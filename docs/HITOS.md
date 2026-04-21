@@ -6,7 +6,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 
 - [x] **Hito 0** — Repositorio creado en GitHub.
 - [x] **Hito 1** — Shell del editor (completado, tag `v0.1.0-hito1`).
-- [ ] Hito 2 — Primer triángulo con OpenGL.
+- [x] **Hito 2** — Primer triángulo con OpenGL (completado, tag `v0.2.0-hito2`).
 - [ ] Hito 3 — Cubo texturizado con cámara.
 - [ ] Hito 4 — Mundo grid + colisiones AABB.
 - [ ] Hito 5 — Asset Browser + gestión de texturas.
@@ -41,4 +41,12 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 
 ### Pendientes menores detectados en Hito 1
 
-- Solapamiento visual entre paneles al arrancar (layout inicial del dockspace). No bloqueante; se ajusta en Hito 2 al introducir el render a textura del viewport.
+- ~~Solapamiento visual entre paneles al arrancar (layout inicial del dockspace).~~ Resuelto en Hito 2 con `DockBuilder` (`Dockspace.cpp`), respeta `imgui.ini` si existe.
+
+## Hito 2 — Primer triángulo con OpenGL
+
+**Objetivo:** dejar de ser shell vacío y dibujar geometría propia (triángulo RGB) en el panel Viewport, con pipeline de render real: GLAD + RHI abstracto + backend OpenGL + shaders propios + framebuffer offscreen.
+
+**Criterios de aceptación:** ver `PLAN_HITO2.md` (todos cumplidos: automáticos + visuales + resize del panel + default layout sin superposiciones).
+
+**Siguiente paso tras completarlo:** Hito 3 — cubo texturizado con cámara. Agregar stb_image (textura), matrices de modelo/vista/proyección con GLM, cámara FPS controlable con WASD + ratón en Play Mode, cámara orbital en Editor Mode. Empezar a usar doctest para testear matemática.

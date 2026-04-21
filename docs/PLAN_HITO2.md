@@ -18,20 +18,20 @@ Este es el hito donde el motor deja de ser "shell vacío" y empieza a dibujar ge
 
 ### Automáticos (verificables por logs / build)
 
-- [ ] `cmake --preset windows-msvc-debug` sigue configurando sin errores desde un repo limpio.
-- [ ] `cmake --build build/debug --config Debug` compila sin errores ni warnings nuevos.
-- [ ] Al arrancar `MoodEditor.exe`, el log `logs/engine.log` incluye líneas nuevas del canal `render`:
+- [x] `cmake --preset windows-msvc-debug` sigue configurando sin errores desde un repo limpio.
+- [x] `cmake --build build/debug --config Debug` compila sin errores ni warnings nuevos.
+- [x] Al arrancar `MoodEditor.exe`, el log `logs/engine.log` incluye líneas nuevas del canal `render`:
   - `OpenGL iniciado: <versión>`
   - `GPU: <vendor> <renderer>`
-- [ ] El proceso cierra con exit code 0 sin leaks reportados por el validator de OpenGL (si se habilita debug context).
+- [x] El proceso cierra con exit code 0 sin leaks reportados por el validator de OpenGL (si se habilita debug context).
 
 ### Visuales (verificables por el dev)
 
-- [ ] Dentro del panel Viewport se ve un triángulo con tres colores interpolados (rojo, verde, azul clásicos).
-- [ ] El fondo del Viewport (detrás del triángulo) es un color sólido distinto al gris del editor (ej. azul oscuro o negro).
-- [ ] Al redimensionar el panel Viewport (arrastrando bordes o acoplando), el framebuffer se redimensiona y el triángulo sigue visible sin aspect ratio roto.
-- [ ] El resto del editor (menús, Inspector, Asset Browser, status bar) sigue funcionando igual que en Hito 1.
-- [ ] Cerrar con X o Archivo > Salir sigue siendo limpio.
+- [x] Dentro del panel Viewport se ve un triángulo con tres colores interpolados (rojo, verde, azul clásicos).
+- [x] El fondo del Viewport (detrás del triángulo) es un color sólido distinto al gris del editor (ej. azul oscuro o negro).
+- [x] Al redimensionar el panel Viewport (arrastrando bordes o acoplando), el framebuffer se redimensiona y el triángulo sigue visible sin aspect ratio roto.
+- [x] El resto del editor (menús, Inspector, Asset Browser, status bar) sigue funcionando igual que en Hito 1.
+- [x] Cerrar con X o Archivo > Salir sigue siendo limpio.
 
 ---
 
@@ -39,84 +39,84 @@ Este es el hito donde el motor deja de ser "shell vacío" y empieza a dibujar ge
 
 ### Bloque 1 — Integrar GLAD
 
-- [ ] Generar GLAD en https://glad.dav1d.de/ con:
+- [x] Generar GLAD en https://glad.dav1d.de/ con:
   - Language: C/C++
   - Specification: OpenGL
   - API gl: Version 4.5
   - Profile: Core
   - Extensions: (ninguna al inicio; se agregan cuando aparezca la necesidad)
   - Options: "Generate a loader" activado
-- [ ] Colocar los archivos descargados en:
+- [x] Colocar los archivos descargados en:
   - `external/glad/include/glad/glad.h`
   - `external/glad/include/KHR/khrplatform.h`
   - `external/glad/src/glad.c`
-- [ ] Eliminar el `external/glad/README.md` placeholder o reemplazarlo con una nota breve de cómo regenerar si hay que cambiar la versión.
-- [ ] Agregar target estático `glad` al `CMakeLists.txt` raíz con `add_library(glad STATIC external/glad/src/glad.c)` y `target_include_directories(glad PUBLIC external/glad/include)`.
-- [ ] Enlazar `glad` a `MoodEditor` con `target_link_libraries(MoodEditor PRIVATE glad)`.
-- [ ] En `src/editor/EditorApplication.cpp`:
+- [x] Eliminar el `external/glad/README.md` placeholder o reemplazarlo con una nota breve de cómo regenerar si hay que cambiar la versión.
+- [x] Agregar target estático `glad` al `CMakeLists.txt` raíz con `add_library(glad STATIC external/glad/src/glad.c)` y `target_include_directories(glad PUBLIC external/glad/include)`.
+- [x] Enlazar `glad` a `MoodEditor` con `target_link_libraries(MoodEditor PRIVATE glad)`.
+- [x] En `src/editor/EditorApplication.cpp`:
   - Reemplazar `#include <SDL_opengl.h>` por `#include <glad/glad.h>`.
   - Después de `SDL_GL_CreateContext`, llamar `gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)` y abortar con log de error si devuelve 0.
   - Loguear `glGetString(GL_VERSION)`, `GL_VENDOR`, `GL_RENDERER` en el canal `render`.
-- [ ] Recompilar y verificar que el editor sigue abriendo igual que en Hito 1 y que aparecen las nuevas líneas de log.
+- [x] Recompilar y verificar que el editor sigue abriendo igual que en Hito 1 y que aparecen las nuevas líneas de log.
 
 ### Bloque 2 — RHI abstracto (capa 4 del motor)
 
 Definir las interfaces en `src/engine/render/` sin implementación concreta todavía. La idea es que el código del editor hable contra estas interfaces, no contra OpenGL directo.
 
-- [ ] `src/engine/render/IRenderer.h` — interfaz con métodos:
+- [x] `src/engine/render/IRenderer.h` — interfaz con métodos:
   - `beginFrame(clearColor)`
   - `endFrame()`
   - `setViewport(x, y, width, height)`
   - `drawMesh(const IMesh&, const IShader&)`
-- [ ] `src/engine/render/IShader.h` — interfaz con:
+- [x] `src/engine/render/IShader.h` — interfaz con:
   - `bind()`, `unbind()`
   - `setUniform<T>(name, value)` (al menos para `mat4`, `vec3`, `float`, `int`)
-- [ ] `src/engine/render/IMesh.h` — interfaz con:
+- [x] `src/engine/render/IMesh.h` — interfaz con:
   - `bind()`, `unbind()`, `indexCount()` o `vertexCount()`
-- [ ] `src/engine/render/IFramebuffer.h` — interfaz con:
+- [x] `src/engine/render/IFramebuffer.h` — interfaz con:
   - `bind()`, `unbind()`, `resize(w, h)`, `colorAttachmentHandle()` (para pasar a ImGui)
 
 ### Bloque 3 — Backend OpenGL (capa 3)
 
 Implementaciones concretas bajo `src/engine/render/opengl/`.
 
-- [ ] `OpenGLRenderer.{h,cpp}` — implementa `IRenderer`, usa `glClear`, `glViewport`, `glDrawElements` / `glDrawArrays`.
-- [ ] `OpenGLShader.{h,cpp}` — compila vertex + fragment, linkea, guarda el `GLuint program`. Carga desde archivo de texto (no hot-reload aún).
-- [ ] `OpenGLMesh.{h,cpp}` — encapsula VAO + VBO (+ EBO si hace falta). Constructor recibe arrays de vértices/índices.
-- [ ] `OpenGLFramebuffer.{h,cpp}` — FBO con textura de color + renderbuffer de depth. Soporte para `resize()`.
-- [ ] RAII estricto en todos: el destructor llama `glDelete*` correspondiente.
+- [x] `OpenGLRenderer.{h,cpp}` — implementa `IRenderer`, usa `glClear`, `glViewport`, `glDrawElements` / `glDrawArrays`.
+- [x] `OpenGLShader.{h,cpp}` — compila vertex + fragment, linkea, guarda el `GLuint program`. Carga desde archivo de texto (no hot-reload aún).
+- [x] `OpenGLMesh.{h,cpp}` — encapsula VAO + VBO (+ EBO si hace falta). Constructor recibe arrays de vértices/índices.
+- [x] `OpenGLFramebuffer.{h,cpp}` — FBO con textura de color + renderbuffer de depth. Soporte para `resize()`.
+- [x] RAII estricto en todos: el destructor llama `glDelete*` correspondiente.
 
 ### Bloque 4 — Shaders built-in
 
-- [ ] `shaders/default.vert` — recibe `aPosition` (vec3) y `aColor` (vec3), pasa color al fragment por `varying`/`out`.
-- [ ] `shaders/default.frag` — recibe el color interpolado y lo emite a `FragColor`.
-- [ ] Ambos targeted a GLSL 450 core.
-- [ ] `CMakeLists.txt`: copiar `shaders/` al directorio del ejecutable post-build (junto a los DLLs) para que el exe los encuentre en runtime.
+- [x] `shaders/default.vert` — recibe `aPosition` (vec3) y `aColor` (vec3), pasa color al fragment por `varying`/`out`.
+- [x] `shaders/default.frag` — recibe el color interpolado y lo emite a `FragColor`.
+- [x] Ambos targeted a GLSL 450 core.
+- [x] `CMakeLists.txt`: copiar `shaders/` al directorio del ejecutable post-build (junto a los DLLs) para que el exe los encuentre en runtime.
 
 ### Bloque 5 — Integración con el Viewport
 
-- [ ] En `EditorApplication` u `EditorUI`, crear un `OpenGLFramebuffer` de tamaño inicial (ej. 1280x720) al arrancar.
-- [ ] Crear la malla del triángulo: 3 vértices con posición + color en NDC (`-0.5,-0.5,0`, `0.5,-0.5,0`, `0,0.5,0`), colores rojo/verde/azul.
-- [ ] Antes de que ImGui empiece su frame, bindear el framebuffer, renderizar el triángulo, desbindear.
-- [ ] En `ViewportPanel::onImGuiRender`:
+- [x] En `EditorApplication` u `EditorUI`, crear un `OpenGLFramebuffer` de tamaño inicial (ej. 1280x720) al arrancar.
+- [x] Crear la malla del triángulo: 3 vértices con posición + color en NDC (`-0.5,-0.5,0`, `0.5,-0.5,0`, `0,0.5,0`), colores rojo/verde/azul.
+- [x] Antes de que ImGui empiece su frame, bindear el framebuffer, renderizar el triángulo, desbindear.
+- [x] En `ViewportPanel::onImGuiRender`:
   - Reemplazar el texto placeholder por `ImGui::Image((ImTextureID)(intptr_t)framebuffer.colorAttachmentHandle(), panelSize)`.
   - Detectar si el tamaño del panel cambió y llamar `framebuffer.resize(newSize)`.
   - Cuidado con la inversión vertical: OpenGL tiene el origen abajo-izquierda, ImGui arriba-izquierda → pasar `uv0 = (0,1)`, `uv1 = (1,0)` a `ImGui::Image`.
 
 ### Bloque 6 — Ajustar solapamiento del dockspace (pendiente de Hito 1)
 
-- [ ] Usar `ImGui::DockBuilderDockWindow` para fijar layout inicial: Viewport al centro, Inspector a la derecha, Asset Browser abajo, sin solapamientos.
-- [ ] Aplicar solo la primera vez que se ejecuta el editor o cuando `imgui.ini` no existe.
+- [x] Usar `ImGui::DockBuilderDockWindow` para fijar layout inicial: Viewport al centro, Inspector a la derecha, Asset Browser abajo, sin solapamientos.
+- [x] Aplicar solo la primera vez que se ejecuta el editor o cuando `imgui.ini` no existe.
 
 ### Bloque 7 — Cierre
 
-- [ ] Recompilar desde cero y verificar todos los criterios de aceptación (automáticos + visuales).
-- [ ] Actualizar `docs/HITOS.md` marcando Hito 2 como completado.
-- [ ] Actualizar `docs/DECISIONS.md` con cualquier decisión técnica de esta iteración.
-- [ ] Actualizar `docs/ESTADO_ACTUAL.md` con el nuevo estado (Hito 2 cerrado, Hito 3 como próximo).
-- [ ] Commits atómicos en español siguiendo la convención del proyecto.
-- [ ] Merge a `main`, tag `v0.2.0-hito2`, push a origin.
-- [ ] Crear `docs/PLAN_HITO3.md` con el desglose del próximo hito.
+- [x] Recompilar desde cero y verificar todos los criterios de aceptación (automáticos + visuales).
+- [x] Actualizar `docs/HITOS.md` marcando Hito 2 como completado.
+- [x] Actualizar `docs/DECISIONS.md` con cualquier decisión técnica de esta iteración.
+- [x] Actualizar `docs/ESTADO_ACTUAL.md` con el nuevo estado (Hito 2 cerrado, Hito 3 como próximo).
+- [x] Commits atómicos en español siguiendo la convención del proyecto.
+- [x] Merge a `main`, tag `v0.2.0-hito2`, push a origin.
+- [x] Crear `docs/PLAN_HITO3.md` con el desglose del próximo hito.
 
 ---
 
@@ -136,14 +136,21 @@ Para mantenerse fiel al principio de incrementalismo (sección 9 del doc técnic
 
 ## Decisiones durante implementación
 
-> Llenar esta sección a medida que aparezcan. Cada entrada también va a `docs/DECISIONS.md`.
+> Entradas detalladas en `docs/DECISIONS.md` (entradas con fecha 2026-04-21 bajo Hito 2).
 
-_(vacío al inicio del hito)_
+- GLAD v2 generado con `glad2` de Python y archivos commiteados (en vez del web generator manual). Regenerable con una línea.
+- Naming de glad v2: archivos se llaman `gl.h` / `gl.c` (no `glad.h` / `glad.c` como v1). Include: `#include <glad/gl.h>`. Loader: `gladLoaderLoadGL()`.
+- GLAD y el loader interno de ImGui coexisten sin force-include ni macros `IMGUI_IMPL_OPENGL_LOADER_CUSTOM`. No hay conflictos de símbolos.
+- `TextureHandle` como `void*` en `RendererTypes.h` para no filtrar `GLuint` en la interfaz pública; alineado con `ImTextureID` de ImGui.
+- Render offscreen → `ImGui::Image` con UV invertido vertical (OpenGL y ImGui usan orígenes opuestos).
+- Resize del framebuffer con 1 frame de lag (el panel publica `desiredWidth/Height`, el loop las lee el frame siguiente).
+- `DockBuilder` sólo arma layout si el dockspace está vacío; respeta `imgui.ini` persistido.
 
 ---
 
 ## Pendientes que quedan para Hito 3 o posterior
 
-> Llenar al cerrar el hito con cosas que surgieron pero no correspondía resolver acá.
-
-_(vacío al inicio del hito)_
+- **Laptop vs. PC desktop:** el dev trabaja en ambas. Diferencia real de GPU (Intel Iris Xe vs NVIDIA GTX 1660 + iGPU AMD del 5600G). Anotar en `ESTADO_ACTUAL.md` y recordar forzar NVIDIA en el Panel de Control cuando se use el desktop. No bloquea ningún hito.
+- **DPI awareness:** los distintos monitores/laptop tienen densidades de pixel distintas; la UI no escala. Evaluar en Hito 15+ (UI polish).
+- **Shader hot-reload:** sería útil para iterar en Hito 3+ cuando los shaders crezcan. Diferido: no es parte del roadmap temprano.
+- **Debug context de OpenGL:** con `GL_ARB_debug_output` se pueden capturar warnings/errores directo a spdlog. Agregar cuando aparezca un bug difícil de localizar.

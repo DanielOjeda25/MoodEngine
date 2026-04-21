@@ -6,27 +6,29 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 1 cerrado, mergeado a `main` y publicado en origin.**
-Tag: `v0.1.0-hito1` en commit `292533b`.
-Verificado automático (logging, startup, shutdown) + verificado por el dev a ojo (UI, menús, paneles, status bar, docking).
+**Hito 2 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.2.0-hito2`.
+Verificado automático (log con `OpenGL iniciado` + `GPU: ...`, exit 0, shutdown ordenado) + verificado por el dev a ojo (triángulo RGB en el panel Viewport, redimensionable sin distorsión, layout por defecto sin superposiciones, título "(Hito 2)").
 
-**Próximo paso:** Hito 2 — primer triángulo con OpenGL. Plan detallado en `docs/PLAN_HITO2.md`.
+**Próximo paso:** Hito 3 — cubo texturizado con cámara. Plan detallado en `docs/PLAN_HITO3.md`.
 
-### Lo que ya está hecho (Hito 1)
+### Lo que ya está hecho
 
+**Hito 1** — Shell del editor completo (tag `v0.1.0-hito1`):
 - Estructura completa de carpetas del repo (sección 6 del doc técnico).
-- Raíz: `.gitignore`, `.gitattributes`, `.clang-format`, `LICENSE`, `README.md`, `CMakeLists.txt`, `CMakePresets.json`.
-- `cmake/CPM.cmake` (bootstrap autodescargable 0.40.2) y `cmake/CompilerWarnings.cmake`.
-- `docs/`: ARCHITECTURE, DECISIONS, HITOS, CODING_STYLE, CONTRIBUTING, SETUP_WINDOWS, PLAN_HITO2, y este mismo documento.
-- `src/core/`: Types.h, Log (.h/.cpp sobre spdlog), Assert.h, Time (.h/.cpp con Timer + FpsCounter).
-- `src/platform/Window.(h|cpp)`: wrapper RAII sobre `SDL_Window` con contexto OpenGL 4.5 Core.
-- `src/editor/`: EditorApplication, EditorUI, MenuBar, StatusBar, Dockspace + 3 paneles (Viewport, Inspector, AssetBrowser) heredando de `IPanel`.
-- `src/main.cpp`: entry point con `SDL_MAIN_HANDLED` y try/catch.
-- Stubs (`.gitkeep`) en `src/engine/`, `src/systems/`, `src/game/`, `tests/`, `shaders/`, `assets/`, `tools/`.
+- Build: CMake 3.24+ con CPM.cmake, CMakePresets, MSVC.
+- `src/core/`: logging (spdlog), Types, Assert, Time (Timer + FpsCounter).
+- `src/platform/Window`: wrapper RAII sobre SDL2 con contexto OpenGL 4.5 Core.
+- `src/editor/`: EditorApplication, EditorUI, MenuBar, StatusBar, Dockspace + 3 paneles.
 
-### Pendiente menor detectado en Hito 1 (no bloqueante)
-
-- Solapamiento visual del layout inicial del dockspace. Se ajusta en Hito 2 cuando el Viewport tenga contenido real (framebuffer con el triángulo) y podamos fijar un `DockBuilder` con posiciones explícitas.
+**Hito 2** — Primer triángulo con OpenGL (tag `v0.2.0-hito2`):
+- `external/glad/`: GLAD v2 para OpenGL 4.5 Core generado con `glad2` Python, files committed, target estático `glad`.
+- `src/engine/render/`: RHI abstracta (`IRenderer`, `IShader`, `IMesh`, `IFramebuffer`, `RendererTypes.h`).
+- `src/engine/render/opengl/`: backend OpenGL (OpenGLRenderer, OpenGLShader con cache de uniforms, OpenGLMesh, OpenGLFramebuffer con color RGBA8 + depth RB).
+- `shaders/default.{vert,frag}`: GLSL 4.5 Core, triángulo con color por vértice. Copiado post-build junto al exe.
+- `EditorApplication` ahora monta renderer + framebuffer + shader + mesh; renderiza offscreen cada frame antes de la UI.
+- `ViewportPanel` muestra el color attachment con `ImGui::Image` y UV invertido vertical; publica `desiredWidth/Height` para que el loop redimensione el FB en el frame siguiente.
+- `Dockspace.cpp` arma layout por defecto con `DockBuilder` cuando `imgui.ini` no tiene nodos split.
 
 ### Dependencias que baja CPM al configurar
 
@@ -34,6 +36,10 @@ Verificado automático (logging, startup, shutdown) + verificado por el dev a oj
 - GLM `1.0.1`
 - spdlog `1.14.1`
 - ImGui rama `docking` (compilado como target interno `imgui` con backends SDL2 + OpenGL3)
+
+### Herramientas externas necesarias (solo para regenerar, no para build)
+
+- `glad2` (Python) — para regenerar GLAD si cambia la versión de GL. Ver `external/glad/README.md`.
 
 ---
 
@@ -94,26 +100,21 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: implementar el Hito 2
+### Tarea inmediata: implementar el Hito 3
 
-El Hito 1 está cerrado (tag `v0.1.0-hito1` en origin). El foco ahora es el **Hito 2 — primer triángulo con OpenGL**.
+El Hito 2 está cerrado (tag `v0.2.0-hito2` en origin). El foco ahora es el **Hito 3 — cubo texturizado con cámara**.
 
-El plan desglosado por tareas está en `docs/PLAN_HITO2.md`. Leé ese documento y respetá el orden propuesto (GLAD primero, después RHI, después framebuffer, después wiring al ViewportPanel).
+El plan desglosado por tareas está en `docs/PLAN_HITO3.md`.
 
-**Punto de arranque concreto:** `external/glad/` — hoy contiene sólo un README. Hay que generar los archivos de GLAD para OpenGL 4.5 Core desde https://glad.dav1d.de/ y ubicarlos en `external/glad/include/glad/glad.h`, `external/glad/src/glad.c`, `external/glad/include/KHR/khrplatform.h`. Después se agrega el target estático `glad` al `CMakeLists.txt` raíz.
-
-**Archivo clave a modificar primero:** `src/editor/EditorApplication.cpp`. Cuando GLAD esté disponible:
-- Reemplazar el include `<SDL_opengl.h>` por `<glad/glad.h>`.
-- Tras `SDL_GL_CreateContext`, llamar `gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)` y abortar si devuelve 0.
-- Loguear `glGetString(GL_VERSION)`, `GL_VENDOR`, `GL_RENDERER` para verificación.
+**Punto de arranque concreto:** `external/stb/` — hoy contiene sólo un README. Bajar `stb_image.h` y `stb_image_write.h` desde https://github.com/nothings/stb (son single-header) y commitearlos.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO2.md` (tareas numeradas).
+1. Leer `docs/PLAN_HITO3.md` (tareas numeradas).
 2. Trabajar tarea por tarea, marcando como completadas en el plan al terminar cada una.
-3. Después de cada bloque grande (GLAD + contexto, RHI, framebuffer, integración), compilar y confirmar que sigue funcionando.
+3. Después de cada bloque grande (textura, matrices MVP, cámara, cubo), compilar y confirmar que sigue funcionando.
 4. Actualizar `docs/DECISIONS.md` si aparece alguna decisión no prevista.
-5. Al final: commits atómicos en español, merge a main, tag `v0.2.0-hito2`, actualizar este documento y `docs/HITOS.md`.
+5. Al final: commits atómicos en español, merge a main, tag `v0.3.0-hito3`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO4.md`.
 
 ---
 
@@ -122,7 +123,10 @@ El plan desglosado por tareas está en `docs/PLAN_HITO2.md`. Leé ese documento 
 1. **VS 2026 Community se instaló sin el workload de C++.** El `Developer Command Prompt for VS 2026` abre pero `cl` y `cmake` no existen. No depender de VS 2026 hasta que el dev agregue el workload o lo desinstale. Usar siempre VS 2022.
 2. **El `Developer Command Prompt` normal de Windows** (sin MSVC) no tiene `cl` en PATH. Si un comando falla con "cl no se reconoce", revisar que el prompt diga "Visual Studio 2022" en el banner.
 3. **SDL2 en debug se llama `SDL2d.dll`**, no `SDL2.dll`. El `add_custom_command` POST_BUILD del CMakeLists copia la variante correcta según `$<TARGET_FILE:SDL2::SDL2>`.
-4. **GLAD no está incluido en Hito 1.** Para que ImGui-OpenGL3 funcione sin loader, `EditorApplication.cpp` incluye `<SDL_opengl.h>` y llama `glClearColor`/`glClear`/`glViewport` directamente (esas funciones son GL 1.1 y están en `opengl32.lib` sin loader). Al entrar GLAD en Hito 2, **quitar** ese include para evitar colisión de símbolos.
+4. ~~**GLAD no está incluido en Hito 1.**~~ Resuelto en Hito 2: `EditorApplication.cpp` usa `<glad/gl.h>` y llama `gladLoaderLoadGL()` tras crear el contexto. GLAD y el loader interno de ImGui conviven sin conflictos porque glad2 prefija sus símbolos con `glad_`.
+8. **GLAD v2 usa naming distinto de v1.** Header: `<glad/gl.h>` (no `<glad/glad.h>`). Source: `gl.c` (no `glad.c`). Loader: `gladLoaderLoadGL()` / `gladLoaderUnloadGL()`.
+9. **Dos máquinas de desarrollo.** Notebook con Intel Iris Xe (GL 4.5 OK, menos performance) y desktop con AMD Ryzen 5 5600G + NVIDIA GTX 1660. En el desktop, forzar NVIDIA para `MoodEditor.exe` desde el Panel de Control NVIDIA (sino Windows puede elegir la iGPU AMD). `imgui.ini` y `build/` NO viajan por git: cada máquina genera lo suyo.
+10. **Shaders se buscan con path relativo `shaders/default.vert`.** Funciona desde la raíz del repo (VS_DEBUGGER_WORKING_DIRECTORY) y desde el directorio del exe (post-build `copy_directory shaders/`). Si agregás shaders nuevos, la copia es automática.
 5. **El primer `cmake --preset` tarda ~5 minutos** porque baja y compila subdeps de SDL2 + ImGui + spdlog + GLM. Ese tiempo solo ocurre la primera vez; después el build incremental es segundos.
 6. **spdlog busca pthread en Windows** y sale un warning de que no lo encuentra. Es esperado y benigno en Windows.
 7. **GLM tira warnings de `cmake_minimum_required` deprecated** porque su CMakeLists usa sintaxis vieja. Ignorable; no es nuestro código.
