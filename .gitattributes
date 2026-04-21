@@ -1,0 +1,30 @@
+# Normalizacion de fin de linea
+* text=auto eol=lf
+
+# Codigo fuente: siempre LF
+*.cpp   text eol=lf
+*.h     text eol=lf
+*.hpp   text eol=lf
+*.c     text eol=lf
+*.cmake text eol=lf
+*.txt   text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.lua   text eol=lf
+*.vert  text eol=lf
+*.frag  text eol=lf
+*.glsl  text eol=lf
+
+# Binarios
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.bmp   binary
+*.tga   binary
+*.wav   binary
+*.ogg   binary
+*.mp3   binary
+*.fbx   binary
+*.obj   binary
+*.gltf  binary
+*.glb   binary

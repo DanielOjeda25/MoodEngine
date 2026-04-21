@@ -1,0 +1,42 @@
+# Build
+build/
+out/
+cmake-build-*/
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln.docstates
+CMakeUserPresets.json
+
+# Compilados
+*.obj
+*.o
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# Logs
+logs/
+*.log
+
+# SO
+.DS_Store
+Thumbs.db
+
+# Archivos temporales
+*.swp
+*.bak
+*~
+
+# Estado de runtime
+imgui.ini
+
+# Herramientas de agentes de codigo
+.claude/
