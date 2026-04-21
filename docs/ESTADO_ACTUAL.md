@@ -6,19 +6,27 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 1 implementado y compilando sin errores en MSVC.** Falta solo verificación visual por parte del desarrollador y, si pasa, commit + tag `v0.1.0-hito1`.
+**Hito 1 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.1.0-hito1` en commit `292533b`.
+Verificado automático (logging, startup, shutdown) + verificado por el dev a ojo (UI, menús, paneles, status bar, docking).
 
-### Lo que ya está hecho
+**Próximo paso:** Hito 2 — primer triángulo con OpenGL. Plan detallado en `docs/PLAN_HITO2.md`.
+
+### Lo que ya está hecho (Hito 1)
 
 - Estructura completa de carpetas del repo (sección 6 del doc técnico).
 - Raíz: `.gitignore`, `.gitattributes`, `.clang-format`, `LICENSE`, `README.md`, `CMakeLists.txt`, `CMakePresets.json`.
 - `cmake/CPM.cmake` (bootstrap autodescargable 0.40.2) y `cmake/CompilerWarnings.cmake`.
-- `docs/`: ARCHITECTURE, DECISIONS, HITOS, CODING_STYLE, CONTRIBUTING, SETUP_WINDOWS, y este mismo documento.
+- `docs/`: ARCHITECTURE, DECISIONS, HITOS, CODING_STYLE, CONTRIBUTING, SETUP_WINDOWS, PLAN_HITO2, y este mismo documento.
 - `src/core/`: Types.h, Log (.h/.cpp sobre spdlog), Assert.h, Time (.h/.cpp con Timer + FpsCounter).
 - `src/platform/Window.(h|cpp)`: wrapper RAII sobre `SDL_Window` con contexto OpenGL 4.5 Core.
 - `src/editor/`: EditorApplication, EditorUI, MenuBar, StatusBar, Dockspace + 3 paneles (Viewport, Inspector, AssetBrowser) heredando de `IPanel`.
 - `src/main.cpp`: entry point con `SDL_MAIN_HANDLED` y try/catch.
 - Stubs (`.gitkeep`) en `src/engine/`, `src/systems/`, `src/game/`, `tests/`, `shaders/`, `assets/`, `tools/`.
+
+### Pendiente menor detectado en Hito 1 (no bloqueante)
+
+- Solapamiento visual del layout inicial del dockspace. Se ajusta en Hito 2 cuando el Viewport tenga contenido real (framebuffer con el triángulo) y podamos fijar un `DockBuilder` con posiciones explícitas.
 
 ### Dependencias que baja CPM al configurar
 
@@ -86,52 +94,26 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: verificar el Hito 1 con el desarrollador
+### Tarea inmediata: implementar el Hito 2
 
-El desarrollador debe ejecutar `MoodEditor.exe` y comprobar los **criterios de aceptación** de la sección 11.2 del doc técnico:
+El Hito 1 está cerrado (tag `v0.1.0-hito1` en origin). El foco ahora es el **Hito 2 — primer triángulo con OpenGL**.
 
-- [ ] Ventana 1280x720, título `"MoodEngine Editor - v0.1.0 (Hito 1)"`.
-- [ ] Menú Archivo / Editar / Ver / Ayuda.
-  - Archivo > Nuevo / Abrir / Guardar → popup "No implementado".
-  - Archivo > Salir → cierra la app.
-  - Ayuda > Acerca de → popup con nombre, versión, link al repo.
-  - Ver → toggles de visibilidad para los 3 paneles.
-- [ ] Tres paneles acoplables visibles: Viewport, Inspector, Asset Browser.
-- [ ] Los paneles son arrastrables, acoplables y flotantes.
-- [ ] Status bar con FPS (actualizándose), `"Editor Mode"`, mensaje `"Listo"`.
-- [ ] X de ventana cierra limpio.
-- [ ] Archivo `logs/engine.log` creado con las entradas de arranque (`MoodEngine iniciando...`, `Ventana creada (1280x720)`, `Editor listo`) y la de cierre (`MoodEngine cerrado limpiamente`).
+El plan desglosado por tareas está en `docs/PLAN_HITO2.md`. Leé ese documento y respetá el orden propuesto (GLAD primero, después RHI, después framebuffer, después wiring al ViewportPanel).
 
-Si algo falla visualmente (panel mal posicionado, FPS en 0, popup no aparece, etc.), pedí al desarrollador un screenshot o descripción precisa. Arreglá en el código, recompilá y vuelva a probar.
+**Punto de arranque concreto:** `external/glad/` — hoy contiene sólo un README. Hay que generar los archivos de GLAD para OpenGL 4.5 Core desde https://glad.dav1d.de/ y ubicarlos en `external/glad/include/glad/glad.h`, `external/glad/src/glad.c`, `external/glad/include/KHR/khrplatform.h`. Después se agrega el target estático `glad` al `CMakeLists.txt` raíz.
 
-### Una vez que el Hito 1 pase todos los criterios
+**Archivo clave a modificar primero:** `src/editor/EditorApplication.cpp`. Cuando GLAD esté disponible:
+- Reemplazar el include `<SDL_opengl.h>` por `<glad/glad.h>`.
+- Tras `SDL_GL_CreateContext`, llamar `gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)` y abortar si devuelve 0.
+- Loguear `glGetString(GL_VERSION)`, `GL_VENDOR`, `GL_RENDERER` para verificación.
 
-1. Proponer al desarrollador una serie de **commits atómicos en español** siguiendo la convención de la sección 9.8 del doc técnico. Sugerencia de división:
-   - `chore(build): configurar CMake con CPM y CMakePresets`
-   - `chore(repo): agregar .gitignore, .gitattributes, .clang-format, LICENSE`
-   - `docs: documentacion inicial (architecture, decisions, hitos, style)`
-   - `feat(core): logging con spdlog, tipos, aserciones y utilidades de tiempo`
-   - `feat(platform): wrapper SDL2 con contexto OpenGL 4.5 core`
-   - `feat(editor): shell con dockspace, menu bar, status bar y tres paneles`
-   - `feat(main): entry point del editor`
-2. **Pedir confirmación explícita antes de hacer los commits** (el desarrollador no siempre los autoriza aunque estén listos).
-3. Cuando todo esté pusheado, crear el tag: `git tag v0.1.0-hito1 && git push --tags`.
-4. Actualizar `docs/HITOS.md` marcando Hito 1 como completado.
+### Flujo recomendado en esta sesión
 
-### Siguiente hito: empezar Hito 2 — primer triángulo con OpenGL
-
-Objetivo del Hito 2 (ver sección 10 del doc técnico):
-
-1. Generar GLAD para OpenGL 4.5 Core desde https://glad.dav1d.de/ y colocarlo en `external/glad/include/glad/glad.h`, `external/glad/src/glad.c`, `external/glad/include/KHR/khrplatform.h`.
-2. Añadir target estático `glad` al `CMakeLists.txt` raíz.
-3. Enlazar `glad` en `MoodEditor` **antes** que `OpenGL::GL` y retirar `<SDL_opengl.h>` de `EditorApplication.cpp`.
-4. Definir la interfaz RHI abstracta en `src/engine/render/`: `IRenderer`, `IShader`, `IMesh`.
-5. Implementarlos en `src/engine/render/opengl/`.
-6. Crear shaders built-in `shaders/default.vert` y `shaders/default.frag` (triángulo de colores vértice por vértice, sin texturas).
-7. Dibujar el triángulo a un **framebuffer offscreen** y mostrarlo como textura dentro del panel Viewport con `ImGui::Image`.
-8. Añadir Tracy + doctest a CPM (planeados para Hito 5-6 pero se pueden preparar).
-
-Archivo de punto de arranque: `src/editor/EditorApplication.cpp`, función `EditorApplication::EditorApplication()` — después de crear el contexto, inicializar GLAD con `gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)` y loguear `glGetString(GL_VERSION)` para verificar.
+1. Leer `docs/PLAN_HITO2.md` (tareas numeradas).
+2. Trabajar tarea por tarea, marcando como completadas en el plan al terminar cada una.
+3. Después de cada bloque grande (GLAD + contexto, RHI, framebuffer, integración), compilar y confirmar que sigue funcionando.
+4. Actualizar `docs/DECISIONS.md` si aparece alguna decisión no prevista.
+5. Al final: commits atómicos en español, merge a main, tag `v0.2.0-hito2`, actualizar este documento y `docs/HITOS.md`.
 
 ---
 
@@ -174,7 +156,8 @@ Archivo de punto de arranque: `src/editor/EditorApplication.cpp`, función `Edit
 ## 8. Al arrancar una sesión nueva
 
 1. Leer este archivo entero.
-2. Leer `MOODENGINE_CONTEXTO_TECNICO.md` si es la primera vez.
-3. `git status` + `git log --oneline -10` para ver si hay cambios nuevos desde la última handoff.
-4. Preguntar al desarrollador: "¿verificaste el Hito 1 o pasó algo nuevo desde el último documento?"
-5. Actuar según la respuesta.
+2. Leer `docs/PLAN_HITO<N>.md` del hito en curso para ver qué tareas quedan.
+3. Leer `MOODENGINE_CONTEXTO_TECNICO.md` si es la primera vez.
+4. `git status` + `git log --oneline -10` + `git tag --sort=-v:refname | head -5` para ver tags y cambios recientes.
+5. Preguntar al desarrollador: "¿seguimos con el Hito en curso o pasó algo nuevo?"
+6. Actuar según la respuesta.
