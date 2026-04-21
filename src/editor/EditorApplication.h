@@ -12,6 +12,11 @@
 
 namespace Mood {
 
+class IRenderer;
+class IFramebuffer;
+class IShader;
+class IMesh;
+
 class EditorApplication {
 public:
     EditorApplication();
@@ -29,7 +34,19 @@ private:
     void beginFrame();
     void endFrame();
 
+    /// @brief Renderiza la escena al framebuffer offscreen que muestra el
+    ///        panel Viewport. Se llama por frame antes de que la UI dibuje.
+    void renderSceneToViewport();
+
     std::unique_ptr<Window> m_window;
+
+    // RHI y recursos graficos. Se destruyen en orden inverso antes del
+    // contexto GL (ver destructor).
+    std::unique_ptr<IRenderer> m_renderer;
+    std::unique_ptr<IFramebuffer> m_viewportFb;
+    std::unique_ptr<IShader> m_defaultShader;
+    std::unique_ptr<IMesh> m_triangleMesh;
+
     EditorUI m_ui;
 
     Timer m_deltaTimer;

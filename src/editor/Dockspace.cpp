@@ -1,8 +1,45 @@
 #include "editor/Dockspace.h"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 namespace Mood {
+
+namespace {
+
+/// @brief Arma el layout por defecto la primera vez. Solo corre si el
+///        dockspace no tiene nodos hijos aun (imgui.ini ausente o vacio).
+///        Si el usuario ya movio paneles antes, los respeta tal cual.
+void buildDefaultLayoutIfEmpty(ImGuiID dockspaceId, const ImVec2& size) {
+    static bool attempted = false;
+    if (attempted) return;
+    attempted = true;
+
+    ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspaceId);
+    if (node != nullptr && node->IsSplitNode()) {
+        // Ya hay un layout persistido: no tocar.
+        return;
+    }
+
+    ImGui::DockBuilderRemoveNode(dockspaceId);
+    ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
+    ImGui::DockBuilderSetNodeSize(dockspaceId, size);
+
+    // Split: derecha (Inspector) -> lo que queda se parte abajo (AssetBrowser)
+    // -> el centro restante queda para el Viewport.
+    ImGuiID dockMain = dockspaceId;
+    ImGuiID dockRight = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Right, 0.22f, nullptr, &dockMain);
+    ImGuiID dockBottom = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Down, 0.28f, nullptr, &dockMain);
+
+    ImGui::DockBuilderDockWindow("Viewport", dockMain);
+    ImGui::DockBuilderDockWindow("Inspector", dockRight);
+    ImGui::DockBuilderDockWindow("Asset Browser", dockBottom);
+    ImGui::DockBuilderFinish(dockspaceId);
+}
+
+} // namespace
 
 bool Dockspace::begin() {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -28,6 +65,7 @@ bool Dockspace::begin() {
 
     if (open) {
         const ImGuiID dockspaceId = ImGui::GetID("MoodDockSpace");
+        buildDefaultLayoutIfEmpty(dockspaceId, viewport->WorkSize);
         ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
     }
 

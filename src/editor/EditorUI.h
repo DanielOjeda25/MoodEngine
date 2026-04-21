@@ -30,6 +30,10 @@ public:
     ///        su visibilidad.
     const std::vector<IPanel*>& panels() const { return m_panels; }
 
+    /// @brief Acceso al panel Viewport para inyectar el framebuffer desde
+    ///        EditorApplication y leer el tamano deseado.
+    ViewportPanel& viewport() { return m_viewport; }
+
 private:
     Dockspace m_dockspace;
     MenuBar m_menuBar;

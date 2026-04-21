@@ -65,7 +65,7 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
 
     if (ImGui::BeginPopupModal("Acerca de MoodEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("MoodEngine");
-        ImGui::Text("Version 0.1.0 (Hito 1)");
+        ImGui::Text("Version 0.2.0 (Hito 2)");
         ImGui::Separator();
         ImGui::Text("Motor grafico 3D propio con editor integrado.");
         ImGui::Text("Repositorio: https://github.com/DanielOjeda25/MoodEngine");
