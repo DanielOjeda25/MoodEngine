@@ -25,6 +25,13 @@ include(CompilerWarnings)
 find_package(OpenGL REQUIRED)
 
 # ---------------------------------------------------------------------------
+# Target interno: GLAD (loader de OpenGL 4.5 Core, generado con glad2)
+# ---------------------------------------------------------------------------
+add_library(glad STATIC external/glad/src/gl.c)
+target_include_directories(glad PUBLIC external/glad/include)
+target_link_libraries(glad PUBLIC OpenGL::GL)
+
+# ---------------------------------------------------------------------------
 # Dependencias externas gestionadas por CPM
 # ---------------------------------------------------------------------------
 
@@ -93,6 +100,11 @@ add_executable(MoodEditor
 
     src/platform/Window.cpp
 
+    src/engine/render/opengl/OpenGLMesh.cpp
+    src/engine/render/opengl/OpenGLShader.cpp
+    src/engine/render/opengl/OpenGLFramebuffer.cpp
+    src/engine/render/opengl/OpenGLRenderer.cpp
+
     src/editor/EditorApplication.cpp
     src/editor/EditorUI.cpp
     src/editor/MenuBar.cpp
@@ -112,6 +124,7 @@ target_link_libraries(MoodEditor PRIVATE
     glm::glm
     spdlog::spdlog
     imgui
+    glad
     OpenGL::GL
 )
 
@@ -126,6 +139,16 @@ if(WIN32)
         COMMENT "Copiando SDL2.dll junto al ejecutable"
     )
 endif()
+
+# Copiar los shaders built-in junto al ejecutable para que se encuentren con
+# rutas relativas. Se usa copy_directory para que funcione tambien al agregar
+# shaders nuevos sin regenerar el CMake.
+add_custom_command(TARGET MoodEditor POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/shaders
+        $<TARGET_FILE_DIR:MoodEditor>/shaders
+    COMMENT "Copiando shaders junto al ejecutable"
+)
 
 # Working directory por defecto para Visual Studio
 set_target_properties(MoodEditor PROPERTIES
