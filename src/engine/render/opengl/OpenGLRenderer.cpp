@@ -7,9 +7,10 @@
 namespace Mood {
 
 void OpenGLRenderer::init() {
-    // En Hito 2 no activamos depth testing (dibujamos un triangulo en NDC).
-    // Se activara cuando entren las mallas 3D en Hito 3.
-    Log::render()->info("OpenGLRenderer listo");
+    // Depth test activado para mallas 3D. Cull face queda para Hito 4+.
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    Log::render()->info("OpenGLRenderer listo (depth test activo)");
 }
 
 void OpenGLRenderer::beginFrame(const ClearValues& clear) {
