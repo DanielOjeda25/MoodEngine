@@ -32,6 +32,13 @@ target_include_directories(glad PUBLIC external/glad/include)
 target_link_libraries(glad PUBLIC OpenGL::GL)
 
 # ---------------------------------------------------------------------------
+# Target interno: stb (headers single-file de Sean Barrett)
+# ---------------------------------------------------------------------------
+# INTERFACE: solo expone include path. Los simbolos viven en stb_impl.cpp.
+add_library(stb INTERFACE)
+target_include_directories(stb INTERFACE external/stb)
+
+# ---------------------------------------------------------------------------
 # Dependencias externas gestionadas por CPM
 # ---------------------------------------------------------------------------
 
@@ -68,6 +75,16 @@ CPMAddPackage(
     DOWNLOAD_ONLY YES
 )
 
+CPMAddPackage(
+    NAME doctest
+    GITHUB_REPOSITORY doctest/doctest
+    VERSION 2.4.11
+    OPTIONS
+        "DOCTEST_WITH_TESTS OFF"
+        "DOCTEST_WITH_MAIN_IN_STATIC_LIB OFF"
+        "DOCTEST_NO_INSTALL ON"
+)
+
 # ---------------------------------------------------------------------------
 # Target interno: ImGui compilado como libreria estatica con backends SDL2 + OpenGL3
 # ---------------------------------------------------------------------------
@@ -100,10 +117,17 @@ add_executable(MoodEditor
 
     src/platform/Window.cpp
 
+    src/engine/assets/PrimitiveMeshes.cpp
+    src/engine/assets/stb_impl.cpp
+
+    src/engine/scene/EditorCamera.cpp
+    src/engine/scene/FpsCamera.cpp
+
     src/engine/render/opengl/OpenGLMesh.cpp
     src/engine/render/opengl/OpenGLShader.cpp
     src/engine/render/opengl/OpenGLFramebuffer.cpp
     src/engine/render/opengl/OpenGLRenderer.cpp
+    src/engine/render/opengl/OpenGLTexture.cpp
 
     src/editor/EditorApplication.cpp
     src/editor/EditorUI.cpp
@@ -125,6 +149,7 @@ target_link_libraries(MoodEditor PRIVATE
     spdlog::spdlog
     imgui
     glad
+    stb
     OpenGL::GL
 )
 
@@ -150,6 +175,14 @@ add_custom_command(TARGET MoodEditor POST_BUILD
     COMMENT "Copiando shaders junto al ejecutable"
 )
 
+# Idem para los assets de ejemplo (texturas, etc.) cuando existan.
+add_custom_command(TARGET MoodEditor POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:MoodEditor>/assets
+    COMMENT "Copiando assets junto al ejecutable"
+)
+
 # Working directory por defecto para Visual Studio
 set_target_properties(MoodEditor PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
@@ -157,3 +190,9 @@ set_target_properties(MoodEditor PROPERTIES
 
 # Target por defecto al abrir la solucion en Visual Studio
 set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT MoodEditor)
+
+# ---------------------------------------------------------------------------
+# Tests (doctest + CTest)
+# ---------------------------------------------------------------------------
+enable_testing()
+add_subdirectory(tests)
