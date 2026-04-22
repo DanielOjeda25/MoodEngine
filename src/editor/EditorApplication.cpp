@@ -1,10 +1,13 @@
 #include "editor/EditorApplication.h"
 
 #include "core/Log.h"
+#include "engine/assets/PrimitiveMeshes.h"
+#include "engine/render/ITexture.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/render/opengl/OpenGLMesh.h"
 #include "engine/render/opengl/OpenGLRenderer.h"
 #include "engine/render/opengl/OpenGLShader.h"
+#include "engine/render/opengl/OpenGLTexture.h"
 
 // glad/gl.h debe ir antes que cualquier otro header que pueda incluir GL
 // (evita redefiniciones con <SDL_opengl.h> o los loaders internos).
@@ -15,15 +18,16 @@
 #include <backends/imgui_impl_sdl2.h>
 #include <imgui.h>
 
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
+
 #include <stdexcept>
-#include <vector>
 
 namespace Mood {
 
 namespace {
 
-// Se pasa a imgui_impl_opengl3 al inicializarlo. Debe corresponder al perfil
-// del contexto creado en Window (OpenGL 4.5 Core).
 constexpr const char* k_GlslVersion = "#version 450 core";
 
 } // namespace
@@ -37,14 +41,12 @@ EditorApplication::EditorApplication() {
     }
 
     WindowSpec spec{};
-    spec.title = "MoodEngine Editor - v0.2.0 (Hito 2)";
+    spec.title = "MoodEngine Editor - v0.3.0 (Hito 3)";
     spec.width = 1280;
     spec.height = 720;
     m_window = std::make_unique<Window>(spec);
 
-    // --- GLAD: cargar punteros de OpenGL 4.5 Core ---
-    // Window ya creo el contexto y lo hizo current, asi que podemos resolver
-    // los punteros ahora.
+    // --- GLAD ---
     if (!gladLoaderLoadGL()) {
         throw std::runtime_error("gladLoaderLoadGL fallo: no se pudo cargar OpenGL");
     }
@@ -75,27 +77,16 @@ EditorApplication::EditorApplication() {
     m_renderer = std::make_unique<OpenGLRenderer>();
     m_renderer->init();
 
-    // Tamano inicial razonable: se redimensiona en el primer frame segun el
-    // tamano real del panel Viewport.
     m_viewportFb = std::make_unique<OpenGLFramebuffer>(1280u, 720u);
 
     m_defaultShader = std::make_unique<OpenGLShader>(
         "shaders/default.vert", "shaders/default.frag");
 
-    // Triangulo en NDC con color por vertice (rojo-verde-azul interpolados).
-    const std::vector<f32> vertices = {
-        //   pos (xyz)        color (rgb)
-        -0.5f, -0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   // abajo-izq, rojo
-         0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   // abajo-der, verde
-         0.0f,  0.5f, 0.0f,   0.0f, 0.0f, 1.0f    // arriba,    azul
-    };
-    const std::vector<VertexAttribute> attrs = {
-        { 0, 3 }, // aPos  -> location 0, vec3
-        { 1, 3 }  // aColor -> location 1, vec3
-    };
-    m_triangleMesh = std::make_unique<OpenGLMesh>(vertices, attrs);
+    MeshData cube = createCubeMesh();
+    m_cubeMesh = std::make_unique<OpenGLMesh>(cube.vertices, cube.attributes);
 
-    // Conectar el framebuffer al panel Viewport para que lo muestre.
+    m_gridTexture = std::make_unique<OpenGLTexture>("assets/textures/grid.png");
+
     m_ui.viewport().setFramebuffer(m_viewportFb.get());
 
     MOOD_LOG_INFO("Editor listo");
@@ -104,7 +95,8 @@ EditorApplication::EditorApplication() {
 EditorApplication::~EditorApplication() {
     // Los recursos GL dependen del contexto; liberar ANTES de destruir ImGui
     // y el contexto (el destructor del Window destruye el contexto al final).
-    m_triangleMesh.reset();
+    m_gridTexture.reset();
+    m_cubeMesh.reset();
     m_defaultShader.reset();
     m_viewportFb.reset();
     m_renderer.reset();
@@ -113,7 +105,6 @@ EditorApplication::~EditorApplication() {
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
 
-    // Liberar la tabla interna de punteros de GLAD antes de destruir el contexto.
     gladLoaderUnloadGL();
 
     m_window.reset();
@@ -133,6 +124,10 @@ void EditorApplication::processEvents() {
                    ev.window.event == SDL_WINDOWEVENT_CLOSE &&
                    ev.window.windowID == SDL_GetWindowID(m_window->sdlHandle())) {
             m_running = false;
+        } else if (ev.type == SDL_KEYDOWN &&
+                   ev.key.keysym.sym == SDLK_ESCAPE &&
+                   m_mode == EditorMode::Play) {
+            exitPlayMode();
         }
     }
 }
@@ -151,19 +146,58 @@ void EditorApplication::endFrame() {
     SDL_GL_GetDrawableSize(m_window->sdlHandle(), &fbWidth, &fbHeight);
     glViewport(0, 0, fbWidth, fbHeight);
 
-    // Gris oscuro de fondo del editor. ImGui dibuja encima en este mismo
-    // framebuffer.
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
     m_window->swapBuffers();
 }
 
-void EditorApplication::renderSceneToViewport() {
-    // Sincronizar el tamano del FB con el del panel Viewport (lectura del
-    // frame anterior). Ignorar si el panel todavia no se renderizo.
+void EditorApplication::enterPlayMode() {
+    m_mode = EditorMode::Play;
+    m_ui.setMode(EditorMode::Play);
+    SDL_SetRelativeMouseMode(SDL_TRUE);
+    // Descartar cualquier delta acumulado para evitar un salto inicial de la vista.
+    SDL_GetRelativeMouseState(nullptr, nullptr);
+    Log::editor()->info("Play Mode activo (WASD + mouse. Esc para salir)");
+}
+
+void EditorApplication::exitPlayMode() {
+    m_mode = EditorMode::Editor;
+    m_ui.setMode(EditorMode::Editor);
+    SDL_SetRelativeMouseMode(SDL_FALSE);
+    Log::editor()->info("Editor Mode activo");
+}
+
+void EditorApplication::updateCameras(f32 dt) {
+    if (m_mode == EditorMode::Editor) {
+        const float dx = m_ui.viewport().cameraRotateDx();
+        const float dy = m_ui.viewport().cameraRotateDy();
+        const float wheel = m_ui.viewport().cameraWheel();
+        if (dx != 0.0f || dy != 0.0f) m_editorCamera.applyMouseDrag(dx, dy);
+        if (wheel != 0.0f) m_editorCamera.applyWheel(wheel);
+    } else {
+        const Uint8* keys = SDL_GetKeyboardState(nullptr);
+        glm::vec3 dir(0.0f);
+        if (keys[SDL_SCANCODE_W]) dir.z += 1.0f;
+        if (keys[SDL_SCANCODE_S]) dir.z -= 1.0f;
+        if (keys[SDL_SCANCODE_D]) dir.x += 1.0f;
+        if (keys[SDL_SCANCODE_A]) dir.x -= 1.0f;
+        if (keys[SDL_SCANCODE_SPACE]) dir.y += 1.0f;
+        if (keys[SDL_SCANCODE_LSHIFT]) dir.y -= 1.0f;
+        m_playCamera.move(dir, dt);
+
+        int mx = 0;
+        int my = 0;
+        SDL_GetRelativeMouseState(&mx, &my);
+        if (mx != 0 || my != 0) {
+            m_playCamera.applyMouseMove(static_cast<float>(mx), static_cast<float>(my));
+        }
+    }
+}
+
+void EditorApplication::renderSceneToViewport(f32 dt) {
     const u32 desiredW = m_ui.viewport().desiredWidth();
     const u32 desiredH = m_ui.viewport().desiredHeight();
     if (desiredW > 0 && desiredH > 0) {
@@ -173,10 +207,36 @@ void EditorApplication::renderSceneToViewport() {
     m_viewportFb->bind();
 
     ClearValues clear{};
-    // Azul oscuro para diferenciar del gris del editor.
     clear.color = {0.07f, 0.12f, 0.22f, 1.0f};
     m_renderer->beginFrame(clear);
-    m_renderer->drawMesh(*m_triangleMesh, *m_defaultShader);
+
+    m_modelRotationRadians += dt * 0.6f;
+    const glm::mat4 model = glm::rotate(
+        glm::mat4(1.0f), m_modelRotationRadians, glm::vec3(0.3f, 1.0f, 0.2f));
+
+    const float aspect = (m_viewportFb->height() > 0)
+        ? static_cast<float>(m_viewportFb->width()) / static_cast<float>(m_viewportFb->height())
+        : 1.0f;
+
+    glm::mat4 view;
+    glm::mat4 projection;
+    if (m_mode == EditorMode::Play) {
+        view = m_playCamera.viewMatrix();
+        projection = m_playCamera.projectionMatrix(aspect);
+    } else {
+        view = m_editorCamera.viewMatrix();
+        projection = m_editorCamera.projectionMatrix(aspect);
+    }
+
+    m_defaultShader->bind();
+    m_defaultShader->setMat4("uModel", model);
+    m_defaultShader->setMat4("uView", view);
+    m_defaultShader->setMat4("uProjection", projection);
+    m_defaultShader->setInt("uTexture", 0);
+
+    m_gridTexture->bind(0);
+
+    m_renderer->drawMesh(*m_cubeMesh, *m_defaultShader);
     m_renderer->endFrame();
 
     m_viewportFb->unbind();
@@ -186,22 +246,37 @@ int EditorApplication::run() {
     m_deltaTimer.reset();
 
     while (m_running) {
-        const f64 dt = m_deltaTimer.elapsedSeconds();
+        const f64 dtD = m_deltaTimer.elapsedSeconds();
+        const f32 dt = static_cast<f32>(dtD);
         m_deltaTimer.reset();
 
-        const f32 fps = m_fpsCounter.tick(dt);
+        const f32 fps = m_fpsCounter.tick(dtD);
         m_ui.setFps(fps);
 
         processEvents();
-
-        bool requestQuit = false;
         beginFrame();
 
-        // Render de la escena al framebuffer offscreen antes de que ImGui
-        // muestre su textura en el panel Viewport.
-        renderSceneToViewport();
-
+        // 1) Construir el widget tree de ImGui. ViewportPanel captura input
+        //    de camara aqui (solo efectivo en Editor Mode).
+        bool requestQuit = false;
         m_ui.draw(requestQuit);
+
+        // 2) Atender toggles de modo solicitados desde la UI (boton Play/Stop).
+        if (m_ui.consumeTogglePlayRequest()) {
+            if (m_mode == EditorMode::Editor) {
+                enterPlayMode();
+            } else {
+                exitPlayMode();
+            }
+        }
+
+        // 3) Input -> camaras.
+        updateCameras(dt);
+
+        // 4) Render 3D al framebuffer offscreen (el panel mostrara la textura).
+        renderSceneToViewport(dt);
+
+        // 5) Draw final de ImGui.
         endFrame();
 
         if (requestQuit) {

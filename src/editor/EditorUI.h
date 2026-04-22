@@ -5,6 +5,7 @@
 // ImGui ni gestiona input: eso vive en EditorApplication.
 
 #include "editor/Dockspace.h"
+#include "editor/EditorMode.h"
 #include "editor/MenuBar.h"
 #include "editor/StatusBar.h"
 #include "editor/panels/AssetBrowserPanel.h"
@@ -34,6 +35,22 @@ public:
     ///        EditorApplication y leer el tamano deseado.
     ViewportPanel& viewport() { return m_viewport; }
 
+    /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
+    ///        la UI lo consulta para mostrarlo en la status bar y el label
+    ///        del boton Play/Stop en la menu bar.
+    EditorMode mode() const { return m_mode; }
+    void setMode(EditorMode m) { m_mode = m; }
+
+    /// @brief Solicitud de toggle del modo emitida por la UI (boton Play).
+    ///        EditorApplication la consume con `consumeTogglePlayRequest`
+    ///        luego de `draw()`.
+    void requestTogglePlay() { m_togglePlayRequested = true; }
+    bool consumeTogglePlayRequest() {
+        const bool r = m_togglePlayRequested;
+        m_togglePlayRequested = false;
+        return r;
+    }
+
 private:
     Dockspace m_dockspace;
     MenuBar m_menuBar;
@@ -44,6 +61,9 @@ private:
     AssetBrowserPanel m_assetBrowser;
 
     std::vector<IPanel*> m_panels;
+
+    EditorMode m_mode = EditorMode::Editor;
+    bool m_togglePlayRequested = false;
 };
 
 } // namespace Mood

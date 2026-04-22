@@ -18,7 +18,7 @@ void EditorUI::draw(bool& requestQuit) {
         }
     }
 
-    m_statusBar.draw();
+    m_statusBar.draw(m_mode);
 }
 
 } // namespace Mood

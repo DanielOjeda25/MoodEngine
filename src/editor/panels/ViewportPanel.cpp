@@ -7,6 +7,11 @@
 namespace Mood {
 
 void ViewportPanel::onImGuiRender() {
+    // Reset de input capturado: se actualiza dentro del panel si aplica.
+    m_cameraRotateDx = 0.0f;
+    m_cameraRotateDy = 0.0f;
+    m_cameraWheel = 0.0f;
+
     if (!visible) return;
 
     // Quitar padding para que la imagen ocupe todo el panel.
@@ -22,6 +27,25 @@ void ViewportPanel::onImGuiRender() {
             const ImVec2 uv0(0.0f, 1.0f);
             const ImVec2 uv1(1.0f, 0.0f);
             ImGui::Image(m_framebuffer->colorAttachmentHandle(), avail, uv0, uv1);
+
+            // Captura de input para la camara del editor mientras el cursor
+            // esta sobre la imagen del viewport.
+            const bool hovered = ImGui::IsItemHovered();
+            ImGuiIO& io = ImGui::GetIO();
+
+            if (hovered) {
+                m_cameraWheel = io.MouseWheel;
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                    m_rightDragging = true;
+                }
+            }
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+                m_rightDragging = false;
+            }
+            if (m_rightDragging) {
+                m_cameraRotateDx = io.MouseDelta.x;
+                m_cameraRotateDy = io.MouseDelta.y;
+            }
         } else {
             const char* placeholder = "Viewport (sin framebuffer)";
             const ImVec2 textSize = ImGui::CalcTextSize(placeholder);

@@ -4,7 +4,7 @@
 
 namespace Mood {
 
-void StatusBar::draw() {
+void StatusBar::draw(EditorMode mode) {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const float statusHeight = ImGui::GetFrameHeight();
 
@@ -27,7 +27,7 @@ void StatusBar::draw() {
         if (ImGui::BeginMenuBar()) {
             ImGui::Text("FPS: %.1f", static_cast<double>(m_fps));
             ImGui::Separator();
-            ImGui::TextUnformatted("Editor Mode");
+            ImGui::TextUnformatted(mode == EditorMode::Play ? "Play Mode" : "Editor Mode");
             ImGui::Separator();
             ImGui::TextUnformatted(m_message.c_str());
             ImGui::EndMenuBar();

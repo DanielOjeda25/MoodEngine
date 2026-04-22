@@ -5,7 +5,11 @@
 // SDL2 y OpenGL3, corre el loop principal y cierra todo en orden inverso.
 
 #include "core/Time.h"
+#include "core/Types.h"
+#include "editor/EditorMode.h"
 #include "editor/EditorUI.h"
+#include "engine/scene/EditorCamera.h"
+#include "engine/scene/FpsCamera.h"
 #include "platform/Window.h"
 
 #include <memory>
@@ -16,6 +20,7 @@ class IRenderer;
 class IFramebuffer;
 class IShader;
 class IMesh;
+class ITexture;
 
 class EditorApplication {
 public:
@@ -35,8 +40,15 @@ private:
     void endFrame();
 
     /// @brief Renderiza la escena al framebuffer offscreen que muestra el
-    ///        panel Viewport. Se llama por frame antes de que la UI dibuje.
-    void renderSceneToViewport();
+    ///        panel Viewport.
+    void renderSceneToViewport(f32 dt);
+
+    /// @brief Actualiza la camara activa leyendo input del panel Viewport
+    ///        (Editor Mode) o de SDL en relative mouse mode (Play Mode).
+    void updateCameras(f32 dt);
+
+    void enterPlayMode();
+    void exitPlayMode();
 
     std::unique_ptr<Window> m_window;
 
@@ -45,7 +57,13 @@ private:
     std::unique_ptr<IRenderer> m_renderer;
     std::unique_ptr<IFramebuffer> m_viewportFb;
     std::unique_ptr<IShader> m_defaultShader;
-    std::unique_ptr<IMesh> m_triangleMesh;
+    std::unique_ptr<IMesh> m_cubeMesh;
+    std::unique_ptr<ITexture> m_gridTexture;
+
+    EditorCamera m_editorCamera;
+    FpsCamera m_playCamera;
+    EditorMode m_mode = EditorMode::Editor;
+    f32 m_modelRotationRadians = 0.0f;
 
     EditorUI m_ui;
 

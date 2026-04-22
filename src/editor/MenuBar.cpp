@@ -50,6 +50,28 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ImGui::EndMenu();
         }
 
+        // Boton Play/Stop empujado a la derecha de la menu bar.
+        const bool isPlay = ui.mode() == EditorMode::Play;
+        const char* btnLabel = isPlay ? "Stop" : "Play";
+        const float btnWidth = 64.0f;
+        const float avail = ImGui::GetContentRegionAvail().x;
+        if (avail > btnWidth) {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - btnWidth));
+        }
+        if (isPlay) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.20f, 0.20f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.25f, 0.25f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.85f, 0.30f, 0.30f, 1.0f));
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.55f, 0.25f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.70f, 0.30f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.85f, 0.35f, 1.0f));
+        }
+        if (ImGui::Button(btnLabel, ImVec2(btnWidth, 0.0f))) {
+            ui.requestTogglePlay();
+        }
+        ImGui::PopStyleColor(3);
+
         ImGui::EndMenuBar();
     }
 
@@ -65,7 +87,7 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
 
     if (ImGui::BeginPopupModal("Acerca de MoodEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("MoodEngine");
-        ImGui::Text("Version 0.2.0 (Hito 2)");
+        ImGui::Text("Version 0.3.0 (Hito 3)");
         ImGui::Separator();
         ImGui::Text("Motor grafico 3D propio con editor integrado.");
         ImGui::Text("Repositorio: https://github.com/DanielOjeda25/MoodEngine");
