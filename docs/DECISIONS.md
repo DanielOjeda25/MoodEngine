@@ -95,3 +95,62 @@ Registro cronológico de decisiones arquitectónicas no triviales. Formato por e
 **Decisión:** `Dockspace::begin` invoca `buildDefaultLayoutIfEmpty` que usa `ImGui::DockBuilder*` para fijar Viewport (centro), Inspector (derecha 22%) y Asset Browser (abajo 28%). Sólo se aplica si el dockspace no tiene nodos hijos (`node->IsSplitNode() == false`); si el usuario ya acomodó paneles, se respeta el layout persistido.
 **Razones:** primera experiencia profesional sin manipular la UI; preserva cambios del usuario.
 **Alternativas consideradas:** forzar el layout siempre — pisa los ajustes del dev.
+
+## 2026-04-22: stb_image commiteado, target `stb` INTERFACE + `stb_impl.cpp`
+
+**Contexto:** carga de texturas para el Hito 3 (adelantada respecto del roadmap que la planeaba en Hito 5).
+**Decisión:** bajar `stb_image.h` (2.30) y `stb_image_write.h` (1.16) del repo `nothings/stb` y commitearlos en `external/stb/`. Target CMake `stb` es INTERFACE (sólo expone include path). Los símbolos se generan en una única TU `src/engine/assets/stb_impl.cpp` con `STB_IMAGE_IMPLEMENTATION` + `STB_IMAGE_WRITE_IMPLEMENTATION`. `README.md` documenta cómo actualizar.
+**Razones:** reproducible sin dependencias externas, single-header aprovechado como viene del autor.
+**Alternativas consideradas:** CPM con repo de stb — funciona pero es innecesario para dos headers.
+**Revisar si:** algún header de stb tiene API-breaking update que queramos pinnear a un commit.
+
+## 2026-04-22: Textura de prueba generada con Python/Pillow, PNG commiteado
+
+**Contexto:** hace falta una textura real para sampler2D; descargar de internet abre tema de licencias.
+**Decisión:** script `tools/gen_grid_texture.py` (Python + Pillow) genera `assets/textures/grid.png` (256x256 RGBA). Ambos se commitean.
+**Razones:** reproducible, sin licencias externas, con orientación visual (acento naranja cada 4 celdas). El script sirve como documentación viva del asset.
+**Alternativas consideradas:** generar la textura en runtime con `stb_image_write` en el primer arranque — desplaza trabajo a código de producto; innecesario.
+**Revisar si:** el asset crece (p.ej. sprite sheets, atlas) y la generación por script se vuelve ruidosa.
+
+## 2026-04-22: RHI amplia con `ITexture` + backend `OpenGLTexture`
+
+**Contexto:** bloque complementario al renderer del Hito 2: subir texturas a GPU y bindearlas por unit.
+**Decisión:** interfaz `ITexture` con `bind(slot)`, `handle()` (TextureHandle opaco). Implementación OpenGL usa stb_image con `stbi_set_flip_vertically_on_load(true)` para que V=0 esté abajo (coincide con OpenGL). Genera mipmaps con `glGenerateMipmap`, filtro LINEAR_MIPMAP_LINEAR / LINEAR, wrap REPEAT.
+**Razones:** misma filosofía que el resto del RHI: interfaz mínima en agnóstica, detalles GL en el backend.
+**Alternativas consideradas:** incluir una clase Material que agrupe textura + shader — prematuro; entra cuando haya varios materials.
+
+## 2026-04-22: Cubo hardcoded en `PrimitiveMeshes::createCubeMesh`
+
+**Contexto:** necesitamos geometría 3D concreta; assimp está planeado para Hito 10.
+**Decisión:** helper `createCubeMesh()` que devuelve `MeshData` con 36 vértices interleaved (pos+color+uv). Sin EBO por ahora; se introduce cuando la duplicación empiece a doler.
+**Razones:** mantenerse minimalista; 36 vértices para un cubo son 8*36=288 floats, trivial en RAM.
+**Alternativas consideradas:** EBO + 24 vértices — mejor data pero más código para el primer cubo del motor.
+
+## 2026-04-22: Render offscreen ahora tras `ui.draw()`, no antes
+
+**Contexto:** el panel Viewport necesita capturar input del mouse para la cámara orbital. Si el render offscreen se hiciera antes de construir el widget tree de ImGui, el input captado entraría en el frame siguiente.
+**Decisión:** nuevo orden del loop — `beginFrame -> ui.draw -> consumeToggle -> updateCameras -> renderSceneToViewport -> endFrame`. El render offscreen queda entre el widget tree y la renderización final de ImGui; la textura del FB se upload antes de que la GPU consuma el draw list que la referencia (`ImGui::Image` sólo guarda el handle).
+**Razones:** input de cámara responde en el mismo frame; el lag de un frame del resize del FB sigue siendo aceptable.
+**Alternativas consideradas:** capturar input en `processEvents` antes de ImGui — forza replicar la lógica de hover/drag sobre un panel ImGui específico.
+
+## 2026-04-22: Modos Editor/Play con toggle desde menu bar y Esc para salir
+
+**Contexto:** dos cámaras (orbital vs FPS) necesitan estados distintos del editor.
+**Decisión:** enum `EditorMode { Editor, Play }` en `src/editor/EditorMode.h`. `EditorApplication` dueño del estado; `EditorUI` tiene un mirror + flag `m_togglePlayRequested`. Botón Play/Stop (verde/rojo) empujado a la derecha de la menu bar. Esc en Play vuelve a Editor. Al entrar Play: `SDL_SetRelativeMouseMode(SDL_TRUE)` + descarta delta residual.
+**Razones:** UX reconocible (botón Play prominente tipo Unity), patrón request-response desacopla UI de estado.
+**Alternativas consideradas:** manejo directo del estado en la UI — acopla MenuBar al mouse capture de SDL.
+
+## 2026-04-22: `EditorCamera` orbital + `FpsCamera` libres, sin clase base
+
+**Contexto:** dos cámaras conceptualmente distintas.
+**Decisión:** clases concretas separadas (`src/engine/scene/EditorCamera.{h,cpp}` y `FpsCamera.{h,cpp}`), sin jerarquía virtual. Ambas exponen `viewMatrix()` + `projectionMatrix(aspect)`; el callsite elige cuál usar según modo.
+**Razones:** duck typing sin vtable ni allocación dinámica; para el tamaño actual, una base virtual es overhead sin beneficio.
+**Alternativas consideradas:** `class Camera` base abstracta — útil cuando haya 3+ cámaras o un CameraController polimórfico; hoy no.
+**Revisar si:** aparecen cámaras cinematic (spline, target-locked) o un sistema ECS necesita tratarlas uniformemente.
+
+## 2026-04-22: Tests con doctest, sólo unidades puras
+
+**Contexto:** inicio de la red de tests. doctest adelantado desde Hito 3-4 (roadmap decía 3-4).
+**Decisión:** target `mood_tests` compila las unidades puras (hoy `EditorCamera`, `FpsCamera` + `test_math.cpp`). No se testea render ni UI. `enable_testing()` + `add_subdirectory(tests)` en el CMakeLists raíz. Ejecución con `ctest` o invocando el exe directo.
+**Razones:** cubrir la matemática sin montar mocks de GL; sirve como sanity check del build de cámaras.
+**Alternativas consideradas:** extraer una static lib `mood_core` compartida con MoodEditor y mood_tests — prematuro con dos archivos; se hace cuando la superficie crezca.

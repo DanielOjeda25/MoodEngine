@@ -6,11 +6,11 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 2 cerrado, mergeado a `main` y publicado en origin.**
-Tag: `v0.2.0-hito2`.
-Verificado automático (log con `OpenGL iniciado` + `GPU: ...`, exit 0, shutdown ordenado) + verificado por el dev a ojo (triángulo RGB en el panel Viewport, redimensionable sin distorsión, layout por defecto sin superposiciones, título "(Hito 2)").
+**Hito 3 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.3.0-hito3`.
+Verificado automático (`Textura cargada: assets/textures/grid.png (256x256, 4 canales)`, `OpenGLRenderer listo (depth test activo)`, tests doctest 10/10 pasando, shutdown exit 0) + verificado por el dev a ojo (cubo rotando texturizado, WASD en Play Mode, toggle Play/Stop + Esc para salir).
 
-**Próximo paso:** Hito 3 — cubo texturizado con cámara. Plan detallado en `docs/PLAN_HITO3.md`.
+**Próximo paso:** Hito 4 — mundo grid + colisiones AABB. Plan detallado en `docs/PLAN_HITO4.md`.
 
 ### Lo que ya está hecho
 
@@ -25,10 +25,25 @@ Verificado automático (log con `OpenGL iniciado` + `GPU: ...`, exit 0, shutdown
 - `external/glad/`: GLAD v2 para OpenGL 4.5 Core generado con `glad2` Python, files committed, target estático `glad`.
 - `src/engine/render/`: RHI abstracta (`IRenderer`, `IShader`, `IMesh`, `IFramebuffer`, `RendererTypes.h`).
 - `src/engine/render/opengl/`: backend OpenGL (OpenGLRenderer, OpenGLShader con cache de uniforms, OpenGLMesh, OpenGLFramebuffer con color RGBA8 + depth RB).
-- `shaders/default.{vert,frag}`: GLSL 4.5 Core, triángulo con color por vértice. Copiado post-build junto al exe.
-- `EditorApplication` ahora monta renderer + framebuffer + shader + mesh; renderiza offscreen cada frame antes de la UI.
-- `ViewportPanel` muestra el color attachment con `ImGui::Image` y UV invertido vertical; publica `desiredWidth/Height` para que el loop redimensione el FB en el frame siguiente.
+- `shaders/default.{vert,frag}`: GLSL 4.5 Core. Copiado post-build junto al exe.
+- `EditorApplication` monta renderer + framebuffer + shader + mesh; renderiza offscreen cada frame antes de la UI.
+- `ViewportPanel` muestra el color attachment con `ImGui::Image` y UV invertido vertical.
 - `Dockspace.cpp` arma layout por defecto con `DockBuilder` cuando `imgui.ini` no tiene nodos split.
+
+**Hito 3** — Cubo texturizado con cámara (tag `v0.3.0-hito3`):
+- `external/stb/`: `stb_image.h` (2.30) + `stb_image_write.h` (1.16) commiteados; target INTERFACE `stb`.
+- `src/engine/assets/stb_impl.cpp`: única TU con `STB_IMAGE_IMPLEMENTATION`.
+- `src/engine/assets/PrimitiveMeshes.{h,cpp}`: helper `createCubeMesh()` (36 vértices, pos+color+uv).
+- `src/engine/render/ITexture.h` + `OpenGLTexture.{h,cpp}`: carga con stb_image, genera mipmaps, flip vertical al cargar.
+- `src/engine/scene/EditorCamera.{h,cpp}`: orbital (yaw/pitch/radio + target). Input: right-drag + wheel.
+- `src/engine/scene/FpsCamera.{h,cpp}`: libre (position + yaw/pitch). Input: WASD + mouse relativo.
+- `src/editor/EditorMode.h`: enum Editor/Play + toggle request via `EditorUI`.
+- `MenuBar` tiene ahora un botón Play/Stop verde/rojo empujado a la derecha.
+- `StatusBar::draw(EditorMode)` muestra "Editor Mode" o "Play Mode" dinámicamente.
+- Shaders extendidos: `uModel/uView/uProjection` + `sampler2D uTexture`, atributos pos/color/uv.
+- Depth test activo en `OpenGLRenderer::init()`.
+- `assets/textures/grid.png` generada con `tools/gen_grid_texture.py` (Python + Pillow, 256x256 RGBA).
+- `tests/` con doctest: 10 casos, 37 asserciones (matemática GLM + cámaras).
 
 ### Dependencias que baja CPM al configurar
 
@@ -36,10 +51,12 @@ Verificado automático (log con `OpenGL iniciado` + `GPU: ...`, exit 0, shutdown
 - GLM `1.0.1`
 - spdlog `1.14.1`
 - ImGui rama `docking` (compilado como target interno `imgui` con backends SDL2 + OpenGL3)
+- doctest `2.4.11` (sólo para el target `mood_tests`)
 
 ### Herramientas externas necesarias (solo para regenerar, no para build)
 
 - `glad2` (Python) — para regenerar GLAD si cambia la versión de GL. Ver `external/glad/README.md`.
+- `Pillow` (Python) — para regenerar `assets/textures/grid.png` desde `tools/gen_grid_texture.py`. No hace falta si el PNG ya está commiteado.
 
 ---
 
@@ -100,21 +117,21 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: implementar el Hito 3
+### Tarea inmediata: implementar el Hito 4
 
-El Hito 2 está cerrado (tag `v0.2.0-hito2` en origin). El foco ahora es el **Hito 3 — cubo texturizado con cámara**.
+El Hito 3 está cerrado (tag `v0.3.0-hito3` en origin). El foco ahora es el **Hito 4 — mundo grid + colisiones AABB**.
 
-El plan desglosado por tareas está en `docs/PLAN_HITO3.md`.
+El plan desglosado por tareas está en `docs/PLAN_HITO4.md`.
 
-**Punto de arranque concreto:** `external/stb/` — hoy contiene sólo un README. Bajar `stb_image.h` y `stb_image_write.h` desde https://github.com/nothings/stb (son single-header) y commitearlos.
+**Punto de arranque concreto:** crear `src/engine/world/GridMap.{h,cpp}` con una grilla 2D de tiles (enum TileType). El renderer itera la grilla y dibuja un cubo texturizado por celda ocupada. Después, `src/core/math/AABB.{h,cpp}` + `src/systems/PhysicsSystem.cpp` con raycasts tile-a-tile para colisión jugador-vs-paredes.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO3.md` (tareas numeradas).
+1. Leer `docs/PLAN_HITO4.md`.
 2. Trabajar tarea por tarea, marcando como completadas en el plan al terminar cada una.
-3. Después de cada bloque grande (textura, matrices MVP, cámara, cubo), compilar y confirmar que sigue funcionando.
+3. Después de cada bloque grande (grid data, grid render, AABB math, collision, debug draw), compilar y confirmar.
 4. Actualizar `docs/DECISIONS.md` si aparece alguna decisión no prevista.
-5. Al final: commits atómicos en español, merge a main, tag `v0.3.0-hito3`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO4.md`.
+5. Al final: commits atómicos en español, merge a main, tag `v0.4.0-hito4`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO5.md`.
 
 ---
 
