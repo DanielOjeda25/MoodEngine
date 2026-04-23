@@ -77,8 +77,10 @@ Entregable: al entrar en Play Mode, apareces en una sala con paredes y podés ca
 ### Bloque 6 — Tests
 
 - [x] `test_aabb.cpp`: intersección, contención, merge. Al menos 6 casos. Ver Bloque 3.
-- [ ] `test_grid.cpp`: `isSolid` para coordenadas dentro y fuera del mapa (fuera debe ser tratado como sólido o como vacío — decidir y testear).
-- [ ] `test_collision.cpp`: `moveAndSlide` contra una sola pared, contra esquina (slide correcto), contra AABB degenerada.
+- [x] `test_grid.cpp`: construcción, setTile válido/fuera-de-rango, `isSolid` dentro y fuera del mapa (decisión: fuera = sólido), `aabbOfTile` en map-local. 5 casos.
+- [x] `test_collision.cpp`: delta cero, área libre, pared en ±X, esquina con slide, Y sin colisión, respeto a `mapWorldOrigin`, AABB degenerada. 8 casos.
+
+Total suite tras Bloque 6: 30 casos, 159 asserciones.
 
 ### Bloque 7 — Cierre
 
