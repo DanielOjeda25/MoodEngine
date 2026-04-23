@@ -4,6 +4,7 @@
 #include "core/math/AABB.h"
 #include "engine/assets/PrimitiveMeshes.h"
 #include "engine/render/ITexture.h"
+#include "engine/render/opengl/OpenGLDebugRenderer.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/render/opengl/OpenGLMesh.h"
 #include "engine/render/opengl/OpenGLRenderer.h"
@@ -96,6 +97,8 @@ EditorApplication::EditorApplication() {
 
     m_gridTexture = std::make_unique<OpenGLTexture>("assets/textures/grid.png");
 
+    m_debugRenderer = std::make_unique<OpenGLDebugRenderer>();
+
     m_ui.viewport().setFramebuffer(m_viewportFb.get());
 
     // --- Mapa de prueba (Hito 4 Bloque 1) ---
@@ -117,6 +120,7 @@ EditorApplication::EditorApplication() {
 EditorApplication::~EditorApplication() {
     // Los recursos GL dependen del contexto; liberar ANTES de destruir ImGui
     // y el contexto (el destructor del Window destruye el contexto al final).
+    m_debugRenderer.reset();
     m_gridTexture.reset();
     m_cubeMesh.reset();
     m_defaultShader.reset();
@@ -150,6 +154,11 @@ void EditorApplication::processEvents() {
                    ev.key.keysym.sym == SDLK_ESCAPE &&
                    m_mode == EditorMode::Play) {
             exitPlayMode();
+        } else if (ev.type == SDL_KEYDOWN &&
+                   ev.key.keysym.sym == SDLK_F1 &&
+                   ev.key.repeat == 0) {
+            m_debugDraw = !m_debugDraw;
+            Log::editor()->info("Debug draw {}", m_debugDraw ? "activado" : "desactivado");
         }
     }
 }
@@ -291,6 +300,29 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
             m_defaultShader->setMat4("uModel", model);
             m_renderer->drawMesh(*m_cubeMesh, *m_defaultShader);
         }
+    }
+
+    // Debug draw (opcional, toggle con F1): AABBs de tiles solidos + AABB
+    // del jugador en Play Mode. Se acumula y flushea despues de la escena
+    // para que las lineas queden por encima (respetando depth).
+    if (m_debugDraw) {
+        const glm::vec3 tileColor(1.0f, 0.85f, 0.15f);
+        for (u32 ty = 0; ty < m_map.height(); ++ty) {
+            for (u32 tx = 0; tx < m_map.width(); ++tx) {
+                if (!m_map.isSolid(tx, ty)) continue;
+                const AABB local = m_map.aabbOfTile(tx, ty);
+                const AABB world{origin + local.min, origin + local.max};
+                m_debugRenderer->drawAabb(world, tileColor);
+            }
+        }
+        if (m_mode == EditorMode::Play) {
+            const glm::vec3 playerColor(0.2f, 1.0f, 0.4f);
+            const glm::vec3 pos = m_playCamera.position();
+            m_debugRenderer->drawAabb(
+                AABB{pos - k_playerHalfExtents, pos + k_playerHalfExtents},
+                playerColor);
+        }
+        m_debugRenderer->flush(view, projection);
     }
 
     m_renderer->endFrame();

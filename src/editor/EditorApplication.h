@@ -22,6 +22,7 @@ class IFramebuffer;
 class IShader;
 class IMesh;
 class ITexture;
+class OpenGLDebugRenderer;
 
 class EditorApplication {
 public:
@@ -65,6 +66,7 @@ private:
     std::unique_ptr<IShader> m_defaultShader;
     std::unique_ptr<IMesh> m_cubeMesh;
     std::unique_ptr<ITexture> m_gridTexture;
+    std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
 
     // Cam orbital: radio 12 para que el mapa 8x8 (XZ +-4) quede en cuadro.
     // Cam FPS: tile interior (2,6) a altura de ojos; yaw -90 mira hacia -Z.
@@ -75,6 +77,10 @@ private:
     // Mapa jugable (Hito 4). Se renderiza centrado en el origen del mundo;
     // las colisiones entran en el Bloque 4.
     GridMap m_map{8u, 8u, 1.0f};
+
+    // Toggle del debug draw de AABBs (tile colliders + AABB del jugador en
+    // Play Mode). Controlado con F1. Default off para no ensuciar la escena.
+    bool m_debugDraw = false;
 
     EditorUI m_ui;
 

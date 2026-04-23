@@ -132,6 +132,7 @@ add_executable(MoodEditor
     src/engine/render/opengl/OpenGLFramebuffer.cpp
     src/engine/render/opengl/OpenGLRenderer.cpp
     src/engine/render/opengl/OpenGLTexture.cpp
+    src/engine/render/opengl/OpenGLDebugRenderer.cpp
 
     src/editor/EditorApplication.cpp
     src/editor/EditorUI.cpp

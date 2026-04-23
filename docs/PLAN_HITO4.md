@@ -70,9 +70,9 @@ Entregable: al entrar en Play Mode, apareces en una sala con paredes y podés ca
 
 ### Bloque 5 — Debug rendering de AABBs
 
-- [ ] `src/engine/render/IDebugRenderer.h` (o ampliar `IRenderer`): métodos `drawLine(a, b, color)`, `drawAabb(box, color)`. Acumulan líneas por frame y las dibujan en un pass de wireframe al final.
-- [ ] `OpenGLDebugRenderer`: usa un VBO dinámico + shader simple (vec3 pos, vec3 color, matrices MVP).
-- [ ] Toggle con tecla F1 (y un campo `m_debugDraw` en EditorApplication).
+- [x] ~~`src/engine/render/IDebugRenderer.h` (o ampliar `IRenderer`)~~: por ahora clase concreta `OpenGLDebugRenderer` directa (sin interfaz), con `drawLine(a, b, color)` y `drawAabb(box, color)`. Acumulan en un `std::vector<Vertex>` CPU y flushean con `GL_LINES` una vez por frame. Extraer a `IDebugRenderer` cuando aparezca un segundo backend.
+- [x] `OpenGLDebugRenderer`: VBO dinámico con growth policy (2x al rebasar), shader `shaders/debug_line.{vert,frag}` (vec3 pos + vec3 color + uView/uProjection, color plano).
+- [x] Toggle con tecla F1 (campo `m_debugDraw` en EditorApplication). En Play Mode se dibuja también el AABB verde del jugador además del amarillo de los tiles sólidos.
 
 ### Bloque 6 — Tests
 
