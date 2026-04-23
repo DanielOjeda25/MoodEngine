@@ -7,18 +7,16 @@ namespace Mood {
 
 namespace {
 
-/// @brief Arma el layout por defecto la primera vez. Solo corre si el
-///        dockspace no tiene nodos hijos aun (imgui.ini ausente o vacio).
-///        Si el usuario ya movio paneles antes, los respeta tal cual.
-void buildDefaultLayoutIfEmpty(ImGuiID dockspaceId, const ImVec2& size) {
-    static bool attempted = false;
-    if (attempted) return;
-    attempted = true;
-
-    ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspaceId);
-    if (node != nullptr && node->IsSplitNode()) {
-        // Ya hay un layout persistido: no tocar.
-        return;
+/// @brief Arma el layout por defecto: corre una vez por sesion salvo que se
+///        pida explicitamente un reset (via `Dockspace::requestResetToDefault`).
+///        Respeta lo persistido en `imgui.ini` mientras no haya reset pendiente.
+void buildDefaultLayout(ImGuiID dockspaceId, const ImVec2& size, bool force) {
+    if (!force) {
+        ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspaceId);
+        if (node != nullptr && node->IsSplitNode()) {
+            // Ya hay un layout persistido: no tocar.
+            return;
+        }
     }
 
     ImGui::DockBuilderRemoveNode(dockspaceId);
@@ -77,7 +75,16 @@ bool Dockspace::begin() {
 
     if (open) {
         const ImGuiID dockspaceId = ImGui::GetID("MoodDockSpace");
-        buildDefaultLayoutIfEmpty(dockspaceId, viewport->WorkSize);
+
+        // Aplicar el layout por defecto: la primera vez del session (si el
+        // dockspace esta vacio) o si se solicito un reset explicito.
+        const bool shouldForceReset = m_resetRequested;
+        if (!m_buildAttempted || m_resetRequested) {
+            buildDefaultLayout(dockspaceId, viewport->WorkSize, shouldForceReset);
+            m_buildAttempted = true;
+            m_resetRequested = false;
+        }
+
         ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
     }
 

@@ -16,6 +16,16 @@ public:
 
     /// @brief Cierra la ventana host abierta con begin().
     void end();
+
+    /// @brief Fuerza que el proximo `begin()` reconstruya el layout por
+    ///        defecto ignorando lo persistido en `imgui.ini`. Util para el
+    ///        item "Ver > Restablecer layout" cuando se agregan paneles
+    ///        nuevos o el dev reorganizo y quiere volver a empezar.
+    void requestResetToDefault() { m_resetRequested = true; }
+
+private:
+    bool m_buildAttempted = false;
+    bool m_resetRequested = false;
 };
 
 } // namespace Mood

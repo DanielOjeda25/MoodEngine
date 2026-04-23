@@ -40,6 +40,11 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             for (IPanel* panel : ui.panels()) {
                 ImGui::MenuItem(panel->name(), nullptr, &panel->visible);
             }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Restablecer layout")) {
+                ui.dockspace().requestResetToDefault();
+                Log::editor()->info("Layout restablecido al default");
+            }
             ImGui::EndMenu();
         }
 

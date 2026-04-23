@@ -36,6 +36,10 @@ public:
     ///        EditorApplication y leer el tamano deseado.
     ViewportPanel& viewport() { return m_viewport; }
 
+    /// @brief Acceso al dockspace. MenuBar lo usa para pedir "Restablecer
+    ///        layout" cuando el usuario lo elige desde el menu Ver.
+    Dockspace& dockspace() { return m_dockspace; }
+
     /// @brief Acceso al panel Asset Browser para inyectarle el AssetManager
     ///        desde EditorApplication y leer la seleccion actual.
     AssetBrowserPanel& assetBrowser() { return m_assetBrowser; }
