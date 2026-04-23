@@ -6,12 +6,11 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 5 cerrado y taggeado como `v0.5.0-hito5` en local.**
+**Hito 5 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.5.0-hito5`.
 Verificado automático (log `AssetManager: fallback 'missing' cargado desde assets/textures/missing.png`, suite doctest 35/35 pasando con 179 asserciones, shutdown exit 0) + verificado por el dev a ojo (sala con 2 texturas — grid en perímetro, brick en columna central —, Asset Browser con 3 miniaturas clicables, Console acoplado inferior-derecho con logs coloreados por nivel, F1 debug draw sigue funcionando, colisiones sin regresión).
 
 **Próximo paso:** Hito 6 — Serialización de proyectos y mapas (`.moodproj` + `.moodmap`). Plan detallado en `docs/PLAN_HITO6.md`. Pendientes arrastrados (ver `PLAN_HITO5.md` sección pendientes): tests de AssetManager, drag & drop Asset Browser → tile, extracción de `GridRenderer` desde `EditorApplication`.
-
-> Nota push: los commits del Hito 5 están sólo en local, sin pushear a origin. Hacer `git push origin main --tags` cuando esté OK.
 
 ### Lo que ya está hecho
 
