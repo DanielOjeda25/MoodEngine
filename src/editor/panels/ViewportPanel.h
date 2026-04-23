@@ -29,6 +29,33 @@ public:
     /// @brief Delta de la rueda del mouse sobre el panel (zoom). Cero si no aplica.
     float cameraWheel() const { return m_cameraWheel; }
 
+    /// @brief `true` si el cursor esta sobre la imagen del viewport en el
+    ///        frame actual. Requisito para usar `mouseNdcX/Y`.
+    bool imageHovered() const { return m_imageHovered; }
+
+    /// @brief Coordenadas NDC del cursor dentro del area de la imagen,
+    ///        rango [-1, 1], Y+ arriba (convencion OpenGL). Sin sentido si
+    ///        `imageHovered()` es false. Usar con `pickTile()`.
+    float mouseNdcX() const { return m_mouseNdcX; }
+    float mouseNdcY() const { return m_mouseNdcY; }
+
+    /// @brief Drop de una textura sobre el viewport (desde AssetBrowser).
+    ///        El panel solo captura el evento; el receiver (EditorApplication)
+    ///        computa el tile con `pickTile(ndcX, ndcY)` y aplica el cambio.
+    struct TextureDrop {
+        bool pending = false;
+        float ndcX = 0.0f;
+        float ndcY = 0.0f;
+        u32 textureId = 0; // castear a TextureAssetId en el consumidor
+    };
+
+    /// @brief Consume el ultimo drop. Devuelve `pending=false` si no hay.
+    TextureDrop consumeTextureDrop() {
+        TextureDrop r = m_pendingDrop;
+        m_pendingDrop = TextureDrop{};
+        return r;
+    }
+
 private:
     IFramebuffer* m_framebuffer = nullptr;
     u32 m_desiredWidth = 0;
@@ -38,6 +65,12 @@ private:
     float m_cameraRotateDy = 0.0f;
     float m_cameraWheel = 0.0f;
     bool m_rightDragging = false;
+
+    bool m_imageHovered = false;
+    float m_mouseNdcX = 0.0f;
+    float m_mouseNdcY = 0.0f;
+
+    TextureDrop m_pendingDrop{};
 };
 
 } // namespace Mood
