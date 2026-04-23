@@ -9,6 +9,7 @@ add_executable(mood_tests
     test_aabb.cpp
     test_grid.cpp
     test_collision.cpp
+    test_vfs.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -17,6 +18,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scene/FpsCamera.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/GridMap.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/PhysicsSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/platform/VFS.cpp
 )
 
 target_include_directories(mood_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)

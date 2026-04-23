@@ -11,6 +11,7 @@
 // por un lookup mas completo; la API publica no cambia.
 
 #include "core/Types.h"
+#include "platform/VFS.h"
 
 #include <memory>
 #include <string>
@@ -54,7 +55,7 @@ public:
     usize textureCount() const { return m_textures.size(); }
 
 private:
-    std::string m_rootDir;
+    VFS m_vfs;
     std::unordered_map<std::string, TextureAssetId> m_textureCache;
     std::vector<std::unique_ptr<ITexture>> m_textures; // [0] = missing
 };

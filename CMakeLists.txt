@@ -116,6 +116,7 @@ add_executable(MoodEditor
     src/core/Time.cpp
 
     src/platform/Window.cpp
+    src/platform/VFS.cpp
 
     src/engine/assets/AssetManager.cpp
     src/engine/assets/PrimitiveMeshes.cpp

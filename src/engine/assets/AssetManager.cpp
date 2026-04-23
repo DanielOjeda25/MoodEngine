@@ -4,7 +4,6 @@
 #include "engine/render/ITexture.h"
 #include "engine/render/opengl/OpenGLTexture.h"
 
-#include <filesystem>
 #include <stdexcept>
 
 namespace Mood {
@@ -13,26 +12,25 @@ namespace {
 
 constexpr const char* k_missingPath = "textures/missing.png";
 
-std::string joinRoot(const std::string& root, std::string_view path) {
-    std::filesystem::path p = std::filesystem::path(root) / std::string(path);
-    return p.generic_string();
-}
-
 } // namespace
 
 AssetManager::AssetManager(std::string rootDir)
-    : m_rootDir(std::move(rootDir)) {
+    : m_vfs(std::filesystem::path(std::move(rootDir))) {
     // Slot 0 reservado para la textura missing. Si no carga, la instalacion
     // esta rota: dejar que la excepcion se propague.
-    const std::string missingFs = joinRoot(m_rootDir, k_missingPath);
+    const auto missingFs = m_vfs.resolve(k_missingPath);
+    if (missingFs.empty()) {
+        throw std::runtime_error(
+            std::string("AssetManager: path logico 'textures/missing.png' rechazado por VFS"));
+    }
     try {
-        m_textures.emplace_back(std::make_unique<OpenGLTexture>(missingFs));
+        m_textures.emplace_back(std::make_unique<OpenGLTexture>(missingFs.generic_string()));
     } catch (const std::exception& e) {
         throw std::runtime_error(
             std::string("AssetManager: no se pudo cargar missing.png ('") +
-            missingFs + "'): " + e.what());
+            missingFs.generic_string() + "'): " + e.what());
     }
-    Log::assets()->info("AssetManager: fallback 'missing' cargado desde {}", missingFs);
+    Log::assets()->info("AssetManager: fallback 'missing' cargado desde {}", missingFs.generic_string());
 }
 
 AssetManager::~AssetManager() = default;
@@ -43,9 +41,17 @@ TextureAssetId AssetManager::loadTexture(std::string_view logicalPath) {
         return it->second;
     }
 
-    const std::string fsPath = joinRoot(m_rootDir, logicalPath);
+    const auto fs = m_vfs.resolve(logicalPath);
+    if (fs.empty()) {
+        Log::assets()->warn(
+            "AssetManager: path logico '{}' rechazado por VFS (unsafe). Fallback a missing.",
+            logicalPath);
+        m_textureCache.emplace(key, missingTextureId());
+        return missingTextureId();
+    }
+
     try {
-        auto tex = std::make_unique<OpenGLTexture>(fsPath);
+        auto tex = std::make_unique<OpenGLTexture>(fs.generic_string());
         const TextureAssetId id = static_cast<TextureAssetId>(m_textures.size());
         m_textures.push_back(std::move(tex));
         m_textureCache.emplace(key, id);

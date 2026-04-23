@@ -68,10 +68,10 @@ Aplicar antes de tocar AssetManager. El resto del Hito 5 asume estas dimensiones
 
 ## Bloque 3 — VFS inicial
 
-- [ ] `src/platform/VFS.{h,cpp}`: `resolvePath(std::string_view logical) -> std::filesystem::path`. Inicial: `textures/grid.png` → `<cwd>/assets/textures/grid.png`.
-- [ ] Rechazar path traversal (`..`, paths absolutos).
-- [ ] Tests: resolución básica, rechazo de `..`, case-insensitive en Windows si aplica.
-- [ ] `AssetManager::loadTexture` acepta path lógico (va por VFS).
+- [x] `src/platform/VFS.{h,cpp}`: `resolve(std::string_view logical) -> std::filesystem::path` + `isSafeLogicalPath` estático. La raíz se pasa al constructor (por ahora `"assets"` desde `AssetManager`).
+- [x] Rechazar path traversal: `..`, `.`, paths absolutos (`C:/`), y leading `/` o `\` (Windows no los reporta como `is_absolute()` sin drive letter pero siguen siendo escape attempts).
+- [x] Tests `tests/test_vfs.cpp`: 5 casos (acepta relativos simples, rechaza `..`/`.`, rechaza absolutos unix+windows, resolve concatena, resolve vacío para unsafe).
+- [x] `AssetManager` usa `VFS` internamente; `loadTexture` ya acepta paths lógicos tipo `"textures/grid.png"`.
 
 ## Bloque 4 — AssetBrowserPanel real
 
