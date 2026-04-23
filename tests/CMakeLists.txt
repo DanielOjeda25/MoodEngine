@@ -12,6 +12,7 @@ add_executable(mood_tests
     test_vfs.cpp
     test_asset_manager.cpp
     test_json_helpers.cpp
+    test_scene_serializer.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -22,6 +23,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/systems/PhysicsSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/VFS.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/AssetManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/serialization/SceneSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Log.cpp
     ${CMAKE_SOURCE_DIR}/src/core/LogRingSink.cpp
 )

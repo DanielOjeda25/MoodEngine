@@ -132,6 +132,8 @@ add_executable(MoodEditor
     src/engine/assets/PrimitiveMeshes.cpp
     src/engine/assets/stb_impl.cpp
 
+    src/engine/serialization/SceneSerializer.cpp
+
     src/engine/scene/EditorCamera.cpp
     src/engine/scene/FpsCamera.cpp
     src/engine/scene/ViewportPick.cpp

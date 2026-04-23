@@ -30,6 +30,10 @@ AssetManager::AssetManager(std::string rootDir, TextureFactory factory)
     }
     try {
         m_textures.emplace_back(m_factory(missingFs.generic_string()));
+        m_texturePaths.emplace_back(k_missingPath);
+        // Cachear el path del missing al id 0 para que una llamada futura a
+        // loadTexture("textures/missing.png") no cree una entrada duplicada.
+        m_textureCache.emplace(k_missingPath, missingTextureId());
     } catch (const std::exception& e) {
         throw std::runtime_error(
             std::string("AssetManager: no se pudo cargar missing.png ('") +
@@ -59,6 +63,7 @@ TextureAssetId AssetManager::loadTexture(std::string_view logicalPath) {
         auto tex = m_factory(fs.generic_string());
         const TextureAssetId id = static_cast<TextureAssetId>(m_textures.size());
         m_textures.push_back(std::move(tex));
+        m_texturePaths.push_back(key);
         m_textureCache.emplace(key, id);
         Log::assets()->info("AssetManager: cargada texture {} -> id {}", logicalPath, id);
         return id;
@@ -78,6 +83,13 @@ ITexture* AssetManager::getTexture(TextureAssetId id) const {
         return m_textures[missingTextureId()].get();
     }
     return m_textures[id].get();
+}
+
+std::string AssetManager::pathOf(TextureAssetId id) const {
+    if (id >= m_texturePaths.size()) {
+        return m_texturePaths[missingTextureId()];
+    }
+    return m_texturePaths[id];
 }
 
 } // namespace Mood

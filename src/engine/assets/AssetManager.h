@@ -57,6 +57,12 @@ public:
     ///        ids invalidos (fuera de rango) caen al fallback missing.
     ITexture* getTexture(TextureAssetId id) const;
 
+    /// @brief Path logico con el que se cargo la textura. Usado por los
+    ///        serializers para persistir la referencia como string estable
+    ///        entre sesiones (los ids son volatiles). Id invalido o missing
+    ///        devuelve el path del missing.
+    std::string pathOf(TextureAssetId id) const;
+
     /// @brief Id de la textura de fallback. Siempre vale 0.
     TextureAssetId missingTextureId() const { return 0; }
 
@@ -68,6 +74,7 @@ private:
     TextureFactory m_factory;
     std::unordered_map<std::string, TextureAssetId> m_textureCache;
     std::vector<std::unique_ptr<ITexture>> m_textures; // [0] = missing
+    std::vector<std::string> m_texturePaths;           // paralelo a m_textures
 };
 
 } // namespace Mood
