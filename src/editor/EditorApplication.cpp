@@ -41,7 +41,7 @@ EditorApplication::EditorApplication() {
     }
 
     WindowSpec spec{};
-    spec.title = "MoodEngine Editor - v0.3.0 (Hito 3)";
+    spec.title = "MoodEngine Editor - v0.4.0-dev (Hito 4)";
     spec.width = 1280;
     spec.height = 720;
     m_window = std::make_unique<Window>(spec);
@@ -223,10 +223,6 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     clear.color = {0.07f, 0.12f, 0.22f, 1.0f};
     m_renderer->beginFrame(clear);
 
-    m_modelRotationRadians += dt * 0.6f;
-    const glm::mat4 model = glm::rotate(
-        glm::mat4(1.0f), m_modelRotationRadians, glm::vec3(0.3f, 1.0f, 0.2f));
-
     const float aspect = (m_viewportFb->height() > 0)
         ? static_cast<float>(m_viewportFb->width()) / static_cast<float>(m_viewportFb->height())
         : 1.0f;
@@ -241,17 +237,40 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         projection = m_editorCamera.projectionMatrix(aspect);
     }
 
+    // View/projection y la textura de pared son constantes para todos los
+    // tiles del frame; solo uModel cambia por cubo.
     m_defaultShader->bind();
-    m_defaultShader->setMat4("uModel", model);
     m_defaultShader->setMat4("uView", view);
     m_defaultShader->setMat4("uProjection", projection);
     m_defaultShader->setInt("uTexture", 0);
-
     m_gridTexture->bind(0);
 
-    m_renderer->drawMesh(*m_cubeMesh, *m_defaultShader);
-    m_renderer->endFrame();
+    // El mapa se dibuja centrado en el origen del mundo: el centro del mapa
+    // queda en (0, 0, 0) para que las camaras por defecto (orbital con
+    // target=origen, FPS cercana al centro) vean la escena sin ajustes.
+    const f32 tileSize = m_map.tileSize();
+    const f32 halfW = 0.5f * static_cast<f32>(m_map.width())  * tileSize;
+    const f32 halfD = 0.5f * static_cast<f32>(m_map.height()) * tileSize;
+    (void)dt; // Ya no rotamos el modelo; el mapa es estatico.
 
+    for (u32 y = 0; y < m_map.height(); ++y) {
+        for (u32 x = 0; x < m_map.width(); ++x) {
+            if (!m_map.isSolid(x, y)) continue;
+
+            const glm::vec3 worldPos(
+                (static_cast<f32>(x) + 0.5f) * tileSize - halfW,
+                0.5f * tileSize,
+                (static_cast<f32>(y) + 0.5f) * tileSize - halfD);
+
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), worldPos);
+            model = glm::scale(model, glm::vec3(tileSize));
+
+            m_defaultShader->setMat4("uModel", model);
+            m_renderer->drawMesh(*m_cubeMesh, *m_defaultShader);
+        }
+    }
+
+    m_renderer->endFrame();
     m_viewportFb->unbind();
 }
 

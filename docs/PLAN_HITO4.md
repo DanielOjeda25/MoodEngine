@@ -45,10 +45,15 @@ Entregable: al entrar en Play Mode, apareces en una sala con paredes y podés ca
 
 ### Bloque 2 — Render del grid como cubos
 
-- [ ] `src/systems/GridRenderer.{h,cpp}` (o integrado en EditorApplication por ahora): itera tiles sólidos y dibuja un cubo por cada uno usando el `OpenGLMesh` del cubo del Hito 3.
-- [ ] Model matrix por tile = `translate(world_pos) * scale(tileSize)`.
-- [ ] Texturas: por ahora, la misma `grid.png` para todas las paredes. Hito 5 introducirá texturas por tile.
-- [ ] Optimización básica: cull trivial de tiles vacíos (no dibujar Empty). Frustum culling NO entra en este hito.
+- [x] `src/systems/GridRenderer.{h,cpp}` (o integrado en EditorApplication por ahora): itera tiles sólidos y dibuja un cubo por cada uno usando el `OpenGLMesh` del cubo del Hito 3.
+- [x] Model matrix por tile = `translate(world_pos) * scale(tileSize)`.
+- [x] Texturas: por ahora, la misma `grid.png` para todas las paredes. Hito 5 introducirá texturas por tile.
+- [x] Optimización básica: cull trivial de tiles vacíos (no dibujar Empty). Frustum culling NO entra en este hito.
+
+> Notas Bloque 2:
+> - Integrado inline en `EditorApplication::renderSceneToViewport`; no se creó aún `src/systems/GridRenderer.{h,cpp}`. Extraer cuando aparezca una segunda fuente de geometría (Hito 5 con texturas por tile, o Hito 10 con meshes de archivo).
+> - Render-bug encontrado en el camino: `OpenGLRenderer::drawMesh` hacía `shader.unbind()` al terminar, por lo que `glUniform*` llamado entre draws (mismo shader) operaba con program 0 bound y fallaba silenciosamente. Resuelto removiendo el unbind (commit separado `fix(render): drawMesh no desbindea...`).
+> - Cámaras por defecto reposicionadas: `EditorCamera` con `radius=12` (mapa 8×8 en cuadro) y `FpsCamera` dentro del mapa en tile interior `(-1.5, 0.6, 2.5)`.
 
 ### Bloque 3 — Matemática AABB
 

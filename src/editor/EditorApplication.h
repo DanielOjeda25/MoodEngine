@@ -61,12 +61,14 @@ private:
     std::unique_ptr<IMesh> m_cubeMesh;
     std::unique_ptr<ITexture> m_gridTexture;
 
-    EditorCamera m_editorCamera;
-    FpsCamera m_playCamera;
+    // Cam orbital: radio 12 para que el mapa 8x8 (XZ +-4) quede en cuadro.
+    // Cam FPS: tile interior (2,6) a altura de ojos; yaw -90 mira hacia -Z.
+    EditorCamera m_editorCamera{45.0f, 30.0f, 12.0f};
+    FpsCamera m_playCamera{glm::vec3(-1.5f, 0.6f, 2.5f), -90.0f, 0.0f};
     EditorMode m_mode = EditorMode::Editor;
-    f32 m_modelRotationRadians = 0.0f;
 
-    // Mapa jugable (Hito 4 Bloque 1). Render en Bloque 2, colisiones en Bloque 4.
+    // Mapa jugable (Hito 4). Se renderiza centrado en el origen del mundo;
+    // las colisiones entran en el Bloque 4.
     GridMap m_map{8u, 8u, 1.0f};
 
     EditorUI m_ui;
