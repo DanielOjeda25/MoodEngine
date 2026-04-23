@@ -298,3 +298,34 @@ Registro cronológico de decisiones arquitectónicas no triviales. Formato por e
 **Decisión:** `Project.root` se infiere del `parent_path` del archivo al cargar, NO se escribe en el JSON. Todos los demás paths (maps[], defaultMap) son relativos a root.
 **Razones:** el proyecto se puede mover a otra carpeta y seguir funcionando; no hay que reescribir el `.moodproj` al renombrar el folder.
 **Alternativas consideradas:** guardar root como path absoluto — rompería al mover la carpeta.
+
+## 2026-04-23: Flow de proyectos estilo Unity/Godot con modal Welcome
+
+**Contexto:** post-cierre de Hito 6, el flow de save/load acumulaba bugs
+reactivos porque el editor mezclaba dos modelos: "Blender sin proyecto"
+(estado vacio con mapa de prueba) y "Unity con proyecto" (carpeta con
+.moodproj + .moodmap). Cada parche para un caso rompia otro.
+**Decisión:** adoptar el modelo Unity/Godot/Unreal sin mezcla:
+- El editor **siempre tiene un proyecto activo**. No existe el estado
+  "sin proyecto y con mapa de prueba editable".
+- Si no hay proyecto (primera vez o tras Cerrar), aparece un **modal
+  Welcome bloqueante** con [Nuevo] / [Abrir] / [Recientes].
+- Al arrancar se intenta auto-abrir el ultimo proyecto (convencion
+  Unity). Si falla o no hay recientes, modal Welcome.
+- Ctrl+S siempre guarda sobre el proyecto actual. Nuevo/Abrir siempre
+  tienen la misma semantica (archivo en disco, crea o abre).
+- El mapa de prueba pasa a ser **template** para Nuevo Proyecto,
+  no un estado editable del editor.
+**Razones:** predictibilidad. Cada accion tiene un unico resultado
+posible; desaparecen los patches "si no hay proyecto hago X, si hay
+hago Y". El modelo matchea las expectativas del dev (viene de Unity/
+Godot) y no requiere reinventar la UX.
+**Alternativas consideradas:**
+- Modelo Blender (sin concepto de proyecto, solo .moodmap). Mas
+  simple pero renuncia a poder empaquetar varios mapas + textures
+  bajo un nombre comun, objetivo del roadmap.
+- Hybrido VS-Code-like (puede abrir sin workspace). Genera la
+  ambiguedad actual.
+**Revisar si:** a largo plazo aparece la necesidad de un "scratch
+mode" para experimentar sin compromiso (editor juega al papel de
+Blender por un rato). Hasta entonces, proyectos everywhere.
