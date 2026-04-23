@@ -112,10 +112,15 @@ std::optional<Project> ProjectSerializer::createNewProject(
         return std::nullopt;
     }
 
+    // Si no se especifico nombre de mapa, usar el del proyecto. Evita que
+    // dos proyectos en la misma raiz compartan "maps/default.moodmap" y se
+    // clobbereen mutuamente al guardar.
+    const std::string mapName = defaultMapName.empty() ? name : defaultMapName;
+
     Project p;
     p.root       = root;
     p.name       = name;
-    p.defaultMap = std::filesystem::path("maps") / (defaultMapName + ".moodmap");
+    p.defaultMap = std::filesystem::path("maps") / (mapName + ".moodmap");
     p.maps       = {p.defaultMap};
 
     // El `.moodproj` se escribe ahora; el `.moodmap` default queda a cargo

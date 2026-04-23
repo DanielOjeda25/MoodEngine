@@ -45,14 +45,19 @@ public:
 
     /// @brief Crea la estructura de carpetas de un proyecto nuevo:
     ///        `<root>/maps/`, `<root>/textures/`, y `<root>/<name>.moodproj`
-    ///        apuntando a un mapa default. El mapa en si se escribe aparte
-    ///        via `SceneSerializer::save`.
+    ///        apuntando a un mapa default `maps/<defaultMapName>.moodmap`.
+    ///        El mapa en si se escribe aparte via `SceneSerializer::save`.
+    ///
+    ///        Si `defaultMapName` queda vacio, se usa `name` (el nombre del
+    ///        proyecto). Esto evita colisiones cuando varios proyectos
+    ///        comparten `root` (dos proyectos en la misma carpeta con mapas
+    ///        llamados "default" se pisaban mutuamente).
     /// @return proyecto creado o `nullopt` si no se pudieron crear los
     ///         directorios (permisos, disco lleno, etc.).
     static std::optional<Project> createNewProject(
         const std::filesystem::path& root,
         const std::string& name,
-        const std::string& defaultMapName = "default");
+        const std::string& defaultMapName = {});
 };
 
 } // namespace Mood

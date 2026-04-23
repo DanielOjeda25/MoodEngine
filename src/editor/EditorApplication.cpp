@@ -251,20 +251,30 @@ bool EditorApplication::confirmDiscardChanges() {
 }
 
 void EditorApplication::handleNewProject() {
+    // confirmDiscardChanges: sigue aplicando si el usuario ejecuta "Nuevo"
+    // sobre un proyecto modificado sin guardar.
     if (!confirmDiscardChanges()) return;
 
     const auto cwd = std::filesystem::current_path().generic_string();
-    const std::string folder = pfd::select_folder(
-        "Carpeta del nuevo proyecto", cwd).result();
-    if (folder.empty()) {
+    const std::string saveTo = pfd::save_file(
+        "Nuevo proyecto — nombre y ubicacion del .moodproj",
+        cwd,
+        {"Proyectos MoodEngine (*.moodproj)", "*.moodproj"},
+        pfd::opt::none).result();
+    if (saveTo.empty()) {
         Log::editor()->info("Nuevo proyecto: cancelado");
         return;
     }
 
-    const std::filesystem::path root(folder);
-    const std::string name = root.filename().generic_string();
-    if (name.empty()) {
-        pfd::message("MoodEngine", "No se pudo deducir el nombre del proyecto del folder elegido.",
+    std::filesystem::path moodprojPath(saveTo);
+    if (moodprojPath.extension() != ".moodproj") {
+        moodprojPath += ".moodproj";
+    }
+
+    const std::filesystem::path root = moodprojPath.parent_path();
+    const std::string name = moodprojPath.stem().generic_string();
+    if (name.empty() || root.empty()) {
+        pfd::message("MoodEngine", "Nombre o carpeta del proyecto invalidos.",
                      pfd::choice::ok, pfd::icon::warning);
         return;
     }
@@ -276,16 +286,22 @@ void EditorApplication::handleNewProject() {
         return;
     }
 
-    // Guardar el estado actual del editor como mapa default del proyecto.
+    // Nuevo proyecto -> contenido inicial = mapa de prueba (template).
+    buildInitialTestMap();
+
     const auto mapPath = created->root / created->defaultMap;
     std::filesystem::create_directories(mapPath.parent_path());
-    SceneSerializer::save(m_map, "default", *m_assetManager, mapPath);
+    SceneSerializer::save(m_map, created->name, *m_assetManager, mapPath);
 
     m_project = std::move(created);
     m_currentMapPath = m_project->defaultMap;
     m_projectDirty = false;
+    addToRecentProjects(m_project->root / (m_project->name + ".moodproj"));
     updateWindowTitle();
-    Log::editor()->info("Nuevo proyecto creado: {}", m_project->name);
+    m_ui.setStatusMessage("Proyecto creado: " + m_project->name);
+    Log::editor()->info("Proyecto creado: {} ({})",
+        m_project->name,
+        (m_project->root / (m_project->name + ".moodproj")).generic_string());
 }
 
 void EditorApplication::handleOpenProject() {
@@ -301,40 +317,63 @@ void EditorApplication::handleOpenProject() {
         return;
     }
 
-    const std::filesystem::path moodproj(selection.front());
-    auto loaded = ProjectSerializer::load(moodproj);
-    if (!loaded.has_value()) {
+    if (!tryOpenProjectPath(std::filesystem::path(selection.front()))) {
         pfd::message("MoodEngine", "No se pudo abrir el proyecto (ver console/log).",
                      pfd::choice::ok, pfd::icon::error);
-        return;
     }
-    if (loaded->maps.empty()) {
-        pfd::message("MoodEngine", "El proyecto no contiene mapas.",
-                     pfd::choice::ok, pfd::icon::warning);
-        return;
+}
+
+bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj) {
+    if (!std::filesystem::exists(moodproj)) {
+        Log::editor()->warn("Proyecto no existe en disco: {}", moodproj.generic_string());
+        return false;
+    }
+    auto loaded = ProjectSerializer::load(moodproj);
+    if (!loaded.has_value() || loaded->maps.empty()) {
+        Log::editor()->warn("Proyecto invalido o sin mapas: {}", moodproj.generic_string());
+        return false;
     }
 
     const auto mapPath = loaded->root / loaded->defaultMap;
     auto savedMap = SceneSerializer::load(mapPath, *m_assetManager);
     if (!savedMap.has_value()) {
-        pfd::message("MoodEngine", "No se pudo abrir el mapa default del proyecto.",
-                     pfd::choice::ok, pfd::icon::error);
-        return;
+        Log::editor()->warn("No se pudo cargar mapa default: {}", mapPath.generic_string());
+        return false;
     }
 
     m_map = std::move(savedMap->map);
     m_project = std::move(loaded);
     m_currentMapPath = m_project->defaultMap;
     m_projectDirty = false;
+    addToRecentProjects(std::filesystem::absolute(moodproj));
     updateWindowTitle();
+    m_ui.setStatusMessage("Proyecto abierto: " + m_project->name);
     Log::editor()->info("Proyecto abierto: {}", m_project->name);
+    return true;
+}
+
+void EditorApplication::addToRecentProjects(const std::filesystem::path& moodproj) {
+    const auto canonical = std::filesystem::absolute(moodproj);
+    m_recentProjects.erase(
+        std::remove_if(m_recentProjects.begin(), m_recentProjects.end(),
+            [&canonical](const std::filesystem::path& p) {
+                return std::filesystem::absolute(p) == canonical;
+            }),
+        m_recentProjects.end());
+    m_recentProjects.insert(m_recentProjects.begin(), canonical);
+    if (m_recentProjects.size() > 8) m_recentProjects.resize(8);
+    m_ui.setRecentProjects(m_recentProjects);
 }
 
 void EditorApplication::handleSave() {
+    // Modelo Unity/Godot: el editor siempre tiene un proyecto activo (el
+    // modal Welcome bloquea la entrada al editor sin proyecto). Ctrl+S
+    // siempre guarda sobre el proyecto actual.
     if (!m_project.has_value()) {
-        Log::editor()->warn("Guardar: no hay proyecto abierto");
+        Log::editor()->warn("Guardar: no hay proyecto activo (estado invalido)");
         return;
     }
+
     const auto mapPath = m_project->root / m_currentMapPath;
     std::filesystem::create_directories(mapPath.parent_path());
     try {
@@ -343,6 +382,9 @@ void EditorApplication::handleSave() {
         ProjectSerializer::save(*m_project);
         m_projectDirty = false;
         updateWindowTitle();
+        m_ui.setStatusMessage("Guardado: " + m_project->name);
+        Log::editor()->info("Proyecto guardado ({}): {}",
+            m_project->name, mapPath.generic_string());
     } catch (const std::exception& e) {
         Log::editor()->warn("Guardar fallo: {}", e.what());
         pfd::message("MoodEngine", std::string("Error al guardar: ") + e.what(),
@@ -351,10 +393,16 @@ void EditorApplication::handleSave() {
 }
 
 void EditorApplication::handleSaveAs() {
-    // Minimo viable: equivale a "Nuevo proyecto con el estado actual". Un
-    // "Guardar como" mas rico (cambiar nombre manteniendo mapas) puede
-    // venir cuando haya mas de un mapa por proyecto.
-    handleNewProject();
+    // "Guardar como" completo queda diferido: requiere UI multi-mapa por
+    // proyecto (el schema .moodproj lo soporta pero el editor todavia
+    // opera sobre el defaultMap). Ver pendientes del Hito 6.
+    if (m_project.has_value()) {
+        pfd::message("MoodEngine — Guardar como",
+                     "Guardar como todavia no esta implementado.\n"
+                     "Usa Ctrl+S para guardar sobre el proyecto actual,\n"
+                     "o Archivo > Cerrar proyecto y crear uno nuevo.",
+                     pfd::choice::ok, pfd::icon::info);
+    }
 }
 
 void EditorApplication::handleCloseProject() {
@@ -365,6 +413,9 @@ void EditorApplication::handleCloseProject() {
     m_project.reset();
     m_currentMapPath.clear();
     m_projectDirty = false;
+    // El mapa de prueba queda como "fondo" mientras el modal Welcome esta
+    // abierto (el usuario lo ve borroso detras del popup). Ayuda visualmente
+    // a distinguir "editor sin proyecto" vs "proyecto vacio".
     buildInitialTestMap();
     updateWindowTitle();
 }
@@ -377,45 +428,41 @@ void EditorApplication::loadEditorState() {
     nlohmann::json j;
     try { in >> j; } catch (...) { return; }
 
-    // Debug flags (no falla si faltan).
+    // Preferencias globales.
     m_debugDraw = j.value("debugDraw", false);
 
-    // Si hay un ultimo proyecto y existe en disco, reabrirlo silenciosamente.
-    const std::string lastProjectPath = j.value("lastProject", std::string{});
-    if (lastProjectPath.empty()) return;
-    const std::filesystem::path moodproj(lastProjectPath);
-    if (!std::filesystem::exists(moodproj)) {
-        Log::editor()->info("Ultimo proyecto ya no existe en disco: {}",
-                            lastProjectPath);
-        return;
+    // Lista de proyectos recientes. El mas reciente esta al principio.
+    m_recentProjects.clear();
+    if (j.contains("recentProjects") && j["recentProjects"].is_array()) {
+        for (const auto& p : j["recentProjects"]) {
+            m_recentProjects.emplace_back(p.get<std::string>());
+        }
     }
+    m_ui.setRecentProjects(m_recentProjects);
 
-    auto loaded = ProjectSerializer::load(moodproj);
-    if (!loaded.has_value() || loaded->maps.empty()) return;
-
-    const auto mapPath = loaded->root / loaded->defaultMap;
-    auto savedMap = SceneSerializer::load(mapPath, *m_assetManager);
-    if (!savedMap.has_value()) return;
-
-    m_map = std::move(savedMap->map);
-    m_project = std::move(loaded);
-    m_currentMapPath = m_project->defaultMap;
-    m_projectDirty = false;
-    Log::editor()->info("Proyecto restaurado de la sesion anterior: {}",
-                        m_project->name);
+    // Auto-restore del ultimo proyecto (convencion Unity/Godot). Si falla
+    // — archivo borrado, JSON corrupto, etc. — caemos silenciosamente en
+    // el modal Welcome para que el usuario elija.
+    if (!m_recentProjects.empty()) {
+        if (tryOpenProjectPath(m_recentProjects.front())) {
+            return;
+        }
+        Log::editor()->info(
+            "No se pudo auto-abrir el ultimo proyecto ({}); mostrando Welcome.",
+            m_recentProjects.front().generic_string());
+    }
 }
 
 void EditorApplication::saveEditorState() const {
     std::error_code ec;
     std::filesystem::create_directories(".mood", ec);
-    if (ec) return; // falla silenciosa: no es critico
+    if (ec) return;
 
     nlohmann::json j;
     j["debugDraw"] = m_debugDraw;
-    if (m_project.has_value()) {
-        const auto moodproj = m_project->root /
-            (m_project->name + ".moodproj");
-        j["lastProject"] = moodproj.generic_string();
+    j["recentProjects"] = nlohmann::json::array();
+    for (const auto& p : m_recentProjects) {
+        j["recentProjects"].push_back(p.generic_string());
     }
 
     std::ofstream out(std::filesystem::path(".mood") / "editor_state.json");
@@ -697,6 +744,18 @@ int EditorApplication::run() {
             case ProjectAction::SaveAs:       handleSaveAs();       break;
             case ProjectAction::CloseProject: handleCloseProject(); break;
             case ProjectAction::None:         break;
+        }
+
+        // Modal Welcome: click en un reciente emite path directo en lugar
+        // de pasar por el dialogo pfd.
+        if (auto recentPath = m_ui.consumeOpenProjectPath(); recentPath.has_value()) {
+            if (!tryOpenProjectPath(*recentPath)) {
+                pfd::message("MoodEngine",
+                    "No se pudo abrir el proyecto reciente '" +
+                    recentPath->generic_string() + "'. Quedara resaltado en la "
+                    "lista hasta que se cierre el editor.",
+                    pfd::choice::ok, pfd::icon::warning);
+            }
         }
 
         // 2.5) Drop de textura desde AssetBrowser: usar el tile picking para

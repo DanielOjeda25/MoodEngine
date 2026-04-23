@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <vector>
 
 namespace Mood {
 
@@ -75,20 +76,30 @@ private:
     ///        abierto (el mapa de prueba no se persiste).
     void markDirty();
 
-    // Handlers de acciones del menu Archivo.
+    // Handlers de acciones del menu Archivo + modal Welcome.
     void handleNewProject();
     void handleOpenProject();
     void handleSave();
     void handleSaveAs();
     void handleCloseProject();
 
+    /// @brief Intenta abrir el proyecto en `moodprojPath`. Devuelve true si
+    ///        quedo activo; false si fallo (loguea la causa).
+    bool tryOpenProjectPath(const std::filesystem::path& moodprojPath);
+
+    /// @brief Agrega un path al tope de la lista de proyectos recientes,
+    ///        deduplicando y limitando el tamano.
+    void addToRecentProjects(const std::filesystem::path& moodprojPath);
+
     /// @brief Si hay cambios sin guardar, pregunta al usuario que hacer
     ///        (guardar / descartar / cancelar). Devuelve `true` si la accion
     ///        puede proceder, `false` si hay que abortarla.
     bool confirmDiscardChanges();
 
-    /// @brief Lee `<cwd>/.mood/editor_state.json` si existe y restaura el
-    ///        ultimo proyecto abierto (+ flags de debug). Silencioso si falla.
+    /// @brief Lee `<cwd>/.mood/editor_state.json` si existe:
+    ///        - preferencias (debugDraw, etc.)
+    ///        - lista de proyectos recientes
+    ///        - auto-abre el mas reciente (convencion Unity/Godot)
     void loadEditorState();
 
     /// @brief Escribe el estado actual a `<cwd>/.mood/editor_state.json`.
@@ -125,9 +136,14 @@ private:
     // abrir proyectos y se resetea al mapa de prueba al cerrar.
     GridMap m_map{8u, 8u, 3.0f};
 
-    // Proyecto activo (Hito 6 Bloque 4). `nullopt` = editor sin proyecto,
-    // con el mapa de prueba hardcodeado.
+    // Proyecto activo (Hito 6 Bloque 4).
+    // Cuando es nullopt (arranque sin recientes, o tras cerrar proyecto),
+    // el editor muestra el modal Welcome y bloquea el resto de la UI hasta
+    // que el usuario elija abrir o crear uno. Convencion Unity/Godot.
     std::optional<Project> m_project;
+
+    // Proyectos recientes (max 8). El tope es el mas reciente.
+    std::vector<std::filesystem::path> m_recentProjects;
     // Path del mapa activo, relativo a `m_project->root`.
     std::filesystem::path m_currentMapPath;
     // True cuando se modifico el estado desde el ultimo save. El titulo de

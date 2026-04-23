@@ -13,6 +13,9 @@
 #include "editor/panels/InspectorPanel.h"
 #include "editor/panels/ViewportPanel.h"
 
+#include <filesystem>
+#include <optional>
+#include <string>
 #include <vector>
 
 namespace Mood {
@@ -27,6 +30,10 @@ public:
 
     /// @brief Actualiza el FPS mostrado en la status bar.
     void setFps(float fps) { m_statusBar.setFps(fps); }
+
+    /// @brief Mensaje libre de la status bar (ej. "Guardado" tras un save).
+    ///        Persiste hasta que se cambie de nuevo.
+    void setStatusMessage(std::string msg) { m_statusBar.setMessage(std::move(msg)); }
 
     /// @brief Lista de paneles, expuesta para que el menu "Ver" pueda togglear
     ///        su visibilidad.
@@ -71,9 +78,24 @@ public:
 
     /// @brief Estado actual del proyecto (lo setea EditorApplication). La UI
     ///        lo usa para grayar items del menu cuando no hay proyecto
-    ///        abierto (p.ej. Guardar o Cerrar).
+    ///        abierto y para decidir si mostrar el modal Welcome.
     bool hasProject() const { return m_hasProject; }
     void setHasProject(bool v) { m_hasProject = v; }
+
+    /// @brief Lista de proyectos recientes (mostrada en el modal Welcome).
+    ///        `path.stem()` se usa como label del boton.
+    void setRecentProjects(std::vector<std::filesystem::path> paths) {
+        m_recentProjects = std::move(paths);
+    }
+
+    /// @brief Si el modal Welcome solicito abrir un proyecto especifico
+    ///        (click en un reciente), el path queda aca. `EditorApplication`
+    ///        lo consume despues de `draw()`.
+    std::optional<std::filesystem::path> consumeOpenProjectPath() {
+        auto p = std::move(m_openProjectPath);
+        m_openProjectPath.reset();
+        return p;
+    }
 
 private:
     Dockspace m_dockspace;
@@ -92,6 +114,14 @@ private:
 
     ProjectAction m_projectAction = ProjectAction::None;
     bool m_hasProject = false;
+    std::vector<std::filesystem::path> m_recentProjects;
+    std::optional<std::filesystem::path> m_openProjectPath;
+
+    /// @brief Dibuja un modal bloqueante con [Nuevo Proyecto] [Abrir Proyecto]
+    ///        + lista de recientes. Se ejecuta SOLO cuando `m_hasProject` es
+    ///        false. Bloquea toda interaccion con el editor hasta que el
+    ///        usuario elija.
+    void drawWelcomeModal();
 };
 
 } // namespace Mood
