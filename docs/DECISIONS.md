@@ -148,6 +148,28 @@ Registro cronológico de decisiones arquitectónicas no triviales. Formato por e
 **Alternativas consideradas:** `class Camera` base abstracta — útil cuando haya 3+ cámaras o un CameraController polimórfico; hoy no.
 **Revisar si:** aparecen cámaras cinematic (spline, target-locked) o un sistema ECS necesita tratarlas uniformemente.
 
+## 2026-04-23: `GridMap` texturas via arrays paralelos en vez de `struct Tile`
+
+**Contexto:** en Hito 5 Bloque 5 hay que agregar textura por tile. Dos diseños: (a) cambiar `std::vector<u8> m_tiles` a `std::vector<Tile>` con `struct Tile { TileType type; TextureAssetId texture; }`, o (b) mantener `m_tiles` intacto y agregar un `std::vector<TextureAssetId> m_tileTextures` paralelo indexado igual.
+**Decisión:** (b) arrays paralelos.
+**Razones:** diff más chico, tests existentes no se tocan (API `tileAt` sigue devolviendo `TileType`), mantiene compatibilidad con el código que sólo necesita saber si un tile es sólido. La separación es práctica ahora: el `PhysicsSystem` sólo lee `isSolid`, el renderer lee `isSolid + tileTextureAt`.
+**Alternativas consideradas:** `struct Tile` — más limpio conceptualmente pero fuerza cambios en todos los callers y tests sin beneficio hoy. Revisar si se agregan 3+ campos por tile (variantes, flags, rotación): ahí sí promover a struct.
+
+## 2026-04-23: `LogRingSink` inherits `base_sink<null_mutex>` + lock propio
+
+**Contexto:** el `ConsolePanel` necesita leer los últimos logs del motor, en vivo, desde un thread (el del editor). spdlog `base_sink<Mutex>` ya lockea `mutex_` en `log()` antes de llamar `sink_it_`, pero ese mutex es `protected` y está pensado para sync interno del sink, no para uso externo.
+**Decisión:** heredar de `base_sink<spdlog::details::null_mutex>` (cero sync provisto por spdlog) y usar un `std::mutex` propio que protege tanto `sink_it_` como `snapshot()`.
+**Razones:** un único mutex para todos los accesos al ring buffer; evita double-lock si usara `base_sink<std::mutex>` + otro mutex para snapshot. El costo de sync se paga una vez por log entry.
+**Alternativas consideradas:** (1) `base_sink<std::mutex>` + `snapshot()` que re-adquiere `mutex_` — funciona pero acopla a un detalle protected de spdlog. (2) Atomic snapshot via CAS — overkill para 512 entradas de log.
+**Revisar si:** el log sale de muchos threads distintos y el contention del lock se vuelve visible en el profiler.
+
+## 2026-04-23: AssetManager con `TextureAssetId` (u32) en vez de reusar `TextureHandle`
+
+**Contexto:** el RHI ya define `using TextureHandle = void*` (para pasar a `ImGui::Image`). `AssetManager` también necesita un identificador de textura, pero los requisitos son distintos (numérico, estable entre sesiones, indexable en `std::vector`).
+**Decisión:** introducir `using TextureAssetId = u32` como tipo propio del `AssetManager`. 0 se reserva para la textura "missing"; cualquier `getTexture(id)` con id fuera de rango cae al fallback. Los callers pueden convertir entre ambos con `getTexture(id)->handle()` cuando necesitan el `TextureHandle` opaco.
+**Razones:** mantiene responsabilidades separadas (identidad del asset vs handle GPU-specific). Permite storage indexable en `std::vector`. No rompe nada del RHI.
+**Alternativas consideradas:** usar `void*` como AssetId — permite puntero directo pero pierde la propiedad de "id estable entre hot-reloads".
+
 ## 2026-04-23: Convencion de escala del motor - 1 unidad = 1 metro SI
 
 **Contexto:** durante el Hito 4 las dimensiones eran artificiales (`tileSize=1.0`, player `0.4x0.9x0.4`, walls 1m cubicos). Un personaje de 0.9m "cabia" debajo de una pared de 1m, inconsistente con cualquier asset realista. El dev detecto la inconsistencia al cerrar el Hito 4.

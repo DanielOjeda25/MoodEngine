@@ -6,12 +6,12 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 4 cerrado y taggeado como `v0.4.0-hito4` en local.**
-Verificado automático (log `Mapa cargado: prueba_8x8 (29 tiles solidos)`, suite doctest 30/30 pasando con 159 asserciones, shutdown exit 0) + verificado por el dev a ojo (sala 8×8 visible, WASD no atraviesa paredes, slide diagonal natural, F1 togglea AABBs amarillos de muros + verde del jugador).
+**Hito 5 cerrado y taggeado como `v0.5.0-hito5` en local.**
+Verificado automático (log `AssetManager: fallback 'missing' cargado desde assets/textures/missing.png`, suite doctest 35/35 pasando con 179 asserciones, shutdown exit 0) + verificado por el dev a ojo (sala con 2 texturas — grid en perímetro, brick en columna central —, Asset Browser con 3 miniaturas clicables, Console acoplado inferior-derecho con logs coloreados por nivel, F1 debug draw sigue funcionando, colisiones sin regresión).
 
-**Próximo paso:** Hito 5 — Asset Browser + gestión de texturas. Plan detallado en `docs/PLAN_HITO5.md`. Antes del grueso, aplicar la convención de escala realista diferida del Hito 4 (`tileSize=3m`, player 1.8m).
+**Próximo paso:** Hito 6 — Serialización de proyectos y mapas (`.moodproj` + `.moodmap`). Plan detallado en `docs/PLAN_HITO6.md`. Pendientes arrastrados (ver `PLAN_HITO5.md` sección pendientes): tests de AssetManager, drag & drop Asset Browser → tile, extracción de `GridRenderer` desde `EditorApplication`.
 
-> Nota push: los commits del Hito 4 están sólo en local, sin pushear a origin. Hacer `git push origin main --tags` cuando esté OK.
+> Nota push: los commits del Hito 5 están sólo en local, sin pushear a origin. Hacer `git push origin main --tags` cuando esté OK.
 
 ### Lo que ya está hecho
 
@@ -46,7 +46,18 @@ Verificado automático (log `Mapa cargado: prueba_8x8 (29 tiles solidos)`, suite
 - `assets/textures/grid.png` generada con `tools/gen_grid_texture.py` (Python + Pillow, 256x256 RGBA).
 - `tests/` con doctest: 10 casos, 37 asserciones (matemática GLM + cámaras).
 
-**Hito 4** — Mundo grid + colisiones AABB (tag local `v0.4.0-hito4`):
+**Hito 5** — Asset Browser + gestión de texturas (tag local `v0.5.0-hito5`):
+- Convención de escala 1 unidad = 1 m SI (Bloque 0, arrastrado del Hito 4). `tileSize=3 m`, player 0.6×1.8×0.6 m a 1.6 m de eye height, speed 3 m/s (ajustado tras feedback del dev: 4→3), orbit radius 30, mapa 24×24 m.
+- `assets/textures/missing.png` generada con `tools/gen_missing_texture.py` (256×256, chequered rosa/negro estilo Source). Canal de log nuevo `assets`.
+- `src/engine/assets/AssetManager.{h,cpp}`: catálogo de texturas con cache por path, `TextureAssetId` propio (u32, 0 = missing), fallback automático al fallar carga (no throw en el callsite).
+- `src/platform/VFS.{h,cpp}`: resuelve paths lógicos contra `assets/`, rechaza `..`, `.`, paths absolutos y leading `/`/`\`. 5 casos de test.
+- `AssetBrowserPanel` ahora escanea `assets/textures/` y muestra miniaturas 64×64 con `ImGui::ImageButton` (UV flip vertical); click selecciona, borde azul en la seleccionada.
+- `assets/textures/brick.png` (aparejo inglés 64×32 con offset, dos tonos) como segunda textura del mapa. `GridMap` extendido con array paralelo `std::vector<TextureAssetId>`; render bindea por tile con tracking `lastBound`.
+- `src/core/LogRingSink.{h,cpp}`: custom spdlog sink con ring buffer de 512 entradas, thread-safe con mutex propio. `src/editor/panels/ConsolePanel.{h,cpp}`: lee el sink y renderiza los logs con color por nivel, filtro por substring de canal, auto-scroll, botón Limpiar.
+- `Dockspace` actualizado: layout default ahora incluye Console en la parte derecha del bottom dock (Asset Browser queda a la izquierda).
+- Suite total 35/179 (+5 VFS).
+
+**Hito 4** — Mundo grid + colisiones AABB (tag `v0.4.0-hito4`):
 - `src/engine/world/GridMap.{h,cpp}`: grilla 2D de tiles con `TileType { Empty, SolidWall }`. Helpers `tileAt`, `isSolid` (fuera = pared), `setTile`, `aabbOfTile`, `solidCount`. Coords map-local; el world offset lo maneja el callsite.
 - `src/core/math/AABB.h`: header-only con `intersects/contains/expanded/merge` + helpers (`center/size/extents/isValid`).
 - `src/systems/PhysicsSystem.{h,cpp}`: `moveAndSlide(map, mapWorldOrigin, box, desired) -> glm::vec3`. Resuelve X luego Z (permite slide en esquinas); Y pasa directo (muros infinitos por ahora). Tiles fuera del mapa se tratan como pared.
@@ -130,22 +141,26 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: implementar el Hito 5
+### Tarea inmediata: implementar el Hito 6
 
-El Hito 4 está cerrado (tag `v0.4.0-hito4` local; falta push). El foco ahora es el **Hito 5 — Asset Browser + gestión de texturas** (AssetManager, VFS inicial, textura fallback rosa-negro, asignar texturas a tiles desde el editor, consola in-game).
+El Hito 5 está cerrado (tag `v0.5.0-hito5` local; falta push). El foco ahora es el **Hito 6 — Serialización de proyectos y mapas**: archivos `.moodproj` y `.moodmap`, guardar/cargar el mapa actual desde el editor, primer formato serializado propio.
 
-El plan desglosado por tareas está en `docs/PLAN_HITO5.md`.
+El plan desglosado por tareas está en `docs/PLAN_HITO6.md`.
 
-**Punto de arranque recomendado:** aplicar primero la **convención de escala realista diferida** (ver PLAN_HITO5 Bloque 0 y PLAN_HITO4 pendientes): pasar a `tileSize=3 m`, player 1.8 m, velocidad 4 m/s, orbit radius 30. Después avanzar con `src/engine/assets/AssetManager.{h,cpp}` y ampliar `GridMap` con `TextureId` por tile.
+**Punto de arranque sugerido:** antes del grueso de serialización, encarar los dos pendientes arrastrados de Hito 5 que el Hito 6 va a necesitar:
+1. Extraer `GridRenderer` de `EditorApplication` (cuando haya que recargar mapas, ese código tiene que vivir solo).
+2. Drag & drop desde Asset Browser a tile (requiere tile picking; habilita editar mapas antes de serializarlos).
+
+Después, diseñar el formato de archivo. JSON con [nlohmann/json](https://github.com/nlohmann/json) o binario custom — decidir en el Bloque 0 del Hito 6.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO5.md` (incluye las pendientes arrastradas del Hito 4).
-2. Preguntar al dev si quiere atacar primero la escala o si prefiere otro orden.
-3. Trabajar tarea por tarea, marcando como completadas en el plan al terminar cada una.
+1. Leer `docs/PLAN_HITO6.md` (incluye pendientes arrastrados del Hito 5).
+2. Preguntar al dev: ¿pendientes primero o directo al formato?
+3. Trabajar bloque por bloque, marcando en el plan al cerrar cada uno.
 4. Después de cada bloque grande, compilar y confirmar.
-5. Actualizar `docs/DECISIONS.md` si aparece alguna decisión no prevista.
-6. Al final: commits atómicos en español, merge a main, tag `v0.5.0-hito5`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO6.md`.
+5. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial (formato JSON vs binario, mecanismo de `std::chrono` timestamps, etc.).
+6. Al final: commits atómicos en español, merge a main, tag `v0.6.0-hito6`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO7.md`.
 
 ---
 

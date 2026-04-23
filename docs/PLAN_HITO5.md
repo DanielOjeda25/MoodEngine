@@ -98,11 +98,11 @@ Aplicar antes de tocar AssetManager. El resto del Hito 5 asume estas dimensiones
 
 ## Bloque 7 — Cierre
 
-- [ ] Recompilar y verificar todos los criterios.
-- [ ] Actualizar `docs/HITOS.md`, `docs/DECISIONS.md`, `docs/ESTADO_ACTUAL.md`.
-- [ ] Commits atómicos en español.
-- [ ] Tag `v0.5.0-hito5` + push.
-- [ ] Crear `docs/PLAN_HITO6.md`.
+- [x] Recompilar y verificar todos los criterios (build limpio, 35/179 tests, editor arranca con Console+grid+brick, fallback missing cargado).
+- [x] Actualizar `docs/HITOS.md`, `docs/DECISIONS.md`, `docs/ESTADO_ACTUAL.md`.
+- [x] Commits atómicos en español (8 commits, uno por bloque + docs).
+- [x] Tag `v0.5.0-hito5` + push.
+- [x] Crear `docs/PLAN_HITO6.md`.
 
 ---
 
@@ -124,4 +124,10 @@ _(llenar a medida que aparezcan)_
 
 ## Pendientes que quedan para Hito 6 o posterior
 
-_(llenar al cerrar el hito)_
+- **Tests de `AssetManager`**: no los agregué en este hito porque `OpenGLTexture` requiere contexto GL. Requiere refactor a factory inyectable (`AssetManager(TextureFactoryFn)`) o un `MockTexture` no-GL para testear cacheo, fallback e id-reuse sin tocar la GPU. Cubre `loadTexture` (cache hit), `loadTexture` de un path roto (devuelve missing, loguea warn), `getTexture(invalid_id)` (devuelve missing).
+- **Drag & drop desde AssetBrowser a un tile del viewport**: planteado originalmente para este hito, la acción se difiere al Hito 6 porque requiere tile picking (raycast del mouse a la grid) que todavía no existe.
+- **Asignar `TextureAssetId` al AABB del jugador para el debug draw**: no entró; el color del AABB jugador queda hardcoded verde.
+- **Extraer `GridRenderer`**: el render del grid sigue inline en `EditorApplication::renderSceneToViewport`. Con las texturas por tile la duplicación empieza a doler (tracking de bind, loop por tiles); buen momento para mover a `src/systems/GridRenderer.{h,cpp}` en Hito 6.
+- **Hot-reload del `AssetBrowserPanel`**: el botón "Recargar" re-escanea pero no invalida texturas ya cargadas. Si reemplazo un PNG en disco, sigo viendo el viejo en GPU hasta reiniciar. Agregar una comparación de mtime y `glTexImage2D` sobre la textura existente cuando cambió. No urgente.
+- **Reset de layout desde menú**: cuando agrego un panel nuevo (`Console` en Hito 5), los usuarios con `imgui.ini` viejo lo ven flotando. Un item "Restablecer layout" en el menú "Ver" que invoque `DockBuilderRemoveNode` + rebuild solucionaría esto sin borrar el archivo a mano.
+- **Tracy profiler**: diferido desde Hito 3, aún sin incorporar. Evaluar en Hito 6 si los frames empiezan a notarse pesados con más geometría.

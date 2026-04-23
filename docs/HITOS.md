@@ -9,7 +9,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 2** — Primer triángulo con OpenGL (completado, tag `v0.2.0-hito2`).
 - [x] **Hito 3** — Cubo texturizado con cámara (completado, tag `v0.3.0-hito3`).
 - [x] **Hito 4** — Mundo grid + colisiones AABB (completado, tag `v0.4.0-hito4`).
-- [ ] Hito 5 — Asset Browser + gestión de texturas.
+- [x] **Hito 5** — Asset Browser + gestión de texturas (completado, tag `v0.5.0-hito5`).
 - [ ] Hito 6 — Serialización de proyectos y mapas.
 - [ ] Hito 7 — Entidades, componentes, jerarquía.
 - [ ] Hito 8 — Scripting con Lua.
@@ -78,6 +78,31 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 
 ### Pendientes menores detectados en Hito 4
 
-- **Convención de escala del mundo** diferida: pasar a `tileSize=3 m` + player 1.8 m. Ver `docs/PLAN_HITO4.md` sección pendientes para detalle completo.
-- **`GridRenderer` inline en EditorApplication** — extraer cuando aparezca la segunda fuente de geometría (texturas por tile o meshes de archivo).
+- ~~**Convención de escala del mundo** diferida~~: resuelto en Hito 5 Bloque 0 (ver `DECISIONS.md` 2026-04-23). Ahora 1 unidad = 1 m SI, `tileSize=3 m`, player 0.6×1.8×0.6, velocidad 3 m/s, orbit radius 30.
+- **`GridRenderer` inline en EditorApplication** — extraer cuando aparezca la segunda fuente de geometría (texturas por tile o meshes de archivo). Sigue pendiente post-Hito 5; ver `PLAN_HITO5.md` sección pendientes.
 - **Face culling (`GL_CULL_FACE`)** no activado — evaluar cuando haya muchas mallas opacas.
+
+## Hito 5 — Asset Browser + gestión de texturas
+
+**Objetivo:** pasar de "motor que carga una textura hardcoded" a motor con catálogo de assets consultable desde el editor. AssetManager con cache, VFS sandbox, textura fallback, texturas por tile, Asset Browser con miniaturas reales, Console in-game.
+
+**Criterios de aceptación cumplidos:**
+- Convención de escala 1 unit = 1 m SI adoptada (Bloque 0, arrastrado del Hito 4).
+- Textura `missing.png` (chequered rosa/negro) cargada en slot 0 del `AssetManager`; cualquier fallo de carga cae ahí.
+- `VFS` rechaza `..`, `.`, paths absolutos y leading `/`/`\`; `AssetManager` lo usa para resolver paths lógicos.
+- `AssetBrowserPanel` muestra miniaturas reales de los PNG de `assets/textures/` con click-to-select.
+- Paredes del mapa renderizadas con 2 texturas distintas (grid.png en borde, brick.png en columna central).
+- `ConsolePanel` acoplado al inferior-derecho, muestra todos los logs del `LogRingSink` coloreados por nivel con filtro por canal.
+- Tests: suite 35/179 (+5 para VFS).
+
+**Siguiente paso tras completarlo:** Hito 6 — Serialización de proyectos y mapas (`.moodproj` + `.moodmap`). Antes, el drag & drop desde Asset Browser a tile del viewport y el refactor `GridRenderer`, ambos arrastrados del Hito 5.
+
+### Pendientes menores detectados en Hito 5
+
+Ver `docs/PLAN_HITO5.md` sección "Pendientes que quedan para Hito 6 o posterior":
+- Tests de `AssetManager` (requiere factory inyectable o `MockTexture` para no depender de GL).
+- Drag & drop Asset Browser → tile del viewport (requiere tile picking).
+- Extraer `GridRenderer` de `EditorApplication`.
+- Hot-reload de texturas (detectar mtime del PNG).
+- Menú "Restablecer layout" para cuando se agregan paneles nuevos.
+- Tracy profiler (diferido sin fecha).
