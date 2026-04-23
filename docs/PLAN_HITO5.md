@@ -75,8 +75,11 @@ Aplicar antes de tocar AssetManager. El resto del Hito 5 asume estas dimensiones
 
 ## Bloque 4 — AssetBrowserPanel real
 
-- [ ] Reemplazar el placeholder "Sin assets cargados" por listado real: itera `assets/textures/` y muestra grid de miniaturas (64×64 en ImGui con `ImGui::ImageButton`).
-- [ ] Click en miniatura: por ahora solo selecciona (guarda en un `std::optional<TextureHandle> m_selected` dentro del panel). Drag & drop entra en Hito 6.
+- [x] Reemplazado el placeholder por listado real: escanea `assets/textures/`, carga cada PNG vía `AssetManager` y muestra grid de miniaturas 64×64 con `ImGui::ImageButton` (UV flip vertical porque stbi carga con flip, ImGui asume top-left origin). Columnas se recalculan al redimensionar el panel. Botón "Recargar" re-escanea.
+- [x] Click en miniatura: guarda el path lógico en `std::optional<std::string> m_selected` dentro del panel (borde azul de la miniatura seleccionada). Loguea `[assets] AssetBrowserPanel: seleccionado 'textures/foo.png'`. Drag & drop sigue en Hito 6.
+- [x] `EditorApplication` le inyecta el manager vía `m_ui.assetBrowser().setAssetManager(...)`.
+
+> Feedback del dev: "las miniaturas aparecian y se seleccionaban, pero no tenian acciones" — comportamiento esperado; la acción de asignar textura al tile es posterior (Hito 6).
 
 ## Bloque 5 — Textura por tile
 

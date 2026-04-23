@@ -96,6 +96,7 @@ EditorApplication::EditorApplication() {
 
     m_assetManager = std::make_unique<AssetManager>();
     m_wallTextureId = m_assetManager->loadTexture("textures/grid.png");
+    m_ui.assetBrowser().setAssetManager(m_assetManager.get());
 
     m_debugRenderer = std::make_unique<OpenGLDebugRenderer>();
 

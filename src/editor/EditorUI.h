@@ -35,6 +35,10 @@ public:
     ///        EditorApplication y leer el tamano deseado.
     ViewportPanel& viewport() { return m_viewport; }
 
+    /// @brief Acceso al panel Asset Browser para inyectarle el AssetManager
+    ///        desde EditorApplication y leer la seleccion actual.
+    AssetBrowserPanel& assetBrowser() { return m_assetBrowser; }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
