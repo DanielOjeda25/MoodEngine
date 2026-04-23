@@ -2,9 +2,9 @@
 
 #include "core/Log.h"
 #include "engine/render/ITexture.h"
-#include "engine/render/opengl/OpenGLTexture.h"
 
 #include <stdexcept>
+#include <utility>
 
 namespace Mood {
 
@@ -14,8 +14,13 @@ constexpr const char* k_missingPath = "textures/missing.png";
 
 } // namespace
 
-AssetManager::AssetManager(std::string rootDir)
-    : m_vfs(std::filesystem::path(std::move(rootDir))) {
+AssetManager::AssetManager(std::string rootDir, TextureFactory factory)
+    : m_vfs(std::filesystem::path(std::move(rootDir))),
+      m_factory(std::move(factory)) {
+    if (!m_factory) {
+        throw std::runtime_error("AssetManager: se requiere una TextureFactory");
+    }
+
     // Slot 0 reservado para la textura missing. Si no carga, la instalacion
     // esta rota: dejar que la excepcion se propague.
     const auto missingFs = m_vfs.resolve(k_missingPath);
@@ -24,7 +29,7 @@ AssetManager::AssetManager(std::string rootDir)
             std::string("AssetManager: path logico 'textures/missing.png' rechazado por VFS"));
     }
     try {
-        m_textures.emplace_back(std::make_unique<OpenGLTexture>(missingFs.generic_string()));
+        m_textures.emplace_back(m_factory(missingFs.generic_string()));
     } catch (const std::exception& e) {
         throw std::runtime_error(
             std::string("AssetManager: no se pudo cargar missing.png ('") +
@@ -51,7 +56,7 @@ TextureAssetId AssetManager::loadTexture(std::string_view logicalPath) {
     }
 
     try {
-        auto tex = std::make_unique<OpenGLTexture>(fs.generic_string());
+        auto tex = m_factory(fs.generic_string());
         const TextureAssetId id = static_cast<TextureAssetId>(m_textures.size());
         m_textures.push_back(std::move(tex));
         m_textureCache.emplace(key, id);

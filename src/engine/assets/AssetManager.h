@@ -13,6 +13,7 @@
 #include "core/Types.h"
 #include "platform/VFS.h"
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -30,10 +31,18 @@ using TextureAssetId = u32;
 
 class AssetManager {
 public:
+    /// @brief Factoria de texturas: recibe un path del filesystem (resuelto
+    ///        por el VFS) y devuelve una ITexture lista. Inyectable para
+    ///        poder testear AssetManager sin contexto GL (mocks).
+    using TextureFactory =
+        std::function<std::unique_ptr<ITexture>(const std::string& filesystemPath)>;
+
     /// @brief Construye el manager y carga la textura "missing". Si missing.png
     ///        no existe genera una excepcion (esta rota la instalacion).
     /// @param rootDir Carpeta raiz de assets (default: "assets").
-    explicit AssetManager(std::string rootDir = "assets");
+    /// @param factory Factoria de texturas. EditorApplication pasa una que
+    ///        crea `OpenGLTexture`. Los tests inyectan mocks.
+    AssetManager(std::string rootDir, TextureFactory factory);
     ~AssetManager();
 
     AssetManager(const AssetManager&) = delete;
@@ -56,6 +65,7 @@ public:
 
 private:
     VFS m_vfs;
+    TextureFactory m_factory;
     std::unordered_map<std::string, TextureAssetId> m_textureCache;
     std::vector<std::unique_ptr<ITexture>> m_textures; // [0] = missing
 };
