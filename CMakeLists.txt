@@ -85,6 +85,15 @@ CPMAddPackage(
         "DOCTEST_NO_INSTALL ON"
 )
 
+CPMAddPackage(
+    NAME nlohmann_json
+    GITHUB_REPOSITORY nlohmann/json
+    VERSION 3.11.3
+    OPTIONS
+        "JSON_BuildTests OFF"
+        "JSON_Install OFF"
+)
+
 # ---------------------------------------------------------------------------
 # Target interno: ImGui compilado como libreria estatica con backends SDL2 + OpenGL3
 # ---------------------------------------------------------------------------
@@ -161,6 +170,7 @@ target_link_libraries(MoodEditor PRIVATE
     imgui
     glad
     stb
+    nlohmann_json::nlohmann_json
     OpenGL::GL
 )
 

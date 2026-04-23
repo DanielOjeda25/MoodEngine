@@ -11,6 +11,7 @@ add_executable(mood_tests
     test_collision.cpp
     test_vfs.cpp
     test_asset_manager.cpp
+    test_json_helpers.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -25,8 +26,11 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/core/LogRingSink.cpp
 )
 
-# AssetManager.cpp usa spdlog (via core/Log).
-target_link_libraries(mood_tests PRIVATE spdlog::spdlog)
+# AssetManager.cpp usa spdlog (via core/Log). JsonHelpers requiere nlohmann_json.
+target_link_libraries(mood_tests PRIVATE
+    spdlog::spdlog
+    nlohmann_json::nlohmann_json
+)
 
 target_include_directories(mood_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
