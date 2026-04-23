@@ -14,12 +14,14 @@ add_executable(mood_tests
     test_json_helpers.cpp
     test_scene_serializer.cpp
     test_project_serializer.cpp
+    test_scene.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
     # testear. Cuando crezca, convertir a target `mood_core` compartido.
     ${CMAKE_SOURCE_DIR}/src/engine/scene/EditorCamera.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/FpsCamera.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/Scene.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/GridMap.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/PhysicsSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/VFS.cpp
@@ -34,6 +36,7 @@ add_executable(mood_tests
 target_link_libraries(mood_tests PRIVATE
     spdlog::spdlog
     nlohmann_json::nlohmann_json
+    EnTT::EnTT
 )
 
 target_include_directories(mood_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)

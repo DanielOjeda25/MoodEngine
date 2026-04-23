@@ -105,6 +105,15 @@ CPMAddPackage(
 add_library(pfd INTERFACE)
 target_include_directories(pfd INTERFACE ${portable_file_dialogs_SOURCE_DIR})
 
+# EnTT (Hito 7): almacenamiento de entidades + consultas tipo ECS.
+# Se envuelve en una fachada propia (`Mood::Scene` + `Mood::Entity`) para no
+# filtrar la API de EnTT al resto del motor. Ver DECISIONS.md.
+CPMAddPackage(
+    NAME EnTT
+    GITHUB_REPOSITORY skypjack/entt
+    VERSION 3.13.2
+)
+
 # ---------------------------------------------------------------------------
 # Target interno: ImGui compilado como libreria estatica con backends SDL2 + OpenGL3
 # ---------------------------------------------------------------------------
@@ -148,6 +157,7 @@ add_executable(MoodEditor
 
     src/engine/scene/EditorCamera.cpp
     src/engine/scene/FpsCamera.cpp
+    src/engine/scene/Scene.cpp
     src/engine/scene/ViewportPick.cpp
 
     src/engine/world/GridMap.cpp
@@ -186,6 +196,7 @@ target_link_libraries(MoodEditor PRIVATE
     stb
     nlohmann_json::nlohmann_json
     pfd
+    EnTT::EnTT
     OpenGL::GL
 )
 
