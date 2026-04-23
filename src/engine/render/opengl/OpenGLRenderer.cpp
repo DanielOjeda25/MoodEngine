@@ -37,11 +37,13 @@ void OpenGLRenderer::setViewport(i32 x, i32 y, u32 width, u32 height) {
 }
 
 void OpenGLRenderer::drawMesh(const IMesh& mesh, const IShader& shader) {
+    // NO desbindeamos shader/mesh al final: romperia el patron "bind once,
+    // draw many" usado por el render del grid (un setMat4 entre draws). Si
+    // `glUniform*` se llama con program 0 bound, la llamada es no-op silencioso
+    // y todos los cubos terminarian dibujandose en la posicion del primero.
     shader.bind();
     mesh.bind();
     glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh.vertexCount()));
-    mesh.unbind();
-    shader.unbind();
 }
 
 } // namespace Mood
