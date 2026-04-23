@@ -329,3 +329,60 @@ Godot) y no requiere reinventar la UX.
 **Revisar si:** a largo plazo aparece la necesidad de un "scratch
 mode" para experimentar sin compromiso (editor juega al papel de
 Blender por un rato). Hasta entonces, proyectos everywhere.
+
+## 2026-04-23: ECS con EnTT + fachada Scene/Entity
+
+**Contexto:** Hito 7 introduce el modelo de entidades-componentes-sistemas para
+que el editor tenga un modelo de escena sobre el cual Hierarchy/Inspector/
+RenderSystem puedan trabajar de forma uniforme.
+**Decisión:** `skypjack/entt` 3.13.2 como backend, oculto detrás de una
+fachada propia: `Mood::Scene` envuelve `entt::registry` y `Mood::Entity` es
+un wrapper liviano (16 bytes: `entt::entity` + `Scene*`). El resto del
+motor no incluye `<entt/entt.hpp>` directamente — todo pasa por `Entity.h`
+/ `Scene.h`. Los componentes en `Components.h` son POD sin lógica; los
+sistemas (hoy solo RenderSystem conceptual) iteran con `Scene::forEach`.
+**Razones:** EnTT es performance-first, battle-tested (Dungeons & Dragons
+Online, Minecraft Bedrock); la fachada esconde templates complejos,
+permite cambiar el backend si aparece otro ECS (Flecs, etc.) sin tocar el
+código cliente. Alineado con la sección 4.14 del doc técnico.
+**Alternativas consideradas:** exponer `entt::registry` directo (mejor
+performance, peor API ergonomics); escribir un ECS propio (reinvento la
+rueda); Flecs (menos adoptado en C++).
+**Revisar si:** necesitamos queries complejas (compound views con exclusion)
+que se vuelvan verbosas de envolver.
+
+## 2026-04-23: Scene derivada de GridMap en Hito 7 (no authoritative todavía)
+
+**Contexto:** en el Hito 7 queríamos introducir entidades pero sin
+reescribir el render (GridRenderer sobre el grid) ni el serializador
+(.moodmap es un grid).
+**Decisión:** `Scene` en Hito 7 es una VISTA derivada del `GridMap`.
+`rebuildSceneFromMap` se llama cada vez que el mapa cambia (buildInitial,
+openProject, drop, closeProject). El editor ve entidades en el Hierarchy y
+puede editarlas en el Inspector, pero las ediciones son EPHEMERAL — no se
+persisten al `.moodmap` porque el formato no las soporta todavía. El flip
+a Scene-authoritative viene cuando llegue geometría no-grid (Hito 10 con
+assimp: meshes importados desde archivo necesitan ser entidades).
+**Razones:** entrega valor incremental sin romper lo que funciona. El
+Hierarchy/Inspector dan feedback visual útil; cuando Scene tome el mando,
+las ediciones pasarán a persistir sin cambios en la UI.
+**Alternativas consideradas:** Scene authoritative desde el día 1 —
+requiere redefinir `.moodmap` con entidades en vez de tiles; mucho cambio
+para cero beneficio inmediato.
+**Revisar si:** Hito 10+ (assimp mesh loading) o si el costo del
+`rebuildSceneFromMap` se nota (~30 entidades hoy, ~1000+ con mapas más
+grandes).
+
+## 2026-04-23: `Scene` se reinicia vía `registry.clear()`, no recreando el unique_ptr
+
+**Contexto:** primera versión de `rebuildSceneFromMap` recreaba el
+`std::unique_ptr<Scene>`. Los paneles Hierarchy/Inspector guardan
+`Scene*` que se volvía dangling pointer tras cada rebuild, produciendo
+crashes al acceder a entidades destruidas.
+**Decisión:** rebuild ahora hace `m_scene->registry().clear()` + repoblar.
+El `Scene*` de los paneles sigue siendo válido (apunta al mismo objeto).
+La selección (también un `Entity` con handle ya inválido) se invalida
+explícitamente con `m_ui.setSelectedEntity(Entity{})`.
+**Razones:** evita un dangling-pointer bug sutil sin complicar la API.
+**Alternativas consideradas:** cambiar la API a `Scene&` por referencia
+(aún más seguro pero requiere pasar la scene por todos los constructores).

@@ -6,11 +6,11 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 6 cerrado, mergeado a `main` y publicado en origin.**
-Tag: `v0.6.0-hito6`.
-Verificado automático (suite doctest 61/281 pasando, log de `Proyecto guardado: ...moodproj` + `Mapa guardado: ...moodmap`, shutdown exit 0) + verificado por el dev a ojo (flujo completo nuevo→drop→cerrar→reabrir preserva el mapa editado; Ctrl+S guarda; título con `*` cuando dirty; Guardar grayado sin proyecto; pan middle-drag estilo Blender; hover cyan durante drag; drop al tile correcto).
+**Hito 7 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.7.0-hito7`.
+Verificado automático (suite doctest 71/322 pasando, editor arranca con modal Welcome, Hierarchy lista 29 entidades, Inspector edita componentes, shutdown exit 0) + verificado por el dev a ojo (modal Welcome aparece sin recientes, crear+guardar+abrir preservan contenido, drag & drop funciona, Hierarchy poblada con entidades nombradas, click en Hierarchy selecciona y muestra componentes en Inspector).
 
-**Próximo paso:** Hito 7 — Entidades, componentes, jerarquía. EnTT detrás de fachada (`Entity`, `Scene`), panel Hierarchy, Inspector funcional con componentes (Transform, MeshRenderer, Camera, Light). Plan detallado en `docs/PLAN_HITO7.md`.
+**Próximo paso:** Hito 8 — Scripting con Lua. Integrar Lua 5.4 + sol2 como binding C++. `ScriptComponent` con path al `.lua` y hot-reload. API mínima expuesta a scripts: transform, input, log, spawn/destroy entity. Plan en `docs/PLAN_HITO8.md`.
 
 ### Lo que ya está hecho
 
@@ -90,6 +90,7 @@ Verificado automático (suite doctest 61/281 pasando, log de `Proyecto guardado:
 - doctest `2.4.11` (sólo para el target `mood_tests`)
 - nlohmann_json `3.11.3` (serialización de `.moodmap` / `.moodproj`)
 - portable-file-dialogs `0.1.0` (DOWNLOAD_ONLY, target INTERFACE propio `pfd`)
+- EnTT `3.13.2` (ECS, Hito 7; oculto detrás de fachada `Scene`/`Entity`)
 
 ### Herramientas externas necesarias (solo para regenerar, no para build)
 
@@ -155,20 +156,20 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: implementar el Hito 7
+### Tarea inmediata: implementar el Hito 8
 
-El Hito 6 está cerrado (tag `v0.6.0-hito6` en origin). El foco ahora es el **Hito 7 — Entidades, componentes, jerarquía**: integrar EnTT detrás de una fachada (`Entity`, `Scene`), panel Hierarchy (árbol), Inspector funcional que edita componentes. Componentes básicos: `Transform`, `MeshRenderer`, `Camera`, `Light`.
+El Hito 7 está cerrado (tag `v0.7.0-hito7` en origin). El foco ahora es el **Hito 8 — Scripting con Lua**: integrar Lua 5.4 + sol2, `ScriptComponent`, API mínima al motor (transform/input/log/spawn), hot-reload de scripts.
 
-El plan desglosado por tareas está en `docs/PLAN_HITO7.md`.
+El plan desglosado por tareas está en `docs/PLAN_HITO8.md`.
 
-**Punto de arranque concreto:** `src/engine/scene/` — crear `Scene.h` que envuelva un `entt::registry` y `Entity.h` como fachada. Pasar la sala del mapa actual a ser una escena de entidades (cada tile sólido = entidad con `Transform` + `MeshRenderer`). Después serialización.
+**Punto de arranque concreto:** agregar Lua (via CPM desde `lua/lua` o mirror) y `sol2` (header-only, vía CPM de `ThePhD/sol2`). Definir `ScriptSystem` que instancie un `sol::state` por entidad con `ScriptComponent`, llame a `onUpdate(dt)` del script cada frame.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO7.md`.
+1. Leer `docs/PLAN_HITO8.md`.
 2. Trabajar bloque por bloque, marcando en el plan al cerrar cada uno.
-3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial (por qué fachada vs exponer EnTT directo, naming, etc.).
-4. Al final: commits atómicos en español, merge a main, tag `v0.7.0-hito7`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO8.md`.
+3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial (p. ej. cómo exponer la API C++ a Lua: funciones libres vs métodos de Scene, cómo manejar errores de script).
+4. Al final: commits atómicos en español, merge a main, tag `v0.8.0-hito8`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO9.md`.
 
 ---
 
