@@ -13,4 +13,14 @@ enum class EditorMode {
     Play,
 };
 
+/// @brief Acciones de proyecto que la UI solicita y EditorApplication atiende.
+enum class ProjectAction {
+    None,
+    NewProject,
+    OpenProject,
+    Save,
+    SaveAs,
+    CloseProject,
+};
+
 } // namespace Mood

@@ -60,6 +60,21 @@ public:
         return r;
     }
 
+    /// @brief Accion de proyecto solicitada desde el menu (Nuevo, Abrir,
+    ///        Guardar, etc.). Solo puede haber una por frame.
+    void requestProjectAction(ProjectAction a) { m_projectAction = a; }
+    ProjectAction consumeProjectAction() {
+        const auto a = m_projectAction;
+        m_projectAction = ProjectAction::None;
+        return a;
+    }
+
+    /// @brief Estado actual del proyecto (lo setea EditorApplication). La UI
+    ///        lo usa para grayar items del menu cuando no hay proyecto
+    ///        abierto (p.ej. Guardar o Cerrar).
+    bool hasProject() const { return m_hasProject; }
+    void setHasProject(bool v) { m_hasProject = v; }
+
 private:
     Dockspace m_dockspace;
     MenuBar m_menuBar;
@@ -74,6 +89,9 @@ private:
 
     EditorMode m_mode = EditorMode::Editor;
     bool m_togglePlayRequested = false;
+
+    ProjectAction m_projectAction = ProjectAction::None;
+    bool m_hasProject = false;
 };
 
 } // namespace Mood

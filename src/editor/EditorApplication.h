@@ -12,10 +12,13 @@
 #include "engine/scene/EditorCamera.h"
 #include "engine/scene/FpsCamera.h"
 #include "engine/scene/ViewportPick.h"
+#include "engine/serialization/ProjectSerializer.h"
 #include "engine/world/GridMap.h"
 #include "platform/Window.h"
 
+#include <filesystem>
 #include <memory>
+#include <optional>
 
 namespace Mood {
 
@@ -59,6 +62,26 @@ private:
     ///        con el mapa centrado en el origen del mundo.
     glm::vec3 mapWorldOrigin() const;
 
+    /// @brief Reemplaza m_map con la sala 8x8 hardcodeada (perimetro grid,
+    ///        columna central brick). Se usa al arrancar y al cerrar proyecto.
+    void buildInitialTestMap();
+
+    /// @brief Sincroniza el titulo de la ventana con el estado actual:
+    ///        nombre del proyecto + indicador de dirty. Llamar cuando algo
+    ///        de ese estado cambia (abrir / guardar / dirty).
+    void updateWindowTitle();
+
+    /// @brief Marca el proyecto como modificado. No-op si no hay proyecto
+    ///        abierto (el mapa de prueba no se persiste).
+    void markDirty();
+
+    // Handlers de acciones del menu Archivo.
+    void handleNewProject();
+    void handleOpenProject();
+    void handleSave();
+    void handleSaveAs();
+    void handleCloseProject();
+
     std::unique_ptr<Window> m_window;
 
     // RHI y recursos graficos. Se destruyen en orden inverso antes del
@@ -84,8 +107,18 @@ private:
     EditorMode m_mode = EditorMode::Editor;
 
     // Mapa jugable (Hito 4). Se renderiza centrado en el origen del mundo;
-    // tileSize=3m (escala SI realista, Hito 5 Bloque 0).
+    // tileSize=3m (escala SI realista, Hito 5 Bloque 0). Se reemplaza al
+    // abrir proyectos y se resetea al mapa de prueba al cerrar.
     GridMap m_map{8u, 8u, 3.0f};
+
+    // Proyecto activo (Hito 6 Bloque 4). `nullopt` = editor sin proyecto,
+    // con el mapa de prueba hardcodeado.
+    std::optional<Project> m_project;
+    // Path del mapa activo, relativo a `m_project->root`.
+    std::filesystem::path m_currentMapPath;
+    // True cuando se modifico el estado desde el ultimo save. El titulo de
+    // la ventana muestra " *" en ese caso.
+    bool m_projectDirty = false;
 
     // Toggle del debug draw de AABBs (tile colliders + AABB del jugador en
     // Play Mode). Controlado con F1. Default off para no ensuciar la escena.

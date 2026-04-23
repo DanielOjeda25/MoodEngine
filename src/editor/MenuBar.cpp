@@ -12,16 +12,20 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("Archivo")) {
             if (ImGui::MenuItem("Nuevo Proyecto")) {
-                Log::editor()->info("Archivo > Nuevo Proyecto (no implementado)");
-                m_showNotImplementedPopup = true;
+                ui.requestProjectAction(ProjectAction::NewProject);
             }
             if (ImGui::MenuItem("Abrir Proyecto")) {
-                Log::editor()->info("Archivo > Abrir Proyecto (no implementado)");
-                m_showNotImplementedPopup = true;
+                ui.requestProjectAction(ProjectAction::OpenProject);
             }
-            if (ImGui::MenuItem("Guardar", "Ctrl+S")) {
-                Log::editor()->info("Archivo > Guardar (no implementado)");
-                m_showNotImplementedPopup = true;
+            ImGui::Separator();
+            if (ImGui::MenuItem("Guardar", "Ctrl+S", false, ui.hasProject())) {
+                ui.requestProjectAction(ProjectAction::Save);
+            }
+            if (ImGui::MenuItem("Guardar como...", nullptr, false, ui.hasProject())) {
+                ui.requestProjectAction(ProjectAction::SaveAs);
+            }
+            if (ImGui::MenuItem("Cerrar proyecto", nullptr, false, ui.hasProject())) {
+                ui.requestProjectAction(ProjectAction::CloseProject);
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Salir", "Alt+F4")) {

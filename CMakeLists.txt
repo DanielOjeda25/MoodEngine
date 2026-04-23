@@ -94,6 +94,17 @@ CPMAddPackage(
         "JSON_Install OFF"
 )
 
+# Portable File Dialogs (single-header, cross-platform). Download-only para
+# crear un target INTERFACE propio; el repo no define uno utilizable via CMake.
+CPMAddPackage(
+    NAME portable_file_dialogs
+    GITHUB_REPOSITORY samhocevar/portable-file-dialogs
+    GIT_TAG 0.1.0
+    DOWNLOAD_ONLY YES
+)
+add_library(pfd INTERFACE)
+target_include_directories(pfd INTERFACE ${portable_file_dialogs_SOURCE_DIR})
+
 # ---------------------------------------------------------------------------
 # Target interno: ImGui compilado como libreria estatica con backends SDL2 + OpenGL3
 # ---------------------------------------------------------------------------
@@ -174,6 +185,7 @@ target_link_libraries(MoodEditor PRIVATE
     glad
     stb
     nlohmann_json::nlohmann_json
+    pfd
     OpenGL::GL
 )
 

@@ -11,8 +11,12 @@
 #include "engine/render/opengl/OpenGLShader.h"
 #include "engine/render/opengl/OpenGLTexture.h"
 #include "engine/scene/ViewportPick.h"
+#include "engine/serialization/ProjectSerializer.h"
+#include "engine/serialization/SceneSerializer.h"
 #include "systems/GridRenderer.h"
 #include "systems/PhysicsSystem.h"
+
+#include <portable-file-dialogs.h>
 
 // glad/gl.h debe ir antes que cualquier otro header que pueda incluir GL
 // (evita redefiniciones con <SDL_opengl.h> o los loaders internos).
@@ -103,8 +107,6 @@ EditorApplication::EditorApplication() {
         [](const std::string& fsPath) -> std::unique_ptr<ITexture> {
             return std::make_unique<OpenGLTexture>(fsPath);
         });
-    m_wallTextureId = m_assetManager->loadTexture("textures/grid.png");
-    const TextureAssetId brickId = m_assetManager->loadTexture("textures/brick.png");
     m_ui.assetBrowser().setAssetManager(m_assetManager.get());
 
     m_debugRenderer = std::make_unique<OpenGLDebugRenderer>();
@@ -114,22 +116,165 @@ EditorApplication::EditorApplication() {
 
     m_ui.viewport().setFramebuffer(m_viewportFb.get());
 
-    // --- Mapa de prueba ---
-    // 8x8 con bordes sólidos (grid.png) y columna central (brick.png) para
-    // validar texturas por tile del Hito 5 Bloque 5.
-    for (u32 i = 0; i < m_map.width(); ++i) {
-        m_map.setTile(i, 0u,                   TileType::SolidWall, m_wallTextureId);
-        m_map.setTile(i, m_map.height() - 1u,  TileType::SolidWall, m_wallTextureId);
-    }
-    for (u32 j = 0; j < m_map.height(); ++j) {
-        m_map.setTile(0u,                  j, TileType::SolidWall, m_wallTextureId);
-        m_map.setTile(m_map.width() - 1u,  j, TileType::SolidWall, m_wallTextureId);
-    }
-    m_map.setTile(m_map.width() / 2u, m_map.height() / 2u,
-                  TileType::SolidWall, brickId);
-    Log::world()->info("Mapa cargado: prueba_8x8 ({} tiles solidos)", m_map.solidCount());
+    buildInitialTestMap();
+    updateWindowTitle();
 
     MOOD_LOG_INFO("Editor listo");
+}
+
+void EditorApplication::buildInitialTestMap() {
+    // 8x8 con bordes sólidos (grid.png) y columna central (brick.png) para
+    // validar texturas por tile. Mismo estado que arrancaba el editor desde
+    // el Hito 5; se reusa al cerrar un proyecto para volver a un baseline
+    // conocido.
+    m_map = GridMap(8u, 8u, 3.0f);
+    const TextureAssetId grid  = m_assetManager->loadTexture("textures/grid.png");
+    const TextureAssetId brick = m_assetManager->loadTexture("textures/brick.png");
+    m_wallTextureId = grid;
+
+    for (u32 i = 0; i < m_map.width(); ++i) {
+        m_map.setTile(i, 0u,                   TileType::SolidWall, grid);
+        m_map.setTile(i, m_map.height() - 1u,  TileType::SolidWall, grid);
+    }
+    for (u32 j = 0; j < m_map.height(); ++j) {
+        m_map.setTile(0u,                  j, TileType::SolidWall, grid);
+        m_map.setTile(m_map.width() - 1u,  j, TileType::SolidWall, grid);
+    }
+    m_map.setTile(m_map.width() / 2u, m_map.height() / 2u,
+                  TileType::SolidWall, brick);
+    Log::world()->info("Mapa de prueba cargado: prueba_8x8 ({} tiles solidos)",
+                       m_map.solidCount());
+}
+
+void EditorApplication::updateWindowTitle() {
+    std::string title = "MoodEngine Editor - v0.6.0-dev (Hito 6)";
+    if (m_project.has_value()) {
+        title = "MoodEngine Editor - " + m_project->name;
+        if (m_projectDirty) title += " *";
+    }
+    SDL_SetWindowTitle(m_window->sdlHandle(), title.c_str());
+    m_ui.setHasProject(m_project.has_value());
+}
+
+void EditorApplication::markDirty() {
+    if (!m_project.has_value()) return;
+    if (!m_projectDirty) {
+        m_projectDirty = true;
+        updateWindowTitle();
+    }
+}
+
+void EditorApplication::handleNewProject() {
+    const auto cwd = std::filesystem::current_path().generic_string();
+    const std::string folder = pfd::select_folder(
+        "Carpeta del nuevo proyecto", cwd).result();
+    if (folder.empty()) {
+        Log::editor()->info("Nuevo proyecto: cancelado");
+        return;
+    }
+
+    const std::filesystem::path root(folder);
+    const std::string name = root.filename().generic_string();
+    if (name.empty()) {
+        pfd::message("MoodEngine", "No se pudo deducir el nombre del proyecto del folder elegido.",
+                     pfd::choice::ok, pfd::icon::warning);
+        return;
+    }
+
+    auto created = ProjectSerializer::createNewProject(root, name);
+    if (!created.has_value()) {
+        pfd::message("MoodEngine", "No se pudo crear el proyecto (ver console/log).",
+                     pfd::choice::ok, pfd::icon::error);
+        return;
+    }
+
+    // Guardar el estado actual del editor como mapa default del proyecto.
+    const auto mapPath = created->root / created->defaultMap;
+    std::filesystem::create_directories(mapPath.parent_path());
+    SceneSerializer::save(m_map, "default", *m_assetManager, mapPath);
+
+    m_project = std::move(created);
+    m_currentMapPath = m_project->defaultMap;
+    m_projectDirty = false;
+    updateWindowTitle();
+    Log::editor()->info("Nuevo proyecto creado: {}", m_project->name);
+}
+
+void EditorApplication::handleOpenProject() {
+    const auto cwd = std::filesystem::current_path().generic_string();
+    const auto selection = pfd::open_file(
+        "Abrir proyecto", cwd,
+        {"Proyectos MoodEngine (*.moodproj)", "*.moodproj"},
+        pfd::opt::none).result();
+    if (selection.empty()) {
+        Log::editor()->info("Abrir proyecto: cancelado");
+        return;
+    }
+
+    const std::filesystem::path moodproj(selection.front());
+    auto loaded = ProjectSerializer::load(moodproj);
+    if (!loaded.has_value()) {
+        pfd::message("MoodEngine", "No se pudo abrir el proyecto (ver console/log).",
+                     pfd::choice::ok, pfd::icon::error);
+        return;
+    }
+    if (loaded->maps.empty()) {
+        pfd::message("MoodEngine", "El proyecto no contiene mapas.",
+                     pfd::choice::ok, pfd::icon::warning);
+        return;
+    }
+
+    const auto mapPath = loaded->root / loaded->defaultMap;
+    auto savedMap = SceneSerializer::load(mapPath, *m_assetManager);
+    if (!savedMap.has_value()) {
+        pfd::message("MoodEngine", "No se pudo abrir el mapa default del proyecto.",
+                     pfd::choice::ok, pfd::icon::error);
+        return;
+    }
+
+    m_map = std::move(savedMap->map);
+    m_project = std::move(loaded);
+    m_currentMapPath = m_project->defaultMap;
+    m_projectDirty = false;
+    updateWindowTitle();
+    Log::editor()->info("Proyecto abierto: {}", m_project->name);
+}
+
+void EditorApplication::handleSave() {
+    if (!m_project.has_value()) {
+        Log::editor()->warn("Guardar: no hay proyecto abierto");
+        return;
+    }
+    const auto mapPath = m_project->root / m_currentMapPath;
+    std::filesystem::create_directories(mapPath.parent_path());
+    try {
+        SceneSerializer::save(m_map, m_currentMapPath.stem().generic_string(),
+                              *m_assetManager, mapPath);
+        ProjectSerializer::save(*m_project);
+        m_projectDirty = false;
+        updateWindowTitle();
+    } catch (const std::exception& e) {
+        Log::editor()->warn("Guardar fallo: {}", e.what());
+        pfd::message("MoodEngine", std::string("Error al guardar: ") + e.what(),
+                     pfd::choice::ok, pfd::icon::error);
+    }
+}
+
+void EditorApplication::handleSaveAs() {
+    // Minimo viable: equivale a "Nuevo proyecto con el estado actual". Un
+    // "Guardar como" mas rico (cambiar nombre manteniendo mapas) puede
+    // venir cuando haya mas de un mapa por proyecto.
+    handleNewProject();
+}
+
+void EditorApplication::handleCloseProject() {
+    if (!m_project.has_value()) return;
+    Log::editor()->info("Cerrando proyecto: {}", m_project->name);
+    m_project.reset();
+    m_currentMapPath.clear();
+    m_projectDirty = false;
+    buildInitialTestMap();
+    updateWindowTitle();
 }
 
 EditorApplication::~EditorApplication() {
@@ -176,6 +321,14 @@ void EditorApplication::processEvents() {
                    ev.key.repeat == 0) {
             m_debugDraw = !m_debugDraw;
             Log::editor()->info("Debug draw {}", m_debugDraw ? "activado" : "desactivado");
+        } else if (ev.type == SDL_KEYDOWN &&
+                   ev.key.keysym.sym == SDLK_s &&
+                   (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
+                   ev.key.repeat == 0 &&
+                   m_mode == EditorMode::Editor) {
+            // Ctrl+S: atajo de Guardar. Emitimos la misma solicitud que el menu
+            // para reusar el dispatcher unico.
+            m_ui.requestProjectAction(ProjectAction::Save);
         }
     }
 }
@@ -375,6 +528,16 @@ int EditorApplication::run() {
             }
         }
 
+        // 2.25) Acciones de proyecto (Archivo > Nuevo / Abrir / Guardar / ...).
+        switch (m_ui.consumeProjectAction()) {
+            case ProjectAction::NewProject:   handleNewProject();   break;
+            case ProjectAction::OpenProject:  handleOpenProject();  break;
+            case ProjectAction::Save:         handleSave();         break;
+            case ProjectAction::SaveAs:       handleSaveAs();       break;
+            case ProjectAction::CloseProject: handleCloseProject(); break;
+            case ProjectAction::None:         break;
+        }
+
         // 2.5) Drop de textura desde AssetBrowser: usar el tile picking para
         //      convertir las NDC del drop en coords de tile y aplicar.
         const ViewportPanel::TextureDrop drop = m_ui.viewport().consumeTextureDrop();
@@ -391,6 +554,7 @@ int EditorApplication::run() {
                               static_cast<TextureAssetId>(drop.textureId));
                 Log::editor()->info("Drop textura id={} -> tile ({}, {})",
                                      drop.textureId, hit.tileX, hit.tileY);
+                markDirty();
             }
         }
 
