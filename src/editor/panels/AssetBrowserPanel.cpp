@@ -70,7 +70,13 @@ void AssetBrowserPanel::onImGuiRender() {
 
     if (!m_scanned) rescan();
 
-    if (ImGui::Button("Recargar")) rescan();
+    if (ImGui::Button("Recargar")) {
+        rescan();
+        // El reupload a GPU de las texturas cambiadas lo maneja
+        // EditorApplication entre frames para no borrar un GLuint que
+        // ImGui pueda estar a punto de usar.
+        m_reloadRequested = true;
+    }
     ImGui::SameLine();
     ImGui::TextDisabled("%zu texturas", m_entries.size());
     ImGui::Separator();

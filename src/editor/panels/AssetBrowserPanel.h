@@ -27,6 +27,15 @@ public:
     ///        por click en este panel. `nullopt` si nada esta seleccionado.
     const std::optional<std::string>& selected() const { return m_selected; }
 
+    /// @brief `true` una unica vez despues de que el usuario apreto Recargar.
+    ///        El consumidor (EditorApplication) debe llamar
+    ///        `AssetManager::reloadChanged()` entre frames para upload seguro.
+    bool consumeReloadRequest() {
+        const bool r = m_reloadRequested;
+        m_reloadRequested = false;
+        return r;
+    }
+
 private:
     struct Entry {
         std::string logicalPath; // "textures/foo.png"
@@ -40,6 +49,7 @@ private:
     std::vector<Entry> m_entries;
     std::optional<std::string> m_selected;
     bool m_scanned = false;
+    bool m_reloadRequested = false;
 };
 
 } // namespace Mood

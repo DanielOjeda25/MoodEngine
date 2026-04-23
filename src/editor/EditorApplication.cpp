@@ -504,6 +504,16 @@ int EditorApplication::run() {
     m_deltaTimer.reset();
 
     while (m_running) {
+        // Hot-reload de texturas solicitado el frame anterior (boton
+        // Recargar del Asset Browser). Se aplica aca, entre frames, para
+        // que ningun draw en curso use un GLuint recien destruido.
+        if (m_ui.assetBrowser().consumeReloadRequest()) {
+            const auto n = m_assetManager->reloadChanged();
+            if (n > 0) {
+                Log::editor()->info("Hot-reload: {} texturas actualizadas", n);
+            }
+        }
+
         const f64 dtD = m_deltaTimer.elapsedSeconds();
         const f32 dt = static_cast<f32>(dtD);
         m_deltaTimer.reset();

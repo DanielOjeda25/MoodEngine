@@ -13,6 +13,7 @@
 #include "core/Types.h"
 #include "platform/VFS.h"
 
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
@@ -69,12 +70,23 @@ public:
     /// @brief Cantidad de texturas en cache (incluye missing).
     usize textureCount() const { return m_textures.size(); }
 
+    /// @brief Revisa el mtime de cada PNG cargado y re-invoca la factoria
+    ///        para las texturas cuyo archivo cambio en disco. Conserva el
+    ///        `TextureAssetId` (swapea el unique_ptr); callsites que
+    ///        guardaron el id siguen viendo la textura actualizada.
+    ///        IMPORTANTE: este metodo borra los GLuint de las texturas
+    ///        cambiadas. Llamar ENTRE frames (antes de `beginFrame`) para
+    ///        evitar que ImGui dibuje con un handle recien destruido.
+    /// @return cantidad de texturas efectivamente recargadas.
+    usize reloadChanged();
+
 private:
     VFS m_vfs;
     TextureFactory m_factory;
     std::unordered_map<std::string, TextureAssetId> m_textureCache;
     std::vector<std::unique_ptr<ITexture>> m_textures; // [0] = missing
     std::vector<std::string> m_texturePaths;           // paralelo a m_textures
+    std::vector<std::filesystem::file_time_type> m_textureMtimes; // paralelo
 };
 
 } // namespace Mood

@@ -31,6 +31,11 @@ AssetManager::AssetManager(std::string rootDir, TextureFactory factory)
     try {
         m_textures.emplace_back(m_factory(missingFs.generic_string()));
         m_texturePaths.emplace_back(k_missingPath);
+        // mtime stamp para el hot-reload. Si el archivo no existe (tests con
+        // mocks), file_time_type por defecto funciona igual — nunca va a ser
+        // "menor" que uno real en futuros reloadChanged().
+        std::error_code ec_mtime;
+        m_textureMtimes.push_back(std::filesystem::last_write_time(missingFs, ec_mtime));
         // Cachear el path del missing al id 0 para que una llamada futura a
         // loadTexture("textures/missing.png") no cree una entrada duplicada.
         m_textureCache.emplace(k_missingPath, missingTextureId());
@@ -64,6 +69,8 @@ TextureAssetId AssetManager::loadTexture(std::string_view logicalPath) {
         const TextureAssetId id = static_cast<TextureAssetId>(m_textures.size());
         m_textures.push_back(std::move(tex));
         m_texturePaths.push_back(key);
+        std::error_code ec_mtime;
+        m_textureMtimes.push_back(std::filesystem::last_write_time(fs, ec_mtime));
         m_textureCache.emplace(key, id);
         Log::assets()->info("AssetManager: cargada texture {} -> id {}", logicalPath, id);
         return id;
@@ -90,6 +97,36 @@ std::string AssetManager::pathOf(TextureAssetId id) const {
         return m_texturePaths[missingTextureId()];
     }
     return m_texturePaths[id];
+}
+
+usize AssetManager::reloadChanged() {
+    usize reloaded = 0;
+    for (TextureAssetId id = 0; id < m_textures.size(); ++id) {
+        const auto fs = m_vfs.resolve(m_texturePaths[id]);
+        if (fs.empty()) continue; // path logico invalido (no deberia pasar)
+
+        std::error_code ec;
+        const auto mtime = std::filesystem::last_write_time(fs, ec);
+        if (ec) {
+            // Archivo desaparecio. No lo reemplazamos con el missing
+            // (arruinaria referencias validas); solo logueamos una vez.
+            continue;
+        }
+        if (mtime == m_textureMtimes[id]) continue;
+
+        try {
+            auto fresh = m_factory(fs.generic_string());
+            m_textures[id] = std::move(fresh); // dtor del viejo -> glDeleteTextures
+            m_textureMtimes[id] = mtime;
+            ++reloaded;
+            Log::assets()->info("AssetManager: recargada '{}' (id {})",
+                                 m_texturePaths[id], id);
+        } catch (const std::exception& e) {
+            Log::assets()->warn("AssetManager: recarga fallo para '{}': {}",
+                                m_texturePaths[id], e.what());
+        }
+    }
+    return reloaded;
 }
 
 } // namespace Mood
