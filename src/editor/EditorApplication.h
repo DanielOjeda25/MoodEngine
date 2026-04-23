@@ -11,6 +11,7 @@
 #include "engine/assets/AssetManager.h"
 #include "engine/scene/EditorCamera.h"
 #include "engine/scene/FpsCamera.h"
+#include "engine/scene/ViewportPick.h"
 #include "engine/world/GridMap.h"
 #include "platform/Window.h"
 
@@ -23,6 +24,7 @@ class IFramebuffer;
 class IShader;
 class IMesh;
 class OpenGLDebugRenderer;
+class GridRenderer;
 
 class EditorApplication {
 public:
@@ -66,6 +68,7 @@ private:
     std::unique_ptr<IShader> m_defaultShader;
     std::unique_ptr<IMesh> m_cubeMesh;
     std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
+    std::unique_ptr<GridRenderer> m_gridRenderer;
 
     // AssetManager: owner de todas las texturas cargadas. Se destruye ANTES
     // del contexto GL (ver destructor).
@@ -87,6 +90,11 @@ private:
     // Toggle del debug draw de AABBs (tile colliders + AABB del jugador en
     // Play Mode). Controlado con F1. Default off para no ensuciar la escena.
     bool m_debugDraw = false;
+
+    // Tile bajo el cursor en Editor Mode (recalculado cada frame via
+    // ViewportPick). hit=false si no hay hover o el rayo no cae dentro del
+    // mapa. Se usa para hover highlight y para drag & drop futuro.
+    TilePickResult m_hoveredTile{};
 
     EditorUI m_ui;
 

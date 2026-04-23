@@ -125,9 +125,11 @@ add_executable(MoodEditor
 
     src/engine/scene/EditorCamera.cpp
     src/engine/scene/FpsCamera.cpp
+    src/engine/scene/ViewportPick.cpp
 
     src/engine/world/GridMap.cpp
 
+    src/systems/GridRenderer.cpp
     src/systems/PhysicsSystem.cpp
 
     src/engine/render/opengl/OpenGLMesh.cpp

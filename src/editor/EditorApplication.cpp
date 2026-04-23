@@ -4,12 +4,14 @@
 #include "core/math/AABB.h"
 #include "engine/assets/PrimitiveMeshes.h"
 #include "engine/render/ITexture.h"
-#include "engine/render/ITexture.h"
 #include "engine/render/opengl/OpenGLDebugRenderer.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/render/opengl/OpenGLMesh.h"
 #include "engine/render/opengl/OpenGLRenderer.h"
 #include "engine/render/opengl/OpenGLShader.h"
+#include "engine/render/opengl/OpenGLTexture.h"
+#include "engine/scene/ViewportPick.h"
+#include "systems/GridRenderer.h"
 #include "systems/PhysicsSystem.h"
 
 // glad/gl.h debe ir antes que cualquier otro header que pueda incluir GL
@@ -94,12 +96,21 @@ EditorApplication::EditorApplication() {
     MeshData cube = createCubeMesh();
     m_cubeMesh = std::make_unique<OpenGLMesh>(cube.vertices, cube.attributes);
 
-    m_assetManager = std::make_unique<AssetManager>();
+    // Factoria real: crea OpenGLTexture desde el path de filesystem. Los tests
+    // pasan otra factoria que devuelve mocks sin tocar GL.
+    m_assetManager = std::make_unique<AssetManager>(
+        "assets",
+        [](const std::string& fsPath) -> std::unique_ptr<ITexture> {
+            return std::make_unique<OpenGLTexture>(fsPath);
+        });
     m_wallTextureId = m_assetManager->loadTexture("textures/grid.png");
     const TextureAssetId brickId = m_assetManager->loadTexture("textures/brick.png");
     m_ui.assetBrowser().setAssetManager(m_assetManager.get());
 
     m_debugRenderer = std::make_unique<OpenGLDebugRenderer>();
+
+    m_gridRenderer = std::make_unique<GridRenderer>(
+        *m_renderer, *m_defaultShader, *m_cubeMesh, *m_assetManager);
 
     m_ui.viewport().setFramebuffer(m_viewportFb.get());
 
@@ -124,6 +135,8 @@ EditorApplication::EditorApplication() {
 EditorApplication::~EditorApplication() {
     // Los recursos GL dependen del contexto; liberar ANTES de destruir ImGui
     // y el contexto (el destructor del Window destruye el contexto al final).
+    // GridRenderer primero: solo guarda referencias, pero es dependiente.
+    m_gridRenderer.reset();
     m_debugRenderer.reset();
     m_assetManager.reset(); // dueño de las texturas
     m_cubeMesh.reset();
@@ -275,50 +288,28 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         projection = m_editorCamera.projectionMatrix(aspect);
     }
 
-    // View/projection constantes para el frame; uModel + textura cambian
-    // por tile (permite que cada celda tenga su propia textura).
-    m_defaultShader->bind();
-    m_defaultShader->setMat4("uView", view);
-    m_defaultShader->setMat4("uProjection", projection);
-    m_defaultShader->setInt("uTexture", 0);
-
-    // Tracking de la textura bound para evitar rebindear si el tile siguiente
-    // usa la misma: optimizacion barata que aprovecha el ordenamiento natural
-    // del iterado (los tiles del borde van juntos).
-    TextureAssetId lastBound = static_cast<TextureAssetId>(-1);
-
     // El mapa se dibuja centrado en el origen del mundo (mapWorldOrigin()).
     // Mismo offset que consume PhysicsSystem: single source of truth.
-    const f32 tileSize = m_map.tileSize();
     const glm::vec3 origin = mapWorldOrigin();
     (void)dt; // Ya no rotamos el modelo; el mapa es estatico.
 
-    for (u32 y = 0; y < m_map.height(); ++y) {
-        for (u32 x = 0; x < m_map.width(); ++x) {
-            if (!m_map.isSolid(x, y)) continue;
+    m_gridRenderer->draw(m_map, origin, view, projection);
 
-            const TextureAssetId tileTex = m_map.tileTextureAt(x, y);
-            if (tileTex != lastBound) {
-                m_assetManager->getTexture(tileTex)->bind(0);
-                lastBound = tileTex;
-            }
-
-            const glm::vec3 worldPos(
-                origin.x + (static_cast<f32>(x) + 0.5f) * tileSize,
-                origin.y + 0.5f * tileSize,
-                origin.z + (static_cast<f32>(y) + 0.5f) * tileSize);
-
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), worldPos);
-            model = glm::scale(model, glm::vec3(tileSize));
-
-            m_defaultShader->setMat4("uModel", model);
-            m_renderer->drawMesh(*m_cubeMesh, *m_defaultShader);
-        }
+    // Tile picking: solo en Editor Mode, cuando el cursor esta sobre la
+    // imagen del viewport. Resultado se usa abajo para el hover highlight
+    // y mas adelante para drag & drop desde el Asset Browser.
+    TilePickResult hovered{};
+    if (m_mode == EditorMode::Editor && m_ui.viewport().imageHovered()) {
+        const glm::vec2 ndc(m_ui.viewport().mouseNdcX(),
+                            m_ui.viewport().mouseNdcY());
+        hovered = pickTile(m_map, origin, view, projection, ndc);
     }
+    m_hoveredTile = hovered;
 
-    // Debug draw (opcional, toggle con F1): AABBs de tiles solidos + AABB
-    // del jugador en Play Mode. Se acumula y flushea despues de la escena
-    // para que las lineas queden por encima (respetando depth).
+    // Debug draw: AABBs de tiles solidos + AABB del jugador en Play Mode
+    // (toggle con F1). Hover highlight del tile bajo el cursor (siempre
+    // visible en Editor Mode). Todo se acumula y flushea al final.
+    bool hasDebugGeometry = false;
     if (m_debugDraw) {
         const glm::vec3 tileColor(1.0f, 0.85f, 0.15f);
         for (u32 ty = 0; ty < m_map.height(); ++ty) {
@@ -336,6 +327,16 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                 AABB{pos - k_playerHalfExtents, pos + k_playerHalfExtents},
                 playerColor);
         }
+        hasDebugGeometry = true;
+    }
+    if (hovered.hit) {
+        const glm::vec3 hoverColor(0.2f, 0.9f, 1.0f); // cyan
+        const AABB local = m_map.aabbOfTile(hovered.tileX, hovered.tileY);
+        const AABB world{origin + local.min, origin + local.max};
+        m_debugRenderer->drawAabb(world, hoverColor);
+        hasDebugGeometry = true;
+    }
+    if (hasDebugGeometry) {
         m_debugRenderer->flush(view, projection);
     }
 
@@ -368,6 +369,25 @@ int EditorApplication::run() {
                 enterPlayMode();
             } else {
                 exitPlayMode();
+            }
+        }
+
+        // 2.5) Drop de textura desde AssetBrowser: usar el tile picking para
+        //      convertir las NDC del drop en coords de tile y aplicar.
+        const ViewportPanel::TextureDrop drop = m_ui.viewport().consumeTextureDrop();
+        if (drop.pending && m_mode == EditorMode::Editor) {
+            const float aspect = (m_viewportFb->height() > 0)
+                ? static_cast<float>(m_viewportFb->width()) / static_cast<float>(m_viewportFb->height())
+                : 1.0f;
+            const glm::mat4 view = m_editorCamera.viewMatrix();
+            const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
+            const TilePickResult hit = pickTile(m_map, mapWorldOrigin(), view, projection,
+                                                glm::vec2(drop.ndcX, drop.ndcY));
+            if (hit.hit) {
+                m_map.setTile(hit.tileX, hit.tileY, TileType::SolidWall,
+                              static_cast<TextureAssetId>(drop.textureId));
+                Log::editor()->info("Drop textura id={} -> tile ({}, {})",
+                                     drop.textureId, hit.tileX, hit.tileY);
             }
         }
 
