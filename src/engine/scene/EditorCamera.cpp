@@ -2,6 +2,7 @@
 
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/geometric.hpp>
 #include <glm/trigonometric.hpp>
 
 #include <algorithm>
@@ -32,6 +33,26 @@ void EditorCamera::applyWheel(float deltaSteps) {
         ? (1.0f - k_zoomStep * deltaSteps)
         : (1.0f - k_zoomStep * deltaSteps); // misma formula; signo importa
     m_radius = std::clamp(m_radius * factor, k_minRadius, k_maxRadius);
+}
+
+void EditorCamera::applyPan(float dxPixels, float dyPixels) {
+    // Basis de la camara en coords de mundo.
+    const glm::vec3 pos = position();
+    const glm::vec3 forward = glm::normalize(m_target - pos);
+    glm::vec3 right = glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f));
+    if (glm::length(right) < 1e-6f) {
+        // Vista vertical pura (pitch cerca de +-90): fallback a X mundo.
+        right = glm::vec3(1.0f, 0.0f, 0.0f);
+    } else {
+        right = glm::normalize(right);
+    }
+    const glm::vec3 up = glm::normalize(glm::cross(right, forward));
+
+    // Sensibilidad proporcional al radio: a mas zoom-out, mas movimiento
+    // por pixel; a zoom-in, menor. Asi el paneo se siente constante.
+    const float panSpeed = 0.0015f * m_radius;
+    m_target -= right * (dxPixels * panSpeed); // mouse a la derecha -> vista sigue al cursor
+    m_target += up    * (dyPixels * panSpeed); // mouse hacia abajo  -> vista hacia arriba
 }
 
 glm::vec3 EditorCamera::position() const {

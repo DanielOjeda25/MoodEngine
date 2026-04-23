@@ -20,6 +20,12 @@ public:
     ///        Positivo = acercarse.
     void applyWheel(float deltaSteps);
 
+    /// @brief Paneo estilo Blender: middle-drag mueve el target de la camara
+    ///        en el plano perpendicular al view direction (right y up de la
+    ///        camara). Sensibilidad escalada por el radio para que sea
+    ///        comparable con la escena a distintos zooms.
+    void applyPan(float dxPixels, float dyPixels);
+
     glm::vec3 position() const;
     glm::mat4 viewMatrix() const;
     glm::mat4 projectionMatrix(float aspectRatio) const;

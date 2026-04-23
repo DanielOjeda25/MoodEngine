@@ -26,6 +26,11 @@ public:
     float cameraRotateDx() const { return m_cameraRotateDx; }
     float cameraRotateDy() const { return m_cameraRotateDy; }
 
+    /// @brief Delta en pixeles del middle-drag del mouse sobre el panel (paneo).
+    ///        Estilo Blender. Cero si no hay drag activo.
+    float cameraPanDx() const { return m_cameraPanDx; }
+    float cameraPanDy() const { return m_cameraPanDy; }
+
     /// @brief Delta de la rueda del mouse sobre el panel (zoom). Cero si no aplica.
     float cameraWheel() const { return m_cameraWheel; }
 
@@ -63,8 +68,11 @@ private:
 
     float m_cameraRotateDx = 0.0f;
     float m_cameraRotateDy = 0.0f;
+    float m_cameraPanDx = 0.0f;
+    float m_cameraPanDy = 0.0f;
     float m_cameraWheel = 0.0f;
     bool m_rightDragging = false;
+    bool m_middleDragging = false;
 
     bool m_imageHovered = false;
     float m_mouseNdcX = 0.0f;

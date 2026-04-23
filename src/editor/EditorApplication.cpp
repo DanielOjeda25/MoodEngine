@@ -230,8 +230,11 @@ void EditorApplication::updateCameras(f32 dt) {
     if (m_mode == EditorMode::Editor) {
         const float dx = m_ui.viewport().cameraRotateDx();
         const float dy = m_ui.viewport().cameraRotateDy();
+        const float panDx = m_ui.viewport().cameraPanDx();
+        const float panDy = m_ui.viewport().cameraPanDy();
         const float wheel = m_ui.viewport().cameraWheel();
         if (dx != 0.0f || dy != 0.0f) m_editorCamera.applyMouseDrag(dx, dy);
+        if (panDx != 0.0f || panDy != 0.0f) m_editorCamera.applyPan(panDx, panDy);
         if (wheel != 0.0f) m_editorCamera.applyWheel(wheel);
     } else {
         const Uint8* keys = SDL_GetKeyboardState(nullptr);

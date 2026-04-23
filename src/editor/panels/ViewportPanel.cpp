@@ -12,6 +12,8 @@ void ViewportPanel::onImGuiRender() {
     // Reset de input capturado: se actualiza dentro del panel si aplica.
     m_cameraRotateDx = 0.0f;
     m_cameraRotateDy = 0.0f;
+    m_cameraPanDx = 0.0f;
+    m_cameraPanDy = 0.0f;
     m_cameraWheel = 0.0f;
     m_imageHovered = false;
     m_mouseNdcX = 0.0f;
@@ -33,51 +35,72 @@ void ViewportPanel::onImGuiRender() {
             const ImVec2 uv1(1.0f, 0.0f);
             ImGui::Image(m_framebuffer->colorAttachmentHandle(), avail, uv0, uv1);
 
+            // Capturar el rect de la imagen AHORA: dentro de
+            // BeginDragDropTarget el "ultimo item" cambia a un widget
+            // interno de ImGui y GetItemRectMin() daria coords erroneas.
+            const ImVec2 imageMin = ImGui::GetItemRectMin();
+            const ImVec2 imageSize = ImGui::GetItemRectSize();
+
+            // Helper local: pos del cursor -> NDC dentro de la imagen.
+            auto mousePosToNdc = [&imageMin, &imageSize](ImVec2 mp, float& ndcX, float& ndcY) {
+                if (imageSize.x <= 0.0f || imageSize.y <= 0.0f) {
+                    ndcX = 0.0f; ndcY = 0.0f; return;
+                }
+                const float lx = mp.x - imageMin.x;
+                const float ly = mp.y - imageMin.y;
+                ndcX = (lx / imageSize.x) * 2.0f - 1.0f;
+                ndcY = 1.0f - (ly / imageSize.y) * 2.0f;
+            };
+
             // Drop target: el AssetBrowser emite payloads "MOOD_TEXTURE_ASSET"
-            // con el id de textura a aplicar al tile bajo el cursor. El tile
-            // exacto lo computa el consumidor con pickTile(ndcX, ndcY).
+            // con el id de textura a aplicar al tile bajo el cursor.
             if (ImGui::BeginDragDropTarget()) {
                 if (const ImGuiPayload* payload =
                         ImGui::AcceptDragDropPayload("MOOD_TEXTURE_ASSET")) {
                     u32 id = 0;
                     if (payload->DataSize == sizeof(id)) {
                         std::memcpy(&id, payload->Data, sizeof(id));
-                        m_pendingDrop = TextureDrop{true, m_mouseNdcX, m_mouseNdcY, id};
+                        float ndcX = 0.0f;
+                        float ndcY = 0.0f;
+                        mousePosToNdc(ImGui::GetMousePos(), ndcX, ndcY);
+                        m_pendingDrop = TextureDrop{true, ndcX, ndcY, id};
                     }
                 }
                 ImGui::EndDragDropTarget();
             }
 
-            // Captura de input para la camara del editor mientras el cursor
-            // esta sobre la imagen del viewport.
-            const bool hovered = ImGui::IsItemHovered();
+            // Captura de input para la camara + hover del viewport. Importante:
+            // AllowWhenBlockedByActiveItem mantiene el hover activo durante
+            // drags (sin eso, al arrastrar una textura se pierde el cyan).
+            const bool hovered = ImGui::IsItemHovered(
+                ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
             ImGuiIO& io = ImGui::GetIO();
 
             if (hovered) {
                 m_imageHovered = true;
-                // NDC del cursor dentro de la imagen: origen al centro, Y+ arriba.
-                // Usamos el rect del item (ImGui::Image) para las esquinas.
-                const ImVec2 itemMin = ImGui::GetItemRectMin();
-                const ImVec2 itemSize = ImGui::GetItemRectSize();
-                const ImVec2 mp = ImGui::GetMousePos();
-                if (itemSize.x > 0.0f && itemSize.y > 0.0f) {
-                    const float lx = mp.x - itemMin.x;
-                    const float ly = mp.y - itemMin.y;
-                    m_mouseNdcX = (lx / itemSize.x) * 2.0f - 1.0f;
-                    m_mouseNdcY = 1.0f - (ly / itemSize.y) * 2.0f;
-                }
+                mousePosToNdc(ImGui::GetMousePos(), m_mouseNdcX, m_mouseNdcY);
 
                 m_cameraWheel = io.MouseWheel;
                 if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
                     m_rightDragging = true;
                 }
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) {
+                    m_middleDragging = true;
+                }
             }
             if (!ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
                 m_rightDragging = false;
             }
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
+                m_middleDragging = false;
+            }
             if (m_rightDragging) {
                 m_cameraRotateDx = io.MouseDelta.x;
                 m_cameraRotateDy = io.MouseDelta.y;
+            }
+            if (m_middleDragging) {
+                m_cameraPanDx = io.MouseDelta.x;
+                m_cameraPanDy = io.MouseDelta.y;
             }
         } else {
             const char* placeholder = "Viewport (sin framebuffer)";
