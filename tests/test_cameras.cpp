@@ -56,7 +56,8 @@ TEST_CASE("FpsCamera: W (dir.z=+1) traslada hacia adelante sobre XZ") {
     const glm::vec3 p0 = cam.position();
     cam.move(glm::vec3(0.0f, 0.0f, 1.0f), /*dt=*/1.0f);
     const glm::vec3 p1 = cam.position();
-    // Tras 1 segundo con speed = 3, la distancia recorrida debe ser 3.
+    // Tras 1 segundo con speed = 3 m/s (escala SI, paso humano), la
+    // distancia recorrida debe ser 3.
     CHECK(glm::length(p1 - p0) == doctest::Approx(3.0f).epsilon(1e-3));
     // Y la direccion debe ser la de forward (hacia -Z).
     CHECK(p1.z < p0.z);

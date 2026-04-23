@@ -12,7 +12,7 @@ namespace Mood {
 
 class FpsCamera {
 public:
-    FpsCamera(glm::vec3 position = {0.0f, 1.0f, 3.0f},
+    FpsCamera(glm::vec3 position = {0.0f, 1.6f, 0.0f},
               float yawDeg = -90.0f, float pitchDeg = 0.0f);
 
     /// @brief Aplica un movimiento relativo del mouse (pixeles) a yaw/pitch.
@@ -44,7 +44,7 @@ private:
     glm::vec3 m_position;
     float m_yawDeg;
     float m_pitchDeg;
-    float m_speed = 3.0f;          // unidades por segundo
+    float m_speed = 3.0f;          // m/s (paso humano rapido sostenido)
     float m_fovDeg = 70.0f;
     float m_near = 0.1f;
     float m_far = 100.0f;

@@ -27,8 +27,9 @@ enum class TileType : u8 {
 
 class GridMap {
 public:
-    /// @brief Construye un mapa de width*height tiles, todos Empty.
-    GridMap(u32 width, u32 height, f32 tileSize = 1.0f);
+    /// @brief Construye un mapa de width*height tiles, todos Empty. Default
+    ///        tileSize = 3 m (convencion SI del motor, ver DECISIONS.md).
+    GridMap(u32 width, u32 height, f32 tileSize = 3.0f);
 
     u32 width()    const { return m_width; }
     u32 height()   const { return m_height; }

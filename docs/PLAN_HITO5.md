@@ -41,12 +41,12 @@ Pasar de "motor que carga una textura hardcoded" a "motor con catálogo de asset
 
 Aplicar antes de tocar AssetManager. El resto del Hito 5 asume estas dimensiones.
 
-- [ ] `GridMap` default `tileSize` de `1.0f` a `3.0f`. Default `WallHeight` sigue == `tileSize` (cúbico).
-- [ ] `EditorApplication::k_playerHalfExtents` de `(0.2, 0.45, 0.2)` a `(0.3, 0.9, 0.3)` (player ~0.6×1.8×0.6 m).
-- [ ] `FpsCamera` default position al centro del tile (2,6) en la nueva escala (world ~`(-4.5, 1.6, 7.5)`), eye height 1.6 m. Velocidad `m_speed` de `3.0` a `4.0` m/s.
-- [ ] `EditorCamera` default `radius` de `12` a `30` para que el mapa 8×8 (24×24 m) entre en cuadro.
-- [ ] Verificar tests (algunos fijan números concretos que podrían cambiar).
-- [ ] Entrada en `DECISIONS.md`: **1 unidad = 1 metro SI**. Todos los assets importados (Hito 10+) asumen esto.
+- [x] `GridMap` default `tileSize` de `1.0f` a `3.0f`. Default `WallHeight` sigue == `tileSize` (cúbico).
+- [x] `EditorApplication::k_playerHalfExtents` de `(0.2, 0.45, 0.2)` a `(0.3, 0.9, 0.3)` (player 0.6×1.8×0.6 m).
+- [x] `FpsCamera` default position de `(0, 1, 3)` a `(0, 1.6, 0)` (altura ojos humana). En `EditorApplication`, player spawn en tile (2,6) world `(-4.5, 1.6, 7.5)`. Velocidad `m_speed` de `3.0` a `3.0` m/s (subida a 4.0 y vuelta a 3.0 tras feedback del dev: "algo lenta pero bajaría a 3 m/s" — el paso humano sostenido).
+- [x] `EditorCamera` default `radius` de `4.0` a `30.0` para que el mapa 8×8 (24×24 m) entre en cuadro. `EditorApplication` también arranca con 30.
+- [x] Verificar tests. `test_cameras` asumía `speed=3` con distancia recorrida 3; actualizado.
+- [x] Entrada en `DECISIONS.md`: **1 unidad = 1 metro SI**.
 
 ## Bloque 1 — Textura fallback "missing"
 

@@ -148,6 +148,19 @@ Registro cronológico de decisiones arquitectónicas no triviales. Formato por e
 **Alternativas consideradas:** `class Camera` base abstracta — útil cuando haya 3+ cámaras o un CameraController polimórfico; hoy no.
 **Revisar si:** aparecen cámaras cinematic (spline, target-locked) o un sistema ECS necesita tratarlas uniformemente.
 
+## 2026-04-23: Convencion de escala del motor - 1 unidad = 1 metro SI
+
+**Contexto:** durante el Hito 4 las dimensiones eran artificiales (`tileSize=1.0`, player `0.4x0.9x0.4`, walls 1m cubicos). Un personaje de 0.9m "cabia" debajo de una pared de 1m, inconsistente con cualquier asset realista. El dev detecto la inconsistencia al cerrar el Hito 4.
+**Decision:** fijar **1 unidad = 1 metro SI** como convencion del motor, valida para todo el codigo + assets importados (modelos 3D del Hito 10, fisica de Jolt en Hito 12, etc.). Aplicada en Hito 5 Bloque 0:
+- `GridMap::tileSize` default `1.0f` -> `3.0f` (pared 3m cubica).
+- `EditorApplication::k_playerHalfExtents` `(0.2, 0.45, 0.2)` -> `(0.3, 0.9, 0.3)` (player 0.6 x 1.8 x 0.6 m).
+- `FpsCamera` default position `(0, 1, 3)` -> `(0, 1.6, 0)` (altura de ojos humana), speed `3.0` -> primero `4.0` y tras feedback del dev ajustado a `3.0` m/s (paso humano rapido sostenido).
+- `EditorCamera` default `radius` `4.0` -> `30.0` (mapa 8x8=24m en cuadro).
+- `EditorApplication` refleja los nuevos defaults: player spawn en tile (2,6) = world `(-4.5, 1.6, 7.5)`, orbit radius 30.
+**Razones:** alinea con GLTF/assimp/Jolt que asumen metros, evita escalados de conversion por-asset en Hito 10+, los numeros quedan mas faciles de razonar ("la sala son 24m", "la pared 3m", "el jugador 1.8m").
+**Alternativas consideradas:** dejar la escala arbitraria y documentar "1 unidad = X m" por proyecto -> rechazado, es el tipo de decision que ensucia todo si no se fija temprano.
+**Revisar si:** aparecen assets con otra convencion (Unreal usa cm por default) - si es necesario, poner un factor de escala en el importer, no en el motor.
+
 ## 2026-04-23: `GridMap` sin world origin, offset inyectado por el consumer
 
 **Contexto:** el mapa se renderiza centrado en el origen del mundo (para que las cámaras con target=0 lo vean sin ajustes). `aabbOfTile` tendría que saber del offset para que `PhysicsSystem` compare en las mismas coords que el renderer.

@@ -68,15 +68,17 @@ private:
     std::unique_ptr<ITexture> m_gridTexture;
     std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
 
-    // Cam orbital: radio 12 para que el mapa 8x8 (XZ +-4) quede en cuadro.
-    // Cam FPS: tile interior (2,6) a altura de ojos; yaw -90 mira hacia -Z.
-    EditorCamera m_editorCamera{45.0f, 30.0f, 12.0f};
-    FpsCamera m_playCamera{glm::vec3(-1.5f, 0.6f, 2.5f), -90.0f, 0.0f};
+    // Escala SI: 1 unidad = 1 metro (ver DECISIONS.md). Mapa 8x8 con
+    // tileSize=3 ocupa 24x24 m; diagonal ~34 m. Cam orbital con radius=30
+    // deja el mapa entero en cuadro. Cam FPS en tile interior (2,6):
+    // world = origen_mapa + ((2+0.5)*3, 1.6, (6+0.5)*3) = (-4.5, 1.6, 7.5).
+    EditorCamera m_editorCamera{45.0f, 30.0f, 30.0f};
+    FpsCamera m_playCamera{glm::vec3(-4.5f, 1.6f, 7.5f), -90.0f, 0.0f};
     EditorMode m_mode = EditorMode::Editor;
 
     // Mapa jugable (Hito 4). Se renderiza centrado en el origen del mundo;
-    // las colisiones entran en el Bloque 4.
-    GridMap m_map{8u, 8u, 1.0f};
+    // tileSize=3m (escala SI realista, Hito 5 Bloque 0).
+    GridMap m_map{8u, 8u, 3.0f};
 
     // Toggle del debug draw de AABBs (tile colliders + AABB del jugador en
     // Play Mode). Controlado con F1. Default off para no ensuciar la escena.

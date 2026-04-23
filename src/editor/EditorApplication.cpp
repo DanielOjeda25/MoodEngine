@@ -33,12 +33,11 @@ namespace {
 
 constexpr const char* k_GlslVersion = "#version 450 core";
 
-// Dimensiones del AABB del jugador en Play Mode (0.4 x 0.9 x 0.4). Centrado
-// en la posicion de la camara FPS. El plan sugiere 0.3 x 0.9 x 0.3, pero con
-// half-extent 0.15 el near clipping plane (0.1) queda demasiado justo y el
-// frustum atraviesa visualmente las paredes al pegarse a ellas con pitch > 0.
-// Con half-extent 0.2 hay doble del near plane de margen.
-constexpr glm::vec3 k_playerHalfExtents{0.2f, 0.45f, 0.2f};
+// Dimensiones del AABB del jugador (0.6 x 1.8 x 0.6 m). Centrado en la
+// posicion de la camara FPS. Escala SI realista: una persona promedio.
+// El half-extent 0.3 m es muy superior al near clipping plane (0.1 m) asi
+// que no hay riesgo de que el frustum atraviese los muros al pegarse.
+constexpr glm::vec3 k_playerHalfExtents{0.3f, 0.9f, 0.3f};
 
 } // namespace
 

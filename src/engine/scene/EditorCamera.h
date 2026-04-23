@@ -11,7 +11,7 @@ namespace Mood {
 
 class EditorCamera {
 public:
-    EditorCamera(float yawDeg = 45.0f, float pitchDeg = 30.0f, float radius = 4.0f);
+    EditorCamera(float yawDeg = 45.0f, float pitchDeg = 30.0f, float radius = 30.0f);
 
     /// @brief Aplica un delta en pixeles del mouse right-drag a yaw/pitch.
     void applyMouseDrag(float dxPixels, float dyPixels);
