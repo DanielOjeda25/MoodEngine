@@ -50,9 +50,10 @@ Aplicar antes de tocar AssetManager. El resto del Hito 5 asume estas dimensiones
 
 ## Bloque 1 — Textura fallback "missing"
 
-- [ ] Script `tools/gen_missing_texture.py` que genere `assets/textures/missing.png` (256×256, chequered rosa #FF00FF / negro #000000).
-- [ ] Commitear el PNG + el script.
-- [ ] `OpenGLTexture` que al fallar stbi_load registre `Log::assets` en vez de solo warn (o tirar excepción), y que el `AssetManager` intercepte para devolver la handle del fallback.
+- [x] Script `tools/gen_missing_texture.py` que genere `assets/textures/missing.png` (256×256, patrón 2×2 de bloques rosa #FF00FF / negro, estilo Source).
+- [x] Commitear el PNG + el script.
+- [x] Logger `assets` agregado a `Log.{h,cpp}` (prep para Bloque 2).
+- [>] `OpenGLTexture` / `AssetManager` wiring del fallback → diferido a Bloque 2 (el AssetManager es quien intercepta; `OpenGLTexture` sigue tirando excepción, el catch vive en el manager).
 
 ## Bloque 2 — AssetManager
 

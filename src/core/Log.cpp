@@ -14,6 +14,7 @@ std::shared_ptr<spdlog::logger> s_engine;
 std::shared_ptr<spdlog::logger> s_editor;
 std::shared_ptr<spdlog::logger> s_render;
 std::shared_ptr<spdlog::logger> s_world;
+std::shared_ptr<spdlog::logger> s_assets;
 
 std::shared_ptr<spdlog::logger> makeLogger(const std::string& name,
                                            const std::vector<spdlog::sink_ptr>& sinks) {
@@ -45,6 +46,7 @@ void init() {
     s_editor = makeLogger("editor", sinks);
     s_render = makeLogger("render", sinks);
     s_world  = makeLogger("world",  sinks);
+    s_assets = makeLogger("assets", sinks);
 }
 
 void shutdown() {
@@ -53,11 +55,13 @@ void shutdown() {
     s_editor.reset();
     s_render.reset();
     s_world.reset();
+    s_assets.reset();
 }
 
 std::shared_ptr<spdlog::logger>& engine() { return s_engine; }
 std::shared_ptr<spdlog::logger>& editor() { return s_editor; }
 std::shared_ptr<spdlog::logger>& render() { return s_render; }
 std::shared_ptr<spdlog::logger>& world()  { return s_world; }
+std::shared_ptr<spdlog::logger>& assets() { return s_assets; }
 
 } // namespace Mood::Log

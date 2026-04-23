@@ -27,6 +27,10 @@ std::shared_ptr<spdlog::logger>& render();
 /// @brief Logger del mundo/nivel (`world`): mapas, tiles, colisiones.
 std::shared_ptr<spdlog::logger>& world();
 
+/// @brief Logger de gestion de assets (`assets`): AssetManager, VFS,
+///        fallbacks, cache hits/misses.
+std::shared_ptr<spdlog::logger>& assets();
+
 } // namespace Mood::Log
 
 // Macros de conveniencia para el logger `engine`.
