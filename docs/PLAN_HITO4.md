@@ -57,8 +57,8 @@ Entregable: al entrar en Play Mode, apareces en una sala con paredes y podés ca
 
 ### Bloque 3 — Matemática AABB
 
-- [ ] `src/core/math/AABB.h`: struct `AABB { glm::vec3 min; glm::vec3 max; }` + funciones libres `intersects(a, b)`, `contains(a, point)`, `expanded(a, margin)`, `merge(a, b)`.
-- [ ] `tests/test_aabb.cpp`: casos de borde (contacto, inclusión, separación, dimensiones degeneradas).
+- [x] `src/core/math/AABB.h`: struct `AABB { glm::vec3 min; glm::vec3 max; }` + funciones libres `intersects(a, b)`, `contains(a, point)`, `expanded(a, margin)`, `merge(a, b)`. Adelantado en Bloque 1.
+- [x] `tests/test_aabb.cpp`: casos de borde (contacto, inclusión, separación, dimensiones degeneradas). 7 casos + subcases, 48 asserciones.
 
 ### Bloque 4 — Sistema de colisión jugador vs grid
 
@@ -76,7 +76,7 @@ Entregable: al entrar en Play Mode, apareces en una sala con paredes y podés ca
 
 ### Bloque 6 — Tests
 
-- [ ] `test_aabb.cpp`: intersección, contención, merge. Al menos 6 casos.
+- [x] `test_aabb.cpp`: intersección, contención, merge. Al menos 6 casos. Ver Bloque 3.
 - [ ] `test_grid.cpp`: `isSolid` para coordenadas dentro y fuera del mapa (fuera debe ser tratado como sólido o como vacío — decidir y testear).
 - [ ] `test_collision.cpp`: `moveAndSlide` contra una sola pared, contra esquina (slide correcto), contra AABB degenerada.
 
