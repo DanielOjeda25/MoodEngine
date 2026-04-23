@@ -4,12 +4,12 @@
 #include "core/math/AABB.h"
 #include "engine/assets/PrimitiveMeshes.h"
 #include "engine/render/ITexture.h"
+#include "engine/render/ITexture.h"
 #include "engine/render/opengl/OpenGLDebugRenderer.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/render/opengl/OpenGLMesh.h"
 #include "engine/render/opengl/OpenGLRenderer.h"
 #include "engine/render/opengl/OpenGLShader.h"
-#include "engine/render/opengl/OpenGLTexture.h"
 #include "systems/PhysicsSystem.h"
 
 // glad/gl.h debe ir antes que cualquier otro header que pueda incluir GL
@@ -94,7 +94,8 @@ EditorApplication::EditorApplication() {
     MeshData cube = createCubeMesh();
     m_cubeMesh = std::make_unique<OpenGLMesh>(cube.vertices, cube.attributes);
 
-    m_gridTexture = std::make_unique<OpenGLTexture>("assets/textures/grid.png");
+    m_assetManager = std::make_unique<AssetManager>();
+    m_wallTextureId = m_assetManager->loadTexture("textures/grid.png");
 
     m_debugRenderer = std::make_unique<OpenGLDebugRenderer>();
 
@@ -120,7 +121,7 @@ EditorApplication::~EditorApplication() {
     // Los recursos GL dependen del contexto; liberar ANTES de destruir ImGui
     // y el contexto (el destructor del Window destruye el contexto al final).
     m_debugRenderer.reset();
-    m_gridTexture.reset();
+    m_assetManager.reset(); // dueño de las texturas
     m_cubeMesh.reset();
     m_defaultShader.reset();
     m_viewportFb.reset();
@@ -276,7 +277,7 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     m_defaultShader->setMat4("uView", view);
     m_defaultShader->setMat4("uProjection", projection);
     m_defaultShader->setInt("uTexture", 0);
-    m_gridTexture->bind(0);
+    m_assetManager->getTexture(m_wallTextureId)->bind(0);
 
     // El mapa se dibuja centrado en el origen del mundo (mapWorldOrigin()).
     // Mismo offset que consume PhysicsSystem: single source of truth.

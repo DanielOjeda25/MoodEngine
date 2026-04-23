@@ -57,14 +57,14 @@ Aplicar antes de tocar AssetManager. El resto del Hito 5 asume estas dimensiones
 
 ## Bloque 2 — AssetManager
 
-- [ ] `src/engine/assets/AssetManager.{h,cpp}`: interfaz mínima.
-  - `TextureHandle loadTexture(std::string_view path)` — devuelve handle cacheado.
-  - `ITexture* getTexture(TextureHandle)` — resolver handle → textura.
-  - `TextureHandle missingTexture()` — handle del fallback.
-- [ ] Interna: `std::unordered_map<std::string, TextureHandle>` para cacheo por path, `std::vector<std::unique_ptr<ITexture>>` como storage.
-- [ ] `EditorApplication` construye el AssetManager, carga `grid.png` + `missing.png` al arrancar.
-- [ ] Reemplazar el `m_gridTexture` crudo por una handle pedida al AssetManager.
-- [ ] Logger `assets` nuevo en `Log`.
+- [x] `src/engine/assets/AssetManager.{h,cpp}`: interfaz minima.
+  - `TextureAssetId loadTexture(std::string_view logicalPath)` — devuelve id cacheado. Nombrado `TextureAssetId` para no pisar `TextureHandle` (void* opaco del RHI).
+  - `ITexture* getTexture(TextureAssetId)` — nunca null; ids invalidos caen al fallback.
+  - `missingTextureId()` — vale 0 (slot reservado).
+- [x] Interna: `std::unordered_map<std::string, TextureAssetId>` para cache por path, `std::vector<std::unique_ptr<ITexture>>` como storage. Catch de excepciones de `OpenGLTexture` -> cachear fallback y loguear warn en canal `assets`.
+- [x] `EditorApplication` construye el AssetManager, carga `missing.png` en el constructor del manager y `textures/grid.png` al arrancar.
+- [x] Reemplazado `m_gridTexture` crudo por `m_wallTextureId` pedido al manager. Bind en el loop: `m_assetManager->getTexture(m_wallTextureId)->bind(0)`.
+- [x] Logger `assets` ya agregado en Bloque 1.
 
 ## Bloque 3 — VFS inicial
 

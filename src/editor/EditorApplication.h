@@ -8,6 +8,7 @@
 #include "core/Types.h"
 #include "editor/EditorMode.h"
 #include "editor/EditorUI.h"
+#include "engine/assets/AssetManager.h"
 #include "engine/scene/EditorCamera.h"
 #include "engine/scene/FpsCamera.h"
 #include "engine/world/GridMap.h"
@@ -21,7 +22,6 @@ class IRenderer;
 class IFramebuffer;
 class IShader;
 class IMesh;
-class ITexture;
 class OpenGLDebugRenderer;
 
 class EditorApplication {
@@ -65,8 +65,12 @@ private:
     std::unique_ptr<IFramebuffer> m_viewportFb;
     std::unique_ptr<IShader> m_defaultShader;
     std::unique_ptr<IMesh> m_cubeMesh;
-    std::unique_ptr<ITexture> m_gridTexture;
     std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
+
+    // AssetManager: owner de todas las texturas cargadas. Se destruye ANTES
+    // del contexto GL (ver destructor).
+    std::unique_ptr<AssetManager> m_assetManager;
+    TextureAssetId m_wallTextureId = 0; // grid.png cargado al arrancar
 
     // Escala SI: 1 unidad = 1 metro (ver DECISIONS.md). Mapa 8x8 con
     // tileSize=3 ocupa 24x24 m; diagonal ~34 m. Cam orbital con radius=30
