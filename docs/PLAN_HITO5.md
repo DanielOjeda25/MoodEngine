@@ -90,9 +90,11 @@ Aplicar antes de tocar AssetManager. El resto del Hito 5 asume estas dimensiones
 
 ## Bloque 6 — ConsolePanel
 
-- [ ] Sink custom de spdlog que empuja cada log a un ring buffer en memoria (512 entradas).
-- [ ] `src/editor/panels/ConsolePanel.{h,cpp}`: lee el ring buffer, dibuja las líneas con color por nivel (info blanco, warn amarillo, error rojo) y filtro por canal.
-- [ ] Toggle en el menú "Ver".
+- [x] `src/core/LogRingSink.{h,cpp}`: custom sink de spdlog con ring buffer de 512 entradas. Thread-safe con `std::mutex` propio (inherit `base_sink<null_mutex>` para evitar double-lock con el mutex interno de spdlog). `snapshot()` copia el contenido en orden cronológico.
+- [x] `Log.{h,cpp}` registra el ring sink como tercer sink de cada logger. Expone `Log::ringSink()` para que el panel lo consuma.
+- [x] `src/editor/panels/ConsolePanel.{h,cpp}`: renderiza las entradas con color por nivel (trace/debug/info/warn/err/critical), tag corto (`INF`, `WRN`, ...), filtro por substring de canal, auto-scroll opcional, botón "Limpiar".
+- [x] Toggle en el menú "Ver" (automático, `EditorUI` lo agrega al vector de paneles).
+- [x] Layout default: Console acoplado en la zona inferior derecha (split 55/45 del bottom dock), Asset Browser a la izquierda. Reset de `imgui.ini` para aplicar el nuevo default.
 
 ## Bloque 7 — Cierre
 

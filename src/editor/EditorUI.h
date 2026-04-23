@@ -9,6 +9,7 @@
 #include "editor/MenuBar.h"
 #include "editor/StatusBar.h"
 #include "editor/panels/AssetBrowserPanel.h"
+#include "editor/panels/ConsolePanel.h"
 #include "editor/panels/InspectorPanel.h"
 #include "editor/panels/ViewportPanel.h"
 
@@ -63,6 +64,7 @@ private:
     ViewportPanel m_viewport;
     InspectorPanel m_inspector;
     AssetBrowserPanel m_assetBrowser;
+    ConsolePanel m_console;
 
     std::vector<IPanel*> m_panels;
 

@@ -6,7 +6,9 @@
 #include <memory>
 #include <spdlog/spdlog.h>
 
-namespace Mood::Log {
+namespace Mood {
+class LogRingSink;
+namespace Log {
 
 /// @brief Inicializa sinks (consola + archivo rotatorio) y crea los loggers.
 ///        Llamar una sola vez al arrancar la aplicacion.
@@ -31,7 +33,13 @@ std::shared_ptr<spdlog::logger>& world();
 ///        fallbacks, cache hits/misses.
 std::shared_ptr<spdlog::logger>& assets();
 
-} // namespace Mood::Log
+/// @brief Sink en memoria con las últimas 512 entradas de log. El
+///        `ConsolePanel` del editor lo consume para mostrar los logs en vivo.
+///        `nullptr` si no se llamó a `init()` aún.
+LogRingSink* ringSink();
+
+} // namespace Log
+} // namespace Mood
 
 // Macros de conveniencia para el logger `engine`.
 #define MOOD_LOG_TRACE(...)    ::Mood::Log::engine()->trace(__VA_ARGS__)

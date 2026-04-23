@@ -25,17 +25,29 @@ void buildDefaultLayoutIfEmpty(ImGuiID dockspaceId, const ImVec2& size) {
     ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
     ImGui::DockBuilderSetNodeSize(dockspaceId, size);
 
-    // Split: derecha (Inspector) -> lo que queda se parte abajo (AssetBrowser)
-    // -> el centro restante queda para el Viewport.
+    // Layout por defecto:
+    //   +--------------------------------+----------+
+    //   |                                |          |
+    //   |          Viewport              | Inspector|
+    //   |                                |          |
+    //   +-----------------+--------------+----------+
+    //   |  Asset Browser  |  Console                |
+    //   +-----------------+-------------------------+
+    //
+    // Orden de splits importa porque cada uno "come" del dock padre.
     ImGuiID dockMain = dockspaceId;
     ImGuiID dockRight = ImGui::DockBuilderSplitNode(
         dockMain, ImGuiDir_Right, 0.22f, nullptr, &dockMain);
     ImGuiID dockBottom = ImGui::DockBuilderSplitNode(
         dockMain, ImGuiDir_Down, 0.28f, nullptr, &dockMain);
+    // Parte el bottom en dos: izquierda para Asset Browser, derecha para Console.
+    ImGuiID dockBottomRight = ImGui::DockBuilderSplitNode(
+        dockBottom, ImGuiDir_Right, 0.45f, nullptr, &dockBottom);
 
-    ImGui::DockBuilderDockWindow("Viewport", dockMain);
-    ImGui::DockBuilderDockWindow("Inspector", dockRight);
+    ImGui::DockBuilderDockWindow("Viewport",      dockMain);
+    ImGui::DockBuilderDockWindow("Inspector",     dockRight);
     ImGui::DockBuilderDockWindow("Asset Browser", dockBottom);
+    ImGui::DockBuilderDockWindow("Console",       dockBottomRight);
     ImGui::DockBuilderFinish(dockspaceId);
 }
 

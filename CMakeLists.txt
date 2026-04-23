@@ -113,6 +113,7 @@ add_executable(MoodEditor
     src/main.cpp
 
     src/core/Log.cpp
+    src/core/LogRingSink.cpp
     src/core/Time.cpp
 
     src/platform/Window.cpp
@@ -144,6 +145,7 @@ add_executable(MoodEditor
     src/editor/panels/ViewportPanel.cpp
     src/editor/panels/InspectorPanel.cpp
     src/editor/panels/AssetBrowserPanel.cpp
+    src/editor/panels/ConsolePanel.cpp
 )
 
 target_include_directories(MoodEditor PRIVATE
