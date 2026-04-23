@@ -51,6 +51,11 @@ private:
     void enterPlayMode();
     void exitPlayMode();
 
+    /// @brief Desplazamiento del tile (0,0) del mapa en el mundo. Usado
+    ///        por el render y por el sistema de colisiones para trabajar
+    ///        con el mapa centrado en el origen del mundo.
+    glm::vec3 mapWorldOrigin() const;
+
     std::unique_ptr<Window> m_window;
 
     // RHI y recursos graficos. Se destruyen en orden inverso antes del

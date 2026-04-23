@@ -125,6 +125,8 @@ add_executable(MoodEditor
 
     src/engine/world/GridMap.cpp
 
+    src/systems/PhysicsSystem.cpp
+
     src/engine/render/opengl/OpenGLMesh.cpp
     src/engine/render/opengl/OpenGLShader.cpp
     src/engine/render/opengl/OpenGLFramebuffer.cpp

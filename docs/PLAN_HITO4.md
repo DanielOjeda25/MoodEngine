@@ -62,11 +62,11 @@ Entregable: al entrar en Play Mode, apareces en una sala con paredes y podés ca
 
 ### Bloque 4 — Sistema de colisión jugador vs grid
 
-- [ ] Representar al "jugador" en Play Mode con una AABB pequeña (ej. 0.3 x 0.9 x 0.3) centrada en la posición de `FpsCamera`.
-- [ ] `src/systems/PhysicsSystem.{h,cpp}`: función `moveAndSlide(GridMap&, AABB& player, glm::vec3 desiredDelta) -> glm::vec3 actualDelta`.
+- [x] Representar al "jugador" en Play Mode con una AABB pequeña (0.4 x 0.9 x 0.4) centrada en la posición de `FpsCamera`. Subido desde 0.3 para dar margen al near clipping plane (ver decisiones).
+- [x] `src/systems/PhysicsSystem.{h,cpp}`: función `moveAndSlide(const GridMap&, const glm::vec3& mapWorldOrigin, AABB& box, const glm::vec3& desiredDelta) -> glm::vec3`.
   - Resolver el movimiento eje por eje (X primero, Z después, Y por separado) para permitir sliding contra paredes.
   - En cada eje: detectar qué tiles tocaría la AABB tras el delta; si alguno es sólido, clampear al borde de ese tile.
-- [ ] En `EditorApplication::updateCameras` del modo Play: capturar el delta deseado de `FpsCamera::move`, pasarlo por `PhysicsSystem::moveAndSlide`, y aplicar el delta real.
+- [x] En `EditorApplication::updateCameras` del modo Play: capturar el delta deseado de `FpsCamera::computeMoveDelta`, pasarlo por `PhysicsSystem::moveAndSlide`, y aplicar el delta real vía `FpsCamera::translate`.
 
 ### Bloque 5 — Debug rendering de AABBs
 
@@ -103,7 +103,10 @@ Entregable: al entrar en Play Mode, apareces en una sala con paredes y podés ca
 
 ## Decisiones durante implementación
 
-_(llenar a medida que aparezcan)_
+- **`GridMap` sin estado de "world origin"**: El mapa queda en map-local coords (tile (0,0) en XZ=(0,0)). El offset para centrar el mapa en el origen del mundo lo computa `EditorApplication::mapWorldOrigin()` y se pasa explícito al renderer y a `moveAndSlide`. Evita tocar la API de `GridMap` por una sola consumidora; si aparece una segunda ventana o viewport mostrando el mismo mapa transformado distinto, mover el origin a `GridMap`.
+- **`FpsCamera` separa cómputo y aplicación del delta**: `computeMoveDelta(dir, dt)` + `translate(delta)` reemplazan internamente a `move()`. Permite pasar el delta por el sistema de colisiones antes de aplicarlo. `move()` queda como conveniencia (usado por los tests).
+- **AABB del jugador 0.4 × 0.9 × 0.4** en vez del 0.3 × 0.9 × 0.3 sugerido por el plan: con `half-extent=0.15` la distancia mínima del ojo al muro era 0.15, apenas 0.05 por encima del near clipping plane (0.1). Con pitch > 0 el frustum se metía visualmente en la pared. `half-extent=0.2` da el doble del near plane de margen sin cambiar el proyector.
+- **Y no colisiona contra el grid en este hito**: los muros se consideran infinitos en Y. `moveAndSlide` aplica `desired.y` directo. Coincide con "No dinámica (gravedad, rebotes)" del plan. Si llegan techos/pozos, reevaluar.
 
 ---
 

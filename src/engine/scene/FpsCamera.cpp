@@ -37,8 +37,8 @@ glm::vec3 FpsCamera::forward() const {
     ));
 }
 
-void FpsCamera::move(const glm::vec3& dir, float dt) {
-    if (glm::length(dir) < 1e-4f) return;
+glm::vec3 FpsCamera::computeMoveDelta(const glm::vec3& dir, float dt) const {
+    if (glm::length(dir) < 1e-4f) return glm::vec3(0.0f);
 
     const glm::vec3 fwd = forward();
     // Strafe sobre el plano XZ para que no se mezcle con el pitch.
@@ -46,10 +46,16 @@ void FpsCamera::move(const glm::vec3& dir, float dt) {
     const glm::vec3 right = glm::normalize(glm::cross(fwdFlat, k_worldUp));
 
     glm::vec3 delta = right * dir.x + k_worldUp * dir.y + fwdFlat * dir.z;
-    if (glm::length(delta) > 1e-4f) {
-        delta = glm::normalize(delta) * (m_speed * dt);
-        m_position += delta;
-    }
+    if (glm::length(delta) < 1e-4f) return glm::vec3(0.0f);
+    return glm::normalize(delta) * (m_speed * dt);
+}
+
+void FpsCamera::translate(const glm::vec3& delta) {
+    m_position += delta;
+}
+
+void FpsCamera::move(const glm::vec3& dir, float dt) {
+    translate(computeMoveDelta(dir, dt));
 }
 
 glm::mat4 FpsCamera::viewMatrix() const {

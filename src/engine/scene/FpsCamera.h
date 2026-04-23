@@ -21,7 +21,17 @@ public:
     /// @brief Avanza la posicion segun la direccion de movimiento solicitada
     ///        (valores -1/0/+1 en cada eje) durante el tiempo `dt`.
     ///        +X = strafe derecha, +Y = subir (world), +Z = adelante.
+    ///        Conveniencia que combina computeMoveDelta + translate.
     void move(const glm::vec3& dir, float dt);
+
+    /// @brief Calcula el delta de mundo que aplicaria `move(dir, dt)` sin
+    ///        modificar la camara. Usado por PhysicsSystem para probar
+    ///        movimiento contra colisiones antes de aplicarlo.
+    glm::vec3 computeMoveDelta(const glm::vec3& dir, float dt) const;
+
+    /// @brief Desplaza la posicion por `delta` en world coords. Ya viene
+    ///        resuelto contra colisiones por el caller.
+    void translate(const glm::vec3& delta);
 
     glm::vec3 position() const { return m_position; }
     glm::vec3 forward() const;

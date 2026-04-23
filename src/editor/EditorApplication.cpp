@@ -1,6 +1,7 @@
 #include "editor/EditorApplication.h"
 
 #include "core/Log.h"
+#include "core/math/AABB.h"
 #include "engine/assets/PrimitiveMeshes.h"
 #include "engine/render/ITexture.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
@@ -8,6 +9,7 @@
 #include "engine/render/opengl/OpenGLRenderer.h"
 #include "engine/render/opengl/OpenGLShader.h"
 #include "engine/render/opengl/OpenGLTexture.h"
+#include "systems/PhysicsSystem.h"
 
 // glad/gl.h debe ir antes que cualquier otro header que pueda incluir GL
 // (evita redefiniciones con <SDL_opengl.h> o los loaders internos).
@@ -29,6 +31,13 @@ namespace Mood {
 namespace {
 
 constexpr const char* k_GlslVersion = "#version 450 core";
+
+// Dimensiones del AABB del jugador en Play Mode (0.4 x 0.9 x 0.4). Centrado
+// en la posicion de la camara FPS. El plan sugiere 0.3 x 0.9 x 0.3, pero con
+// half-extent 0.15 el near clipping plane (0.1) queda demasiado justo y el
+// frustum atraviesa visualmente las paredes al pegarse a ellas con pitch > 0.
+// Con half-extent 0.2 hay doble del near plane de margen.
+constexpr glm::vec3 k_playerHalfExtents{0.2f, 0.45f, 0.2f};
 
 } // namespace
 
@@ -167,6 +176,14 @@ void EditorApplication::endFrame() {
     m_window->swapBuffers();
 }
 
+glm::vec3 EditorApplication::mapWorldOrigin() const {
+    return glm::vec3(
+        -0.5f * static_cast<f32>(m_map.width())  * m_map.tileSize(),
+        0.0f,
+        -0.5f * static_cast<f32>(m_map.height()) * m_map.tileSize()
+    );
+}
+
 void EditorApplication::enterPlayMode() {
     m_mode = EditorMode::Play;
     m_ui.setMode(EditorMode::Play);
@@ -199,7 +216,15 @@ void EditorApplication::updateCameras(f32 dt) {
         if (keys[SDL_SCANCODE_A]) dir.x -= 1.0f;
         if (keys[SDL_SCANCODE_SPACE]) dir.y += 1.0f;
         if (keys[SDL_SCANCODE_LSHIFT]) dir.y -= 1.0f;
-        m_playCamera.move(dir, dt);
+
+        // Movimiento: delta deseado -> colisiones -> delta aplicado.
+        const glm::vec3 desired = m_playCamera.computeMoveDelta(dir, dt);
+        if (desired.x != 0.0f || desired.y != 0.0f || desired.z != 0.0f) {
+            const glm::vec3 camPos = m_playCamera.position();
+            AABB playerBox{camPos - k_playerHalfExtents, camPos + k_playerHalfExtents};
+            const glm::vec3 actual = moveAndSlide(m_map, mapWorldOrigin(), playerBox, desired);
+            m_playCamera.translate(actual);
+        }
 
         int mx = 0;
         int my = 0;
@@ -245,12 +270,10 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     m_defaultShader->setInt("uTexture", 0);
     m_gridTexture->bind(0);
 
-    // El mapa se dibuja centrado en el origen del mundo: el centro del mapa
-    // queda en (0, 0, 0) para que las camaras por defecto (orbital con
-    // target=origen, FPS cercana al centro) vean la escena sin ajustes.
+    // El mapa se dibuja centrado en el origen del mundo (mapWorldOrigin()).
+    // Mismo offset que consume PhysicsSystem: single source of truth.
     const f32 tileSize = m_map.tileSize();
-    const f32 halfW = 0.5f * static_cast<f32>(m_map.width())  * tileSize;
-    const f32 halfD = 0.5f * static_cast<f32>(m_map.height()) * tileSize;
+    const glm::vec3 origin = mapWorldOrigin();
     (void)dt; // Ya no rotamos el modelo; el mapa es estatico.
 
     for (u32 y = 0; y < m_map.height(); ++y) {
@@ -258,9 +281,9 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
             if (!m_map.isSolid(x, y)) continue;
 
             const glm::vec3 worldPos(
-                (static_cast<f32>(x) + 0.5f) * tileSize - halfW,
-                0.5f * tileSize,
-                (static_cast<f32>(y) + 0.5f) * tileSize - halfD);
+                origin.x + (static_cast<f32>(x) + 0.5f) * tileSize,
+                origin.y + 0.5f * tileSize,
+                origin.z + (static_cast<f32>(y) + 0.5f) * tileSize);
 
             glm::mat4 model = glm::translate(glm::mat4(1.0f), worldPos);
             model = glm::scale(model, glm::vec3(tileSize));
