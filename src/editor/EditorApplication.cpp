@@ -10,6 +10,9 @@
 #include "engine/render/opengl/OpenGLRenderer.h"
 #include "engine/render/opengl/OpenGLShader.h"
 #include "engine/render/opengl/OpenGLTexture.h"
+#include "engine/scene/Components.h"
+#include "engine/scene/Entity.h"
+#include "engine/scene/Scene.h"
 #include "engine/scene/ViewportPick.h"
 #include "engine/serialization/ProjectSerializer.h"
 #include "engine/serialization/SceneSerializer.h"
@@ -172,7 +175,15 @@ EditorApplication::EditorApplication() {
 
     m_ui.viewport().setFramebuffer(m_viewportFb.get());
 
+    m_scene = std::make_unique<Scene>();
+
+    // Inyectar dependencias en los paneles de ECS.
+    m_ui.hierarchy().setScene(m_scene.get());
+    m_ui.hierarchy().setEditorUi(&m_ui);
+    m_ui.inspector().setEditorUi(&m_ui);
+
     buildInitialTestMap();
+    rebuildSceneFromMap();
     updateWindowTitle();
 
     MOOD_LOG_INFO("Editor listo");
@@ -204,6 +215,39 @@ void EditorApplication::buildInitialTestMap() {
                   TileType::SolidWall, brick);
     Log::world()->info("Mapa de prueba cargado: prueba_8x8 ({} tiles solidos)",
                        m_map.solidCount());
+}
+
+void EditorApplication::rebuildSceneFromMap() {
+    // Vision actual: Scene es derivada del GridMap. Cada tile solido =
+    // 1 entidad con Transform + MeshRenderer. Limpiamos en-place el
+    // registry (en vez de recrear el Scene completo) para no invalidar
+    // los punteros que tienen los paneles Hierarchy/Inspector.
+    if (!m_scene) m_scene = std::make_unique<Scene>();
+    m_scene->registry().clear();
+    m_ui.setSelectedEntity(Entity{}); // la seleccion apuntaba a un handle ya
+                                       // destruido; invalidarla.
+
+    const glm::vec3 origin = mapWorldOrigin();
+    const f32 tileSize = m_map.tileSize();
+
+    for (u32 y = 0; y < m_map.height(); ++y) {
+        for (u32 x = 0; x < m_map.width(); ++x) {
+            if (!m_map.isSolid(x, y)) continue;
+
+            const std::string name = "Tile_" + std::to_string(x) + "_" + std::to_string(y);
+            Entity e = m_scene->createEntity(name);
+
+            auto& t = e.getComponent<TransformComponent>();
+            t.position = glm::vec3(
+                origin.x + (static_cast<f32>(x) + 0.5f) * tileSize,
+                origin.y + 0.5f * tileSize,
+                origin.z + (static_cast<f32>(y) + 0.5f) * tileSize);
+            t.scale = glm::vec3(tileSize);
+
+            e.addComponent<MeshRendererComponent>(
+                m_cubeMesh.get(), m_map.tileTextureAt(x, y));
+        }
+    }
 }
 
 void EditorApplication::updateWindowTitle() {
@@ -288,6 +332,7 @@ void EditorApplication::handleNewProject() {
 
     // Nuevo proyecto -> contenido inicial = mapa de prueba (template).
     buildInitialTestMap();
+    rebuildSceneFromMap();
 
     const auto mapPath = created->root / created->defaultMap;
     std::filesystem::create_directories(mapPath.parent_path());
@@ -342,6 +387,7 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
     }
 
     m_map = std::move(savedMap->map);
+    rebuildSceneFromMap();
     m_project = std::move(loaded);
     m_currentMapPath = m_project->defaultMap;
     m_projectDirty = false;
@@ -417,6 +463,7 @@ void EditorApplication::handleCloseProject() {
     // abierto (el usuario lo ve borroso detras del popup). Ayuda visualmente
     // a distinguir "editor sin proyecto" vs "proyecto vacio".
     buildInitialTestMap();
+    rebuildSceneFromMap();
     updateWindowTitle();
 }
 
@@ -772,6 +819,7 @@ int EditorApplication::run() {
             if (hit.hit) {
                 m_map.setTile(hit.tileX, hit.tileY, TileType::SolidWall,
                               static_cast<TextureAssetId>(drop.textureId));
+                rebuildSceneFromMap();
                 Log::editor()->info("Drop textura id={} -> tile ({}, {})",
                                      drop.textureId, hit.tileX, hit.tileY);
                 markDirty();

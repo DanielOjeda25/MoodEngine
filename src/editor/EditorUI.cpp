@@ -5,7 +5,7 @@
 namespace Mood {
 
 EditorUI::EditorUI() {
-    m_panels = {&m_viewport, &m_inspector, &m_assetBrowser, &m_console};
+    m_panels = {&m_viewport, &m_hierarchy, &m_inspector, &m_assetBrowser, &m_console};
 }
 
 void EditorUI::draw(bool& requestQuit) {

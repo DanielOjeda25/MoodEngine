@@ -181,6 +181,7 @@ add_executable(MoodEditor
     src/editor/panels/InspectorPanel.cpp
     src/editor/panels/AssetBrowserPanel.cpp
     src/editor/panels/ConsolePanel.cpp
+    src/editor/panels/HierarchyPanel.cpp
 )
 
 target_include_directories(MoodEditor PRIVATE

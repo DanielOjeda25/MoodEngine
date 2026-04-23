@@ -11,6 +11,7 @@
 #include "engine/assets/AssetManager.h"
 #include "engine/scene/EditorCamera.h"
 #include "engine/scene/FpsCamera.h"
+#include "engine/scene/Scene.h"
 #include "engine/scene/ViewportPick.h"
 #include "engine/serialization/ProjectSerializer.h"
 #include "engine/world/GridMap.h"
@@ -66,6 +67,15 @@ private:
     /// @brief Reemplaza m_map con la sala 8x8 hardcodeada (perimetro grid,
     ///        columna central brick). Se usa al arrancar y al cerrar proyecto.
     void buildInitialTestMap();
+
+    /// @brief Reconstruye `m_scene` desde cero a partir del estado actual de
+    ///        `m_map`: una entidad por tile solido con Tag + Transform +
+    ///        MeshRenderer. Se llama en cada modificacion del mapa (drop,
+    ///        load, rebuild) para mantener ambos lados sincronizados.
+    ///        Estrategia brute-force O(W*H) — suficiente para los tamanos
+    ///        actuales (mapa 8x8 = ~30 entidades max). Optimizable cuando
+    ///        cambie el modelo primario a Scene-driven.
+    void rebuildSceneFromMap();
 
     /// @brief Sincroniza el titulo de la ventana con el estado actual:
     ///        nombre del proyecto + indicador de dirty. Llamar cuando algo
@@ -135,6 +145,13 @@ private:
     // tileSize=3m (escala SI realista, Hito 5 Bloque 0). Se reemplaza al
     // abrir proyectos y se resetea al mapa de prueba al cerrar.
     GridMap m_map{8u, 8u, 3.0f};
+
+    // Escena ECS (Hito 7). Por ahora es una VISTA derivada de `m_map`:
+    // cada tile solido es una entidad. El render sigue haciendo el loop
+    // por el grid; Scene existe para que Hierarchy/Inspector trabajen
+    // sobre entidades. La migracion a Scene-driven render viene en
+    // hitos posteriores cuando haya geometria no-grid (assimp en Hito 10).
+    std::unique_ptr<Scene> m_scene;
 
     // Proyecto activo (Hito 6 Bloque 4).
     // Cuando es nullopt (arranque sin recientes, o tras cerrar proyecto),

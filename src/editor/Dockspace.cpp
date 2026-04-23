@@ -24,16 +24,18 @@ void buildDefaultLayout(ImGuiID dockspaceId, const ImVec2& size, bool force) {
     ImGui::DockBuilderSetNodeSize(dockspaceId, size);
 
     // Layout por defecto:
-    //   +--------------------------------+----------+
-    //   |                                |          |
-    //   |          Viewport              | Inspector|
-    //   |                                |          |
-    //   +-----------------+--------------+----------+
-    //   |  Asset Browser  |  Console                |
-    //   +-----------------+-------------------------+
+    //   +-----------+--------------------+----------+
+    //   |           |                    |          |
+    //   | Hierarchy |    Viewport        | Inspector|
+    //   |           |                    |          |
+    //   +-----------+---------+----------+----------+
+    //   |  Asset Browser      |  Console            |
+    //   +---------------------+---------------------+
     //
     // Orden de splits importa porque cada uno "come" del dock padre.
     ImGuiID dockMain = dockspaceId;
+    ImGuiID dockLeft = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Left, 0.18f, nullptr, &dockMain);
     ImGuiID dockRight = ImGui::DockBuilderSplitNode(
         dockMain, ImGuiDir_Right, 0.22f, nullptr, &dockMain);
     ImGuiID dockBottom = ImGui::DockBuilderSplitNode(
@@ -42,6 +44,7 @@ void buildDefaultLayout(ImGuiID dockspaceId, const ImVec2& size, bool force) {
     ImGuiID dockBottomRight = ImGui::DockBuilderSplitNode(
         dockBottom, ImGuiDir_Right, 0.45f, nullptr, &dockBottom);
 
+    ImGui::DockBuilderDockWindow("Hierarchy",     dockLeft);
     ImGui::DockBuilderDockWindow("Viewport",      dockMain);
     ImGui::DockBuilderDockWindow("Inspector",     dockRight);
     ImGui::DockBuilderDockWindow("Asset Browser", dockBottom);

@@ -10,8 +10,10 @@
 #include "editor/StatusBar.h"
 #include "editor/panels/AssetBrowserPanel.h"
 #include "editor/panels/ConsolePanel.h"
+#include "editor/panels/HierarchyPanel.h"
 #include "editor/panels/InspectorPanel.h"
 #include "editor/panels/ViewportPanel.h"
+#include "engine/scene/Entity.h"
 
 #include <filesystem>
 #include <optional>
@@ -50,6 +52,19 @@ public:
     /// @brief Acceso al panel Asset Browser para inyectarle el AssetManager
     ///        desde EditorApplication y leer la seleccion actual.
     AssetBrowserPanel& assetBrowser() { return m_assetBrowser; }
+
+    /// @brief Acceso al panel Hierarchy para inyectarle el Scene desde
+    ///        EditorApplication.
+    HierarchyPanel& hierarchy() { return m_hierarchy; }
+
+    /// @brief Acceso al panel Inspector (se le inyecta el Scene para
+    ///        conocer la entidad seleccionada y editar sus componentes).
+    InspectorPanel& inspector() { return m_inspector; }
+
+    /// @brief Entidad seleccionada por el panel Hierarchy (compartida con
+    ///        el Inspector). Entity default-constructed = sin seleccion.
+    Entity selectedEntity() const { return m_selectedEntity; }
+    void setSelectedEntity(Entity e) { m_selectedEntity = e; }
 
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
@@ -103,9 +118,11 @@ private:
     StatusBar m_statusBar;
 
     ViewportPanel m_viewport;
+    HierarchyPanel m_hierarchy;
     InspectorPanel m_inspector;
     AssetBrowserPanel m_assetBrowser;
     ConsolePanel m_console;
+    Entity m_selectedEntity;
 
     std::vector<IPanel*> m_panels;
 
