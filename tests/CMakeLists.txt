@@ -10,6 +10,7 @@ add_executable(mood_tests
     test_grid.cpp
     test_collision.cpp
     test_vfs.cpp
+    test_asset_manager.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -19,7 +20,13 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/world/GridMap.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/PhysicsSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/VFS.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/AssetManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/Log.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/LogRingSink.cpp
 )
+
+# AssetManager.cpp usa spdlog (via core/Log).
+target_link_libraries(mood_tests PRIVATE spdlog::spdlog)
 
 target_include_directories(mood_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 

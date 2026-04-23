@@ -2,8 +2,15 @@
 // validar las operaciones como para confirmar que la infraestructura de
 // doctest + GLM quedo bien enganchada al build.
 
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+// Esta TU tambien define el main() del runner de tests. Se hace explicito
+// en vez de usar IMPLEMENT_WITH_MAIN porque necesitamos llamar
+// `Mood::Log::init()` antes de correr los tests: AssetManager (y otras
+// unidades) usan los loggers.
+
+#define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest/doctest.h>
+
+#include "core/Log.h"
 
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
@@ -11,6 +18,14 @@
 #include <glm/gtc/matrix_inverse.hpp>
 
 #include <cmath>
+
+int main(int argc, char** argv) {
+    Mood::Log::init();
+    doctest::Context ctx(argc, argv);
+    const int res = ctx.run();
+    Mood::Log::shutdown();
+    return res;
+}
 
 TEST_CASE("glm::mat4 identidad transforma vec4 trivialmente") {
     const glm::mat4 id(1.0f);
