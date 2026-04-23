@@ -83,10 +83,10 @@ Aplicar antes de tocar AssetManager. El resto del Hito 5 asume estas dimensiones
 
 ## Bloque 5 — Textura por tile
 
-- [ ] `GridMap::tiles` pasa de `std::vector<u8>` a `std::vector<Tile>` donde `struct Tile { TileType type; TextureHandle texture; }`. O agregar `std::vector<TextureHandle> m_tileTextures` paralelo — decidir.
-- [ ] `setTile(x, y, type, textureHandle)` sobrecarga.
-- [ ] El render del grid bindea la textura correcta por tile antes del draw (rompe el "bind once fuera del loop" actual: hay que moverlo adentro o agrupar por textura).
-- [ ] Mapa de prueba: borde perimetral con `grid.png`, columna central con una segunda textura (ej. `brick.png` generada nueva).
+- [x] Decidido: arrays paralelos (`std::vector<u8> m_tiles` + `std::vector<TextureAssetId> m_tileTextures`), 0 overhead en los tests existentes y menor diff que un `struct Tile`. Si crece la info por tile (flags, variantes), promover a struct.
+- [x] `setTile(x, y, type, texture)` como overload (+ `tileTextureAt(x, y)` para leer). El `setTile(x, y, type)` viejo queda como conveniencia.
+- [x] Render bindea la textura por tile con tracking `lastBound` para evitar rebinds cuando tiles consecutivos comparten textura (optimización barata que aprovecha el orden del iterado).
+- [x] Mapa de prueba: perímetro con `grid.png`, columna central con `brick.png` generada con `tools/gen_brick_texture.py` (256×256 RGBA, aparejo inglés dos tonos).
 
 ## Bloque 6 — ConsolePanel
 

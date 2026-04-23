@@ -13,6 +13,7 @@
 
 #include "core/Types.h"
 #include "core/math/AABB.h"
+#include "engine/assets/AssetManager.h" // TextureAssetId
 
 #include <vector>
 
@@ -43,9 +44,15 @@ public:
     ///        que tileAt (fuera del mapa = solido).
     bool isSolid(u32 x, u32 y) const;
 
-    /// @brief Setea el tipo de un tile. Silenciosamente ignorado si (x,y)
-    ///        esta fuera del mapa (nunca alocamos fuera).
+    /// @brief Setea el tipo de un tile (textura queda como este). Silencioso
+    ///        si (x,y) esta fuera del mapa.
     void setTile(u32 x, u32 y, TileType type);
+
+    /// @brief Setea tipo + textura del tile. Silencioso fuera de rango.
+    void setTile(u32 x, u32 y, TileType type, TextureAssetId texture);
+
+    /// @brief Textura asignada al tile. Fuera de rango devuelve 0 (missing).
+    TextureAssetId tileTextureAt(u32 x, u32 y) const;
 
     /// @brief AABB del cubo que ocupa el tile (x,y) en coordenadas de mundo.
     ///        Centro en (x*tileSize + tileSize/2, tileSize/2, y*tileSize + tileSize/2).
@@ -58,7 +65,8 @@ private:
     u32 m_width;
     u32 m_height;
     f32 m_tileSize;
-    std::vector<u8> m_tiles; // row-major: tiles[y * width + x]
+    std::vector<u8> m_tiles;                       // row-major: y * width + x
+    std::vector<TextureAssetId> m_tileTextures;    // paralelo a m_tiles
 };
 
 } // namespace Mood

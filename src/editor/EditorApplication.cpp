@@ -96,23 +96,26 @@ EditorApplication::EditorApplication() {
 
     m_assetManager = std::make_unique<AssetManager>();
     m_wallTextureId = m_assetManager->loadTexture("textures/grid.png");
+    const TextureAssetId brickId = m_assetManager->loadTexture("textures/brick.png");
     m_ui.assetBrowser().setAssetManager(m_assetManager.get());
 
     m_debugRenderer = std::make_unique<OpenGLDebugRenderer>();
 
     m_ui.viewport().setFramebuffer(m_viewportFb.get());
 
-    // --- Mapa de prueba (Hito 4 Bloque 1) ---
-    // 8x8 con bordes solidos y una columna en el centro.
+    // --- Mapa de prueba ---
+    // 8x8 con bordes sólidos (grid.png) y columna central (brick.png) para
+    // validar texturas por tile del Hito 5 Bloque 5.
     for (u32 i = 0; i < m_map.width(); ++i) {
-        m_map.setTile(i, 0u, TileType::SolidWall);
-        m_map.setTile(i, m_map.height() - 1u, TileType::SolidWall);
+        m_map.setTile(i, 0u,                   TileType::SolidWall, m_wallTextureId);
+        m_map.setTile(i, m_map.height() - 1u,  TileType::SolidWall, m_wallTextureId);
     }
     for (u32 j = 0; j < m_map.height(); ++j) {
-        m_map.setTile(0u, j, TileType::SolidWall);
-        m_map.setTile(m_map.width() - 1u, j, TileType::SolidWall);
+        m_map.setTile(0u,                  j, TileType::SolidWall, m_wallTextureId);
+        m_map.setTile(m_map.width() - 1u,  j, TileType::SolidWall, m_wallTextureId);
     }
-    m_map.setTile(m_map.width() / 2u, m_map.height() / 2u, TileType::SolidWall);
+    m_map.setTile(m_map.width() / 2u, m_map.height() / 2u,
+                  TileType::SolidWall, brickId);
     Log::world()->info("Mapa cargado: prueba_8x8 ({} tiles solidos)", m_map.solidCount());
 
     MOOD_LOG_INFO("Editor listo");
@@ -272,13 +275,17 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         projection = m_editorCamera.projectionMatrix(aspect);
     }
 
-    // View/projection y la textura de pared son constantes para todos los
-    // tiles del frame; solo uModel cambia por cubo.
+    // View/projection constantes para el frame; uModel + textura cambian
+    // por tile (permite que cada celda tenga su propia textura).
     m_defaultShader->bind();
     m_defaultShader->setMat4("uView", view);
     m_defaultShader->setMat4("uProjection", projection);
     m_defaultShader->setInt("uTexture", 0);
-    m_assetManager->getTexture(m_wallTextureId)->bind(0);
+
+    // Tracking de la textura bound para evitar rebindear si el tile siguiente
+    // usa la misma: optimizacion barata que aprovecha el ordenamiento natural
+    // del iterado (los tiles del borde van juntos).
+    TextureAssetId lastBound = static_cast<TextureAssetId>(-1);
 
     // El mapa se dibuja centrado en el origen del mundo (mapWorldOrigin()).
     // Mismo offset que consume PhysicsSystem: single source of truth.
@@ -289,6 +296,12 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     for (u32 y = 0; y < m_map.height(); ++y) {
         for (u32 x = 0; x < m_map.width(); ++x) {
             if (!m_map.isSolid(x, y)) continue;
+
+            const TextureAssetId tileTex = m_map.tileTextureAt(x, y);
+            if (tileTex != lastBound) {
+                m_assetManager->getTexture(tileTex)->bind(0);
+                lastBound = tileTex;
+            }
 
             const glm::vec3 worldPos(
                 origin.x + (static_cast<f32>(x) + 0.5f) * tileSize,

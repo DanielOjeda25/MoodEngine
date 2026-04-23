@@ -6,7 +6,8 @@ GridMap::GridMap(u32 width, u32 height, f32 tileSize)
     : m_width(width),
       m_height(height),
       m_tileSize(tileSize),
-      m_tiles(static_cast<usize>(width) * height, static_cast<u8>(TileType::Empty)) {}
+      m_tiles(static_cast<usize>(width) * height, static_cast<u8>(TileType::Empty)),
+      m_tileTextures(static_cast<usize>(width) * height, 0u) {}
 
 TileType GridMap::tileAt(u32 x, u32 y) const {
     if (x >= m_width || y >= m_height) {
@@ -22,6 +23,18 @@ bool GridMap::isSolid(u32 x, u32 y) const {
 void GridMap::setTile(u32 x, u32 y, TileType type) {
     if (x >= m_width || y >= m_height) return;
     m_tiles[y * m_width + x] = static_cast<u8>(type);
+}
+
+void GridMap::setTile(u32 x, u32 y, TileType type, TextureAssetId texture) {
+    if (x >= m_width || y >= m_height) return;
+    const usize i = y * m_width + x;
+    m_tiles[i] = static_cast<u8>(type);
+    m_tileTextures[i] = texture;
+}
+
+TextureAssetId GridMap::tileTextureAt(u32 x, u32 y) const {
+    if (x >= m_width || y >= m_height) return 0u;
+    return m_tileTextures[y * m_width + x];
 }
 
 AABB GridMap::aabbOfTile(u32 x, u32 y) const {
