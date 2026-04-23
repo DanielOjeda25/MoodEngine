@@ -89,6 +89,19 @@ EditorApplication::EditorApplication() {
 
     m_ui.viewport().setFramebuffer(m_viewportFb.get());
 
+    // --- Mapa de prueba (Hito 4 Bloque 1) ---
+    // 8x8 con bordes solidos y una columna en el centro.
+    for (u32 i = 0; i < m_map.width(); ++i) {
+        m_map.setTile(i, 0u, TileType::SolidWall);
+        m_map.setTile(i, m_map.height() - 1u, TileType::SolidWall);
+    }
+    for (u32 j = 0; j < m_map.height(); ++j) {
+        m_map.setTile(0u, j, TileType::SolidWall);
+        m_map.setTile(m_map.width() - 1u, j, TileType::SolidWall);
+    }
+    m_map.setTile(m_map.width() / 2u, m_map.height() / 2u, TileType::SolidWall);
+    Log::world()->info("Mapa cargado: prueba_8x8 ({} tiles solidos)", m_map.solidCount());
+
     MOOD_LOG_INFO("Editor listo");
 }
 

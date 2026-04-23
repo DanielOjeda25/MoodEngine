@@ -10,6 +10,7 @@
 #include "editor/EditorUI.h"
 #include "engine/scene/EditorCamera.h"
 #include "engine/scene/FpsCamera.h"
+#include "engine/world/GridMap.h"
 #include "platform/Window.h"
 
 #include <memory>
@@ -64,6 +65,9 @@ private:
     FpsCamera m_playCamera;
     EditorMode m_mode = EditorMode::Editor;
     f32 m_modelRotationRadians = 0.0f;
+
+    // Mapa jugable (Hito 4 Bloque 1). Render en Bloque 2, colisiones en Bloque 4.
+    GridMap m_map{8u, 8u, 1.0f};
 
     EditorUI m_ui;
 

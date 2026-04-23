@@ -36,10 +36,12 @@ Entregable: al entrar en Play Mode, apareces en una sala con paredes y podés ca
 
 ### Bloque 1 — Datos del mapa grid
 
-- [ ] `src/engine/world/GridMap.h`: estructura con `u32 width`, `u32 height`, `f32 tileSize`, `std::vector<u8> tiles` (enum TileType: Empty=0, SolidWall=1, extendible).
-- [ ] `src/engine/world/GridMap.cpp`: helpers `isSolid(x,y)`, `tileAt(x,y)`, AABB en mundo para un tile `aabbOfTile(x,y)`.
-- [ ] Mapa de prueba construido en código (en `EditorApplication` o helper): 8x8 con paredes en el borde y una columna en el centro.
-- [ ] Logger nuevo `world` en `src/core/Log.cpp` (`engine`, `editor`, `render`, `world`).
+- [x] `src/engine/world/GridMap.h`: estructura con `u32 width`, `u32 height`, `f32 tileSize`, `std::vector<u8> tiles` (enum TileType: Empty=0, SolidWall=1, extendible).
+- [x] `src/engine/world/GridMap.cpp`: helpers `isSolid(x,y)`, `tileAt(x,y)`, AABB en mundo para un tile `aabbOfTile(x,y)`.
+- [x] Mapa de prueba construido en código (en `EditorApplication` o helper): 8x8 con paredes en el borde y una columna en el centro.
+- [x] Logger nuevo `world` en `src/core/Log.cpp` (`engine`, `editor`, `render`, `world`).
+
+> Nota: `aabbOfTile` requiere el tipo `AABB`. Se creó `src/core/math/AABB.h` header-only (parte del Bloque 3) durante este bloque para no dejar el helper vacío. Los tests formales de AABB siguen en Bloque 3/6.
 
 ### Bloque 2 — Render del grid como cubos
 

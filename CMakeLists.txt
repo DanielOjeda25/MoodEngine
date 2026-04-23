@@ -123,6 +123,8 @@ add_executable(MoodEditor
     src/engine/scene/EditorCamera.cpp
     src/engine/scene/FpsCamera.cpp
 
+    src/engine/world/GridMap.cpp
+
     src/engine/render/opengl/OpenGLMesh.cpp
     src/engine/render/opengl/OpenGLShader.cpp
     src/engine/render/opengl/OpenGLFramebuffer.cpp

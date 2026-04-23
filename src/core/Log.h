@@ -24,6 +24,9 @@ std::shared_ptr<spdlog::logger>& editor();
 /// @brief Logger del subsistema de render (`render`).
 std::shared_ptr<spdlog::logger>& render();
 
+/// @brief Logger del mundo/nivel (`world`): mapas, tiles, colisiones.
+std::shared_ptr<spdlog::logger>& world();
+
 } // namespace Mood::Log
 
 // Macros de conveniencia para el logger `engine`.
