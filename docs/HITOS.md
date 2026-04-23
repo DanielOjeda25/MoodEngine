@@ -61,4 +61,4 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 
 ### Pendientes menores detectados en Hito 3
 
-- FPS counter en la status bar no se visualiza claramente en todos los layouts: investigar orden de render de ventanas ImGui no-docked sobre paneles docked. No bloqueante.
+- ~~FPS counter en la status bar no se visualiza claramente en todos los layouts.~~ Resuelto 2026-04-23: `StatusBar` usa `ImGui::BeginViewportSideBar(ImGuiDir_Down)` y se dibuja antes del dockspace para que el viewport recorte su work area antes de que los paneles docked lo consuman.

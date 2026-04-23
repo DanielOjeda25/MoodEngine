@@ -144,7 +144,7 @@ Este hito consolida el pipeline 3D completo: matrices MVP, texturas con stb_imag
 
 ## Pendientes que quedan para Hito 4 o posterior
 
-- **FPS counter en la status bar no siempre visible.** Con ciertos layouts de panel docked al bottom (Asset Browser), la status bar queda tapada o no refresca. Revisar orden de render de ventanas no-docked sobre dockspace o migrar a `ImGui::BeginViewportSideBar`. No bloqueante.
+- ~~**FPS counter en la status bar no siempre visible.**~~ Resuelto 2026-04-23: `StatusBar::draw` migrado a `ImGui::BeginViewportSideBar(ImGuiDir_Down, ...)` (requiere `<imgui_internal.h>`) y reordenado antes de `Dockspace::begin` en `EditorUI::draw`. ImGui reserva la franja inferior del viewport; el dockspace recibe un `WorkSize` ya recortado y el Asset Browser deja de solaparse.
 - **Face culling (`glEnable(GL_CULL_FACE)`):** con el cubo actual y su ordenamiento de triángulos, se podría habilitar back-face culling para ahorrar fragmentos. Evaluar en Hito 4 cuando aparezcan más mallas opacas.
 - **Estructura compartida de código testeable.** Por ahora `tests/CMakeLists.txt` compila directamente las fuentes de las cámaras. Si crece la superficie testeada, extraer `mood_core` como static lib compartida entre `MoodEditor` y `mood_tests`.
 - **Hot-reload de shaders.** Útil cuando los shaders crezcan (Hito 11 iluminación, Hito 17 PBR).

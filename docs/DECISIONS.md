@@ -148,6 +148,14 @@ Registro cronológico de decisiones arquitectónicas no triviales. Formato por e
 **Alternativas consideradas:** `class Camera` base abstracta — útil cuando haya 3+ cámaras o un CameraController polimórfico; hoy no.
 **Revisar si:** aparecen cámaras cinematic (spline, target-locked) o un sistema ECS necesita tratarlas uniformemente.
 
+## 2026-04-23: Status bar con `ImGui::BeginViewportSideBar` antes del dockspace
+
+**Contexto:** post Hito 3, con el Asset Browser acoplado al 28% inferior del dockspace, la status bar inferior quedaba tapada. El dockspace host ocupa todo `viewport->WorkSize` y los paneles docked se dibujan encima de cualquier ventana que posicionemos manualmente al borde inferior.
+**Decisión:** migrar `StatusBar::draw` a `ImGui::BeginViewportSideBar(name, nullptr, ImGuiDir_Down, height, flags)` — requiere `<imgui_internal.h>` en la rama `docking` actual — y llamarla ANTES de `Dockspace::begin` en `EditorUI::draw`. ImGui registra la reserva en `BuildWorkOffsetMax` del viewport; el dockspace recibe un `WorkSize` recortado y no pisa la franja de la status bar.
+**Razones:** solución canónica de ImGui para barras laterales/inferiores; un frame de lag en el ajuste pero sin parpadeo visible; evita z-order manual entre ventanas no-docked y dockspace.
+**Alternativas consideradas:** `BringWindowToFront` manual o flag `NoBringToFrontOnFocus` en la status bar — funcionan inconsistentemente según el `imgui.ini` persistido.
+**Revisar si:** activamos multi-viewport de ImGui o cambiamos el host del dockspace.
+
 ## 2026-04-22: Tests con doctest, sólo unidades puras
 
 **Contexto:** inicio de la red de tests. doctest adelantado desde Hito 3-4 (roadmap decía 3-4).
