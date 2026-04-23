@@ -103,6 +103,19 @@ void AssetBrowserPanel::onImGuiRender() {
         }
         if (isSelected) ImGui::PopStyleColor();
 
+        // Drag source: arrastrar una miniatura permite soltarla sobre el
+        // Viewport para asignarla como textura de un tile. Payload = id de
+        // la textura (u32); el consumidor lo castea a TextureAssetId.
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+            ImGui::SetDragDropPayload("MOOD_TEXTURE_ASSET", &e.id, sizeof(e.id));
+            // Preview del payload: miniatura + nombre.
+            ImGui::Image(tex->handle(), ImVec2(48.0f, 48.0f),
+                         ImVec2(0, 1), ImVec2(1, 0));
+            ImGui::SameLine();
+            ImGui::TextUnformatted(e.displayName.c_str());
+            ImGui::EndDragDropSource();
+        }
+
         // Nombre de archivo, truncado si no entra en el ancho del thumb.
         const float textW = ImGui::CalcTextSize(e.displayName.c_str()).x;
         if (textW <= k_thumbSize) {
