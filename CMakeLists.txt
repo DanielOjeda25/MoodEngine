@@ -133,6 +133,7 @@ add_executable(MoodEditor
     src/engine/assets/stb_impl.cpp
 
     src/engine/serialization/SceneSerializer.cpp
+    src/engine/serialization/ProjectSerializer.cpp
 
     src/engine/scene/EditorCamera.cpp
     src/engine/scene/FpsCamera.cpp
