@@ -148,6 +148,41 @@ Registro cronológico de decisiones arquitectónicas no triviales. Formato por e
 **Alternativas consideradas:** `class Camera` base abstracta — útil cuando haya 3+ cámaras o un CameraController polimórfico; hoy no.
 **Revisar si:** aparecen cámaras cinematic (spline, target-locked) o un sistema ECS necesita tratarlas uniformemente.
 
+## 2026-04-23: `GridMap` sin world origin, offset inyectado por el consumer
+
+**Contexto:** el mapa se renderiza centrado en el origen del mundo (para que las cámaras con target=0 lo vean sin ajustes). `aabbOfTile` tendría que saber del offset para que `PhysicsSystem` compare en las mismas coords que el renderer.
+**Decisión:** `GridMap` queda en map-local coords (tile (0,0) en XZ=(0,0)). El offset lo computa `EditorApplication::mapWorldOrigin()` (derivado de width/height/tileSize) y se pasa explícito al renderer y a `moveAndSlide`. Single source of truth en el callsite.
+**Razones:** mantiene la data del mapa pura (testeable sin transformaciones), evita agregar estado mutable a `GridMap` por un solo consumidor.
+**Alternativas consideradas:** guardar `worldOrigin` dentro de `GridMap` — postergado hasta que aparezca un segundo consumidor con otro transform (ej. minimapa, edición de un subrango).
+
+## 2026-04-23: `OpenGLDebugRenderer` concreto, sin interfaz `IDebugRenderer`
+
+**Contexto:** debug draw de AABBs para validar physics (Hito 4 Bloque 5).
+**Decisión:** crear `OpenGLDebugRenderer` como clase concreta en `src/engine/render/opengl/` (no extraer interfaz aún). `drawLine/drawAabb` acumulan vértices `{pos, color}` en un `std::vector` CPU, y `flush(view, projection)` los sube a un VBO dinámico (growth 2×) y los dibuja con `GL_LINES` bajo el shader `shaders/debug_line.{vert,frag}`.
+**Razones:** hay un solo backend de render (OpenGL). El plan explícitamente permite "`IDebugRenderer.h` o ampliar `IRenderer`"; la tercera opción (concreto sin abstracción) cumple el criterio de "evitar abstracciones prematuras" de CLAUDE.md. Si Vulkan llega (no previsto), extraer.
+**Alternativas consideradas:** `IDebugRenderer.h` + `OpenGLDebugRenderer : public IDebugRenderer` — añade dos archivos por nada hoy.
+
+## 2026-04-23: `FpsCamera` separa `computeMoveDelta` de `translate`
+
+**Contexto:** `PhysicsSystem::moveAndSlide` necesita ver el delta que la cámara quiere aplicar **antes** de aplicarlo, para poder clampearlo contra colisiones.
+**Decisión:** agregar `glm::vec3 computeMoveDelta(dir, dt) const` (devuelve el delta sin mutar) y `void translate(glm::vec3 delta)` (aplica el delta ya resuelto). El método `move(dir, dt)` original se mantiene como conveniencia (delega en ambos).
+**Razones:** el callsite queda `desired -> moveAndSlide -> actual -> translate`. Nada que depende del viejo `move()` se rompe (tests + código simple siguen funcionando).
+**Alternativas consideradas:** que `move()` devuelva el delta aplicado y permita pasar un predicado de colisión — acopla la cámara al sistema de colisiones, mala dirección.
+
+## 2026-04-23: Player AABB 0.4×0.9×0.4 en vez del 0.3×0.9×0.3 del plan
+
+**Contexto:** con `half-extent=0.15` (0.3 ancho) la cámara queda a 0.15 unidades del muro al colisionar. Con el near clipping plane a 0.1 y pitch > 0, el frustum se metía visualmente dentro del muro.
+**Decisión:** subir half-extent a 0.2 (0.4 ancho). El margen a la pared queda en 0.2, el doble del near plane.
+**Razones:** fix estándar (FPS comerciales hacen lo mismo, "body" más ancho que lo estrictamente necesario). No requiere bajar el near plane (que penaliza precisión del depth).
+**Revisar si:** se adopta la convención de escala realista (Hito 5+) — el half-extent pasará a 0.3 (player ~0.6m wide) que ya es mucho mayor al near plane y este problema se disuelve.
+
+## 2026-04-23: `drawMesh` sin `shader.unbind()` al terminar
+
+**Contexto:** al agregar el loop que dibuja 29 cubos del grid (un `setMat4("uModel", ...)` entre draws), todos los cubos aparecían en la posición del primero.
+**Decisión:** `OpenGLRenderer::drawMesh` deja el shader y la mesh bindeados al terminar. El que llama decide cuándo cambiar estado.
+**Razones:** `glUniform*` actúa sobre el program bound. Con `unbind()` al final de cada draw, el `setMat4` de la próxima iteración se ejecutaba con program 0 bound y fallaba silencioso (GL_INVALID_OPERATION). Es el patrón "bind once, draw many" estándar; unbind explícito es lo atípico.
+**Alternativas consideradas:** rebindear el shader dentro del loop antes de cada `setMat4` — oculta el bug, no lo elimina.
+
 ## 2026-04-23: Status bar con `ImGui::BeginViewportSideBar` antes del dockspace
 
 **Contexto:** post Hito 3, con el Asset Browser acoplado al 28% inferior del dockspace, la status bar inferior quedaba tapada. El dockspace host ocupa todo `viewport->WorkSize` y los paneles docked se dibujan encima de cualquier ventana que posicionemos manualmente al borde inferior.

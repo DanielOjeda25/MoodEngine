@@ -8,7 +8,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 1** — Shell del editor (completado, tag `v0.1.0-hito1`).
 - [x] **Hito 2** — Primer triángulo con OpenGL (completado, tag `v0.2.0-hito2`).
 - [x] **Hito 3** — Cubo texturizado con cámara (completado, tag `v0.3.0-hito3`).
-- [ ] Hito 4 — Mundo grid + colisiones AABB.
+- [x] **Hito 4** — Mundo grid + colisiones AABB (completado, tag `v0.4.0-hito4`).
 - [ ] Hito 5 — Asset Browser + gestión de texturas.
 - [ ] Hito 6 — Serialización de proyectos y mapas.
 - [ ] Hito 7 — Entidades, componentes, jerarquía.
@@ -62,3 +62,22 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 ### Pendientes menores detectados en Hito 3
 
 - ~~FPS counter en la status bar no se visualiza claramente en todos los layouts.~~ Resuelto 2026-04-23: `StatusBar` usa `ImGui::BeginViewportSideBar(ImGuiDir_Down)` y se dibuja antes del dockspace para que el viewport recorte su work area antes de que los paneles docked lo consuman.
+
+## Hito 4 — Mundo grid + colisiones AABB
+
+**Objetivo:** primer "mundo" jugable. Mapa definido como grid 2D de tiles renderizado como cubos 3D, colisiones AABB propias que impiden atravesar paredes (con slide en esquinas), y debug rendering para visualizar las AABBs.
+
+**Criterios de aceptación cumplidos:**
+- Viewport muestra sala 8×8 con bordes sólidos y columna central (29 paredes).
+- En Play Mode, WASD mueve y no atraviesa paredes; slide diagonal funciona.
+- Tecla `F1` togglea debug draw (AABBs de tiles en amarillo + AABB del jugador en verde en Play).
+- Log del canal `world`: `Mapa cargado: prueba_8x8 (29 tiles solidos)`.
+- Cierre limpio, exit 0. Suite de tests: 30 casos, 159 asserciones.
+
+**Siguiente paso tras completarlo:** Hito 5 — Asset Browser + gestión de texturas. AssetManager, VFS inicial, texturas por tile desde el editor, textura fallback rosa-negro, consola in-game. Antes de empezar, aplicar la convención de escala realista postergada del Hito 4 (ver `docs/PLAN_HITO5.md`).
+
+### Pendientes menores detectados en Hito 4
+
+- **Convención de escala del mundo** diferida: pasar a `tileSize=3 m` + player 1.8 m. Ver `docs/PLAN_HITO4.md` sección pendientes para detalle completo.
+- **`GridRenderer` inline en EditorApplication** — extraer cuando aparezca la segunda fuente de geometría (texturas por tile o meshes de archivo).
+- **Face culling (`GL_CULL_FACE`)** no activado — evaluar cuando haya muchas mallas opacas.

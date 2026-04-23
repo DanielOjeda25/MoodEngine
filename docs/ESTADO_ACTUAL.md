@@ -6,11 +6,12 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 3 cerrado, mergeado a `main` y publicado en origin.**
-Tag: `v0.3.0-hito3`.
-Verificado automático (`Textura cargada: assets/textures/grid.png (256x256, 4 canales)`, `OpenGLRenderer listo (depth test activo)`, tests doctest 10/10 pasando, shutdown exit 0) + verificado por el dev a ojo (cubo rotando texturizado, WASD en Play Mode, toggle Play/Stop + Esc para salir).
+**Hito 4 cerrado y taggeado como `v0.4.0-hito4` en local.**
+Verificado automático (log `Mapa cargado: prueba_8x8 (29 tiles solidos)`, suite doctest 30/30 pasando con 159 asserciones, shutdown exit 0) + verificado por el dev a ojo (sala 8×8 visible, WASD no atraviesa paredes, slide diagonal natural, F1 togglea AABBs amarillos de muros + verde del jugador).
 
-**Próximo paso:** Hito 4 — mundo grid + colisiones AABB. Plan detallado en `docs/PLAN_HITO4.md`.
+**Próximo paso:** Hito 5 — Asset Browser + gestión de texturas. Plan detallado en `docs/PLAN_HITO5.md`. Antes del grueso, aplicar la convención de escala realista diferida del Hito 4 (`tileSize=3m`, player 1.8m).
+
+> Nota push: los commits del Hito 4 están sólo en local, sin pushear a origin. Hacer `git push origin main --tags` cuando esté OK.
 
 ### Lo que ya está hecho
 
@@ -44,6 +45,18 @@ Verificado automático (`Textura cargada: assets/textures/grid.png (256x256, 4 c
 - Depth test activo en `OpenGLRenderer::init()`.
 - `assets/textures/grid.png` generada con `tools/gen_grid_texture.py` (Python + Pillow, 256x256 RGBA).
 - `tests/` con doctest: 10 casos, 37 asserciones (matemática GLM + cámaras).
+
+**Hito 4** — Mundo grid + colisiones AABB (tag local `v0.4.0-hito4`):
+- `src/engine/world/GridMap.{h,cpp}`: grilla 2D de tiles con `TileType { Empty, SolidWall }`. Helpers `tileAt`, `isSolid` (fuera = pared), `setTile`, `aabbOfTile`, `solidCount`. Coords map-local; el world offset lo maneja el callsite.
+- `src/core/math/AABB.h`: header-only con `intersects/contains/expanded/merge` + helpers (`center/size/extents/isValid`).
+- `src/systems/PhysicsSystem.{h,cpp}`: `moveAndSlide(map, mapWorldOrigin, box, desired) -> glm::vec3`. Resuelve X luego Z (permite slide en esquinas); Y pasa directo (muros infinitos por ahora). Tiles fuera del mapa se tratan como pared.
+- `src/engine/render/opengl/OpenGLDebugRenderer.{h,cpp}` + `shaders/debug_line.{vert,frag}`: debug draw de líneas/AABBs. VBO dinámico con growth 2×, flush una vez por frame.
+- `EditorApplication`: render del grid inline (loop por tiles sólidos con `translate*scale(tileSize)`), Play Mode con colisiones AABB vs grid (AABB jugador 0.4×0.9×0.4, antes 0.3×0.9×0.3, ver DECISIONS), toggle F1 para debug draw. Cámara orbital `radius=12`, FPS starts at tile interior `(-1.5, 0.6, 2.5)`.
+- `FpsCamera` dividido en `computeMoveDelta` + `translate` para que el callsite pueda pasar por `moveAndSlide` antes de aplicar.
+- Nuevo canal de log `world`. Logger inicial: `Mapa cargado: prueba_8x8 (29 tiles solidos)`.
+- `fix(render)`: `drawMesh` ya no desbindea shader/mesh al terminar (permitía todos los cubos apilados por silent-fail de `glUniform*`).
+- `fix(editor)`: status bar migrada a `ImGui::BeginViewportSideBar` + dibujada antes del dockspace; cierra el pendiente menor del Hito 3.
+- Tests: +13 casos nuevos (7 AABB, 5 GridMap, 8 PhysicsSystem). Suite total 30/159.
 
 ### Dependencias que baja CPM al configurar
 
@@ -117,21 +130,22 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: implementar el Hito 4
+### Tarea inmediata: implementar el Hito 5
 
-El Hito 3 está cerrado (tag `v0.3.0-hito3` en origin). El foco ahora es el **Hito 4 — mundo grid + colisiones AABB**.
+El Hito 4 está cerrado (tag `v0.4.0-hito4` local; falta push). El foco ahora es el **Hito 5 — Asset Browser + gestión de texturas** (AssetManager, VFS inicial, textura fallback rosa-negro, asignar texturas a tiles desde el editor, consola in-game).
 
-El plan desglosado por tareas está en `docs/PLAN_HITO4.md`.
+El plan desglosado por tareas está en `docs/PLAN_HITO5.md`.
 
-**Punto de arranque concreto:** crear `src/engine/world/GridMap.{h,cpp}` con una grilla 2D de tiles (enum TileType). El renderer itera la grilla y dibuja un cubo texturizado por celda ocupada. Después, `src/core/math/AABB.{h,cpp}` + `src/systems/PhysicsSystem.cpp` con raycasts tile-a-tile para colisión jugador-vs-paredes.
+**Punto de arranque recomendado:** aplicar primero la **convención de escala realista diferida** (ver PLAN_HITO5 Bloque 0 y PLAN_HITO4 pendientes): pasar a `tileSize=3 m`, player 1.8 m, velocidad 4 m/s, orbit radius 30. Después avanzar con `src/engine/assets/AssetManager.{h,cpp}` y ampliar `GridMap` con `TextureId` por tile.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO4.md`.
-2. Trabajar tarea por tarea, marcando como completadas en el plan al terminar cada una.
-3. Después de cada bloque grande (grid data, grid render, AABB math, collision, debug draw), compilar y confirmar.
-4. Actualizar `docs/DECISIONS.md` si aparece alguna decisión no prevista.
-5. Al final: commits atómicos en español, merge a main, tag `v0.4.0-hito4`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO5.md`.
+1. Leer `docs/PLAN_HITO5.md` (incluye las pendientes arrastradas del Hito 4).
+2. Preguntar al dev si quiere atacar primero la escala o si prefiere otro orden.
+3. Trabajar tarea por tarea, marcando como completadas en el plan al terminar cada una.
+4. Después de cada bloque grande, compilar y confirmar.
+5. Actualizar `docs/DECISIONS.md` si aparece alguna decisión no prevista.
+6. Al final: commits atómicos en español, merge a main, tag `v0.5.0-hito5`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO6.md`.
 
 ---
 

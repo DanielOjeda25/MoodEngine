@@ -84,11 +84,11 @@ Total suite tras Bloque 6: 30 casos, 159 asserciones.
 
 ### Bloque 7 — Cierre
 
-- [ ] Recompilar y verificar criterios.
-- [ ] Actualizar `docs/HITOS.md`, `docs/DECISIONS.md`, `docs/ESTADO_ACTUAL.md`.
-- [ ] Commits atómicos en español.
-- [ ] Tag `v0.4.0-hito4` + push.
-- [ ] Crear `docs/PLAN_HITO5.md`.
+- [x] Recompilar y verificar criterios (build limpio, suite 30/30, editor arranca y cierra limpio, colision + slide + debug draw verificados por el dev).
+- [x] Actualizar `docs/HITOS.md`, `docs/DECISIONS.md`, `docs/ESTADO_ACTUAL.md`.
+- [x] Commits atómicos en español.
+- [x] Tag `v0.4.0-hito4` + push.
+- [x] Crear `docs/PLAN_HITO5.md`.
 
 ---
 
@@ -114,4 +114,10 @@ Total suite tras Bloque 6: 30 casos, 159 asserciones.
 
 ## Pendientes que quedan para Hito 5 o posterior
 
-_(llenar al cerrar el hito)_
+- **Convención de escala del mundo (1 unidad = 1 metro SI).** Hoy `tileSize=1.0` + walls cúbicos + player 0.4×0.9×0.4 con eye a 0.6 implican un personaje de ~90 cm: inconsistente con cualquier asset realista que llegue. Pasar a `tileSize=3.0` (pared 3m), player 0.6×1.8×0.6 con eye a 1.6, velocidad FPS 4 m/s, orbit radius 30 para el mapa 8×8. Queda para Hito 5 antes de empezar a asignar texturas por tile. Diferido por el dev el 2026-04-23.
+- **Desacoplar `wallHeight` de `tileSize` en `GridMap`.** Hoy el cubo de pared es `scale(tileSize)` en los 3 ejes. Cuando haya techos variables o salas con altura distinta, agregar `wallHeight` al mapa.
+- **Extraer `IDebugRenderer`.** `OpenGLDebugRenderer` es concreta hoy. Si aparece un segundo backend (Vulkan), extraer interfaz siguiendo el patrón del resto del RHI.
+- **`GridRenderer` propio.** El render del grid vive inline en `EditorApplication::renderSceneToViewport`. Mover a `src/systems/GridRenderer.{h,cpp}` cuando haya texturas por tile (Hito 5) o frustum culling (futuro).
+- **`mood_core` como static lib compartida.** `tests/CMakeLists.txt` ya compila 4 .cpp del motor directamente (cámaras, GridMap, PhysicsSystem). Si sigue creciendo, extraer una lib.
+- **Face culling (`GL_CULL_FACE`).** Con 29 cubos opacos conviene activar back-face culling. Verificar primero el orden de triángulos del cubo del Hito 3. No urgente.
+- **Cobertura de tests del movimiento**: no testeo `FpsCamera::computeMoveDelta` directamente (solo lo integro); agregar cuando cambie la lógica de strafe/yaw.
