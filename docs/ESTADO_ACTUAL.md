@@ -6,11 +6,11 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 5 cerrado, mergeado a `main` y publicado en origin.**
-Tag: `v0.5.0-hito5`.
-Verificado automático (log `AssetManager: fallback 'missing' cargado desde assets/textures/missing.png`, suite doctest 35/35 pasando con 179 asserciones, shutdown exit 0) + verificado por el dev a ojo (sala con 2 texturas — grid en perímetro, brick en columna central —, Asset Browser con 3 miniaturas clicables, Console acoplado inferior-derecho con logs coloreados por nivel, F1 debug draw sigue funcionando, colisiones sin regresión).
+**Hito 6 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.6.0-hito6`.
+Verificado automático (suite doctest 61/281 pasando, log de `Proyecto guardado: ...moodproj` + `Mapa guardado: ...moodmap`, shutdown exit 0) + verificado por el dev a ojo (flujo completo nuevo→drop→cerrar→reabrir preserva el mapa editado; Ctrl+S guarda; título con `*` cuando dirty; Guardar grayado sin proyecto; pan middle-drag estilo Blender; hover cyan durante drag; drop al tile correcto).
 
-**Próximo paso:** Hito 6 — Serialización de proyectos y mapas (`.moodproj` + `.moodmap`). Plan detallado en `docs/PLAN_HITO6.md`. Pendientes arrastrados (ver `PLAN_HITO5.md` sección pendientes): tests de AssetManager, drag & drop Asset Browser → tile, extracción de `GridRenderer` desde `EditorApplication`.
+**Próximo paso:** Hito 7 — Entidades, componentes, jerarquía. EnTT detrás de fachada (`Entity`, `Scene`), panel Hierarchy, Inspector funcional con componentes (Transform, MeshRenderer, Camera, Light). Plan detallado en `docs/PLAN_HITO7.md`.
 
 ### Lo que ya está hecho
 
@@ -68,6 +68,19 @@ Verificado automático (log `AssetManager: fallback 'missing' cargado desde asse
 - `fix(editor)`: status bar migrada a `ImGui::BeginViewportSideBar` + dibujada antes del dockspace; cierra el pendiente menor del Hito 3.
 - Tests: +13 casos nuevos (7 AABB, 5 GridMap, 8 PhysicsSystem). Suite total 30/159.
 
+**Hito 6** — Serialización de proyectos y mapas (tag `v0.6.0-hito6`):
+- Bloque 0 (arrastrado Hito 5): `GridRenderer` extraído a `src/systems/GridRenderer.{h,cpp}`; `ViewportPick` + hover cyan del tile bajo el cursor; drag & drop Asset Browser→tile con payload `"MOOD_TEXTURE_ASSET"`; `AssetManager` con `TextureFactory` inyectable (desbloquea tests sin GL); menú `Ver > Restablecer layout`; debug lines a 2 px; pan middle-drag estilo Blender en `EditorCamera`.
+- `src/engine/serialization/JsonHelpers.h` (header-only): adaptadores ADL para `glm::vec2/3/4` (array `[x,y,z]`), `AABB` (`{min,max}`), `TileType` (strings `"empty"/"solid_wall"` via `NLOHMANN_JSON_SERIALIZE_ENUM`). Constantes `k_MoodmapFormatVersion=1`, `k_MoodprojFormatVersion=1` + `checkFormatVersion` que rechaza versiones futuras.
+- `src/engine/serialization/SceneSerializer.{h,cpp}`: `save(map, name, assets, path)` y `load(path, assets) -> optional<SavedMap>`. Schema `.moodmap` con tiles en row-major + texturas por path lógico (string estable).
+- `src/engine/serialization/ProjectSerializer.{h,cpp}`: `save(Project)`, `load(moodprojPath) -> optional<Project>`, `createNewProject(root, name) -> optional<Project>`. Schema `.moodproj` con version/name/defaultMap/maps[]. `Project::root` se infiere del `parent_path` al cargar.
+- `AssetManager` extendido con `pathOf(id) -> string` (vector paralelo `m_texturePaths`), `TextureFactory` inyectable, y caché de `"textures/missing.png"` → id 0.
+- `portable-file-dialogs 0.1.0` como dep (CPM DOWNLOAD_ONLY + target INTERFACE) para diálogos nativos.
+- `EditorApplication` gana `std::optional<Project>`, `m_currentMapPath`, `m_projectDirty`, `updateWindowTitle`, `markDirty`, y 5 handlers (`handleNewProject/OpenProject/Save/SaveAs/CloseProject`). Título SDL dinámico con `*` si dirty. Atajo `Ctrl+S` (en Editor Mode). Menú Archivo con Nuevo/Abrir/Guardar/Guardar como/Cerrar; últimos 3 se grayan sin proyecto.
+- Helper `buildInitialTestMap()` separado: se ejecuta al arrancar y al cerrar proyecto (baseline conocido).
+- Tests: +26 casos, +102 asserciones (7 AssetManager con mocks, 6 JsonHelpers, 6 SceneSerializer, 7 ProjectSerializer). Suite total: 61/281.
+- Fixes incorporados: drop al tile correcto (rect capturado antes de `BeginDragDropTarget`); cyan visible durante drag (flag `AllowWhenBlockedByActiveItem`).
+- Pendientes menores (ver `PLAN_HITO6.md`): Bloque 5 (editor.state.json) diferido; "guardar como" completo; diálogo de dirty-check al cerrar/abrir; UI multi-mapa.
+
 ### Dependencias que baja CPM al configurar
 
 - SDL2 `release-2.30.2`
@@ -75,6 +88,8 @@ Verificado automático (log `AssetManager: fallback 'missing' cargado desde asse
 - spdlog `1.14.1`
 - ImGui rama `docking` (compilado como target interno `imgui` con backends SDL2 + OpenGL3)
 - doctest `2.4.11` (sólo para el target `mood_tests`)
+- nlohmann_json `3.11.3` (serialización de `.moodmap` / `.moodproj`)
+- portable-file-dialogs `0.1.0` (DOWNLOAD_ONLY, target INTERFACE propio `pfd`)
 
 ### Herramientas externas necesarias (solo para regenerar, no para build)
 
@@ -140,26 +155,20 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: implementar el Hito 6
+### Tarea inmediata: implementar el Hito 7
 
-El Hito 5 está cerrado (tag `v0.5.0-hito5` local; falta push). El foco ahora es el **Hito 6 — Serialización de proyectos y mapas**: archivos `.moodproj` y `.moodmap`, guardar/cargar el mapa actual desde el editor, primer formato serializado propio.
+El Hito 6 está cerrado (tag `v0.6.0-hito6` en origin). El foco ahora es el **Hito 7 — Entidades, componentes, jerarquía**: integrar EnTT detrás de una fachada (`Entity`, `Scene`), panel Hierarchy (árbol), Inspector funcional que edita componentes. Componentes básicos: `Transform`, `MeshRenderer`, `Camera`, `Light`.
 
-El plan desglosado por tareas está en `docs/PLAN_HITO6.md`.
+El plan desglosado por tareas está en `docs/PLAN_HITO7.md`.
 
-**Punto de arranque sugerido:** antes del grueso de serialización, encarar los dos pendientes arrastrados de Hito 5 que el Hito 6 va a necesitar:
-1. Extraer `GridRenderer` de `EditorApplication` (cuando haya que recargar mapas, ese código tiene que vivir solo).
-2. Drag & drop desde Asset Browser a tile (requiere tile picking; habilita editar mapas antes de serializarlos).
-
-Después, diseñar el formato de archivo. JSON con [nlohmann/json](https://github.com/nlohmann/json) o binario custom — decidir en el Bloque 0 del Hito 6.
+**Punto de arranque concreto:** `src/engine/scene/` — crear `Scene.h` que envuelva un `entt::registry` y `Entity.h` como fachada. Pasar la sala del mapa actual a ser una escena de entidades (cada tile sólido = entidad con `Transform` + `MeshRenderer`). Después serialización.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO6.md` (incluye pendientes arrastrados del Hito 5).
-2. Preguntar al dev: ¿pendientes primero o directo al formato?
-3. Trabajar bloque por bloque, marcando en el plan al cerrar cada uno.
-4. Después de cada bloque grande, compilar y confirmar.
-5. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial (formato JSON vs binario, mecanismo de `std::chrono` timestamps, etc.).
-6. Al final: commits atómicos en español, merge a main, tag `v0.6.0-hito6`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO7.md`.
+1. Leer `docs/PLAN_HITO7.md`.
+2. Trabajar bloque por bloque, marcando en el plan al cerrar cada uno.
+3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial (por qué fachada vs exponer EnTT directo, naming, etc.).
+4. Al final: commits atómicos en español, merge a main, tag `v0.7.0-hito7`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO8.md`.
 
 ---
 

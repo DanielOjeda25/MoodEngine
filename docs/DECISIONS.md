@@ -232,3 +232,69 @@ Registro cronológico de decisiones arquitectónicas no triviales. Formato por e
 **Decisión:** target `mood_tests` compila las unidades puras (hoy `EditorCamera`, `FpsCamera` + `test_math.cpp`). No se testea render ni UI. `enable_testing()` + `add_subdirectory(tests)` en el CMakeLists raíz. Ejecución con `ctest` o invocando el exe directo.
 **Razones:** cubrir la matemática sin montar mocks de GL; sirve como sanity check del build de cámaras.
 **Alternativas consideradas:** extraer una static lib `mood_core` compartida con MoodEditor y mood_tests — prematuro con dos archivos; se hace cuando la superficie crezca.
+
+
+## 2026-04-23: Tile picking via raycast al plano y=0
+
+**Contexto:** drag & drop de texturas sobre el viewport necesita saber qué tile cae bajo el cursor. Hay muros (cubos) que ocluyen el piso, pero queremos que el click funcione incluso sobre tiles vacíos.
+**Decisión:** `ViewportPick::pickTile` hace unproject con la inversa de `proj * view` de dos puntos NDC (z=-1 near, z=+1 far), saca el rayo `near → far`, lo intersecta con el plano y=0. Si el hit cae dentro del rectángulo del mapa, devuelve `(tileX, tileY)`. Ignora la geometría de los muros — al clickear sobre la cima de un muro, el rayo pincha el piso del mismo tile.
+**Razones:** O(1), sin BVH ni raycast contra geometría, suficiente para editores de grid; permite pintar tiles vacíos y sólidos por igual.
+**Alternativas consideradas:** raycast contra cada AABB del mapa — O(W*H) por frame, innecesario para este caso.
+**Revisar si:** aparecen niveles no-planos (rampas, puentes) donde "piso" deja de ser una plano único.
+
+## 2026-04-23: TextureFactory inyectable en `AssetManager`
+
+**Contexto:** el Hito 5 dejó pendiente que `AssetManager` no era testeable — instanciaba `OpenGLTexture` directo en `loadTexture`, lo cual requiere contexto GL.
+**Decisión:** añadir `using TextureFactory = std::function<std::unique_ptr<ITexture>(const std::string&)>` al constructor. `EditorApplication` pasa una lambda que crea `OpenGLTexture`; los tests pasan una que devuelve un `MockTexture` (no hace I/O, no toca GL).
+**Razones:** 7 casos nuevos (+24 asserciones) para caching, fallback, VFS sandbox y rangos inválidos, sin GL. Mantiene la API pública sin cambios para los callsites existentes (una lambda más al construir).
+**Alternativas consideradas:** método virtual protegido + subclase de tests — más ceremonia y menos flexible.
+
+## 2026-04-23: Middle-drag como pan estilo Blender en `EditorCamera`
+
+**Contexto:** el dev pidió paneo al faltar la forma de encuadrar el mapa al lado (solo había rotar y zoom).
+**Decisión:** `applyPan(dxPixels, dyPixels)` mueve el `m_target` perpendicular al view direction. Sensibilidad `0.0015 * radius` para que se sienta constante al cambiar de zoom. Middle-drag se captura en `ViewportPanel` con el mismo patrón que right-drag. Dirección: mouse a la derecha mueve el target a la izquierda ("agarra" el mundo con el cursor, igual que Blender/Maya/3ds Max).
+**Alternativas consideradas:** Shift+right-drag — no es convención estándar en editores 3D.
+
+## 2026-04-23: JSON con `nlohmann/json` 3.11.3 + adapters ADL
+
+**Contexto:** serialización del Hito 6.
+**Decisión:** `nlohmann/json` 3.11.3 vía CPM. Adaptadores de tipos del motor en `src/engine/serialization/JsonHelpers.h` (header-only). Estrategia: `adl_serializer<T>` para `glm::vec2/3/4` (compacto como array `[x,y,z]`) y `AABB` (explícito `{min, max}`); `NLOHMANN_JSON_SERIALIZE_ENUM` para `TileType` → strings `"empty"/"solid_wall"` (estables a renumeración del enum). La macro tiene que estar en el mismo namespace que el enum para que ADL la encuentre.
+**Razones:** `nlohmann/json` es el default de facto en C++ moderno. Header-only, excelente API. El schema del motor es pequeño y plano; no necesita un framework pesado.
+**Alternativas consideradas:** `cereal` (planeado para Hito 10+ según el doc técnico cuando lleguen objetos más complejos), `tinygltf`-style ad-hoc — menos ergonómico.
+
+## 2026-04-23: Versionado de formato por entero monotónico
+
+**Contexto:** `.moodmap` y `.moodproj` son los primeros formatos persistidos del motor.
+**Decisión:** cada formato tiene una constante `k_MoodmapFormatVersion = 1` / `k_MoodprojFormatVersion = 1`. Helper `checkFormatVersion(j, supported, fileKind)` en `JsonHelpers.h`: rechaza versiones mayores con `runtime_error`, acepta iguales o menores (los serializers deciden si pueden migrar). Bump cuando cambia la semántica — agregar un campo nuevo opcional con default al leer NO requiere bump.
+**Razones:** simple, explícito, permite mensajes de error útiles ("versión 2 no soportada; máxima: 1"). Migraciones pueden sumarse hito por hito sin cambiar la estrategia.
+**Alternativas consideradas:** semver — overkill para archivos internos del motor.
+
+## 2026-04-23: Texturas en `.moodmap` se guardan por path lógico, no por id
+
+**Contexto:** los `TextureAssetId` son índices en la tabla del `AssetManager` actual — volátiles entre sesiones o proyectos distintos.
+**Decisión:** al serializar un tile, se escribe `"texture": "textures/grid.png"` (path lógico del VFS). Al cargar, se llama `AssetManager::loadTexture(path)` y se usa el id que devuelva. Requirió:
+1. `AssetManager::pathOf(id) -> string`: lookup inverso via `std::vector<std::string> m_texturePaths` paralelo a `m_textures`.
+2. Cachear `"textures/missing.png"` al id 0 en el constructor, para que round-trip save→load del fallback preserve el id.
+**Razones:** formato estable a cambios en el orden de carga de assets; permite compartir proyectos con otro dev que tenga distintas texturas ya cargadas.
+**Alternativas consideradas:** UUIDs por textura — requeriría un registro persistente aparte, sobreingeniería para el tamaño actual.
+
+## 2026-04-23: File dialogs nativos con `portable-file-dialogs`
+
+**Contexto:** el menú Archivo necesita abrir diálogos para seleccionar carpeta / `.moodproj`.
+**Decisión:** `portable-file-dialogs` 0.1.0 vía CPM (DOWNLOAD_ONLY + target INTERFACE propio; el repo no trae `CMakeLists.txt` utilizable). Header-only, cross-platform, usa APIs nativas del OS (Shell/GTK/Cocoa).
+**Razones:** mínimo esfuerzo, look nativo, mejor UX que reimplementar un file browser en ImGui.
+**Alternativas consideradas:** `tinyfiledialogs` (más viejo, C puro), browser en ImGui (tiempo).
+
+## 2026-04-23: Request/consume para acciones del menú (ProjectAction)
+
+**Contexto:** el menú Archivo tiene cinco items con lógica no trivial (diálogos, I/O, cambios de estado).
+**Decisión:** `EditorUI` expone `requestProjectAction(ProjectAction)` y `consumeProjectAction()`. `MenuBar` sólo emite requests; `EditorApplication` consume después de `ui.draw()` y dispatcha a handlers concretos. Ctrl+S se captura en `processEvents` y emite el mismo request — dispatcher único.
+**Razones:** mismo patrón que `togglePlayRequest` del Hito 3 y `dockspace.requestResetToDefault` del Bloque 0. Desacopla UI de side effects; facilita testear la UI sin ejecutar diálogos.
+**Alternativas consideradas:** callbacks desde MenuBar — acopla MenuBar a las implementaciones concretas de los handlers.
+
+## 2026-04-23: `Project.root` no se serializa
+
+**Contexto:** el `.moodproj` declara paths a mapas y textures.
+**Decisión:** `Project.root` se infiere del `parent_path` del archivo al cargar, NO se escribe en el JSON. Todos los demás paths (maps[], defaultMap) son relativos a root.
+**Razones:** el proyecto se puede mover a otra carpeta y seguir funcionando; no hay que reescribir el `.moodproj` al renombrar el folder.
+**Alternativas consideradas:** guardar root como path absoluto — rompería al mover la carpeta.

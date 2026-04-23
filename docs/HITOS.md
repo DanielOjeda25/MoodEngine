@@ -10,7 +10,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 3** — Cubo texturizado con cámara (completado, tag `v0.3.0-hito3`).
 - [x] **Hito 4** — Mundo grid + colisiones AABB (completado, tag `v0.4.0-hito4`).
 - [x] **Hito 5** — Asset Browser + gestión de texturas (completado, tag `v0.5.0-hito5`).
-- [ ] Hito 6 — Serialización de proyectos y mapas.
+- [x] **Hito 6** — Serialización de proyectos y mapas (completado, tag `v0.6.0-hito6`).
 - [ ] Hito 7 — Entidades, componentes, jerarquía.
 - [ ] Hito 8 — Scripting con Lua.
 - [ ] Hito 9 — Audio básico.
@@ -99,10 +99,34 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 
 ### Pendientes menores detectados en Hito 5
 
-Ver `docs/PLAN_HITO5.md` sección "Pendientes que quedan para Hito 6 o posterior":
-- Tests de `AssetManager` (requiere factory inyectable o `MockTexture` para no depender de GL).
-- Drag & drop Asset Browser → tile del viewport (requiere tile picking).
-- Extraer `GridRenderer` de `EditorApplication`.
-- Hot-reload de texturas (detectar mtime del PNG).
-- Menú "Restablecer layout" para cuando se agregan paneles nuevos.
+- ~~Tests de `AssetManager`.~~ Resueltos en Hito 6 Bloque 0 (factory inyectable + `MockTexture`).
+- ~~Drag & drop Asset Browser → tile del viewport.~~ Resuelto en Hito 6 Bloque 0 con `ViewportPick` + `BeginDragDropTarget`.
+- ~~Extraer `GridRenderer` de `EditorApplication`.~~ Resuelto en Hito 6 Bloque 0.
+- ~~Menú "Restablecer layout".~~ Resuelto en Hito 6 Bloque 0 (`Ver > Restablecer layout`).
+- Hot-reload de texturas (detectar mtime del PNG). Sigue diferido.
 - Tracy profiler (diferido sin fecha).
+
+## Hito 6 — Serialización de proyectos y mapas
+
+**Objetivo:** persistir el estado del editor en disco (`.moodproj` + `.moodmap`) con JSON versionado. Ciclo completo desde el menú Archivo: nuevo, abrir, guardar, cerrar.
+
+**Criterios de aceptación cumplidos:**
+- `Archivo > Nuevo Proyecto` abre diálogo nativo (portable-file-dialogs), crea estructura `<root>/maps/`, `<root>/textures/`, `<root>/<name>.moodproj` y guarda el estado actual del editor como `maps/default.moodmap`.
+- `Archivo > Abrir Proyecto` filtra `*.moodproj` y carga el mapa default.
+- `Archivo > Guardar` (Ctrl+S) escribe ambos archivos; grayado si no hay proyecto.
+- `Archivo > Cerrar proyecto` vuelve al mapa de prueba hardcodeado.
+- Título dinámico `MoodEngine Editor - <name>` con `*` si hay cambios sin guardar.
+- Versionado: `k_MoodmapFormatVersion = 1`, `k_MoodprojFormatVersion = 1`. Cargar versión futura falla con mensaje claro.
+- Tests: 61 casos / 281 asserciones (+6 JSON helpers, +6 SceneSerializer, +7 ProjectSerializer, +7 AssetManager con factory mock).
+- Bonus (Bloque 0): `GridRenderer` extraído, `ViewportPick` + hover cyan, drag & drop Asset Browser→tile, pan estilo Blender (middle-drag), `Ver > Restablecer layout`, debug lines 2 px, tests AssetManager.
+
+**Siguiente paso tras completarlo:** Hito 7 — Entidades, componentes, jerarquía. Integrar EnTT detrás de una fachada (`Entity`, `Scene`), panel Hierarchy (árbol de entidades), Inspector funcional editando componentes. Componentes básicos: `Transform`, `MeshRenderer`, `Camera`, `Light`.
+
+### Pendientes menores detectados en Hito 6
+
+Ver `docs/PLAN_HITO6.md` sección "Pendientes que quedan para Hito 7 o posterior":
+- Bloque 5 (editor state persistence) diferido — polish UX, no bloqueante.
+- "Guardar como" completo (hoy duplica estructura via Nuevo Proyecto).
+- Diálogo de confirmación para descartar cambios sin guardar (Cerrar/Abrir/Nuevo).
+- UI para múltiples mapas por proyecto (el schema ya los soporta).
+- Hot-reload de `.moodmap` editado externamente.
