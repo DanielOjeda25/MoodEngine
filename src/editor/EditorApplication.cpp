@@ -16,6 +16,7 @@
 #include "systems/GridRenderer.h"
 #include "systems/PhysicsSystem.h"
 
+#include <nlohmann/json.hpp>
 #include <portable-file-dialogs.h>
 
 // glad/gl.h debe ir antes que cualquier otro header que pueda incluir GL
@@ -31,6 +32,8 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
+#include <cstring>
+#include <fstream>
 #include <stdexcept>
 
 namespace Mood {
@@ -38,6 +41,43 @@ namespace Mood {
 namespace {
 
 constexpr const char* k_GlslVersion = "#version 450 core";
+
+// Callback que recibe el driver para cada warning/error GL. Filtra por
+// severidad y rutea al logger `render` con el nivel equivalente. Solo se
+// activa si el contexto fue creado con el debug bit (builds Debug).
+void APIENTRY glDebugCallback(GLenum /*source*/, GLenum type, GLuint id,
+                               GLenum severity, GLsizei /*length*/,
+                               const GLchar* message, const void* /*userParam*/) {
+    // Filtrar notifications verbosos del driver (buffer info, etc.).
+    if (severity == GL_DEBUG_SEVERITY_NOTIFICATION) return;
+
+    // Silenciar warnings conocidos que sabemos benignos y que spamearian la
+    // Console cada frame. Si el driver cambia y empiezan a aparecer otros
+    // mensajes relevantes, el callback los sigue capturando.
+    if (std::strstr(message, "API_ID_LINE_WIDTH") != nullptr) {
+        // glLineWidth(>1.0) esta deprecated en Core Profile pero todos los
+        // drivers actuales lo honran. Lo usamos en el debug draw.
+        return;
+    }
+
+    const char* typeStr = "other";
+    switch (type) {
+        case GL_DEBUG_TYPE_ERROR:               typeStr = "error";       break;
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typeStr = "deprecated";  break;
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  typeStr = "undefined";   break;
+        case GL_DEBUG_TYPE_PORTABILITY:         typeStr = "portability"; break;
+        case GL_DEBUG_TYPE_PERFORMANCE:         typeStr = "perf";        break;
+        default: break;
+    }
+
+    if (severity == GL_DEBUG_SEVERITY_HIGH) {
+        Mood::Log::render()->error("[GL {} #{}] {}", typeStr, id, message);
+    } else if (severity == GL_DEBUG_SEVERITY_MEDIUM) {
+        Mood::Log::render()->warn("[GL {} #{}] {}", typeStr, id, message);
+    } else {
+        Mood::Log::render()->debug("[GL {} #{}] {}", typeStr, id, message);
+    }
+}
 
 // Dimensiones del AABB del jugador (0.6 x 1.8 x 0.6 m). Centrado en la
 // posicion de la camara FPS. Escala SI realista: una persona promedio.
@@ -70,6 +110,22 @@ EditorApplication::EditorApplication() {
     Log::render()->info("GPU: {} {}",
         reinterpret_cast<const char*>(glGetString(GL_VENDOR)),
         reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+
+    // Debug context callback: solo si el driver expone la extension y el
+    // contexto fue creado con el flag (builds Debug). En Release el callback
+    // no esta enganchado y no cuesta nada.
+    {
+        GLint flags = 0;
+        glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
+        if ((flags & GL_CONTEXT_FLAG_DEBUG_BIT) != 0) {
+            glEnable(GL_DEBUG_OUTPUT);
+            glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS); // stacktrace util al paso
+            glDebugMessageCallback(glDebugCallback, nullptr);
+            glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE,
+                                  0, nullptr, GL_TRUE);
+            Log::render()->info("GL debug output enganchado");
+        }
+    }
 
     // --- Dear ImGui ---
     IMGUI_CHECKVERSION();
@@ -120,6 +176,10 @@ EditorApplication::EditorApplication() {
     updateWindowTitle();
 
     MOOD_LOG_INFO("Editor listo");
+
+    // Restaurar estado de la sesion anterior (ultimo proyecto, flags).
+    // Silencioso si no hay archivo o si el ultimo proyecto desaparecio.
+    loadEditorState();
 }
 
 void EditorApplication::buildInitialTestMap() {
@@ -164,7 +224,35 @@ void EditorApplication::markDirty() {
     }
 }
 
+bool EditorApplication::confirmDiscardChanges() {
+    if (!m_projectDirty) return true;
+
+    const auto choice = pfd::message(
+        "MoodEngine — Cambios sin guardar",
+        "Hay cambios sin guardar en el proyecto actual.\n\n"
+        "Si - guardar antes de continuar\n"
+        "No - descartar los cambios\n"
+        "Cancelar - volver al editor",
+        pfd::choice::yes_no_cancel,
+        pfd::icon::question).result();
+
+    switch (choice) {
+        case pfd::button::yes:
+            handleSave();
+            // Si el save fallo (p.ej. disco lleno), m_projectDirty sigue
+            // en true y abortamos la accion.
+            return !m_projectDirty;
+        case pfd::button::no:
+            return true;
+        case pfd::button::cancel:
+        default:
+            return false;
+    }
+}
+
 void EditorApplication::handleNewProject() {
+    if (!confirmDiscardChanges()) return;
+
     const auto cwd = std::filesystem::current_path().generic_string();
     const std::string folder = pfd::select_folder(
         "Carpeta del nuevo proyecto", cwd).result();
@@ -201,6 +289,8 @@ void EditorApplication::handleNewProject() {
 }
 
 void EditorApplication::handleOpenProject() {
+    if (!confirmDiscardChanges()) return;
+
     const auto cwd = std::filesystem::current_path().generic_string();
     const auto selection = pfd::open_file(
         "Abrir proyecto", cwd,
@@ -269,6 +359,8 @@ void EditorApplication::handleSaveAs() {
 
 void EditorApplication::handleCloseProject() {
     if (!m_project.has_value()) return;
+    if (!confirmDiscardChanges()) return;
+
     Log::editor()->info("Cerrando proyecto: {}", m_project->name);
     m_project.reset();
     m_currentMapPath.clear();
@@ -277,7 +369,66 @@ void EditorApplication::handleCloseProject() {
     updateWindowTitle();
 }
 
+void EditorApplication::loadEditorState() {
+    const auto path = std::filesystem::path(".mood") / "editor_state.json";
+    std::ifstream in(path);
+    if (!in.is_open()) return;
+
+    nlohmann::json j;
+    try { in >> j; } catch (...) { return; }
+
+    // Debug flags (no falla si faltan).
+    m_debugDraw = j.value("debugDraw", false);
+
+    // Si hay un ultimo proyecto y existe en disco, reabrirlo silenciosamente.
+    const std::string lastProjectPath = j.value("lastProject", std::string{});
+    if (lastProjectPath.empty()) return;
+    const std::filesystem::path moodproj(lastProjectPath);
+    if (!std::filesystem::exists(moodproj)) {
+        Log::editor()->info("Ultimo proyecto ya no existe en disco: {}",
+                            lastProjectPath);
+        return;
+    }
+
+    auto loaded = ProjectSerializer::load(moodproj);
+    if (!loaded.has_value() || loaded->maps.empty()) return;
+
+    const auto mapPath = loaded->root / loaded->defaultMap;
+    auto savedMap = SceneSerializer::load(mapPath, *m_assetManager);
+    if (!savedMap.has_value()) return;
+
+    m_map = std::move(savedMap->map);
+    m_project = std::move(loaded);
+    m_currentMapPath = m_project->defaultMap;
+    m_projectDirty = false;
+    Log::editor()->info("Proyecto restaurado de la sesion anterior: {}",
+                        m_project->name);
+}
+
+void EditorApplication::saveEditorState() const {
+    std::error_code ec;
+    std::filesystem::create_directories(".mood", ec);
+    if (ec) return; // falla silenciosa: no es critico
+
+    nlohmann::json j;
+    j["debugDraw"] = m_debugDraw;
+    if (m_project.has_value()) {
+        const auto moodproj = m_project->root /
+            (m_project->name + ".moodproj");
+        j["lastProject"] = moodproj.generic_string();
+    }
+
+    std::ofstream out(std::filesystem::path(".mood") / "editor_state.json");
+    if (!out.is_open()) return;
+    out << j.dump(2);
+}
+
 EditorApplication::~EditorApplication() {
+    // Persistir preferencias antes de tirar cualquier recurso. Falla silencio-
+    // samente si no puede escribir — no queremos que un shutdown explote por
+    // un archivo de estado corrupto.
+    saveEditorState();
+
     // Los recursos GL dependen del contexto; liberar ANTES de destruir ImGui
     // y el contexto (el destructor del Window destruye el contexto al final).
     // GridRenderer primero: solo guarda referencias, pero es dependiente.

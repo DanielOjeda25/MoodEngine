@@ -16,6 +16,11 @@ Window::Window(const WindowSpec& spec) : m_spec(spec) {
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+#ifdef _DEBUG
+    // Pedimos un contexto con debug bit activo en builds Debug. En Release
+    // el flag no se setea (evitamos el overhead de la validacion GL).
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+#endif
 
     Uint32 flags = SDL_WINDOW_OPENGL;
     if (m_spec.resizable) flags |= SDL_WINDOW_RESIZABLE;

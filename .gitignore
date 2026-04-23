@@ -37,6 +37,7 @@ Thumbs.db
 
 # Estado de runtime
 imgui.ini
+.mood/
 
 # Herramientas de agentes de codigo
 .claude/

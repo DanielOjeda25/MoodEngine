@@ -7,10 +7,18 @@
 namespace Mood {
 
 void OpenGLRenderer::init() {
-    // Depth test activado para mallas 3D. Cull face queda para Hito 4+.
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    Log::render()->info("OpenGLRenderer listo (depth test activo)");
+
+    // Back-face culling: las mallas opacas del motor tienen winding CCW
+    // vistas desde afuera. PrimitiveMeshes::createCubeMesh respeta el orden;
+    // mallas futuras con winding incorrecto se veran "hundidas" y el bug es
+    // obvio. Ahorra ~50% de fragment shader cuando la escena es opaca.
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
+
+    Log::render()->info("OpenGLRenderer listo (depth test + back-face culling)");
 }
 
 void OpenGLRenderer::beginFrame(const ClearValues& clear) {

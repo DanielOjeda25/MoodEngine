@@ -82,6 +82,20 @@ private:
     void handleSaveAs();
     void handleCloseProject();
 
+    /// @brief Si hay cambios sin guardar, pregunta al usuario que hacer
+    ///        (guardar / descartar / cancelar). Devuelve `true` si la accion
+    ///        puede proceder, `false` si hay que abortarla.
+    bool confirmDiscardChanges();
+
+    /// @brief Lee `<cwd>/.mood/editor_state.json` si existe y restaura el
+    ///        ultimo proyecto abierto (+ flags de debug). Silencioso si falla.
+    void loadEditorState();
+
+    /// @brief Escribe el estado actual a `<cwd>/.mood/editor_state.json`.
+    ///        Silencioso si falla (no queremos que un shutdown se rompa por
+    ///        un archivo de preferencias).
+    void saveEditorState() const;
+
     std::unique_ptr<Window> m_window;
 
     // RHI y recursos graficos. Se destruyen en orden inverso antes del
