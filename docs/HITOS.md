@@ -103,8 +103,9 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - ~~Drag & drop Asset Browser → tile del viewport.~~ Resuelto en Hito 6 Bloque 0 con `ViewportPick` + `BeginDragDropTarget`.
 - ~~Extraer `GridRenderer` de `EditorApplication`.~~ Resuelto en Hito 6 Bloque 0.
 - ~~Menú "Restablecer layout".~~ Resuelto en Hito 6 Bloque 0 (`Ver > Restablecer layout`).
-- Hot-reload de texturas (detectar mtime del PNG). Sigue diferido.
-- Tracy profiler (diferido sin fecha).
+- **Color configurable del AABB del jugador en debug draw**. Sigue hardcoded verde en `EditorApplication::renderSceneToViewport`. Polish; entra cuando exista un panel de Settings.
+- **Hot-reload del `AssetBrowserPanel`**: el botón "Recargar" re-escanea filesystem pero no invalida texturas ya cargadas en GPU. Detectar mtime y re-subir con `glTexImage2D`.
+- **Tracy profiler**: diferido desde Hito 3. Evaluar cuando aparezcan cuellos de botella (Hito 11 iluminación, Hito 17 PBR).
 
 ## Hito 6 — Serialización de proyectos y mapas
 
