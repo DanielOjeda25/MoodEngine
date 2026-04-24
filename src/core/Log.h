@@ -33,6 +33,10 @@ std::shared_ptr<spdlog::logger>& world();
 ///        fallbacks, cache hits/misses.
 std::shared_ptr<spdlog::logger>& assets();
 
+/// @brief Logger de scripts Lua (`script`): `log.info/warn` desde Lua,
+///        errores de carga/ejecucion, mensajes de hot-reload.
+std::shared_ptr<spdlog::logger>& script();
+
 /// @brief Sink en memoria con las últimas 512 entradas de log. El
 ///        `ConsolePanel` del editor lo consume para mostrar los logs en vivo.
 ///        `nullptr` si no se llamó a `init()` aún.

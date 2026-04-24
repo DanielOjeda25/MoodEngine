@@ -84,4 +84,18 @@ struct LightComponent {
     float intensity = 1.0f;
 };
 
+/// @brief Behavior en Lua (Hito 8). `path` es logico (ej. "scripts/rotator.lua").
+///        `loaded` lo flipea `ScriptSystem` cuando carga con exito;
+///        `lastError` guarda el ultimo mensaje para mostrarlo en el Inspector.
+///        El `sol::state` del script NO vive aca (sol::state no es copiable);
+///        lo maneja el `ScriptSystem` en un mapa `entt::entity -> sol::state`.
+struct ScriptComponent {
+    std::string path;
+    bool loaded = false;
+    std::string lastError;
+
+    ScriptComponent() = default;
+    ScriptComponent(std::string p) : path(std::move(p)) {}
+};
+
 } // namespace Mood
