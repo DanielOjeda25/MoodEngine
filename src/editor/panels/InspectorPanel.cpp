@@ -103,6 +103,35 @@ void InspectorPanel::onImGuiRender() {
         if (ImGui::DragFloat("intensity##lt", &lt.intensity, 0.01f, 0.0f, 100.0f)) {
             m_editedThisFrame = true;
         }
+        ImGui::Separator();
+    }
+
+    // --- ScriptComponent ---
+    // Cambiar el path o pulsar Recargar pone `loaded=false`: el ScriptSystem
+    // crea un sol::state fresco la proxima vez que corra update(). Eso es
+    // mas fuerte que el hot-reload por mtime (que reutiliza el state);
+    // cuando el usuario recarga manualmente lo habitual es querer un reset
+    // limpio de globals.
+    if (e.hasComponent<ScriptComponent>()) {
+        auto& sc = e.getComponent<ScriptComponent>();
+        ImGui::TextDisabled("Script");
+        char buf[512];
+        std::snprintf(buf, sizeof(buf), "%s", sc.path.c_str());
+        if (ImGui::InputText("path##sc", buf, sizeof(buf))) {
+            sc.path = buf;
+            sc.loaded = false;
+            sc.lastError.clear();
+            m_editedThisFrame = true;
+        }
+        if (ImGui::Button("Recargar##sc")) {
+            sc.loaded = false;
+            sc.lastError.clear();
+        }
+        if (!sc.lastError.empty()) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
+            ImGui::TextWrapped("Error: %s", sc.lastError.c_str());
+            ImGui::PopStyleColor();
+        }
     }
 
     ImGui::End();

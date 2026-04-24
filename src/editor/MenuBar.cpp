@@ -56,6 +56,13 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Acerca de")) {
                 m_showAboutPopup = true;
             }
+            ImGui::Separator();
+            // Demo Hito 8: spawnea una entidad flotante con ScriptComponent
+            // que apunta a assets/scripts/rotator.lua. Util para validar
+            // que el ScriptSystem engancha sin tocar nada del mapa.
+            if (ImGui::MenuItem("Agregar rotador demo", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnRotator();
+            }
             ImGui::EndMenu();
         }
 

@@ -66,6 +66,16 @@ public:
     Entity selectedEntity() const { return m_selectedEntity; }
     void setSelectedEntity(Entity e) { m_selectedEntity = e; }
 
+    /// @brief Demo del Hito 8: request para crear una entidad con
+    ///        ScriptComponent apuntando a `scripts/rotator.lua`.
+    ///        `EditorApplication` la consume despues de `draw()`.
+    void requestSpawnRotator() { m_spawnRotatorRequested = true; }
+    bool consumeSpawnRotatorRequest() {
+        const bool r = m_spawnRotatorRequested;
+        m_spawnRotatorRequested = false;
+        return r;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -131,6 +141,7 @@ private:
 
     ProjectAction m_projectAction = ProjectAction::None;
     bool m_hasProject = false;
+    bool m_spawnRotatorRequested = false;
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;
 

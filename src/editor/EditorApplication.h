@@ -30,6 +30,7 @@ class IShader;
 class IMesh;
 class OpenGLDebugRenderer;
 class GridRenderer;
+class ScriptSystem;
 
 class EditorApplication {
 public:
@@ -127,6 +128,7 @@ private:
     std::unique_ptr<IMesh> m_cubeMesh;
     std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
     std::unique_ptr<GridRenderer> m_gridRenderer;
+    std::unique_ptr<ScriptSystem> m_scriptSystem;
 
     // AssetManager: owner de todas las texturas cargadas. Se destruye ANTES
     // del contexto GL (ver destructor).

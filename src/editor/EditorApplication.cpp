@@ -18,6 +18,7 @@
 #include "engine/serialization/SceneSerializer.h"
 #include "systems/GridRenderer.h"
 #include "systems/PhysicsSystem.h"
+#include "systems/ScriptSystem.h"
 
 #include <nlohmann/json.hpp>
 #include <portable-file-dialogs.h>
@@ -176,6 +177,7 @@ EditorApplication::EditorApplication() {
     m_ui.viewport().setFramebuffer(m_viewportFb.get());
 
     m_scene = std::make_unique<Scene>();
+    m_scriptSystem = std::make_unique<ScriptSystem>();
 
     // Inyectar dependencias en los paneles de ECS.
     m_ui.hierarchy().setScene(m_scene.get());
@@ -226,6 +228,10 @@ void EditorApplication::rebuildSceneFromMap() {
     m_scene->registry().clear();
     m_ui.setSelectedEntity(Entity{}); // la seleccion apuntaba a un handle ya
                                        // destruido; invalidarla.
+    // Los sol::state mapeados por entt::entity del ScriptSystem quedan
+    // huerfanos: hay que tirarlos antes de recrear entidades con los
+    // mismos handles numericos.
+    if (m_scriptSystem) m_scriptSystem->clear();
 
     const glm::vec3 origin = mapWorldOrigin();
     const f32 tileSize = m_map.tileSize();
@@ -526,6 +532,7 @@ EditorApplication::~EditorApplication() {
     // Los recursos GL dependen del contexto; liberar ANTES de destruir ImGui
     // y el contexto (el destructor del Window destruye el contexto al final).
     // GridRenderer primero: solo guarda referencias, pero es dependiente.
+    m_scriptSystem.reset(); // sol::state destructors; no dependen de GL
     m_gridRenderer.reset();
     m_debugRenderer.reset();
     m_assetManager.reset(); // dueño de las texturas
@@ -696,6 +703,29 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
 
     m_gridRenderer->draw(m_map, origin, view, projection);
 
+    // Render Scene-driven para entidades que NO vienen del grid (ej. el
+    // rotador demo del Hito 8). El GridRenderer ya dibujo las tiles, asi
+    // que se saltean por prefijo del tag — la migracion total a render
+    // scene-driven vive en Hito 10 (meshes via assimp).
+    if (m_scene) {
+        m_defaultShader->bind();
+        m_defaultShader->setMat4("uView", view);
+        m_defaultShader->setMat4("uProjection", projection);
+        m_defaultShader->setInt("uTexture", 0);
+
+        m_scene->forEach<TransformComponent, MeshRendererComponent>(
+            [&](Entity e, TransformComponent& t, MeshRendererComponent& mr) {
+                if (e.hasComponent<TagComponent>()) {
+                    const auto& tag = e.getComponent<TagComponent>();
+                    if (tag.name.rfind("Tile_", 0) == 0) return;
+                }
+                if (mr.mesh == nullptr) return;
+                m_assetManager->getTexture(mr.texture)->bind(0);
+                m_defaultShader->setMat4("uModel", t.worldMatrix());
+                m_renderer->drawMesh(*mr.mesh, *m_defaultShader);
+            });
+    }
+
     // Tile picking: solo en Editor Mode, cuando el cursor esta sobre la
     // imagen del viewport. Resultado se usa abajo para el hover highlight
     // y mas adelante para drag & drop desde el Asset Browser.
@@ -805,6 +835,20 @@ int EditorApplication::run() {
             }
         }
 
+        // Demo Hito 8: "Ayuda > Agregar rotador demo". Crea una entidad
+        // flotante sobre el centro del mapa con ScriptComponent apuntando a
+        // assets/scripts/rotator.lua. Util para validar el ScriptSystem sin
+        // tocar el mapa ni el serializer.
+        if (m_ui.consumeSpawnRotatorRequest() && m_scene) {
+            Entity r = m_scene->createEntity("Rotador");
+            auto& t = r.getComponent<TransformComponent>();
+            t.position = glm::vec3(0.0f, 4.0f, 0.0f);
+            t.scale = glm::vec3(1.0f);
+            r.addComponent<MeshRendererComponent>(m_cubeMesh.get(), m_wallTextureId);
+            r.addComponent<ScriptComponent>(std::string{"assets/scripts/rotator.lua"});
+            Log::editor()->info("Spawned rotador demo en (0, 4, 0)");
+        }
+
         // 2.5) Drop de textura desde AssetBrowser: usar el tile picking para
         //      convertir las NDC del drop en coords de tile y aplicar.
         const ViewportPanel::TextureDrop drop = m_ui.viewport().consumeTextureDrop();
@@ -828,6 +872,13 @@ int EditorApplication::run() {
 
         // 3) Input -> camaras.
         updateCameras(dt);
+
+        // 3.5) Scripts Lua: correr onUpdate(self, dt) en cada entidad con
+        //      ScriptComponent. Antes del render para que los cambios en
+        //      Transform se vean este mismo frame.
+        if (m_scene && m_scriptSystem) {
+            m_scriptSystem->update(*m_scene, dt);
+        }
 
         // 4) Render 3D al framebuffer offscreen (el panel mostrara la textura).
         renderSceneToViewport(dt);
