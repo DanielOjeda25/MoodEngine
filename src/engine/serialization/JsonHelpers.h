@@ -31,7 +31,10 @@ namespace Mood {
 // Incrementar SOLO cuando cambia la forma en que se serializa (no al agregar
 // campos opcionales con default al leer).
 
-constexpr int k_MoodmapFormatVersion = 1;
+// v2 (Hito 10): agrega seccion `entities` al .moodmap para persistir
+// entidades no-tile (modelos importados via drag & drop). Archivos v1 se
+// leen sin cambios (entities queda vacio).
+constexpr int k_MoodmapFormatVersion = 2;
 constexpr int k_MoodprojFormatVersion = 1;
 
 /// @brief Verifica que la version declarada en un archivo sea legible.

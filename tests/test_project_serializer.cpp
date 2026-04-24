@@ -205,14 +205,14 @@ TEST_CASE("ProjectSerializer + SceneSerializer: round-trip de dos proyectos en l
     REQUIRE(a.has_value());
     GridMap mapA(4u, 4u, 1.0f);
     mapA.setTile(0, 0, TileType::SolidWall, t1);
-    SceneSerializer::save(mapA, "A", assets, a->root / a->defaultMap);
+    SceneSerializer::save(mapA, "A", nullptr, assets, a->root / a->defaultMap);
 
     // Proyecto B con un tile en (3,3) -- distinto a A
     const auto b = ProjectSerializer::createNewProject(root, "B");
     REQUIRE(b.has_value());
     GridMap mapB(4u, 4u, 1.0f);
     mapB.setTile(3, 3, TileType::SolidWall, t2);
-    SceneSerializer::save(mapB, "B", assets, b->root / b->defaultMap);
+    SceneSerializer::save(mapB, "B", nullptr, assets, b->root / b->defaultMap);
 
     // Releer A y verificar que su tile sigue en (0,0), sin el de B.
     const auto reA = SceneSerializer::load(a->root / a->defaultMap, assets);

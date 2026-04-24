@@ -394,7 +394,7 @@ void EditorApplication::handleNewProject() {
 
     const auto mapPath = created->root / created->defaultMap;
     std::filesystem::create_directories(mapPath.parent_path());
-    SceneSerializer::save(m_map, created->name, *m_assetManager, mapPath);
+    SceneSerializer::save(m_map, created->name, m_scene.get(), *m_assetManager, mapPath);
 
     m_project = std::move(created);
     m_currentMapPath = m_project->defaultMap;
@@ -446,6 +446,30 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
 
     m_map = std::move(savedMap->map);
     rebuildSceneFromMap();
+    // Entidades no-tile persistidas (Hito 10 Bloque 6): se aplican DESPUES
+    // del rebuildSceneFromMap que crea las Tile_X_Y. Si no hay entidades
+    // (archivo v1 o mapa sin meshes dropeados), el loop no hace nada.
+    if (m_scene) {
+        for (const auto& se : savedMap->entities) {
+            Entity e = m_scene->createEntity(se.tag);
+            auto& t = e.getComponent<TransformComponent>();
+            t.position      = se.position;
+            t.rotationEuler = se.rotationEuler;
+            t.scale         = se.scale;
+            if (se.meshRenderer.has_value()) {
+                const auto& mr = *se.meshRenderer;
+                const MeshAssetId meshId = m_assetManager->loadMesh(mr.meshPath);
+                std::vector<TextureAssetId> mats;
+                mats.reserve(mr.materials.size());
+                for (const auto& texPath : mr.materials) {
+                    mats.push_back(texPath.empty()
+                        ? m_assetManager->missingTextureId()
+                        : m_assetManager->loadTexture(texPath));
+                }
+                e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
+            }
+        }
+    }
     m_project = std::move(loaded);
     m_currentMapPath = m_project->defaultMap;
     m_projectDirty = false;
@@ -482,7 +506,7 @@ void EditorApplication::handleSave() {
     std::filesystem::create_directories(mapPath.parent_path());
     try {
         SceneSerializer::save(m_map, m_currentMapPath.stem().generic_string(),
-                              *m_assetManager, mapPath);
+                              m_scene.get(), *m_assetManager, mapPath);
         ProjectSerializer::save(*m_project);
         m_projectDirty = false;
         updateWindowTitle();

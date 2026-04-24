@@ -18,6 +18,7 @@ add_executable(mood_tests
     test_lua.cpp
     test_lua_bindings.cpp
     test_audio.cpp
+    test_mesh_asset.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -61,4 +62,8 @@ target_link_libraries(mood_tests PRIVATE
     glm::glm
 )
 
-add_test(NAME mood_tests COMMAND mood_tests)
+# WORKING_DIRECTORY = root del repo: los tests que tocan el disco (ej.
+# test_mesh_asset cargando assets/meshes/pyramid.obj via assimp) resuelven
+# paths logicos relativos a ese root.
+add_test(NAME mood_tests COMMAND mood_tests
+         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

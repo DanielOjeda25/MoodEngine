@@ -5,6 +5,9 @@
 
 #include "engine/assets/AssetManager.h"
 #include "engine/render/ITexture.h"
+#include "engine/scene/Components.h"
+#include "engine/scene/Entity.h"
+#include "engine/scene/Scene.h"
 #include "engine/serialization/JsonHelpers.h"
 #include "engine/serialization/SceneSerializer.h"
 #include "engine/world/GridMap.h"
@@ -59,7 +62,7 @@ TEST_CASE("SceneSerializer: round-trip de un mapa 3x3 con texturas distintas") {
     // resto queda Empty con texture = 0 (missing)
 
     const auto path = tempPath("map_roundtrip.moodmap");
-    SceneSerializer::save(original, "prueba", assets, path);
+    SceneSerializer::save(original, "prueba", nullptr, assets, path);
     REQUIRE(std::filesystem::exists(path));
 
     const auto loaded = SceneSerializer::load(path, assets);
@@ -150,7 +153,7 @@ TEST_CASE("SceneSerializer: save escribe un JSON parseable con los campos clave"
     m.setTile(0, 0, TileType::SolidWall, assets.loadTexture("textures/grid.png"));
 
     const auto path = tempPath("parseable.moodmap");
-    SceneSerializer::save(m, "inspeccion", assets, path);
+    SceneSerializer::save(m, "inspeccion", nullptr, assets, path);
 
     nlohmann::json j;
     {
@@ -166,5 +169,78 @@ TEST_CASE("SceneSerializer: save escribe un JSON parseable con los campos clave"
     CHECK(j.at("tiles")[0].at("texture") == "textures/grid.png");
     CHECK(j.at("tiles")[1].at("type") == "empty");
 
+    std::filesystem::remove(path);
+}
+
+// --- Round-trip de entidades no-tile (Hito 10 Bloque 6) ---
+
+TEST_CASE("SceneSerializer: round-trip entidades con MeshRenderer (Hito 10)") {
+    AssetManager assets("assets", nullFactory());
+    const TextureAssetId brick = assets.loadTexture("textures/brick.png");
+
+    // Scene con 2 entidades no-tile + una tile-like (que NO deberia
+    // serializarse por el filtro de prefijo "Tile_").
+    Scene scene;
+    {
+        Entity a = scene.createEntity("Mesh_pyramid");
+        auto& ta = a.getComponent<TransformComponent>();
+        ta.position = glm::vec3(1.0f, 2.0f, 3.0f);
+        ta.rotationEuler = glm::vec3(45.0f, 0.0f, 0.0f);
+        ta.scale = glm::vec3(2.0f);
+        a.addComponent<MeshRendererComponent>(
+            MeshAssetId{0}, std::vector<TextureAssetId>{brick, brick});
+
+        // Una tile-like que debe ser FILTRADA (solo por prefijo del tag).
+        Entity t = scene.createEntity("Tile_0_0");
+        t.addComponent<MeshRendererComponent>(MeshAssetId{0}, TextureAssetId{0});
+
+        // Sin MeshRenderer: tambien filtrada (no tiene nada para serializar).
+        Entity z = scene.createEntity("vacio");
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("entities_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1); // solo "Mesh_pyramid" entra
+
+    const auto& se = loaded->entities[0];
+    CHECK(se.tag == "Mesh_pyramid");
+    CHECK(se.position.x == doctest::Approx(1.0f));
+    CHECK(se.position.y == doctest::Approx(2.0f));
+    CHECK(se.position.z == doctest::Approx(3.0f));
+    CHECK(se.rotationEuler.x == doctest::Approx(45.0f));
+    CHECK(se.scale.x == doctest::Approx(2.0f));
+    REQUIRE(se.meshRenderer.has_value());
+    // El mesh id 0 es el cubo fallback; path logico = "__missing_cube".
+    CHECK(se.meshRenderer->meshPath == "__missing_cube");
+    CHECK(se.meshRenderer->materials.size() == 2);
+    CHECK(se.meshRenderer->materials[0] == "textures/brick.png");
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: archivo v1 (sin 'entities') se carga con lista vacia") {
+    // Simula un .moodmap viejo: sin campo `entities`. Debe seguir cargando.
+    const auto path = tempPath("v1_legacy.moodmap");
+    {
+        nlohmann::json j;
+        j["version"]  = 1; // version anterior
+        j["name"]     = "legacy";
+        j["width"]    = 1;
+        j["height"]   = 1;
+        j["tileSize"] = 1.0f;
+        j["tiles"]    = nlohmann::json::array({
+            {{"type", "empty"}, {"texture", "textures/missing.png"}}
+        });
+        std::ofstream out(path);
+        out << j.dump();
+    }
+    AssetManager assets("assets", nullFactory());
+    const auto r = SceneSerializer::load(path, assets);
+    REQUIRE(r.has_value());
+    CHECK(r->entities.empty());
     std::filesystem::remove(path);
 }
