@@ -505,3 +505,44 @@ con él y el filtro por prefijo desaparece.
   explícitamente diferido al 10.
 **Revisar si:** aparece otro caso de "entidades con MeshRenderer no-tile"
 antes del Hito 10; ahí vale la pena el marker component.
+
+## 2026-04-24: miniaudio v0.11.21 vendored single-header (Hito 9)
+
+**Contexto:** elección de backend de audio para el motor.
+**Decisión:** miniaudio v0.11.21 (mackron/miniaudio) vendored como single-header en `external/miniaudio/`. Target CMake INTERFACE; implementación materializada en una única TU `src/engine/audio/miniaudio_impl.cpp` con `MINIAUDIO_IMPLEMENTATION` + `MA_NO_ENCODING` + `MA_NO_GENERATION`. Mismo patrón que stb.
+**Razones:** cero instalación/ecosistema (es C, no C++ estándar), soporta WAV/OGG/MP3/FLAC de stock, high-level API `ma_engine` incluye resource manager (cacheo de PCM) y sonidos posicionales 3D, dominio público / MIT-0. La alternativa OpenAL Soft requiere CMake build + config por plataforma. FMOD/Wwise = licencia. SDL_mixer es funcional pero atado a SDL específicamente y menos moderno.
+**Alternativas consideradas:** OpenAL Soft (más complejo de integrar, target CMake pesado), SDL_mixer (API menos rica, no positional modern), FMOD (licencia comercial).
+**Revisar si:** necesitamos features que miniaudio no expone (reverb fullband, ambisonics, HRTF externo). En ese caso, swap backend; la interfaz `AudioDevice` es agnóstica.
+
+## 2026-04-24: `AudioDevice` null-safe (modo mute al fallar init)
+
+**Contexto:** CI sin audio hardware, máquinas del dev con driver roto, y tests unitarios que corren en máquinas sin sonido.
+**Decisión:** si `ma_engine_init(nullptr, &engine)` falla, `AudioDevice` queda en estado inválido. `isValid()` retorna false; `play/stop/setListener/stopAll` son no-ops silenciosos. El resto del motor no se entera.
+**Razones:** no queremos que un driver raro rompa el editor completo ni que los tests requieran hardware. Los games con opción `--nosound` implementan lo mismo históricamente.
+**Alternativas consideradas:** throw en init y que `EditorApplication` atrape (más ruidoso, mismo resultado). Poll del sistema antes de intentar init (no evita drivers corruptos).
+**Revisar si:** aparecen casos donde necesitamos saber si el device falló para mostrar UI ("audio no disponible"). Hoy alcanza con el warn del log.
+
+## 2026-04-24: `AudioClip` solo metadata — PCM en resource manager de miniaudio
+
+**Contexto:** diseño del segundo tipo de asset del motor. Primer instinto: `AudioClip` owner del buffer de PCM decodificado.
+**Decisión:** `AudioClip` guarda path + metadata (duración, sr, canales). El PCM lo maneja el resource manager interno de `ma_engine` (via `ma_sound_init_from_file` que cachea). El `AssetManager` solo lleva la lista de clips (identidad + path); `AudioDevice::play` crea `ma_sound` instances fresh cada vez, compartiendo el PCM del cache.
+**Razones:** miniaudio ya hace resource management; duplicarlo sería redundante. AudioClip se mantiene liviano y serializable (solo string path). Las reproducciones concurrentes del mismo clip (múltiples enemigos golpeando, ambient loops) salen automáticas.
+**Alternativas consideradas:** cargar PCM completo en `AudioClip` con `ma_decoder_decode_buffer` + `ma_audio_buffer`: más control pero duplica trabajo del resource manager. Útil solo si el motor cargara miniaudio solo como decodificador (sin device).
+**Revisar si:** necesitamos custom DSP por clip (filters, resampling), o streaming de archivos grandes donde el cache no-streaming mata la RAM.
+
+## 2026-04-24: `AudioAssetId` distinto de `TextureAssetId`
+
+**Contexto:** `AssetManager` ya tiene `TextureAssetId = u32` con `0 = missing`. Al agregar audio es tentador reusar el tipo.
+**Decisión:** `AudioAssetId = u32` como alias separado. Namespaces numéricos distintos (texturas y audio crecen independiente), `missingAudioId() == 0` también pero no colisiona con `missingTextureId() == 0` porque son accesores diferentes.
+**Razones:** typesafety: un bug que pase un id de textura a `getAudio` es silencioso si son el mismo tipo. Alias separados hacen el error obvio en el code review. Overhead: cero (mismo tamaño de alias).
+**Alternativas consideradas:** `AssetId<Texture>` / `AssetId<Audio>` strongly-typed. Mejor teoría, pero cada call-site requiere instanciación explícita y el cast a u32 para logs/serialización se vuelve ritual. El alias separado da el 80% del beneficio con el 20% del costo.
+**Revisar si:** aparece un tercer tipo de asset (meshes en Hito 10). En ese caso, `using MeshAssetId = u32` sigue el mismo patrón; si empiezan a mezclarse, considerar el template strongly-typed.
+
+## 2026-04-24: `AudioSourceComponent` no se serializa en `.moodmap`
+
+**Contexto:** el `.moodmap` actual serializa tiles + texturas asignadas, no entidades ECS completas. `ScriptComponent` tampoco se serializa (decisión Hito 8).
+**Decisión:** `AudioSourceComponent` tampoco se persiste. Los audio sources se spawnean programáticamente (ej. el demo de `Ayuda > Agregar audio source demo`) o (futuro) desde scripts Lua.
+**Razones:** consistente con `ScriptComponent`. El modelo Scene-driven authoritative se discute en Hito 10+ cuando aparezcan meshes de archivo. Serializar un subconjunto de componentes ahora fuerza un diseño a medias.
+**Alternativas consideradas:** agregar una sección `[audio_sources]` al `.moodmap` ahora. Genera doble fuente de verdad (`SceneSerializer` persiste tiles + esta nueva sección).
+**Revisar si:** cuando entre Scene authoritative en Hito 10+, AudioSourceComponent + ScriptComponent + MeshRendererComponent se persisten juntos en el mismo `[entities]`.
+

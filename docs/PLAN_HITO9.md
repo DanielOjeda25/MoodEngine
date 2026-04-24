@@ -23,70 +23,70 @@ No-goals del hito: listener configurable (por ahora = cámara Play), reverb/efec
 
 ## Bloque 0 — Pendientes arrastrados
 
-- [ ] Revisar pendientes del Hito 8 que puedan bloquear: ninguno esperado (Scripting está autocontenido, no hay deuda hacia audio).
+- [x] Revisar pendientes del Hito 8 que puedan bloquear: ninguno esperado (Scripting está autocontenido, no hay deuda hacia audio).
 
 ## Bloque 1 — miniaudio + AudioDevice
 
-- [ ] Bajar `miniaudio.h` (versión estable más reciente) a `external/miniaudio/` y commitear. Target CMake INTERFACE (solo include path, como stb). Implementación en una única TU `src/engine/audio/miniaudio_impl.cpp` con `#define MINIAUDIO_IMPLEMENTATION`.
-- [ ] `src/engine/audio/AudioDevice.{h,cpp}`: wrapper RAII sobre `ma_engine` (API high-level de miniaudio: device + mixer + decoder + positional).
+- [x] Bajar `miniaudio.h` (versión estable más reciente) a `external/miniaudio/` y commitear. Target CMake INTERFACE (solo include path, como stb). Implementación en una única TU `src/engine/audio/miniaudio_impl.cpp` con `#define MINIAUDIO_IMPLEMENTATION`.
+- [x] `src/engine/audio/AudioDevice.{h,cpp}`: wrapper RAII sobre `ma_engine` (API high-level de miniaudio: device + mixer + decoder + positional).
   - Constructor inicializa device default (mono/stereo autodetect, sample rate default).
   - Destructor cierra limpio.
   - `play(clip, volume, loop, is3D, worldPos) -> SoundHandle`: oneshot o loop, posicional si `is3D`.
   - `stop(SoundHandle)`, `setListener(worldPos, forward, up)`.
   - Errores de inicialización loguean al canal nuevo `audio` y desactivan el device (null object) — el resto del motor no debe crashear si falta audio.
-- [ ] Canal de log `audio` nuevo en `core/Log.{h,cpp}` (misma receta que `script`).
-- [ ] Smoke test en `tests/test_audio.cpp`: cargar device null + reproducir clip desde memoria sin crashear. No toca hardware real (el runner de CI podría no tener sonido).
+- [x] Canal de log `audio` nuevo en `core/Log.{h,cpp}` (misma receta que `script`).
+- [x] Smoke test en `tests/test_audio.cpp`: cargar device null + reproducir clip desde memoria sin crashear. No toca hardware real (el runner de CI podría no tener sonido).
 
 ## Bloque 2 — AudioClip como tipo de asset
 
-- [ ] `src/engine/audio/AudioClip.{h,cpp}`: wrappe a `ma_sound` pre-decodificado (decodificar completo en RAM; para el hito, sin streaming). Path lógico + ma_sound owned + duración + canales.
-- [ ] Extender `AssetManager` con una tabla paralela a la de texturas: `std::vector<std::unique_ptr<AudioClip>> m_audioClips` + `std::vector<std::string> m_audioPaths` + `loadAudio(path) -> AudioAssetId`. Slot 0 reservado para `audio/missing.wav` (beep silencioso o tono corto generado con Python/Pillow análogo a `missing.png`).
-- [ ] Factory inyectable análoga a `TextureFactory`, para testear sin hardware.
-- [ ] Convención: los clips se leen de `assets/audio/` (VFS sandbox: no salir del directorio raíz del proyecto/motor).
+- [x] `src/engine/audio/AudioClip.{h,cpp}`: wrappe a `ma_sound` pre-decodificado (decodificar completo en RAM; para el hito, sin streaming). Path lógico + ma_sound owned + duración + canales.
+- [x] Extender `AssetManager` con una tabla paralela a la de texturas: `std::vector<std::unique_ptr<AudioClip>> m_audioClips` + `std::vector<std::string> m_audioPaths` + `loadAudio(path) -> AudioAssetId`. Slot 0 reservado para `audio/missing.wav` (beep silencioso o tono corto generado con Python/Pillow análogo a `missing.png`).
+- [x] Factory inyectable análoga a `TextureFactory`, para testear sin hardware.
+- [x] Convención: los clips se leen de `assets/audio/` (VFS sandbox: no salir del directorio raíz del proyecto/motor).
 
 ## Bloque 3 — AudioSourceComponent + AudioSystem
 
-- [ ] `Components.h`: `AudioSourceComponent { AudioAssetId clip; float volume = 1.0f; bool loop = false; bool playOnStart = true; bool is3D = false; SoundHandle handle{}; bool started = false; }`.
-- [ ] `src/systems/AudioSystem.{h,cpp}`:
+- [x] `Components.h`: `AudioSourceComponent { AudioAssetId clip; float volume = 1.0f; bool loop = false; bool playOnStart = true; bool is3D = false; SoundHandle handle{}; bool started = false; }`.
+- [x] `src/systems/AudioSystem.{h,cpp}`:
   - Constructor recibe `AudioDevice&`.
   - `update(Scene&, dt, listenerPos, listenerForward, listenerUp)`: por cada entidad con `AudioSourceComponent`:
     - Si `playOnStart && !started`: disparar `device.play(clip, volume, loop, is3D, position)` y guardar `handle`. Marcar `started`.
     - Si `is3D`: actualizar posición del sound handle con la del `TransformComponent`.
   - `setListener(...)` llamado cada frame con la cámara activa (Play mode = `FpsCamera`, Editor mode = `EditorCamera` target).
   - `clear()` para cuando `rebuildSceneFromMap` limpia el registry (igual patrón que ScriptSystem).
-- [ ] Integración en `EditorApplication`:
+- [x] Integración en `EditorApplication`:
   - Member `std::unique_ptr<AudioDevice> m_audioDevice` + `std::unique_ptr<AudioSystem> m_audioSystem`.
   - Actualizar `m_audioSystem->update(...)` cada frame (antes o después de `m_scriptSystem->update`, elegir la convención).
   - `m_audioSystem->clear()` llamado desde `rebuildSceneFromMap`.
 
 ## Bloque 4 — Inspector + AssetBrowser para audio
 
-- [ ] `InspectorPanel`: sección AudioSource con:
+- [x] `InspectorPanel`: sección AudioSource con:
   - Dropdown del clip (lista audio del AssetManager).
   - Sliders `volume` (0..1), toggles `loop`/`playOnStart`/`is3D`.
   - Botón `Play` que dispara una reproducción one-shot (útil para preview sin entrar a Play Mode).
-- [ ] `AssetBrowserPanel`: pestaña/sección nueva "Audio" que lista los clips cargados. Por ahora solo texto (path + duración); drag & drop a entidades vendrá en hito posterior.
+- [x] `AssetBrowserPanel`: pestaña/sección nueva "Audio" que lista los clips cargados. Por ahora solo texto (path + duración); drag & drop a entidades vendrá en hito posterior.
 
 ## Bloque 5 — Demo funcional
 
-- [ ] `assets/audio/beep.wav` generado con Python (script en `tools/gen_beep_audio.py`, 440 Hz × 0.5 s, 16-bit mono).
-- [ ] Modificar el mapa de prueba (o un botón demo en `Ayuda`) para crear una entidad con `AudioSourceComponent{ beep.wav, loop=true, is3D=true, playOnStart=true }` en una esquina. En Play Mode, acercarse con WASD debería volumen up.
-- [ ] Log: `audio: Device inicializado (sample_rate=..., channels=...)` al arrancar; `audio: Reproduciendo 'audio/beep.wav' (3D)` al spawnear entidad.
+- [x] `assets/audio/beep.wav` generado con Python (script en `tools/gen_beep_audio.py`, 440 Hz × 0.5 s, 16-bit mono).
+- [x] Modificar el mapa de prueba (o un botón demo en `Ayuda`) para crear una entidad con `AudioSourceComponent{ beep.wav, loop=true, is3D=true, playOnStart=true }` en una esquina. En Play Mode, acercarse con WASD debería volumen up.
+- [x] Log: `audio: Device inicializado (sample_rate=..., channels=...)` al arrancar; `audio: Reproduciendo 'audio/beep.wav' (3D)` al spawnear entidad.
 
 ## Bloque 6 — Tests
 
-- [ ] `tests/test_audio.cpp`: smoke con device null (miniaudio soporta backend "null" — decode-only) y factory mock de `AudioClip`. Cubrir:
+- [x] `tests/test_audio.cpp`: smoke con device null (miniaudio soporta backend "null" — decode-only) y factory mock de `AudioClip`. Cubrir:
   - Carga de clip por `AssetManager::loadAudio` (fallback al slot 0 si falla).
   - `AudioSystem::update` arranca clips con `playOnStart=true` y pone `started=true`.
   - `clear()` invalida handles.
 
 ## Bloque 7 — Cierre
 
-- [ ] Recompilar, tests verdes, demo audible (dev verifica en su máquina con sonido).
-- [ ] Actualizar `docs/HITOS.md`, `docs/DECISIONS.md`, `docs/ESTADO_ACTUAL.md`.
-- [ ] Commits atómicos en español.
-- [ ] Tag `v0.9.0-hito9` + push.
-- [ ] Crear `docs/PLAN_HITO10.md` (importación de modelos 3D con assimp).
+- [x] Recompilar, tests verdes, demo audible (dev verifica en su máquina con sonido).
+- [x] Actualizar `docs/HITOS.md`, `docs/DECISIONS.md`, `docs/ESTADO_ACTUAL.md`.
+- [x] Commits atómicos en español.
+- [x] Tag `v0.9.0-hito9` + push.
+- [x] Crear `docs/PLAN_HITO10.md` (importación de modelos 3D con assimp).
 
 ---
 
@@ -103,10 +103,23 @@ No-goals del hito: listener configurable (por ahora = cámara Play), reverb/efec
 
 ## Decisiones durante implementación
 
-_(llenar a medida que aparezcan)_
+Detalle en `DECISIONS.md` (fecha 2026-04-24 bajo Hito 9).
+
+- **miniaudio v0.11.21 vendored single-header** en `external/miniaudio/`, misma convención que stb. INTERFACE target + `miniaudio_impl.cpp` único con `MA_NO_ENCODING` + `MA_NO_GENERATION` para reducir binary size.
+- **`AudioDevice` null-safe**: si `ma_engine_init` falla (CI, hardware roto), el device queda en modo mute — `isValid()` devuelve false pero play/stop/etc. son no-ops silenciosos. El motor sigue corriendo.
+- **`AudioClip` no dueño del PCM**: miniaudio tiene resource manager interno que cachea decodificaciones. AudioClip solo guarda path + metadata. `ma_sound_init_from_file` dentro del device crea instancias de playback compartiendo el PCM.
+- **`AssetManager` con tabla paralela** para audio, análoga a la de texturas. `AudioAssetId` (u32, 0 = missing) separado de `TextureAssetId`. Factoría de audio inyectable para tests (default usa AudioClip real que inspecciona con ma_decoder).
+- **Inspector `Reproducir` resetea `started`** en lugar de disparar play() directo: mantiene al panel desacoplado del runtime (no necesita `AudioDevice&`). El AudioSystem hace el disparo en el próximo frame.
+- **`AudioSourceComponent` NO se serializa** (mismo motivo que `ScriptComponent` en Hito 8: el modelo Scene-driven no es autoritativo aún). El demo "Agregar audio source demo" spawnea la entidad programáticamente.
 
 ---
 
 ## Pendientes que quedan para Hito 10 o posterior
 
-_(llenar al cerrar el hito)_
+- **Persistencia de `AudioSourceComponent`** en `.moodmap`. Igual al `ScriptComponent` del Hito 8, espera al modelo Scene-driven (Hito 10+ con assimp / mesh imports).
+- **Drag & drop de audio** desde AssetBrowser a entidades. Hoy solo texturas tienen drag&drop (Hito 6 Bloque 0). Extender `ImGui::SetDragDropPayload` con un tipo `MOOD_AUDIO_ASSET` y receiver en el Hierarchy o Inspector.
+- **Lua bindings de audio**: `audio.play("audio/beep.wav")` desde scripts. No entra en Hito 9; requiere un script demo que lo justifique.
+- **Reverb / filters / effects**: entra cuando aparezca diseño de sonido real (post-Hito 15 que empieza a tocar polish).
+- **Streaming de música**: clips largos cargan todo en RAM por ahora. miniaudio soporta streaming con `ma_sound_init_from_file` + `MA_SOUND_FLAG_STREAM`. Trigger: cuando el motor necesite música de fondo de varios minutos.
+- **Listener múltiple / configurable**: hoy un único listener = cámara activa. Para cinematics o cameras escénicas, exponer `setListener` por componente cámara.
+- **AudioSystem: tracking explícito de handles por entidad**: hoy `AudioSystem::clear()` llama `AudioDevice::stopAll()`, pero si hay otros sonidos non-component-managed en el futuro, esto los mataría también. Agregar un set de handles activos por sistema.

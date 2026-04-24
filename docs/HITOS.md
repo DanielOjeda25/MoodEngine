@@ -13,7 +13,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 6** — Serialización de proyectos y mapas (completado, tag `v0.6.0-hito6`).
 - [x] **Hito 7** — Entidades, componentes, jerarquía (completado, tag `v0.7.0-hito7`).
 - [x] **Hito 8** — Scripting con Lua (completado, tag `v0.8.0-hito8`).
-- [ ] Hito 9 — Audio básico.
+- [x] **Hito 9** — Audio básico (completado, tag `v0.9.0-hito9`).
 - [ ] Hito 10 — Importación de modelos 3D.
 - [ ] Hito 11 — Iluminación Phong/Blinn-Phong.
 - [ ] Hito 12 — Física con Jolt.
@@ -191,3 +191,32 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Debugger de Lua** (mobdebug o similar). **Trigger:** cuando los scripts crezcan más allá de `print`.
 - **Persistencia de `ScriptComponent` en `.moodmap`.** **Trigger:** Scene authoritative (Hito 10+).
 - **Leak de mtimes viejos al cambiar path en caliente.** Negligible hoy (pocos paths). **Trigger:** >100 paths distintos.
+
+## Hito 9 — Audio básico
+
+**Objetivo:** dotar al motor de reproducción de audio posicional sin ceremonia. `miniaudio` como backend, `AudioClip` como segundo tipo de asset, `AudioSourceComponent` integrado al ECS, `AudioSystem` que maneja listener + playback, demo visible con atenuación 3D.
+
+**Criterios de aceptación cumplidos:**
+- `miniaudio` v0.11.21 vendored single-header, target INTERFACE + `miniaudio_impl.cpp`.
+- `AudioDevice` null-safe: si falla init (CI, hardware roto) queda en mute; el motor sigue corriendo. Log `audio: AudioDevice inicializado (sample_rate=48000, channels=2)`.
+- `AudioClip`: inspección no-blocking de metadata (duración, sr, canales) con `ma_decoder`.
+- `AssetManager` extendido con tabla paralela de audio (id 0 = missing.wav silencio 100 ms). Factoría inyectable para tests sin hardware.
+- `AudioSourceComponent { clip, volume, loop, playOnStart, is3D, handle, started }` en `Components.h`.
+- `AudioSystem::update` dispara playOnStart (guard `started`), sincroniza posición 3D cada frame. `clear()` antes de `rebuildSceneFromMap`.
+- `InspectorPanel`: combo de clips + sliders + toggles + botón Reproducir (preview).
+- `AssetBrowserPanel`: sección "Audio" colapsable con path + duración + sr + canales.
+- Demo: `Ayuda > Agregar audio source demo` spawnea entidad con `beep.wav` (440 Hz 0.5 s) loop + 3D en `(-10, 1.5, -10)`. En Play Mode, acercarse con WASD sube el volumen por atenuación 3D de miniaudio.
+- Canal log `audio` registrado.
+- Tests: `test_audio.cpp` (6 casos: AudioDevice null-safe, AssetManager loadAudio cachea + cae a missing, getAudio nunca null, AudioSystem marca started, clear() vacía activeSoundCount, is3D actualiza posición). Suite total: 83 casos / 346 asserciones.
+
+**Siguiente paso tras completarlo:** Hito 10 — Importación de modelos 3D con assimp. Lectura de `.obj`/`.gltf`, `MeshAsset` como tercer tipo de asset, `MeshRendererComponent` mejorado (material + multi-mesh), primer escenario no-grid.
+
+### Pendientes menores detectados en Hito 9
+
+- **Persistencia de `AudioSourceComponent` en `.moodmap`.** **Trigger:** Scene authoritative (igual que `ScriptComponent`, Hito 10+).
+- **Drag & drop de audio** desde AssetBrowser a entidades. Hoy solo texturas. **Trigger:** misma ventana de feature polish UX.
+- **Lua bindings de audio** (`audio.play("audio/beep.wav")`). **Trigger:** primer script que lo necesite.
+- **Streaming de música** (clips largos). Hoy todo en RAM. **Trigger:** música de fondo >1 min.
+- **Listener múltiple / configurable** (hoy = cámara activa). **Trigger:** cámaras cinematográficas.
+- **Reverb / filters / effects.** **Trigger:** polish post-Hito 15.
+- **`AudioSystem` tracking explícito de handles por entidad** (hoy `clear()` llama `stopAll()`). **Trigger:** segundo sistema que emita sonidos (UI clicks, etc.).

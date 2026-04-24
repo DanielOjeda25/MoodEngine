@@ -6,11 +6,11 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 8 cerrado, mergeado a `main` y publicado en origin.**
-Tag: `v0.8.0-hito8`.
-Verificado automático (suite doctest 74/330 pasando, editor arranca con modal Welcome, demo `rotator.lua` carga y rota el cubo, hot-reload funcional, Inspector con sección Script, shutdown exit 0) + verificado por el dev a ojo (cubo visible y rotando a 45°/s en Y tras "Agregar rotador demo", log del canal `script` con "Cargado"/"Recargado").
+**Hito 9 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.9.0-hito9`.
+Verificado automático (suite doctest 83/346 pasando con +6 tests de audio, editor arranca con `[audio] AudioDevice inicializado (sample_rate=48000, channels=2)`, fallback `missing.wav` cargado en slot 0, beep.wav discover vía AssetBrowser con metadata 0.50s/44100Hz/1ch, shutdown exit 0).
 
-**Próximo paso:** Hito 9 — Audio básico con miniaudio. AudioClip como asset, `AudioSourceComponent`, reproducción de música y SFX, audio posicional 3D básico. Plan en `docs/PLAN_HITO9.md`.
+**Próximo paso:** Hito 10 — Importación de modelos 3D con assimp. `.obj`/`.gltf` como tercer tipo de asset del motor, `MeshAsset` + `MeshRendererComponent` evolucionado (multi-mesh + material), primer escenario con geometría no-grid. Plan en `docs/PLAN_HITO10.md`.
 
 ### Lo que ya está hecho
 
@@ -68,6 +68,20 @@ Verificado automático (suite doctest 74/330 pasando, editor arranca con modal W
 - `fix(editor)`: status bar migrada a `ImGui::BeginViewportSideBar` + dibujada antes del dockspace; cierra el pendiente menor del Hito 3.
 - Tests: +13 casos nuevos (7 AABB, 5 GridMap, 8 PhysicsSystem). Suite total 30/159.
 
+**Hito 9** — Audio básico con miniaudio (tag `v0.9.0-hito9`):
+- `miniaudio` v0.11.21 vendored single-header (`external/miniaudio/`), INTERFACE target + `miniaudio_impl.cpp` con `MA_NO_ENCODING` + `MA_NO_GENERATION`.
+- `src/engine/audio/AudioDevice.{h,cpp}`: wrapper RAII sobre `ma_engine`. Null-safe (mute si falla init). API: `play(clip, volume, loop, is3D, pos) -> SoundHandle`, `stop`, `stopAll`, `setSoundPosition`, `setListener`, `activeSoundCount`.
+- `src/engine/audio/AudioClip.{h,cpp}`: metadata-only (path, duración, sr, canales). El PCM lo cachea el resource manager interno de miniaudio.
+- `AssetManager` extendido con tabla paralela de audio: `AudioAssetId` (u32, 0 = missing), `loadAudio`, `getAudio`, `audioPathOf`. Factory inyectable para tests sin hardware.
+- `AudioSourceComponent { clip, volume, loop, playOnStart, is3D, handle, started }` en `Components.h`.
+- `src/systems/AudioSystem.{h,cpp}`: dispara `playOnStart`, sincroniza posición 3D desde `TransformComponent`, `clear()` invalida handles antes del `registry.clear()`.
+- Inspector: sección AudioSource con combo de clips + sliders volumen + toggles + botón Reproducir.
+- AssetBrowser: sección "Audio" colapsable (paths + metadata).
+- Demo: `Ayuda > Agregar audio source demo` spawnea entidad con `beep.wav` loop 3D en `(-10, 1.5, -10)`. En Play Mode WASD cerca/lejos modula volumen.
+- `assets/audio/missing.wav` (silencio 100 ms) + `assets/audio/beep.wav` (sinusoidal 440 Hz 0.5 s) generados con `tools/gen_missing_audio.py` y `tools/gen_beep_audio.py`.
+- Canal de log `audio` registrado.
+- Tests: `tests/test_audio.cpp` (6 casos). Suite 83/346.
+
 **Hito 8** — Scripting con Lua (tag `v0.8.0-hito8`):
 - `walterschell/Lua` (tag `v5.4.5`) como wrapper CMake de Lua 5.4 upstream. Target `lua_static`. Opciones: `LUA_BUILD_BINARY OFF`, `LUA_BUILD_COMPILER OFF`, `LUA_ENABLE_TESTING OFF` (si no, registra `lua-testsuite` en CTest que requiere `lua.exe`).
 - `ThePhD/sol2` v3.3.0 como binding C++17↔Lua. Wrapped detrás de `src/engine/scripting/LuaBindings.{h,cpp}` para no filtrar `sol::*`.
@@ -113,6 +127,7 @@ Verificado automático (suite doctest 74/330 pasando, editor arranca con modal W
 - EnTT `3.13.2` (ECS, Hito 7; oculto detrás de fachada `Scene`/`Entity`)
 - Lua `5.4.5` via `walterschell/Lua` wrapper (Hito 8; target `lua_static`)
 - sol2 `v3.3.0` (Hito 8; binding C++↔Lua header-only, aislado detrás de `LuaBindings`)
+- miniaudio `v0.11.21` vendored single-header (Hito 9; `external/miniaudio/`, target INTERFACE `miniaudio`)
 
 ### Herramientas externas necesarias (solo para regenerar, no para build)
 
