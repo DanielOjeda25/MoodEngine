@@ -151,6 +151,31 @@ CPMAddPackage(
     GIT_TAG v3.3.0
 )
 
+# assimp (Hito 10): importacion de modelos 3D. Desactivamos todos los
+# formatos por default y habilitamos solo OBJ + glTF + FBX (los del plan
+# del hito). Sin exportadores, sin herramientas CLI, sin tests, sin shared
+# lib (la API estable en Windows requiere copiar DLLs extra si fuera
+# shared). `ASSIMP_WARNINGS_AS_ERRORS` se fuerza OFF porque el codigo de
+# assimp tiene warnings sobre MSVC /W4 que no son nuestros.
+set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+CPMAddPackage(
+    NAME assimp
+    GITHUB_REPOSITORY assimp/assimp
+    GIT_TAG v5.4.3
+    OPTIONS
+        "BUILD_SHARED_LIBS OFF"
+        "ASSIMP_BUILD_TESTS OFF"
+        "ASSIMP_BUILD_ASSIMP_TOOLS OFF"
+        "ASSIMP_INSTALL OFF"
+        "ASSIMP_BUILD_SAMPLES OFF"
+        "ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF"
+        "ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF"
+        "ASSIMP_BUILD_OBJ_IMPORTER ON"
+        "ASSIMP_BUILD_GLTF_IMPORTER ON"
+        "ASSIMP_BUILD_FBX_IMPORTER ON"
+        "ASSIMP_INJECT_DEBUG_POSTFIX OFF"
+)
+
 # ---------------------------------------------------------------------------
 # Target interno: ImGui compilado como libreria estatica con backends SDL2 + OpenGL3
 # ---------------------------------------------------------------------------
@@ -246,6 +271,7 @@ target_link_libraries(MoodEditor PRIVATE
     lua_static
     sol2::sol2
     miniaudio
+    assimp::assimp
     OpenGL::GL
 )
 
