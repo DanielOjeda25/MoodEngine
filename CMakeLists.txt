@@ -211,6 +211,7 @@ add_executable(MoodEditor
     src/platform/VFS.cpp
 
     src/engine/assets/AssetManager.cpp
+    src/engine/assets/MeshLoader.cpp
     src/engine/assets/PrimitiveMeshes.cpp
     src/engine/assets/stb_impl.cpp
 

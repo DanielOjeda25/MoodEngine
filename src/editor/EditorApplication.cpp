@@ -168,6 +168,12 @@ EditorApplication::EditorApplication() {
         "assets",
         [](const std::string& fsPath) -> std::unique_ptr<ITexture> {
             return std::make_unique<OpenGLTexture>(fsPath);
+        },
+        /*audioFactory*/ AssetManager::AudioClipFactory{},
+        /*meshFactory*/
+        [](const std::vector<f32>& verts,
+           const std::vector<VertexAttribute>& attrs) -> std::unique_ptr<IMesh> {
+            return std::make_unique<OpenGLMesh>(verts, attrs);
         });
     m_ui.assetBrowser().setAssetManager(m_assetManager.get());
 

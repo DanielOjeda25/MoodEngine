@@ -31,6 +31,8 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/LuaBindings.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/VFS.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/AssetManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/MeshLoader.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/PrimitiveMeshes.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/serialization/SceneSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/serialization/ProjectSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/audio/AudioClip.cpp
@@ -49,6 +51,7 @@ target_link_libraries(mood_tests PRIVATE
     lua_static
     sol2::sol2
     miniaudio
+    assimp::assimp
 )
 
 target_include_directories(mood_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)

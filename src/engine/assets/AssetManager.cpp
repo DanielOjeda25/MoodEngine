@@ -1,8 +1,12 @@
 #include "engine/assets/AssetManager.h"
 
 #include "core/Log.h"
+#include "engine/assets/MeshLoader.h"
+#include "engine/assets/PrimitiveMeshes.h"
 #include "engine/audio/AudioClip.h"
+#include "engine/render/IMesh.h"
 #include "engine/render/ITexture.h"
+#include "engine/render/MeshAsset.h"
 
 #include <stdexcept>
 #include <utility>
@@ -13,15 +17,34 @@ namespace {
 
 constexpr const char* k_missingTexturePath = "textures/missing.png";
 constexpr const char* k_missingAudioPath   = "audio/missing.wav";
+// Sentinela para el mesh fallback. No es un path real del VFS: el mesh se
+// genera programaticamente (cubo primitivo). El serializer usa este string
+// para distinguir "mesh por defecto" de uno importado.
+constexpr const char* k_missingMeshPath    = "__missing_cube";
+
+/// @brief Mesh stub sin GL — permite que los tests construyan AssetManager
+///        sin contexto OpenGL (default de MeshFactory). Produccion siempre
+///        pasa una factoria real que crea OpenGLMesh.
+class NullMesh : public IMesh {
+public:
+    explicit NullMesh(u32 count) : m_count(count) {}
+    void bind() const override {}
+    void unbind() const override {}
+    u32 vertexCount() const override { return m_count; }
+private:
+    u32 m_count;
+};
 
 } // namespace
 
 AssetManager::AssetManager(std::string rootDir,
                             TextureFactory textureFactory,
-                            AudioClipFactory audioFactory)
+                            AudioClipFactory audioFactory,
+                            MeshFactory meshFactory)
     : m_vfs(std::filesystem::path(std::move(rootDir))),
       m_textureFactory(std::move(textureFactory)),
-      m_audioFactory(std::move(audioFactory)) {
+      m_audioFactory(std::move(audioFactory)),
+      m_meshFactory(std::move(meshFactory)) {
     if (!m_textureFactory) {
         throw std::runtime_error("AssetManager: se requiere una TextureFactory");
     }
@@ -30,6 +53,19 @@ AssetManager::AssetManager(std::string rootDir,
     if (!m_audioFactory) {
         m_audioFactory = [](const std::string& logical, const std::string& fs) {
             return std::make_unique<AudioClip>(logical, fs);
+        };
+    }
+    // Mesh factory por defecto: produce NullMesh (sin GL). Tests pueden
+    // construir AssetManager sin contexto OpenGL; produccion siempre pasa
+    // una factoria real que cree `OpenGLMesh`.
+    if (!m_meshFactory) {
+        m_meshFactory = [](const std::vector<f32>& verts,
+                           const std::vector<VertexAttribute>& attrs) -> std::unique_ptr<IMesh> {
+            u32 stride = 0;
+            for (const auto& a : attrs) stride += a.componentCount;
+            const u32 count = (stride > 0)
+                ? static_cast<u32>(verts.size() / stride) : 0;
+            return std::make_unique<NullMesh>(count);
         };
     }
 
@@ -69,6 +105,27 @@ AssetManager::AssetManager(std::string rootDir,
     }
     Log::assets()->info("AssetManager: fallback audio 'missing' cargado desde {}",
                          missingAudioFs.generic_string());
+
+    // ---- Slot 0 mesh: cubo primitivo (no requiere archivo) ----
+    // Se usa como fallback cuando assimp falla y como mesh por defecto del
+    // render scene-driven para entidades-tile (Hito 10 Bloque 4).
+    {
+        auto cubeData = createCubeMesh();
+        auto missingMesh = std::make_unique<MeshAsset>();
+        missingMesh->logicalPath = k_missingMeshPath;
+        SubMesh sm{};
+        sm.materialIndex = 0;
+        sm.vertexCount = static_cast<u32>(cubeData.vertices.size() / 8); // stride 8
+        sm.mesh = m_meshFactory(cubeData.vertices, cubeData.attributes);
+        if (sm.mesh == nullptr) {
+            throw std::runtime_error(
+                "AssetManager: MeshFactory devolvio null para el cubo fallback");
+        }
+        missingMesh->submeshes.push_back(std::move(sm));
+        m_meshes.emplace_back(std::move(missingMesh));
+        m_meshCache.emplace(k_missingMeshPath, missingMeshId());
+    }
+    Log::assets()->info("AssetManager: fallback mesh 'cubo primitivo' generado en slot 0");
 }
 
 AssetManager::~AssetManager() = default;
@@ -175,6 +232,58 @@ std::string AssetManager::audioPathOf(AudioAssetId id) const {
     }
     return m_audioClips[id]->logicalPath();
 }
+
+// ----------------------------------------------------------------------------
+// Mesh (Hito 10)
+// ----------------------------------------------------------------------------
+
+MeshAssetId AssetManager::loadMesh(std::string_view logicalPath) {
+    const std::string key(logicalPath);
+    if (auto it = m_meshCache.find(key); it != m_meshCache.end()) {
+        return it->second;
+    }
+
+    const auto fs = m_vfs.resolve(logicalPath);
+    if (fs.empty()) {
+        Log::assets()->warn(
+            "AssetManager: mesh path '{}' rechazado por VFS. Fallback a missing (cubo).",
+            logicalPath);
+        m_meshCache.emplace(key, missingMeshId());
+        return missingMeshId();
+    }
+
+    auto asset = loadMeshWithAssimp(key, fs.generic_string(), m_meshFactory);
+    if (asset == nullptr) {
+        // Loggeo ya emitido por loadMeshWithAssimp. Cacheamos el fallback
+        // para no reintentar cada frame.
+        m_meshCache.emplace(key, missingMeshId());
+        return missingMeshId();
+    }
+
+    const MeshAssetId id = static_cast<MeshAssetId>(m_meshes.size());
+    m_meshes.push_back(std::move(asset));
+    m_meshCache.emplace(key, id);
+    Log::assets()->info("AssetManager: cargado mesh {} -> id {}", logicalPath, id);
+    return id;
+}
+
+MeshAsset* AssetManager::getMesh(MeshAssetId id) const {
+    if (id >= m_meshes.size()) {
+        return m_meshes[missingMeshId()].get();
+    }
+    return m_meshes[id].get();
+}
+
+std::string AssetManager::meshPathOf(MeshAssetId id) const {
+    if (id >= m_meshes.size()) {
+        return m_meshes[missingMeshId()]->logicalPath;
+    }
+    return m_meshes[id]->logicalPath;
+}
+
+// ----------------------------------------------------------------------------
+// Hot-reload de texturas (Hito 5 Bloque 2)
+// ----------------------------------------------------------------------------
 
 usize AssetManager::reloadChanged() {
     usize reloaded = 0;

@@ -11,6 +11,7 @@
 // por un lookup mas completo; la API publica no cambia.
 
 #include "core/Types.h"
+#include "engine/render/RendererTypes.h"
 #include "platform/VFS.h"
 
 #include <filesystem>
@@ -25,7 +26,9 @@ namespace Mood {
 
 class AudioClip;
 
+class IMesh;
 class ITexture;
+struct MeshAsset;
 
 /// @brief Identificador estable de una textura dentro de un `AssetManager`.
 ///        Valor 0 se reserva para la textura "missing": pedir `getTexture(0)`
@@ -36,6 +39,11 @@ using TextureAssetId = u32;
 ///        clip "missing" (silencio de 100 ms) para que `getAudio(0)` nunca
 ///        sea null.
 using AudioAssetId = u32;
+
+/// @brief Identificador estable de un MeshAsset. Valor 0 reservado para el
+///        mesh "missing" (cubo del Hito 3) para que `getMesh(0)` nunca sea
+///        null.
+using MeshAssetId = u32;
 
 class AssetManager {
 public:
@@ -52,17 +60,30 @@ public:
         std::function<std::unique_ptr<AudioClip>(const std::string& logicalPath,
                                                   const std::string& filesystemPath)>;
 
-    /// @brief Construye el manager y carga los fallbacks (missing.png y
-    ///        missing.wav). Si alguno falla, lanza: la instalacion esta rota.
+    /// @brief Factoria de IMesh (VAO/VBO). Recibe un buffer interleaved de
+    ///        floats + layout y devuelve un mesh listo para draw. Produccion
+    ///        pasa `OpenGLMesh`; tests inyectan mocks que solo guardan el
+    ///        vertex count.
+    using MeshFactory =
+        std::function<std::unique_ptr<IMesh>(const std::vector<f32>& vertices,
+                                              const std::vector<VertexAttribute>& attributes)>;
+
+    /// @brief Construye el manager y carga los fallbacks (missing.png,
+    ///        missing.wav y missing mesh = cubo). Si alguno falla, lanza: la
+    ///        instalacion esta rota.
     /// @param rootDir Carpeta raiz de assets (default: "assets").
     /// @param textureFactory Factoria de texturas. EditorApplication pasa
     ///        una que crea `OpenGLTexture`. Los tests inyectan mocks.
     /// @param audioFactory Factoria de audio clips. Default: construye
     ///        `AudioClip` directo (no requiere hardware, solo inspecciona
     ///        metadata con ma_decoder). Los tests pueden inyectar stubs.
+    /// @param meshFactory Factoria de IMesh. Requerida para poder generar
+    ///        el mesh de fallback (cubo primitivo) y para importar modelos
+    ///        via assimp.
     AssetManager(std::string rootDir,
                  TextureFactory textureFactory,
-                 AudioClipFactory audioFactory = {});
+                 AudioClipFactory audioFactory = {},
+                 MeshFactory meshFactory = {});
     ~AssetManager();
 
     AssetManager(const AssetManager&) = delete;
@@ -120,10 +141,34 @@ public:
     ///        el AssetBrowser). Id invalido devuelve el path de missing.
     std::string audioPathOf(AudioAssetId id) const;
 
+    // ---- Mesh (Hito 10) ----
+
+    /// @brief Carga (o devuelve cacheado) un MeshAsset por path logico (p.ej.
+    ///        "meshes/suzanne.obj"). En fallo devuelve `missingMeshId()` (cubo
+    ///        primitivo) y loguea en el canal assets. Imports via assimp.
+    MeshAssetId loadMesh(std::string_view logicalPath);
+
+    /// @brief Devuelve el MeshAsset del id. Nunca null: ids invalidos caen al
+    ///        fallback missing (cubo).
+    MeshAsset* getMesh(MeshAssetId id) const;
+
+    /// @brief Id del mesh fallback (cubo generado en el constructor). Siempre
+    ///        vale 0.
+    MeshAssetId missingMeshId() const { return 0; }
+
+    /// @brief Path logico asociado al mesh. Slot 0 devuelve el path sentinela
+    ///        "__missing_cube" (no existe en disco; solo uso interno del
+    ///        serializer para detectar "sin mesh real cargado").
+    std::string meshPathOf(MeshAssetId id) const;
+
+    /// @brief Cantidad de meshes cacheados (incluye missing).
+    usize meshCount() const { return m_meshes.size(); }
+
 private:
     VFS m_vfs;
     TextureFactory m_textureFactory;
     AudioClipFactory m_audioFactory;
+    MeshFactory m_meshFactory;
 
     // Texturas (Hito 5).
     std::unordered_map<std::string, TextureAssetId> m_textureCache;
@@ -134,6 +179,10 @@ private:
     // Audio (Hito 9).
     std::unordered_map<std::string, AudioAssetId> m_audioCache;
     std::vector<std::unique_ptr<AudioClip>> m_audioClips; // [0] = missing.wav
+
+    // Mesh (Hito 10). [0] = cubo primitivo (fallback).
+    std::unordered_map<std::string, MeshAssetId> m_meshCache;
+    std::vector<std::unique_ptr<MeshAsset>> m_meshes;
 };
 
 } // namespace Mood
