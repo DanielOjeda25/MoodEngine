@@ -6,11 +6,11 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 9 cerrado, mergeado a `main` y publicado en origin.**
-Tag: `v0.9.0-hito9`.
-Verificado automático (suite doctest 83/346 pasando con +6 tests de audio, editor arranca con `[audio] AudioDevice inicializado (sample_rate=48000, channels=2)`, fallback `missing.wav` cargado en slot 0, beep.wav discover vía AssetBrowser con metadata 0.50s/44100Hz/1ch, shutdown exit 0).
+**Hito 10 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.10.0-hito10`.
+Verificado automático (suite doctest 90/380 pasando con +8 tests nuevos — 5 de MeshLoader/AssetManager, 2 de round-trip de entidades, test setup con WORKING_DIRECTORY). Verificado por el dev a ojo: drag de `pyramid.obj` desde AssetBrowser al Viewport spawnea la entidad con metadata `[1 submeshes, 18 v]`; Ctrl+S persiste 3 entidades; cerrar + reabrir trae las 3 entidades con posición/rotación/scale/material intactos (`Mapa cargado: … (N tiles sólidos, 3 entidades)` en el log).
 
-**Próximo paso:** Hito 10 — Importación de modelos 3D con assimp. `.obj`/`.gltf` como tercer tipo de asset del motor, `MeshAsset` + `MeshRendererComponent` evolucionado (multi-mesh + material), primer escenario con geometría no-grid. Plan en `docs/PLAN_HITO10.md`.
+**Próximo paso:** Hito 11 — Iluminación Phong/Blinn-Phong. Activar `LightComponent` (era placeholder del Hito 7), shader con normales + multiple lights, demo visual de escena iluminada. Plan en `docs/PLAN_HITO11.md`.
 
 ### Lo que ya está hecho
 
@@ -67,6 +67,21 @@ Verificado automático (suite doctest 83/346 pasando con +6 tests de audio, edit
 - `fix(render)`: `drawMesh` ya no desbindea shader/mesh al terminar (permitía todos los cubos apilados por silent-fail de `glUniform*`).
 - `fix(editor)`: status bar migrada a `ImGui::BeginViewportSideBar` + dibujada antes del dockspace; cierra el pendiente menor del Hito 3.
 - Tests: +13 casos nuevos (7 AABB, 5 GridMap, 8 PhysicsSystem). Suite total 30/159.
+
+**Hito 10** — Importación de modelos 3D con assimp (tag `v0.10.0-hito10`):
+- `assimp v5.4.3` como static lib vía CPM. Solo importers OBJ + glTF + FBX habilitados (todos los demás + exporters + tests + CLI off). `ASSIMP_WARNINGS_AS_ERRORS OFF` forzado en cache antes del CPMAddPackage (el código de assimp tiene warnings en /W4).
+- `src/engine/render/MeshAsset.h` + `src/engine/assets/MeshLoader.{h,cpp}`: `MeshAsset` = `{logicalPath, vector<SubMesh>}`, SubMesh = `{unique_ptr<IMesh>, materialIndex, vertexCount}`. `loadMeshWithAssimp` con flags `Triangulate | GenNormals | FlipUVs | CalcTangentSpace`. Expande índices a vértices planos (matchea `glDrawArrays` sin EBO).
+- `AssetManager` extendido como tercer tipo de asset. `MeshAssetId` (u32, 0 = cubo primitivo fallback). Slot 0 generado programáticamente con `createCubeMesh()` + MeshFactory (path sentinela `"__missing_cube"`). `MeshFactory` inyectable con default `NullMesh` stub (tests sin GL); producción pasa lambda que crea `OpenGLMesh`.
+- `MeshRendererComponent` refactorizado: de `IMesh* mesh + TextureAssetId texture` a `MeshAssetId mesh + vector<TextureAssetId> materials`. Helper `materialOrMissing(i)` cae al slot 0 si el array es más corto que los submeshes.
+- Render unificado a un solo loop scene-driven. `GridRenderer` eliminado (archivos borrados, dead code tras la migración). `renderSceneToViewport` itera `Scene::forEach<Transform, MeshRenderer>` y dibuja submesh por submesh cambiando textura según `materialIndex`.
+- `updateTileEntity(x, y, tex)`: helper nuevo para edits localizados de tiles — encuentra la entidad `Tile_X_Y` por tag y edita in-place, o la crea si la celda era Empty. Reemplaza el `rebuildSceneFromMap` completo en el drop de textura (preserva selección del Hierarchy).
+- `AssetBrowserPanel` seccion "Meshes" (entre texturas y Audio). Lista `.obj/.gltf/.glb/.fbx` de `assets/meshes/` con metadata (submesh + vertex count). Drag payload `"MOOD_MESH_ASSET"` — fix detectado durante smoke test: `BeginDragDropSource` tiene que ir inmediatamente tras `Selectable`, no después de SameLine + TextDisabled.
+- `ViewportPanel::MeshDrop` + `consumeMeshDrop()` análogos al flow de textura. `BeginDragDropTarget` acepta ambos payloads.
+- `EditorApplication` consume el mesh drop: spawnea `Mesh_<path>` en el centro del tile bajo el cursor con `Transform + MeshRendererComponent(meshId, slot 0)`.
+- Schema v2 del `.moodmap` (`k_MoodmapFormatVersion = 2`): sección `entities` nueva con `{tag, transform, mesh_renderer:{mesh_path, materials[]}}`. Filtro por prefijo `Tile_*` (esas se reconstruyen del grid). Archivos v1 se siguen leyendo con `entities=[]` (campo opcional al parsear).
+- `SavedMap` extendido con `SavedEntity` + `SavedMeshRenderer`. `SceneSerializer::save` acepta `Scene*` opcional. `EditorApplication::tryOpenProjectPath` aplica las entidades persistidas tras `rebuildSceneFromMap`.
+- Tests: +8 casos / +34 asserciones en `test_mesh_asset.cpp` + `test_scene_serializer.cpp`. `add_test` con `WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` para que tests que abren archivos reales (pyramid.obj via assimp) resuelvan desde la raíz del repo. Suite total 90/380.
+- `assets/meshes/pyramid.obj`: pirámide base cuadrada escrita a mano (5 v / 6 tris / con UVs). `.gitignore` fix: `!assets/meshes/*.obj` para evitar colisión con `*.obj` de objetos MSVC.
 
 **Hito 9** — Audio básico con miniaudio (tag `v0.9.0-hito9`):
 - `miniaudio` v0.11.21 vendored single-header (`external/miniaudio/`), INTERFACE target + `miniaudio_impl.cpp` con `MA_NO_ENCODING` + `MA_NO_GENERATION`.
@@ -128,6 +143,7 @@ Verificado automático (suite doctest 83/346 pasando con +6 tests de audio, edit
 - Lua `5.4.5` via `walterschell/Lua` wrapper (Hito 8; target `lua_static`)
 - sol2 `v3.3.0` (Hito 8; binding C++↔Lua header-only, aislado detrás de `LuaBindings`)
 - miniaudio `v0.11.21` vendored single-header (Hito 9; `external/miniaudio/`, target INTERFACE `miniaudio`)
+- assimp `v5.4.3` via CPM (Hito 10; static, solo importers OBJ/glTF/FBX, sin exporters/tests/CLI)
 
 ### Herramientas externas necesarias (solo para regenerar, no para build)
 
@@ -193,20 +209,20 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: implementar el Hito 9
+### Tarea inmediata: implementar el Hito 11
 
-El Hito 8 está cerrado (tag `v0.8.0-hito8` en origin). El foco ahora es el **Hito 9 — Audio básico** con miniaudio. `AudioClip` como tipo de asset, `AudioSourceComponent`, reproducción de música y SFX, base de audio posicional 3D.
+El Hito 10 está cerrado (tag `v0.10.0-hito10` en origin). El foco ahora es el **Hito 11 — Iluminación Phong/Blinn-Phong**. Activar `LightComponent` (era placeholder desde Hito 7), extender el shader con normales + cálculo Phong, soportar directional + point lights, demo de escena con iluminación dinámica.
 
-El plan desglosado por tareas está en `docs/PLAN_HITO9.md`.
+El plan desglosado por tareas está en `docs/PLAN_HITO11.md`.
 
-**Punto de arranque concreto:** agregar miniaudio (header-only, commiteado en `external/miniaudio/` como stb) y crear `src/engine/audio/AudioDevice.{h,cpp}` que inicialice el device default. Después, `AudioClip` como segundo tipo de asset del `AssetManager`, `AudioSourceComponent`, y un `AudioSystem` que actualice posición 3D leyendo el `TransformComponent` de la entidad.
+**Punto de arranque concreto:** extender el vertex attribute layout para incluir la normal (assimp ya la calcula desde Hito 10 vía `aiProcess_GenNormals`). Nuevo shader `lit.{vert,frag}` con cálculo Phong. `LightSystem` que recolecta componentes `LightComponent` de la scene y los sube como uniforms al shader. Demo: agregar `Ayuda > Agregar luz` con posición y color editables.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO9.md`.
+1. Leer `docs/PLAN_HITO11.md`.
 2. Trabajar bloque por bloque, marcando en el plan al cerrar cada uno.
-3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial (p. ej. AudioClip como variante discriminada en `AssetManager` vs `AssetManager` genérico, cómo integrar `audio.play()` en Lua si se expone).
-4. Al final: commits atómicos en español, merge a main, tag `v0.9.0-hito9`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO10.md`.
+3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial (p. ej. shader hot-reload, cómo pasar el array de luces al shader — uniform array vs UBO, intensidad en W/m² vs 0..1 arbitrario).
+4. Al final: commits atómicos en español, merge a main, tag `v0.11.0-hito11`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO12.md`.
 
 ---
 

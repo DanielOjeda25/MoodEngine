@@ -546,3 +546,155 @@ antes del Hito 10; ahí vale la pena el marker component.
 **Alternativas consideradas:** agregar una sección `[audio_sources]` al `.moodmap` ahora. Genera doble fuente de verdad (`SceneSerializer` persiste tiles + esta nueva sección).
 **Revisar si:** cuando entre Scene authoritative en Hito 10+, AudioSourceComponent + ScriptComponent + MeshRendererComponent se persisten juntos en el mismo `[entities]`.
 
+## 2026-04-24: assimp 5.4.3 como static lib, solo importadores OBJ + glTF + FBX
+
+**Contexto:** Hito 10 introduce la importacion de modelos 3D. `assimp`
+soporta 40+ formatos por default pero la mayoria no interesan al motor
+(BVH animaciones, WAV audio, etc.) y suman ~10 MB al binario.
+**Decision:** `CPMAddPackage(assimp v5.4.3)` con `BUILD_SHARED_LIBS OFF`
+(estatica, sin DLL extra en Windows), `ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT
+OFF` + `ASSIMP_BUILD_OBJ_IMPORTER/GLTF_IMPORTER/FBX_IMPORTER ON`. Todos
+los exportadores off (no exportamos desde el motor), tests + samples +
+CLI tools off. `ASSIMP_WARNINGS_AS_ERRORS OFF` forzado como `CACHE BOOL`
+antes del CPMAddPackage porque el codigo de assimp tiene warnings en
+MSVC /W4 que no son nuestros.
+**Razones:** triple cobertura de pipeline (OBJ = mas simple/legacy,
+glTF = standard moderno, FBX = formato industria). ~30 MB menos de
+binario respecto del build completo. Estatica evita el carrusel de
+DLLs que ya tenemos con SDL2.
+**Alternativas consideradas:**
+- `tinyobjloader` + `cgltf` + nada para FBX: menos friccion de build,
+  pero tres codebases distintas para mantener y no hay ruta clara a FBX
+  sin reimplementarlo.
+- assimp dinamica: ~5 MB menos en memoria pero obliga a copiar DLL
+  post-build y complica packaging.
+**Revisar si:** el tiempo de configure se vuelve insoportable (assimp es
+el package mas pesado de CPM hoy) o si algun formato nuevo (USDZ) se
+vuelve importante y no esta en v5.4.3.
+
+## 2026-04-24: MeshLoader expande indices a vertices planos (sin EBO)
+
+**Contexto:** assimp entrega cada mesh como `(vertices[], indices[])`.
+El pipeline actual de render usa `OpenGLMesh` con `glDrawArrays` (sin
+EBO). Dos opciones: migrar `IMesh` a soportar EBO o expandir a vertices
+planos.
+**Decision:** expandir. `loadMeshWithAssimp` itera las caras y escribe
+los atributos del vertice referenciado (pos+color+uv) al buffer plano;
+cada triangulo ocupa 3*8 floats sin comparticion.
+**Razones:** matchea lo que `OpenGLRenderer::drawMesh` ya sabe dibujar;
+cero cambios en el RHI. Para meshes pequenos (pyramid demo=18 verts,
+Suzanne=~500 verts) el overhead de RAM es despreciable con expansion
+~1.8x tipica. Migrar a EBO cuando aparezca un mesh real grande se hace
+en un solo punto (nuevo `OpenGLIndexedMesh` + el loader deja de
+expandir).
+**Alternativas consideradas:**
+- Agregar EBO a `OpenGLMesh` ahora: mas codigo que refactorizar, zero
+  beneficio para los meshes del hito. YAGNI aplicado.
+- Abstraer mesh indexed vs non-indexed por interfaz: prematuro con un
+  solo backend.
+**Revisar si:** primer mesh importado con >50k vertices o el perfil de
+RAM empieza a doler en escenas con cientos de meshes.
+
+## 2026-04-24: `NullMesh` stub como default de `MeshFactory` en AssetManager
+
+**Contexto:** el ctor del `AssetManager` crea el mesh de fallback
+(slot 0 = cubo primitivo) llamando a la `MeshFactory`. Si la factory no
+se pasa, el ctor deberia fallar — pero 10+ tests que no tocan GL se
+romperian en cascada (construyen el manager solo para testear caching
+/ VFS).
+**Decision:** si `MeshFactory` es null, el `AssetManager` la defaultea a
+una que produce un `NullMesh` (IMesh stub interno, `vertexCount()` = lo
+que sale de los attrs, `bind/unbind` no-ops). Produccion siempre pasa
+una factory real que crea `OpenGLMesh` (ver `EditorApplication`).
+**Razones:** misma filosofia que el `AudioClipFactory` defaultea a
+construir `AudioClip` directo. Mantiene los tests existentes sin cambios
+y no obliga a cada test a fabricar un stub manualmente.
+**Alternativas consideradas:** exigir `MeshFactory` y migrar todos los
+tests. Viable pero mucho churn para cero beneficio.
+**Revisar si:** el `NullMesh` empieza a usarse en contextos no-test
+(bug) — ahi el comportamiento silencioso es peligroso y habria que
+volver al enforcement estricto.
+
+## 2026-04-24: Render scene-driven unificado; GridRenderer eliminado
+
+**Contexto:** desde Hito 8 Bloque 6 habia dos pases de render: el
+`GridRenderer` (loop por tiles del `GridMap`) y un pase Scene-driven que
+dibujaba entidades con `MeshRenderer` filtrando `Tile_*` (workaround para
+que las tiles no se dibujaran dos veces). Con el Hito 10 las tiles ya
+son entidades (`rebuildSceneFromMap` las crea) y tienen un `MeshRenderer`
+apuntando al cubo fallback; el `GridRenderer` es redundante.
+**Decision:** un solo loop scene-driven. `GridRenderer` eliminado
+(archivos borrados). `renderSceneToViewport` itera
+`Scene::forEach<Transform, MeshRenderer>` sin filtros. `GridMap` sigue
+siendo la fuente authoritative de la topologia del mapa (physics +
+serializer + `rebuildSceneFromMap`); solo el render dejo de depender de
+el.
+**Razones:** menos codigo (la logica de "donde dibujar tiles" vive en
+un solo lugar — `rebuildSceneFromMap`). Habilita mezclar tiles con
+modelos importados sin casos especiales. Prepara el camino a Hito 14+
+donde la Scene sera authoritative para persistencia tambien.
+**Alternativas consideradas:**
+- Mantener `GridRenderer` por perfo (un solo draw call por tile en loop
+  tight vs un submesh loop por entidad): zero diferencia medible con 30
+  tiles, y perderiamos la unificacion.
+- Usar un marker component `TileBackedComponent` para el filtro: agrega
+  componente nuevo por caso puntual que va a morir cuando el render no
+  distinga tiles de modelos.
+**Revisar si:** escenas de cientos de tiles + muchos meshes empiezan a
+pinchar — ahi vale la pena un render sort/batching (Hito 18+).
+
+## 2026-04-24: `updateTileEntity` para edits localizados (preserva seleccion)
+
+**Contexto:** el drop de textura sobre un tile antes llamaba
+`m_map.setTile + rebuildSceneFromMap`. `rebuildSceneFromMap` hace
+`registry.clear()` que invalida la seleccion del Hierarchy (el `Entity`
+del panel apunta a un handle muerto). UX raro: parece que se "resetea"
+la seleccion sin motivo aparente.
+**Decision:** nuevo helper `EditorApplication::updateTileEntity(x, y, tex)`.
+Busca la entidad con tag `Tile_X_Y` por `forEach` lineal (max ~30
+entidades en mapas 8x8), edita `MeshRenderer.materials[0]` in-place, o
+crea una nueva entidad tile si la celda era Empty. El `GridMap.setTile`
+se sigue llamando en paralelo para mantener physics/serializer
+sincronizados.
+**Razones:** preserva la seleccion y evita un registry rebuild completo.
+`rebuildSceneFromMap` queda reservado para cambios globales (open/close
+proyecto, buildInitialTestMap).
+**Alternativas consideradas:** un mapa `(x,y) -> entt::entity` para O(1)
+lookup. Overkill para 30 entidades; se agrega cuando los mapas crezcan.
+
+## 2026-04-24: `.moodmap` schema v2 con seccion `entities` opcional
+
+**Contexto:** Hito 10 persiste por primera vez entidades del Scene (los
+meshes dropeados). El schema v1 solo conocia tiles.
+**Decision:** bump a `k_MoodmapFormatVersion = 2`. Nueva seccion
+`entities` = array de `{tag, transform:{position, rotationEuler, scale},
+mesh_renderer:{mesh_path, materials[]}}`. Filtro de serializacion: solo
+entidades cuyo tag NO empieza con `"Tile_"` (esas se reconstruyen del
+grid en `rebuildSceneFromMap`) Y tienen `MeshRendererComponent`. Paths
+logicos en texturas/meshes para que los ids volatiles no se filtren al
+JSON. Al leer, `entities` es opcional (archivos v1 quedan con lista
+vacia), bump justificado porque el writer nuevo produce archivos que
+un reader v1 no entenderia.
+**Razones:** primer paso hacia Scene authoritative sin romper compat con
+proyectos v1 ya creados. Solo MeshRenderer en este primer pase:
+`ScriptComponent` y `AudioSourceComponent` tienen estado runtime
+(`sol::state`, `SoundHandle`) que no tiene sentido serializar.
+**Alternativas consideradas:**
+- Persistir TODOS los componentes ahora: scope creep del Hito 10 +
+  estado runtime contamina el JSON.
+- Schema separado `.moodscene` para entidades: duplica el problema del
+  roundtrip entre archivos. Mejor un solo archivo por mapa por ahora.
+**Revisar si:** aparece un schema evolution mayor (Hito 14 prefabs) que
+justifique partir `.moodmap` en `.moodmap` + `.moodscene`.
+
+## 2026-04-24: `.gitignore` excepcion para Wavefront OBJ
+
+**Contexto:** el `.gitignore` tenia `*.obj` para objetos compilados de
+MSVC. Los Wavefront OBJ (modelos 3D) tambien usan `.obj` y quedaban
+ignorados: `assets/meshes/pyramid.obj` no se committeaba.
+**Decision:** agregar `!assets/meshes/*.obj` como excepcion al patron.
+**Razones:** mantiene el patron general para evitar commitear artefactos
+de build sin migrar toda la convencion a un subfolder aparte.
+**Alternativas consideradas:** mover los OBJ de assets a otro path
+(`assets/models/`). Renombrar por una colision de extensions es lo
+opuesto al principio de menor sorpresa.

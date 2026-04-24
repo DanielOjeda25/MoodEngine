@@ -14,7 +14,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 7** — Entidades, componentes, jerarquía (completado, tag `v0.7.0-hito7`).
 - [x] **Hito 8** — Scripting con Lua (completado, tag `v0.8.0-hito8`).
 - [x] **Hito 9** — Audio básico (completado, tag `v0.9.0-hito9`).
-- [ ] Hito 10 — Importación de modelos 3D.
+- [x] **Hito 10** — Importación de modelos 3D (completado, tag `v0.10.0-hito10`).
 - [ ] Hito 11 — Iluminación Phong/Blinn-Phong.
 - [ ] Hito 12 — Física con Jolt.
 - [ ] Hito 13 — Gizmos y selección.
@@ -220,3 +220,33 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Listener múltiple / configurable** (hoy = cámara activa). **Trigger:** cámaras cinematográficas.
 - **Reverb / filters / effects.** **Trigger:** polish post-Hito 15.
 - **`AudioSystem` tracking explícito de handles por entidad** (hoy `clear()` llama `stopAll()`). **Trigger:** segundo sistema que emita sonidos (UI clicks, etc.).
+
+## Hito 10 — Importación de modelos 3D
+
+**Objetivo:** romper el límite "todo es un cubo". Importar OBJ/glTF/FBX via assimp, integrarlos al Scene como `MeshAsset`+`MeshRenderer`, migrar el render a scene-driven, persistir entidades no-tile en el `.moodmap`.
+
+**Criterios de aceptación cumplidos:**
+- `assimp v5.4.3` como static lib vía CPM, solo con importers OBJ + glTF + FBX habilitados (~30 MB menos de binario).
+- `MeshAsset` como tercer tipo de asset (`Texture` + `AudioClip` + `MeshAsset`); `MeshLoader::loadMeshWithAssimp` con flags `Triangulate | GenNormals | FlipUVs | CalcTangentSpace` y expansión de índices a vértices planos (matchea `glDrawArrays` sin EBO).
+- `AssetManager` extendido con `MeshAssetId` (u32, slot 0 = cubo primitivo fallback) + `MeshFactory` inyectable (default `NullMesh` stub para tests sin GL).
+- `MeshRendererComponent` refactorizado de `IMesh* + TextureAssetId` a `MeshAssetId + vector<TextureAssetId>`. Helper `materialOrMissing(i)`.
+- Render unificado a un solo loop scene-driven (`Scene::forEach<Transform, MeshRenderer>` iterando submeshes). `GridRenderer` eliminado (dead code tras la migración).
+- Drop de textura ahora usa `updateTileEntity(x, y, tex)` (edit in-place) en vez de `rebuildSceneFromMap`: preserva la selección del Hierarchy.
+- AssetBrowser con sección "Meshes" (encima de Audio) que lista `.obj/.gltf/.glb/.fbx` de `assets/meshes/`. Drag payload `"MOOD_MESH_ASSET"`; drop al Viewport spawnea entidad `Mesh_<path>` en el tile bajo el cursor.
+- `SceneSerializer` v2: schema nuevo con sección `entities` (filtrada por prefijo de tag `Tile_*`, solo MeshRenderer en este hito); archivos v1 se siguen leyendo con `entities=[]`. `SavedMap` extendido con `SavedEntity` + `SavedMeshRenderer`.
+- `EditorApplication::tryOpenProjectPath` aplica entidades persistidas tras `rebuildSceneFromMap`. Round-trip verificado end-to-end: drag pyramid x3 → Ctrl+S → Cerrar → Abrir → 3 entidades vuelven idénticas.
+- Tests: +8 casos / +34 asserciones (5 en `test_mesh_asset.cpp`, 2 en `test_scene_serializer.cpp`, test CMakeLists con `WORKING_DIRECTORY`). Suite total 90/380.
+- `assets/meshes/pyramid.obj` como mesh sample escrito a mano (5 verts / 6 tris / UVs por cara). `.gitignore` fix: `!assets/meshes/*.obj` para evitar colisión con `*.obj` de objetos MSVC.
+
+**Siguiente paso tras completarlo:** Hito 11 — Iluminación Phong/Blinn-Phong. Activar `LightComponent` (era placeholder del Hito 7), shader con normales, directional + point lights, demos de una escena iluminada. Plan en `docs/PLAN_HITO11.md`.
+
+### Pendientes menores detectados en Hito 10
+
+- **Preview 3D de meshes en el AssetBrowser** (thumbnails renderizados). El usuario lo pidió durante Bloque 5; requiere FB por mesh + mini-pipeline offscreen. **Trigger:** polish post-Hito 11 o cuando los meshes importados se vuelvan numerosos.
+- **EBO / `OpenGLIndexedMesh`.** Hoy el loader expande índices a vértices planos (x1.8 RAM típico). **Trigger:** primer mesh importado con >50k vértices.
+- **Hot-reload de meshes.** Análogo al de texturas (Hito 5). **Trigger:** iteración artística con archivos editados externamente.
+- **Drop de mesh reemplaza entidad existente** (vs siempre spawnear nueva). **Trigger:** cuando aparezca el caso de uso "cambiarle el mesh a X".
+- **Serializar `Script`/`Audio` components.** Fuera de scope hasta Scene authoritative. **Trigger:** Hito 14 (prefabs).
+- **Materiales reales** (color, normal map, metallic/roughness). Hoy solo texture por submesh. **Trigger:** Hito 17 (PBR).
+- **Drag & drop de audio** (arrastrado desde Hito 9). **Trigger:** Scene authoritative.
+- **Light components funcionales.** **Trigger:** Hito 11.
