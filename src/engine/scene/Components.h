@@ -10,7 +10,7 @@
 //     dueno del ciclo de vida.
 
 #include "core/Types.h"
-#include "engine/assets/AssetManager.h" // TextureAssetId, AudioAssetId
+#include "engine/assets/AssetManager.h" // TextureAssetId, AudioAssetId, MeshAssetId
 #include "engine/audio/AudioDevice.h"    // SoundHandle
 
 #include <glm/ext/matrix_transform.hpp>
@@ -19,10 +19,9 @@
 #include <glm/vec3.hpp>
 
 #include <string>
+#include <vector>
 
 namespace Mood {
-
-class IMesh;
 
 /// @brief Nombre legible de la entidad (para Hierarchy, logs, debug).
 struct TagComponent {
@@ -56,15 +55,32 @@ struct TransformComponent {
     }
 };
 
-/// @brief Indica que la entidad se dibuja con un mesh + textura dados.
-///        `mesh` es non-owning (AssetManager / motor son los duenos).
-///        `texture` es un id resolvible via `AssetManager::getTexture`.
+/// @brief Indica que la entidad se dibuja con un mesh + materiales asociados.
+///        `mesh` es un id resolvible via `AssetManager::getMesh`; si el id es
+///        invalido, getMesh() cae al slot 0 (cubo primitivo).
+///        `materials` tiene una `TextureAssetId` por submesh del MeshAsset; si
+///        es mas corto que el numero de submeshes, los submeshes restantes
+///        usan el slot 0 (missing.png).
+///
+///        Antes del Hito 10 este componente tenia `IMesh* mesh + TextureAssetId
+///        texture`. La migracion a ids permite (a) persistirlo en .moodmap
+///        (paths logicos estables), (b) soportar modelos importados con
+///        multiples submeshes, (c) swapear el mesh en el Inspector sin tocar
+///        el resto de la entidad.
 struct MeshRendererComponent {
-    IMesh* mesh = nullptr;
-    TextureAssetId texture = 0;
+    MeshAssetId mesh = 0;                       // 0 = cubo primitivo (fallback)
+    std::vector<TextureAssetId> materials;      // 1 textura por submesh
 
     MeshRendererComponent() = default;
-    MeshRendererComponent(IMesh* m, TextureAssetId t) : mesh(m), texture(t) {}
+    MeshRendererComponent(MeshAssetId m, TextureAssetId t) : mesh(m), materials{t} {}
+    MeshRendererComponent(MeshAssetId m, std::vector<TextureAssetId> mats)
+        : mesh(m), materials(std::move(mats)) {}
+
+    /// @brief Devuelve la textura del submesh i, o el slot 0 (missing) si
+    ///        la lista es mas corta.
+    TextureAssetId materialOrMissing(usize submeshIndex) const {
+        return (submeshIndex < materials.size()) ? materials[submeshIndex] : 0;
+    }
 };
 
 /// @brief Camara como componente. Stub por ahora; el editor sigue usando las

@@ -72,9 +72,9 @@ TEST_CASE("Entity: addComponent reemplaza el existente") {
 TEST_CASE("Scene::forEach itera entidades con los componentes pedidos") {
     Scene scene;
     Entity a = scene.createEntity("a");
-    a.addComponent<MeshRendererComponent>(nullptr, 1u);
+    a.addComponent<MeshRendererComponent>(MeshAssetId{0}, TextureAssetId{1});
     Entity b = scene.createEntity("b");
-    b.addComponent<MeshRendererComponent>(nullptr, 2u);
+    b.addComponent<MeshRendererComponent>(MeshAssetId{0}, TextureAssetId{2});
     Entity c = scene.createEntity("c"); // sin MeshRenderer
 
     int visited = 0;
@@ -82,7 +82,8 @@ TEST_CASE("Scene::forEach itera entidades con los componentes pedidos") {
     scene.forEach<MeshRendererComponent>(
         [&](Entity, MeshRendererComponent& mr) {
             ++visited;
-            sumIds += mr.texture;
+            // El ctor (mesh, tex) mete `tex` en materials[0].
+            if (!mr.materials.empty()) sumIds += mr.materials[0];
         });
     CHECK(visited == 2);
     CHECK(sumIds == 3u);

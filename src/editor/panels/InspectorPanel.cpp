@@ -3,6 +3,7 @@
 #include "editor/EditorUI.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/audio/AudioClip.h"
+#include "engine/render/MeshAsset.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 
@@ -66,11 +67,30 @@ void InspectorPanel::onImGuiRender() {
     }
 
     // --- MeshRendererComponent ---
+    // Con Hito 10, `mesh` es un MeshAssetId (no un IMesh* crudo) y `materials`
+    // es un vector de TextureAssetId (1 por submesh). Muestra metadata del
+    // mesh resuelto y la lista de materiales. Dropdown para cambiar el mesh
+    // entra en Bloque 5 (drag & drop desde AssetBrowser).
     if (e.hasComponent<MeshRendererComponent>()) {
         const auto& mr = e.getComponent<MeshRendererComponent>();
         ImGui::TextDisabled("MeshRenderer");
-        ImGui::Text("mesh: %s", mr.mesh != nullptr ? "set" : "null");
-        ImGui::Text("texture id: %u", mr.texture);
+        if (m_assets != nullptr) {
+            ImGui::Text("mesh: %s (id %u)",
+                         m_assets->meshPathOf(mr.mesh).c_str(), mr.mesh);
+            MeshAsset* asset = m_assets->getMesh(mr.mesh);
+            if (asset != nullptr) {
+                ImGui::Text("submeshes: %u, vertices: %u",
+                             static_cast<u32>(asset->submeshes.size()),
+                             asset->totalVertexCount());
+            }
+        } else {
+            ImGui::Text("mesh id: %u", mr.mesh);
+        }
+        ImGui::Text("materials: %u", static_cast<u32>(mr.materials.size()));
+        for (usize i = 0; i < mr.materials.size(); ++i) {
+            ImGui::BulletText("  [%zu] texture id %u", i,
+                               static_cast<unsigned>(mr.materials[i]));
+        }
         ImGui::TextDisabled("(editor de materiales en hitos posteriores)");
         ImGui::Separator();
     }

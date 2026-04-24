@@ -4,6 +4,7 @@
 #include "core/math/AABB.h"
 #include "engine/assets/PrimitiveMeshes.h"
 #include "engine/render/ITexture.h"
+#include "engine/render/MeshAsset.h"
 #include "engine/render/opengl/OpenGLDebugRenderer.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/render/opengl/OpenGLMesh.h"
@@ -267,8 +268,11 @@ void EditorApplication::rebuildSceneFromMap() {
                 origin.z + (static_cast<f32>(y) + 0.5f) * tileSize);
             t.scale = glm::vec3(tileSize);
 
+            // Mesh id 0 = cubo primitivo generado por el AssetManager.
+            // La textura del tile va como unico material (1 submesh = 1 textura).
             e.addComponent<MeshRendererComponent>(
-                m_cubeMesh.get(), m_map.tileTextureAt(x, y));
+                m_assetManager->missingMeshId(),
+                m_map.tileTextureAt(x, y));
         }
     }
 }
@@ -725,9 +729,12 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     m_gridRenderer->draw(m_map, origin, view, projection);
 
     // Render Scene-driven para entidades que NO vienen del grid (ej. el
-    // rotador demo del Hito 8). El GridRenderer ya dibujo las tiles, asi
-    // que se saltean por prefijo del tag — la migracion total a render
-    // scene-driven vive en Hito 10 (meshes via assimp).
+    // rotador demo del Hito 8 + modelos importados del Hito 10). El
+    // GridRenderer ya dibujo las tiles, asi que se saltean por prefijo del
+    // tag. La migracion total al scene-driven (sin GridRenderer) se hace en
+    // Bloque 4 de este hito.
+    // Itera por submeshes para soportar MeshAssets importados por assimp:
+    // 1 draw call por submesh, cambiando la textura segun `materialIndex`.
     if (m_scene) {
         m_defaultShader->bind();
         m_defaultShader->setMat4("uView", view);
@@ -740,10 +747,18 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                     const auto& tag = e.getComponent<TagComponent>();
                     if (tag.name.rfind("Tile_", 0) == 0) return;
                 }
-                if (mr.mesh == nullptr) return;
-                m_assetManager->getTexture(mr.texture)->bind(0);
+                MeshAsset* asset = m_assetManager->getMesh(mr.mesh);
+                if (asset == nullptr) return;
                 m_defaultShader->setMat4("uModel", t.worldMatrix());
-                m_renderer->drawMesh(*mr.mesh, *m_defaultShader);
+                for (usize i = 0; i < asset->submeshes.size(); ++i) {
+                    const auto& sub = asset->submeshes[i];
+                    if (sub.mesh == nullptr) continue;
+                    // Indice al array de materiales del componente
+                    // (fallback slot 0 si el array es corto).
+                    const TextureAssetId tex = mr.materialOrMissing(sub.materialIndex);
+                    m_assetManager->getTexture(tex)->bind(0);
+                    m_renderer->drawMesh(*sub.mesh, *m_defaultShader);
+                }
             });
     }
 
@@ -865,7 +880,8 @@ int EditorApplication::run() {
             auto& t = r.getComponent<TransformComponent>();
             t.position = glm::vec3(0.0f, 4.0f, 0.0f);
             t.scale = glm::vec3(1.0f);
-            r.addComponent<MeshRendererComponent>(m_cubeMesh.get(), m_wallTextureId);
+            // Usa el cubo fallback del AssetManager (slot 0) como mesh del rotador.
+            r.addComponent<MeshRendererComponent>(m_assetManager->missingMeshId(), m_wallTextureId);
             r.addComponent<ScriptComponent>(std::string{"assets/scripts/rotator.lua"});
             Log::editor()->info("Spawned rotador demo en (0, 4, 0)");
         }
