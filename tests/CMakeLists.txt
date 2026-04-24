@@ -17,6 +17,7 @@ add_executable(mood_tests
     test_scene.cpp
     test_lua.cpp
     test_lua_bindings.cpp
+    test_audio.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -32,6 +33,10 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/assets/AssetManager.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/serialization/SceneSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/serialization/ProjectSerializer.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/audio/AudioClip.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/audio/AudioDevice.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/audio/miniaudio_impl.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/AudioSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Log.cpp
     ${CMAKE_SOURCE_DIR}/src/core/LogRingSink.cpp
 )
@@ -43,6 +48,7 @@ target_link_libraries(mood_tests PRIVATE
     EnTT::EnTT
     lua_static
     sol2::sol2
+    miniaudio
 )
 
 target_include_directories(mood_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)

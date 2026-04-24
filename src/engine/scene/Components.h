@@ -10,7 +10,8 @@
 //     dueno del ciclo de vida.
 
 #include "core/Types.h"
-#include "engine/assets/AssetManager.h" // TextureAssetId
+#include "engine/assets/AssetManager.h" // TextureAssetId, AudioAssetId
+#include "engine/audio/AudioDevice.h"    // SoundHandle
 
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
@@ -96,6 +97,27 @@ struct ScriptComponent {
 
     ScriptComponent() = default;
     ScriptComponent(std::string p) : path(std::move(p)) {}
+};
+
+/// @brief Fuente de audio asociada a una entidad (Hito 9). Reproducción
+///        manejada por `AudioSystem`. Si `is3D`, usa el `TransformComponent`
+///        de la misma entidad para posicionar; si no, se mezcla plano.
+///
+/// El `SoundHandle` se setea cuando `AudioSystem` arranca la reproducción
+/// (los clips con `playOnStart=true` arrancan en el primer update). El flag
+/// `started` evita que un playOnStart dispare varias veces.
+struct AudioSourceComponent {
+    AudioAssetId clip = 0;          // 0 = missing silencio; default inocuo
+    float volume = 1.0f;            // lineal, escalado al master del device
+    bool loop = false;
+    bool playOnStart = true;        // dispara en el primer update del sistema
+    bool is3D = false;              // usa TransformComponent para posicion
+
+    SoundHandle handle = 0;         // llenado por AudioSystem cuando play
+    bool started = false;           // guard contra re-disparo de playOnStart
+
+    AudioSourceComponent() = default;
+    AudioSourceComponent(AudioAssetId c) : clip(c) {}
 };
 
 } // namespace Mood

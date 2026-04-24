@@ -31,6 +31,8 @@ class IMesh;
 class OpenGLDebugRenderer;
 class GridRenderer;
 class ScriptSystem;
+class AudioDevice;
+class AudioSystem;
 
 class EditorApplication {
 public:
@@ -129,6 +131,8 @@ private:
     std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
     std::unique_ptr<GridRenderer> m_gridRenderer;
     std::unique_ptr<ScriptSystem> m_scriptSystem;
+    std::unique_ptr<AudioDevice> m_audioDevice;
+    std::unique_ptr<AudioSystem> m_audioSystem;
 
     // AssetManager: owner de todas las texturas cargadas. Se destruye ANTES
     // del contexto GL (ver destructor).

@@ -39,6 +39,16 @@ add_library(stb INTERFACE)
 target_include_directories(stb INTERFACE external/stb)
 
 # ---------------------------------------------------------------------------
+# Target interno: miniaudio (single-header de David Reid, Hito 9)
+# ---------------------------------------------------------------------------
+# Mismo patron que stb: INTERFACE + una sola TU materializa los simbolos.
+add_library(miniaudio INTERFACE)
+target_include_directories(miniaudio INTERFACE external/miniaudio)
+# En Linux habra que linkear dl/pthread/m; en Windows el driver WASAPI viene
+# con el SDK. Por ahora solo soportamos Windows en CI, agregar condicional
+# cuando se active el Hito 25 (Linux).
+
+# ---------------------------------------------------------------------------
 # Dependencias externas gestionadas por CPM
 # ---------------------------------------------------------------------------
 
@@ -179,6 +189,10 @@ add_executable(MoodEditor
     src/engine/assets/PrimitiveMeshes.cpp
     src/engine/assets/stb_impl.cpp
 
+    src/engine/audio/AudioClip.cpp
+    src/engine/audio/AudioDevice.cpp
+    src/engine/audio/miniaudio_impl.cpp
+
     src/engine/serialization/SceneSerializer.cpp
     src/engine/serialization/ProjectSerializer.cpp
 
@@ -189,6 +203,7 @@ add_executable(MoodEditor
 
     src/engine/world/GridMap.cpp
 
+    src/systems/AudioSystem.cpp
     src/systems/GridRenderer.cpp
     src/systems/PhysicsSystem.cpp
     src/systems/ScriptSystem.cpp
@@ -230,6 +245,7 @@ target_link_libraries(MoodEditor PRIVATE
     EnTT::EnTT
     lua_static
     sol2::sol2
+    miniaudio
     OpenGL::GL
 )
 

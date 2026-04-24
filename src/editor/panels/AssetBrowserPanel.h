@@ -43,10 +43,17 @@ private:
         TextureAssetId id = 0;   // cargado en scan
     };
 
+    struct AudioEntry {
+        std::string logicalPath; // "audio/foo.wav"
+        std::string displayName; // "foo.wav"
+        AudioAssetId id = 0;
+    };
+
     void rescan();
 
     AssetManager* m_assetManager = nullptr;
     std::vector<Entry> m_entries;
+    std::vector<AudioEntry> m_audioEntries;
     std::optional<std::string> m_selected;
     bool m_scanned = false;
     bool m_reloadRequested = false;

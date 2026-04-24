@@ -37,6 +37,10 @@ std::shared_ptr<spdlog::logger>& assets();
 ///        errores de carga/ejecucion, mensajes de hot-reload.
 std::shared_ptr<spdlog::logger>& script();
 
+/// @brief Logger de audio (`audio`): AudioDevice init, AudioClip loading,
+///        playback starts/stops, errores del backend miniaudio.
+std::shared_ptr<spdlog::logger>& audio();
+
 /// @brief Sink en memoria con las últimas 512 entradas de log. El
 ///        `ConsolePanel` del editor lo consume para mostrar los logs en vivo.
 ///        `nullptr` si no se llamó a `init()` aún.

@@ -5,6 +5,7 @@
 namespace Mood {
 
 class EditorUI;
+class AssetManager;
 
 class InspectorPanel : public IPanel {
 public:
@@ -14,6 +15,10 @@ public:
     /// @brief Inyecta EditorUI para leer la entidad seleccionada.
     ///        Non-owning.
     void setEditorUi(EditorUI* ui) { m_ui = ui; }
+
+    /// @brief Inyecta el AssetManager para poblar dropdowns (texturas, audio)
+    ///        sin acoplar Inspector a EditorApplication. Non-owning.
+    void setAssetManager(AssetManager* am) { m_assets = am; }
 
     /// @brief Flag de cambio: true cuando el usuario edito un componente
     ///        este frame. `EditorApplication` lo consume tras `ui.draw()`
@@ -26,6 +31,7 @@ public:
 
 private:
     EditorUI* m_ui = nullptr;
+    AssetManager* m_assets = nullptr;
     bool m_editedThisFrame = false;
 };
 

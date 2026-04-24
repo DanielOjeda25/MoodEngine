@@ -23,12 +23,19 @@
 
 namespace Mood {
 
+class AudioClip;
+
 class ITexture;
 
 /// @brief Identificador estable de una textura dentro de un `AssetManager`.
 ///        Valor 0 se reserva para la textura "missing": pedir `getTexture(0)`
 ///        siempre devuelve algo renderizable.
 using TextureAssetId = u32;
+
+/// @brief Identificador estable de un AudioClip. Valor 0 reservado para el
+///        clip "missing" (silencio de 100 ms) para que `getAudio(0)` nunca
+///        sea null.
+using AudioAssetId = u32;
 
 class AssetManager {
 public:
@@ -38,12 +45,24 @@ public:
     using TextureFactory =
         std::function<std::unique_ptr<ITexture>(const std::string& filesystemPath)>;
 
-    /// @brief Construye el manager y carga la textura "missing". Si missing.png
-    ///        no existe genera una excepcion (esta rota la instalacion).
+    /// @brief Factoria de audio clips. Recibe path logico + filesystem y
+    ///        devuelve un AudioClip con la metadata poblada. Inyectable para
+    ///        testear sin hardware (mocks que devuelven clip con duracion=0).
+    using AudioClipFactory =
+        std::function<std::unique_ptr<AudioClip>(const std::string& logicalPath,
+                                                  const std::string& filesystemPath)>;
+
+    /// @brief Construye el manager y carga los fallbacks (missing.png y
+    ///        missing.wav). Si alguno falla, lanza: la instalacion esta rota.
     /// @param rootDir Carpeta raiz de assets (default: "assets").
-    /// @param factory Factoria de texturas. EditorApplication pasa una que
-    ///        crea `OpenGLTexture`. Los tests inyectan mocks.
-    AssetManager(std::string rootDir, TextureFactory factory);
+    /// @param textureFactory Factoria de texturas. EditorApplication pasa
+    ///        una que crea `OpenGLTexture`. Los tests inyectan mocks.
+    /// @param audioFactory Factoria de audio clips. Default: construye
+    ///        `AudioClip` directo (no requiere hardware, solo inspecciona
+    ///        metadata con ma_decoder). Los tests pueden inyectar stubs.
+    AssetManager(std::string rootDir,
+                 TextureFactory textureFactory,
+                 AudioClipFactory audioFactory = {});
     ~AssetManager();
 
     AssetManager(const AssetManager&) = delete;
@@ -80,13 +99,41 @@ public:
     /// @return cantidad de texturas efectivamente recargadas.
     usize reloadChanged();
 
+    // ---- Audio ----
+
+    /// @brief Carga (o devuelve cacheado) un AudioClip por path logico. En
+    ///        fallo devuelve `missingAudioId()` (silencio de 100 ms) y loguea
+    ///        al canal assets.
+    AudioAssetId loadAudio(std::string_view logicalPath);
+
+    /// @brief Devuelve el AudioClip del id. Nunca null: ids invalidos caen
+    ///        al fallback missing.
+    AudioClip* getAudio(AudioAssetId id) const;
+
+    /// @brief Id del clip fallback ("audio/missing.wav"). Siempre vale 0.
+    AudioAssetId missingAudioId() const { return 0; }
+
+    /// @brief Cantidad de clips cacheados (incluye missing).
+    usize audioCount() const { return m_audioClips.size(); }
+
+    /// @brief Path logico con el que se cargo un clip (para serializadores y
+    ///        el AssetBrowser). Id invalido devuelve el path de missing.
+    std::string audioPathOf(AudioAssetId id) const;
+
 private:
     VFS m_vfs;
-    TextureFactory m_factory;
+    TextureFactory m_textureFactory;
+    AudioClipFactory m_audioFactory;
+
+    // Texturas (Hito 5).
     std::unordered_map<std::string, TextureAssetId> m_textureCache;
     std::vector<std::unique_ptr<ITexture>> m_textures; // [0] = missing
     std::vector<std::string> m_texturePaths;           // paralelo a m_textures
     std::vector<std::filesystem::file_time_type> m_textureMtimes; // paralelo
+
+    // Audio (Hito 9).
+    std::unordered_map<std::string, AudioAssetId> m_audioCache;
+    std::vector<std::unique_ptr<AudioClip>> m_audioClips; // [0] = missing.wav
 };
 
 } // namespace Mood

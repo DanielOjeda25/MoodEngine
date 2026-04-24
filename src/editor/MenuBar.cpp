@@ -63,6 +63,12 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar rotador demo", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnRotator();
             }
+            // Demo Hito 9: spawnea una entidad con AudioSourceComponent
+            // (beep.wav loop 3D) en una esquina del mapa. En Play Mode,
+            // acercarse debería subir el volumen por atenuacion 3D.
+            if (ImGui::MenuItem("Agregar audio source demo", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnAudioSource();
+            }
             ImGui::EndMenu();
         }
 

@@ -16,6 +16,8 @@
 #include "engine/scene/ViewportPick.h"
 #include "engine/serialization/ProjectSerializer.h"
 #include "engine/serialization/SceneSerializer.h"
+#include "engine/audio/AudioDevice.h"
+#include "systems/AudioSystem.h"
 #include "systems/GridRenderer.h"
 #include "systems/PhysicsSystem.h"
 #include "systems/ScriptSystem.h"
@@ -179,10 +181,16 @@ EditorApplication::EditorApplication() {
     m_scene = std::make_unique<Scene>();
     m_scriptSystem = std::make_unique<ScriptSystem>();
 
+    // Audio (Hito 9). El device tolera fallo de init (modo mute) — el motor
+    // sigue funcionando aunque no haya hardware de audio.
+    m_audioDevice = std::make_unique<AudioDevice>();
+    m_audioSystem = std::make_unique<AudioSystem>(*m_audioDevice, *m_assetManager);
+
     // Inyectar dependencias en los paneles de ECS.
     m_ui.hierarchy().setScene(m_scene.get());
     m_ui.hierarchy().setEditorUi(&m_ui);
     m_ui.inspector().setEditorUi(&m_ui);
+    m_ui.inspector().setAssetManager(m_assetManager.get());
 
     buildInitialTestMap();
     rebuildSceneFromMap();
@@ -232,6 +240,9 @@ void EditorApplication::rebuildSceneFromMap() {
     // huerfanos: hay que tirarlos antes de recrear entidades con los
     // mismos handles numericos.
     if (m_scriptSystem) m_scriptSystem->clear();
+    // AudioSystem::clear() -> AudioDevice::stopAll(): los sonidos de los
+    // AudioSourceComponent de las entidades que estamos por destruir.
+    if (m_audioSystem) m_audioSystem->clear();
 
     const glm::vec3 origin = mapWorldOrigin();
     const f32 tileSize = m_map.tileSize();
@@ -533,6 +544,10 @@ EditorApplication::~EditorApplication() {
     // y el contexto (el destructor del Window destruye el contexto al final).
     // GridRenderer primero: solo guarda referencias, pero es dependiente.
     m_scriptSystem.reset(); // sol::state destructors; no dependen de GL
+    // AudioSystem antes que AudioDevice: el system tiene &device pero no
+    // toca el device en su destructor; stopAll lo llamamos antes via clear.
+    m_audioSystem.reset();
+    m_audioDevice.reset();
     m_gridRenderer.reset();
     m_debugRenderer.reset();
     m_assetManager.reset(); // dueño de las texturas
@@ -849,6 +864,26 @@ int EditorApplication::run() {
             Log::editor()->info("Spawned rotador demo en (0, 4, 0)");
         }
 
+        // Demo Hito 9: spawnea una entidad con AudioSourceComponent. Carga
+        // el beep.wav via AssetManager (cacheado despues del primer spawn)
+        // y lo ubica en una esquina del mapa (en world coords escala SI:
+        // 1 unidad = 1 m, tileSize=3m, esquina ~ (-10, 1.5, -10)).
+        if (m_ui.consumeSpawnAudioSourceRequest() && m_scene && m_assetManager) {
+            const AudioAssetId beepId = m_assetManager->loadAudio("audio/beep.wav");
+            Entity src = m_scene->createEntity("AudioSource demo");
+            auto& t = src.getComponent<TransformComponent>();
+            t.position = glm::vec3(-10.0f, 1.5f, -10.0f);
+            // Sin MeshRenderer: es una entidad invisible (marcador audio).
+            // El debug draw del Hito 4 solo dibuja tile colliders, no esto.
+            AudioSourceComponent asrc{beepId};
+            asrc.loop = true;
+            asrc.is3D = true;
+            asrc.playOnStart = true;
+            asrc.volume = 0.8f;
+            src.addComponent<AudioSourceComponent>(asrc);
+            Log::editor()->info("Spawned audio source demo en (-10, 1.5, -10)");
+        }
+
         // 2.5) Drop de textura desde AssetBrowser: usar el tile picking para
         //      convertir las NDC del drop en coords de tile y aplicar.
         const ViewportPanel::TextureDrop drop = m_ui.viewport().consumeTextureDrop();
@@ -878,6 +913,30 @@ int EditorApplication::run() {
         //      Transform se vean este mismo frame.
         if (m_scene && m_scriptSystem) {
             m_scriptSystem->update(*m_scene, dt);
+        }
+
+        // 3.6) Audio: arranca playOnStart, sincroniza posicion 3D, y setea
+        //      el listener a la camara activa. Despues de scripts para que
+        //      cualquier cambio de Transform del frame ya este aplicado.
+        if (m_scene && m_audioSystem) {
+            m_audioSystem->update(*m_scene, dt);
+
+            // Listener = camara activa segun modo. World-up fijo (0,1,0).
+            const glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
+            if (m_mode == EditorMode::Play) {
+                m_audioSystem->setListener(
+                    m_playCamera.position(),
+                    m_playCamera.forward(),
+                    worldUp);
+            } else {
+                // Editor Mode: listener en la posicion de la orbit cam
+                // mirando al origen (target por defecto del EditorCamera).
+                const glm::vec3 camPos = m_editorCamera.position();
+                const glm::vec3 fwd = glm::length(camPos) > 1e-5f
+                    ? glm::normalize(-camPos)
+                    : glm::vec3(0.0f, 0.0f, -1.0f);
+                m_audioSystem->setListener(camPos, fwd, worldUp);
+            }
         }
 
         // 4) Render 3D al framebuffer offscreen (el panel mostrara la textura).

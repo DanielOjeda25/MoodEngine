@@ -1,12 +1,16 @@
 #include "editor/panels/InspectorPanel.h"
 
 #include "editor/EditorUI.h"
+#include "engine/assets/AssetManager.h"
+#include "engine/audio/AudioClip.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 
 #include <imgui.h>
 
 #include <cstdio>
+#include <string>
+#include <vector>
 
 namespace Mood {
 
@@ -132,6 +136,72 @@ void InspectorPanel::onImGuiRender() {
             ImGui::TextWrapped("Error: %s", sc.lastError.c_str());
             ImGui::PopStyleColor();
         }
+        ImGui::Separator();
+    }
+
+    // --- AudioSourceComponent (Hito 9) ---
+    // Dropdown poblado a partir de los clips cargados en el AssetManager.
+    // Botón "Reproducir" resetea `started` para que AudioSystem dispare de
+    // nuevo en el próximo update (util para preview sin entrar a Play Mode).
+    if (e.hasComponent<AudioSourceComponent>()) {
+        auto& asrc = e.getComponent<AudioSourceComponent>();
+        ImGui::TextDisabled("AudioSource");
+
+        // Lista de clips del manager como combo. Si aun no hay assets manager
+        // inyectado, mostrar solo el id crudo.
+        if (m_assets != nullptr) {
+            std::vector<std::string> labels;
+            labels.reserve(m_assets->audioCount());
+            for (AudioAssetId i = 0; i < m_assets->audioCount(); ++i) {
+                labels.push_back(m_assets->audioPathOf(i));
+            }
+            int current = static_cast<int>(asrc.clip);
+            if (current < 0 || current >= static_cast<int>(labels.size())) {
+                current = 0;
+            }
+            // BeginCombo para soportar paths largos con scroll.
+            if (ImGui::BeginCombo("clip##as", labels[current].c_str())) {
+                for (int i = 0; i < static_cast<int>(labels.size()); ++i) {
+                    const bool selected = (current == i);
+                    if (ImGui::Selectable(labels[i].c_str(), selected)) {
+                        asrc.clip = static_cast<AudioAssetId>(i);
+                        asrc.started = false; // obligar a re-arrancar con el nuevo clip
+                        m_editedThisFrame = true;
+                    }
+                    if (selected) ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+        } else {
+            ImGui::Text("clip id: %u (asset manager no inyectado)", asrc.clip);
+        }
+
+        if (ImGui::SliderFloat("volume##as", &asrc.volume, 0.0f, 1.0f)) {
+            m_editedThisFrame = true;
+        }
+        if (ImGui::Checkbox("loop##as", &asrc.loop)) { m_editedThisFrame = true; }
+        ImGui::SameLine();
+        if (ImGui::Checkbox("playOnStart##as", &asrc.playOnStart)) {
+            m_editedThisFrame = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Checkbox("is3D##as", &asrc.is3D)) { m_editedThisFrame = true; }
+
+        // Preview: resetear `started` fuerza al AudioSystem a volver a
+        // disparar la reproduccion en el proximo frame. Requiere playOnStart.
+        if (ImGui::Button("Reproducir##as")) {
+            asrc.started = false;
+            if (!asrc.playOnStart) {
+                // Preview implicito: encender playOnStart temporalmente no
+                // es ideal (persiste). Mejor: advertir al usuario.
+                ImGui::OpenPopup("audio_preview_note");
+            }
+        }
+        if (ImGui::BeginPopup("audio_preview_note")) {
+            ImGui::TextUnformatted("Activa 'playOnStart' para que suene al disparar.");
+            ImGui::EndPopup();
+        }
+        ImGui::Separator();
     }
 
     ImGui::End();

@@ -76,6 +76,16 @@ public:
         return r;
     }
 
+    /// @brief Demo del Hito 9: request para crear una entidad con
+    ///        AudioSourceComponent (beep.wav loop + 3D) en una esquina del
+    ///        mapa. `EditorApplication` la consume despues de `draw()`.
+    void requestSpawnAudioSource() { m_spawnAudioSourceRequested = true; }
+    bool consumeSpawnAudioSourceRequest() {
+        const bool r = m_spawnAudioSourceRequested;
+        m_spawnAudioSourceRequested = false;
+        return r;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -142,6 +152,7 @@ private:
     ProjectAction m_projectAction = ProjectAction::None;
     bool m_hasProject = false;
     bool m_spawnRotatorRequested = false;
+    bool m_spawnAudioSourceRequested = false;
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;
 

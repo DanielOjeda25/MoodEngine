@@ -1,6 +1,7 @@
 #include "engine/assets/AssetManager.h"
 
 #include "core/Log.h"
+#include "engine/audio/AudioClip.h"
 #include "engine/render/ITexture.h"
 
 #include <stdexcept>
@@ -10,41 +11,64 @@ namespace Mood {
 
 namespace {
 
-constexpr const char* k_missingPath = "textures/missing.png";
+constexpr const char* k_missingTexturePath = "textures/missing.png";
+constexpr const char* k_missingAudioPath   = "audio/missing.wav";
 
 } // namespace
 
-AssetManager::AssetManager(std::string rootDir, TextureFactory factory)
+AssetManager::AssetManager(std::string rootDir,
+                            TextureFactory textureFactory,
+                            AudioClipFactory audioFactory)
     : m_vfs(std::filesystem::path(std::move(rootDir))),
-      m_factory(std::move(factory)) {
-    if (!m_factory) {
+      m_textureFactory(std::move(textureFactory)),
+      m_audioFactory(std::move(audioFactory)) {
+    if (!m_textureFactory) {
         throw std::runtime_error("AssetManager: se requiere una TextureFactory");
     }
+    // Audio factory por defecto: construye AudioClip directo. No requiere
+    // hardware; `AudioClip` inspecciona metadata con `ma_decoder_init_file`.
+    if (!m_audioFactory) {
+        m_audioFactory = [](const std::string& logical, const std::string& fs) {
+            return std::make_unique<AudioClip>(logical, fs);
+        };
+    }
 
-    // Slot 0 reservado para la textura missing. Si no carga, la instalacion
-    // esta rota: dejar que la excepcion se propague.
-    const auto missingFs = m_vfs.resolve(k_missingPath);
+    // ---- Slot 0 textura: missing.png (obligatorio) ----
+    const auto missingFs = m_vfs.resolve(k_missingTexturePath);
     if (missingFs.empty()) {
         throw std::runtime_error(
             std::string("AssetManager: path logico 'textures/missing.png' rechazado por VFS"));
     }
     try {
-        m_textures.emplace_back(m_factory(missingFs.generic_string()));
-        m_texturePaths.emplace_back(k_missingPath);
-        // mtime stamp para el hot-reload. Si el archivo no existe (tests con
-        // mocks), file_time_type por defecto funciona igual — nunca va a ser
-        // "menor" que uno real en futuros reloadChanged().
+        m_textures.emplace_back(m_textureFactory(missingFs.generic_string()));
+        m_texturePaths.emplace_back(k_missingTexturePath);
         std::error_code ec_mtime;
         m_textureMtimes.push_back(std::filesystem::last_write_time(missingFs, ec_mtime));
-        // Cachear el path del missing al id 0 para que una llamada futura a
-        // loadTexture("textures/missing.png") no cree una entrada duplicada.
-        m_textureCache.emplace(k_missingPath, missingTextureId());
+        m_textureCache.emplace(k_missingTexturePath, missingTextureId());
     } catch (const std::exception& e) {
         throw std::runtime_error(
             std::string("AssetManager: no se pudo cargar missing.png ('") +
             missingFs.generic_string() + "'): " + e.what());
     }
     Log::assets()->info("AssetManager: fallback 'missing' cargado desde {}", missingFs.generic_string());
+
+    // ---- Slot 0 audio: missing.wav (silencio 100ms; obligatorio) ----
+    const auto missingAudioFs = m_vfs.resolve(k_missingAudioPath);
+    if (missingAudioFs.empty()) {
+        throw std::runtime_error(
+            std::string("AssetManager: path logico 'audio/missing.wav' rechazado por VFS"));
+    }
+    try {
+        m_audioClips.emplace_back(m_audioFactory(k_missingAudioPath,
+                                                  missingAudioFs.generic_string()));
+        m_audioCache.emplace(k_missingAudioPath, missingAudioId());
+    } catch (const std::exception& e) {
+        throw std::runtime_error(
+            std::string("AssetManager: no se pudo cargar missing.wav ('") +
+            missingAudioFs.generic_string() + "'): " + e.what());
+    }
+    Log::assets()->info("AssetManager: fallback audio 'missing' cargado desde {}",
+                         missingAudioFs.generic_string());
 }
 
 AssetManager::~AssetManager() = default;
@@ -65,7 +89,7 @@ TextureAssetId AssetManager::loadTexture(std::string_view logicalPath) {
     }
 
     try {
-        auto tex = m_factory(fs.generic_string());
+        auto tex = m_textureFactory(fs.generic_string());
         const TextureAssetId id = static_cast<TextureAssetId>(m_textures.size());
         m_textures.push_back(std::move(tex));
         m_texturePaths.push_back(key);
@@ -99,6 +123,59 @@ std::string AssetManager::pathOf(TextureAssetId id) const {
     return m_texturePaths[id];
 }
 
+// ----------------------------------------------------------------------------
+// Audio
+// ----------------------------------------------------------------------------
+
+AudioAssetId AssetManager::loadAudio(std::string_view logicalPath) {
+    const std::string key(logicalPath);
+    if (auto it = m_audioCache.find(key); it != m_audioCache.end()) {
+        return it->second;
+    }
+
+    const auto fs = m_vfs.resolve(logicalPath);
+    if (fs.empty()) {
+        Log::assets()->warn(
+            "AssetManager: audio path '{}' rechazado por VFS. Fallback a missing.",
+            logicalPath);
+        m_audioCache.emplace(key, missingAudioId());
+        return missingAudioId();
+    }
+
+    try {
+        auto clip = m_audioFactory(key, fs.generic_string());
+        const AudioAssetId id = static_cast<AudioAssetId>(m_audioClips.size());
+        m_audioClips.push_back(std::move(clip));
+        m_audioCache.emplace(key, id);
+        Log::assets()->info("AssetManager: cargado audio {} -> id {} ({:.2f}s, {}Hz, {}ch)",
+                             logicalPath, id,
+                             m_audioClips.back()->durationSeconds(),
+                             m_audioClips.back()->sampleRate(),
+                             m_audioClips.back()->channels());
+        return id;
+    } catch (const std::exception& e) {
+        m_audioCache.emplace(key, missingAudioId());
+        Log::assets()->warn(
+            "AssetManager: fallback a missing.wav para '{}' ({})",
+            logicalPath, e.what());
+        return missingAudioId();
+    }
+}
+
+AudioClip* AssetManager::getAudio(AudioAssetId id) const {
+    if (id >= m_audioClips.size()) {
+        return m_audioClips[missingAudioId()].get();
+    }
+    return m_audioClips[id].get();
+}
+
+std::string AssetManager::audioPathOf(AudioAssetId id) const {
+    if (id >= m_audioClips.size()) {
+        return m_audioClips[missingAudioId()]->logicalPath();
+    }
+    return m_audioClips[id]->logicalPath();
+}
+
 usize AssetManager::reloadChanged() {
     usize reloaded = 0;
     for (TextureAssetId id = 0; id < m_textures.size(); ++id) {
@@ -115,7 +192,7 @@ usize AssetManager::reloadChanged() {
         if (mtime == m_textureMtimes[id]) continue;
 
         try {
-            auto fresh = m_factory(fs.generic_string());
+            auto fresh = m_textureFactory(fs.generic_string());
             m_textures[id] = std::move(fresh); // dtor del viejo -> glDeleteTextures
             m_textureMtimes[id] = mtime;
             ++reloaded;
