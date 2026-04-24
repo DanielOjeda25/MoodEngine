@@ -114,6 +114,26 @@ CPMAddPackage(
     VERSION 3.13.2
 )
 
+# Lua 5.4 (Hito 8): backend de scripting. Lua upstream no trae CMake; usamos
+# el wrapper walterschell/Lua que empaqueta lua-5.4.x con un CMakeLists.
+# Target: `lua_static`.
+CPMAddPackage(
+    NAME Lua
+    GITHUB_REPOSITORY walterschell/Lua
+    GIT_TAG v5.4.5
+    OPTIONS
+        "LUA_BUILD_BINARY OFF"
+        "LUA_BUILD_COMPILER OFF"
+)
+
+# sol2 (Hito 8): binding header-only C++17 <-> Lua. Se envuelve dentro de
+# src/engine/scripting/ para no exponer sol::* al resto del motor.
+CPMAddPackage(
+    NAME sol2
+    GITHUB_REPOSITORY ThePhD/sol2
+    GIT_TAG v3.3.0
+)
+
 # ---------------------------------------------------------------------------
 # Target interno: ImGui compilado como libreria estatica con backends SDL2 + OpenGL3
 # ---------------------------------------------------------------------------
@@ -198,6 +218,8 @@ target_link_libraries(MoodEditor PRIVATE
     nlohmann_json::nlohmann_json
     pfd
     EnTT::EnTT
+    lua_static
+    sol2::sol2
     OpenGL::GL
 )
 

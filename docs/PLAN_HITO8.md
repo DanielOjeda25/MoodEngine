@@ -26,7 +26,7 @@ Permitir que **entidades tengan comportamiento escrito en Lua**, no en C++. Meta
 
 ## Bloque 1 — Dependencias Lua + sol2
 
-- [ ] CPMAddPackage para Lua 5.4 (usar `walterschell/Lua` o un wrapper con CMakeLists utilizable; Lua upstream no trae CMake nativo).
+- [ ] CPMAddPackage para `walterschell/Lua` (wrapper CMake de Lua 5.4; Lua upstream no trae CMake nativo).
 - [ ] CPMAddPackage para `ThePhD/sol2` (header-only, versión `v3.3.0`).
 - [ ] Linkear ambos a `MoodEditor`.
 - [ ] Compilar un smoke test: `sol::state` + cargar `"print('hola')"` para confirmar que engancha.
@@ -36,17 +36,25 @@ Permitir que **entidades tengan comportamiento escrito en Lua**, no en C++. Meta
 - [ ] `src/engine/scene/Components.h`: agregar `ScriptComponent { std::string path; bool loaded = false; }`. El `sol::state` NO vive en el componente (no es copiable); vive en un mapa `entt::entity -> sol::state` en `ScriptSystem`.
 - [ ] `src/systems/ScriptSystem.{h,cpp}`:
   - `void update(Scene&, float dt)`: para cada entidad con `ScriptComponent`, si no está cargada, leer el archivo y `sol::state::script_file(...)`. Luego llamar `onUpdate(self, dt)` si existe en el script.
-  - API expuesta a Lua vía `usertype` de sol2: `Entity`, `TransformComponent`, `Log`, `Input`.
+  - API expuesta a Lua vía `usertype` de sol2: `Entity`, `TransformComponent`, `Log` (ver Bloque 3 para scope).
   - Manejo de errores: si el script tira, logear al canal `script` y desactivar ese script (pone `loaded=false` + guardar el error para no spamear).
+  - **Lifecycle**: exponer `clear()` que vacía el mapa `entt::entity -> sol::state`. Llamarlo desde `EditorApplication::rebuildSceneFromMap` (que hace `registry.clear()`) para evitar handles muertos en el ScriptSystem.
 
-## Bloque 3 — API C++ → Lua
+## Bloque 3 — API C++ → Lua (SCOPE ACOTADO)
+
+> **Decisión 2026-04-23:** Bloque 3 achicado al mínimo que el demo
+> `rotator.lua` requiere. `Input` y mutaciones de escena (`createEntity`/
+> `destroyEntity`) se difieren al Hito 8+ o cuando aparezca un demo que
+> los necesite. Evita scope creep exponiendo API que nadie usa todavia.
 
 - [ ] `src/engine/scripting/LuaBindings.{h,cpp}` centraliza los bindings.
-  - `Entity`: propiedades `tag`, `transform` (devuelve `TransformComponent&`), `hasComponent<T>()`, etc.
-  - `TransformComponent`: `position`, `rotationEuler`, `scale`, `worldMatrix()`.
-  - `Log`: funciones libres `log.info(str)`, `log.warn(str)`.
-  - `Input`: `input.isKeyDown("W")`, etc. (stub inicial basado en `SDL_GetKeyboardState`).
-  - `scene`: global con `createEntity(name)` / `destroyEntity(entity)`.
+  - `Entity`: sólo `.tag` (read-only) y `.transform` (devuelve `TransformComponent&`). Nada más.
+  - `TransformComponent`: `.position`, `.rotationEuler`, `.scale` con acceso por componente `.x/.y/.z`.
+  - `Log`: funciones libres `log.info(str)` y `log.warn(str)`.
+- [ ] **Diferidos (con trigger explícito):**
+  - `Input` bindings (`input.isKeyDown("W")` etc.). **Trigger:** primer script de gameplay que necesite teclado.
+  - `scene:createEntity(name)` / `scene:destroyEntity(entity)`. **Trigger:** primer script que necesite spawn/despawn en runtime.
+  - `hasComponent<T>()` y similares. **Trigger:** cuando aparezca un script con lógica condicional por componente.
 
 ## Bloque 4 — Hot-reload
 
