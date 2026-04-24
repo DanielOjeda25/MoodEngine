@@ -16,6 +16,7 @@ add_executable(mood_tests
     test_project_serializer.cpp
     test_scene.cpp
     test_lua.cpp
+    test_lua_bindings.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -25,6 +26,8 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scene/Scene.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/GridMap.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/PhysicsSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/ScriptSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scripting/LuaBindings.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/VFS.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/AssetManager.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/serialization/SceneSerializer.cpp

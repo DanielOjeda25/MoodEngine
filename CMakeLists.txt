@@ -117,6 +117,13 @@ CPMAddPackage(
 # Lua 5.4 (Hito 8): backend de scripting. Lua upstream no trae CMake; usamos
 # el wrapper walterschell/Lua que empaqueta lua-5.4.x con un CMakeLists.
 # Target: `lua_static`.
+# El wrapper walterschell/Lua registra `lua-testsuite` en CTest si
+# `LUA_ENABLE_TESTING` esta ON (default). Como desactivamos el binario
+# `lua.exe` arriba, el test falla por "Could not find executable lua".
+# Forzamos el cache con tipo BOOL antes de CPM porque los `option(...)`
+# internos del wrapper ignoran variables UNINITIALIZED.
+set(LUA_ENABLE_TESTING OFF CACHE BOOL "Build and run tests (Lua wrapper)" FORCE)
+
 CPMAddPackage(
     NAME Lua
     GITHUB_REPOSITORY walterschell/Lua
@@ -184,6 +191,9 @@ add_executable(MoodEditor
 
     src/systems/GridRenderer.cpp
     src/systems/PhysicsSystem.cpp
+    src/systems/ScriptSystem.cpp
+
+    src/engine/scripting/LuaBindings.cpp
 
     src/engine/render/opengl/OpenGLMesh.cpp
     src/engine/render/opengl/OpenGLShader.cpp
