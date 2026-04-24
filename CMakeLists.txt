@@ -230,7 +230,6 @@ add_executable(MoodEditor
     src/engine/world/GridMap.cpp
 
     src/systems/AudioSystem.cpp
-    src/systems/GridRenderer.cpp
     src/systems/PhysicsSystem.cpp
     src/systems/ScriptSystem.cpp
 

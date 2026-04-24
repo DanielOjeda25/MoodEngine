@@ -2,7 +2,6 @@
 
 #include "core/Log.h"
 #include "core/math/AABB.h"
-#include "engine/assets/PrimitiveMeshes.h"
 #include "engine/render/ITexture.h"
 #include "engine/render/MeshAsset.h"
 #include "engine/render/opengl/OpenGLDebugRenderer.h"
@@ -19,7 +18,6 @@
 #include "engine/serialization/SceneSerializer.h"
 #include "engine/audio/AudioDevice.h"
 #include "systems/AudioSystem.h"
-#include "systems/GridRenderer.h"
 #include "systems/PhysicsSystem.h"
 #include "systems/ScriptSystem.h"
 
@@ -160,11 +158,9 @@ EditorApplication::EditorApplication() {
     m_defaultShader = std::make_unique<OpenGLShader>(
         "shaders/default.vert", "shaders/default.frag");
 
-    MeshData cube = createCubeMesh();
-    m_cubeMesh = std::make_unique<OpenGLMesh>(cube.vertices, cube.attributes);
-
     // Factoria real: crea OpenGLTexture desde el path de filesystem. Los tests
-    // pasan otra factoria que devuelve mocks sin tocar GL.
+    // pasan otra factoria que devuelve mocks sin tocar GL. El cubo fallback
+    // ya no vive aca: el AssetManager lo genera via MeshFactory en el slot 0.
     m_assetManager = std::make_unique<AssetManager>(
         "assets",
         [](const std::string& fsPath) -> std::unique_ptr<ITexture> {
@@ -179,9 +175,6 @@ EditorApplication::EditorApplication() {
     m_ui.assetBrowser().setAssetManager(m_assetManager.get());
 
     m_debugRenderer = std::make_unique<OpenGLDebugRenderer>();
-
-    m_gridRenderer = std::make_unique<GridRenderer>(
-        *m_renderer, *m_defaultShader, *m_cubeMesh, *m_assetManager);
 
     m_ui.viewport().setFramebuffer(m_viewportFb.get());
 
@@ -275,6 +268,44 @@ void EditorApplication::rebuildSceneFromMap() {
                 m_map.tileTextureAt(x, y));
         }
     }
+}
+
+void EditorApplication::updateTileEntity(u32 tileX, u32 tileY, TextureAssetId texture) {
+    if (!m_scene) return;
+    const std::string name = "Tile_" + std::to_string(tileX) + "_" + std::to_string(tileY);
+
+    // Busqueda linear sobre ~30 entidades. Suficiente hasta que los mapas
+    // pasen de 16x16 o aparezca un Scene query indexado.
+    Entity found{};
+    m_scene->forEach<TagComponent>([&](Entity e, TagComponent& tag) {
+        if (!static_cast<bool>(found) && tag.name == name) found = e;
+    });
+
+    if (static_cast<bool>(found)) {
+        if (found.hasComponent<MeshRendererComponent>()) {
+            auto& mr = found.getComponent<MeshRendererComponent>();
+            if (mr.materials.empty()) mr.materials.push_back(texture);
+            else mr.materials[0] = texture;
+        } else {
+            found.addComponent<MeshRendererComponent>(
+                m_assetManager->missingMeshId(), texture);
+        }
+        return;
+    }
+
+    // La tile no tenia entidad (era Empty). Creamos una con los mismos
+    // defaults que rebuildSceneFromMap.
+    const glm::vec3 origin = mapWorldOrigin();
+    const f32 tileSize = m_map.tileSize();
+    Entity e = m_scene->createEntity(name);
+    auto& t = e.getComponent<TransformComponent>();
+    t.position = glm::vec3(
+        origin.x + (static_cast<f32>(tileX) + 0.5f) * tileSize,
+        origin.y + 0.5f * tileSize,
+        origin.z + (static_cast<f32>(tileY) + 0.5f) * tileSize);
+    t.scale = glm::vec3(tileSize);
+    e.addComponent<MeshRendererComponent>(
+        m_assetManager->missingMeshId(), texture);
 }
 
 void EditorApplication::updateWindowTitle() {
@@ -552,16 +583,13 @@ EditorApplication::~EditorApplication() {
 
     // Los recursos GL dependen del contexto; liberar ANTES de destruir ImGui
     // y el contexto (el destructor del Window destruye el contexto al final).
-    // GridRenderer primero: solo guarda referencias, pero es dependiente.
     m_scriptSystem.reset(); // sol::state destructors; no dependen de GL
     // AudioSystem antes que AudioDevice: el system tiene &device pero no
     // toca el device en su destructor; stopAll lo llamamos antes via clear.
     m_audioSystem.reset();
     m_audioDevice.reset();
-    m_gridRenderer.reset();
     m_debugRenderer.reset();
-    m_assetManager.reset(); // dueño de las texturas
-    m_cubeMesh.reset();
+    m_assetManager.reset(); // dueño de las texturas y meshes (incluido el cubo fallback)
     m_defaultShader.reset();
     m_viewportFb.reset();
     m_renderer.reset();
@@ -726,15 +754,16 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     const glm::vec3 origin = mapWorldOrigin();
     (void)dt; // Ya no rotamos el modelo; el mapa es estatico.
 
-    m_gridRenderer->draw(m_map, origin, view, projection);
-
-    // Render Scene-driven para entidades que NO vienen del grid (ej. el
-    // rotador demo del Hito 8 + modelos importados del Hito 10). El
-    // GridRenderer ya dibujo las tiles, asi que se saltean por prefijo del
-    // tag. La migracion total al scene-driven (sin GridRenderer) se hace en
-    // Bloque 4 de este hito.
-    // Itera por submeshes para soportar MeshAssets importados por assimp:
-    // 1 draw call por submesh, cambiando la textura segun `materialIndex`.
+    // Render scene-driven unificado (Hito 10 Bloque 4). Antes habia dos
+    // pases: GridRenderer loopeando el GridMap + pase scene-driven filtrando
+    // `Tile_`. Ahora `rebuildSceneFromMap` crea las entidades-tile ya con
+    // MeshRendererComponent, y este unico loop las dibuja junto con modelos
+    // importados / rotador demo / etc.
+    // GridMap sigue existiendo como fuente authoritative de la topologia
+    // (physics + save/load + rebuild); solo el render dejo de dependir de el.
+    //
+    // Itera por submeshes para soportar MeshAssets con multiples submeshes
+    // (imports assimp). 1 draw call por submesh, textura segun materialIndex.
     if (m_scene) {
         m_defaultShader->bind();
         m_defaultShader->setMat4("uView", view);
@@ -742,19 +771,15 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         m_defaultShader->setInt("uTexture", 0);
 
         m_scene->forEach<TransformComponent, MeshRendererComponent>(
-            [&](Entity e, TransformComponent& t, MeshRendererComponent& mr) {
-                if (e.hasComponent<TagComponent>()) {
-                    const auto& tag = e.getComponent<TagComponent>();
-                    if (tag.name.rfind("Tile_", 0) == 0) return;
-                }
+            [&](Entity, TransformComponent& t, MeshRendererComponent& mr) {
                 MeshAsset* asset = m_assetManager->getMesh(mr.mesh);
                 if (asset == nullptr) return;
                 m_defaultShader->setMat4("uModel", t.worldMatrix());
                 for (usize i = 0; i < asset->submeshes.size(); ++i) {
                     const auto& sub = asset->submeshes[i];
                     if (sub.mesh == nullptr) continue;
-                    // Indice al array de materiales del componente
-                    // (fallback slot 0 si el array es corto).
+                    // Fallback slot 0 (missing.png) si el array es mas corto
+                    // que el numero de submeshes.
                     const TextureAssetId tex = mr.materialOrMissing(sub.materialIndex);
                     m_assetManager->getTexture(tex)->bind(0);
                     m_renderer->drawMesh(*sub.mesh, *m_defaultShader);
@@ -918,9 +943,13 @@ int EditorApplication::run() {
             const TilePickResult hit = pickTile(m_map, mapWorldOrigin(), view, projection,
                                                 glm::vec2(drop.ndcX, drop.ndcY));
             if (hit.hit) {
-                m_map.setTile(hit.tileX, hit.tileY, TileType::SolidWall,
-                              static_cast<TextureAssetId>(drop.textureId));
-                rebuildSceneFromMap();
+                const auto texId = static_cast<TextureAssetId>(drop.textureId);
+                // Mantener el GridMap sincronizado (physics + serializer).
+                m_map.setTile(hit.tileX, hit.tileY, TileType::SolidWall, texId);
+                // Edit localizado en la Scene (preserva handles + seleccion).
+                // Reemplaza el rebuildSceneFromMap completo que se hacia antes
+                // del Hito 10 Bloque 4.
+                updateTileEntity(hit.tileX, hit.tileY, texId);
                 Log::editor()->info("Drop textura id={} -> tile ({}, {})",
                                      drop.textureId, hit.tileX, hit.tileY);
                 markDirty();

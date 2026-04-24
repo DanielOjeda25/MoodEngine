@@ -29,7 +29,6 @@ class IFramebuffer;
 class IShader;
 class IMesh;
 class OpenGLDebugRenderer;
-class GridRenderer;
 class ScriptSystem;
 class AudioDevice;
 class AudioSystem;
@@ -73,12 +72,20 @@ private:
 
     /// @brief Reconstruye `m_scene` desde cero a partir del estado actual de
     ///        `m_map`: una entidad por tile solido con Tag + Transform +
-    ///        MeshRenderer. Se llama en cada modificacion del mapa (drop,
-    ///        load, rebuild) para mantener ambos lados sincronizados.
-    ///        Estrategia brute-force O(W*H) — suficiente para los tamanos
-    ///        actuales (mapa 8x8 = ~30 entidades max). Optimizable cuando
-    ///        cambie el modelo primario a Scene-driven.
+    ///        MeshRenderer. Se llama al cargar proyecto / cerrar proyecto /
+    ///        buildInitialTestMap — cambios globales donde invalidar la
+    ///        seleccion es aceptable.
+    ///        Estrategia brute-force O(W*H). Para edits localizados (drop de
+    ///        textura sobre un tile), usar `updateTileEntity` que conserva
+    ///        handles y seleccion.
     void rebuildSceneFromMap();
+
+    /// @brief Edit localizado para una sola tile. Si la entidad ya existe
+    ///        (`Tile_X_Y`), le actualiza el MeshRenderer in-place; si no,
+    ///        la crea con los mismos defaults que rebuildSceneFromMap.
+    ///        Uso: drop de textura desde AssetBrowser (Hito 10 Bloque 4).
+    ///        Preserva la seleccion en Hierarchy.
+    void updateTileEntity(u32 tileX, u32 tileY, TextureAssetId texture);
 
     /// @brief Sincroniza el titulo de la ventana con el estado actual:
     ///        nombre del proyecto + indicador de dirty. Llamar cuando algo
@@ -127,9 +134,7 @@ private:
     std::unique_ptr<IRenderer> m_renderer;
     std::unique_ptr<IFramebuffer> m_viewportFb;
     std::unique_ptr<IShader> m_defaultShader;
-    std::unique_ptr<IMesh> m_cubeMesh;
     std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
-    std::unique_ptr<GridRenderer> m_gridRenderer;
     std::unique_ptr<ScriptSystem> m_scriptSystem;
     std::unique_ptr<AudioDevice> m_audioDevice;
     std::unique_ptr<AudioSystem> m_audioSystem;
