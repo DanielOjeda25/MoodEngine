@@ -52,8 +52,9 @@ void ViewportPanel::onImGuiRender() {
                 ndcY = 1.0f - (ly / imageSize.y) * 2.0f;
             };
 
-            // Drop target: el AssetBrowser emite payloads "MOOD_TEXTURE_ASSET"
-            // con el id de textura a aplicar al tile bajo el cursor.
+            // Drop target: el AssetBrowser emite payloads
+            // "MOOD_TEXTURE_ASSET" (id de textura a aplicar a un tile) o
+            // "MOOD_MESH_ASSET" (id de mesh a spawnear como nueva entidad).
             if (ImGui::BeginDragDropTarget()) {
                 if (const ImGuiPayload* payload =
                         ImGui::AcceptDragDropPayload("MOOD_TEXTURE_ASSET")) {
@@ -64,6 +65,17 @@ void ViewportPanel::onImGuiRender() {
                         float ndcY = 0.0f;
                         mousePosToNdc(ImGui::GetMousePos(), ndcX, ndcY);
                         m_pendingDrop = TextureDrop{true, ndcX, ndcY, id};
+                    }
+                }
+                if (const ImGuiPayload* payload =
+                        ImGui::AcceptDragDropPayload("MOOD_MESH_ASSET")) {
+                    u32 id = 0;
+                    if (payload->DataSize == sizeof(id)) {
+                        std::memcpy(&id, payload->Data, sizeof(id));
+                        float ndcX = 0.0f;
+                        float ndcY = 0.0f;
+                        mousePosToNdc(ImGui::GetMousePos(), ndcX, ndcY);
+                        m_pendingMeshDrop = MeshDrop{true, ndcX, ndcY, id};
                     }
                 }
                 ImGui::EndDragDropTarget();

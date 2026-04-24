@@ -3,6 +3,7 @@
 #include "core/Log.h"
 #include "engine/audio/AudioClip.h"
 #include "engine/render/ITexture.h"
+#include "engine/render/MeshAsset.h"
 
 #include <imgui.h>
 
@@ -17,9 +18,11 @@ namespace {
 // lookup inverso, esto sale de ahi.
 constexpr const char* k_textureDir = "assets/textures";
 constexpr const char* k_audioDir   = "assets/audio";
+constexpr const char* k_meshDir    = "assets/meshes";
 constexpr float k_thumbSize = 64.0f;
 constexpr const char* k_logicalPrefix      = "textures/";
 constexpr const char* k_audioLogicalPrefix = "audio/";
+constexpr const char* k_meshLogicalPrefix  = "meshes/";
 
 bool isPng(const std::filesystem::path& p) {
     auto ext = p.extension().string();
@@ -33,6 +36,13 @@ bool isAudio(const std::filesystem::path& p) {
     std::transform(ext.begin(), ext.end(), ext.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac";
+}
+
+bool isMesh(const std::filesystem::path& p) {
+    auto ext = p.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return ext == ".obj" || ext == ".gltf" || ext == ".glb" || ext == ".fbx";
 }
 
 } // namespace
@@ -80,9 +90,30 @@ void AssetBrowserPanel::rescan() {
                   });
     }
 
+    // Meshes: busca en assets/meshes/ por obj/gltf/glb/fbx. El AssetManager
+    // carga con assimp; si algun import falla cae a `missingMeshId()` (cubo)
+    // y el log del canal `assets` avisa.
+    m_meshEntries.clear();
+    std::error_code mesh_ec;
+    auto mesh_it = std::filesystem::directory_iterator(k_meshDir, mesh_ec);
+    if (!mesh_ec) {
+        for (const auto& entry : mesh_it) {
+            if (!entry.is_regular_file() || !isMesh(entry.path())) continue;
+            MeshEntry me;
+            me.displayName = entry.path().filename().string();
+            me.logicalPath = std::string(k_meshLogicalPrefix) + me.displayName;
+            me.id = m_assetManager->loadMesh(me.logicalPath);
+            m_meshEntries.push_back(std::move(me));
+        }
+        std::sort(m_meshEntries.begin(), m_meshEntries.end(),
+                  [](const MeshEntry& a, const MeshEntry& b) {
+                      return a.displayName < b.displayName;
+                  });
+    }
+
     m_scanned = true;
-    Log::assets()->info("AssetBrowserPanel: {} texturas, {} audios listados",
-                         m_entries.size(), m_audioEntries.size());
+    Log::assets()->info("AssetBrowserPanel: {} texturas, {} audios, {} meshes listados",
+                         m_entries.size(), m_audioEntries.size(), m_meshEntries.size());
 }
 
 void AssetBrowserPanel::onImGuiRender() {
@@ -175,6 +206,41 @@ void AssetBrowserPanel::onImGuiRender() {
 
         if (static_cast<int>((i + 1) % cols) != 0) {
             ImGui::SameLine();
+        }
+    }
+
+    // --- Sección Meshes (Hito 10 Bloque 5) ---
+    // Puesta justo despues de las texturas para que los modelos importados
+    // queden a la vista sin scroll. Lista plana (sin thumbnails todavia)
+    // con metadata resuelta por assimp. Cada item es arrastrable al
+    // Viewport para spawnear una entidad con `MeshRendererComponent`.
+    if (!m_meshEntries.empty()) {
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Meshes", ImGuiTreeNodeFlags_DefaultOpen)) {
+            for (const auto& me : m_meshEntries) {
+                MeshAsset* asset = m_assetManager->getMesh(me.id);
+                ImGui::PushID(me.logicalPath.c_str());
+                // Selectable para habilitar drag source; no cambia seleccion
+                // global del panel (esa la usa el flow de texturas).
+                ImGui::Selectable(me.displayName.c_str(), false);
+                // Drag source INMEDIATAMENTE despues del Selectable:
+                // BeginDragDropSource opera sobre el ultimo item, y si se llama
+                // tras el `SameLine + TextDisabled` siguiente se asociaria al
+                // texto gris (que no es draggeable).
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                    ImGui::SetDragDropPayload("MOOD_MESH_ASSET", &me.id, sizeof(me.id));
+                    ImGui::TextUnformatted(me.displayName.c_str());
+                    ImGui::EndDragDropSource();
+                }
+                if (asset != nullptr) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("[%u submeshes, %u v]",
+                                         static_cast<u32>(asset->submeshes.size()),
+                                         asset->totalVertexCount());
+                }
+                ImGui::PopID();
+            }
         }
     }
 

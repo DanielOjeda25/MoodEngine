@@ -61,6 +61,24 @@ public:
         return r;
     }
 
+    /// @brief Drop de un mesh sobre el viewport (Hito 10 Bloque 5). El
+    ///        consumidor usa el tile picking para poner la nueva entidad en
+    ///        el centro del tile bajo el cursor. Si el pick falla (cursor
+    ///        fuera del mapa), el spawn se descarta.
+    struct MeshDrop {
+        bool pending = false;
+        float ndcX = 0.0f;
+        float ndcY = 0.0f;
+        u32 meshId = 0; // castear a MeshAssetId en el consumidor
+    };
+
+    /// @brief Consume el ultimo mesh drop. Devuelve `pending=false` si no hay.
+    MeshDrop consumeMeshDrop() {
+        MeshDrop r = m_pendingMeshDrop;
+        m_pendingMeshDrop = MeshDrop{};
+        return r;
+    }
+
 private:
     IFramebuffer* m_framebuffer = nullptr;
     u32 m_desiredWidth = 0;
@@ -79,6 +97,7 @@ private:
     float m_mouseNdcY = 0.0f;
 
     TextureDrop m_pendingDrop{};
+    MeshDrop m_pendingMeshDrop{};
 };
 
 } // namespace Mood

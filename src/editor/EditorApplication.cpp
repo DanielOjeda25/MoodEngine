@@ -956,6 +956,43 @@ int EditorApplication::run() {
             }
         }
 
+        // 2.6) Drop de mesh desde AssetBrowser (Hito 10 Bloque 5): spawnea
+        //      una entidad con MeshRendererComponent en el centro del tile
+        //      bajo el cursor. Si el pick falla (cursor fuera del mapa), el
+        //      drop se descarta silenciosamente.
+        const ViewportPanel::MeshDrop mdrop = m_ui.viewport().consumeMeshDrop();
+        if (mdrop.pending && m_mode == EditorMode::Editor && m_scene) {
+            const float aspect = (m_viewportFb->height() > 0)
+                ? static_cast<float>(m_viewportFb->width()) / static_cast<float>(m_viewportFb->height())
+                : 1.0f;
+            const glm::mat4 view = m_editorCamera.viewMatrix();
+            const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
+            const TilePickResult hit = pickTile(m_map, mapWorldOrigin(), view, projection,
+                                                glm::vec2(mdrop.ndcX, mdrop.ndcY));
+            if (hit.hit) {
+                const auto meshId = static_cast<MeshAssetId>(mdrop.meshId);
+                const glm::vec3 origin = mapWorldOrigin();
+                const f32 tileSize = m_map.tileSize();
+                // Nombre incremental por si spawneamos varios del mismo mesh.
+                const std::string meshName = m_assetManager->meshPathOf(meshId);
+                Entity e = m_scene->createEntity("Mesh_" + meshName);
+                auto& t = e.getComponent<TransformComponent>();
+                t.position = glm::vec3(
+                    origin.x + (static_cast<f32>(hit.tileX) + 0.5f) * tileSize,
+                    origin.y + 0.5f * tileSize, // sobre el piso, altura = 0.5 tile
+                    origin.z + (static_cast<f32>(hit.tileY) + 0.5f) * tileSize);
+                t.scale = glm::vec3(1.0f);
+                // Material por defecto: slot 0 (missing.png). El usuario puede
+                // dropear texturas encima despues. Un TextureAssetId por
+                // submesh; los submeshes ausentes caen a slot 0 via
+                // `materialOrMissing`.
+                e.addComponent<MeshRendererComponent>(meshId, TextureAssetId{0});
+                Log::editor()->info("Drop mesh '{}' -> tile ({}, {})",
+                                     meshName, hit.tileX, hit.tileY);
+                markDirty();
+            }
+        }
+
         // 3) Input -> camaras.
         updateCameras(dt);
 

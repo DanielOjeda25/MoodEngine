@@ -49,11 +49,18 @@ private:
         AudioAssetId id = 0;
     };
 
+    struct MeshEntry {
+        std::string logicalPath; // "meshes/foo.obj"
+        std::string displayName; // "foo.obj"
+        MeshAssetId id = 0;
+    };
+
     void rescan();
 
     AssetManager* m_assetManager = nullptr;
     std::vector<Entry> m_entries;
     std::vector<AudioEntry> m_audioEntries;
+    std::vector<MeshEntry> m_meshEntries;
     std::optional<std::string> m_selected;
     bool m_scanned = false;
     bool m_reloadRequested = false;
