@@ -22,6 +22,10 @@ CMakeUserPresets.json
 *.ilk
 *.exp
 
+# Excepciones: Wavefront OBJ de assets (misma extension que objetos MSVC
+# pero son modelos 3D que si queremos versionar).
+!assets/meshes/*.obj
+
 # Logs
 logs/
 *.log
