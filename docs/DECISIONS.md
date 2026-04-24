@@ -386,3 +386,122 @@ explícitamente con `m_ui.setSelectedEntity(Entity{})`.
 **Razones:** evita un dangling-pointer bug sutil sin complicar la API.
 **Alternativas consideradas:** cambiar la API a `Scene&` por referencia
 (aún más seguro pero requiere pasar la scene por todos los constructores).
+
+## 2026-04-24: Lua 5.4 via walterschell/Lua wrapper + sol2 v3.3.0
+
+**Contexto:** Hito 8 integra scripting en Lua. Lua upstream (lua.org) no
+trae `CMakeLists.txt` nativo; CPM prefiere repos con CMake.
+**Decisión:** `walterschell/Lua` (tag `v5.4.5`) como wrapper CMake sobre
+Lua 5.4.5. Expone target `lua_static`. Opciones: `LUA_BUILD_BINARY OFF`,
+`LUA_BUILD_COMPILER OFF` (no necesitamos el REPL ni `luac`),
+`LUA_ENABLE_TESTING OFF` (si no, el wrapper registra `lua-testsuite` en
+CTest que falla por falta de `lua.exe`). El flag se setea como `CACHE BOOL`
+antes del `CPMAddPackage` porque los `option(...)` internos ignoran
+variables UNINITIALIZED.
+sol2 v3.3.0 (header-only) como binding C++17↔Lua; wrapped detrás de
+`src/engine/scripting/LuaBindings.{h,cpp}` para no filtrar `sol::*` al
+resto del motor.
+**Razones:** wrapper estable, Lua 5.4 con stdlib completa, sol2 es el
+default de facto para C++17.
+**Alternativas consideradas:**
+- Bajar las fuentes de Lua commiteadas (como stb): funciona pero
+  reinventar el CMake a mano cuando ya hay wrapper es fricción.
+- LuaJIT: mucho más rápido pero más restrictivo en plataformas y API; el
+  doc técnico pide Lua 5.4 pelado.
+- luabridge o kaguya: menos adoptados que sol2 hoy.
+**Revisar si:** el wrapper se desactualiza o sol2 v4 aporta cambios
+relevantes.
+
+## 2026-04-24: Un `sol::state` por entidad (islas aisladas)
+
+**Contexto:** cada entidad con `ScriptComponent` necesita su propio
+contexto Lua: las globals de un script no deberían cruzar a otras
+entidades.
+**Decisión:** `ScriptSystem` guarda
+`std::unordered_map<entt::entity, std::unique_ptr<sol::state>> m_states`.
+El `sol::state` NO vive en el `ScriptComponent` porque `sol::state` no es
+copiable y hacerlo movible complica el storage de EnTT (componentes se
+mueven al compactar). `unique_ptr` asegura que la dirección del state no
+cambie al crecer el mapa. `clear()` vacía el mapa cuando el registry se
+limpia (llamado desde `rebuildSceneFromMap`).
+**Razones:** aislamiento simple; los usertypes registrados apuntan al
+`Entity` específico via closures, no se confunden entre scripts.
+**Alternativas consideradas:** un `sol::state` compartido con "sandbox
+tables" por entidad (`_ENV`). Más eficiente en RAM pero complica la API y
+el reset: cerrar una entidad no libera su tabla trivialmente.
+**Revisar si:** aparecen cientos de entidades con script y el costo de
+un state per-entity (cada `sol::state` arrastra toda la stdlib de Lua
+cargada) empieza a pesar en RAM.
+
+## 2026-04-24: API C++→Lua con scope mínimo en Hito 8
+
+**Contexto:** el plan original de Hito 8 Bloque 3 listaba `Input`,
+`scene:createEntity`, etc. Durante la implementación el dev pidió
+"seguir estricto, sin desviarnos" (ver `feedback_plan_discipline` en
+memoria). El demo concreto de Bloque 6 (`rotator.lua`) solo necesita
+`self.transform.rotationEuler.y`.
+**Decisión:** exponer únicamente lo que `rotator.lua` necesita. Bindings
+disponibles desde Lua en `LuaBindings.cpp`:
+- `Entity.tag` (lectura), `Entity.transform` (ref al `TransformComponent&`).
+- `TransformComponent.position` / `.rotationEuler` / `.scale` (glm::vec3
+  con `.x/.y/.z`).
+- Tabla global `log` con `info(str)` y `warn(str)` → canal `script`.
+- Libs Lua habilitadas: `base`, `math`, `string`. NO `io`/`os`/`package`
+  (sandbox razonable; ningún script del motor necesita tocar el FS o
+  cargar módulos dinámicamente por ahora).
+`Input`, `scene:createEntity`, mutaciones de otros componentes, quedan
+diferidos con trigger explícito en `PLAN_HITO8.md`.
+**Razones:** evitar "scope creep" exponiendo API que nadie usa. Cada
+función expuesta tiene costo: superficie de tests, compatibilidad futura,
+cambios de comportamiento si la cambiamos. Prefiero agregar cuando haya
+un demo que la pida.
+**Alternativas consideradas:** exponer todo de entrada — viola
+feedback del dev y el principio de "no diseñar para hipotéticos" de
+CLAUDE.md.
+
+## 2026-04-24: Hot-reload de scripts con throttle global + state reuse
+
+**Contexto:** detectar cambios en `.lua` sin stat al FS cada frame.
+**Decisión:** `ScriptSystem` acumula `dt` en `m_hotReloadAccumulator`.
+Cuando supera `k_hotReloadInterval = 0.5 s`, chequea mtime de cada
+`ScriptComponent::path` contra `m_mtimes`. Si difiere, reejecuta
+`safe_script_file` sobre el **mismo** `sol::state` (preserva globals, solo
+redefine `onUpdate` y compañía). Log: `Recargado 'path/to/script.lua'`.
+El "Recargar" del Inspector, en contraste, pone `loaded=false` — eso
+fuerza un `sol::state` **nuevo** la próxima iteración (reset duro, útil
+cuando el dev cambia el path al script).
+**Razones:** diferenciar los dos casos:
+- Hot-reload automático: el usuario editó el archivo, quiere ver el
+  cambio sin perder el estado en-flight (posición del cubo, etc.).
+- "Recargar" manual: reset limpio (descarta globals acumulados).
+Throttle global porque el stat al filesystem es más barato por entrada que
+por frame con 60+ frames/s, pero sigue siendo innecesario a esa frecuencia.
+**Alternativas consideradas:** `std::filesystem` con `inotify`/`ReadDirectoryChangesW` — más eficiente
+pero mucho más código plataforma-específico para ahorrar un stat cada
+500 ms. Dejar para cuando haya ≥100 scripts.
+
+## 2026-04-24: Pase de render scene-driven (demo fix) separado de GridRenderer
+
+**Contexto:** el `GridRenderer` itera `GridMap` directamente, no el
+`Scene`. La entidad "Rotador" spawneada por el menú tenía
+`MeshRendererComponent` pero nadie la dibujaba. Es un gap del plan, no un
+bug del script: el header de `EditorApplication.h` ya decía "La migracion
+a Scene-driven render viene en hitos posteriores cuando haya geometria
+no-grid (assimp en Hito 10)".
+**Decisión:** agregar un pase inline en `renderSceneToViewport` DESPUÉS
+del `GridRenderer::draw`, iterando `Scene::forEach<Transform, MeshRenderer>`
+y dibujando cada entidad que NO tenga tag con prefijo `"Tile_"` (las
+entidades-tile de `rebuildSceneFromMap` sí lo tienen). El filtro evita
+overdraw: las tiles ya las dibujó el GridRenderer.
+**Razones:** cambio mínimo para que el Bloque 6 del Hito 8 funcione
+visualmente. Es explícitamente transicional — cuando Hito 10 reemplace
+el `GridRenderer` por un `RenderSystem` scene-driven, este pase se funde
+con él y el filtro por prefijo desaparece.
+**Alternativas consideradas:**
+- Agregar un `TileBackedComponent{}` marker component para el filtro en
+  vez del prefijo del tag: más limpio, pero es nueva API por un caso
+  puntual que va a morir en Hito 10. Prefijo de tag reusa data existente.
+- Reescribir el render a scene-driven ahora: fuera de scope de Hito 8 y
+  explícitamente diferido al 10.
+**Revisar si:** aparece otro caso de "entidades con MeshRenderer no-tile"
+antes del Hito 10; ahí vale la pena el marker component.

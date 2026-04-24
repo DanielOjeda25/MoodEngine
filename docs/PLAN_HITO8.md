@@ -22,23 +22,23 @@ Permitir que **entidades tengan comportamiento escrito en Lua**, no en C++. Meta
 
 ## Bloque 0 — Pendientes arrastrados
 
-- [ ] Revisar que no haya pendientes del Hito 7 que bloqueen scripting. En principio ninguno: el ECS ya está listo y `Scene` soporta `addComponent<ScriptComponent>`.
+- [x] Revisar que no haya pendientes del Hito 7 que bloqueen scripting. Ninguno: el ECS ya estaba listo y `Scene` soporta `addComponent<ScriptComponent>`.
 
 ## Bloque 1 — Dependencias Lua + sol2
 
-- [ ] CPMAddPackage para `walterschell/Lua` (wrapper CMake de Lua 5.4; Lua upstream no trae CMake nativo).
-- [ ] CPMAddPackage para `ThePhD/sol2` (header-only, versión `v3.3.0`).
-- [ ] Linkear ambos a `MoodEditor`.
-- [ ] Compilar un smoke test: `sol::state` + cargar `"print('hola')"` para confirmar que engancha.
+- [x] CPMAddPackage para `walterschell/Lua` (wrapper CMake de Lua 5.4; Lua upstream no trae CMake nativo). Tag `v5.4.5`. Target `lua_static`.
+- [x] CPMAddPackage para `ThePhD/sol2` (header-only, versión `v3.3.0`). Target `sol2::sol2`.
+- [x] Linkear ambos a `MoodEditor` y a `mood_tests`.
+- [x] Smoke test en `tests/test_lua.cpp`: `sol::state` carga `x = 1+2`, llama una función Lua desde C++, reporta error de sintaxis sin crashear.
 
 ## Bloque 2 — ScriptComponent + ScriptSystem
 
-- [ ] `src/engine/scene/Components.h`: agregar `ScriptComponent { std::string path; bool loaded = false; }`. El `sol::state` NO vive en el componente (no es copiable); vive en un mapa `entt::entity -> sol::state` en `ScriptSystem`.
-- [ ] `src/systems/ScriptSystem.{h,cpp}`:
-  - `void update(Scene&, float dt)`: para cada entidad con `ScriptComponent`, si no está cargada, leer el archivo y `sol::state::script_file(...)`. Luego llamar `onUpdate(self, dt)` si existe en el script.
-  - API expuesta a Lua vía `usertype` de sol2: `Entity`, `TransformComponent`, `Log` (ver Bloque 3 para scope).
-  - Manejo de errores: si el script tira, logear al canal `script` y desactivar ese script (pone `loaded=false` + guardar el error para no spamear).
-  - **Lifecycle**: exponer `clear()` que vacía el mapa `entt::entity -> sol::state`. Llamarlo desde `EditorApplication::rebuildSceneFromMap` (que hace `registry.clear()`) para evitar handles muertos en el ScriptSystem.
+- [x] `src/engine/scene/Components.h`: agregar `ScriptComponent { std::string path; bool loaded; std::string lastError; }`. El `sol::state` NO vive en el componente (no es copiable); vive en un mapa `entt::entity -> sol::state` en `ScriptSystem`.
+- [x] `src/systems/ScriptSystem.{h,cpp}`:
+  - `void update(Scene&, f32 dt)`: para cada entidad con `ScriptComponent`, si no está cargada, crea `sol::state`, registra bindings y `safe_script_file`. Luego llama `onUpdate(self, dt)` si existe.
+  - API expuesta a Lua vía `usertype` de sol2: `Entity`, `TransformComponent`, `log.info/warn` (ver Bloque 3 para scope).
+  - Manejo de errores: si el script tira, loguea al canal `script` y desactiva (`loaded=false` + guarda el error). No spamea.
+  - **Lifecycle**: `clear()` vacía el mapa `entt::entity -> sol::state`. Llamado desde `EditorApplication::rebuildSceneFromMap` (que hace `registry.clear()`) para evitar handles muertos en el ScriptSystem.
 
 ## Bloque 3 — API C++ → Lua (SCOPE ACOTADO)
 
@@ -47,51 +47,56 @@ Permitir que **entidades tengan comportamiento escrito en Lua**, no en C++. Meta
 > `destroyEntity`) se difieren al Hito 8+ o cuando aparezca un demo que
 > los necesite. Evita scope creep exponiendo API que nadie usa todavia.
 
-- [ ] `src/engine/scripting/LuaBindings.{h,cpp}` centraliza los bindings.
+- [x] `src/engine/scripting/LuaBindings.{h,cpp}` centraliza los bindings.
   - `Entity`: sólo `.tag` (read-only) y `.transform` (devuelve `TransformComponent&`). Nada más.
   - `TransformComponent`: `.position`, `.rotationEuler`, `.scale` con acceso por componente `.x/.y/.z`.
-  - `Log`: funciones libres `log.info(str)` y `log.warn(str)`.
-- [ ] **Diferidos (con trigger explícito):**
+  - `Log`: tabla `log` con `info(str)` y `warn(str)` → ruteados al canal `script`.
+  - `self` como global, seteado por entidad al crear el `sol::state`.
+  - Libs habilitadas: base + math + string. No io/os/package (sandbox razonable).
+- [x] **Diferidos (con trigger explícito):**
   - `Input` bindings (`input.isKeyDown("W")` etc.). **Trigger:** primer script de gameplay que necesite teclado.
   - `scene:createEntity(name)` / `scene:destroyEntity(entity)`. **Trigger:** primer script que necesite spawn/despawn en runtime.
   - `hasComponent<T>()` y similares. **Trigger:** cuando aparezca un script con lógica condicional por componente.
 
 ## Bloque 4 — Hot-reload
 
-- [ ] `ScriptSystem` mantiene un mapa `path -> file_time_type` y compara contra `std::filesystem::last_write_time` cada cierto tiempo (throttling cada 500 ms para no spamear I/O).
-- [ ] Si cambió, re-script_file sobre el mismo `sol::state` (preserva el estado del script).
-- [ ] Log: `script: recargado rotador.lua`.
+- [x] `ScriptSystem` mantiene un mapa `path -> file_time_type` y compara contra `std::filesystem::last_write_time`. Throttle: un acumulador de `dt` dispara el check cada 500 ms para no spamear I/O.
+- [x] Si cambió, re-`safe_script_file` sobre el mismo `sol::state` (preserva las globals del script).
+- [x] Log del canal `script`: `Recargado 'assets/scripts/rotator.lua'`.
+- [x] Distinción vs "Recargar" del Inspector: el botón pone `loaded=false`, lo que fuerza un `sol::state` nuevo (reset fuerte; útil ante path change).
 
 ## Bloque 5 — Inspector: editar ScriptComponent
 
-- [ ] `InspectorPanel`: agregar sección ScriptComponent con `InputText` del path + botón "Recargar".
-- [ ] Si el archivo no existe o tiró error la última vez, mostrar el error en rojo.
+- [x] `InspectorPanel`: sección ScriptComponent con `InputText` del path + botón "Recargar".
+- [x] Editar el path invalida el state (pone `loaded=false` + limpia `lastError`): el ScriptSystem re-crea el sol::state la próxima vez.
+- [x] Si hay `lastError`, se muestra en rojo con `TextWrapped`.
 
 ## Bloque 6 — Script de ejemplo + demo
 
-- [ ] `assets/scripts/rotator.lua`:
+- [x] `assets/scripts/rotator.lua`:
   ```lua
   function onUpdate(self, dt)
     self.transform.rotationEuler.y = self.transform.rotationEuler.y + 45 * dt
   end
   ```
-- [ ] Modificar `buildInitialTestMap` o agregar un botón "Agregar rotador" que cree una entidad suelta con `ScriptComponent{rotator.lua}`. Verificar que rota en el Viewport.
+- [x] Ítem de menú `Ayuda > Agregar rotador demo` (grayado sin proyecto) que dispara un request en `EditorUI::requestSpawnRotator()`. `EditorApplication` consume el request tras `ui.draw()` y crea una entidad "Rotador" con `Transform(0,4,0) + MeshRenderer(cube, gridTexture) + ScriptComponent("assets/scripts/rotator.lua")`.
+- [x] **Fix reactivo**: se agregó un pase scene-driven en `renderSceneToViewport` que itera entidades con `MeshRenderer + Transform` y las dibuja. Las tiles (con tag `Tile_*`) se saltean para no overdrawear. Sin este pase, la entidad tenía `MeshRenderer` pero nadie la dibujaba (el `GridRenderer` solo conoce el grid).
 
 ## Bloque 7 — Tests
 
-- [ ] `tests/test_lua_bindings.cpp`: smoke test del ScriptSystem sin GL:
-  - Crear Scene + Entity + ScriptComponent.
-  - Script inline que modifica el Transform.
-  - Correr system.update una vez y verificar que el Transform cambió.
-- [ ] Test de hot-reload con un archivo temporal: escribir v1, cargar, escribir v2, re-update, verificar que se aplicó la nueva lógica.
+- [x] `tests/test_lua_bindings.cpp`: smoke test del ScriptSystem sin GL.
+  - Script escribe `self.transform.position.x = 7.5` → update cambia el Transform.
+  - Hot-reload: escribir v1, update, sleep breve, sobrescribir con v2, update con dt > 0.5 s → se detecta el mtime y el segundo update usa la nueva lógica.
+  - Error de carga: script inválido → `loaded=false` y `lastError` no vacío, sin crash.
+- [x] Fix de build colateral: `LUA_ENABLE_TESTING=OFF` en `CMakeLists.txt` para que el wrapper walterschell/Lua no registre `lua-testsuite` en CTest (requería `lua.exe` que desactivamos).
 
 ## Bloque 8 — Cierre
 
-- [ ] Recompilar, tests verdes, editor demuestra el cubo rotando por script Lua.
-- [ ] Actualizar `docs/HITOS.md`, `docs/DECISIONS.md`, `docs/ESTADO_ACTUAL.md`.
-- [ ] Commits atómicos en español.
-- [ ] Tag `v0.8.0-hito8` + push.
-- [ ] Crear `docs/PLAN_HITO9.md` (audio básico con miniaudio).
+- [x] Recompilar, tests verdes (mood_tests 74/330), editor muestra el cubo rotando por script Lua.
+- [x] Actualizar `docs/HITOS.md`, `docs/DECISIONS.md`, `docs/ESTADO_ACTUAL.md`.
+- [x] Commits atómicos en español.
+- [x] Tag `v0.8.0-hito8` + push.
+- [x] Crear `docs/PLAN_HITO9.md` (audio básico con miniaudio).
 
 ---
 
@@ -107,10 +112,22 @@ Permitir que **entidades tengan comportamiento escrito en Lua**, no en C++. Meta
 
 ## Decisiones durante implementación
 
-_(llenar a medida que aparezcan)_
+Entradas detalladas en `DECISIONS.md` bajo fecha 2026-04-24 (Hito 8).
+
+- **Lua 5.4 via walterschell/Lua wrapper** en vez de integrar Lua upstream (que no trae CMake). Target `lua_static`, sin binarios ni tests del wrapper.
+- **Un `sol::state` por entidad** (islas aisladas): globals de un script no cruzan entre entidades. Storage en `unordered_map<entt::entity, unique_ptr<sol::state>>` para mantener punteros estables al crecer el mapa.
+- **Scope Bloque 3 achicado**: solo `Entity.tag`/`Entity.transform`, `TransformComponent`, `log.info/warn`. `Input`, `scene:createEntity`, etc. se difieren con triggers explícitos.
+- **Hot-reload con throttle global 500 ms**: un solo acumulador de `dt` por sistema, no por entidad; el stat al filesystem vale poco pero es inútil hacerlo cada frame.
+- **Hot-reload reutiliza el `sol::state`**: `safe_script_file` sobre el state existente preserva globals. El botón Recargar del Inspector, en cambio, hace reset fuerte (`loaded=false` → nuevo state) para cubrir el caso de cambio de path.
+- **Pase scene-driven de render como fix reactivo del Bloque 6**: sin él, la entidad rotador tenía `MeshRenderer` pero nadie la dibujaba. Las tiles se filtran por prefijo de tag (`"Tile_"`). Overdraw = 0 porque el filtro las excluye. La migración "real" a render scene-driven vive en Hito 10 (assimp).
 
 ---
 
 ## Pendientes que quedan para Hito 9 o posterior
 
-_(llenar al cerrar el hito)_
+- **`Input` bindings en Lua**. **Trigger**: primer script de gameplay que necesite teclado/mouse.
+- **`scene:createEntity` / `scene:destroyEntity` desde Lua**. **Trigger**: primer script que necesite spawn/despawn en runtime.
+- **Acceso a más componentes desde Lua** (`MeshRenderer`, `Camera`, etc.). **Trigger**: cuando un script real lo necesite.
+- **Debugger de Lua** (mobdebug o similar). **Trigger**: cuando los scripts crezcan y el debug por `print` se vuelva frustrante.
+- **Persistencia de scripts en `.moodmap`**: hoy el `ScriptComponent` no se serializa (el `.moodmap` solo conoce tiles). **Trigger**: Scene authoritative (Hito 10+).
+- **Prevención de leak de mtimes viejos** cuando el usuario cambia el path de un script vivo: `m_mtimes[oldPath]` queda en el mapa. Overhead despreciable hoy (3 paths ever). **Trigger**: si aparece caso de uso con cientos de paths distintos.

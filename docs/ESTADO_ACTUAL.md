@@ -6,11 +6,11 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 7 cerrado, mergeado a `main` y publicado en origin.**
-Tag: `v0.7.0-hito7`.
-Verificado automático (suite doctest 71/322 pasando, editor arranca con modal Welcome, Hierarchy lista 29 entidades, Inspector edita componentes, shutdown exit 0) + verificado por el dev a ojo (modal Welcome aparece sin recientes, crear+guardar+abrir preservan contenido, drag & drop funciona, Hierarchy poblada con entidades nombradas, click en Hierarchy selecciona y muestra componentes en Inspector).
+**Hito 8 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.8.0-hito8`.
+Verificado automático (suite doctest 74/330 pasando, editor arranca con modal Welcome, demo `rotator.lua` carga y rota el cubo, hot-reload funcional, Inspector con sección Script, shutdown exit 0) + verificado por el dev a ojo (cubo visible y rotando a 45°/s en Y tras "Agregar rotador demo", log del canal `script` con "Cargado"/"Recargado").
 
-**Próximo paso:** Hito 8 — Scripting con Lua. Integrar Lua 5.4 + sol2 como binding C++. `ScriptComponent` con path al `.lua` y hot-reload. API mínima expuesta a scripts: transform, input, log, spawn/destroy entity. Plan en `docs/PLAN_HITO8.md`.
+**Próximo paso:** Hito 9 — Audio básico con miniaudio. AudioClip como asset, `AudioSourceComponent`, reproducción de música y SFX, audio posicional 3D básico. Plan en `docs/PLAN_HITO9.md`.
 
 ### Lo que ya está hecho
 
@@ -68,6 +68,26 @@ Verificado automático (suite doctest 71/322 pasando, editor arranca con modal W
 - `fix(editor)`: status bar migrada a `ImGui::BeginViewportSideBar` + dibujada antes del dockspace; cierra el pendiente menor del Hito 3.
 - Tests: +13 casos nuevos (7 AABB, 5 GridMap, 8 PhysicsSystem). Suite total 30/159.
 
+**Hito 8** — Scripting con Lua (tag `v0.8.0-hito8`):
+- `walterschell/Lua` (tag `v5.4.5`) como wrapper CMake de Lua 5.4 upstream. Target `lua_static`. Opciones: `LUA_BUILD_BINARY OFF`, `LUA_BUILD_COMPILER OFF`, `LUA_ENABLE_TESTING OFF` (si no, registra `lua-testsuite` en CTest que requiere `lua.exe`).
+- `ThePhD/sol2` v3.3.0 como binding C++17↔Lua. Wrapped detrás de `src/engine/scripting/LuaBindings.{h,cpp}` para no filtrar `sol::*`.
+- `ScriptComponent { std::string path; bool loaded; std::string lastError; }` en `Components.h`. El `sol::state` NO vive en el componente (no copiable); vive en un `std::unordered_map<entt::entity, std::unique_ptr<sol::state>>` dentro del `ScriptSystem`.
+- `src/systems/ScriptSystem.{h,cpp}`: `update(Scene&, dt)` carga lazy al primer frame por entidad, llama `onUpdate(self, dt)`. Errores se loguean al canal nuevo `script` y desactivan el script hasta recarga. `clear()` se llama desde `rebuildSceneFromMap` (el `registry.clear()` invalida los handles).
+- `LuaBindings::setupLuaBindings(state, entity)`: expone `Entity.tag` (R) / `.transform` (REF a `TransformComponent&`), `TransformComponent.position/.rotationEuler/.scale` (glm::vec3 con `.x/.y/.z`), tabla global `log` con `info/warn`. `self` global. Libs habilitadas: `base` + `math` + `string` (sin io/os/package: sandbox razonable).
+- Hot-reload (Bloque 4): throttle global 500 ms via accumulator; al cambiar mtime re-ejecuta `safe_script_file` sobre el mismo `sol::state` (preserva globals). Log: `Recargado '…'`.
+- Inspector (Bloque 5): sección Script con `InputText` del path + botón **Recargar** + `lastError` en rojo. Recargar/editar path → `loaded=false` (reset duro del state).
+- Demo (Bloque 6): `assets/scripts/rotator.lua` (+45°/s en Y). Item de menú `Ayuda > Agregar rotador demo`. `EditorUI::requestSpawnRotator/consumeSpawnRotatorRequest`. `EditorApplication` crea entidad "Rotador" con Transform(0,4,0) + MeshRenderer(cubo+grid.png) + ScriptComponent.
+- **Fix reactivo**: sin render scene-driven, la entidad tenía MeshRenderer pero nadie la dibujaba. Se agregó un pase inline en `renderSceneToViewport` que itera `Scene::forEach<Transform, MeshRenderer>` saltando entidades con tag prefijo `Tile_`. Transicional — Hito 10 migrará el render completo a scene-driven.
+- Tests: +3 casos nuevos en `test_lua_bindings.cpp` (script muta Transform, hot-reload re-ejecuta, error guarda `lastError`). Suite total 74/330.
+
+**Hito 7** — Entidades, componentes, jerarquía (tag `v0.7.0-hito7`):
+- EnTT 3.13.2 via CPM, linkeada a MoodEditor + mood_tests.
+- `Scene` (envuelve `entt::registry`) + `Entity` (16 bytes: `entt::entity` + `Scene*`) + `Components.h` (Tag, Transform, MeshRenderer, Camera, Light). Todo `entt::` escondido detrás de la fachada.
+- `rebuildSceneFromMap` mantiene la Scene sincronizada con el GridMap (llamada en buildInitial / tryOpenProjectPath / drop / closeProject). Se hace `registry.clear()` en-place para no invalidar los `Scene*` de los paneles.
+- `HierarchyPanel` (panel izquierdo 18%) lista entidades por tag, click selecciona.
+- `InspectorPanel` reescrito con secciones por componente (InputText, DragFloat3, ColorEdit3, Combo). Ediciones son ephemeral en este hito (el `.moodmap` sigue siendo grid).
+- Tests: +8 casos / +24 asserciones. Suite 71/322.
+
 **Hito 6** — Serialización de proyectos y mapas (tag `v0.6.0-hito6`):
 - Bloque 0 (arrastrado Hito 5): `GridRenderer` extraído a `src/systems/GridRenderer.{h,cpp}`; `ViewportPick` + hover cyan del tile bajo el cursor; drag & drop Asset Browser→tile con payload `"MOOD_TEXTURE_ASSET"`; `AssetManager` con `TextureFactory` inyectable (desbloquea tests sin GL); menú `Ver > Restablecer layout`; debug lines a 2 px; pan middle-drag estilo Blender en `EditorCamera`.
 - `src/engine/serialization/JsonHelpers.h` (header-only): adaptadores ADL para `glm::vec2/3/4` (array `[x,y,z]`), `AABB` (`{min,max}`), `TileType` (strings `"empty"/"solid_wall"` via `NLOHMANN_JSON_SERIALIZE_ENUM`). Constantes `k_MoodmapFormatVersion=1`, `k_MoodprojFormatVersion=1` + `checkFormatVersion` que rechaza versiones futuras.
@@ -91,6 +111,8 @@ Verificado automático (suite doctest 71/322 pasando, editor arranca con modal W
 - nlohmann_json `3.11.3` (serialización de `.moodmap` / `.moodproj`)
 - portable-file-dialogs `0.1.0` (DOWNLOAD_ONLY, target INTERFACE propio `pfd`)
 - EnTT `3.13.2` (ECS, Hito 7; oculto detrás de fachada `Scene`/`Entity`)
+- Lua `5.4.5` via `walterschell/Lua` wrapper (Hito 8; target `lua_static`)
+- sol2 `v3.3.0` (Hito 8; binding C++↔Lua header-only, aislado detrás de `LuaBindings`)
 
 ### Herramientas externas necesarias (solo para regenerar, no para build)
 
@@ -156,20 +178,20 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: implementar el Hito 8
+### Tarea inmediata: implementar el Hito 9
 
-El Hito 7 está cerrado (tag `v0.7.0-hito7` en origin). El foco ahora es el **Hito 8 — Scripting con Lua**: integrar Lua 5.4 + sol2, `ScriptComponent`, API mínima al motor (transform/input/log/spawn), hot-reload de scripts.
+El Hito 8 está cerrado (tag `v0.8.0-hito8` en origin). El foco ahora es el **Hito 9 — Audio básico** con miniaudio. `AudioClip` como tipo de asset, `AudioSourceComponent`, reproducción de música y SFX, base de audio posicional 3D.
 
-El plan desglosado por tareas está en `docs/PLAN_HITO8.md`.
+El plan desglosado por tareas está en `docs/PLAN_HITO9.md`.
 
-**Punto de arranque concreto:** agregar Lua (via CPM desde `lua/lua` o mirror) y `sol2` (header-only, vía CPM de `ThePhD/sol2`). Definir `ScriptSystem` que instancie un `sol::state` por entidad con `ScriptComponent`, llame a `onUpdate(dt)` del script cada frame.
+**Punto de arranque concreto:** agregar miniaudio (header-only, commiteado en `external/miniaudio/` como stb) y crear `src/engine/audio/AudioDevice.{h,cpp}` que inicialice el device default. Después, `AudioClip` como segundo tipo de asset del `AssetManager`, `AudioSourceComponent`, y un `AudioSystem` que actualice posición 3D leyendo el `TransformComponent` de la entidad.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO8.md`.
+1. Leer `docs/PLAN_HITO9.md`.
 2. Trabajar bloque por bloque, marcando en el plan al cerrar cada uno.
-3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial (p. ej. cómo exponer la API C++ a Lua: funciones libres vs métodos de Scene, cómo manejar errores de script).
-4. Al final: commits atómicos en español, merge a main, tag `v0.8.0-hito8`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO9.md`.
+3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial (p. ej. AudioClip como variante discriminada en `AssetManager` vs `AssetManager` genérico, cómo integrar `audio.play()` en Lua si se expone).
+4. Al final: commits atómicos en español, merge a main, tag `v0.9.0-hito9`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO10.md`.
 
 ---
 
