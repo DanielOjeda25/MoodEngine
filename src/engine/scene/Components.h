@@ -92,13 +92,21 @@ struct CameraComponent {
     float farPlane = 100.0f;
 };
 
-/// @brief Luz. Placeholder para Hito 11 (iluminacion Phong/Blinn-Phong).
+/// @brief Luz. Activada en Hito 11 (Blinn-Phong forward).
+///        - `Directional`: usa `direction` (no la posicion del Transform). Solo
+///          se considera la PRIMERA encontrada (single sun).
+///        - `Point`: usa la posicion del `TransformComponent`. Atenuacion
+///          cuadratica suave hasta `radius`. Hasta MAX_POINT_LIGHTS=8 activas;
+///          el resto se ignora con un warn al loguear.
 struct LightComponent {
     enum class Type : u8 { Directional = 0, Point = 1 };
 
     Type type = Type::Point;
     glm::vec3 color{1.0f};
     float intensity = 1.0f;
+    float radius = 10.0f;                    // solo Point
+    glm::vec3 direction{0.0f, -1.0f, 0.0f};  // solo Directional, normalizada
+    bool enabled = true;
 };
 
 /// @brief Behavior en Lua (Hito 8). `path` es logico (ej. "scripts/rotator.lua").

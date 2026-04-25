@@ -19,6 +19,7 @@ add_executable(mood_tests
     test_lua_bindings.cpp
     test_audio.cpp
     test_mesh_asset.cpp
+    test_lighting.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -40,6 +41,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/audio/AudioDevice.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/audio/miniaudio_impl.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/AudioSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/LightSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Log.cpp
     ${CMAKE_SOURCE_DIR}/src/core/LogRingSink.cpp
 )

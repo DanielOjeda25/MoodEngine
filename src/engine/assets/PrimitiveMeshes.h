@@ -17,9 +17,10 @@ struct MeshData {
     std::vector<VertexAttribute> attributes;
 };
 
-/// @brief Cubo unitario [-0.5, +0.5]^3 con color por vertice + UVs por cara.
+/// @brief Cubo unitario [-0.5, +0.5]^3 con color por vertice + UVs por cara
+///        + normales planas por cara (Hito 11: el iluminado lo necesita).
 ///        36 vertices (6 caras * 2 triangulos * 3 vertices, sin EBO).
-///        Orden de atributos: pos(3) + color(3) + uv(2) -> stride 8 floats.
+///        Orden de atributos: pos(3) + color(3) + uv(2) + normal(3) -> stride 11.
 MeshData createCubeMesh();
 
 } // namespace Mood

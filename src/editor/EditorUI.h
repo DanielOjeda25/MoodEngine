@@ -86,6 +86,16 @@ public:
         return r;
     }
 
+    /// @brief Demo del Hito 11: request para crear una entidad con
+    ///        LightComponent (Point, blanco, intensidad 1, radius 12)
+    ///        suspendida sobre el centro del mapa.
+    void requestSpawnPointLight() { m_spawnPointLightRequested = true; }
+    bool consumeSpawnPointLightRequest() {
+        const bool r = m_spawnPointLightRequested;
+        m_spawnPointLightRequested = false;
+        return r;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -153,6 +163,7 @@ private:
     bool m_hasProject = false;
     bool m_spawnRotatorRequested = false;
     bool m_spawnAudioSourceRequested = false;
+    bool m_spawnPointLightRequested = false;
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;
 

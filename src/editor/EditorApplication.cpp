@@ -18,6 +18,7 @@
 #include "engine/serialization/SceneSerializer.h"
 #include "engine/audio/AudioDevice.h"
 #include "systems/AudioSystem.h"
+#include "systems/LightSystem.h"
 #include "systems/PhysicsSystem.h"
 #include "systems/ScriptSystem.h"
 
@@ -157,6 +158,10 @@ EditorApplication::EditorApplication() {
 
     m_defaultShader = std::make_unique<OpenGLShader>(
         "shaders/default.vert", "shaders/default.frag");
+    // Hito 11: shader iluminado para todas las entidades con MeshRenderer.
+    // El default queda vivo solo para emergencias (UI/debug si aparece).
+    m_litShader = std::make_unique<OpenGLShader>(
+        "shaders/lit.vert", "shaders/lit.frag");
 
     // Factoria real: crea OpenGLTexture desde el path de filesystem. Los tests
     // pasan otra factoria que devuelve mocks sin tocar GL. El cubo fallback
@@ -180,6 +185,7 @@ EditorApplication::EditorApplication() {
 
     m_scene = std::make_unique<Scene>();
     m_scriptSystem = std::make_unique<ScriptSystem>();
+    m_lightSystem  = std::make_unique<LightSystem>();
 
     // Audio (Hito 9). El device tolera fallo de init (modo mute) — el motor
     // sigue funcionando aunque no haya hardware de audio.
@@ -468,6 +474,20 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
                 }
                 e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
             }
+            // Hito 11: aplicar LightComponent persistido si existe.
+            if (se.light.has_value()) {
+                const auto& sl = *se.light;
+                LightComponent lc{};
+                lc.type = (sl.type == "directional")
+                    ? LightComponent::Type::Directional
+                    : LightComponent::Type::Point;
+                lc.color     = sl.color;
+                lc.intensity = sl.intensity;
+                lc.radius    = sl.radius;
+                lc.direction = sl.direction;
+                lc.enabled   = sl.enabled;
+                e.addComponent<LightComponent>(lc);
+            }
         }
     }
     m_project = std::move(loaded);
@@ -612,8 +632,10 @@ EditorApplication::~EditorApplication() {
     // toca el device en su destructor; stopAll lo llamamos antes via clear.
     m_audioSystem.reset();
     m_audioDevice.reset();
+    m_lightSystem.reset();
     m_debugRenderer.reset();
     m_assetManager.reset(); // dueño de las texturas y meshes (incluido el cubo fallback)
+    m_litShader.reset();
     m_defaultShader.reset();
     m_viewportFb.reset();
     m_renderer.reset();
@@ -789,16 +811,25 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     // Itera por submeshes para soportar MeshAssets con multiples submeshes
     // (imports assimp). 1 draw call por submesh, textura segun materialIndex.
     if (m_scene) {
-        m_defaultShader->bind();
-        m_defaultShader->setMat4("uView", view);
-        m_defaultShader->setMat4("uProjection", projection);
-        m_defaultShader->setInt("uTexture", 0);
+        // Hito 11: el render scene-driven usa el shader iluminado. Recolectamos
+        // las luces de la scene una vez por frame y subimos los uniforms antes
+        // de los draws.
+        const glm::vec3 cameraPos = (m_mode == EditorMode::Play)
+            ? m_playCamera.position()
+            : m_editorCamera.position();
+        LightFrameData lights = m_lightSystem->buildFrameData(*m_scene);
+
+        m_litShader->bind();
+        m_litShader->setMat4("uView", view);
+        m_litShader->setMat4("uProjection", projection);
+        m_litShader->setInt("uTexture", 0);
+        m_lightSystem->bindUniforms(*m_litShader, lights, cameraPos);
 
         m_scene->forEach<TransformComponent, MeshRendererComponent>(
             [&](Entity, TransformComponent& t, MeshRendererComponent& mr) {
                 MeshAsset* asset = m_assetManager->getMesh(mr.mesh);
                 if (asset == nullptr) return;
-                m_defaultShader->setMat4("uModel", t.worldMatrix());
+                m_litShader->setMat4("uModel", t.worldMatrix());
                 for (usize i = 0; i < asset->submeshes.size(); ++i) {
                     const auto& sub = asset->submeshes[i];
                     if (sub.mesh == nullptr) continue;
@@ -806,7 +837,7 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                     // que el numero de submeshes.
                     const TextureAssetId tex = mr.materialOrMissing(sub.materialIndex);
                     m_assetManager->getTexture(tex)->bind(0);
-                    m_renderer->drawMesh(*sub.mesh, *m_defaultShader);
+                    m_renderer->drawMesh(*sub.mesh, *m_litShader);
                 }
             });
     }
@@ -939,6 +970,24 @@ int EditorApplication::run() {
         // el beep.wav via AssetManager (cacheado despues del primer spawn)
         // y lo ubica en una esquina del mapa (en world coords escala SI:
         // 1 unidad = 1 m, tileSize=3m, esquina ~ (-10, 1.5, -10)).
+        // Demo Hito 11: spawnea una luz puntual blanca sobre el centro del
+        // mapa. Activa el iluminado real — sin esto la sala se ve solo con
+        // el ambient global y queda muy oscura.
+        if (m_ui.consumeSpawnPointLightRequest() && m_scene) {
+            Entity light = m_scene->createEntity("Luz demo");
+            auto& t = light.getComponent<TransformComponent>();
+            t.position = glm::vec3(0.0f, 4.0f, 0.0f);
+            LightComponent lc{};
+            lc.type      = LightComponent::Type::Point;
+            lc.color     = glm::vec3(1.0f, 0.95f, 0.85f); // tibia, no neon
+            lc.intensity = 1.5f;
+            lc.radius    = 12.0f;
+            lc.enabled   = true;
+            light.addComponent<LightComponent>(lc);
+            Log::editor()->info("Spawned luz puntual en (0, 4, 0) con radius=12");
+            markDirty();
+        }
+
         if (m_ui.consumeSpawnAudioSourceRequest() && m_scene && m_assetManager) {
             const AudioAssetId beepId = m_assetManager->loadAudio("audio/beep.wav");
             Entity src = m_scene->createEntity("AudioSource demo");

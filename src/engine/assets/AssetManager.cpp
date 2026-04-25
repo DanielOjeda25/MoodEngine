@@ -115,7 +115,11 @@ AssetManager::AssetManager(std::string rootDir,
         missingMesh->logicalPath = k_missingMeshPath;
         SubMesh sm{};
         sm.materialIndex = 0;
-        sm.vertexCount = static_cast<u32>(cubeData.vertices.size() / 8); // stride 8
+        // Stride en floats = suma de componentCount de los attributes. Hito 11
+        // subio de 8 (pos+color+uv) a 11 (+normal).
+        u32 strideFloats = 0;
+        for (const auto& a : cubeData.attributes) strideFloats += a.componentCount;
+        sm.vertexCount = static_cast<u32>(cubeData.vertices.size() / strideFloats);
         sm.mesh = m_meshFactory(cubeData.vertices, cubeData.attributes);
         if (sm.mesh == nullptr) {
             throw std::runtime_error(

@@ -111,21 +111,34 @@ void InspectorPanel::onImGuiRender() {
         ImGui::Separator();
     }
 
-    // --- LightComponent ---
+    // --- LightComponent (Hito 11) ---
+    // Activado: tiene type / color / intensity (Hito 7) + radius (point) +
+    // direction (directional) + enabled.
     if (e.hasComponent<LightComponent>()) {
         auto& lt = e.getComponent<LightComponent>();
         ImGui::TextDisabled("Light");
+
+        if (ImGui::Checkbox("enabled##lt", &lt.enabled)) m_editedThisFrame = true;
+
         const char* items[] = {"Directional", "Point"};
         int current = static_cast<int>(lt.type);
         if (ImGui::Combo("type##lt", &current, items, 2)) {
             lt.type = static_cast<LightComponent::Type>(current);
             m_editedThisFrame = true;
         }
-        if (ImGui::ColorEdit3("color##lt", &lt.color.x)) {
-            m_editedThisFrame = true;
-        }
+        if (ImGui::ColorEdit3("color##lt", &lt.color.x)) m_editedThisFrame = true;
         if (ImGui::DragFloat("intensity##lt", &lt.intensity, 0.01f, 0.0f, 100.0f)) {
             m_editedThisFrame = true;
+        }
+
+        if (lt.type == LightComponent::Type::Point) {
+            if (ImGui::DragFloat("radius (m)##lt", &lt.radius, 0.1f, 0.1f, 1000.0f)) {
+                m_editedThisFrame = true;
+            }
+        } else {
+            if (ImGui::DragFloat3("direction##lt", &lt.direction.x, 0.01f, -1.0f, 1.0f)) {
+                m_editedThisFrame = true;
+            }
         }
         ImGui::Separator();
     }

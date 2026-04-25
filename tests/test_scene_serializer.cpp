@@ -244,3 +244,66 @@ TEST_CASE("SceneSerializer: archivo v1 (sin 'entities') se carga con lista vacia
     CHECK(r->entities.empty());
     std::filesystem::remove(path);
 }
+
+TEST_CASE("SceneSerializer: round-trip de LightComponent (Hito 11)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+
+    // Una entidad con Light Point + Transform; debe persistir todos los campos.
+    Entity p = scene.createEntity("Luz_demo");
+    {
+        auto& t = p.getComponent<TransformComponent>();
+        t.position = glm::vec3(0.0f, 4.0f, 0.0f);
+        LightComponent lc{};
+        lc.type      = LightComponent::Type::Point;
+        lc.color     = glm::vec3(1.0f, 0.95f, 0.85f);
+        lc.intensity = 1.5f;
+        lc.radius    = 12.0f;
+        lc.enabled   = true;
+        p.addComponent<LightComponent>(lc);
+    }
+    // Una entidad Directional sin Transform-relevante (la dir va en el componente).
+    Entity d = scene.createEntity("Sol");
+    {
+        LightComponent lc{};
+        lc.type      = LightComponent::Type::Directional;
+        lc.direction = glm::vec3(0.0f, -1.0f, 0.3f);
+        lc.color     = glm::vec3(1.0f, 0.8f, 0.6f);
+        lc.intensity = 0.5f;
+        lc.enabled   = true;
+        d.addComponent<LightComponent>(lc);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("light_roundtrip.moodmap");
+    SceneSerializer::save(empty, "lit", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 2);
+
+    // Buscar por tag (el orden de iteracion del registry no es estable).
+    const SavedEntity* sePoint = nullptr;
+    const SavedEntity* seDir   = nullptr;
+    for (const auto& se : loaded->entities) {
+        if (se.tag == "Luz_demo") sePoint = &se;
+        if (se.tag == "Sol")      seDir   = &se;
+    }
+    REQUIRE(sePoint != nullptr);
+    REQUIRE(seDir   != nullptr);
+    REQUIRE(sePoint->light.has_value());
+    REQUIRE(seDir->light.has_value());
+
+    CHECK(sePoint->light->type == "point");
+    CHECK(sePoint->light->intensity == doctest::Approx(1.5f));
+    CHECK(sePoint->light->radius    == doctest::Approx(12.0f));
+    CHECK(sePoint->light->color.r   == doctest::Approx(1.0f));
+    CHECK(sePoint->light->color.g   == doctest::Approx(0.95f));
+    CHECK(sePoint->light->enabled);
+
+    CHECK(seDir->light->type == "directional");
+    CHECK(seDir->light->direction.y == doctest::Approx(-1.0f));
+    CHECK(seDir->light->intensity   == doctest::Approx(0.5f));
+
+    std::filesystem::remove(path);
+}

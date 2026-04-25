@@ -34,7 +34,10 @@ namespace Mood {
 // v2 (Hito 10): agrega seccion `entities` al .moodmap para persistir
 // entidades no-tile (modelos importados via drag & drop). Archivos v1 se
 // leen sin cambios (entities queda vacio).
-constexpr int k_MoodmapFormatVersion = 2;
+// v3 (Hito 11): SavedEntity gana campo opcional `light` ({type, color,
+// intensity, direction?, radius?, enabled}). Archivos v2 sin `light` se
+// leen igual.
+constexpr int k_MoodmapFormatVersion = 3;
 constexpr int k_MoodprojFormatVersion = 1;
 
 /// @brief Verifica que la version declarada en un archivo sea legible.

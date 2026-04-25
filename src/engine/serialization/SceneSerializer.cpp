@@ -48,6 +48,19 @@ json serializeEntity(Entity e, const AssetManager& assets) {
         }
         je["mesh_renderer"] = jmr;
     }
+
+    if (e.hasComponent<LightComponent>()) {
+        const auto& lc = e.getComponent<LightComponent>();
+        json jl;
+        jl["type"] = (lc.type == LightComponent::Type::Directional)
+            ? "directional" : "point";
+        jl["color"]     = lc.color;
+        jl["intensity"] = lc.intensity;
+        jl["radius"]    = lc.radius;
+        jl["direction"] = lc.direction;
+        jl["enabled"]   = lc.enabled;
+        je["light"] = jl;
+    }
     return je;
 }
 
@@ -70,6 +83,18 @@ SavedEntity parseEntity(const json& je) {
             }
         }
         se.meshRenderer = std::move(mr);
+    }
+
+    if (je.contains("light")) {
+        const auto& jl = je.at("light");
+        SavedLight sl;
+        sl.type      = jl.value("type", std::string{"point"});
+        sl.color     = jl.value("color",     glm::vec3{1.0f});
+        sl.intensity = jl.value("intensity", 1.0f);
+        sl.radius    = jl.value("radius",    10.0f);
+        sl.direction = jl.value("direction", glm::vec3{0.0f, -1.0f, 0.0f});
+        sl.enabled   = jl.value("enabled",   true);
+        se.light = std::move(sl);
     }
     return se;
 }
@@ -105,9 +130,12 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
         auto* mutableScene = const_cast<Scene*>(scene); // forEach requiere non-const
         mutableScene->forEach<TagComponent>([&](Entity e, TagComponent& tag) {
             if (isTileTag(tag.name)) return;
-            // Solo serializamos entidades con MeshRenderer (primer pase).
-            // Script/Audio/etc. quedan fuera de scope del Hito 10.
-            if (!e.hasComponent<MeshRendererComponent>()) return;
+            // Persistimos cualquier entidad con al menos un componente
+            // serializable: MeshRenderer (Hito 10) o Light (Hito 11).
+            // Script/Audio quedan fuera de scope hasta Scene authoritative.
+            const bool hasMr = e.hasComponent<MeshRendererComponent>();
+            const bool hasLi = e.hasComponent<LightComponent>();
+            if (!hasMr && !hasLi) return;
             j["entities"].push_back(serializeEntity(e, assets));
         });
     }

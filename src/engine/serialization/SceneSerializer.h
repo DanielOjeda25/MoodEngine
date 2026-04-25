@@ -62,15 +62,28 @@ struct SavedMeshRenderer {
     std::vector<std::string> materials;
 };
 
-/// @brief Copia persistida de una entidad no-tile. En este hito solo
-///        soportamos meshes importados; Script/Audio se deja para hitos
-///        posteriores (explicito en NO-do del PLAN_HITO10).
+/// @brief Copia persistida de un LightComponent (Hito 11).
+///        `type` se guarda como string ("directional"/"point") para no atar
+///        el archivo a la enumeracion del enum.
+struct SavedLight {
+    std::string type{"point"}; // "directional" | "point"
+    glm::vec3 color{1.0f};
+    f32 intensity = 1.0f;
+    f32 radius = 10.0f;                    // solo Point
+    glm::vec3 direction{0.0f, -1.0f, 0.0f}; // solo Directional
+    bool enabled = true;
+};
+
+/// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh
+///        renderer; Hito 11 agrega light. Otros componentes (Script, Audio)
+///        siguen sin persistirse (ver no-goals de cada hito).
 struct SavedEntity {
     std::string tag;
     glm::vec3 position{0.0f};
     glm::vec3 rotationEuler{0.0f};
     glm::vec3 scale{1.0f};
     std::optional<SavedMeshRenderer> meshRenderer;
+    std::optional<SavedLight> light;
 };
 
 struct SavedMap {

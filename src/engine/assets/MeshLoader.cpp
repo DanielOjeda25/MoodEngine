@@ -12,13 +12,17 @@ namespace Mood {
 
 namespace {
 
-// Layout interleaved del mesh, igual al cubo primitivo del Hito 3:
-// pos(3) + color(3) + uv(2) = stride 8 floats.
+// Layout interleaved del mesh, igual al cubo primitivo:
+// pos(3) + color(3) + uv(2) + normal(3) = stride 11 floats.
+// Hito 11: agregamos normales para el iluminado Blinn-Phong.
+constexpr u32 k_strideFloats = 11;
+
 std::vector<VertexAttribute> defaultAttributes() {
     return {
         {0, 3}, // position
         {1, 3}, // color
         {2, 2}, // uv
+        {3, 3}, // normal
     };
 }
 
@@ -26,11 +30,12 @@ std::vector<VertexAttribute> defaultAttributes() {
 // glDrawArrays. Triangulos desplegados, un vertice por corner.
 std::vector<f32> flattenAiMesh(const aiMesh& m) {
     std::vector<f32> out;
-    // Reserva pesimista: 3 vertices por cara * 8 floats por vertice.
-    out.reserve(static_cast<usize>(m.mNumFaces) * 3 * 8);
+    // Reserva pesimista: 3 vertices por cara * stride floats.
+    out.reserve(static_cast<usize>(m.mNumFaces) * 3 * k_strideFloats);
 
-    const bool hasColor = (m.mColors[0] != nullptr);
-    const bool hasUV    = (m.mTextureCoords[0] != nullptr);
+    const bool hasColor   = (m.mColors[0] != nullptr);
+    const bool hasUV      = (m.mTextureCoords[0] != nullptr);
+    const bool hasNormals = (m.mNormals != nullptr);
 
     for (u32 f = 0; f < m.mNumFaces; ++f) {
         const aiFace& face = m.mFaces[f];
@@ -63,6 +68,19 @@ std::vector<f32> flattenAiMesh(const aiMesh& m) {
                 out.push_back(uv.y);
             } else {
                 out.push_back(0.0f);
+                out.push_back(0.0f);
+            }
+
+            if (hasNormals) {
+                const aiVector3D& n = m.mNormals[idx];
+                out.push_back(n.x);
+                out.push_back(n.y);
+                out.push_back(n.z);
+            } else {
+                // Sin normales (importer raro o GenNormals fallo): up vector
+                // nominal. El iluminado se vera plano pero no crashea.
+                out.push_back(0.0f);
+                out.push_back(1.0f);
                 out.push_back(0.0f);
             }
         }
@@ -116,8 +134,7 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
 
         SubMesh sm{};
         sm.materialIndex = m->mMaterialIndex;
-        // vertexCount = vertices.size() / (stride en floats). Stride = 8.
-        sm.vertexCount = static_cast<u32>(vertices.size() / 8);
+        sm.vertexCount = static_cast<u32>(vertices.size() / k_strideFloats);
         sm.mesh = meshFactory(vertices, attrs);
         if (sm.mesh == nullptr) {
             Log::assets()->warn("MeshLoader: MeshFactory devolvio null para submesh {} de '{}'",

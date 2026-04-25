@@ -69,6 +69,12 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar audio source demo", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnAudioSource();
             }
+            // Demo Hito 11: spawnea una luz puntual blanca encima del centro
+            // del mapa. Si no hay luces, la sala se ve casi negra (solo
+            // ambient); con esta luz aparecen highlights y caras sombreadas.
+            if (ImGui::MenuItem("Agregar luz puntual demo", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnPointLight();
+            }
             ImGui::EndMenu();
         }
 

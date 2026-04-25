@@ -32,6 +32,7 @@ class OpenGLDebugRenderer;
 class ScriptSystem;
 class AudioDevice;
 class AudioSystem;
+class LightSystem;
 
 class EditorApplication {
 public:
@@ -134,10 +135,12 @@ private:
     std::unique_ptr<IRenderer> m_renderer;
     std::unique_ptr<IFramebuffer> m_viewportFb;
     std::unique_ptr<IShader> m_defaultShader;
+    std::unique_ptr<IShader> m_litShader;
     std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
     std::unique_ptr<ScriptSystem> m_scriptSystem;
     std::unique_ptr<AudioDevice> m_audioDevice;
     std::unique_ptr<AudioSystem> m_audioSystem;
+    std::unique_ptr<LightSystem> m_lightSystem;
 
     // AssetManager: owner de todas las texturas cargadas. Se destruye ANTES
     // del contexto GL (ver destructor).
