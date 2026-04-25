@@ -60,6 +60,20 @@ No-goals del hito: multi-selección + rectangle select (Hito 14+), snap to grid,
 - [ ] Resultado → `EditorUI::setSelectedEntity(e)`. Hierarchy y Inspector reaccionan automáticamente.
 - [ ] Click en vacío deselecciona.
 
+### Bloque 2.5 — Iconos de sprite para entidades sin mesh visible
+
+Feature que pidió el dev al cerrar el Hito 12. Entidades como `LightComponent` (Point/Directional) o `AudioSourceComponent` hoy son invisibles en el viewport. Como consecuencia:
+- No hay forma de click-to-select una luz sin seleccionarla por Hierarchy.
+- No sabés dónde está parada la fuente hasta que te fijás en el Transform.
+
+- [ ] `assets/textures/icons/light_point.png`, `light_directional.png`, `audio_source.png` (32×32 PNG con fondo transparente). Generadas con script en `tools/gen_editor_icons.py` (o bajadas CC0 de fontawesome/similares).
+- [ ] `src/engine/render/opengl/OpenGLBillboardRenderer.{h,cpp}` (o integrado en `OpenGLDebugRenderer`): dibuja sprites view-aligned en world-space. Tamaño constante en pantalla (scale por distancia cámara).
+- [ ] `EditorApplication::renderSceneToViewport` emite un billboard por cada entidad con `LightComponent`/`AudioSourceComponent` sin `MeshRendererComponent` (las que sí lo tienen ya son visibles).
+- [ ] El icono es pickable: el ScenePick también testea ray vs quad-del-billboard. Click sobre el icono selecciona la entidad.
+- [ ] Solo en Editor Mode — en Play Mode los iconos se ocultan (no contaminan la experiencia final).
+
+> Alternativa al .png: dibujar los íconos como shapes procedurales (esfera wireframe para point, flecha para directional, altavoz para audio) con `OpenGLDebugRenderer`. Menos bonito pero no requiere assets; decidir durante implementación.
+
 ## Bloque 3 — Gizmo translate
 
 - [ ] `src/engine/scene/Gizmo.{h,cpp}`: render en viewport de 3 flechas axis-aligned sobre el Transform de la entidad seleccionada. Color por eje (RGB).
