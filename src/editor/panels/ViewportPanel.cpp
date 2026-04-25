@@ -99,6 +99,32 @@ void ViewportPanel::onImGuiRender() {
                 if (ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) {
                     m_middleDragging = true;
                 }
+                // Click-to-select (Hito 13): registrar mouse down y probar
+                // al soltar si hubo drag. Umbral 4px distingue click puro.
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                    m_leftMouseDown = true;
+                    const ImVec2 p = ImGui::GetMousePos();
+                    m_leftDownX = p.x;
+                    m_leftDownY = p.y;
+                }
+            }
+            // Al soltar el left button (haya sido donde haya sido) — si
+            // el down fue sobre el viewport y el desplazamiento es chico,
+            // disparar click-select. Chequear siempre (no solo si hovered)
+            // para soportar que el usuario mueva el mouse hacia afuera
+            // antes de soltar; sin drag real, cuenta como click.
+            if (m_leftMouseDown && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                const ImVec2 p = ImGui::GetMousePos();
+                const float dx = p.x - m_leftDownX;
+                const float dy = p.y - m_leftDownY;
+                const bool wasClick = (dx*dx + dy*dy) < 16.0f; // 4px
+                if (wasClick && m_imageHovered) {
+                    float ndcX = 0.0f;
+                    float ndcY = 0.0f;
+                    mousePosToNdc(p, ndcX, ndcY);
+                    m_pendingClick = ClickSelect{true, ndcX, ndcY};
+                }
+                m_leftMouseDown = false;
             }
             if (!ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
                 m_rightDragging = false;

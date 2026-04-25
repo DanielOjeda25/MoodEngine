@@ -13,6 +13,7 @@
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
+#include "engine/scene/ScenePick.h"
 #include "engine/scene/ViewportPick.h"
 #include "engine/serialization/ProjectSerializer.h"
 #include "engine/serialization/SceneSerializer.h"
@@ -1101,6 +1102,29 @@ int EditorApplication::run() {
             asrc.volume = 0.8f;
             src.addComponent<AudioSourceComponent>(asrc);
             Log::editor()->info("Spawned audio source demo en (-10, 1.5, -10)");
+        }
+
+        // 2.4) Click-to-select (Hito 13 Bloque 2): raycast desde el cursor
+        //      y selecciona la entidad mas cercana. Click en vacio deselecciona.
+        //      Solo en Editor Mode — en Play Mode el mouse es para la camara.
+        const ViewportPanel::ClickSelect click = m_ui.viewport().consumeClickSelect();
+        if (click.pending && m_mode == EditorMode::Editor && m_scene) {
+            const float aspect = (m_viewportFb->height() > 0)
+                ? static_cast<float>(m_viewportFb->width()) / static_cast<float>(m_viewportFb->height())
+                : 1.0f;
+            const glm::mat4 view = m_editorCamera.viewMatrix();
+            const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
+            const ScenePickResult hit = pickEntity(*m_scene, view, projection,
+                                                    glm::vec2(click.ndcX, click.ndcY));
+            if (hit) {
+                m_ui.setSelectedEntity(hit.entity);
+                if (hit.entity.hasComponent<TagComponent>()) {
+                    Log::editor()->info("Click-select: '{}'",
+                        hit.entity.getComponent<TagComponent>().name);
+                }
+            } else {
+                m_ui.setSelectedEntity(Entity{});
+            }
         }
 
         // 2.5) Drop de textura desde AssetBrowser: usar el tile picking para

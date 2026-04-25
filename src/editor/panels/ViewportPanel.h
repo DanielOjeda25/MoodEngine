@@ -79,6 +79,23 @@ public:
         return r;
     }
 
+    /// @brief Click izquierdo sobre la imagen del viewport (Hito 13).
+    ///        Distingue click puro de drag: dispara solo si el mouse bajó
+    ///        y subió sin desplazarse más de 4 pixeles.
+    struct ClickSelect {
+        bool pending = false;
+        float ndcX = 0.0f;
+        float ndcY = 0.0f;
+    };
+
+    /// @brief Consume el ultimo click-select. `EditorApplication` hace el
+    ///        raycast y setea la seleccion.
+    ClickSelect consumeClickSelect() {
+        ClickSelect r = m_pendingClick;
+        m_pendingClick = ClickSelect{};
+        return r;
+    }
+
 private:
     IFramebuffer* m_framebuffer = nullptr;
     u32 m_desiredWidth = 0;
@@ -98,6 +115,12 @@ private:
 
     TextureDrop m_pendingDrop{};
     MeshDrop m_pendingMeshDrop{};
+    ClickSelect m_pendingClick{};
+
+    // Para diferenciar click vs drag del left-button.
+    bool m_leftMouseDown = false;
+    float m_leftDownX = 0.0f;
+    float m_leftDownY = 0.0f;
 };
 
 } // namespace Mood

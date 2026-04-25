@@ -254,6 +254,7 @@ add_executable(MoodEditor
     src/engine/scene/FpsCamera.cpp
     src/engine/scene/Scene.cpp
     src/engine/scene/ViewportPick.cpp
+    src/engine/scene/ScenePick.cpp
 
     src/engine/world/GridMap.cpp
 
