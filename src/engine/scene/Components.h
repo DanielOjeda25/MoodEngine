@@ -123,6 +123,27 @@ struct ScriptComponent {
     ScriptComponent(std::string p) : path(std::move(p)) {}
 };
 
+/// @brief Rigid body (Hito 12). Presencia física en Jolt: gravedad y
+///        colisiones. `bodyId` lo llena `PhysicsSystem` cuando crea el
+///        body en el `PhysicsWorld`; hasta entonces vale 0.
+///        Cambiar shape/mass en runtime requiere recrear el body (hoy solo
+///        se permite fuera de Play Mode; el Inspector lo va a grayar).
+struct RigidBodyComponent {
+    enum class Type  : u8 { Static = 0, Kinematic = 1, Dynamic = 2 };
+    enum class Shape : u8 { Box = 0, Sphere = 1, Capsule = 2 };
+
+    Type  type  = Type::Dynamic;
+    Shape shape = Shape::Box;
+    glm::vec3 halfExtents{0.5f}; // Box: (x,y,z). Sphere: (r,_,_). Capsule: (halfH, r, _).
+    f32 mass = 1.0f;              // kg, solo Dynamic
+
+    u32 bodyId = 0;               // llenado por PhysicsSystem (0 = no creado)
+
+    RigidBodyComponent() = default;
+    RigidBodyComponent(Type t, Shape s, glm::vec3 he, f32 m = 1.0f)
+        : type(t), shape(s), halfExtents(he), mass(m) {}
+};
+
 /// @brief Fuente de audio asociada a una entidad (Hito 9). Reproducción
 ///        manejada por `AudioSystem`. Si `is3D`, usa el `TransformComponent`
 ///        de la misma entidad para posicionar; si no, se mezcla plano.

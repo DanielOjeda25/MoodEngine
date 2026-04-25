@@ -19,6 +19,7 @@ std::shared_ptr<spdlog::logger> s_world;
 std::shared_ptr<spdlog::logger> s_assets;
 std::shared_ptr<spdlog::logger> s_script;
 std::shared_ptr<spdlog::logger> s_audio;
+std::shared_ptr<spdlog::logger> s_physics;
 std::shared_ptr<LogRingSink> s_ringSink;
 
 std::shared_ptr<spdlog::logger> makeLogger(const std::string& name,
@@ -56,7 +57,8 @@ void init() {
     s_world  = makeLogger("world",  sinks);
     s_assets = makeLogger("assets", sinks);
     s_script = makeLogger("script", sinks);
-    s_audio  = makeLogger("audio",  sinks);
+    s_audio   = makeLogger("audio",   sinks);
+    s_physics = makeLogger("physics", sinks);
 }
 
 void shutdown() {
@@ -68,6 +70,7 @@ void shutdown() {
     s_assets.reset();
     s_script.reset();
     s_audio.reset();
+    s_physics.reset();
     s_ringSink.reset();
 }
 
@@ -77,7 +80,8 @@ std::shared_ptr<spdlog::logger>& render() { return s_render; }
 std::shared_ptr<spdlog::logger>& world()  { return s_world; }
 std::shared_ptr<spdlog::logger>& assets() { return s_assets; }
 std::shared_ptr<spdlog::logger>& script() { return s_script; }
-std::shared_ptr<spdlog::logger>& audio()  { return s_audio; }
+std::shared_ptr<spdlog::logger>& audio()   { return s_audio; }
+std::shared_ptr<spdlog::logger>& physics() { return s_physics; }
 
 LogRingSink* ringSink() { return s_ringSink.get(); }
 

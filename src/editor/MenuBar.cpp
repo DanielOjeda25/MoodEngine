@@ -75,6 +75,13 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar luz puntual demo", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnPointLight();
             }
+            // Demo Hito 12: caja fisica (rigid body dinamico) que cae por
+            // gravedad. En Play Mode la caja se apoya en el suelo y puede
+            // ser empujada por el jugador (colisiones AABB vs capsule
+            // llegan en hitos posteriores).
+            if (ImGui::MenuItem("Agregar caja fisica demo", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnPhysicsBox();
+            }
             ImGui::EndMenu();
         }
 

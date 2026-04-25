@@ -151,6 +151,32 @@ CPMAddPackage(
     GIT_TAG v3.3.0
 )
 
+# Jolt Physics (Hito 12): biblioteca de fisica rigid body. Target `Jolt`.
+# Desactivamos sample/test/viewer/performance-test targets — solo queremos
+# la libreria. `OVERRIDE_CXX_FLAGS OFF` evita que Jolt pise nuestros
+# warnings. `INTERPROCEDURAL_OPTIMIZATION OFF` acelera la primera compile
+# en Debug (LTO no aporta ahi). Single-precision (DOUBLE_PRECISION OFF).
+CPMAddPackage(
+    NAME JoltPhysics
+    GITHUB_REPOSITORY jrouwe/JoltPhysics
+    GIT_TAG v5.2.0
+    SOURCE_SUBDIR Build
+    OPTIONS
+        "TARGET_UNIT_TESTS OFF"
+        "TARGET_HELLO_WORLD OFF"
+        "TARGET_PERFORMANCE_TEST OFF"
+        "TARGET_VIEWER OFF"
+        "TARGET_SAMPLES OFF"
+        "OVERRIDE_CXX_FLAGS OFF"
+        "INTERPROCEDURAL_OPTIMIZATION OFF"
+        "CROSS_PLATFORM_DETERMINISTIC OFF"
+        "DOUBLE_PRECISION OFF"
+        "GENERATE_DEBUG_SYMBOLS ON"
+        # MoodEditor linka contra /MDd (dynamic debug runtime); Jolt default
+        # es /MTd y eso produce LNK2038 al mezclar. Forzamos dynamic.
+        "USE_STATIC_MSVC_RUNTIME_LIBRARY OFF"
+)
+
 # assimp (Hito 10): importacion de modelos 3D. Desactivamos todos los
 # formatos por default y habilitamos solo OBJ + glTF + FBX (los del plan
 # del hito). Sin exportadores, sin herramientas CLI, sin tests, sin shared
@@ -219,6 +245,8 @@ add_executable(MoodEditor
     src/engine/audio/AudioDevice.cpp
     src/engine/audio/miniaudio_impl.cpp
 
+    src/engine/physics/PhysicsWorld.cpp
+
     src/engine/serialization/SceneSerializer.cpp
     src/engine/serialization/ProjectSerializer.cpp
 
@@ -273,6 +301,7 @@ target_link_libraries(MoodEditor PRIVATE
     sol2::sol2
     miniaudio
     assimp::assimp
+    Jolt
     OpenGL::GL
 )
 

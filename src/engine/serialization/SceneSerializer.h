@@ -74,6 +74,17 @@ struct SavedLight {
     bool enabled = true;
 };
 
+/// @brief Copia persistida de un RigidBodyComponent (Hito 12).
+///        `type` y `shape` como string para robustez frente a renumeracion.
+///        La pose actual NO se persiste: Jolt es authoritative en runtime
+///        y al cargar, el body se crea en la posicion del Transform.
+struct SavedRigidBody {
+    std::string type{"dynamic"};     // "static" | "kinematic" | "dynamic"
+    std::string shape{"box"};        // "box" | "sphere" | "capsule"
+    glm::vec3 halfExtents{0.5f};
+    f32 mass = 1.0f;
+};
+
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh
 ///        renderer; Hito 11 agrega light. Otros componentes (Script, Audio)
 ///        siguen sin persistirse (ver no-goals de cada hito).
@@ -84,6 +95,7 @@ struct SavedEntity {
     glm::vec3 scale{1.0f};
     std::optional<SavedMeshRenderer> meshRenderer;
     std::optional<SavedLight> light;
+    std::optional<SavedRigidBody> rigidBody;
 };
 
 struct SavedMap {

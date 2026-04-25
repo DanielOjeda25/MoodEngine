@@ -37,7 +37,9 @@ namespace Mood {
 // v3 (Hito 11): SavedEntity gana campo opcional `light` ({type, color,
 // intensity, direction?, radius?, enabled}). Archivos v2 sin `light` se
 // leen igual.
-constexpr int k_MoodmapFormatVersion = 3;
+// v4 (Hito 12): SavedEntity gana campo opcional `rigid_body` ({type, shape,
+// half_extents, mass}). Archivos v3 sin `rigid_body` se leen igual.
+constexpr int k_MoodmapFormatVersion = 4;
 constexpr int k_MoodprojFormatVersion = 1;
 
 /// @brief Verifica que la version declarada en un archivo sea legible.

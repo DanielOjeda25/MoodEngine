@@ -17,6 +17,7 @@
 #include "engine/serialization/ProjectSerializer.h"
 #include "engine/serialization/SceneSerializer.h"
 #include "engine/audio/AudioDevice.h"
+#include "engine/physics/PhysicsWorld.h"
 #include "systems/AudioSystem.h"
 #include "systems/LightSystem.h"
 #include "systems/PhysicsSystem.h"
@@ -186,6 +187,9 @@ EditorApplication::EditorApplication() {
     m_scene = std::make_unique<Scene>();
     m_scriptSystem = std::make_unique<ScriptSystem>();
     m_lightSystem  = std::make_unique<LightSystem>();
+    // Hito 12: PhysicsWorld (Jolt). Init es pesado la primera vez del proceso
+    // (Factory + RegisterTypes) pero instancias subsecuentes son baratas.
+    m_physicsWorld = std::make_unique<PhysicsWorld>();
 
     // Audio (Hito 9). El device tolera fallo de init (modo mute) — el motor
     // sigue funcionando aunque no haya hardware de audio.
@@ -239,6 +243,17 @@ void EditorApplication::rebuildSceneFromMap() {
     // registry (en vez de recrear el Scene completo) para no invalidar
     // los punteros que tienen los paneles Hierarchy/Inspector.
     if (!m_scene) m_scene = std::make_unique<Scene>();
+    // Hito 12: antes del clear, destruir los bodies de Jolt asociados a
+    // RigidBodyComponent — tras registry.clear() perdemos los componentes
+    // y los bodyIds quedarian huerfanos en PhysicsWorld.
+    if (m_physicsWorld) {
+        m_scene->forEach<RigidBodyComponent>([&](Entity, RigidBodyComponent& rb) {
+            if (rb.bodyId != 0) {
+                m_physicsWorld->destroyBody(rb.bodyId);
+                rb.bodyId = 0;
+            }
+        });
+    }
     m_scene->registry().clear();
     m_ui.setSelectedEntity(Entity{}); // la seleccion apuntaba a un handle ya
                                        // destruido; invalidarla.
@@ -272,7 +287,55 @@ void EditorApplication::rebuildSceneFromMap() {
             e.addComponent<MeshRendererComponent>(
                 m_assetManager->missingMeshId(),
                 m_map.tileTextureAt(x, y));
+
+            // Hito 12: cada tile solido tambien es un static body en Jolt
+            // (Box de tileSize/2 en los 3 ejes). updateRigidBodies materializa
+            // el body en el proximo frame.
+            e.addComponent<RigidBodyComponent>(
+                RigidBodyComponent::Type::Static,
+                RigidBodyComponent::Shape::Box,
+                glm::vec3(tileSize * 0.5f),
+                0.0f);
         }
+    }
+}
+
+void EditorApplication::updateRigidBodies(f32 dt) {
+    if (!m_scene || !m_physicsWorld) return;
+
+    // 1) Materializar bodies nuevos (bodyId==0) con los valores iniciales
+    //    de la entidad.
+    m_scene->forEach<TransformComponent, RigidBodyComponent>(
+        [&](Entity, TransformComponent& t, RigidBodyComponent& rb) {
+            if (rb.bodyId != 0) return;
+            CollisionShape shape = CollisionShape::Box;
+            switch (rb.shape) {
+                case RigidBodyComponent::Shape::Box:     shape = CollisionShape::Box; break;
+                case RigidBodyComponent::Shape::Sphere:  shape = CollisionShape::Sphere; break;
+                case RigidBodyComponent::Shape::Capsule: shape = CollisionShape::Capsule; break;
+            }
+            BodyType type = BodyType::Static;
+            switch (rb.type) {
+                case RigidBodyComponent::Type::Static:    type = BodyType::Static; break;
+                case RigidBodyComponent::Type::Kinematic: type = BodyType::Kinematic; break;
+                case RigidBodyComponent::Type::Dynamic:   type = BodyType::Dynamic; break;
+            }
+            rb.bodyId = m_physicsWorld->createBody(t.position, shape,
+                                                    rb.halfExtents, type, rb.mass);
+        });
+
+    // 2) Stepear la simulacion SOLO en Play Mode. En Editor Mode los bodies
+    //    existen (para debug draw futuro) pero no se mueven.
+    if (m_mode == EditorMode::Play) {
+        m_physicsWorld->step(dt);
+        // 3) Sync body -> Transform para bodies dinamicos. Los Static no se
+        //    mueven, se salta el read para ahorrar calls.
+        m_scene->forEach<TransformComponent, RigidBodyComponent>(
+            [&](Entity, TransformComponent& t, RigidBodyComponent& rb) {
+                if (rb.type == RigidBodyComponent::Type::Static) return;
+                if (rb.bodyId == 0) return;
+                t.position = m_physicsWorld->bodyPosition(rb.bodyId);
+            });
     }
 }
 
@@ -488,6 +551,21 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
                 lc.enabled   = sl.enabled;
                 e.addComponent<LightComponent>(lc);
             }
+            // Hito 12: aplicar RigidBodyComponent persistido. El body se
+            // materializa en el proximo frame via updateRigidBodies().
+            if (se.rigidBody.has_value()) {
+                const auto& srb = *se.rigidBody;
+                RigidBodyComponent rb{};
+                if (srb.type == "static")         rb.type = RigidBodyComponent::Type::Static;
+                else if (srb.type == "kinematic") rb.type = RigidBodyComponent::Type::Kinematic;
+                else                              rb.type = RigidBodyComponent::Type::Dynamic;
+                if (srb.shape == "sphere")        rb.shape = RigidBodyComponent::Shape::Sphere;
+                else if (srb.shape == "capsule")  rb.shape = RigidBodyComponent::Shape::Capsule;
+                else                              rb.shape = RigidBodyComponent::Shape::Box;
+                rb.halfExtents = srb.halfExtents;
+                rb.mass = srb.mass;
+                e.addComponent<RigidBodyComponent>(rb);
+            }
         }
     }
     m_project = std::move(loaded);
@@ -633,6 +711,7 @@ EditorApplication::~EditorApplication() {
     m_audioSystem.reset();
     m_audioDevice.reset();
     m_lightSystem.reset();
+    m_physicsWorld.reset();
     m_debugRenderer.reset();
     m_assetManager.reset(); // dueño de las texturas y meshes (incluido el cubo fallback)
     m_litShader.reset();
@@ -970,6 +1049,26 @@ int EditorApplication::run() {
         // el beep.wav via AssetManager (cacheado despues del primer spawn)
         // y lo ubica en una esquina del mapa (en world coords escala SI:
         // 1 unidad = 1 m, tileSize=3m, esquina ~ (-10, 1.5, -10)).
+        // Demo Hito 12: spawnea una caja fisica (Dynamic, 1m box, 5kg) a 6m
+        // de altura. En Play Mode cae por gravedad hasta apoyarse en los
+        // tiles del piso. Se le puede empujar con el jugador (colisiones
+        // con capsule controller vienen en pendientes del hito).
+        if (m_ui.consumeSpawnPhysicsBoxRequest() && m_scene && m_assetManager) {
+            Entity box = m_scene->createEntity("CajaFisica");
+            auto& t = box.getComponent<TransformComponent>();
+            t.position = glm::vec3(0.0f, 6.0f, 0.0f);
+            t.scale    = glm::vec3(1.0f);
+            box.addComponent<MeshRendererComponent>(
+                m_assetManager->missingMeshId(), m_wallTextureId);
+            box.addComponent<RigidBodyComponent>(
+                RigidBodyComponent::Type::Dynamic,
+                RigidBodyComponent::Shape::Box,
+                glm::vec3(0.5f, 0.5f, 0.5f),
+                5.0f);
+            Log::physics()->info("Spawned caja fisica en (0, 6, 0) con mass=5kg");
+            markDirty();
+        }
+
         // Demo Hito 11: spawnea una luz puntual blanca sobre el centro del
         // mapa. Activa el iluminado real — sin esto la sala se ve solo con
         // el ambient global y queda muy oscura.
@@ -1068,6 +1167,11 @@ int EditorApplication::run() {
 
         // 3) Input -> camaras.
         updateCameras(dt);
+
+        // 3.4) Fisica (Jolt, Hito 12): materializa bodies nuevos siempre y
+        //      stepea la sim solo en Play Mode. Despues del input y antes
+        //      de scripts — asi un script puede leer la posicion post-step.
+        updateRigidBodies(dt);
 
         // 3.5) Scripts Lua: correr onUpdate(self, dt) en cada entidad con
         //      ScriptComponent. Antes del render para que los cambios en

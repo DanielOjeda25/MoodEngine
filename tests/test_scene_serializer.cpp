@@ -307,3 +307,63 @@ TEST_CASE("SceneSerializer: round-trip de LightComponent (Hito 11)") {
 
     std::filesystem::remove(path);
 }
+
+TEST_CASE("SceneSerializer: round-trip de RigidBodyComponent (Hito 12)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+
+    Entity box = scene.createEntity("CajaFisica");
+    {
+        auto& t = box.getComponent<TransformComponent>();
+        t.position = glm::vec3(2.5f, 6.0f, -1.5f);
+        t.scale = glm::vec3(1.0f);
+        RigidBodyComponent rb{};
+        rb.type = RigidBodyComponent::Type::Dynamic;
+        rb.shape = RigidBodyComponent::Shape::Box;
+        rb.halfExtents = glm::vec3(0.5f, 0.75f, 0.5f);
+        rb.mass = 5.0f;
+        box.addComponent<RigidBodyComponent>(rb);
+    }
+
+    Entity floor = scene.createEntity("Piso");
+    {
+        auto& t = floor.getComponent<TransformComponent>();
+        t.position = glm::vec3(0.0f);
+        RigidBodyComponent rb{};
+        rb.type = RigidBodyComponent::Type::Static;
+        rb.shape = RigidBodyComponent::Shape::Sphere;
+        rb.halfExtents = glm::vec3(2.0f);
+        floor.addComponent<RigidBodyComponent>(rb);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("rigidbody_roundtrip.moodmap");
+    SceneSerializer::save(empty, "physics", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 2);
+
+    const SavedEntity* seBox = nullptr;
+    const SavedEntity* seFloor = nullptr;
+    for (const auto& se : loaded->entities) {
+        if (se.tag == "CajaFisica") seBox = &se;
+        if (se.tag == "Piso")       seFloor = &se;
+    }
+    REQUIRE(seBox   != nullptr);
+    REQUIRE(seFloor != nullptr);
+    REQUIRE(seBox->rigidBody.has_value());
+    REQUIRE(seFloor->rigidBody.has_value());
+
+    CHECK(seBox->rigidBody->type  == "dynamic");
+    CHECK(seBox->rigidBody->shape == "box");
+    CHECK(seBox->rigidBody->mass  == doctest::Approx(5.0f));
+    CHECK(seBox->rigidBody->halfExtents.x == doctest::Approx(0.5f));
+    CHECK(seBox->rigidBody->halfExtents.y == doctest::Approx(0.75f));
+
+    CHECK(seFloor->rigidBody->type  == "static");
+    CHECK(seFloor->rigidBody->shape == "sphere");
+    CHECK(seFloor->rigidBody->halfExtents.x == doctest::Approx(2.0f));
+
+    std::filesystem::remove(path);
+}

@@ -61,6 +61,24 @@ json serializeEntity(Entity e, const AssetManager& assets) {
         jl["enabled"]   = lc.enabled;
         je["light"] = jl;
     }
+
+    if (e.hasComponent<RigidBodyComponent>()) {
+        const auto& rb = e.getComponent<RigidBodyComponent>();
+        json jrb;
+        switch (rb.type) {
+            case RigidBodyComponent::Type::Static:    jrb["type"] = "static";    break;
+            case RigidBodyComponent::Type::Kinematic: jrb["type"] = "kinematic"; break;
+            case RigidBodyComponent::Type::Dynamic:   jrb["type"] = "dynamic";   break;
+        }
+        switch (rb.shape) {
+            case RigidBodyComponent::Shape::Box:     jrb["shape"] = "box";     break;
+            case RigidBodyComponent::Shape::Sphere:  jrb["shape"] = "sphere";  break;
+            case RigidBodyComponent::Shape::Capsule: jrb["shape"] = "capsule"; break;
+        }
+        jrb["halfExtents"] = rb.halfExtents;
+        jrb["mass"]        = rb.mass;
+        je["rigid_body"] = jrb;
+    }
     return je;
 }
 
@@ -95,6 +113,16 @@ SavedEntity parseEntity(const json& je) {
         sl.direction = jl.value("direction", glm::vec3{0.0f, -1.0f, 0.0f});
         sl.enabled   = jl.value("enabled",   true);
         se.light = std::move(sl);
+    }
+
+    if (je.contains("rigid_body")) {
+        const auto& jrb = je.at("rigid_body");
+        SavedRigidBody srb;
+        srb.type        = jrb.value("type",        std::string{"dynamic"});
+        srb.shape       = jrb.value("shape",       std::string{"box"});
+        srb.halfExtents = jrb.value("halfExtents", glm::vec3{0.5f});
+        srb.mass        = jrb.value("mass",        1.0f);
+        se.rigidBody = std::move(srb);
     }
     return se;
 }
@@ -131,11 +159,13 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
         mutableScene->forEach<TagComponent>([&](Entity e, TagComponent& tag) {
             if (isTileTag(tag.name)) return;
             // Persistimos cualquier entidad con al menos un componente
-            // serializable: MeshRenderer (Hito 10) o Light (Hito 11).
-            // Script/Audio quedan fuera de scope hasta Scene authoritative.
+            // serializable: MeshRenderer (Hito 10), Light (Hito 11) o
+            // RigidBody (Hito 12). Script/Audio fuera de scope hasta Scene
+            // authoritative (Hito 14+).
             const bool hasMr = e.hasComponent<MeshRendererComponent>();
             const bool hasLi = e.hasComponent<LightComponent>();
-            if (!hasMr && !hasLi) return;
+            const bool hasRb = e.hasComponent<RigidBodyComponent>();
+            if (!hasMr && !hasLi && !hasRb) return;
             j["entities"].push_back(serializeEntity(e, assets));
         });
     }

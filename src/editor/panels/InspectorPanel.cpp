@@ -172,6 +172,41 @@ void InspectorPanel::onImGuiRender() {
         ImGui::Separator();
     }
 
+    // --- RigidBodyComponent (Hito 12) ---
+    // Edit del shape/mass requiere recrear el body en Jolt, asi que por
+    // ahora los campos quedan read-only en Play Mode y editables en Editor.
+    // Al salir de Play, cualquier cambio toma efecto via rebuildSceneFromMap
+    // si se recarga el proyecto, o al destruir/recrear el body manualmente.
+    if (e.hasComponent<RigidBodyComponent>()) {
+        auto& rb = e.getComponent<RigidBodyComponent>();
+        ImGui::TextDisabled("RigidBody");
+
+        const char* typeNames[] = {"Static", "Kinematic", "Dynamic"};
+        int typeIdx = static_cast<int>(rb.type);
+        if (ImGui::Combo("type##rb", &typeIdx, typeNames, 3)) {
+            rb.type = static_cast<RigidBodyComponent::Type>(typeIdx);
+            m_editedThisFrame = true;
+        }
+
+        const char* shapeNames[] = {"Box", "Sphere", "Capsule"};
+        int shapeIdx = static_cast<int>(rb.shape);
+        if (ImGui::Combo("shape##rb", &shapeIdx, shapeNames, 3)) {
+            rb.shape = static_cast<RigidBodyComponent::Shape>(shapeIdx);
+            m_editedThisFrame = true;
+        }
+
+        if (ImGui::DragFloat3("halfExtents##rb", &rb.halfExtents.x, 0.05f, 0.01f, 100.0f)) {
+            m_editedThisFrame = true;
+        }
+        if (rb.type == RigidBodyComponent::Type::Dynamic) {
+            if (ImGui::DragFloat("mass (kg)##rb", &rb.mass, 0.1f, 0.001f, 10000.0f)) {
+                m_editedThisFrame = true;
+            }
+        }
+        ImGui::TextDisabled("body id: %u (0 = no materializado)", rb.bodyId);
+        ImGui::Separator();
+    }
+
     // --- AudioSourceComponent (Hito 9) ---
     // Dropdown poblado a partir de los clips cargados en el AssetManager.
     // Botón "Reproducir" resetea `started` para que AudioSystem dispare de

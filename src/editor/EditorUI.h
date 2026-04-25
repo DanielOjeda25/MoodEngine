@@ -96,6 +96,16 @@ public:
         return r;
     }
 
+    /// @brief Demo del Hito 12: request para spawnear una caja fisica
+    ///        (Dynamic, Box, 1 m x 1 m x 1 m, 5 kg) a 6 m de altura. Cae
+    ///        por gravedad hasta apoyarse en el suelo / tiles solidos.
+    void requestSpawnPhysicsBox() { m_spawnPhysicsBoxRequested = true; }
+    bool consumeSpawnPhysicsBoxRequest() {
+        const bool r = m_spawnPhysicsBoxRequested;
+        m_spawnPhysicsBoxRequested = false;
+        return r;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -164,6 +174,7 @@ private:
     bool m_spawnRotatorRequested = false;
     bool m_spawnAudioSourceRequested = false;
     bool m_spawnPointLightRequested = false;
+    bool m_spawnPhysicsBoxRequested = false;
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;
 

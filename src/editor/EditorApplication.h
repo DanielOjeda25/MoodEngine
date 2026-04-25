@@ -33,6 +33,7 @@ class ScriptSystem;
 class AudioDevice;
 class AudioSystem;
 class LightSystem;
+class PhysicsWorld;
 
 class EditorApplication {
 public:
@@ -70,6 +71,12 @@ private:
     /// @brief Reemplaza m_map con la sala 8x8 hardcodeada (perimetro grid,
     ///        columna central brick). Se usa al arrancar y al cerrar proyecto.
     void buildInitialTestMap();
+
+    /// @brief Hito 12: crea/sincroniza rigid bodies con Jolt. Por frame:
+    ///        - entidades con RigidBodyComponent sin body creado -> create.
+    ///        - en Play Mode: tras step(), copia position del body al Transform.
+    ///        En Editor Mode solo materializa bodies nuevos; no stepea.
+    void updateRigidBodies(f32 dt);
 
     /// @brief Reconstruye `m_scene` desde cero a partir del estado actual de
     ///        `m_map`: una entidad por tile solido con Tag + Transform +
@@ -141,6 +148,7 @@ private:
     std::unique_ptr<AudioDevice> m_audioDevice;
     std::unique_ptr<AudioSystem> m_audioSystem;
     std::unique_ptr<LightSystem> m_lightSystem;
+    std::unique_ptr<PhysicsWorld> m_physicsWorld;
 
     // AssetManager: owner de todas las texturas cargadas. Se destruye ANTES
     // del contexto GL (ver destructor).

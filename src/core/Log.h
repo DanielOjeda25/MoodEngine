@@ -41,6 +41,10 @@ std::shared_ptr<spdlog::logger>& script();
 ///        playback starts/stops, errores del backend miniaudio.
 std::shared_ptr<spdlog::logger>& audio();
 
+/// @brief Logger de fisica (`physics`): Jolt init, body creation/destruction,
+///        traces del engine Jolt, errores de assert.
+std::shared_ptr<spdlog::logger>& physics();
+
 /// @brief Sink en memoria con las últimas 512 entradas de log. El
 ///        `ConsolePanel` del editor lo consume para mostrar los logs en vivo.
 ///        `nullptr` si no se llamó a `init()` aún.
