@@ -698,3 +698,43 @@ de build sin migrar toda la convencion a un subfolder aparte.
 **Alternativas consideradas:** mover los OBJ de assets a otro path
 (`assets/models/`). Renombrar por una colision de extensions es lo
 opuesto al principio de menor sorpresa.
+
+## 2026-04-24: Vertex layout pos+color+uv+normal (stride 11) en lugar de capas separadas
+
+**Contexto:** Hito 11 necesita normales en cada vértice. Opciones: (a) extender el layout existente in-place a stride 11; (b) tener dos layouts paralelos (legacy stride 8 + nuevo stride 11) y elegir por shader; (c) un VBO interleaved + un VBO de normales separado.
+**Decisión:** (a) — extender el layout existente. `createCubeMesh` y `MeshLoader` siempre emiten stride 11. El shader `default.{vert,frag}` queda como está y simplemente ignora la `location = 3` que recibe (OpenGL no falla por atributos no usados en el VAO).
+**Razones:** menos branching en el código de carga, un solo path. La sobrecarga de 3 floats por vértice es trivial frente a los volúmenes actuales (~10k vértices). Mantener dos layouts agrega complejidad por un beneficio mínimo.
+**Alternativas consideradas:** (b) elegante pero genera deuda de migrar después; (c) más caché-friendly para draws que sólo necesitan posición (shadows), pero hoy no hace falta y multiplica VBOs/VAOs.
+**Revisar si:** aparece un draw path que sólo lea posición (shadow mapping en Hito 16). Ahí evaluar pull a un buffer por atributo o vertex stream layouts (gl 4.5 attrib divisor / separate buffer bindings).
+
+## 2026-04-24: Inverse-transpose por vertex en GLSL en lugar de `uNormalMatrix`
+
+**Contexto:** transformar normales con escalas no uniformes requiere `mat3(transpose(inverse(uModel)))`. Lo común en engines es pre-calcularlo en CPU y pasar como uniform.
+**Decisión:** en `lit.vert`, hacerlo por vertex.
+**Razones:** las escenas actuales tienen ~30 entidades; el costo de la inversa por vertex es despreciable y el código queda más simple (un uniform menos que sincronizar en CPU). Cuando los volúmenes crezcan o aparezca skinning (Hito 19), pasar al uniform es directo.
+**Alternativas consideradas:** uniform pre-calculado en CPU — lo correcto a largo plazo pero overengineering para hoy.
+**Revisar si:** el profiler muestra que el vertex shader se vuelve cuello de botella (post-Hito 18 con muchos draws).
+
+## 2026-04-24: Atenuación cuadrática smooth con cutoff por radius (no la fórmula 1/(a+b·d+c·d²))
+
+**Contexto:** modelo de atenuación para `PointLight`.
+**Decisión:** `att = (1 - clamp(dist/radius, 0, 1))^2`. Cae a 0 exactamente en `radius`, suave en el medio.
+**Razones:** UX para diseño de niveles: el modder dice "esta luz alcanza 12 metros" y el resultado coincide. La fórmula clásica con (constant + linear + quadratic) requiere afinar 3 parámetros para cortar en una distancia dada.
+**Alternativas consideradas:** atenuación 1/d² física-correcta + cutoff suave — coherente con PBR pero exagerado para Blinn-Phong AAA-2010 (el target estético del motor). Dejar abierto para Hito 17.
+**Revisar si:** los assets requieren matching con DCC tools (Blender, Maya) que asumen atenuación inversa-cuadrada física.
+
+## 2026-04-24: Single sun + N point lights (sin SpotLight ni multi-Directional)
+
+**Contexto:** API de luces para Hito 11.
+**Decisión:** el shader `lit.frag` soporta exactamente UNA `DirectionalLight` (uniform `uDirectional`) + hasta 8 `PointLight`. `LightSystem::buildFrameData` toma la primera Directional que encuentra y la usa; las demás se ignoran.
+**Razones:** alcanza para "hay un sol" + luces locales. Un mapa real rara vez quiere dos directionales (¿dos soles?). SpotLight + multiple directionals son features de polish que entran cuando un escenario lo justifique.
+**Alternativas consideradas:** array de hasta 4 directionals desde el día uno — más uniforms a manejar, branching en el shader, sin caso de uso concreto.
+**Revisar si:** Hito 14+ trae un escenario "noche con focos" o un nivel con luna + sol cinemático.
+
+## 2026-04-24: Bindings por nombre en `LightSystem::bindUniforms` (no UBO)
+
+**Contexto:** subir N PointLights al shader.
+**Decisión:** loop CPU que llama `setVec3("uPointLights[0].position", ...)` etc. Nombres construidos con `snprintf`.
+**Razones:** la cache de `glGetUniformLocation` en `OpenGLShader` lo hace barato (una sola consulta GL por uniform en todo el lifetime). Sin UBO, sin std140 padding, sin layout pinning. Para 8 luces × 4 campos = 32 uniforms; trivial.
+**Alternativas consideradas:** UBO (Uniform Buffer Object) con std140 layout — más rápido y más cercano a Vulkan/DX12, pero overengineered para 8 lights. Migrar cuando el limit suba (Hito 18 deferred / clustered).
+**Revisar si:** se sube `MAX_POINT_LIGHTS` arriba de 64 (cluster forward o deferred), o si aparece SSBO necesario para tile-based shading.

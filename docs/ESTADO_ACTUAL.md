@@ -6,7 +6,13 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 10 cerrado, mergeado a `main` y publicado en origin.**
+**Hito 11 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.11.0-hito11`.
+Verificado automático: suite doctest 98/428 pasando (+8 lighting, +1 light round-trip vs Hito 10), editor compila sin warnings nuevos, `lit.{vert,frag}` se compila en el arranque, ningún uniform missing reportado por GL debug. Verificado por el dev a ojo: con luz puntual blanca via `Ayuda > Agregar luz puntual demo`, las paredes muestran caras frente/atrás distinguibles; el slider de intensity en el Inspector se refleja en vivo; tras Ctrl+S y reload del proyecto, la luz se recrea idéntica.
+
+**Próximo paso:** Hito 12 — Física con Jolt Physics. Reemplazar el `PhysicsSystem` AABB-vs-grid del Hito 4 por rigid bodies con Jolt: gravedad real, colliders convexos, capsule controller para el jugador. Plan en `docs/PLAN_HITO12.md`.
+
+### Hito 10 (anterior, ya cerrado)
 Tag: `v0.10.0-hito10`.
 Verificado automático (suite doctest 90/380 pasando con +8 tests nuevos — 5 de MeshLoader/AssetManager, 2 de round-trip de entidades, test setup con WORKING_DIRECTORY). Verificado por el dev a ojo: drag de `pyramid.obj` desde AssetBrowser al Viewport spawnea la entidad con metadata `[1 submeshes, 18 v]`; Ctrl+S persiste 3 entidades; cerrar + reabrir trae las 3 entidades con posición/rotación/scale/material intactos (`Mapa cargado: … (N tiles sólidos, 3 entidades)` en el log).
 
@@ -82,6 +88,16 @@ Verificado automático (suite doctest 90/380 pasando con +8 tests nuevos — 5 d
 - `SavedMap` extendido con `SavedEntity` + `SavedMeshRenderer`. `SceneSerializer::save` acepta `Scene*` opcional. `EditorApplication::tryOpenProjectPath` aplica las entidades persistidas tras `rebuildSceneFromMap`.
 - Tests: +8 casos / +34 asserciones en `test_mesh_asset.cpp` + `test_scene_serializer.cpp`. `add_test` con `WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` para que tests que abren archivos reales (pyramid.obj via assimp) resuelvan desde la raíz del repo. Suite total 90/380.
 - `assets/meshes/pyramid.obj`: pirámide base cuadrada escrita a mano (5 v / 6 tris / con UVs). `.gitignore` fix: `!assets/meshes/*.obj` para evitar colisión con `*.obj` de objetos MSVC.
+
+**Hito 11** — Iluminación Blinn-Phong (tag `v0.11.0-hito11`):
+- Vertex layout extendido a stride 11 (pos+color+uv+normal). `createCubeMesh` emite normales planas por cara; `MeshLoader` (assimp) preserva las normales que `aiProcess_GenNormals` calcula. Stride viejo de 8 dejó de existir.
+- `shaders/lit.{vert,frag}`: Blinn-Phong forward (ambient + diffuse + specular). Soporta 1 `DirectionalLight` global + hasta `MAX_POINT_LIGHTS=8`. Atenuación cuadrática smooth con cutoff por `radius`. Normal en mundo via `mat3(transpose(inverse(uModel)))` por vertex.
+- `LightComponent { type, color, intensity, radius, direction, enabled }` real (antes placeholder Hito 7). Inspector tiene sección con sliders en vivo.
+- `src/systems/LightSystem.{h,cpp}`: `buildFrameData(scene)` arma snapshot por frame; `bindUniforms(shader, data, cameraPos)` sube nombres tipo `uPointLights[i].radius` (la cache de `glGetUniformLocation` lo hace barato).
+- `EditorApplication`: agrega `m_litShader` + `m_lightSystem`; el render scene-driven usa lit en lugar de default. `cameraPos` viene de la cámara activa (Editor o Play).
+- Demo: `Ayuda > Agregar luz puntual demo` spawnea entidad "Luz demo" en (0,4,0). La sala se ilumina realista.
+- Persistencia: `SavedLight` en `SceneSerializer` con type/color/intensity/radius/direction/enabled. `k_MoodmapFormatVersion` 2 → 3 (v2 sin campo `light` se carga igual).
+- Tests: `test_lighting.cpp` (7 casos LightSystem) + round-trip de Light en `test_scene_serializer.cpp`. Suite total 98/428.
 
 **Hito 9** — Audio básico con miniaudio (tag `v0.9.0-hito9`):
 - `miniaudio` v0.11.21 vendored single-header (`external/miniaudio/`), INTERFACE target + `miniaudio_impl.cpp` con `MA_NO_ENCODING` + `MA_NO_GENERATION`.

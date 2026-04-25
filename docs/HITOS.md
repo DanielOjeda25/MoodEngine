@@ -15,7 +15,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 8** — Scripting con Lua (completado, tag `v0.8.0-hito8`).
 - [x] **Hito 9** — Audio básico (completado, tag `v0.9.0-hito9`).
 - [x] **Hito 10** — Importación de modelos 3D (completado, tag `v0.10.0-hito10`).
-- [ ] Hito 11 — Iluminación Phong/Blinn-Phong.
+- [x] **Hito 11** — Iluminación Phong/Blinn-Phong (completado, tag `v0.11.0-hito11`).
 - [ ] Hito 12 — Física con Jolt.
 - [ ] Hito 13 — Gizmos y selección.
 - [ ] Hito 14 — Prefabs.
@@ -250,3 +250,28 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Materiales reales** (color, normal map, metallic/roughness). Hoy solo texture por submesh. **Trigger:** Hito 17 (PBR).
 - **Drag & drop de audio** (arrastrado desde Hito 9). **Trigger:** Scene authoritative.
 - **Light components funcionales.** **Trigger:** Hito 11.
+
+## Hito 11 — Iluminación Phong / Blinn-Phong
+
+**Objetivo:** que la escena deje de ser "unlit" (textura directa) y pase a iluminarse con Blinn-Phong forward. `LightComponent` (placeholder desde Hito 7) pasa a ser real, con soporte para 1 directional + N point lights.
+
+**Criterios de aceptación cumplidos:**
+- Vertex layout extendido a stride 11 (pos+color+uv+normal). `createCubeMesh` genera normales planas; `MeshLoader` (assimp) preserva las normales que `aiProcess_GenNormals` calcula.
+- `shaders/lit.{vert,frag}`: Blinn-Phong (ambient + diffuse + specular). Soporta hasta `MAX_POINT_LIGHTS=8` con atenuación cuadrática suave hasta `radius`. 1 directional via `uDirectional`.
+- `LightComponent { type, color, intensity, radius, direction, enabled }` real. Sliders en Inspector se reflejan en vivo.
+- `src/systems/LightSystem.{h,cpp}` recolecta lights del Scene cada frame y sube uniforms (cache de `glGetUniformLocation` en `OpenGLShader` evita el costo).
+- Demo `Ayuda > Agregar luz puntual demo` spawnea entidad con Light Point en (0,4,0). Sala 8x8 muestra sombreado real con caras frente/atrás distinguibles.
+- Persistencia: `SavedLight` en `SceneSerializer` con type/color/intensity/radius/direction/enabled. `k_MoodmapFormatVersion` 2 → 3 (v2 sin campo `light` se carga igual).
+- Tests: 7 nuevos en `test_lighting.cpp` + 1 round-trip de Light en `test_scene_serializer.cpp`. Suite 98/428 (+8 vs Hito 10).
+
+**Siguiente paso tras completarlo:** Hito 12 — Física con Jolt. Reemplazar el `PhysicsSystem` propio (AABB vs grid del Hito 4) por Jolt Physics: rigid bodies, colliders convexos, gravedad, capsule controllers, integración con `Transform`. Plan en `docs/PLAN_HITO12.md`.
+
+### Pendientes menores detectados en Hito 11
+
+- **Hot-reload de shaders** (Bloque 6): diferido. **Trigger:** Hito 16 (shadows) o Hito 17 (PBR) — momento natural cuando los shaders crezcan.
+- **Preview 3D de meshes en AssetBrowser**: re-arrastrado desde Hito 10. **Trigger:** asset humano lo pide.
+- **Normal mapping**: opcional en plan, no entró. **Trigger:** Hito 17 (PBR).
+- **`uNormalMatrix` precalculado en CPU**: hoy es por-vertex en GLSL. **Trigger:** frametimes que dolieren con muchos draws (Hito 18).
+- **Múltiples directional lights / SpotLight**: fuera de scope del hito. **Trigger:** mapa real que lo pida.
+- **Atenuación con falloff exponente configurable**: hoy cuadrática hardcoded. **Trigger:** feedback visual.
+- **Persistencia de `AudioSource`**: sigue arrastrándose desde Hito 9. **Trigger:** Scene authoritative completo (Hito 14+).
