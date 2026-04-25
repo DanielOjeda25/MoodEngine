@@ -20,6 +20,7 @@ add_executable(mood_tests
     test_audio.cpp
     test_mesh_asset.cpp
     test_lighting.cpp
+    test_picking.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -27,6 +28,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scene/EditorCamera.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/FpsCamera.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/Scene.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/ScenePick.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/GridMap.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/PhysicsSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/ScriptSystem.cpp
