@@ -778,3 +778,51 @@ opuesto al principio de menor sorpresa.
 **Razones:** `CharacterVirtual` requiere handling correcto de slope, step-up, ground detection, jump state machine, y callbacks de colision. Implementarlo "bien" es varios dias; implementarlo mal produce un jugador que se traba en esquinas o clip-throughs. El hito ya cumple el core objetivo (Jolt integrado, rigid bodies demos). Preferimos diferirlo a cuando tengamos gizmos (Hito 13) para poder mover/ajustar al player interactivamente y depurar el controller, en vez de hacerlo a ciegas.
 **Alternativas consideradas:** implementar un `Character` (no `CharacterVirtual`) rapido con solo gravedad + colision horizontal — funciona pero la calidad es inferior a lo que ya hace `moveAndSlide`. Net negative de UX si apuramos.
 **Revisar si:** se termina el Hito 13 (gizmos) o aparece gameplay concreto que necesite jump/slope (plataformas, puzzles).
+
+## 2026-04-24: Gizmos en screen-space con `ImDrawList`, no geometria GL (Hito 13)
+
+**Contexto:** como renderizar los gizmos 3D (flechas de translate, anillos de rotate, cajas de scale).
+**Decision:** dibujar los gizmos como polylines 2D via `ImDrawList` en un callback que `ViewportPanel` invoca DESPUES de `ImGui::Image` del framebuffer. `EditorApplication` proyecta los world-points del gizmo a screen-space con las `m_lastView/m_lastProjection` del frame anterior, y el `ImDrawList` los pinta con clip-rect al area de la imagen.
+**Razones:** cero shaders nuevos, cero VBOs, cero depth buffer para overlays — los gizmos son andamios, no parte de la escena. Reutilizamos el stack de ImGui que ya es dependencia del editor. El "1 frame de lag" por usar matrices del frame anterior es imperceptible a la practica (gizmos no se mueven sin input del usuario, que es lo que dispara el re-render).
+**Alternativas consideradas:** mesh + shader dedicado (torus + arrow mesh) con GL passes — mas lineas de codigo, mas estado que mantener, y el picking seguiria siendo math 2D. Integrar ImGuizmo (lib externa) — descartado: queriamos escribir la math propia para entenderla + no depender de un tercero para algo que es tan central al editor.
+**Revisar si:** aparece un caso de gizmo que requiera oclusion real con la escena (ej. transparencias 3D), o multi-viewport con gizmos en cada uno.
+
+## 2026-04-24: Picking por AABB unitario escalado, no por malla real (Hito 13)
+
+**Contexto:** `ScenePick::pickEntity` necesita intersectar el rayo del mouse contra cada entidad.
+**Decision:** toda entidad con `MeshRendererComponent` se testea contra un AABB `[-0.5, 0.5]^3` local, transformado por `Transform.position` + `Transform.scale`. Entidades sin mesh (Light, AudioSource) se testean contra una esfera world-space de radio 0.6m centrada en `Transform.position`.
+**Razones:** el AABB unitario coincide con el primitivo `cube.obj` (default de la demo y tile de mapa). Para modelos importados, es una conservative hitbox: el click selecciona "cerca" del modelo, con un poco de falso-positivo alrededor — aceptable para un editor. No requerimos construir BVH por mesh ni iterar vertices. La esfera de 0.6m para iconos es ~2x el tamano visual del icono en pantalla, minimiza "no le pego a la luz".
+**Alternativas consideradas:** integrar `PhysicsWorld::rayCast` de Jolt + tabla BodyID → Entity — mas preciso pero solo funciona con entidades que tienen `RigidBodyComponent`, y las luces/audio no lo tienen. Tambien arrastra el costo de Jolt a un feature puramente de editor. `MeshFromAsset` con bounds reales por modelo — alineado con futuro mesh collider pero overkill para el loop "spawneo un cubo y lo selecciono".
+**Revisar si:** empieza a molestar el false-positive con modelos no-cuboides (ej. dos esferas cercanas donde el AABB se superpone). Trigger: Hito 11+ con BVH + `MeshFromAsset` disponible.
+
+## 2026-04-24: Click vs drag con threshold de 4px (Hito 13)
+
+**Contexto:** el mismo mouse-button (left) se usa para click-to-select y para drag-de-gizmo. Hay que decidir cual es cual.
+**Decision:** `ViewportPanel` registra la posicion del mouseDown sobre la imagen; al mouseUp, si `|delta|^2 < 16` (4px) y el mouseDown fue sobre el viewport, dispara `ClickSelect{ndcX, ndcY}`. Si se movio mas, fue un drag (camara o gizmo) y el click-select se descarta. Ademas, si el gizmo consumio el click (flag `m_gizmoConsumedClick` en `EditorApplication`), el click-select se suprime aunque el mouse no haya drifteado.
+**Razones:** 4px es el umbral estandar en editores (Unity, Godot lo usan). Diferenciar por intencion, no por tiempo — evita la UX de "mantenelo quieto 100ms" que es fragil. El flag doble (gizmo + threshold) cubre dos escenarios: "click puro que no tocaba el gizmo" (threshold) y "mouse down sobre el gizmo sin mover" (flag).
+**Alternativas consideradas:** threshold de tiempo (si el boton se solto en <150ms cuenta como click) — menos intuitivo, depende del framerate. Diferenciar el button (left = select, middle = gizmo) — rompe convencion de editores 3D.
+**Revisar si:** algun usuario reporta que sus clicks no se registran (monitor sensible al jitter) — entonces subir a 6-8px.
+
+## 2026-04-24: Uniform-scale handle = cuadrado blanco central (Hito 13)
+
+**Contexto:** el scale gizmo original tenia 3 ejes (X/Y/Z) pero no habia forma de escalar uniforme sin escribir los 3 componentes a mano o usar el Inspector.
+**Decision:** en modo Scale, ademas de los 3 handles de eje (index 0/1/2) hay un cuarto handle (index 3) dibujado como cuadrado blanco en el origen del gizmo. Drag sobre el: factor `1 + deltaPx / k_armLen` (k_armLen=60px), aplicado a los 3 componentes de `Transform.scale`. Clamp inferior a 0.01 para evitar scale=0 que colapsa la mesh.
+**Razones:** pedido explicito del dev. Convencion comun (Unity, Blender tienen un handle central para uniform). Un solo `delta_px` se convierte a factor multiplicativo — mas predecible que intentar leer los 3 ejes por separado y promediar. Clamp >= 0.01 evita artifacts de rendering (normal matrix degenerada cuando scale llega a 0).
+**Alternativas consideradas:** toggle global "lockear uniform scale" en el Inspector — menos descubrible. Shift+drag sobre cualquier eje → uniform — poco intuitivo sin UI hint.
+**Revisar si:** aparece el requerimiento de un "bounding box drag" estilo GIMP (arrastrar corner del AABB para escalar 2 ejes a la vez).
+
+## 2026-04-24: Inspector esconde scale/rotation sin MeshRenderer (Hito 13)
+
+**Contexto:** `InspectorPanel` mostraba 3 DragFloat3 (position/rotation/scale) para cualquier entidad con `TransformComponent`. Problema: una `PointLight` mostraba campos de escala/rotacion que no afectan nada (las luces puntuales no tienen orientacion y scale no escala el radio). Los usuarios los tocaban y no pasaba nada.
+**Decision:** si la entidad **no** tiene `MeshRendererComponent`, el Inspector solo muestra `position`. `rotationEuler` y `scale` quedan ocultos. Si se agrega MeshRenderer mas tarde, aparecen.
+**Razones:** feedback directo del dev — "no tiene sentido escalar una luz". La UI es un documento del modelo mental: mostrar solo lo que aplica. Si en el futuro una luz "direccional" requiere rotation, esa visibilidad la gatilla `LightComponent::Type::Directional`, no el Transform crudo.
+**Alternativas consideradas:** disable (grey out) en vez de ocultar — todavia distrae. Dejarlo como estaba — UX floja.
+**Revisar si:** se agrega un componente que legitimamente usa rotation/scale del Transform sin MeshRenderer (ej. AudioListener con cono direccional) — extender el condicional para incluirlo.
+
+## 2026-04-24: Overlays de edicion ocultos en Play Mode (Hito 13)
+
+**Contexto:** los iconos 2D de Light/AudioSource + los gizmos 3D son andamios del editor. Al entrar a Play Mode se seguian dibujando.
+**Decision:** early return del callback de overlay si `m_mode == EditorMode::Play`. Los iconos + gizmos solo existen en Editor Mode.
+**Razones:** Play Mode existe para ver el juego como lo vera el jugador final. Los iconos rompen la inmersion (un circulo amarillo flotando = "esto es debug"). Los gizmos sobre el player en Play tampoco tienen sentido — no estas editando, estas jugando.
+**Alternativas consideradas:** toggle manual ("show editor overlays in play") — overhead innecesario, nadie va a querer eso por default.
+**Revisar si:** se agrega un "play-in-editor with debug overlays" flow (comun en juegos AAA para QA). Trigger: Hito 22+ con tooling de QA.

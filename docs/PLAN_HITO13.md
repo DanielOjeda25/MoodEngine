@@ -27,83 +27,77 @@ No-goals del hito: multi-selección + rectangle select (Hito 14+), snap to grid,
 
 ### Automáticos
 
-- [ ] `cmake --build build/debug --config Debug` compila sin errores ni warnings nuevos.
-- [ ] Tests: helpers de ray-AABB intersect, ray-gizmo-axis picking (ray vs capped cylinder para las flechas).
-- [ ] Cierre limpio.
+- [x] `cmake --build build/debug --config Debug` compila sin errores ni warnings nuevos.
+- [x] Tests: `tests/test_picking.cpp` cubre ray-AABB, ray-sphere, dos targets (más cercano gana), rayo al cielo, entidad detrás de la cámara, guard sin Transform. **7/7 verdes** (106/106 suite completa).
+- [x] Cierre limpio.
 
 ### Visuales
 
-- [ ] Click en una entidad en el viewport la resalta en Hierarchy (selection sync).
-- [ ] Shift+Click agrega a la selección — **opcional** para este hito; si no entra, queda diferido.
-- [ ] Con entidad seleccionada, gizmo aparece sobre el pivote.
-- [ ] Arrastrar cada eje del gizmo modifica la propiedad correcta y se ve en vivo.
-- [ ] Inspector refleja los cambios en tiempo real.
+- [x] Click en una entidad en el viewport la resalta en Hierarchy (selection sync).
+- [ ] Shift+Click agrega a la selección — **diferido** (Hito 14+). No entró en este hito; no es bloqueante.
+- [x] Con entidad seleccionada, gizmo aparece sobre el pivote.
+- [x] Arrastrar cada eje del gizmo modifica la propiedad correcta y se ve en vivo.
+- [x] Inspector refleja los cambios en tiempo real.
 
 ---
 
 ## Bloque 0 — Pendientes arrastrados del Hito 12
 
-- [ ] **CharacterController de Jolt** (Bloque 4 del Hito 12): integración del jugador como `JPH::CharacterVirtual`. Si hay bandwidth al final, entra; si no, se difiere de nuevo.
-- [ ] **Rotación del body → Transform.rotationEuler**: hoy solo sincronizamos position. Cuando las cajas empiecen a rodar por colisiones (Hito 13 con cajas apiladas) se va a notar.
-- [ ] **Shape `MeshFromAsset`**: colisiones precisas para modelos importados. Útil para el ray-cast de click-to-select (si queremos picking preciso contra la pirámide, no solo su AABB).
+- [ ] **CharacterController de Jolt** (Bloque 4 del Hito 12): integración del jugador como `JPH::CharacterVirtual`. **Diferido otra vez** — se pospone a un hito dedicado cuando el gameplay lo requiera (probablemente post-prefabs).
+- [ ] **Rotación del body → Transform.rotationEuler**: hoy solo sincronizamos position. Diferido — todavía no se apila nada que ruede en la demo.
+- [ ] **Shape `MeshFromAsset`**: diferido — el picking por AABB cubre el caso común.
 
-## Bloque 1 — Raycast pickable
+## Bloque 1 — Raycast pickable ✅
 
-- [ ] `src/engine/scene/ScenePick.{h,cpp}` (análogo a `ViewportPick` del Hito 6 pero para entidades): `pickEntity(scene, assets, ray_origin, ray_dir) -> std::optional<Entity>`. Usa AABB de la mesh o sphere de la light.
-- [ ] Integrar con Jolt si es más rápido: `PhysicsWorld::rayCast(origin, dir) -> BodyID`. Luego mapear BodyID → Entity via tabla inversa.
-- [ ] Fallback a AABB ECS-side si el body no existe (entidades sin RigidBody).
+- [x] `src/engine/scene/ScenePick.{h,cpp}`: `pickEntity(scene, view, projection, ndc) -> ScenePickResult`. Usa AABB unitario de la mesh (escalado por Transform) o esfera de radio 0.6m para Light/Audio sin mesh.
+- [ ] ~~Integrar con Jolt `rayCast`~~: se optó por ECS-only (más simple, sin depender del PhysicsWorld). Cuando haya muchas entidades se evalúa.
+- [x] Fallback a AABB ECS-side si el body no existe.
 
-## Bloque 2 — Click-to-select
+## Bloque 2 — Click-to-select ✅
 
-- [ ] `ViewportPanel` captura click izquierdo sobre la imagen (diferenciar drag-de-gizmo vs click-select).
-- [ ] Al click, el viewport construye el ray desde la cámara y llama al ScenePick.
-- [ ] Resultado → `EditorUI::setSelectedEntity(e)`. Hierarchy y Inspector reaccionan automáticamente.
-- [ ] Click en vacío deselecciona.
+- [x] `ViewportPanel` captura click izquierdo sobre la imagen, con threshold de 4px para distinguir click puro de drag.
+- [x] Al click, construye NDC y `EditorApplication` genera el ray + llama a `pickEntity`.
+- [x] Resultado → `EditorUI::setSelectedEntity(e)`. Hierarchy e Inspector reaccionan automáticamente.
+- [x] Click en vacío deselecciona.
+- [x] Guard anti-doble-disparo contra el gizmo: si el drag-start consumió el click, el select no se dispara.
 
-### Bloque 2.5 — Iconos de sprite para entidades sin mesh visible
+### Bloque 2.5 — Iconos para entidades sin mesh ✅
 
-Feature que pidió el dev al cerrar el Hito 12. Entidades como `LightComponent` (Point/Directional) o `AudioSourceComponent` hoy son invisibles en el viewport. Como consecuencia:
-- No hay forma de click-to-select una luz sin seleccionarla por Hierarchy.
-- No sabés dónde está parada la fuente hasta que te fijás en el Transform.
+- [x] Render 2D en screen-space via `ImDrawList` callback `ViewportPanel::setOverlayDraw` (sin assets externos ni shader nuevo). Círculo amarillo para `LightComponent`, cian para `AudioSourceComponent`.
+- [x] Halo azul alrededor del icono si la entidad está seleccionada.
+- [x] Iconos pickable por esfera de 0.6m (parte del mismo `pickEntity`).
+- [x] Solo visibles en Editor Mode (early return en el overlay si `m_mode == Play`).
 
-- [ ] `assets/textures/icons/light_point.png`, `light_directional.png`, `audio_source.png` (32×32 PNG con fondo transparente). Generadas con script en `tools/gen_editor_icons.py` (o bajadas CC0 de fontawesome/similares).
-- [ ] `src/engine/render/opengl/OpenGLBillboardRenderer.{h,cpp}` (o integrado en `OpenGLDebugRenderer`): dibuja sprites view-aligned en world-space. Tamaño constante en pantalla (scale por distancia cámara).
-- [ ] `EditorApplication::renderSceneToViewport` emite un billboard por cada entidad con `LightComponent`/`AudioSourceComponent` sin `MeshRendererComponent` (las que sí lo tienen ya son visibles).
-- [ ] El icono es pickable: el ScenePick también testea ray vs quad-del-billboard. Click sobre el icono selecciona la entidad.
-- [ ] Solo en Editor Mode — en Play Mode los iconos se ocultan (no contaminan la experiencia final).
+## Bloque 3 — Gizmo translate ✅
 
-> Alternativa al .png: dibujar los íconos como shapes procedurales (esfera wireframe para point, flecha para directional, altavoz para audio) con `OpenGLDebugRenderer`. Menos bonito pero no requiere assets; decidir durante implementación.
+- [x] Overlay en `EditorApplication`: 3 flechas axis-aligned en screen-space (proyección world → screen), color R/G/B por eje.
+- [x] Picking por cercanía 2D al segmento (threshold 8px). Hover no resalta — se evalúa solo en mouse-down.
+- [x] Drag: `closestParam` entre dos líneas 3D (rayo del mouse vs eje del gizmo). Delta aplicado a `Transform.position`.
 
-## Bloque 3 — Gizmo translate
+## Bloque 4 — Gizmo rotate + scale ✅
 
-- [ ] `src/engine/scene/Gizmo.{h,cpp}`: render en viewport de 3 flechas axis-aligned sobre el Transform de la entidad seleccionada. Color por eje (RGB).
-- [ ] Raycast ray ↔ flecha (capped cylinder): al hover, tint brighter; al click + drag, entra modo translate.
-- [ ] Drag: proyectar el delta del mouse sobre el plano perpendicular al eje + plano de la vista. Aplicar delta a `Transform.position`.
-- [ ] Liberar click: commit. `markDirty()`.
+- [x] **Rotate**: 3 anillos (48 segmentos polyline) por eje. Sign del delta invertido según `dot(axis, cam_to_origin)` para que rotar a la derecha sienta natural desde cualquier ángulo.
+- [x] **Scale**: 3 líneas cortas + cuadrado al final por eje; al arrastrar, factor aplicado al componente correspondiente (`scale.x`, `.y` o `.z`).
+- [x] **Uniform scale** (feedback dev): cuadrado blanco al centro del gizmo de scale; drag multiplica los 3 componentes por `1 + deltaPx / k_armLen` (60px). Clamp >= 0.01.
 
-## Bloque 4 — Gizmo rotate / scale
+## Bloque 5 — Hotkeys + UX ✅
 
-- [ ] Rotate: 3 anillos (torus-ish) por eje. Drag aplica rotación al eje Euler correspondiente.
-- [ ] Scale: 3 cajas por eje. Drag aplica factor al `Transform.scale`.
+- [x] `W`/`E`/`R` cambian modo. Ignorados si `ImGui::WantTextInput` (no pisan escribir en un input).
+- [ ] ~~Esc cancela drag sin commit~~: diferido. El drag se aplica live, no hay staging; si se quiere cancelar hoy, el usuario deshace con el Inspector. Se contempla con undo/redo (Hito 22).
+- [ ] ~~Indicator visual del modo~~: diferido. Los 3 modos se distinguen por la forma del gizmo (flechas vs anillos vs cajas). Si aparece demanda, se agrega un label.
 
-## Bloque 5 — Hotkeys + UX
+## Bloque 6 — Tests ✅
 
-- [ ] `W` / `E` / `R` cambian modo (translate/rotate/scale). Estado en `EditorUI`.
-- [ ] Indicator visual del modo actual (label + color en toolbar o menú).
-- [ ] Esc cancela drag en curso sin commit.
+- [x] `tests/test_picking.cpp`: 7 cases cubriendo scene vacía, ray central hitea mesh en origen, light sin mesh pickable por esfera, dos targets en línea (el más cercano gana), rayo al cielo no hitea, entidad detrás de cámara no hitea, entidad sin Transform no hitea (safety).
+- [ ] ~~`tests/test_gizmo.cpp`~~: diferido. La math del gizmo (closestParam + project world→screen) es glm puro; el test de cobertura real sería end-to-end contra ImGui, lo cual queda para un futuro hito de tests de UI.
 
-## Bloque 6 — Tests
+## Bloque 7 — Cierre ✅
 
-- [ ] `tests/test_picking.cpp`: ray-AABB, ray-sphere, ray-capped-cylinder.
-- [ ] `tests/test_gizmo.cpp`: proyección de delta sobre eje / plano (math pura).
-
-## Bloque 7 — Cierre
-
-- [ ] Recompilar, tests verdes, demo visible (seleccionar la caja demo, moverla con el gizmo, ver la caja apoyarse en el nuevo lugar cuando entra a Play).
-- [ ] Actualizar `docs/HITOS.md`, `docs/DECISIONS.md`, `docs/ESTADO_ACTUAL.md`.
-- [ ] Commits atómicos en español.
-- [ ] Tag `v0.13.0-hito13` + push.
-- [ ] Crear `docs/PLAN_HITO14.md` (prefabs).
+- [x] Recompilar: `cmake --build build/debug --config Debug` limpio. Tests verdes: 106/106 (7 nuevos para picking).
+- [x] Actualizar `docs/HITOS.md`, `docs/DECISIONS.md`, `docs/ESTADO_ACTUAL.md`.
+- [x] Commits atómicos en español.
+- [x] Tag `v0.13.0-hito13` + push.
+- [x] Crear `docs/PLAN_HITO14.md` (Prefabs).
 
 ---
 
@@ -120,10 +114,26 @@ Feature que pidió el dev al cerrar el Hito 12. Entidades como `LightComponent` 
 
 ## Decisiones durante implementación
 
-_(llenar a medida que aparezcan)_
+- **Gizmo en screen-space con `ImDrawList`, no geometría GL**: flechas/anillos/cajas se dibujan como polylines 2D post-frame desde un callback del `ViewportPanel`. Ventaja: cero shaders nuevos, cero VBOs, cero depth-write para overlays. El precio: 1 frame de lag porque la cámara usada es la del frame anterior (`m_lastView`/`m_lastProjection`); imperceptible a la práctica.
+- **Picking por AABB unitario escalado (no por mesh real)**: se asume que toda `MeshRendererComponent` ocupa `[-0.5, 0.5]^3` local, y `Transform.scale` define el tamaño world. Para el primitivo cubo es exacto; para modelos importados es una conservative hitbox. Suficiente para el editor; se considera `MeshFromAsset` cuando el picking contra malla curva se vuelva necesario.
+- **Entidades sin mesh pickables por esfera de 0.6m**: `LightComponent` y `AudioSourceComponent` se pican contra una sphere en world-space. 0.6m es ~2× el tamaño visual del icono; minimiza "no le pego a la luz".
+- **Click vs drag = threshold 4px**: en `ViewportPanel`, si el mouse se movió < 4px entre mouseDown y mouseUp, es click puro → dispara `ClickSelect`. Si se movió más, fue un drag (de cámara o de gizmo) y el select se descarta.
+- **Uniform-scale handle = cuadrado blanco central**: en modo Scale, además de los 3 ejes hay un cuarto "eje" (index = 3) en el origen del gizmo que escala los 3 componentes a la vez. Factor = `1 + deltaPx / k_armLen` (60px), clamp >= 0.01.
+- **Rotate sign por dot(axis, cam_to_origin)**: sin esto, rotar el anillo X sentía al revés si mirabas la escena desde -X. Se elige el signo del delta según la orientación de la cámara respecto al eje.
+- **Inspector esconde scale/rotation sin MeshRenderer**: feedback del dev — no tiene sentido "escalar" una luz puntual, el control solo introducía confusión. Se muestran únicamente si la entidad tiene `MeshRendererComponent`.
+- **Overlays ocultos en Play Mode**: iconos + gizmos son andamios de edición. Mostrarlos en Play rompía la inmersión; early return en el callback si `m_mode == Play`.
+- **Hotkeys respetan `ImGui::WantTextInput`**: W/E/R no se disparan si el usuario está escribiendo en un input de texto (ej: renombrar entidad en Hierarchy).
 
 ---
 
 ## Pendientes que quedan para Hito 14 o posterior
 
-_(llenar al cerrar el hito)_
+- **Shift+click multi-selección** y rectangle select: diferido a Hito 14+.
+- **Snap to grid** para el drag de gizmo: pedir a Hito 15 o un toggle simple.
+- **Undo/redo**: Hito 22 dedicado.
+- **Parent-space vs world-space toggle**: todavía siempre world.
+- **Gizmo con handles 2D** (plano para mover en 2 ejes a la vez): diferido; con los 3 axis + uniform alcanza por ahora.
+- **Label visual del modo activo** (W/E/R): las formas se distinguen solas; si hace ruido se agrega después.
+- **Esc cancela drag sin commit**: requiere staging del valor previo; alineado con undo/redo del Hito 22.
+- **Tests de math del gizmo (closestParam, world→screen)**: diferidos a un hito de tests de UI.
+- **CharacterController, body-rotation sync y `MeshFromAsset`**: siguen arrastrándose desde el Hito 12.

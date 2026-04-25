@@ -6,11 +6,15 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 12 cerrado, mergeado a `main` y publicado en origin.**
+**Hito 13 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.13.0-hito13`.
+Verificado automático: suite doctest 106/454 pasando (+7 casos nuevos en `test_picking.cpp`), editor arranca sin warnings. Click en el viewport selecciona la entidad; gizmos de translate/rotate/scale aparecen sobre el pivote; hotkeys `W/E/R` cambian modo; un cuadrado blanco central en Scale permite escalar uniformemente; luces y audios son visibles como iconos 2D y pickables. Iconos + gizmos solo en Editor Mode — ocultos en Play.
+
+**Próximo paso:** Hito 14 — Prefabs. Formato `.moodprefab` para guardar templates de entidades (con componentes + hijos), instanciación desde el AssetBrowser, override local. Plan en `docs/PLAN_HITO14.md`.
+
+### Hito 12 (anterior, ya cerrado)
 Tag: `v0.12.0-hito12`.
 Verificado automático: suite doctest 99/442 pasando (+1 round-trip RigidBody), editor arranca con `[physics] Jolt inicializado (max_bodies=1024, max_pairs=1024, gravity=-9.81)`, sin warnings nuevos. El mapa 8×8 tiene 29 static bodies (uno por tile sólido) y la caja demo (Dynamic 5kg) cae por gravedad al entrar a Play Mode.
-
-**Próximo paso:** Hito 13 — Gizmos y selección. Manipuladores 3D para translate/rotate/scale sobre la entidad seleccionada en Hierarchy, ray-casting click-to-select en el viewport. Plan en `docs/PLAN_HITO13.md`.
 
 ### Hito 11 (anterior, ya cerrado)
 Tag: `v0.11.0-hito11`.
@@ -88,6 +92,19 @@ Verificado automático (suite doctest 90/380 pasando con +8 tests nuevos — 5 d
 - `SavedMap` extendido con `SavedEntity` + `SavedMeshRenderer`. `SceneSerializer::save` acepta `Scene*` opcional. `EditorApplication::tryOpenProjectPath` aplica las entidades persistidas tras `rebuildSceneFromMap`.
 - Tests: +8 casos / +34 asserciones en `test_mesh_asset.cpp` + `test_scene_serializer.cpp`. `add_test` con `WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` para que tests que abren archivos reales (pyramid.obj via assimp) resuelvan desde la raíz del repo. Suite total 90/380.
 - `assets/meshes/pyramid.obj`: pirámide base cuadrada escrita a mano (5 v / 6 tris / con UVs). `.gitignore` fix: `!assets/meshes/*.obj` para evitar colisión con `*.obj` de objetos MSVC.
+
+**Hito 13** — Gizmos y selección (tag `v0.13.0-hito13`):
+- `src/engine/scene/ScenePick.{h,cpp}`: API pura `pickEntity(scene, view, projection, ndc) -> ScenePickResult{entity, worldPoint, distance}`. Ray-AABB (slab test) para entidades con `MeshRendererComponent` (asume cubo unitario `[-0.5, 0.5]^3` escalado por Transform); ray-sphere de radio 0.6m para `LightComponent`/`AudioSourceComponent` sin mesh.
+- `ViewportPanel`: click izquierdo con threshold de 4px distingue click puro de drag. Dispara `ClickSelect{ndcX, ndcY}` via `consumeClickSelect()`. Nuevo callback `setOverlayDraw(fn)` invocado después de `ImGui::Image` con `ImDrawList` clippeado al área de la imagen — es el único "pincel" para iconos + gizmos.
+- `EditorApplication`: overlay callback completo con helpers `project(world→screen)`, `cameraRay(ndc)`, `closestParam(lineA, lineB)`. Guarda `m_lastView`/`m_lastProjection` para que el overlay use las mismas matrices que el render del frame anterior.
+- **Iconos 2D**: círculo amarillo para `LightComponent`, cian para `AudioSourceComponent`. Halo azul si la entidad está seleccionada. Sin assets externos: todo con `ImDrawList::AddCircle` / `AddCircleFilled`.
+- **Translate gizmo**: 3 flechas (X rojo / Y verde / Z azul) axis-aligned desde la entidad seleccionada. Picking por distancia 2D al segmento (8px). Drag proyecta el delta del mouse al eje con `closestParam` 3D-line vs 3D-line.
+- **Rotate gizmo**: 3 anillos (48-seg polyline) por eje. Sign del delta angular invertido según `dot(axis, cam_to_origin)` para que rotar a la derecha siempre se sienta natural.
+- **Scale gizmo**: 3 ejes (línea + cuadrado al final) + **cuadrado blanco central** para uniform scale (handle `axis=3`). Factor `1 + deltaPx / 60`, clamp >= 0.01.
+- **Hotkeys W/E/R** cambian modo. Respetan `ImGui::WantTextInput` (no pisan edits del Inspector).
+- `InspectorPanel`: esconde rotation/scale si la entidad no tiene `MeshRendererComponent` (feedback del dev — no tiene sentido escalar una luz puntual). Sigue mostrando position siempre.
+- **Play Mode limpio**: early return del overlay si `m_mode == Play`. Los iconos + gizmos son andamios de edición, no parte del juego.
+- Tests: `tests/test_picking.cpp` con 7 casos (scene vacía, ray central hitea mesh, light pickable por esfera, más cercano gana, ray al cielo no hitea, entidad detrás no hitea, sin Transform safe). Suite total 106/454.
 
 **Hito 12** — Física con Jolt (tag `v0.12.0-hito12`):
 - `JoltPhysics v5.2.0` via CPM, runtime dinámica `/MDd` forzada (default `/MTd` colisionaba con nuestro proyecto). Solo la lib principal; samples/viewer/tests off.
@@ -238,20 +255,20 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: implementar el Hito 11
+### Tarea inmediata: implementar el Hito 14
 
-El Hito 10 está cerrado (tag `v0.10.0-hito10` en origin). El foco ahora es el **Hito 11 — Iluminación Phong/Blinn-Phong**. Activar `LightComponent` (era placeholder desde Hito 7), extender el shader con normales + cálculo Phong, soportar directional + point lights, demo de escena con iluminación dinámica.
+El Hito 13 está cerrado (tag `v0.13.0-hito13` en origin). El foco ahora es el **Hito 14 — Prefabs**. Formato `.moodprefab` reusable (entidad + componentes + hijos), instanciación desde el AssetBrowser (drag-drop al Viewport, igual que meshes/texturas), override local por instancia.
 
-El plan desglosado por tareas está en `docs/PLAN_HITO11.md`.
+El plan desglosado por tareas está en `docs/PLAN_HITO14.md`.
 
-**Punto de arranque concreto:** extender el vertex attribute layout para incluir la normal (assimp ya la calcula desde Hito 10 vía `aiProcess_GenNormals`). Nuevo shader `lit.{vert,frag}` con cálculo Phong. `LightSystem` que recolecta componentes `LightComponent` de la scene y los sube como uniforms al shader. Demo: agregar `Ayuda > Agregar luz` con posición y color editables.
+**Punto de arranque concreto:** definir `SavedPrefab` (reusa `SavedEntity` + children) en `SceneSerializer`; agregar `PrefabSerializer.{h,cpp}` con `save(entity) / load(path)`; extender `AssetManager` con catálogo de prefabs (`PrefabAssetId`); sección "Prefabs" en AssetBrowser con drag payload `"MOOD_PREFAB_ASSET"`; consumer en `EditorApplication::handlePrefabDrop` que instancia la entidad con `TransformComponent.position` derivada del pick 3D (ya disponible desde Hito 13).
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO11.md`.
+1. Leer `docs/PLAN_HITO14.md`.
 2. Trabajar bloque por bloque, marcando en el plan al cerrar cada uno.
-3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial (p. ej. shader hot-reload, cómo pasar el array de luces al shader — uniform array vs UBO, intensidad en W/m² vs 0..1 arbitrario).
-4. Al final: commits atómicos en español, merge a main, tag `v0.11.0-hito11`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO12.md`.
+3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial (p. ej. cómo serializar referencias a prefabs en el `.moodmap`, cómo representar overrides, naming de hijos al instanciar).
+4. Al final: commits atómicos en español, merge a main, tag `v0.14.0-hito14`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO15.md`.
 
 ---
 

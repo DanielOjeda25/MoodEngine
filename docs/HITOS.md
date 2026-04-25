@@ -17,7 +17,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 10** — Importación de modelos 3D (completado, tag `v0.10.0-hito10`).
 - [x] **Hito 11** — Iluminación Phong/Blinn-Phong (completado, tag `v0.11.0-hito11`).
 - [x] **Hito 12** — Física con Jolt (completado, tag `v0.12.0-hito12`).
-- [ ] Hito 13 — Gizmos y selección.
+- [x] **Hito 13** — Gizmos y selección (completado, tag `v0.13.0-hito13`).
 - [ ] Hito 14 — Prefabs.
 - [ ] Hito 15 — Skybox, fog, post-procesado.
 - [ ] Hito 16 — Shadow mapping.
@@ -294,10 +294,38 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 
 ### Pendientes menores detectados en Hito 12
 
-- **CharacterController de Jolt** (Bloque 4): diferido — el jugador sigue con `moveAndSlide` AABB del Hito 4. **Trigger:** Hito 13 (gizmos) o 14 (prefabs + gameplay).
+- **CharacterController de Jolt** (Bloque 4): diferido — el jugador sigue con `moveAndSlide` AABB del Hito 4. Se re-pospuso en Hito 13; **trigger** pasa a un hito de gameplay específico.
 - **`F2` debug draw de Jolt**: diferido junto con CharacterController. Requiere implementar `JPH::DebugRenderer` → `OpenGLDebugRenderer`.
 - **`test_physics.cpp`**: diferido para evitar arrastrar Jolt (~40 MB static lib) a `mood_tests`. **Trigger:** lógica C++ no trivial que lo necesite.
 - **Rotación del body → Transform.rotationEuler**: hoy solo sync de posición. **Trigger:** colisiones que hagan rodar cajas.
 - **Shape `MeshFromAsset`** (Box/Sphere/Capsule solo por ahora). **Trigger:** colisiones precisas para modelos importados.
 - **Triggers/sensors** para gameplay/scripts. **Trigger:** Hito 14+.
 - Pendientes Hito 11 (hot-reload shaders, preview 3D, normal mapping, multi-directional, persistencia Audio) siguen en tracker.
+
+## Hito 13 — Gizmos y selección
+
+**Objetivo:** hacer el editor usable con el mouse sobre la escena 3D. Click-to-select con raycast + gizmos 3D (translate/rotate/scale) operados en screen-space sobre la entidad seleccionada.
+
+**Criterios de aceptación cumplidos:**
+- `src/engine/scene/ScenePick.{h,cpp}`: `pickEntity(scene, view, projection, ndc)` retorna la entidad más cercana al rayo. Ray-AABB (slab test) para meshes, ray-sphere (radio 0.6m) para Light/AudioSource sin mesh.
+- `ViewportPanel`: captura click izquierdo con threshold 4px (click vs drag) + callback `setOverlayDraw` para dibujar sobre la imagen con `ImDrawList`.
+- Overlay en `EditorApplication`: iconos 2D (círculos) para Light (amarillo) y AudioSource (cian), con halo azul si están seleccionados. Gizmo de Translate (3 flechas axis), Rotate (3 anillos 48-seg), Scale (3 líneas + cuadrados + **cuadrado blanco central** uniform). Color RGB por eje.
+- Drag gizmo: `closestParam` 3D-line vs 3D-line para translate/scale-axis; delta angular 2D alrededor del centro del gizmo para rotate (con sign por `dot(axis, cam_to_origin)`).
+- Hotkeys `W/E/R` cambian modo, respetan `ImGui::WantTextInput`.
+- Inspector esconde scale/rotation si la entidad no tiene `MeshRendererComponent` (pedido del dev: no tiene sentido escalar una luz).
+- Overlays ocultos en Play Mode (iconos + gizmos son andamios de edición).
+- Tests: `tests/test_picking.cpp` con 7 casos (scene vacía, ray central, light por esfera, más cercano gana, rayo al cielo, entidad detrás, sin Transform). 106/106 suite verde.
+
+**Siguiente paso tras completarlo:** Hito 14 — Prefabs. Definir un formato `.moodprefab` reusable (entidad + componentes + hijos), instanciación en escena desde el AssetBrowser, override local de propiedades por instancia. Plan en `docs/PLAN_HITO14.md`.
+
+### Pendientes menores detectados en Hito 13
+
+- **Shift+click multi-selección + rectangle select**: diferido. **Trigger:** Hito 14+.
+- **Snap to grid** en drag de gizmo: diferido. **Trigger:** Hito 15 (skybox/polish) o cuando haga ruido.
+- **Esc cancela drag sin commit**: requiere staging del valor previo → alineado con undo/redo (Hito 22).
+- **Label visual del modo activo (W/E/R)**: las formas se distinguen solas; si aparece demanda, se agrega.
+- **Parent-space vs world-space toggle**: siempre world por ahora.
+- **Handles 2D** (plano para mover en 2 ejes): diferido; con 3 axis + uniform alcanza.
+- **Tests de math de gizmo (closestParam, project)**: diferidos a un hito de tests de UI.
+- **Picking contra malla real** (no AABB conservativa): requiere `MeshFromAsset` + BVH, alineado con Hito 11/Jolt.
+- Pendientes Hito 12 (CharacterController, body-rotation sync, `MeshFromAsset`) siguen arrastrándose.
