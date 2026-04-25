@@ -175,6 +175,23 @@ private:
     glm::mat4 m_lastProjection{1.0f};
     f32 m_lastAspect = 1.0f;
 
+    // Estado del translate gizmo (Hito 13 Bloque 3). Cuando `active` es
+    // true, el mouse esta arrastrando el eje `axis` (0=X, 1=Y, 2=Z) de la
+    // entidad seleccionada. `startPos` = Transform.position al iniciar.
+    // `startParam` = parametro sobre la linea del eje con el que el ray
+    // camara-mouse fue cercano al empezar.
+    struct GizmoDragState {
+        bool active = false;
+        int axis = -1;
+        glm::vec3 startPos{0.0f};
+        f32 startParam = 0.0f;
+    };
+    GizmoDragState m_gizmo;
+    // True si el click del frame fue consumido por el gizmo; el loop
+    // principal lo consulta para descartar el ClickSelect fantasma que
+    // ViewportPanel emite si el gesto fue un micro-click.
+    bool m_gizmoConsumedClick = false;
+
     // Escena ECS (Hito 7). Por ahora es una VISTA derivada de `m_map`:
     // cada tile solido es una entidad. El render sigue haciendo el loop
     // por el grid; Scene existe para que Hierarchy/Inspector trabajen

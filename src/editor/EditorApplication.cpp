@@ -207,18 +207,19 @@ EditorApplication::EditorApplication() {
     rebuildSceneFromMap();
     updateWindowTitle();
 
-    // Hito 13 Bloque 2.5: overlay 2D sobre el viewport que dibuja iconos
-    // para entidades sin mesh visible (Light, AudioSource) + highlight de
-    // la entidad seleccionada. Se ejecuta dentro del render de ViewportPanel
-    // con ImGui drawlist, asi queda encima del render 3D sin pasar por GL.
+    // Hito 13 Bloque 2.5 + 3: overlay 2D sobre el viewport.
+    // - Iconos para entidades sin mesh visible (Light/Audio).
+    // - Halo de seleccion.
+    // - Translate gizmo: 3 flechas (X rojo, Y verde, Z azul) arrastrables.
     m_ui.viewport().setOverlayDraw(
         [this](ImDrawList* dl, float x0, float y0, float w, float h) {
             if (!m_scene) return;
+            // Play Mode: sin overlays de editor (iconos, gizmos, halo).
+            // El jugador no deberia ver marcadores de seleccion en el juego.
+            if (m_mode == EditorMode::Play) return;
             const glm::mat4 vp = m_lastProjection * m_lastView;
 
-            // Helper: proyecta worldPos a pixel-space dentro del rect de la
-            // imagen. Devuelve {true, screenX, screenY} si esta delante de
-            // la camara; {false, ...} si queda atras y no hay que dibujarlo.
+            // Helper: worldPos -> pixel-space.
             auto project = [&](const glm::vec3& p, float& sx, float& sy) -> bool {
                 const glm::vec4 clip = vp * glm::vec4(p, 1.0f);
                 if (clip.w <= 1e-4f) return false;
@@ -230,15 +231,44 @@ EditorApplication::EditorApplication() {
                 sy = y0 + (1.0f - (ndcY * 0.5f + 0.5f)) * h;
                 return true;
             };
+            // Helper: mouse screen -> camera ray (origen + direccion).
+            auto cameraRay = [&](ImVec2 mp, glm::vec3& rorigin, glm::vec3& rdir) -> bool {
+                const float ndcX = ((mp.x - x0) / w) * 2.0f - 1.0f;
+                const float ndcY = 1.0f - ((mp.y - y0) / h) * 2.0f;
+                const glm::mat4 invVP = glm::inverse(vp);
+                const glm::vec4 nearH = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
+                const glm::vec4 farH  = invVP * glm::vec4(ndcX, ndcY, +1.0f, 1.0f);
+                if (nearH.w == 0.0f || farH.w == 0.0f) return false;
+                rorigin = glm::vec3(nearH) / nearH.w;
+                const glm::vec3 farW = glm::vec3(farH) / farH.w;
+                const glm::vec3 d = farW - rorigin;
+                const float len = glm::length(d);
+                if (len < 1e-6f) return false;
+                rdir = d / len;
+                return true;
+            };
+            // Parametro del punto de lineA (pA + dA*t) mas cercano al rayo
+            // lineB (pB + dB*t). dA y dB deben ser unitarios.
+            auto closestParam = [](const glm::vec3& pA, const glm::vec3& dA,
+                                    const glm::vec3& pB, const glm::vec3& dB) -> f32 {
+                const glm::vec3 n = pA - pB;
+                const f32 b  = glm::dot(dA, dB);
+                const f32 d1 = glm::dot(dA, n);
+                const f32 d2 = glm::dot(dB, n);
+                const f32 denom = 1.0f - b * b;
+                if (std::abs(denom) < 1e-5f) return 0.0f; // paralelas
+                return (b * d2 - d1) / denom;
+            };
 
-            const ImU32 colLight = IM_COL32(255, 225, 100, 220); // amarillo
-            const ImU32 colAudio = IM_COL32(100, 220, 230, 220); // cyan
+            const ImU32 colLight = IM_COL32(255, 225, 100, 220);
+            const ImU32 colAudio = IM_COL32(100, 220, 230, 220);
             const ImU32 colBorder = IM_COL32(20, 20, 20, 255);
-            const ImU32 colSel = IM_COL32(30, 180, 255, 255);    // azul seleccion
+            const ImU32 colSel = IM_COL32(30, 180, 255, 255);
 
-            const Entity selected = m_ui.selectedEntity();
+            Entity selected = m_ui.selectedEntity();
             const auto selectedHandle = selected ? selected.handle() : entt::entity{entt::null};
 
+            // --- 1) Iconos + halo por entidad ---
             m_scene->forEach<TransformComponent>(
                 [&](Entity e, TransformComponent& t) {
                     const bool hasMesh = e.hasComponent<MeshRendererComponent>();
@@ -252,14 +282,11 @@ EditorApplication::EditorApplication() {
                     float sx, sy;
                     if (!project(t.position, sx, sy)) return;
 
-                    // Icono propio si no tiene mesh visible.
                     if (needsIcon) {
                         const ImU32 col = hasLight ? colLight : colAudio;
                         const float r = 10.0f;
                         dl->AddCircleFilled(ImVec2(sx, sy), r, col, 24);
                         dl->AddCircle(ImVec2(sx, sy), r, colBorder, 24, 1.5f);
-                        // Directional light: raya hacia donde apunta (2D down si
-                        // direction.y negativa, aprox).
                         if (hasLight) {
                             const auto& lc = e.getComponent<LightComponent>();
                             if (lc.type == LightComponent::Type::Directional) {
@@ -270,12 +297,128 @@ EditorApplication::EditorApplication() {
                         }
                     }
 
-                    // Highlight de seleccion: halo azul que envuelve el icono.
                     if (isSelected) {
                         const float r = needsIcon ? 14.0f : 12.0f;
                         dl->AddCircle(ImVec2(sx, sy), r, colSel, 24, 2.0f);
                     }
                 });
+
+            // --- 2) Translate gizmo para la seleccion ---
+            if (!selected || !selected.hasComponent<TransformComponent>()) return;
+
+            auto& tform = selected.getComponent<TransformComponent>();
+            const glm::vec3 worldOrigin = tform.position;
+            float osx, osy;
+            if (!project(worldOrigin, osx, osy)) return;
+
+            const glm::vec3 axes[3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+            const ImU32 axisCol[3] = {
+                IM_COL32(230, 50, 50, 230),   // X rojo
+                IM_COL32(80, 230, 80, 230),   // Y verde
+                IM_COL32(70, 120, 255, 230),  // Z azul
+            };
+            const ImU32 hoverCol = IM_COL32(255, 220, 30, 255);
+            const f32 k_armLen = 60.0f; // px
+
+            // Direccion de cada eje en screen-space (unitaria) + posicion
+            // del extremo. Si el eje mira "hacia la camara" (dir degenerada),
+            // se skipea.
+            f32 screenDX[3] = {0, 0, 0};
+            f32 screenDY[3] = {0, 0, 0};
+            f32 endSX[3] = {osx, osx, osx};
+            f32 endSY[3] = {osy, osy, osy};
+            bool axisVisible[3] = {false, false, false};
+            for (int i = 0; i < 3; ++i) {
+                f32 esx, esy;
+                if (!project(worldOrigin + axes[i] * 1.0f, esx, esy)) continue;
+                const f32 dx = esx - osx;
+                const f32 dy = esy - osy;
+                const f32 lenPx = std::sqrt(dx * dx + dy * dy);
+                if (lenPx < 1e-3f) continue;
+                screenDX[i] = dx / lenPx;
+                screenDY[i] = dy / lenPx;
+                endSX[i] = osx + screenDX[i] * k_armLen;
+                endSY[i] = osy + screenDY[i] * k_armLen;
+                axisVisible[i] = true;
+            }
+
+            // Hit-test 2D: distancia mouse al segmento.
+            const ImVec2 mousePos = ImGui::GetMousePos();
+            int hoverAxis = -1;
+            if (!m_gizmo.active) {
+                f32 bestDist = 7.0f; // umbral px
+                for (int i = 0; i < 3; ++i) {
+                    if (!axisVisible[i]) continue;
+                    const f32 dx = endSX[i] - osx;
+                    const f32 dy = endSY[i] - osy;
+                    const f32 len2 = dx * dx + dy * dy;
+                    if (len2 < 1.0f) continue;
+                    const f32 px = mousePos.x - osx;
+                    const f32 py = mousePos.y - osy;
+                    const f32 t = std::max(0.0f, std::min(1.0f, (px * dx + py * dy) / len2));
+                    const f32 qx = osx + t * dx - mousePos.x;
+                    const f32 qy = osy + t * dy - mousePos.y;
+                    const f32 d = std::sqrt(qx * qx + qy * qy);
+                    if (d < bestDist) { bestDist = d; hoverAxis = i; }
+                }
+            }
+
+            // Comenzar drag: left click sobre un eje (dentro del viewport).
+            const bool mouseDown    = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+            const bool mouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+            const bool insideViewport = mousePos.x >= x0 && mousePos.x <= x0 + w
+                                     && mousePos.y >= y0 && mousePos.y <= y0 + h;
+            if (!m_gizmo.active && mouseClicked && hoverAxis >= 0 && insideViewport) {
+                glm::vec3 rayOrigin, rayDir;
+                if (cameraRay(mousePos, rayOrigin, rayDir)) {
+                    m_gizmo.active = true;
+                    m_gizmo.axis = hoverAxis;
+                    m_gizmo.startPos = worldOrigin;
+                    m_gizmo.startParam = closestParam(worldOrigin, axes[hoverAxis],
+                                                       rayOrigin, rayDir);
+                    m_gizmoConsumedClick = true;
+                }
+            }
+
+            // Durante drag: mover la entidad.
+            if (m_gizmo.active && mouseDown && m_gizmo.axis >= 0) {
+                glm::vec3 rayOrigin, rayDir;
+                if (cameraRay(mousePos, rayOrigin, rayDir)) {
+                    const f32 nowParam = closestParam(
+                        m_gizmo.startPos, axes[m_gizmo.axis], rayOrigin, rayDir);
+                    const f32 delta = nowParam - m_gizmo.startParam;
+                    tform.position = m_gizmo.startPos + axes[m_gizmo.axis] * delta;
+                    // markDirty es barato — OK llamar por frame mientras dragea.
+                    if (m_project) markDirty();
+                }
+            }
+
+            // Release.
+            if (m_gizmo.active && !mouseDown) {
+                m_gizmo.active = false;
+            }
+
+            // Draw de los ejes.
+            for (int i = 0; i < 3; ++i) {
+                if (!axisVisible[i]) continue;
+                ImU32 col = axisCol[i];
+                const bool isActive = m_gizmo.active && m_gizmo.axis == i;
+                const bool isHover  = !m_gizmo.active && hoverAxis == i;
+                if (isActive || isHover) col = hoverCol;
+                dl->AddLine(ImVec2(osx, osy), ImVec2(endSX[i], endSY[i]), col, 2.5f);
+                // Punta de flecha triangular.
+                const f32 perpX = -screenDY[i];
+                const f32 perpY =  screenDX[i];
+                const f32 ah = 10.0f;
+                const f32 aw = 5.0f;
+                const f32 bx = endSX[i] - screenDX[i] * ah;
+                const f32 by = endSY[i] - screenDY[i] * ah;
+                dl->AddTriangleFilled(
+                    ImVec2(endSX[i], endSY[i]),
+                    ImVec2(bx + perpX * aw, by + perpY * aw),
+                    ImVec2(bx - perpX * aw, by - perpY * aw),
+                    col);
+            }
         });
 
     MOOD_LOG_INFO("Editor listo");
@@ -1001,8 +1144,12 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     // Tile picking: solo en Editor Mode, cuando el cursor esta sobre la
     // imagen del viewport. Resultado se usa abajo para el hover highlight
     // y mas adelante para drag & drop desde el Asset Browser.
+    // Suprimido durante el drag del gizmo (Hito 13): el cyan se superpone
+    // ruidosamente con las flechas, y es claro que el usuario esta moviendo
+    // la entidad, no apuntando a un tile.
     TilePickResult hovered{};
-    if (m_mode == EditorMode::Editor && m_ui.viewport().imageHovered()) {
+    if (m_mode == EditorMode::Editor && m_ui.viewport().imageHovered() &&
+        !m_gizmo.active) {
         const glm::vec2 ndc(m_ui.viewport().mouseNdcX(),
                             m_ui.viewport().mouseNdcY());
         hovered = pickTile(m_map, origin, view, projection, ndc);
@@ -1183,8 +1330,13 @@ int EditorApplication::run() {
         // 2.4) Click-to-select (Hito 13 Bloque 2): raycast desde el cursor
         //      y selecciona la entidad mas cercana. Click en vacio deselecciona.
         //      Solo en Editor Mode — en Play Mode el mouse es para la camara.
+        //      Si el gizmo se llevo el click este frame, descartar el select
+        //      para que clickear sobre una flecha no mueva la seleccion.
         const ViewportPanel::ClickSelect click = m_ui.viewport().consumeClickSelect();
-        if (click.pending && m_mode == EditorMode::Editor && m_scene) {
+        const bool skipClickDueToGizmo = m_gizmoConsumedClick;
+        m_gizmoConsumedClick = false;
+        if (click.pending && !skipClickDueToGizmo &&
+            m_mode == EditorMode::Editor && m_scene) {
             const float aspect = (m_viewportFb->height() > 0)
                 ? static_cast<float>(m_viewportFb->width()) / static_cast<float>(m_viewportFb->height())
                 : 1.0f;
