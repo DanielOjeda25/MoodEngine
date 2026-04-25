@@ -207,6 +207,77 @@ EditorApplication::EditorApplication() {
     rebuildSceneFromMap();
     updateWindowTitle();
 
+    // Hito 13 Bloque 2.5: overlay 2D sobre el viewport que dibuja iconos
+    // para entidades sin mesh visible (Light, AudioSource) + highlight de
+    // la entidad seleccionada. Se ejecuta dentro del render de ViewportPanel
+    // con ImGui drawlist, asi queda encima del render 3D sin pasar por GL.
+    m_ui.viewport().setOverlayDraw(
+        [this](ImDrawList* dl, float x0, float y0, float w, float h) {
+            if (!m_scene) return;
+            const glm::mat4 vp = m_lastProjection * m_lastView;
+
+            // Helper: proyecta worldPos a pixel-space dentro del rect de la
+            // imagen. Devuelve {true, screenX, screenY} si esta delante de
+            // la camara; {false, ...} si queda atras y no hay que dibujarlo.
+            auto project = [&](const glm::vec3& p, float& sx, float& sy) -> bool {
+                const glm::vec4 clip = vp * glm::vec4(p, 1.0f);
+                if (clip.w <= 1e-4f) return false;
+                const float ndcX = clip.x / clip.w;
+                const float ndcY = clip.y / clip.w;
+                const float ndcZ = clip.z / clip.w;
+                if (ndcZ < -1.0f || ndcZ > 1.0f) return false;
+                sx = x0 + (ndcX * 0.5f + 0.5f) * w;
+                sy = y0 + (1.0f - (ndcY * 0.5f + 0.5f)) * h;
+                return true;
+            };
+
+            const ImU32 colLight = IM_COL32(255, 225, 100, 220); // amarillo
+            const ImU32 colAudio = IM_COL32(100, 220, 230, 220); // cyan
+            const ImU32 colBorder = IM_COL32(20, 20, 20, 255);
+            const ImU32 colSel = IM_COL32(30, 180, 255, 255);    // azul seleccion
+
+            const Entity selected = m_ui.selectedEntity();
+            const auto selectedHandle = selected ? selected.handle() : entt::entity{entt::null};
+
+            m_scene->forEach<TransformComponent>(
+                [&](Entity e, TransformComponent& t) {
+                    const bool hasMesh = e.hasComponent<MeshRendererComponent>();
+                    const bool hasLight = e.hasComponent<LightComponent>();
+                    const bool hasAudio = e.hasComponent<AudioSourceComponent>();
+                    const bool needsIcon = (hasLight || hasAudio) && !hasMesh;
+                    const bool isSelected = (selectedHandle != entt::entity{entt::null})
+                                             && (e.handle() == selectedHandle);
+                    if (!needsIcon && !isSelected) return;
+
+                    float sx, sy;
+                    if (!project(t.position, sx, sy)) return;
+
+                    // Icono propio si no tiene mesh visible.
+                    if (needsIcon) {
+                        const ImU32 col = hasLight ? colLight : colAudio;
+                        const float r = 10.0f;
+                        dl->AddCircleFilled(ImVec2(sx, sy), r, col, 24);
+                        dl->AddCircle(ImVec2(sx, sy), r, colBorder, 24, 1.5f);
+                        // Directional light: raya hacia donde apunta (2D down si
+                        // direction.y negativa, aprox).
+                        if (hasLight) {
+                            const auto& lc = e.getComponent<LightComponent>();
+                            if (lc.type == LightComponent::Type::Directional) {
+                                dl->AddLine(ImVec2(sx, sy - r + 1),
+                                             ImVec2(sx, sy + r - 1),
+                                             colBorder, 2.0f);
+                            }
+                        }
+                    }
+
+                    // Highlight de seleccion: halo azul que envuelve el icono.
+                    if (isSelected) {
+                        const float r = needsIcon ? 14.0f : 12.0f;
+                        dl->AddCircle(ImVec2(sx, sy), r, colSel, 24, 2.0f);
+                    }
+                });
+        });
+
     MOOD_LOG_INFO("Editor listo");
 
     // Restaurar estado de la sesion anterior (ultimo proyecto, flags).
@@ -874,6 +945,11 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         view = m_editorCamera.viewMatrix();
         projection = m_editorCamera.projectionMatrix(aspect);
     }
+    // Hito 13: guardar para que el overlay 2D de ViewportPanel (iconos +
+    // gizmos) proyecte posiciones al frame siguiente.
+    m_lastView = view;
+    m_lastProjection = projection;
+    m_lastAspect = aspect;
 
     // El mapa se dibuja centrado en el origen del mundo (mapWorldOrigin()).
     // Mismo offset que consume PhysicsSystem: single source of truth.

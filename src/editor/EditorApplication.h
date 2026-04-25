@@ -168,6 +168,13 @@ private:
     // abrir proyectos y se resetea al mapa de prueba al cerrar.
     GridMap m_map{8u, 8u, 3.0f};
 
+    // Matrices activas del ultimo frame de render (Hito 13). Las guarda
+    // `renderSceneToViewport`; las lee el overlay del ViewportPanel (iconos,
+    // gizmos) con un frame de lag, imperceptible a 60fps.
+    glm::mat4 m_lastView{1.0f};
+    glm::mat4 m_lastProjection{1.0f};
+    f32 m_lastAspect = 1.0f;
+
     // Escena ECS (Hito 7). Por ahora es una VISTA derivada de `m_map`:
     // cada tile solido es una entidad. El render sigue haciendo el loop
     // por el grid; Scene existe para que Hierarchy/Inspector trabajen

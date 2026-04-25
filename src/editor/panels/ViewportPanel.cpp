@@ -41,6 +41,20 @@ void ViewportPanel::onImGuiRender() {
             const ImVec2 imageMin = ImGui::GetItemRectMin();
             const ImVec2 imageSize = ImGui::GetItemRectSize();
 
+            // Overlay callback (Hito 13): iconos + gizmos se dibujan sobre
+            // la imagen con ImGui drawlist, asi quedan por encima del render
+            // 3D sin pasar por GL. Clip rect al area de la imagen.
+            if (m_overlayDraw) {
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                dl->PushClipRect(imageMin,
+                                 ImVec2(imageMin.x + imageSize.x,
+                                        imageMin.y + imageSize.y),
+                                 true);
+                m_overlayDraw(dl, imageMin.x, imageMin.y,
+                               imageSize.x, imageSize.y);
+                dl->PopClipRect();
+            }
+
             // Helper local: pos del cursor -> NDC dentro de la imagen.
             auto mousePosToNdc = [&imageMin, &imageSize](ImVec2 mp, float& ndcX, float& ndcY) {
                 if (imageSize.x <= 0.0f || imageSize.y <= 0.0f) {

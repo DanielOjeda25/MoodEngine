@@ -3,6 +3,10 @@
 #include "core/Types.h"
 #include "editor/panels/IPanel.h"
 
+#include <functional>
+
+struct ImDrawList;
+
 namespace Mood {
 
 class IFramebuffer;
@@ -96,6 +100,15 @@ public:
         return r;
     }
 
+    /// @brief Callback invocado DESPUES de dibujar la imagen del framebuffer,
+    ///        usando un DrawList con clip al area de la imagen. Recibe el
+    ///        origen (top-left) y tamano del rect. Uso: overlays 2D como
+    ///        iconos de Light/Audio y gizmos de seleccion (Hito 13).
+    using OverlayDraw = std::function<void(ImDrawList* drawList,
+                                            float imageMinX, float imageMinY,
+                                            float imageSizeX, float imageSizeY)>;
+    void setOverlayDraw(OverlayDraw cb) { m_overlayDraw = std::move(cb); }
+
 private:
     IFramebuffer* m_framebuffer = nullptr;
     u32 m_desiredWidth = 0;
@@ -116,6 +129,7 @@ private:
     TextureDrop m_pendingDrop{};
     MeshDrop m_pendingMeshDrop{};
     ClickSelect m_pendingClick{};
+    OverlayDraw m_overlayDraw{};
 
     // Para diferenciar click vs drag del left-button.
     bool m_leftMouseDown = false;

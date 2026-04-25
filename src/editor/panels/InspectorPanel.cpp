@@ -51,17 +51,23 @@ void InspectorPanel::onImGuiRender() {
     }
 
     // --- TransformComponent ---
+    // Scale + rotation solo tienen efecto visible si hay MeshRenderer
+    // (o es un tile rendereado). Para Light/Audio puros (sin mesh)
+    // ocultarlos evita confundir al usuario con controles sin efecto.
     if (e.hasComponent<TransformComponent>()) {
         auto& t = e.getComponent<TransformComponent>();
         ImGui::TextDisabled("Transform");
         if (ImGui::DragFloat3("position##tr", &t.position.x, 0.05f)) {
             m_editedThisFrame = true;
         }
-        if (ImGui::DragFloat3("rotation (deg)##tr", &t.rotationEuler.x, 0.5f)) {
-            m_editedThisFrame = true;
-        }
-        if (ImGui::DragFloat3("scale##tr", &t.scale.x, 0.05f, 0.01f, 100.0f)) {
-            m_editedThisFrame = true;
+        const bool hasMesh = e.hasComponent<MeshRendererComponent>();
+        if (hasMesh) {
+            if (ImGui::DragFloat3("rotation (deg)##tr", &t.rotationEuler.x, 0.5f)) {
+                m_editedThisFrame = true;
+            }
+            if (ImGui::DragFloat3("scale##tr", &t.scale.x, 0.05f, 0.01f, 100.0f)) {
+                m_editedThisFrame = true;
+            }
         }
         ImGui::Separator();
     }
