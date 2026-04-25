@@ -175,15 +175,20 @@ private:
     glm::mat4 m_lastProjection{1.0f};
     f32 m_lastAspect = 1.0f;
 
-    // Estado del translate gizmo (Hito 13 Bloque 3). Cuando `active` es
-    // true, el mouse esta arrastrando el eje `axis` (0=X, 1=Y, 2=Z) de la
-    // entidad seleccionada. `startPos` = Transform.position al iniciar.
-    // `startParam` = parametro sobre la linea del eje con el que el ray
-    // camara-mouse fue cercano al empezar.
+    // Modo del gizmo (Hito 13 Bloque 3-5). Cambia con W/E/R estilo Unity.
+    enum class GizmoMode : u8 { Translate = 0, Rotate = 1, Scale = 2 };
+    GizmoMode m_gizmoMode = GizmoMode::Translate;
+
+    // Estado del drag del gizmo. Segun `mode`, `startValue` guarda:
+    //   Translate: Transform.position inicial (vec3).
+    //   Scale:     Transform.scale inicial (vec3).
+    //   Rotate:    Transform.rotationEuler inicial (vec3).
+    // `startParam` es el parametro/angulo inicial sobre el eje (o anillo,
+    // en Rotate).
     struct GizmoDragState {
         bool active = false;
         int axis = -1;
-        glm::vec3 startPos{0.0f};
+        glm::vec3 startValue{0.0f};
         f32 startParam = 0.0f;
     };
     GizmoDragState m_gizmo;
