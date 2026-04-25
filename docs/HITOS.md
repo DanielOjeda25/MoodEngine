@@ -16,7 +16,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 9** — Audio básico (completado, tag `v0.9.0-hito9`).
 - [x] **Hito 10** — Importación de modelos 3D (completado, tag `v0.10.0-hito10`).
 - [x] **Hito 11** — Iluminación Phong/Blinn-Phong (completado, tag `v0.11.0-hito11`).
-- [ ] Hito 12 — Física con Jolt.
+- [x] **Hito 12** — Física con Jolt (completado, tag `v0.12.0-hito12`).
 - [ ] Hito 13 — Gizmos y selección.
 - [ ] Hito 14 — Prefabs.
 - [ ] Hito 15 — Skybox, fog, post-procesado.
@@ -275,3 +275,29 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Múltiples directional lights / SpotLight**: fuera de scope del hito. **Trigger:** mapa real que lo pida.
 - **Atenuación con falloff exponente configurable**: hoy cuadrática hardcoded. **Trigger:** feedback visual.
 - **Persistencia de `AudioSource`**: sigue arrastrándose desde Hito 9. **Trigger:** Scene authoritative completo (Hito 14+).
+
+## Hito 12 — Física con Jolt
+
+**Objetivo:** reemplazar el `PhysicsSystem` casero AABB-vs-grid del Hito 4 por Jolt Physics: rigid bodies con gravedad real, colliders variados, ECS integration.
+
+**Criterios de aceptación cumplidos:**
+- `JoltPhysics v5.2.0` via CPM (runtime `/MDd` forzado, targets auxiliares off).
+- `src/engine/physics/PhysicsWorld.{h,cpp}`: wrapper RAII con layers Static/Moving, API para createBody/step/setPosition/addForce.
+- `RigidBodyComponent { type, shape, halfExtents, mass, bodyId }` en `Components.h`.
+- `EditorApplication::updateRigidBodies` materializa bodies + stepea en Play Mode + sync body → Transform.
+- Tiles sólidos ahora tienen `RigidBodyComponent(Static)` automático; el mapa es colisionable en Jolt.
+- Demo `Ayuda > Agregar caja física demo` spawnea entidad Dynamic que cae por gravedad.
+- Persistencia: `SavedRigidBody` en `.moodmap` (pose NO se guarda; Jolt authoritative runtime). `k_MoodmapFormatVersion` 3 → 4.
+- Canal de log `physics`. Tests: round-trip RigidBody (99 casos / 442 asserciones total).
+
+**Siguiente paso tras completarlo:** Hito 13 — Gizmos y selección. Manipuladores 3D sobre entidad seleccionada (translate/rotate/scale), ray-casting click-to-select en el viewport. Plan en `docs/PLAN_HITO13.md`.
+
+### Pendientes menores detectados en Hito 12
+
+- **CharacterController de Jolt** (Bloque 4): diferido — el jugador sigue con `moveAndSlide` AABB del Hito 4. **Trigger:** Hito 13 (gizmos) o 14 (prefabs + gameplay).
+- **`F2` debug draw de Jolt**: diferido junto con CharacterController. Requiere implementar `JPH::DebugRenderer` → `OpenGLDebugRenderer`.
+- **`test_physics.cpp`**: diferido para evitar arrastrar Jolt (~40 MB static lib) a `mood_tests`. **Trigger:** lógica C++ no trivial que lo necesite.
+- **Rotación del body → Transform.rotationEuler**: hoy solo sync de posición. **Trigger:** colisiones que hagan rodar cajas.
+- **Shape `MeshFromAsset`** (Box/Sphere/Capsule solo por ahora). **Trigger:** colisiones precisas para modelos importados.
+- **Triggers/sensors** para gameplay/scripts. **Trigger:** Hito 14+.
+- Pendientes Hito 11 (hot-reload shaders, preview 3D, normal mapping, multi-directional, persistencia Audio) siguen en tracker.

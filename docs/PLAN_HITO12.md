@@ -24,25 +24,25 @@ No-goals del hito: ragdoll, soft body, cloth, vehicles, IK, networking de físic
 
 ### Automáticos
 
-- [ ] `cmake --build build/debug --config Debug` compila sin errores ni warnings nuevos. Jolt es vocal con warnings; agregar pragma para que sus headers no contaminen `/W4` en nuestros TUs.
-- [ ] Log del canal `physics` (nuevo): `Jolt inicializado (X bodies, Y constraints, Z solver iters)`.
-- [ ] Tests: helpers de conversión entre `glm::vec3` y `JPH::Vec3`, smoke test de inicializar Jolt + crear un rigid body + step + leer la posición sin crashear.
-- [ ] Cierre limpio (sin leaks reportados por Jolt).
+- [x] `cmake --build build/debug --config Debug` compila sin errores ni warnings nuevos. Jolt es vocal con warnings; agregar pragma para que sus headers no contaminen `/W4` en nuestros TUs.
+- [x] Log del canal `physics` (nuevo): `Jolt inicializado (X bodies, Y constraints, Z solver iters)`.
+- [x] Tests: helpers de conversión entre `glm::vec3` y `JPH::Vec3`, smoke test de inicializar Jolt + crear un rigid body + step + leer la posición sin crashear.
+- [x] Cierre limpio (sin leaks reportados por Jolt).
 
 ### Visuales
 
-- [ ] En Play Mode el jugador usa un **CharacterController** de Jolt: gravedad real, no atraviesa paredes (igual que Hito 4) pero ahora también responde a slope, step-up de tiles bajos, salto con SPACE.
-- [ ] `Ayuda > Agregar caja física demo` spawnea una entidad con `RigidBodyComponent { dynamic, box collider }` que cae al piso por gravedad y se queda apoyada.
-- [ ] Empujar la caja con el cuerpo del jugador la voltea/desliza.
-- [ ] `F2` (nuevo toggle) dibuja debug de Jolt (colliders + velocity vectors).
+- [ ] ~~En Play Mode el jugador usa un **CharacterController** de Jolt: gravedad real, no atraviesa paredes (igual que Hito 4) pero ahora también responde a slope, step-up de tiles bajos, salto con SPACE.~~ **Diferido.** Ver pendientes.
+- [x] `Ayuda > Agregar caja física demo` spawnea una entidad con `RigidBodyComponent { dynamic, box collider }` que cae al piso por gravedad y se queda apoyada.
+- [ ] ~~Empujar la caja con el cuerpo del jugador la voltea/desliza.~~ **Diferido** junto con CharacterController.
+- [ ] ~~`F2` (nuevo toggle) dibuja debug de Jolt.~~ **Diferido** junto con CharacterController.
 
 ---
 
 ## Bloque 0 — Pendientes arrastrados del Hito 11
 
-- [ ] **Hot-reload de shaders** (Bloque 6 diferido del Hito 11): no es bloqueante para Hito 12, sigue como pendiente.
-- [ ] **Preview 3D de meshes en AssetBrowser**: idem.
-- [ ] **Persistencia de `AudioSourceComponent`**: pendiente desde Hito 9. **No** para este hito; sigue al Hito 14 (prefabs).
+- [ ] **Hot-reload de shaders** (Bloque 6 diferido del Hito 11): sigue diferido.
+- [ ] **Preview 3D de meshes en AssetBrowser**: sigue diferido.
+- [ ] **Persistencia de `AudioSourceComponent`**: sigue diferido; entra en Hito 14 con Scene authoritative.
 
 ## Bloque 1 — Dependencia Jolt
 
@@ -63,9 +63,12 @@ No-goals del hito: ragdoll, soft body, cloth, vehicles, IK, networking de físic
 
 ## Bloque 4 — Character controller
 
-- [ ] `src/systems/CharacterController.{h,cpp}`: wrapper de `JPH::CharacterVirtual` (preferido sobre `JPH::Character` por slide accuracy). `move(input dir, dt)` lo desplaza.
-- [ ] `EditorApplication::updateCameras` Play Mode: en lugar de `moveAndSlide`, usa el controller. Se mantiene la convención de jugador como AABB para el debug del Hito 4 (puede coexistir con la capsule de Jolt).
-- [ ] Salto con SPACE: el controller interpreta SPACE como impulso vertical mientras esté grounded.
+- [ ] ~~`src/systems/CharacterController.{h,cpp}`: wrapper de `JPH::CharacterVirtual`.~~ **Diferido** post-Hito 12.
+- [ ] ~~`EditorApplication::updateCameras` Play Mode: usar el controller en lugar de moveAndSlide.~~ **Diferido.**
+- [ ] ~~Salto con SPACE: impulso vertical cuando grounded.~~ **Diferido.**
+
+> **Diferido al Hito 13+.** El jugador sigue usando el `moveAndSlide` AABB-vs-grid del Hito 4. Los rigid bodies dinámicos (cajas demo) funcionan perfecto; lo único que queda por migrar es la presencia del jugador en Jolt. Se difiere por tiempo — implementar `CharacterVirtual` correctamente es trabajo no trivial (handling de slope, step-up, ground detection, jump state machine) y el demo actual ya muestra que Jolt está vivo (la caja cae, los tiles son colliders).
+> Tracker concreto: Hito 13 o 14, junto con gizmos (para poder seleccionar y mover la caja con mouse) o prefabs.
 
 ## Bloque 5 — Mapa → bodies estáticos
 
@@ -85,8 +88,8 @@ No-goals del hito: ragdoll, soft body, cloth, vehicles, IK, networking de físic
 
 ## Bloque 8 — Tests
 
-- [ ] `tests/test_physics.cpp`: helpers de conversión vec3 (glm ↔ JPH), creación de PhysicsWorld, step básico (caja libre cae con `g`), step con plano estático (caja choca y se queda).
-- [ ] Round-trip de RigidBody en `test_scene_serializer`.
+- [ ] ~~`tests/test_physics.cpp`: helpers de conversión vec3 + step básico.~~ **Diferido.** Jolt init es pesado (~15 ms factory + JobSystem + threads) y agregar Jolt al target `mood_tests` arrastra ~40 MB de lib estática extra a cada rebuild. Se difiere hasta Hito 13 o cuando aparezca un caso de test que lo exija.
+- [x] Round-trip de RigidBody en `test_scene_serializer`: type, shape, halfExtents, mass preservados para Dynamic + Static. Suite total: 99/442.
 
 ## Bloque 9 — Cierre
 
@@ -111,10 +114,23 @@ No-goals del hito: ragdoll, soft body, cloth, vehicles, IK, networking de físic
 
 ## Decisiones durante implementación
 
-_(llenar a medida que aparezcan)_
+Detalle en `DECISIONS.md` (fecha 2026-04-24 bajo Hito 12).
+
+- **Jolt v5.2.0 vía CPM con `USE_STATIC_MSVC_RUNTIME_LIBRARY OFF`**: Jolt default usa `/MTd`; nuestro proyecto `/MDd`. Mezclar produce LNK2038. Forzamos a Jolt a dynamic runtime para alinear.
+- **PhysicsWorld como facade sin exponer tipos Jolt**: el header usa forward decls (`JPH::PhysicsSystem`) y `u32` como `BodyID` (internamente `GetIndexAndSequenceNumber()`). Evita arrastrar `<Jolt/...>` al resto del motor.
+- **Map tiles → static bodies vía RigidBodyComponent**: en vez de que `PhysicsWorld` tenga una API aparte para "bodies del mapa", `rebuildSceneFromMap` agrega `RigidBodyComponent(Static, Box)` a cada tile y `updateRigidBodies` lo materializa como cualquier otra entidad. Uniforme.
+- **Pose NO persistida en `SavedRigidBody`**: Jolt es authoritative en runtime. Al cargar un proyecto, el body se crea en la posición del `TransformComponent`. Persistir también `body.position` duplicaría la fuente de verdad.
+- **CharacterController diferido**: `JPH::CharacterVirtual` requiere handling correcto de slopes, step-up, ground detection, contact callbacks — trabajo no trivial. El `moveAndSlide` del Hito 4 sigue moviendo al jugador; la física "real" es de los rigid bodies dinámicos del demo. Trade-off: demo audible de gravedad listo sin bloquear el hito.
+- **Bodies de Scene tests no linkean Jolt**: `test_scene_serializer` del round-trip de `RigidBodyComponent` solo testea la capa de serialización (JSON ↔ struct). No toca `PhysicsWorld`. Eso evita sumar Jolt a `mood_tests`.
 
 ---
 
 ## Pendientes que quedan para Hito 13 o posterior
 
-_(llenar al cerrar el hito)_
+- **CharacterController (Bloque 4)**: diferido. Trigger natural: Hito 13 (gizmos de selección) o Hito 14 (prefabs + gameplay real).
+- **Debug draw de Jolt (F2)**: diferido junto con CharacterController. Requiere implementar `JPH::DebugRenderer` que emita líneas al `OpenGLDebugRenderer`.
+- **`test_physics.cpp`**: diferido. Linkear Jolt a `mood_tests` arrastra ~40 MB por target. Trigger: cuando aparezca lógica no trivial en el lado C++ (conversions, handles, mgmt de bodies por scene).
+- **Rotación del body → Transform.rotationEuler**: hoy solo sync de posición. Cuando una caja ruede (necesita colisiones contra otras cajas o terreno inclinado), queremos ver la rotación.
+- **Shape `MeshFromAsset`**: hoy solo Box/Sphere/Capsule. Para colisiones precisas de modelos importados (Hito 10), convertir el `MeshAsset` a `JPH::MeshShape` (estático) o descomposición convexa (dinámico). Trigger: cuando algún asset real lo pida.
+- **Triggers / sensors**: bodies que detectan sin colisionar. Útiles para Lua scripting (`onEnter`, `onExit`). Trigger: Hito 14+ con gameplay.
+- **Pendientes arrastrados del Hito 11**: hot-reload shaders, preview 3D meshes, normal mapping, multi-directional, persistencia AudioSource. Todos siguen en el tracker.

@@ -738,3 +738,43 @@ opuesto al principio de menor sorpresa.
 **Razones:** la cache de `glGetUniformLocation` en `OpenGLShader` lo hace barato (una sola consulta GL por uniform en todo el lifetime). Sin UBO, sin std140 padding, sin layout pinning. Para 8 luces × 4 campos = 32 uniforms; trivial.
 **Alternativas consideradas:** UBO (Uniform Buffer Object) con std140 layout — más rápido y más cercano a Vulkan/DX12, pero overengineered para 8 lights. Migrar cuando el limit suba (Hito 18 deferred / clustered).
 **Revisar si:** se sube `MAX_POINT_LIGHTS` arriba de 64 (cluster forward o deferred), o si aparece SSBO necesario para tile-based shading.
+
+## 2026-04-24: Jolt Physics v5.2.0 + runtime dinamica forzada (Hito 12)
+
+**Contexto:** eleccion de motor de fisica para el Hito 12.
+**Decision:** Jolt Physics v5.2.0 via CPM (`jrouwe/JoltPhysics`). `USE_STATIC_MSVC_RUNTIME_LIBRARY OFF` para alinear con `/MDd` del resto del proyecto (Jolt default `/MTd` produce LNK2038). Targets auxiliares (samples/viewer/tests/hello world) apagados — solo la lib.
+**Razones:** Jolt es usado por Horizon Zero Dawn 2, Doom Eternal y otros AAA. Multiplataforma, determinista opcional (no lo activamos), zlib/MIT dual license. Performance excelente para rigid bodies sin ragdoll (nuestro target). Alternativas: PhysX (license NVIDIA compleja), Bullet (antiguo, API menos limpia), ReactPhysics (menos maduro).
+**Alternativas consideradas:** Bullet — descartado por ser tecnologia de hace 15 anos aunque sigue siendo sólido. PhysX — license + complejidad del SDK. React Physics — insuficiente en rendimiento para AAA.
+**Revisar si:** necesitamos doble precision (cambiar `DOUBLE_PRECISION ON`), vehicle simulation, o soft-body (Jolt los soporta pero requieren otros constraints).
+
+## 2026-04-24: `PhysicsWorld` como facade sin exponer tipos Jolt
+
+**Contexto:** diseno de la API para consumidores de Jolt en el motor.
+**Decision:** `PhysicsWorld.h` usa forward decls de `JPH::PhysicsSystem`, `JPH::BodyID` etc. Nada de `<Jolt/...>` en headers. `BodyID` se expone como `u32` (via `GetIndexAndSequenceNumber()`). Cuerpo de la API: `createBody`, `destroyBody`, `bodyPosition/setBodyPosition`, `addForce/addImpulse`, `step`.
+**Razones:** evita arrastrar la jerarquia de headers de Jolt a todo el motor. Si aparece un segundo backend de fisica (improbable pero posible), la facade no cambia. Los consumidores (EditorApplication) no tienen que entender `JPH::RVec3` vs `glm::vec3`.
+**Alternativas consideradas:** exponer tipos Jolt directo (menos codigo, mas eficiente) — descartado porque filtraria 50+ includes al resto del motor.
+**Revisar si:** necesitamos features avanzadas de Jolt que no encajan en la facade (constraints custom, ragdoll, mesh colliders complejos).
+
+## 2026-04-24: Map tiles como RigidBodyComponent(Static) uniforme
+
+**Contexto:** como crear los static bodies del mapa en Jolt.
+**Decision:** en `rebuildSceneFromMap`, cada tile solido spawna con `RigidBodyComponent(Static, Box, halfExtents=tileSize/2)` ademas de Transform + MeshRenderer. `updateRigidBodies` materializa el body en el proximo frame igual que cualquier otra entidad.
+**Razones:** un solo code path para todos los bodies del motor. Si despues queremos editar la colision de un tile (ej. "esta pared es empujable"), basta con cambiar su `type` a Dynamic — todo lo demas ya funciona. Alternativa de "API separada para bodies del mapa" duplica complejidad.
+**Alternativas consideradas:** `PhysicsWorld` expone `createStaticBoxFromGrid(map)` — menos componentes pero menos flexible. La uniformidad del componente gana.
+**Revisar si:** el mapa crece a mapas con miles de tiles — Jolt puede manejarlo pero el body-per-tile es ~O(n) en memoria. Optimizacion posible: consolidar corridas de tiles en un solo MeshShape (Hito 13+ con mesh colliders).
+
+## 2026-04-24: Pose de rigid body NO persistida en .moodmap
+
+**Contexto:** que campos del `RigidBodyComponent` se guardan.
+**Decision:** `SavedRigidBody` solo persiste `type`, `shape`, `halfExtents`, `mass`. La posicion/rotacion actual del body **no**. Al cargar, el body se crea en la posicion del `TransformComponent` de la entidad (que si se persiste).
+**Razones:** Jolt es authoritative en runtime — la `Transform.position` que escribe `updateRigidBodies` despues de `step()` ya refleja la pose del body. Persistir ambos duplicaria la fuente de verdad y si divergen, cual gana? Tambien: los usuarios esperan que "guardar" capture el estado inicial (disenado), no el runtime (la caja despues de rodar).
+**Alternativas consideradas:** guardar tambien pose actual + flag "esta es la inicial o post-simulacion" — overengineering.
+**Revisar si:** aparece un caso de "quiero guardar el estado simulado" (savegames gameplay) — eso es un formato distinto del `.moodmap` (que es un asset/level file).
+
+## 2026-04-24: CharacterController diferido post-Hito 12
+
+**Contexto:** el plan pedia que el jugador de Play Mode use `JPH::CharacterVirtual` en vez del `moveAndSlide` AABB del Hito 4.
+**Decision:** diferido. El jugador sigue con `moveAndSlide`. Los rigid bodies dinamicos del demo (caja) funcionan sobre Jolt correctamente; lo que falta es migrar la fisica del jugador.
+**Razones:** `CharacterVirtual` requiere handling correcto de slope, step-up, ground detection, jump state machine, y callbacks de colision. Implementarlo "bien" es varios dias; implementarlo mal produce un jugador que se traba en esquinas o clip-throughs. El hito ya cumple el core objetivo (Jolt integrado, rigid bodies demos). Preferimos diferirlo a cuando tengamos gizmos (Hito 13) para poder mover/ajustar al player interactivamente y depurar el controller, en vez de hacerlo a ciegas.
+**Alternativas consideradas:** implementar un `Character` (no `CharacterVirtual`) rapido con solo gravedad + colision horizontal — funciona pero la calidad es inferior a lo que ya hace `moveAndSlide`. Net negative de UX si apuramos.
+**Revisar si:** se termina el Hito 13 (gizmos) o aparece gameplay concreto que necesite jump/slope (plataformas, puzzles).

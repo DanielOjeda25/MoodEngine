@@ -6,14 +6,14 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 11 cerrado, mergeado a `main` y publicado en origin.**
+**Hito 12 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.12.0-hito12`.
+Verificado automático: suite doctest 99/442 pasando (+1 round-trip RigidBody), editor arranca con `[physics] Jolt inicializado (max_bodies=1024, max_pairs=1024, gravity=-9.81)`, sin warnings nuevos. El mapa 8×8 tiene 29 static bodies (uno por tile sólido) y la caja demo (Dynamic 5kg) cae por gravedad al entrar a Play Mode.
+
+**Próximo paso:** Hito 13 — Gizmos y selección. Manipuladores 3D para translate/rotate/scale sobre la entidad seleccionada en Hierarchy, ray-casting click-to-select en el viewport. Plan en `docs/PLAN_HITO13.md`.
+
+### Hito 11 (anterior, ya cerrado)
 Tag: `v0.11.0-hito11`.
-Verificado automático: suite doctest 98/428 pasando (+8 lighting, +1 light round-trip vs Hito 10), editor compila sin warnings nuevos, `lit.{vert,frag}` se compila en el arranque, ningún uniform missing reportado por GL debug. Verificado por el dev a ojo: con luz puntual blanca via `Ayuda > Agregar luz puntual demo`, las paredes muestran caras frente/atrás distinguibles; el slider de intensity en el Inspector se refleja en vivo; tras Ctrl+S y reload del proyecto, la luz se recrea idéntica.
-
-**Próximo paso:** Hito 12 — Física con Jolt Physics. Reemplazar el `PhysicsSystem` AABB-vs-grid del Hito 4 por rigid bodies con Jolt: gravedad real, colliders convexos, capsule controller para el jugador. Plan en `docs/PLAN_HITO12.md`.
-
-### Hito 10 (anterior, ya cerrado)
-Tag: `v0.10.0-hito10`.
 Verificado automático (suite doctest 90/380 pasando con +8 tests nuevos — 5 de MeshLoader/AssetManager, 2 de round-trip de entidades, test setup con WORKING_DIRECTORY). Verificado por el dev a ojo: drag de `pyramid.obj` desde AssetBrowser al Viewport spawnea la entidad con metadata `[1 submeshes, 18 v]`; Ctrl+S persiste 3 entidades; cerrar + reabrir trae las 3 entidades con posición/rotación/scale/material intactos (`Mapa cargado: … (N tiles sólidos, 3 entidades)` en el log).
 
 **Próximo paso:** Hito 11 — Iluminación Phong/Blinn-Phong. Activar `LightComponent` (era placeholder del Hito 7), shader con normales + multiple lights, demo visual de escena iluminada. Plan en `docs/PLAN_HITO11.md`.
@@ -89,6 +89,18 @@ Verificado automático (suite doctest 90/380 pasando con +8 tests nuevos — 5 d
 - Tests: +8 casos / +34 asserciones en `test_mesh_asset.cpp` + `test_scene_serializer.cpp`. `add_test` con `WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` para que tests que abren archivos reales (pyramid.obj via assimp) resuelvan desde la raíz del repo. Suite total 90/380.
 - `assets/meshes/pyramid.obj`: pirámide base cuadrada escrita a mano (5 v / 6 tris / con UVs). `.gitignore` fix: `!assets/meshes/*.obj` para evitar colisión con `*.obj` de objetos MSVC.
 
+**Hito 12** — Física con Jolt (tag `v0.12.0-hito12`):
+- `JoltPhysics v5.2.0` via CPM, runtime dinámica `/MDd` forzada (default `/MTd` colisionaba con nuestro proyecto). Solo la lib principal; samples/viewer/tests off.
+- `src/engine/physics/PhysicsWorld.{h,cpp}`: wrapper RAII sobre `JPH::PhysicsSystem` + Factory + TempAllocator + JobSystem + filters. Layers `Static` (geometría del mapa) + `Moving` (dinámicos). API compacta: `createBody`, `destroyBody`, `bodyPosition`, `setBodyPosition`, `addForce`, `addImpulse`, `step`. Forward decls de `JPH::` en el header para no contaminar el motor.
+- `RigidBodyComponent { type, shape, halfExtents, mass, bodyId }` en `Components.h`. Types: Static / Kinematic / Dynamic. Shapes: Box / Sphere / Capsule.
+- `EditorApplication::updateRigidBodies(dt)`: materializa bodies (bodyId==0 → create), stepea la sim en Play Mode y sincroniza body→Transform.position.
+- `rebuildSceneFromMap`: destruye bodies de Jolt antes del `registry.clear()`; cada tile sólido agrega `RigidBodyComponent(Static, Box, halfExtents=tileSize/2)`.
+- Demo `Ayuda > Agregar caja física demo`: spawnea entidad "CajaFisica" (Dynamic, 1m Box, 5kg) a 6m de altura que cae por gravedad.
+- InspectorPanel: sección RigidBody con combos type/shape, halfExtents, mass (solo Dynamic), display de bodyId.
+- Persistencia: `SavedRigidBody {type, shape, halfExtents, mass}` en `SceneSerializer`; pose NO se guarda (Jolt authoritative runtime). `k_MoodmapFormatVersion` 3 → 4.
+- Canal de log `physics`. Tests: round-trip RigidBody (99/442 suite).
+- **Diferidos:** CharacterController (Bloque 4), debug draw F2 (Bloque 6), `test_physics.cpp`. Ver `PLAN_HITO12.md` sección pendientes.
+
 **Hito 11** — Iluminación Blinn-Phong (tag `v0.11.0-hito11`):
 - Vertex layout extendido a stride 11 (pos+color+uv+normal). `createCubeMesh` emite normales planas por cara; `MeshLoader` (assimp) preserva las normales que `aiProcess_GenNormals` calcula. Stride viejo de 8 dejó de existir.
 - `shaders/lit.{vert,frag}`: Blinn-Phong forward (ambient + diffuse + specular). Soporta 1 `DirectionalLight` global + hasta `MAX_POINT_LIGHTS=8`. Atenuación cuadrática smooth con cutoff por `radius`. Normal en mundo via `mat3(transpose(inverse(uModel)))` por vertex.
@@ -159,6 +171,7 @@ Verificado automático (suite doctest 90/380 pasando con +8 tests nuevos — 5 d
 - Lua `5.4.5` via `walterschell/Lua` wrapper (Hito 8; target `lua_static`)
 - sol2 `v3.3.0` (Hito 8; binding C++↔Lua header-only, aislado detrás de `LuaBindings`)
 - miniaudio `v0.11.21` vendored single-header (Hito 9; `external/miniaudio/`, target INTERFACE `miniaudio`)
+- JoltPhysics `v5.2.0` (Hito 12; target `Jolt`, runtime `/MDd` forzado)
 - assimp `v5.4.3` via CPM (Hito 10; static, solo importers OBJ/glTF/FBX, sin exporters/tests/CLI)
 
 ### Herramientas externas necesarias (solo para regenerar, no para build)
