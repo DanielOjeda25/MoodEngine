@@ -222,6 +222,48 @@ TEST_CASE("SceneSerializer: round-trip entidades con MeshRenderer (Hito 10)") {
     std::filesystem::remove(path);
 }
 
+TEST_CASE("SceneSerializer: round-trip de EnvironmentComponent (Hito 15)") {
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    Entity env = scene.createEntity("Environment");
+    EnvironmentComponent env_data{};
+    env_data.skyboxPath     = "skyboxes/sky_night";
+    env_data.fogMode        = 2; // Exp
+    env_data.fogColor       = glm::vec3(0.8f, 0.4f, 0.1f);
+    env_data.fogDensity     = 0.05f;
+    env_data.fogLinearStart = 7.5f;
+    env_data.fogLinearEnd   = 42.0f;
+    env_data.exposure       = 1.5f;
+    env_data.tonemapMode    = 1; // Reinhard
+    env.addComponent<EnvironmentComponent>(env_data);
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("env_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo_env", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1);
+
+    const auto& se = loaded->entities[0];
+    CHECK(se.tag == "Environment");
+    REQUIRE(se.environment.has_value());
+    const auto& s = *se.environment;
+    CHECK(s.skyboxPath     == "skyboxes/sky_night");
+    CHECK(s.fogMode        == "exp");
+    CHECK(s.fogColor.x     == doctest::Approx(0.8f));
+    CHECK(s.fogColor.y     == doctest::Approx(0.4f));
+    CHECK(s.fogColor.z     == doctest::Approx(0.1f));
+    CHECK(s.fogDensity     == doctest::Approx(0.05f));
+    CHECK(s.fogLinearStart == doctest::Approx(7.5f));
+    CHECK(s.fogLinearEnd   == doctest::Approx(42.0f));
+    CHECK(s.exposure       == doctest::Approx(1.5f));
+    CHECK(s.tonemapMode    == "reinhard");
+
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("SceneSerializer: archivo v1 (sin 'entities') se carga con lista vacia") {
     // Simula un .moodmap viejo: sin campo `entities`. Debe seguir cargando.
     const auto path = tempPath("v1_legacy.moodmap");

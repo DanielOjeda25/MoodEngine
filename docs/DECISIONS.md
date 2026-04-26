@@ -967,3 +967,146 @@ otros call-sites futuros podrian repetirla.
 **Revisar si:** se migra a un file dialog propio (ImGui-based) en
 Linux — ahi pfd hace cosas distintas y los separadores serian
 homogeneos.
+
+## 2026-04-26: Skybox via cubemap + truc pos.z=w (sin abstraccion ICubemapTexture)
+
+**Contexto:** Hito 15 introduce el primer skybox del motor. La opcion
+"correcta a futuro" es abstraer `ICubemapTexture` analogo a `ITexture`,
+pero hoy hay un solo backend (OpenGL) y un solo consumidor (`SkyboxRenderer`).
+**Decision:** mantener la cubemap dentro de `engine/render/opengl/` sin
+interfaz abstracta. `OpenGLCubemapTexture` carga 6 PNGs con stb_image,
+crea `GL_TEXTURE_CUBE_MAP` con LINEAR + CLAMP_TO_EDGE en S/T/R.
+`SkyboxRenderer` owns el cubemap + shader + cubo unitario; `draw()` usa
+el truc `gl_Position.z = gl_Position.w` para que tras /w el depth quede
+en 1 (far plane), con depth_func temporalmente cambiado a LEQUAL para
+que el clear con depth=1 no descarte el sky. La translacion de la view
+matrix se anula con `mat4(mat3(view))` para que el sky no se desplace
+al mover la camara.
+**Razones:** entrega valor (skybox visible) sin generar abstraccion
+prematura. Cuando IBL (Hito 17) entre, ahi se extrae `ICubemapTexture`
+con dos clientes reales.
+**Alternativas consideradas:** abstraer ya — codigo nuevo sin cliente
+adicional, viola "no introducir abstraccion antes que el segundo
+consumidor".
+
+## 2026-04-26: Fog distance-based con replica matematica en C++/GLSL
+
+**Contexto:** el fog del Hito 15 corre en el shader pero queremos
+testearlo sin GL.
+**Decision:** `engine/render/Fog.h` (header-only) con `FogMode` (Off /
+Linear / Exp / Exp2), `FogParams` y funciones puras `computeFogFactor`
++ `applyFog`. El fragment shader `lit.frag` replica la misma logica
+con un `if (uFogMode == ...)` por modo. El bind de uniforms en
+`EditorApplication` lee de `m_fog` (FogParams).
+**Razones:** los modos del fog son matematica simple pero faciles de
+pifiar (limites del lineal, signos del exp); tener tests sin GL captura
+regresiones rapido. La duplicacion C++/GLSL es minima (~30 lineas) y
+explicita.
+**Alternativas consideradas:** generar GLSL desde el header con un
+script — ingenieria por gusto.
+
+## 2026-04-26: Pipeline HDR via segundo framebuffer + post-process pass
+
+**Contexto:** sin HDR los highlights de las luces se queman a blanco;
+no hay forma de aplicar exposicion ni tonemapping no-trivial.
+**Decision:** dos framebuffers para el viewport del editor:
+- `m_sceneFb` (RGBA16F, HDR): aqui se dibuja sky + escena + lit + fog
+  + debug. Permite valores > 1 sin clip.
+- `m_viewportFb` (RGBA8, LDR): lo que ImGui muestra dentro del panel.
+Un `PostProcessPass` aplica `2^exposure * color` + tonemap (None /
+Reinhard / ACES Narkowicz fast) + gamma 1/2.2 al pasar de uno a otro.
+Fullscreen triangle generado por `gl_VertexID` (sin VBO; un VAO trivial
+porque Core Profile lo exige).
+**Razones:** habilita exposicion + tonemapping sin parchar todo el
+pipeline. Mantener LDR final compatible con ImGui (que asume sRGB).
+ACES como default es perceptualmente mejor que clamp directo en
+escenas con highlights.
+**Alternativas consideradas:** un solo FB sRGB con `glEnable(GL_FRAMEBUFFER_SRGB)`
+y dejar el tonemap fuera. Mas dependiente del driver y dificulta el
+control fino. Tambien evaluado: bloom integrado en este hito —
+diferido a 18+.
+**Revisar si:** llega bloom (Hito 18) — el `m_sceneFb` HDR es la
+fuente natural para downsamples.
+
+## 2026-04-26: `EnvironmentComponent` en una entidad cualquiera (no panel global)
+
+**Contexto:** los parametros de skybox/fog/exposure/tonemap necesitan
+una UI editable y persistible.
+**Decision:** se expone como un componente ECS, agregable a cualquier
+entidad (convencion: una entidad vacia "Environment"). El render scan
+toma el primer `EnvironmentComponent` encontrado y lo aplica al frame.
+Si no hay ninguno, defaults seguros (fog Off, exposure 0, tonemap ACES).
+Se serializa como un `SavedEnvironment` opcional en cada `SavedEntity`.
+**Razones:** reusa la persistencia, el inspector, el scan y la
+serialization del ECS sin codigo nuevo. Un panel "Render Settings"
+global hubiera sido un singleton + UI separada + persistencia separada.
+**Alternativas consideradas:** singleton en `EditorApplication` + panel
+dedicado. Mas trabajo, peor encaje con el flow ECS-driven del editor.
+**Revisar si:** hay 5+ campos de "render settings" que no encajan en
+un componente serializable (luminance, fog volumetrico, etc.) — ahi un
+panel dedicado tiene mas sentido.
+
+## 2026-04-26: Reset a defaults antes de aplicar Environment cada frame
+
+**Contexto:** bug detectado en smoke test del Hito 15: tras abrir un
+proyecto con Environment fog verde y luego abrir otro proyecto sin
+Environment, los uniforms del fog/exposure/tonemap quedaban "colgados"
+con los valores del previo. La causa: el scan solo seteaba si encontraba
+un componente, sin reset previo.
+**Decision:** `applyEnvironmentFromScene` resetea `m_fog =
+FogParams{}` + `m_exposure = 0` + `m_tonemap = ACES` ANTES del scan;
+si encuentra un Environment, sobreescribe. Llamado por
+`renderSceneToViewport` cada frame Y por `tryOpenProjectPath` justo
+despues de cargar las entidades — asi la primera frame post-load
+no muestra un flash a defaults.
+**Razones:** una sola fuente de verdad por frame. El reset elimina
+"fugas" entre proyectos sin requerir invalidacion explicita en
+handlers de Cerrar / Abrir / Nuevo.
+**Alternativas consideradas:** resetear los uniforms en cada handler
+de proyecto (Cerrar / Abrir / Nuevo / etc.). Mas codigo, mas chances
+de olvidar uno.
+
+## 2026-04-26: El editor SIEMPRE arranca con el Welcome modal
+
+**Contexto:** desde Hito 6 estaba implementado un auto-restore del
+ultimo proyecto reciente (convencion Unity/Godot). En el smoke test
+del Hito 15 el dev recordo que esto va contra una decision suya
+explicita ("en cada relanzamiento debe estar limpio, nada cacheado").
+El auto-restore:
+- ocultaba el Welcome modal (raras veces se ve la lista de recientes),
+- arrastraba estado del proyecto previo silenciosamente al arrancar,
+- el dev creyo durante el smoke test que era estado "colgado" de la
+  sesion anterior.
+**Decision:** quitar el auto-open. `loadEditorState` SOLO puebla
+`m_recentProjects` para alimentar el modal Welcome (y `m_debugDraw`
+para preferencias globales). El modal aparece SIEMPRE al arrancar.
+Memoria persistente `feedback_no_autoopen_project.md` registra la
+decision para que ningun agente futuro la re-introduzca como
+"convencion Unity".
+**Razones:** la convencion Unity no es ley; lo importante es que el
+flow encaje con como el dev quiere usar el editor. Si en el futuro
+quiere "auto-open opcional", se mete detras de un toggle de
+preferencias (off por default).
+**Alternativas consideradas:** dejar el auto-open con un toggle
+visible para apagarlo. Cinco veces hubo confusion durante este
+hito; mejor cambiar el default y opt-in si alguien lo pide.
+
+## 2026-04-26: Welcome modal con gestion de recientes (Limpiar inexistentes + X)
+
+**Contexto:** sin auto-open, los proyectos recientes son la unica via
+rapida para reabrir. La lista se ensucia cuando el dev mueve / borra /
+renombra proyectos por afuera del editor.
+**Decision:** dos affordances en el modal:
+- Boton "Limpiar inexistentes" arriba de la lista — barre todos los
+  recientes cuyo archivo ya no existe en disco.
+- Boton "X" al final de cada fila — quita esa entrada manualmente.
+Las filas inexistentes se renderizan en rojo con tag `(no existe)` y
+su click no las abre, las marca para borrar.
+`EditorUI::eraseRecent` y `pruneMissingRecents` setean un flag dirty;
+`EditorApplication` lo consume post-frame y persiste a
+`editor_state.json`.
+**Razones:** UX directa, sin confirmaciones extra (la accion es
+trivialmente reversible — cualquier "Abrir Proyecto..." vuelve a
+agregar el path al tope).
+**Alternativas consideradas:** dialogo de confirmacion al borrar
+("Estas seguro?"). Para una operacion reversible es ruido.

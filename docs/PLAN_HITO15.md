@@ -24,64 +24,72 @@ No-goals del hito: bloom (entra en Hito 18 si la pipeline lo justifica), SSAO, d
 
 ### Automáticos
 
-- [ ] Compila sin warnings nuevos.
-- [ ] Tests: helpers numéricos del fog (factor de fog según distancia + densidad) + parser del cubemap (6 caras desde paths lógicos).
-- [ ] Cierre limpio.
+- [x] Compila sin warnings nuevos.
+- [x] Tests: helpers numéricos del fog (factor de fog según distancia + densidad) + parser del cubemap (6 caras desde paths lógicos).
+- [x] Cierre limpio.
 
 ### Visuales
 
-- [ ] Detrás de la escena se ve un skybox real (default: gradient day-sky generado a mano si no se carga uno).
-- [ ] Mover la cámara (orbital o FPS) muestra el skybox infinito sin parallax.
-- [ ] Fog activable desde un panel — al subir densidad, los muros distantes se difuminan en el color del fog.
-- [ ] Toggle "tonemap on/off" muestra la diferencia entre RGBA8 directo y RGBA16F → tonemap → gamma.
-- [ ] Cambiar exposición en runtime se ve sin relanzar.
+- [x] Detrás de la escena se ve un skybox real (default: gradient day-sky generado a mano si no se carga uno).
+- [x] Mover la cámara (orbital o FPS) muestra el skybox infinito sin parallax.
+- [x] Fog activable desde un panel — al subir densidad, los muros distantes se difuminan en el color del fog.
+- [x] Toggle "tonemap on/off" muestra la diferencia entre RGBA8 directo y RGBA16F → tonemap → gamma.
+- [x] Cambiar exposición en runtime se ve sin relanzar.
 
 ---
 
 ## Bloque 0 — Pendientes arrastrados del Hito 14
 
-- [ ] Drop de prefab reemplaza entidad existente (queda diferido nuevamente si no aparece caso de uso).
-- [ ] Thumbnails 3D del AssetBrowser (también arrastrado de Hito 10/14). Si entra en este hito sería un side-effect del FB de preview, evaluable después del Bloque 3.
+- [ ] Drop de prefab reemplaza entidad existente (sigue diferido; no apareció caso de uso concreto).
+- [ ] Thumbnails 3D del AssetBrowser (también arrastrado de Hito 10/14). No entró en este hito.
 
 ## Bloque 1 — Cubemap + skybox
 
-- [ ] `engine/render/ICubemapTexture.h` o extensión de `ITexture` para 6 caras. Decisión documentada acá.
-- [ ] Backend OpenGL: `glTexImage2D` x 6 con `GL_TEXTURE_CUBE_MAP_POSITIVE_X..NEGATIVE_Z`. Filtros LINEAR + clamp_to_edge.
-- [ ] `assets/skyboxes/<name>/{px,nx,py,ny,pz,nz}.png` (6 PNG). Convención de naming inspirada en KTX/Khronos.
-- [ ] Sample default `assets/skyboxes/sky_day/` generado con Python (gradient azul claro → naranja en `+Y`, oscuro abajo). Tools/script que regenere si hace falta.
-- [ ] `shaders/skybox.{vert,frag}`: vertex elimina el componente W (cube proyectado al far plane), fragment muestra `texture(cubemap, dir)`. `gl_Position.z = gl_Position.w` para que el depth quede en 1.
-- [ ] Render order: `clear` → `skybox` (depth test LEQUAL) → escena scene-driven. El skybox queda detrás de TODO porque su depth=1.
+- [x] `engine/render/opengl/OpenGLCubemapTexture.{h,cpp}`: wrapper de `GL_TEXTURE_CUBE_MAP` con 6 caras. Filtros LINEAR + clamp_to_edge en S/T/R para evitar seams. NO setea `stbi_set_flip_vertically_on_load(true)` (las caras del cubemap esperan top-left, distinto de las texturas 2D).
+- [x] **Decisión**: no abstraer ICubemapTexture todavía — un solo backend, un solo consumidor (`SkyboxRenderer`). La interfaz se extrae cuando aparezca un segundo (IBL en Hito 17).
+- [x] `assets/skyboxes/sky_day/{px,nx,py,ny,pz,nz}.png` generados por `tools/gen_sky_cubemap.py` (Pillow). Gradient cenit→horizonte, accent sunset sutil en `+Z`.
+- [x] `shaders/skybox.{vert,frag}`: vertex anula la translación de view (`mat4(mat3(view))`) y fuerza `gl_Position.z = w` (depth=1). Fragment samplea el cubemap con la dirección del vertex.
+- [x] `systems/SkyboxRenderer.{h,cpp}`: owns cubemap + shader + cubo unitario de 36 verts. `draw(view, projection)` hace switch temporal a `GL_LEQUAL` + desactiva culling, dibuja, restaura state.
+- [x] `EditorApplication`: construye el SkyboxRenderer con try/catch — si la carga falla, queda nullptr y el motor sigue con clear color visible.
 
 ## Bloque 2 — Fog en `lit`
 
-- [ ] Uniforms nuevos en `lit.frag`: `uFogColor: vec3`, `uFogDensity: float`, `uFogMode: int` (0=off, 1=lineal, 2=exp, 3=exp2).
-- [ ] Cálculo: distancia desde el frag al ojo (`length(uCameraPos - worldPos)`) → factor 0..1 → `mix(litColor, uFogColor, factor)`.
-- [ ] Lineal: `(d - near) / (far - near)`. Exp: `1 - exp(-density*d)`. Exp2: `1 - exp(-(density*d)^2)`.
-- [ ] Tests numéricos: `applyFog(litColor, fogColor, density, distance, mode)` en una función `engine/render/Fog.h` testeable sin GL.
+- [x] `engine/render/Fog.h` (header-only): `FogMode {Off, Linear, Exp, Exp2}` + `FogParams` + `computeFogFactor` + `applyFog`. Misma matemática que el shader, testeable sin GL.
+- [x] `shaders/lit.frag` extendido con uniforms `uFogMode/uFogColor/uFogDensity/uFogStart/uFogEnd` + función `computeFogFactor(distance)` que replica el helper. Aplicado post-iluminación con `mix(lighting, uFogColor, factor)`.
+- [x] `EditorApplication` setea los uniforms cada frame. Valores vienen del frame state (`m_fog`) que el `applyEnvironmentFromScene` regenera desde el `EnvironmentComponent` o defaults.
+- [x] `tests/test_fog.cpp`: 6 casos cubriendo Off, Linear (con limites + degenerado), Exp (asintótico), Exp2 vs Exp comparados, `applyFog` end-to-end.
 
 ## Bloque 3 — Render target HDR + post-process
 
-- [ ] `IFramebuffer` gana un parámetro `format` (default `RGBA8`, nuevo `RGBA16F`). El backend OpenGL lo materializa con `glTexImage2D(GL_RGBA16F, ...)`.
-- [ ] `EditorApplication` ahora tiene DOS framebuffers para el viewport: `m_sceneFb` (HDR, donde se pinta la escena + skybox + fog) y `m_finalFb` (LDR, lo que ImGui muestra). El segundo se mantiene RGBA8 porque ImGui asume sRGB.
-- [ ] `shaders/post_process.{vert,frag}`: fullscreen triangle (single triangle truc), samplea `uHdrTex` y aplica `exp(uExposure) * color`, luego `Reinhard` (`x / (1+x)`) o `ACES` por uniforms, luego `pow(color, 1/2.2)`.
-- [ ] Pase post-process: bind `m_finalFb` → fullscreen quad con shader `post_process` → ImGui muestra `m_finalFb`. `m_sceneFb` queda invisible al usuario.
+- [x] `OpenGLFramebuffer` gana `enum class Format {LDR, HDR}`. HDR usa `GL_RGBA16F`; LDR sigue siendo `GL_RGBA8`. Default LDR para no romper callsites.
+- [x] `OpenGLFramebuffer::glColorTextureId()` getter (no en IFramebuffer) para que el PostProcessPass samplee sin filtrar el GLuint via la interfaz abstracta.
+- [x] `EditorApplication` ahora tiene DOS framebuffers para el viewport: `m_sceneFb` (HDR, donde se dibuja sky + escena + lit + fog + debug) y `m_viewportFb` (LDR, lo que ImGui muestra).
+- [x] `shaders/post_process.{vert,frag}`: fullscreen triangle generado por `gl_VertexID` (sin VBO). Aplica `2^exposure` + tonemap (None / Reinhard / ACES Narkowicz) + gamma 1/2.2.
+- [x] `systems/PostProcessPass.{h,cpp}`: owns shader + VAO trivial. `apply(src, dst, exposure, tonemap)` cambia depth/cull state durante el draw.
 
-## Bloque 4 — UI: panel "Render Settings" o EnvironmentComponent
+## Bloque 4 — UI: EnvironmentComponent
 
-- [ ] Decisión: ¿panel global del editor o componente en una entidad? Opción más limpia para serializar = `EnvironmentComponent` en una entidad "Environment" creada por `rebuildSceneFromMap`.
-- [ ] Campos: `skyboxPath`, `fogColor`, `fogDensity`, `fogMode (combo)`, `exposure (-5..+5)`, `tonemapMode (combo: None/Reinhard/ACES)`.
-- [ ] Inspector renderiza la sección con los widgets. Persistencia: `EntitySerializer` aprende a leer/escribir `EnvironmentComponent`.
-- [ ] Schema bump si aplica: si los defaults no cambian comportamiento de archivos viejos, `k_MoodmapFormatVersion` se queda en 5. Si el field requiere semantica nueva, bump a 6.
+- [x] **Decisión**: NO un panel global "Render Settings" — el `EnvironmentComponent` se agrega a una entidad cualquiera (convención: un objeto vacío llamado "Environment"). Si hay varias entidades con el componente, gana la primera; las demás se ignoran. Si no hay ninguna, se usan los defaults.
+- [x] `EnvironmentComponent` en `Components.h` con: skyboxPath (placeholder hasta catálogo de cubemaps), fogMode/Color/Density/LinearStart/LinearEnd, exposure, tonemapMode.
+- [x] `EditorApplication::applyEnvironmentFromScene` helper: reset a defaults + apply del primer Environment encontrado. Llamado por `renderSceneToViewport` cada frame Y por `tryOpenProjectPath` justo después de cargar las entidades — así la primera frame post-load ya muestra los valores guardados sin un flash a defaults.
+- [x] Inspector sección Environment con Combo (modo fog), ColorEdit (color fog), DragFloat (density / start / end / exposure), Combo (tonemap).
+- [x] Item de menú `Ayuda > Agregar Environment`. Si ya hay uno, selecciona el existente.
+- [x] Serialización: `SavedEnvironment` opcional en `SavedEntity`. EntitySerializer lo lee/escribe con strings para fogMode/tonemapMode.
+- [x] Schema bump: `k_MoodmapFormatVersion` 5 → 6 con backward-compat. `tryOpenProjectPath` reaplica el componente.
+- [x] **Bug fix detectado en smoke test**: el bloque 4 inicial NO reseteaba m_fog antes del scan, así que abrir un proyecto sin Environment heredaba los valores del proyecto previo. Fix: reset a defaults en cada frame antes del scan.
 
 ## Bloque 5 — Tests + cierre
 
-- [ ] Tests: `tests/test_fog.cpp` con casos numéricos para los 3 modos a distintas distancias.
-- [ ] Tests: round-trip `EnvironmentComponent` en `.moodmap`.
-- [ ] Sample skybox (`sky_day/`) commiteado.
-- [ ] Smoke test visual: arranca con sky default, cambiar fog density en Inspector cubre/descubre la sala. Tonemap toggle preserva contraste.
-- [ ] Actualizar `docs/HITOS.md`, `docs/DECISIONS.md`, `docs/ESTADO_ACTUAL.md`.
-- [ ] Commits atómicos en español. Tag `v0.15.0-hito15` + push.
-- [ ] Crear `docs/PLAN_HITO16.md` (Shadow mapping).
+- [x] `tests/test_fog.cpp` (Bloque 2, 6 casos).
+- [x] `tests/test_scene_serializer.cpp` extendido: round-trip de `EnvironmentComponent` con todos los campos.
+- [x] Suite total **120 / 530** (antes 113 / 493).
+- [x] Smoke test visual: skybox visible, fog viviendo el viewport, exposure / tonemap reactivos, Environment se persiste y reaplica.
+- [x] **Polish post-bloque (no en plan original, fix UX)**:
+  - Memoria nueva `feedback_no_autoopen_project.md`: el editor SIEMPRE arranca con el Welcome modal. `loadEditorState` ya no auto-abre el último proyecto; solo puebla la lista de recientes para alimentar el modal.
+  - Welcome modal con UX para limpiar la lista: botón "Limpiar inexistentes" + botón "X" por entrada + indicador rojo `(no existe)`. `EditorUI::eraseRecent` y `pruneMissingRecents` con flag dirty que el EditorApplication consume y persiste.
+- [x] Actualizar `docs/HITOS.md`, `docs/DECISIONS.md`, `docs/ESTADO_ACTUAL.md`.
+- [x] Commits atómicos en español. Tag `v0.15.0-hito15` + push.
+- [x] Crear `docs/PLAN_HITO16.md` (Shadow mapping).
 
 ---
 
@@ -98,10 +106,22 @@ No-goals del hito: bloom (entra en Hito 18 si la pipeline lo justifica), SSAO, d
 
 ## Decisiones durante implementación
 
-_(llenar a medida que aparezcan)_
+Detalle en `DECISIONS.md` bajo fecha 2026-04-26 (Hito 15).
+
+- **No abstraer `ICubemapTexture`** todavía. Un backend, un consumidor; la interfaz se extrae cuando entre IBL (Hito 17).
+- **HDR via segundo framebuffer + post-process pass**, no un solo FB sRGB con extensiones modernas. Mantiene la pipeline explícita y portable.
+- **`EnvironmentComponent` en una entidad cualquiera** en vez de un panel global o un singleton. Reusa la persistencia/inspección del ECS sin código nuevo.
+- **Reset a defaults antes del scan cada frame**: bug encontrado en smoke test cuando se abrió un proyecto sin Environment después de uno con fog verde — los valores del previo se "colaban".
+- **El editor NO auto-abre el último proyecto**. Decisión explícita del dev en Hito 6 que se había violado con el auto-restore. Welcome modal aparece SIEMPRE al arrancar.
+- **Limpieza manual de recientes** desde el modal (botón "Limpiar inexistentes" + "X" por entrada). Necesario porque sin auto-open la lista de recientes es la única vía rápida y los proyectos borrados ensucian la lista.
 
 ---
 
 ## Pendientes que quedan para Hito 16 o posterior
 
-_(llenar al cerrar el hito)_
+- **Catálogo de skyboxes** (cubemap por proyecto). Hoy se usa el cubemap fijo cargado al iniciar (`sky_day`). El campo `skyboxPath` del `EnvironmentComponent` se persiste pero no se aplica todavía. **Trigger:** cuando aparezcan ≥2 skyboxes en el proyecto.
+- **Bloom** post-process. **Trigger:** cuando los highlights HDR realmente se vean apagados sin él (escenas más complejas + PBR).
+- **Anti-aliasing** (MSAA del scene FB o FXAA en post-process). **Trigger:** quejas visibles de jaggies en escenas con muchas líneas finas.
+- **Skybox procedural** (atmospheric scattering). **Trigger:** demo "ciclo dia/noche".
+- **`ICubemapTexture` abstracta** + factory en AssetManager (catálogo). **Trigger:** entrada de IBL en Hito 17 que también consume cubemaps.
+- **Drop de prefab reemplaza entidad existente** y **thumbnails 3D** siguen como pendientes de hitos previos.

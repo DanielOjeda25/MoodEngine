@@ -19,7 +19,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 12** — Física con Jolt (completado, tag `v0.12.0-hito12`).
 - [x] **Hito 13** — Gizmos y selección (completado, tag `v0.13.0-hito13`).
 - [x] **Hito 14** — Prefabs (completado, tag `v0.14.0-hito14`).
-- [ ] Hito 15 — Skybox, fog, post-procesado.
+- [x] **Hito 15** — Skybox, fog, post-procesado (completado, tag `v0.15.0-hito15`).
 - [ ] Hito 16 — Shadow mapping.
 - [ ] Hito 17 — PBR.
 - [ ] Hito 18 — Deferred / Forward+.
@@ -362,3 +362,31 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Thumbnails 3D del prefab en el AssetBrowser**. Pendiente arrastrado desde Hito 10 (también pedido para meshes). **Trigger:** polish post-Hito 17 cuando los preview tengan más utilidad estética.
 - **Lua bindings** (`scene.instantiate("prefabs/x.moodprefab")`). **Trigger:** primer script gameplay que necesite spawn dinámico.
 - **Undo/Redo** del spawn de prefab. **Trigger:** Hito 22.
+
+## Hito 15 — Skybox, fog y post-procesado
+
+**Objetivo:** convertir el viewport en una escena 3D moderna. Skybox de cubemap detrás de todo, fog uniforme distance-based, render target HDR + post-process pass con tonemapping y gamma. Todo configurable en runtime via un `EnvironmentComponent` serializable.
+
+**Criterios de aceptación cumplidos:**
+- `tools/gen_sky_cubemap.py` genera 6 PNG de un cielo gradient en `assets/skyboxes/sky_day/`. Reproducible con Pillow.
+- `OpenGLCubemapTexture` (Wrapper de `GL_TEXTURE_CUBE_MAP`) + `SkyboxRenderer` (cubo unitario con depth=1 truc). Render LEQUAL para que la escena escriba encima.
+- `engine/render/Fog.h` (header-only): 4 modos (Off / Linear / Exp / Exp2), testeable sin GL. `lit.frag` extendido con uniforms + replica de la matemática.
+- `OpenGLFramebuffer` con enum `Format {LDR, HDR}`. RGBA16F para el scene FB; RGBA8 para el LDR final que ImGui muestra.
+- `PostProcessPass`: fullscreen triangle desde `gl_VertexID` (sin VBO). Aplica `2^exposure` + tonemap (None / Reinhard / ACES Narkowicz) + gamma 1/2.2.
+- `EnvironmentComponent` (skybox / fog / exposure / tonemap) editable desde Inspector. `applyEnvironmentFromScene` resetea a defaults + aplica el primer Environment, llamado cada frame y al cargar proyecto.
+- Schema bump: `k_MoodmapFormatVersion` 5 → 6. Backward-compat con archivos sin `environment`.
+- Tests: `test_fog.cpp` (6 casos numéricos) + extensión de `test_scene_serializer.cpp` con round-trip de Environment. Suite total **120 / 530** (antes 113 / 493).
+
+**Polish reactivo del hito (no en plan original):**
+- Memoria nueva `feedback_no_autoopen_project.md`: el editor NUNCA auto-abre el último proyecto. `loadEditorState` ya no llama a `tryOpenProjectPath`. El Welcome modal aparece SIEMPRE al arrancar.
+- Welcome modal con UX de gestión de recientes: botón "Limpiar inexistentes" + botón "X" por entrada + indicador rojo `(no existe)`.
+
+**Siguiente paso tras completarlo:** Hito 16 — Shadow mapping. Shadow map de la directional light principal + sample en el lit shader. Plan en `docs/PLAN_HITO16.md`.
+
+### Pendientes menores detectados en Hito 15
+
+- **Catálogo de skyboxes** (per-proyecto). Hoy se carga `sky_day` fijo al iniciar; `EnvironmentComponent.skyboxPath` se persiste pero no se aplica. **Trigger:** ≥2 skyboxes en el repo.
+- **Bloom** en post-process. **Trigger:** highlights HDR apagados sin él (PBR).
+- **Anti-aliasing** (MSAA o FXAA). **Trigger:** jaggies visibles.
+- **Skybox procedural** (atmospheric scattering). **Trigger:** demo de ciclo día/noche.
+- **`ICubemapTexture` abstracta**. **Trigger:** segundo consumidor de cubemaps (IBL Hito 17).
