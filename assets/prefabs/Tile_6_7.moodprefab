@@ -1,0 +1,41 @@
+{
+  "children": [],
+  "name": "Tile_6_7",
+  "root": {
+    "mesh_renderer": {
+      "materials": [
+        "textures/grid.png"
+      ],
+      "mesh_path": "__missing_cube"
+    },
+    "rigid_body": {
+      "halfExtents": [
+        1.5,
+        1.5,
+        1.5
+      ],
+      "mass": 0.0,
+      "shape": "box",
+      "type": "static"
+    },
+    "tag": "Tile_6_7",
+    "transform": {
+      "position": [
+        7.5,
+        1.5,
+        10.5
+      ],
+      "rotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        3.0,
+        3.0,
+        3.0
+      ]
+    }
+  },
+  "version": 1
+}

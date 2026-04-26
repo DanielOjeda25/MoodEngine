@@ -147,3 +147,73 @@ TEST_CASE("PrefabSerializer: load JSON corrupto devuelve nullopt") {
     CHECK_FALSE(PrefabSerializer::load(path).has_value());
     std::filesystem::remove(path);
 }
+
+// --- AssetManager::loadPrefab (Hito 14 Bloque 2) ---
+
+TEST_CASE("AssetManager::loadPrefab cachea + cae a missing ante fallo") {
+    AssetManager am("assets", nullFactory());
+
+    // Slot 0 siempre existe y es el "prefab vacio".
+    const auto* slot0 = am.getPrefab(am.missingPrefabId());
+    REQUIRE(slot0 != nullptr);
+    CHECK(slot0->name == "(empty)");
+
+    // Path invalido (../) cae al missing via VFS.
+    const auto bad = am.loadPrefab("../leak.moodprefab");
+    CHECK(bad == am.missingPrefabId());
+
+    // Path valido pero archivo inexistente: cae al missing y cachea para
+    // no reintentar.
+    const auto absent = am.loadPrefab("prefabs/no_existe.moodprefab");
+    CHECK(absent == am.missingPrefabId());
+    // segunda llamada usa el cache, mismo id.
+    CHECK(am.loadPrefab("prefabs/no_existe.moodprefab") == am.missingPrefabId());
+
+    // Id fuera de rango cae al missing.
+    CHECK(am.getPrefab(9999) == slot0);
+}
+
+TEST_CASE("AssetManager::loadPrefab carga un prefab real escrito a disco") {
+    // Escribimos el prefab a un path bajo `assets/prefabs/` (existe en el
+    // repo) para que el VFS lo encuentre. Usamos un nombre temporal con
+    // timestamp para no colisionar con assets reales.
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::string fileName = "test_" + std::to_string(stamp) + ".moodprefab";
+    const std::string logicalPath = "prefabs/" + fileName;
+    const std::filesystem::path fsPath =
+        std::filesystem::path("assets") / "prefabs" / fileName;
+    std::filesystem::create_directories(fsPath.parent_path());
+
+    {
+        nlohmann::json j;
+        j["version"] = k_MoodprefabFormatVersion;
+        j["name"]    = "demo";
+        j["root"]    = nlohmann::json{
+            {"tag", "Hello"},
+            {"transform", {
+                {"position",      nlohmann::json::array({1.0, 2.0, 3.0})},
+                {"rotationEuler", nlohmann::json::array({0.0, 0.0, 0.0})},
+                {"scale",         nlohmann::json::array({1.0, 1.0, 1.0})}
+            }}
+        };
+        j["children"] = nlohmann::json::array();
+        std::ofstream out(fsPath);
+        out << j.dump();
+    }
+
+    AssetManager am("assets", nullFactory());
+    const auto id = am.loadPrefab(logicalPath);
+    CHECK(id != am.missingPrefabId());
+
+    const auto* sp = am.getPrefab(id);
+    REQUIRE(sp != nullptr);
+    CHECK(sp->name == "demo");
+    CHECK(sp->root.tag == "Hello");
+    CHECK(sp->root.position.x == doctest::Approx(1.0));
+
+    // Cache: segunda load del mismo path = mismo id, no se duplica.
+    CHECK(am.loadPrefab(logicalPath) == id);
+    CHECK(am.prefabPathOf(id) == logicalPath);
+
+    std::filesystem::remove(fsPath);
+}

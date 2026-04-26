@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "name": "sample_light",
+  "root": {
+    "tag": "Luz_sample",
+    "transform": {
+      "position": [0.0, 5.0, 0.0],
+      "rotationEuler": [0.0, 0.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    "light": {
+      "type": "point",
+      "color": [1.0, 0.6, 0.2],
+      "intensity": 2.0,
+      "radius": 8.0,
+      "direction": [0.0, -1.0, 0.0],
+      "enabled": true
+    }
+  },
+  "children": []
+}
