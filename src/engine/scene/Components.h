@@ -144,6 +144,33 @@ struct RigidBodyComponent {
         : type(t), shape(s), halfExtents(he), mass(m) {}
 };
 
+/// @brief Configuracion del entorno de render (Hito 15 Bloque 4):
+///        skybox + fog + post-process (exposure + tonemap). Se agrega a UNA
+///        entidad cualquiera de la scene (convencion: un objeto vacio
+///        llamado "Environment"). Si hay mas de una entidad con este
+///        componente, `EditorApplication` usa la primera que encuentra.
+///        Si no hay ninguna, los uniforms quedan en sus defaults.
+///
+///        El campo `skyboxPath` esta reservado para un futuro asset
+///        catalog de skyboxes (cubemap por proyecto). Hito 15 sigue
+///        usando un cubemap fijo cargado al iniciar (`sky_day`); el campo
+///        se persiste pero no se aplica todavia.
+struct EnvironmentComponent {
+    // Skybox (placeholder hasta que haya catalogo de cubemaps).
+    std::string skyboxPath{"skyboxes/sky_day"};
+
+    // Fog
+    u32 fogMode = 0;                    // 0=Off, 1=Linear, 2=Exp, 3=Exp2
+    glm::vec3 fogColor{0.55f, 0.65f, 0.75f};
+    float fogDensity = 0.015f;
+    float fogLinearStart = 5.0f;
+    float fogLinearEnd = 50.0f;
+
+    // Post-process
+    float exposure = 0.0f;              // EVs
+    u32 tonemapMode = 2;                // 0=None, 1=Reinhard, 2=ACES
+};
+
 /// @brief Marca a una entidad como instancia de un prefab (Hito 14).
 ///        Solo guarda el path logico del `.moodprefab` que la origino — sin
 ///        propagacion bidireccional (cambiar el prefab no actualiza esta

@@ -22,6 +22,7 @@
 #include "engine/physics/PhysicsWorld.h"
 #include "systems/AudioSystem.h"
 #include "systems/LightSystem.h"
+#include "systems/PostProcessPass.h"
 #include "systems/SkyboxRenderer.h"
 #include "systems/PhysicsSystem.h"
 #include "systems/ScriptSystem.h"
@@ -158,7 +159,15 @@ EditorApplication::EditorApplication() {
     m_renderer = std::make_unique<OpenGLRenderer>();
     m_renderer->init();
 
-    m_viewportFb = std::make_unique<OpenGLFramebuffer>(1280u, 720u);
+    // Hito 15 Bloque 3: dos framebuffers para el viewport.
+    //   - `m_sceneFb`: HDR (RGBA16F). Donde se pinta sky + escena + lit + fog.
+    //     Soporta valores > 1.0 que el tonemap luego comprime.
+    //   - `m_viewportFb`: LDR (RGBA8). Resultado del post-process pass; lo que
+    //     ImGui muestra dentro del ViewportPanel (asume sRGB / RGBA8).
+    m_sceneFb = std::make_unique<OpenGLFramebuffer>(
+        1280u, 720u, OpenGLFramebuffer::Format::HDR);
+    m_viewportFb = std::make_unique<OpenGLFramebuffer>(
+        1280u, 720u, OpenGLFramebuffer::Format::LDR);
 
     m_defaultShader = std::make_unique<OpenGLShader>(
         "shaders/default.vert", "shaders/default.frag");
@@ -198,6 +207,10 @@ EditorApplication::EditorApplication() {
     }
 
     m_ui.viewport().setFramebuffer(m_viewportFb.get());
+
+    // Post-process pass (Hito 15 Bloque 3). Toma `m_sceneFb` (HDR) y
+    // produce `m_viewportFb` (LDR) tras exposicion + tonemap + gamma.
+    m_postProcess = std::make_unique<PostProcessPass>();
 
     m_scene = std::make_unique<Scene>();
     m_scriptSystem = std::make_unique<ScriptSystem>();
@@ -651,6 +664,30 @@ void EditorApplication::buildInitialTestMap() {
                        m_map.solidCount());
 }
 
+void EditorApplication::applyEnvironmentFromScene() {
+    // Reset a defaults primero. Sin este reset, abrir un proyecto sin
+    // Environment hereda los valores del proyecto anterior.
+    m_fog      = FogParams{};
+    m_exposure = 0.0f;
+    m_tonemap  = TonemapMode::ACES;
+
+    if (!m_scene) return;
+
+    bool envFound = false;
+    m_scene->forEach<EnvironmentComponent>(
+        [&](Entity, EnvironmentComponent& env) {
+            if (envFound) return; // primer Environment gana
+            envFound = true;
+            m_fog.mode        = static_cast<FogMode>(env.fogMode);
+            m_fog.color       = env.fogColor;
+            m_fog.density     = env.fogDensity;
+            m_fog.linearStart = env.fogLinearStart;
+            m_fog.linearEnd   = env.fogLinearEnd;
+            m_exposure        = env.exposure;
+            m_tonemap         = static_cast<TonemapMode>(env.tonemapMode);
+        });
+}
+
 void EditorApplication::rebuildSceneFromMap() {
     // Vision actual: Scene es derivada del GridMap. Cada tile solido =
     // 1 entidad con Transform + MeshRenderer. Limpiamos en-place el
@@ -980,6 +1017,25 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
                 rb.mass = srb.mass;
                 e.addComponent<RigidBodyComponent>(rb);
             }
+            // Hito 15: aplicar EnvironmentComponent persistido si existe.
+            if (se.environment.has_value()) {
+                const auto& s = *se.environment;
+                EnvironmentComponent env{};
+                env.skyboxPath     = s.skyboxPath;
+                if      (s.fogMode == "linear") env.fogMode = 1;
+                else if (s.fogMode == "exp")    env.fogMode = 2;
+                else if (s.fogMode == "exp2")   env.fogMode = 3;
+                else                            env.fogMode = 0;
+                env.fogColor       = s.fogColor;
+                env.fogDensity     = s.fogDensity;
+                env.fogLinearStart = s.fogLinearStart;
+                env.fogLinearEnd   = s.fogLinearEnd;
+                env.exposure       = s.exposure;
+                if      (s.tonemapMode == "reinhard") env.tonemapMode = 1;
+                else if (s.tonemapMode == "aces")     env.tonemapMode = 2;
+                else                                  env.tonemapMode = 0;
+                e.addComponent<EnvironmentComponent>(env);
+            }
             // Hito 14: link al prefab de origen, si la entidad fue
             // persistida con `prefab_path`. Sin propagacion bidireccional
             // por ahora — solo el breadcrumb.
@@ -988,6 +1044,11 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
             }
         }
     }
+    // Hito 15: aplicar el Environment del proyecto recien cargado YA, en
+    // lugar de esperar al primer renderSceneToViewport. Asi la primera frame
+    // muestra el fog/exposure/tonemap guardados, sin un flash a defaults.
+    applyEnvironmentFromScene();
+
     m_project = std::move(loaded);
     m_currentMapPath = m_project->defaultMap;
     m_projectDirty = false;
@@ -1079,6 +1140,12 @@ void EditorApplication::loadEditorState() {
     m_debugDraw = j.value("debugDraw", false);
 
     // Lista de proyectos recientes. El mas reciente esta al principio.
+    // Se carga aca para alimentar el modal Welcome — pero NO se auto-abre
+    // ninguno (el dev pidio explicitamente que cada relanzamiento arranque
+    // limpio con la ventana de bienvenida; ver memoria de feedback). Si en
+    // el futuro se quiere "auto-abrir el ultimo" como toggle de preferencias,
+    // poner el `tryOpenProjectPath(m_recentProjects.front())` detras de un
+    // flag opt-in.
     m_recentProjects.clear();
     if (j.contains("recentProjects") && j["recentProjects"].is_array()) {
         for (const auto& p : j["recentProjects"]) {
@@ -1086,18 +1153,6 @@ void EditorApplication::loadEditorState() {
         }
     }
     m_ui.setRecentProjects(m_recentProjects);
-
-    // Auto-restore del ultimo proyecto (convencion Unity/Godot). Si falla
-    // — archivo borrado, JSON corrupto, etc. — caemos silenciosamente en
-    // el modal Welcome para que el usuario elija.
-    if (!m_recentProjects.empty()) {
-        if (tryOpenProjectPath(m_recentProjects.front())) {
-            return;
-        }
-        Log::editor()->info(
-            "No se pudo auto-abrir el ultimo proyecto ({}); mostrando Welcome.",
-            m_recentProjects.front().generic_string());
-    }
 }
 
 void EditorApplication::saveEditorState() const {
@@ -1133,11 +1188,13 @@ EditorApplication::~EditorApplication() {
     m_lightSystem.reset();
     m_physicsWorld.reset();
     m_skyboxRenderer.reset();
+    m_postProcess.reset();
     m_debugRenderer.reset();
     m_assetManager.reset(); // dueño de las texturas y meshes (incluido el cubo fallback)
     m_litShader.reset();
     m_defaultShader.reset();
     m_viewportFb.reset();
+    m_sceneFb.reset();
     m_renderer.reset();
 
     ImGui_ImplOpenGL3_Shutdown();
@@ -1272,10 +1329,15 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     const u32 desiredW = m_ui.viewport().desiredWidth();
     const u32 desiredH = m_ui.viewport().desiredHeight();
     if (desiredW > 0 && desiredH > 0) {
+        // Hito 15 Bloque 3: ambos framebuffers comparten el tamano del panel.
+        // El HDR es el target del render real; el LDR es el que ImGui muestra.
+        m_sceneFb->resize(desiredW, desiredH);
         m_viewportFb->resize(desiredW, desiredH);
     }
 
-    m_viewportFb->bind();
+    // El render de la escena (sky + lit + fog + debug) escribe al HDR.
+    // El post-process pass copia + tonemap a `m_viewportFb` al final.
+    m_sceneFb->bind();
 
     ClearValues clear{};
     clear.color = {0.07f, 0.12f, 0.22f, 1.0f};
@@ -1324,6 +1386,11 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     // Itera por submeshes para soportar MeshAssets con multiples submeshes
     // (imports assimp). 1 draw call por submesh, textura segun materialIndex.
     if (m_scene) {
+        // Hito 15 Bloque 4: reset + apply del Environment. Helper compartido
+        // con `tryOpenProjectPath` para que la primera frame tras cargar un
+        // proyecto ya muestre los valores guardados sin un flash a defaults.
+        applyEnvironmentFromScene();
+
         // Hito 11: el render scene-driven usa el shader iluminado. Recolectamos
         // las luces de la scene una vez por frame y subimos los uniforms antes
         // de los draws.
@@ -1416,7 +1483,17 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     }
 
     m_renderer->endFrame();
-    m_viewportFb->unbind();
+    m_sceneFb->unbind();
+
+    // Hito 15 Bloque 3: post-process pass. Lee `m_sceneFb` (HDR), escribe
+    // a `m_viewportFb` (LDR) tras `2^exposure` + tonemap + gamma. ImGui
+    // muestra `m_viewportFb` en el panel Viewport (`setFramebuffer` lo
+    // apunto en el ctor).
+    if (m_postProcess && m_sceneFb && m_viewportFb) {
+        m_postProcess->apply(*m_sceneFb, *m_viewportFb,
+                              m_exposure, m_tonemap);
+        m_viewportFb->unbind();
+    }
 }
 
 int EditorApplication::run() {
@@ -1465,6 +1542,16 @@ int EditorApplication::run() {
             case ProjectAction::SaveAs:       handleSaveAs();       break;
             case ProjectAction::CloseProject: handleCloseProject(); break;
             case ProjectAction::None:         break;
+        }
+
+        // Hito 15 polish: el modal Welcome puede editar la lista de
+        // recientes (boton X por entrada + "Limpiar inexistentes"). Cuando
+        // hay cambios, sincronizamos `m_recentProjects` con la lista del
+        // UI y persistimos al `editor_state.json`.
+        if (m_ui.consumeRecentsDirty()) {
+            m_recentProjects.assign(m_ui.recentProjects().begin(),
+                                     m_ui.recentProjects().end());
+            saveEditorState();
         }
 
         // Modal Welcome: click en un reciente emite path directo en lugar
@@ -1516,6 +1603,28 @@ int EditorApplication::run() {
                 5.0f);
             Log::physics()->info("Spawned caja fisica en (0, 6, 0) con mass=5kg");
             markDirty();
+        }
+
+        // Demo Hito 15: entidad sentinel con EnvironmentComponent default.
+        // Una sola entidad por scene (la primera encontrada gana); si el
+        // usuario crea varias, las ignoradas se loguean como warning aca.
+        if (m_ui.consumeSpawnEnvironmentRequest() && m_scene) {
+            // Si ya hay una, avisar y seleccionarla en lugar de duplicar.
+            Entity existing{};
+            m_scene->forEach<EnvironmentComponent>(
+                [&](Entity e, EnvironmentComponent&) {
+                    if (!static_cast<bool>(existing)) existing = e;
+                });
+            if (static_cast<bool>(existing)) {
+                Log::editor()->warn("Ya existe un Environment; seleccionando el existente.");
+                m_ui.setSelectedEntity(existing);
+            } else {
+                Entity env = m_scene->createEntity("Environment");
+                env.addComponent<EnvironmentComponent>();
+                m_ui.setSelectedEntity(env);
+                Log::editor()->info("Spawned entidad Environment con defaults");
+                markDirty();
+            }
         }
 
         // Demo Hito 11: spawnea una luz puntual blanca sobre el centro del

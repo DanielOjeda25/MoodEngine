@@ -91,6 +91,12 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar caja fisica demo", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnPhysicsBox();
             }
+            // Demo Hito 15: entidad "Environment" con EnvironmentComponent
+            // default. Una vez creada, se puede editar desde el Inspector
+            // (skybox path, fog mode/color/density, exposure, tonemap).
+            if (ImGui::MenuItem("Agregar Environment", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnEnvironment();
+            }
             ImGui::EndMenu();
         }
 

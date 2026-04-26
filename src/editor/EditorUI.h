@@ -117,6 +117,16 @@ public:
         return r;
     }
 
+    /// @brief Hito 15: request para crear una entidad "Environment" con
+    ///        un `EnvironmentComponent` default. Util para empezar a editar
+    ///        sky/fog/post-process desde el Inspector.
+    void requestSpawnEnvironment() { m_spawnEnvironmentRequested = true; }
+    bool consumeSpawnEnvironmentRequest() {
+        const bool r = m_spawnEnvironmentRequested;
+        m_spawnEnvironmentRequested = false;
+        return r;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -154,6 +164,28 @@ public:
         m_recentProjects = std::move(paths);
     }
 
+    /// @brief Quita un path de la lista de recientes (boton "X" del modal).
+    ///        Marca dirty para que EditorApplication persista al state file.
+    void eraseRecent(const std::filesystem::path& path);
+
+    /// @brief Quita todos los recientes cuyo archivo ya no existe en disco
+    ///        (boton "Limpiar inexistentes"). Marca dirty.
+    void pruneMissingRecents();
+
+    /// @brief `true` una unica vez tras editar la lista de recientes.
+    ///        EditorApplication consume y llama a `saveEditorState`.
+    bool consumeRecentsDirty() {
+        const bool r = m_recentsDirty;
+        m_recentsDirty = false;
+        return r;
+    }
+
+    /// @brief Acceso de lectura para que `EditorApplication::saveEditorState`
+    ///        sirva la lista actualizada.
+    const std::vector<std::filesystem::path>& recentProjects() const {
+        return m_recentProjects;
+    }
+
     /// @brief Si el modal Welcome solicito abrir un proyecto especifico
     ///        (click en un reciente), el path queda aca. `EditorApplication`
     ///        lo consume despues de `draw()`.
@@ -187,6 +219,8 @@ private:
     bool m_spawnPointLightRequested = false;
     bool m_spawnPhysicsBoxRequested = false;
     bool m_savePrefabRequested = false;
+    bool m_spawnEnvironmentRequested = false;
+    bool m_recentsDirty = false; // Hito 15 polish: edicion manual de la lista de recientes
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;
 

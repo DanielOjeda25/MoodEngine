@@ -263,6 +263,7 @@ add_executable(MoodEditor
     src/systems/AudioSystem.cpp
     src/systems/LightSystem.cpp
     src/systems/PhysicsSystem.cpp
+    src/systems/PostProcessPass.cpp
     src/systems/ScriptSystem.cpp
     src/systems/SkyboxRenderer.cpp
 

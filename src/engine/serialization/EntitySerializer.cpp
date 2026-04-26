@@ -63,6 +63,25 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         je["rigid_body"] = jrb;
     }
 
+    if (entity.hasComponent<EnvironmentComponent>()) {
+        const auto& env = entity.getComponent<EnvironmentComponent>();
+        json je2;
+        je2["skybox_path"] = env.skyboxPath;
+        // FogMode -> string. Mantener orden alineado con el enum runtime.
+        const char* fogModes[] = {"off", "linear", "exp", "exp2"};
+        const u32 fm = (env.fogMode < 4) ? env.fogMode : 0;
+        je2["fog_mode"]         = fogModes[fm];
+        je2["fog_color"]        = env.fogColor;
+        je2["fog_density"]      = env.fogDensity;
+        je2["fog_linear_start"] = env.fogLinearStart;
+        je2["fog_linear_end"]   = env.fogLinearEnd;
+        je2["exposure"]         = env.exposure;
+        const char* toneModes[] = {"none", "reinhard", "aces"};
+        const u32 tm = (env.tonemapMode < 3) ? env.tonemapMode : 0;
+        je2["tonemap_mode"] = toneModes[tm];
+        je["environment"] = je2;
+    }
+
     // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la
     // entidad tiene un `PrefabLinkComponent`. Sin propagacion bidireccional
     // por ahora; es solo un breadcrumb para futuras features ("revertir a
@@ -115,6 +134,19 @@ SavedEntity parseEntityFromJson(const json& j) {
         srb.halfExtents = jrb.value("halfExtents", glm::vec3{0.5f});
         srb.mass        = jrb.value("mass",        1.0f);
         se.rigidBody = std::move(srb);
+    }
+    if (j.contains("environment")) {
+        const auto& je = j.at("environment");
+        SavedEnvironment se2;
+        se2.skyboxPath     = je.value("skybox_path",     std::string{"skyboxes/sky_day"});
+        se2.fogMode        = je.value("fog_mode",        std::string{"off"});
+        se2.fogColor       = je.value("fog_color",       glm::vec3{0.55f, 0.65f, 0.75f});
+        se2.fogDensity     = je.value("fog_density",     0.015f);
+        se2.fogLinearStart = je.value("fog_linear_start", 5.0f);
+        se2.fogLinearEnd   = je.value("fog_linear_end",   50.0f);
+        se2.exposure       = je.value("exposure",        0.0f);
+        se2.tonemapMode    = je.value("tonemap_mode",    std::string{"aces"});
+        se.environment = std::move(se2);
     }
     se.prefabPath = j.value("prefab_path", std::string{});
     return se;

@@ -6,9 +6,10 @@
 
 namespace Mood {
 
-OpenGLFramebuffer::OpenGLFramebuffer(u32 width, u32 height) {
+OpenGLFramebuffer::OpenGLFramebuffer(u32 width, u32 height, Format format) {
     m_width = width;
     m_height = height;
+    m_format = format;
     invalidate();
 }
 
@@ -73,12 +74,21 @@ void OpenGLFramebuffer::invalidate() {
     glGenFramebuffers(1, &m_fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
 
-    // Color attachment: textura RGBA8.
+    // Color attachment: RGBA8 (LDR) o RGBA16F (HDR).
     glGenTextures(1, &m_colorTexture);
     glBindTexture(GL_TEXTURE_2D, m_colorTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
-                 static_cast<GLsizei>(m_width), static_cast<GLsizei>(m_height),
-                 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    if (m_format == Format::HDR) {
+        // Internal format float, datos los manda el shader; el `type` no
+        // importa porque el buffer arranca clear, igual lo seteamos en
+        // FLOAT por consistencia.
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F,
+                     static_cast<GLsizei>(m_width), static_cast<GLsizei>(m_height),
+                     0, GL_RGBA, GL_FLOAT, nullptr);
+    } else {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+                     static_cast<GLsizei>(m_width), static_cast<GLsizei>(m_height),
+                     0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    }
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);

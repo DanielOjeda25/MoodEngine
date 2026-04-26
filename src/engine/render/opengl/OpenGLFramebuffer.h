@@ -13,7 +13,15 @@ namespace Mood {
 
 class OpenGLFramebuffer final : public IFramebuffer {
 public:
-    OpenGLFramebuffer(u32 width, u32 height);
+    /// @brief Formato del color attachment.
+    ///   - LDR (default): `GL_RGBA8`. Lo que muestra ImGui directo.
+    ///   - HDR (Hito 15): `GL_RGBA16F`. Permite valores > 1.0 sin clip,
+    ///     necesario para pasar por exposicion + tonemap. NO se le puede
+    ///     pasar como ImTextureID a `ImGui::Image` (asume sRGB); usar la
+    ///     textura LDR del post-process pass para mostrar.
+    enum class Format { LDR = 0, HDR = 1 };
+
+    OpenGLFramebuffer(u32 width, u32 height, Format format = Format::LDR);
     ~OpenGLFramebuffer() override;
 
     OpenGLFramebuffer(const OpenGLFramebuffer&) = delete;
@@ -28,6 +36,14 @@ public:
 
     TextureHandle colorAttachmentHandle() const override;
 
+    /// @brief GLuint del color attachment, util para shaders del motor que
+    ///        samplean este FB (post-process). NO se expone via IFramebuffer
+    ///        para no filtrar el tipo concreto del backend.
+    GLuint glColorTextureId() const { return m_colorTexture; }
+
+    /// @brief Formato del color attachment (LDR/HDR).
+    Format format() const { return m_format; }
+
 private:
     /// @brief Libera los handles actuales y recrea el FBO con `m_width/m_height`.
     void invalidate();
@@ -37,6 +53,7 @@ private:
     GLuint m_depthRbo = 0;
     u32 m_width = 0;
     u32 m_height = 0;
+    Format m_format = Format::LDR;
 };
 
 } // namespace Mood

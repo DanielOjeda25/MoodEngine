@@ -149,6 +149,45 @@ void InspectorPanel::onImGuiRender() {
         ImGui::Separator();
     }
 
+    // --- EnvironmentComponent (Hito 15 Bloque 4) ---
+    // Sky + fog + post-process. Solo el primer Environment encontrado en la
+    // Scene se aplica al frame; varios = warning suave (no aca, en
+    // EditorApplication). Cambios en vivo via DragFloat / Combo.
+    if (e.hasComponent<EnvironmentComponent>()) {
+        auto& env = e.getComponent<EnvironmentComponent>();
+        ImGui::TextDisabled("Environment");
+
+        ImGui::TextDisabled("Skybox: %s (asset catalog futuro)",
+                             env.skyboxPath.c_str());
+
+        ImGui::Separator();
+        ImGui::TextUnformatted("Fog");
+        const char* fogModes[] = {"Off", "Linear", "Exp", "Exp2"};
+        int fogIdx = static_cast<int>(env.fogMode);
+        if (ImGui::Combo("mode##env", &fogIdx, fogModes, 4)) {
+            env.fogMode = static_cast<u32>(fogIdx);
+            m_editedThisFrame = true;
+        }
+        if (ImGui::ColorEdit3("color##envfog", &env.fogColor.x)) m_editedThisFrame = true;
+        if (env.fogMode == 1) {
+            if (ImGui::DragFloat("start (m)##env", &env.fogLinearStart, 0.1f, 0.0f, 500.0f)) m_editedThisFrame = true;
+            if (ImGui::DragFloat("end (m)##env",   &env.fogLinearEnd,   0.1f, 0.0f, 500.0f)) m_editedThisFrame = true;
+        } else if (env.fogMode == 2 || env.fogMode == 3) {
+            if (ImGui::DragFloat("density##env", &env.fogDensity, 0.001f, 0.0f, 1.0f)) m_editedThisFrame = true;
+        }
+
+        ImGui::Separator();
+        ImGui::TextUnformatted("Post-process");
+        if (ImGui::DragFloat("exposure (EV)##env", &env.exposure, 0.05f, -5.0f, 5.0f)) m_editedThisFrame = true;
+        const char* tonemaps[] = {"None", "Reinhard", "ACES"};
+        int toneIdx = static_cast<int>(env.tonemapMode);
+        if (ImGui::Combo("tonemap##env", &toneIdx, tonemaps, 3)) {
+            env.tonemapMode = static_cast<u32>(toneIdx);
+            m_editedThisFrame = true;
+        }
+        ImGui::Separator();
+    }
+
     // --- ScriptComponent ---
     // Cambiar el path o pulsar Recargar pone `loaded=false`: el ScriptSystem
     // crea un sol::state fresco la proxima vez que corra update(). Eso es

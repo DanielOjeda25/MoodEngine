@@ -85,6 +85,20 @@ struct SavedRigidBody {
     f32 mass = 1.0f;
 };
 
+/// @brief Copia persistida de un EnvironmentComponent (Hito 15).
+///        Mismos campos que el componente runtime. `fogMode` y
+///        `tonemapMode` como string por estabilidad ante renumeraciones.
+struct SavedEnvironment {
+    std::string skyboxPath{"skyboxes/sky_day"};
+    std::string fogMode{"off"};            // "off" | "linear" | "exp" | "exp2"
+    glm::vec3 fogColor{0.55f, 0.65f, 0.75f};
+    f32 fogDensity = 0.015f;
+    f32 fogLinearStart = 5.0f;
+    f32 fogLinearEnd = 50.0f;
+    f32 exposure = 0.0f;
+    std::string tonemapMode{"aces"};       // "none" | "reinhard" | "aces"
+};
+
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh
 ///        renderer; Hito 11 agrega light; Hito 12 agrega rigid body;
 ///        Hito 14 agrega prefabPath (link suave al asset del que se
@@ -99,6 +113,7 @@ struct SavedEntity {
     std::optional<SavedMeshRenderer> meshRenderer;
     std::optional<SavedLight> light;
     std::optional<SavedRigidBody> rigidBody;
+    std::optional<SavedEnvironment> environment; // Hito 15
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
 };
 

@@ -27,9 +27,12 @@ namespace Mood {
 
 class IRenderer;
 class IFramebuffer;
+class OpenGLFramebuffer;
 class IShader;
 class IMesh;
 class OpenGLDebugRenderer;
+class PostProcessPass;
+enum class TonemapMode : i32;
 class ScriptSystem;
 class AudioDevice;
 class AudioSystem;
@@ -90,6 +93,14 @@ private:
     ///        handles y seleccion.
     void rebuildSceneFromMap();
 
+    /// @brief Hito 15: resetea m_fog/m_exposure/m_tonemap a defaults y aplica
+    ///        el primer EnvironmentComponent encontrado en `m_scene`. Si no
+    ///        hay ninguno, quedan los defaults. Llamado por `renderSceneToViewport`
+    ///        cada frame y por `tryOpenProjectPath` justo despues de cargar
+    ///        las entidades — asi el primer render del proyecto nuevo ya
+    ///        muestra los valores guardados sin un frame intermedio default.
+    void applyEnvironmentFromScene();
+
     /// @brief Edit localizado para una sola tile. Si la entidad ya existe
     ///        (`Tile_X_Y`), le actualiza el MeshRenderer in-place; si no,
     ///        la crea con los mismos defaults que rebuildSceneFromMap.
@@ -142,7 +153,15 @@ private:
     // RHI y recursos graficos. Se destruyen en orden inverso antes del
     // contexto GL (ver destructor).
     std::unique_ptr<IRenderer> m_renderer;
-    std::unique_ptr<IFramebuffer> m_viewportFb;
+    // Hito 15 Bloque 3: pipeline HDR. Sky + escena + lit + fog escriben a
+    // `m_sceneFb` (RGBA16F). El post-process pass lo procesa con
+    // exposicion + tonemap + gamma y deja el resultado en `m_viewportFb`
+    // (RGBA8) que es lo que muestra el panel Viewport.
+    std::unique_ptr<OpenGLFramebuffer> m_sceneFb;
+    std::unique_ptr<OpenGLFramebuffer> m_viewportFb;
+    std::unique_ptr<PostProcessPass> m_postProcess;
+    f32 m_exposure = 0.0f;                      // EVs, [-5..+5] tipico
+    TonemapMode m_tonemap = TonemapMode{2};     // ACES por default
     std::unique_ptr<IShader> m_defaultShader;
     std::unique_ptr<IShader> m_litShader;
     std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
@@ -153,15 +172,11 @@ private:
     std::unique_ptr<PhysicsWorld> m_physicsWorld;
     std::unique_ptr<SkyboxRenderer> m_skyboxRenderer;
 
-    // Fog del frame (Hito 15 Bloque 2). Default visible para smoke test;
-    // el Bloque 4 lo migra a un EnvironmentComponent serializable.
-    FogParams m_fog{
-        FogMode::Exp,
-        glm::vec3(0.55f, 0.65f, 0.75f),
-        0.015f,
-        5.0f,
-        50.0f
-    };
+    // Estado de render del frame actual. Lo regenera
+    // `applyEnvironmentFromScene` cada frame (reset a defaults + override
+    // con el primer EnvironmentComponent encontrado). Sin Environment los
+    // valores quedan en sus defaults (fog Off, sin exposure, tonemap ACES).
+    FogParams m_fog{};
 
     // AssetManager: owner de todas las texturas cargadas. Se destruye ANTES
     // del contexto GL (ver destructor).

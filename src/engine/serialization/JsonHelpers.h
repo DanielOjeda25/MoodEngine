@@ -42,7 +42,10 @@ namespace Mood {
 // v5 (Hito 14): SavedEntity gana campo opcional `prefab_path` (string)
 // que linkea la entidad a un `.moodprefab` de origen. Archivos v4 sin
 // `prefab_path` se leen igual (el link queda como cadena vacia).
-constexpr int k_MoodmapFormatVersion = 5;
+// v6 (Hito 15): SavedEntity gana campo opcional `environment` con
+// {skybox_path, fog_*, exposure, tonemap_mode}. Archivos v5 sin
+// `environment` se leen igual.
+constexpr int k_MoodmapFormatVersion = 6;
 constexpr int k_MoodprojFormatVersion = 1;
 
 /// @brief Verifica que la version declarada en un archivo sea legible.
