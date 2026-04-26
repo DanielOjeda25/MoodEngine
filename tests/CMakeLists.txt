@@ -21,6 +21,7 @@ add_executable(mood_tests
     test_mesh_asset.cpp
     test_lighting.cpp
     test_picking.cpp
+    test_prefab_serializer.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -37,8 +38,10 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/assets/AssetManager.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/MeshLoader.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/PrimitiveMeshes.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/serialization/EntitySerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/serialization/SceneSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/serialization/ProjectSerializer.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/serialization/PrefabSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/audio/AudioClip.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/audio/AudioDevice.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/audio/miniaudio_impl.cpp

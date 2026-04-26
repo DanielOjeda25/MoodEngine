@@ -144,6 +144,19 @@ struct RigidBodyComponent {
         : type(t), shape(s), halfExtents(he), mass(m) {}
 };
 
+/// @brief Marca a una entidad como instancia de un prefab (Hito 14).
+///        Solo guarda el path logico del `.moodprefab` que la origino — sin
+///        propagacion bidireccional (cambiar el prefab no actualiza esta
+///        instancia, eso queda para hitos posteriores).
+///        El SceneSerializer persiste este path como `prefab_path` en el
+///        `.moodmap`, asi un round-trip preserva el link.
+struct PrefabLinkComponent {
+    std::string path; // logico, ej. "prefabs/torch.moodprefab"
+
+    PrefabLinkComponent() = default;
+    PrefabLinkComponent(std::string p) : path(std::move(p)) {}
+};
+
 /// @brief Fuente de audio asociada a una entidad (Hito 9). Reproducción
 ///        manejada por `AudioSystem`. Si `is3D`, usa el `TransformComponent`
 ///        de la misma entidad para posicionar; si no, se mezcla plano.

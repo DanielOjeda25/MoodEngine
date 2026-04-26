@@ -247,8 +247,10 @@ add_executable(MoodEditor
 
     src/engine/physics/PhysicsWorld.cpp
 
+    src/engine/serialization/EntitySerializer.cpp
     src/engine/serialization/SceneSerializer.cpp
     src/engine/serialization/ProjectSerializer.cpp
+    src/engine/serialization/PrefabSerializer.cpp
 
     src/engine/scene/EditorCamera.cpp
     src/engine/scene/FpsCamera.cpp

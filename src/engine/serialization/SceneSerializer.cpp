@@ -5,6 +5,7 @@
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
+#include "engine/serialization/EntitySerializer.h"
 #include "engine/serialization/JsonHelpers.h"
 
 #include <nlohmann/json.hpp>
@@ -26,105 +27,14 @@ bool isTileTag(const std::string& tag) {
     return tag.rfind(k_tilePrefix, 0) == 0;
 }
 
-json serializeEntity(Entity e, const AssetManager& assets) {
-    json je;
-    const auto& tag = e.getComponent<TagComponent>();
-    je["tag"] = tag.name;
-
-    const auto& t = e.getComponent<TransformComponent>();
-    json jt;
-    jt["position"]      = t.position;
-    jt["rotationEuler"] = t.rotationEuler;
-    jt["scale"]         = t.scale;
-    je["transform"] = jt;
-
-    if (e.hasComponent<MeshRendererComponent>()) {
-        const auto& mr = e.getComponent<MeshRendererComponent>();
-        json jmr;
-        jmr["mesh_path"] = assets.meshPathOf(mr.mesh);
-        jmr["materials"] = json::array();
-        for (TextureAssetId texId : mr.materials) {
-            jmr["materials"].push_back(assets.pathOf(texId));
-        }
-        je["mesh_renderer"] = jmr;
-    }
-
-    if (e.hasComponent<LightComponent>()) {
-        const auto& lc = e.getComponent<LightComponent>();
-        json jl;
-        jl["type"] = (lc.type == LightComponent::Type::Directional)
-            ? "directional" : "point";
-        jl["color"]     = lc.color;
-        jl["intensity"] = lc.intensity;
-        jl["radius"]    = lc.radius;
-        jl["direction"] = lc.direction;
-        jl["enabled"]   = lc.enabled;
-        je["light"] = jl;
-    }
-
-    if (e.hasComponent<RigidBodyComponent>()) {
-        const auto& rb = e.getComponent<RigidBodyComponent>();
-        json jrb;
-        switch (rb.type) {
-            case RigidBodyComponent::Type::Static:    jrb["type"] = "static";    break;
-            case RigidBodyComponent::Type::Kinematic: jrb["type"] = "kinematic"; break;
-            case RigidBodyComponent::Type::Dynamic:   jrb["type"] = "dynamic";   break;
-        }
-        switch (rb.shape) {
-            case RigidBodyComponent::Shape::Box:     jrb["shape"] = "box";     break;
-            case RigidBodyComponent::Shape::Sphere:  jrb["shape"] = "sphere";  break;
-            case RigidBodyComponent::Shape::Capsule: jrb["shape"] = "capsule"; break;
-        }
-        jrb["halfExtents"] = rb.halfExtents;
-        jrb["mass"]        = rb.mass;
-        je["rigid_body"] = jrb;
-    }
-    return je;
+// Wrappers locales que delegan al EntitySerializer compartido. Mismo nombre
+// que la implementacion legacy del Hito 12 para minimizar el diff con el
+// resto del archivo (ver `EntitySerializer.{h,cpp}`).
+inline json serializeEntity(Entity e, const AssetManager& assets) {
+    return serializeEntityToJson(e, assets);
 }
-
-SavedEntity parseEntity(const json& je) {
-    SavedEntity se;
-    se.tag = je.value("tag", std::string{});
-    if (je.contains("transform")) {
-        const auto& jt = je.at("transform");
-        se.position      = jt.value("position",      glm::vec3{0.0f});
-        se.rotationEuler = jt.value("rotationEuler", glm::vec3{0.0f});
-        se.scale         = jt.value("scale",         glm::vec3{1.0f});
-    }
-    if (je.contains("mesh_renderer")) {
-        const auto& jmr = je.at("mesh_renderer");
-        SavedMeshRenderer mr;
-        mr.meshPath = jmr.value("mesh_path", std::string{});
-        if (jmr.contains("materials")) {
-            for (const auto& m : jmr.at("materials")) {
-                mr.materials.push_back(m.get<std::string>());
-            }
-        }
-        se.meshRenderer = std::move(mr);
-    }
-
-    if (je.contains("light")) {
-        const auto& jl = je.at("light");
-        SavedLight sl;
-        sl.type      = jl.value("type", std::string{"point"});
-        sl.color     = jl.value("color",     glm::vec3{1.0f});
-        sl.intensity = jl.value("intensity", 1.0f);
-        sl.radius    = jl.value("radius",    10.0f);
-        sl.direction = jl.value("direction", glm::vec3{0.0f, -1.0f, 0.0f});
-        sl.enabled   = jl.value("enabled",   true);
-        se.light = std::move(sl);
-    }
-
-    if (je.contains("rigid_body")) {
-        const auto& jrb = je.at("rigid_body");
-        SavedRigidBody srb;
-        srb.type        = jrb.value("type",        std::string{"dynamic"});
-        srb.shape       = jrb.value("shape",       std::string{"box"});
-        srb.halfExtents = jrb.value("halfExtents", glm::vec3{0.5f});
-        srb.mass        = jrb.value("mass",        1.0f);
-        se.rigidBody = std::move(srb);
-    }
-    return se;
+inline SavedEntity parseEntity(const json& j) {
+    return parseEntityFromJson(j);
 }
 
 } // namespace

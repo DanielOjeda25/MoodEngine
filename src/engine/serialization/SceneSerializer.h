@@ -86,8 +86,11 @@ struct SavedRigidBody {
 };
 
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh
-///        renderer; Hito 11 agrega light. Otros componentes (Script, Audio)
-///        siguen sin persistirse (ver no-goals de cada hito).
+///        renderer; Hito 11 agrega light; Hito 12 agrega rigid body;
+///        Hito 14 agrega prefabPath (link suave al asset del que se
+///        instancio, vacio si no vino de prefab).
+///        Otros componentes (Script, Audio) siguen sin persistirse (ver
+///        no-goals de cada hito).
 struct SavedEntity {
     std::string tag;
     glm::vec3 position{0.0f};
@@ -96,6 +99,7 @@ struct SavedEntity {
     std::optional<SavedMeshRenderer> meshRenderer;
     std::optional<SavedLight> light;
     std::optional<SavedRigidBody> rigidBody;
+    std::string prefabPath; // Hito 14: vacio = no vino de prefab
 };
 
 struct SavedMap {
