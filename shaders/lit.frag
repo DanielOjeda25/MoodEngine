@@ -41,6 +41,30 @@ uniform int uActivePointLights;   // [0, MAX_POINT_LIGHTS]
 uniform float uSpecularStrength;  // global (todas las superficies por igual)
 uniform float uShininess;         // exponente Blinn-Phong (32 = mate-medio)
 
+// Fog (Hito 15 Bloque 2). `uFogMode`: 0=off, 1=lineal, 2=exp, 3=exp2.
+// Misma matematica que `engine/render/Fog.h` (testeable sin GL).
+uniform int   uFogMode;
+uniform vec3  uFogColor;
+uniform float uFogDensity;
+uniform float uFogStart;
+uniform float uFogEnd;
+
+float computeFogFactor(float distance) {
+    if (uFogMode == 0) {
+        return 0.0;
+    } else if (uFogMode == 1) {
+        float denom = uFogEnd - uFogStart;
+        if (denom <= 0.0) return 1.0;
+        float t = (distance - uFogStart) / denom;
+        return clamp(t, 0.0, 1.0);
+    } else if (uFogMode == 2) {
+        return 1.0 - exp(-uFogDensity * distance);
+    } else { // 3 = exp2
+        float dd = uFogDensity * distance;
+        return 1.0 - exp(-(dd * dd));
+    }
+}
+
 vec3 evalDirectional(DirLight L, vec3 N, vec3 V, vec3 albedo) {
     if (L.enabled == 0) return vec3(0.0);
     vec3 lightDir = normalize(-L.direction);
@@ -89,6 +113,13 @@ void main() {
     for (int i = 0; i < n; ++i) {
         lighting += evalPoint(uPointLights[i], N, V, albedo, vWorldPos);
     }
+
+    // Fog: blend del color iluminado con el color del fog, usando la
+    // distancia world-space frag-camara. Aplicado post-iluminacion para
+    // que el ambient + lights tambien se desvanezcan.
+    float dist = length(uCameraPos - vWorldPos);
+    float fogF = computeFogFactor(dist);
+    lighting = mix(lighting, uFogColor, fogF);
 
     FragColor = vec4(lighting, tex.a);
 }

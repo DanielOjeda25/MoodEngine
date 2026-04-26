@@ -22,6 +22,7 @@
 #include "engine/physics/PhysicsWorld.h"
 #include "systems/AudioSystem.h"
 #include "systems/LightSystem.h"
+#include "systems/SkyboxRenderer.h"
 #include "systems/PhysicsSystem.h"
 #include "systems/ScriptSystem.h"
 
@@ -183,6 +184,18 @@ EditorApplication::EditorApplication() {
     m_ui.assetBrowser().setAssetManager(m_assetManager.get());
 
     m_debugRenderer = std::make_unique<OpenGLDebugRenderer>();
+
+    // Skybox (Hito 15 Bloque 1): cubemap default `assets/skyboxes/sky_day/`.
+    // Tolera fallo de carga (en CI sin assets, o si el path cambia): el
+    // motor sigue corriendo con clear color visible.
+    try {
+        m_skyboxRenderer =
+            std::make_unique<SkyboxRenderer>("assets/skyboxes/sky_day");
+    } catch (const std::exception& e) {
+        Log::render()->warn("SkyboxRenderer no disponible: {}. Sky fallback al clear color.",
+                             e.what());
+        m_skyboxRenderer.reset();
+    }
 
     m_ui.viewport().setFramebuffer(m_viewportFb.get());
 
@@ -1119,6 +1132,7 @@ EditorApplication::~EditorApplication() {
     m_audioDevice.reset();
     m_lightSystem.reset();
     m_physicsWorld.reset();
+    m_skyboxRenderer.reset();
     m_debugRenderer.reset();
     m_assetManager.reset(); // dueño de las texturas y meshes (incluido el cubo fallback)
     m_litShader.reset();
@@ -1286,6 +1300,14 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     m_lastProjection = projection;
     m_lastAspect = aspect;
 
+    // Hito 15 Bloque 1: skybox PRIMERO. El cubo del skybox se rendea con
+    // depth=1 (truco pos.z=w) y depth test LEQUAL, asi cualquier geometria
+    // con depth < 1 escribe encima. Si el SkyboxRenderer no esta disponible
+    // (carga del cubemap fallida), el clear color queda visible.
+    if (m_skyboxRenderer) {
+        m_skyboxRenderer->draw(view, projection);
+    }
+
     // El mapa se dibuja centrado en el origen del mundo (mapWorldOrigin()).
     // Mismo offset que consume PhysicsSystem: single source of truth.
     const glm::vec3 origin = mapWorldOrigin();
@@ -1315,6 +1337,17 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         m_litShader->setMat4("uProjection", projection);
         m_litShader->setInt("uTexture", 0);
         m_lightSystem->bindUniforms(*m_litShader, lights, cameraPos);
+
+        // Hito 15 Bloque 2: fog. En este bloque los parametros viven en un
+        // member del EditorApplication (`m_fog`) inicializado por default
+        // a Exp con densidad sutil para que el smoke test sea visible. El
+        // Bloque 4 agrega `EnvironmentComponent` y la fuente pasa a la
+        // entidad sentinel "Environment" de la scene.
+        m_litShader->setInt  ("uFogMode",    static_cast<int>(m_fog.mode));
+        m_litShader->setVec3 ("uFogColor",   m_fog.color);
+        m_litShader->setFloat("uFogDensity", m_fog.density);
+        m_litShader->setFloat("uFogStart",   m_fog.linearStart);
+        m_litShader->setFloat("uFogEnd",     m_fog.linearEnd);
 
         m_scene->forEach<TransformComponent, MeshRendererComponent>(
             [&](Entity, TransformComponent& t, MeshRendererComponent& mr) {

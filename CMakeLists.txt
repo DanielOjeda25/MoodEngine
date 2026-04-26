@@ -264,6 +264,7 @@ add_executable(MoodEditor
     src/systems/LightSystem.cpp
     src/systems/PhysicsSystem.cpp
     src/systems/ScriptSystem.cpp
+    src/systems/SkyboxRenderer.cpp
 
     src/engine/scripting/LuaBindings.cpp
 
@@ -272,6 +273,7 @@ add_executable(MoodEditor
     src/engine/render/opengl/OpenGLFramebuffer.cpp
     src/engine/render/opengl/OpenGLRenderer.cpp
     src/engine/render/opengl/OpenGLTexture.cpp
+    src/engine/render/opengl/OpenGLCubemapTexture.cpp
     src/engine/render/opengl/OpenGLDebugRenderer.cpp
 
     src/editor/EditorApplication.cpp

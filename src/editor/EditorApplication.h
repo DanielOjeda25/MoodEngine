@@ -9,6 +9,7 @@
 #include "editor/EditorMode.h"
 #include "editor/EditorUI.h"
 #include "engine/assets/AssetManager.h"
+#include "engine/render/Fog.h"
 #include "engine/scene/EditorCamera.h"
 #include "engine/scene/FpsCamera.h"
 #include "engine/scene/Scene.h"
@@ -34,6 +35,7 @@ class AudioDevice;
 class AudioSystem;
 class LightSystem;
 class PhysicsWorld;
+class SkyboxRenderer;
 
 class EditorApplication {
 public:
@@ -149,6 +151,17 @@ private:
     std::unique_ptr<AudioSystem> m_audioSystem;
     std::unique_ptr<LightSystem> m_lightSystem;
     std::unique_ptr<PhysicsWorld> m_physicsWorld;
+    std::unique_ptr<SkyboxRenderer> m_skyboxRenderer;
+
+    // Fog del frame (Hito 15 Bloque 2). Default visible para smoke test;
+    // el Bloque 4 lo migra a un EnvironmentComponent serializable.
+    FogParams m_fog{
+        FogMode::Exp,
+        glm::vec3(0.55f, 0.65f, 0.75f),
+        0.015f,
+        5.0f,
+        50.0f
+    };
 
     // AssetManager: owner de todas las texturas cargadas. Se destruye ANTES
     // del contexto GL (ver destructor).
