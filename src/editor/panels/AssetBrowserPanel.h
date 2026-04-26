@@ -36,6 +36,11 @@ public:
         return r;
     }
 
+    /// @brief Re-escanea texturas / audio / meshes / prefabs. Publico para
+    ///        que `EditorApplication` lo invoque tras guardar un prefab
+    ///        nuevo (asi aparece en la sección sin reabrir el editor).
+    void rescan();
+
 private:
     struct Entry {
         std::string logicalPath; // "textures/foo.png"
@@ -55,12 +60,17 @@ private:
         MeshAssetId id = 0;
     };
 
-    void rescan();
+    struct PrefabEntry {
+        std::string logicalPath; // "prefabs/foo.moodprefab"
+        std::string displayName; // "foo.moodprefab"
+        PrefabAssetId id = 0;
+    };
 
     AssetManager* m_assetManager = nullptr;
     std::vector<Entry> m_entries;
     std::vector<AudioEntry> m_audioEntries;
     std::vector<MeshEntry> m_meshEntries;
+    std::vector<PrefabEntry> m_prefabEntries;
     std::optional<std::string> m_selected;
     bool m_scanned = false;
     bool m_reloadRequested = false;

@@ -28,6 +28,15 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                 ui.requestProjectAction(ProjectAction::CloseProject);
             }
             ImGui::Separator();
+            // Hito 14: guardar la entidad seleccionada como prefab. Grayado
+            // si no hay seleccion o si no hay proyecto (los prefabs se
+            // guardan en `<proyecto>/assets/prefabs/`).
+            const bool canSavePrefab =
+                ui.hasProject() && static_cast<bool>(ui.selectedEntity());
+            if (ImGui::MenuItem("Guardar como prefab...", nullptr, false, canSavePrefab)) {
+                ui.requestSavePrefabDialog();
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem("Salir", "Alt+F4")) {
                 requestQuit = true;
             }

@@ -92,6 +92,17 @@ void ViewportPanel::onImGuiRender() {
                         m_pendingMeshDrop = MeshDrop{true, ndcX, ndcY, id};
                     }
                 }
+                if (const ImGuiPayload* payload =
+                        ImGui::AcceptDragDropPayload("MOOD_PREFAB_ASSET")) {
+                    u32 id = 0;
+                    if (payload->DataSize == sizeof(id)) {
+                        std::memcpy(&id, payload->Data, sizeof(id));
+                        float ndcX = 0.0f;
+                        float ndcY = 0.0f;
+                        mousePosToNdc(ImGui::GetMousePos(), ndcX, ndcY);
+                        m_pendingPrefabDrop = PrefabDrop{true, ndcX, ndcY, id};
+                    }
+                }
                 ImGui::EndDragDropTarget();
             }
 

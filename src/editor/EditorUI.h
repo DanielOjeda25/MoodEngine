@@ -106,6 +106,17 @@ public:
         return r;
     }
 
+    /// @brief Hito 14: request para abrir el dialogo "Guardar como prefab"
+    ///        sobre la entidad seleccionada en el Hierarchy.
+    ///        EditorApplication lo consume y dispara `pfd::save_file` con
+    ///        filtro `*.moodprefab`.
+    void requestSavePrefabDialog() { m_savePrefabRequested = true; }
+    bool consumeSavePrefabRequest() {
+        const bool r = m_savePrefabRequested;
+        m_savePrefabRequested = false;
+        return r;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -175,6 +186,7 @@ private:
     bool m_spawnAudioSourceRequested = false;
     bool m_spawnPointLightRequested = false;
     bool m_spawnPhysicsBoxRequested = false;
+    bool m_savePrefabRequested = false;
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;
 

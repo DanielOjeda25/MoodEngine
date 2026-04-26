@@ -29,6 +29,7 @@ class AudioClip;
 class IMesh;
 class ITexture;
 struct MeshAsset;
+struct SavedPrefab;
 
 /// @brief Identificador estable de una textura dentro de un `AssetManager`.
 ///        Valor 0 se reserva para la textura "missing": pedir `getTexture(0)`
@@ -44,6 +45,12 @@ using AudioAssetId = u32;
 ///        mesh "missing" (cubo del Hito 3) para que `getMesh(0)` nunca sea
 ///        null.
 using MeshAssetId = u32;
+
+/// @brief Identificador estable de un Prefab (Hito 14). Valor 0 reservado
+///        para un "prefab vacio" (root sin componentes), asi `getPrefab(0)`
+///        nunca devuelve null. Loadeo lazy: el `.moodprefab` se parsea al
+///        invocar `loadPrefab`, no al escanear el directorio.
+using PrefabAssetId = u32;
 
 class AssetManager {
 public:
@@ -164,6 +171,27 @@ public:
     /// @brief Cantidad de meshes cacheados (incluye missing).
     usize meshCount() const { return m_meshes.size(); }
 
+    // ---- Prefab (Hito 14) ----
+
+    /// @brief Carga (o devuelve cacheado) un prefab por path logico (p.ej.
+    ///        "prefabs/torch.moodprefab"). En fallo devuelve `missingPrefabId()`
+    ///        (prefab vacio) y loguea al canal `assets`.
+    PrefabAssetId loadPrefab(std::string_view logicalPath);
+
+    /// @brief Devuelve el SavedPrefab del id. Nunca null: ids invalidos caen
+    ///        al slot 0 (prefab vacio).
+    const SavedPrefab* getPrefab(PrefabAssetId id) const;
+
+    /// @brief Id del prefab vacio (placeholder). Siempre vale 0.
+    PrefabAssetId missingPrefabId() const { return 0; }
+
+    /// @brief Path logico con el que se cargo el prefab. Slot 0 devuelve el
+    ///        sentinela `"__empty_prefab"` (no existe en disco).
+    std::string prefabPathOf(PrefabAssetId id) const;
+
+    /// @brief Cantidad de prefabs cacheados (incluye el slot 0).
+    usize prefabCount() const { return m_prefabs.size(); }
+
 private:
     VFS m_vfs;
     TextureFactory m_textureFactory;
@@ -183,6 +211,11 @@ private:
     // Mesh (Hito 10). [0] = cubo primitivo (fallback).
     std::unordered_map<std::string, MeshAssetId> m_meshCache;
     std::vector<std::unique_ptr<MeshAsset>> m_meshes;
+
+    // Prefab (Hito 14). [0] = prefab vacio (root sin componentes).
+    std::unordered_map<std::string, PrefabAssetId> m_prefabCache;
+    std::vector<std::unique_ptr<SavedPrefab>> m_prefabs;
+    std::vector<std::string> m_prefabPaths; // paralelo a m_prefabs
 };
 
 } // namespace Mood

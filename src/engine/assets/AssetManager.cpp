@@ -7,6 +7,7 @@
 #include "engine/render/IMesh.h"
 #include "engine/render/ITexture.h"
 #include "engine/render/MeshAsset.h"
+#include "engine/serialization/PrefabSerializer.h"
 
 #include <stdexcept>
 #include <utility>
@@ -21,6 +22,10 @@ constexpr const char* k_missingAudioPath   = "audio/missing.wav";
 // genera programaticamente (cubo primitivo). El serializer usa este string
 // para distinguir "mesh por defecto" de uno importado.
 constexpr const char* k_missingMeshPath    = "__missing_cube";
+// Sentinela del prefab fallback (slot 0). Tampoco existe en disco; el
+// AssetManager genera un SavedPrefab vacio para que `getPrefab(0)` no sea
+// null.
+constexpr const char* k_emptyPrefabPath    = "__empty_prefab";
 
 /// @brief Mesh stub sin GL — permite que los tests construyan AssetManager
 ///        sin contexto OpenGL (default de MeshFactory). Produccion siempre
@@ -130,6 +135,19 @@ AssetManager::AssetManager(std::string rootDir,
         m_meshCache.emplace(k_missingMeshPath, missingMeshId());
     }
     Log::assets()->info("AssetManager: fallback mesh 'cubo primitivo' generado en slot 0");
+
+    // ---- Slot 0 prefab: SavedPrefab vacio (no requiere archivo). Sirve
+    //      como "default" cuando un id de prefab es invalido o el archivo
+    //      no se pudo parsear. Su `root` queda tag vacio + Transform default.
+    {
+        auto empty = std::make_unique<SavedPrefab>();
+        empty->name = "(empty)";
+        empty->root.tag = ""; // se completa en spawn si se usa como fallback
+        m_prefabs.emplace_back(std::move(empty));
+        m_prefabPaths.emplace_back(k_emptyPrefabPath);
+        m_prefabCache.emplace(k_emptyPrefabPath, missingPrefabId());
+    }
+    Log::assets()->info("AssetManager: prefab 'vacio' generado en slot 0");
 }
 
 AssetManager::~AssetManager() = default;
@@ -317,6 +335,55 @@ usize AssetManager::reloadChanged() {
         }
     }
     return reloaded;
+}
+
+// ----------------------------------------------------------------------------
+// Prefab (Hito 14)
+// ----------------------------------------------------------------------------
+
+PrefabAssetId AssetManager::loadPrefab(std::string_view logicalPath) {
+    const std::string key(logicalPath);
+    if (auto it = m_prefabCache.find(key); it != m_prefabCache.end()) {
+        return it->second;
+    }
+
+    const auto fs = m_vfs.resolve(logicalPath);
+    if (fs.empty()) {
+        Log::assets()->warn(
+            "AssetManager: prefab path '{}' rechazado por VFS. Fallback al vacio.",
+            logicalPath);
+        m_prefabCache.emplace(key, missingPrefabId());
+        return missingPrefabId();
+    }
+
+    auto loaded = PrefabSerializer::load(fs);
+    if (!loaded.has_value()) {
+        // Loggeo ya emitido por el serializer.
+        m_prefabCache.emplace(key, missingPrefabId());
+        return missingPrefabId();
+    }
+
+    auto stored = std::make_unique<SavedPrefab>(std::move(*loaded));
+    const PrefabAssetId id = static_cast<PrefabAssetId>(m_prefabs.size());
+    m_prefabs.push_back(std::move(stored));
+    m_prefabPaths.push_back(key);
+    m_prefabCache.emplace(key, id);
+    Log::assets()->info("AssetManager: cargado prefab {} -> id {}", logicalPath, id);
+    return id;
+}
+
+const SavedPrefab* AssetManager::getPrefab(PrefabAssetId id) const {
+    if (id >= m_prefabs.size()) {
+        return m_prefabs[missingPrefabId()].get();
+    }
+    return m_prefabs[id].get();
+}
+
+std::string AssetManager::prefabPathOf(PrefabAssetId id) const {
+    if (id >= m_prefabPaths.size()) {
+        return m_prefabPaths[missingPrefabId()];
+    }
+    return m_prefabPaths[id];
 }
 
 } // namespace Mood

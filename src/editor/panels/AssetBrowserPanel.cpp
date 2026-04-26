@@ -19,10 +19,12 @@ namespace {
 constexpr const char* k_textureDir = "assets/textures";
 constexpr const char* k_audioDir   = "assets/audio";
 constexpr const char* k_meshDir    = "assets/meshes";
+constexpr const char* k_prefabDir  = "assets/prefabs";
 constexpr float k_thumbSize = 64.0f;
-constexpr const char* k_logicalPrefix      = "textures/";
-constexpr const char* k_audioLogicalPrefix = "audio/";
-constexpr const char* k_meshLogicalPrefix  = "meshes/";
+constexpr const char* k_logicalPrefix       = "textures/";
+constexpr const char* k_audioLogicalPrefix  = "audio/";
+constexpr const char* k_meshLogicalPrefix   = "meshes/";
+constexpr const char* k_prefabLogicalPrefix = "prefabs/";
 
 bool isPng(const std::filesystem::path& p) {
     auto ext = p.extension().string();
@@ -43,6 +45,13 @@ bool isMesh(const std::filesystem::path& p) {
     std::transform(ext.begin(), ext.end(), ext.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return ext == ".obj" || ext == ".gltf" || ext == ".glb" || ext == ".fbx";
+}
+
+bool isPrefab(const std::filesystem::path& p) {
+    auto ext = p.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return ext == ".moodprefab";
 }
 
 } // namespace
@@ -111,9 +120,31 @@ void AssetBrowserPanel::rescan() {
                   });
     }
 
+    // Prefabs: busca en assets/prefabs/ por *.moodprefab. AssetManager
+    // los lazy-parsea con `loadPrefab`; si alguno falla cae a `missingPrefabId()`.
+    m_prefabEntries.clear();
+    std::error_code prefab_ec;
+    auto prefab_it = std::filesystem::directory_iterator(k_prefabDir, prefab_ec);
+    if (!prefab_ec) {
+        for (const auto& entry : prefab_it) {
+            if (!entry.is_regular_file() || !isPrefab(entry.path())) continue;
+            PrefabEntry pe;
+            pe.displayName = entry.path().filename().string();
+            pe.logicalPath = std::string(k_prefabLogicalPrefix) + pe.displayName;
+            pe.id = m_assetManager->loadPrefab(pe.logicalPath);
+            m_prefabEntries.push_back(std::move(pe));
+        }
+        std::sort(m_prefabEntries.begin(), m_prefabEntries.end(),
+                  [](const PrefabEntry& a, const PrefabEntry& b) {
+                      return a.displayName < b.displayName;
+                  });
+    }
+
     m_scanned = true;
-    Log::assets()->info("AssetBrowserPanel: {} texturas, {} audios, {} meshes listados",
-                         m_entries.size(), m_audioEntries.size(), m_meshEntries.size());
+    Log::assets()->info(
+        "AssetBrowserPanel: {} texturas, {} audios, {} meshes, {} prefabs listados",
+        m_entries.size(), m_audioEntries.size(), m_meshEntries.size(),
+        m_prefabEntries.size());
 }
 
 void AssetBrowserPanel::onImGuiRender() {
@@ -239,6 +270,29 @@ void AssetBrowserPanel::onImGuiRender() {
                                          static_cast<u32>(asset->submeshes.size()),
                                          asset->totalVertexCount());
                 }
+                ImGui::PopID();
+            }
+        }
+    }
+
+    // --- Sección Prefabs (Hito 14 Bloque 4) ---
+    // Pegada a Meshes porque ambos son "fuentes de geometria/entidades
+    // arrastrables al viewport". Drag payload `"MOOD_PREFAB_ASSET"` (u32 id);
+    // EditorApplication consume al soltar y crea una entidad copia.
+    if (!m_prefabEntries.empty()) {
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Prefabs", ImGuiTreeNodeFlags_DefaultOpen)) {
+            for (const auto& pe : m_prefabEntries) {
+                ImGui::PushID(pe.logicalPath.c_str());
+                ImGui::Selectable(pe.displayName.c_str(), false);
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                    ImGui::SetDragDropPayload("MOOD_PREFAB_ASSET", &pe.id, sizeof(pe.id));
+                    ImGui::TextUnformatted(pe.displayName.c_str());
+                    ImGui::EndDragDropSource();
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("(prefab)");
                 ImGui::PopID();
             }
         }

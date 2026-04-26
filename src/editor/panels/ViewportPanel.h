@@ -83,6 +83,22 @@ public:
         return r;
     }
 
+    /// @brief Drop de un prefab sobre el viewport (Hito 14 Bloque 5).
+    ///        Mismo flow que MeshDrop: el consumidor hace pick y spawnea
+    ///        una instancia del prefab en el world-point.
+    struct PrefabDrop {
+        bool pending = false;
+        float ndcX = 0.0f;
+        float ndcY = 0.0f;
+        u32 prefabId = 0; // castear a PrefabAssetId en el consumidor
+    };
+
+    PrefabDrop consumePrefabDrop() {
+        PrefabDrop r = m_pendingPrefabDrop;
+        m_pendingPrefabDrop = PrefabDrop{};
+        return r;
+    }
+
     /// @brief Click izquierdo sobre la imagen del viewport (Hito 13).
     ///        Distingue click puro de drag: dispara solo si el mouse bajó
     ///        y subió sin desplazarse más de 4 pixeles.
@@ -128,6 +144,7 @@ private:
 
     TextureDrop m_pendingDrop{};
     MeshDrop m_pendingMeshDrop{};
+    PrefabDrop m_pendingPrefabDrop{};
     ClickSelect m_pendingClick{};
     OverlayDraw m_overlayDraw{};
 
