@@ -826,3 +826,144 @@ opuesto al principio de menor sorpresa.
 **Razones:** Play Mode existe para ver el juego como lo vera el jugador final. Los iconos rompen la inmersion (un circulo amarillo flotando = "esto es debug"). Los gizmos sobre el player en Play tampoco tienen sentido — no estas editando, estas jugando.
 **Alternativas consideradas:** toggle manual ("show editor overlays in play") — overhead innecesario, nadie va a querer eso por default.
 **Revisar si:** se agrega un "play-in-editor with debug overlays" flow (comun en juegos AAA para QA). Trigger: Hito 22+ con tooling de QA.
+
+## 2026-04-26: `EntitySerializer` compartido entre `.moodmap` y `.moodprefab`
+
+**Contexto:** Hito 14 introduce `.moodprefab` como nuevo formato. Tanto
+ese formato como el `.moodmap` (Hito 6, extendido en 10/11/12) tienen
+que serializar entidades con sus componentes (Tag, Transform,
+MeshRenderer, Light, RigidBody). En el `.moodmap` la lógica vivia en
+funciones libres `serializeEntity` / `parseEntity` dentro del namespace
+anonimo de `SceneSerializer.cpp`. Duplicar esa logica en
+`PrefabSerializer.cpp` deja la puerta abierta a que un componente nuevo
+se agregue a un solo lado y se pierdan datos en round-trips.
+**Decision:** extraer las dos funciones a un header publico —
+`engine/serialization/EntitySerializer.{h,cpp}` — con firmas
+`serializeEntityToJson(Entity, AssetManager) -> json` y
+`parseEntityFromJson(json) -> SavedEntity`. `SceneSerializer.cpp`
+mantiene wrappers locales que delegan al helper para minimizar el diff
+con el codigo legacy.
+**Razones:** un solo punto donde mapear Component <-> JSON. Cualquier
+componente nuevo (en este hito: `PrefabLinkComponent`) se agrega una
+vez y aparece automatico en ambos formatos. Cero duplicacion.
+**Alternativas consideradas:** dejar el helper en SceneSerializer y que
+PrefabSerializer lo llame con `friend` o exponiendo la funcion via
+header privado: friccion sin beneficio, viola la convencion de
+"namespace anonimo = privado al .cpp".
+**Revisar si:** aparece un nuevo formato (Hito 21 packaging) que
+necesite un mapeo distinto — ahi el helper tendria que aceptar un
+`SerializeOptions` para seleccionar que componentes incluir.
+
+## 2026-04-26: Prefabs como assets globales del repo
+
+**Contexto:** Hito 14 plan original sugeria guardar `.moodprefab` en
+`<proyecto>/assets/prefabs/` (per-proyecto, estilo Unity). En el primer
+smoke test el usuario guardo un prefab pero al cambiar de proyecto el
+AssetBrowser no lo listaba — bug obvio: el browser escanea
+`<cwd>/assets/prefabs/`, no la carpeta del proyecto activo.
+**Decision:** los prefabs son **assets globales del repo**, vivem en
+`<cwd>/assets/prefabs/`. Misma convencion que texturas / audio / meshes
+(todos en `<cwd>/assets/<tipo>/`). El proyecto solo persiste mapas
+(`.moodmap`) + manifiesto (`.moodproj`); los assets se comparten.
+**Razones:**
+- Consistencia: el editor tenia un modelo "assets globales" desde
+  Hito 5; los prefabs lo violaban sin razon.
+- Reuso: un prefab "torch" sirve para todos los proyectos sin duplicar.
+- UX: aparecen automaticos en el AssetBrowser sin importar el proyecto.
+**Alternativas consideradas:**
+- Per-proyecto puro: requiere refactor del AssetBrowser para que sepa
+  del proyecto activo; rompe el modelo. Util si los proyectos quieren
+  versiones distintas del mismo prefab — caso real escaso a esta etapa.
+- Hibrido (prefabs en `<proyecto>/...` + un fallback al global): mas
+  flexibilidad, mas complejidad.
+**Revisar si:** un usuario quiere "este prefab solo para este proyecto"
+con sentido real (cuando los proyectos sean grandes y los assets se
+ensucien entre si).
+
+## 2026-04-26: `PrefabLinkComponent` como string-only marker
+
+**Contexto:** una entidad instanciada de un prefab necesita "recordar"
+de donde vino para futuras features (revert/apply/scan).
+**Decision:** componente nuevo con un solo campo `std::string path`.
+Sin metadata extra (versioning del prefab, dirty tracking, override
+list, timestamp). Solo el path logico relativo a `assets/`.
+**Razones:** Hito 14 NO implementa propagacion bidireccional, asi que
+no hay nada que trackear. Un string es suficiente para el uso actual y
+es trivialmente serializable. Si en un hito futuro aparece la necesidad
+real de "lista de overrides modificados", se agrega un struct sin
+romper compat (campo nuevo opcional al parsear).
+**Alternativas consideradas:**
+- Struct con `path + lastSyncedTimestamp + List<string> overrides`:
+  prematuro. Hace mas pesado el round-trip y aporta cero hoy.
+- Storage externo (un mapa entt::entity -> link en el editor): se
+  pierde al cerrar el editor; no se serializa.
+**Revisar si:** la propagacion bidireccional entra y necesita trackear
+overrides explicitos.
+
+## 2026-04-26: Sin nested prefabs en Hito 14 (postergado)
+
+**Contexto:** un prefab podria contener una entidad que es a su vez una
+instancia de otro prefab. Unity lo soporta (con muchas restricciones
+historicas).
+**Decision:** no en este hito. El schema reserva `children: []` pero
+todos los `.moodprefab` guardados desde el editor producen array vacio.
+Razon tecnica: `TransformComponent` del Hito 7 no expone `parent`/
+`children`, asi que la instanciacion no puede reconstruir jerarquia.
+**Razones:** entrega valor incremental sin bloquear el resto del hito.
+Los prefabs flat ya son el 90% de los casos de uso (item, prop, light
+preset).
+**Alternativas consideradas:** agregar `ParentComponent` + `ChildrenComponent`
+ahora — scope creep significativo (afecta Hierarchy, gizmos,
+serializer, picking). Mejor en hito dedicado.
+**Revisar si:** aparece un caso real de "torch_with_flame" donde el
+flame es otra entidad ECS.
+
+## 2026-04-26: Drop de prefab siempre instancia, no reemplaza
+
+**Contexto:** plan original incluia "drop sobre una entidad existente
+(via Hierarchy) reemplaza su mesh".
+**Decision:** diferido. Hoy el drop SIEMPRE crea una entidad nueva en
+el tile bajo el cursor. Reemplazar quedo postergado.
+**Razones:** ambiguedad semantica que no se puede resolver sin un
+caso de uso real:
+- ¿Reemplazar todos los componentes o solo MeshRenderer?
+- ¿Conservar el Transform local?
+- ¿Renombrar el tag al del prefab o conservar el original?
+- ¿Que pasa si la entidad existente tenia componentes que el prefab no?
+Sin un workflow concreto que pida "swap mesh by prefab", elegir mal
+introduce un comportamiento confuso dificil de revertir.
+**Alternativas consideradas:** implementar la version mas conservadora
+(solo agrega/reemplaza componentes que el prefab tiene, mantiene el
+Transform). Plausible pero a riesgo de pisar trabajo del usuario.
+**Revisar si:** aparece un workflow real ("tengo 50 props, quiero
+swappear todos al modelo nuevo del prefab X").
+
+## 2026-04-26: `pfd::save_file` requiere path nativo + filename saneado
+
+**Contexto:** smoke test del Hito 14 — al hacer "Archivo > Guardar como
+prefab..." el dialogo nativo de Windows no aparecia (devolvia "" sin
+mostrarse) y el log marcaba `Guardar prefab: cancelado`. Comparando
+con `handleNewProject` que SI funciona: ese pasa solo el directorio;
+el handler de prefab pasaba `<dir>/<filename>`.
+**Decision:** dos fixes combinados:
+1. **Sanitizar el filename**: tags pueden tener caracteres invalidos
+   para Windows shell (`<>:"/\|?*`). Caso real: `Mesh_meshes/pyramid.obj_1`
+   tras un drop de mesh — `/` rompe el filename. Helper `sanitize`
+   reemplaza por `_`.
+2. **Path nativo, no generic**: `generic_string()` produce forward
+   slashes; pfd::save_file en Windows usa IFileSaveDialog que para
+   paths FILE+DIR espera backslashes. `string()` mantiene los
+   separadores nativos del filesystem.
+`handleNewProject` no tenia el bug porque pasa solo el cwd (directorio,
+sin filename). Cuando hay archivo en el path, los separadores importan.
+**Razones:** el fix permite seguir pre-rellenando el nombre del prefab
+en el dialogo (UX mejor que pedirle al usuario que escriba "Tile_6_7"
+manualmente). Si pasaramos solo el directorio, el dialogo aparece pero
+sin nombre default.
+**Alternativas consideradas:** pasar solo el directorio (como
+handleNewProject) y dejar que el usuario escriba el nombre. Funciona
+pero peor UX — y la causa raiz del bug igual hay que entenderla porque
+otros call-sites futuros podrian repetirla.
+**Revisar si:** se migra a un file dialog propio (ImGui-based) en
+Linux — ahi pfd hace cosas distintas y los separadores serian
+homogeneos.

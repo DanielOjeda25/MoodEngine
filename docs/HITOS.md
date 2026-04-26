@@ -18,7 +18,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 11** — Iluminación Phong/Blinn-Phong (completado, tag `v0.11.0-hito11`).
 - [x] **Hito 12** — Física con Jolt (completado, tag `v0.12.0-hito12`).
 - [x] **Hito 13** — Gizmos y selección (completado, tag `v0.13.0-hito13`).
-- [ ] Hito 14 — Prefabs.
+- [x] **Hito 14** — Prefabs (completado, tag `v0.14.0-hito14`).
 - [ ] Hito 15 — Skybox, fog, post-procesado.
 - [ ] Hito 16 — Shadow mapping.
 - [ ] Hito 17 — PBR.
@@ -329,3 +329,36 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Tests de math de gizmo (closestParam, project)**: diferidos a un hito de tests de UI.
 - **Picking contra malla real** (no AABB conservativa): requiere `MeshFromAsset` + BVH, alineado con Hito 11/Jolt.
 - Pendientes Hito 12 (CharacterController, body-rotation sync, `MeshFromAsset`) siguen arrastrándose.
+
+## Hito 14 — Prefabs
+
+**Objetivo:** sistema de prefabs reusables. Guardar una entidad con sus componentes como `.moodprefab`, instanciar copias via drag desde el AssetBrowser al Viewport, mantener override local por instancia (modificarla no toca el prefab base), persistir el link `prefabPath` en el `.moodmap` para futuras features de revert/apply.
+
+**Criterios de aceptación cumplidos:**
+- Schema `.moodprefab` v1 (`{version, name?, root: SavedEntity, children: [...]}`). Reusa `SavedEntity` del Hito 10/11/12 (Mesh + Light + RigidBody).
+- `engine/serialization/EntitySerializer.{h,cpp}` extraído del `SceneSerializer` para que el helper Component<->JSON viva en un solo lugar; ambos formatos lo comparten.
+- `engine/serialization/PrefabSerializer.{h,cpp}` con `save(Entity, name, AssetManager&, path)` y `load(path) -> optional<SavedPrefab>`.
+- `AssetManager` extendido con `PrefabAssetId` (slot 0 = vacío fallback) + `loadPrefab` + `getPrefab` + `prefabPathOf` + `prefabCount`. Pattern espejo del catálogo de meshes.
+- `PrefabLinkComponent` (string-only) marca a una entidad como instancia de un prefab. `EntitySerializer` lo lee/escribe como `prefab_path`.
+- `EditorUI::request/consumeSavePrefabRequest` + ítem de menú `Archivo > Guardar como prefab…` (grayado sin selección; **NO** requiere proyecto activo: los prefabs son globales del repo).
+- `AssetBrowserPanel` con sección "Prefabs" entre Meshes y Audio. Drag payload `MOOD_PREFAB_ASSET`. `ViewportPanel::PrefabDrop` + `consumePrefabDrop` análogos al flow de mesh.
+- `EditorApplication::handlePrefabDrop` instancia copiando Transform/Mesh/Light/RigidBody (resolviendo paths a ids), agrega `PrefabLinkComponent` y selecciona la nueva entidad. Tag con sufijo numérico.
+- `tryOpenProjectPath` reaplica `PrefabLinkComponent` cuando una `SavedEntity` viene con `prefabPath` no vacío al cargar el `.moodmap`.
+- Schema bump: `k_MoodmapFormatVersion` 4 → 5. Backward-compat: archivos v4 sin `prefab_path` se siguen leyendo (campo opcional).
+- Tests: `test_prefab_serializer.cpp` (5 casos round-trip + 2 de `AssetManager::loadPrefab`). Suite total **113 / 493** (antes 106 / 454).
+- Sample asset: `assets/prefabs/sample_light.moodprefab` para validar el flow sin pasar por el dialog.
+
+**Fix reactivo del smoke test (incluido en el hito):**
+- `pfd::save_file` para prefabs no mostraba el diálogo en Windows si el `default_path` tenía forward slashes (de `generic_string()`) o caracteres inválidos en el filename (tags como `Mesh_meshes/pyramid.obj_1` con `/`). `handleNewProject` no tenía el bug porque pasa solo el directorio; el handler de prefab pasa `dir + filename`. Fix: sanitizar el filename + usar `string()` (separadores nativos) en lugar de `generic_string()`.
+
+**Siguiente paso tras completarlo:** Hito 15 — Skybox, fog, post-procesado. Cubemap textures, fog exponencial/lineal, primer pase de post-procesado (tonemapping placeholder + bloom toggle). Plan en `docs/PLAN_HITO15.md`.
+
+### Pendientes menores detectados en Hito 14
+
+- **Propagación bidireccional prefab ↔ instancia** (revert / apply overrides). El link queda persistido pero la UX de "actualizar prefab desde instancia" o "reset overrides" no existe. **Trigger:** hito dedicado o cuando aparezca un workflow real iterativo sobre prefabs.
+- **Nested prefabs** (un prefab que contiene otro prefab como entity hija). Bloqueado por la falta de `ParentComponent`/`ChildrenComponent` en el ECS. **Trigger:** post-Hito 14, junto con la jerarquía padre/hijo en `TransformComponent`.
+- **Drop de prefab sobre entidad existente reemplaza componentes**. **Trigger:** workflow real "swap mesh by prefab" sobre N props.
+- **Prefab variants** (Unity-style). **Trigger:** si la cantidad de prefabs casi-iguales se vuelve inmanejable.
+- **Thumbnails 3D del prefab en el AssetBrowser**. Pendiente arrastrado desde Hito 10 (también pedido para meshes). **Trigger:** polish post-Hito 17 cuando los preview tengan más utilidad estética.
+- **Lua bindings** (`scene.instantiate("prefabs/x.moodprefab")`). **Trigger:** primer script gameplay que necesite spawn dinámico.
+- **Undo/Redo** del spawn de prefab. **Trigger:** Hito 22.

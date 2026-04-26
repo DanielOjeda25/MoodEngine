@@ -6,11 +6,15 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 13 cerrado, mergeado a `main` y publicado en origin.**
-Tag: `v0.13.0-hito13`.
-Verificado automático: suite doctest 106/454 pasando (+7 casos nuevos en `test_picking.cpp`), editor arranca sin warnings. Click en el viewport selecciona la entidad; gizmos de translate/rotate/scale aparecen sobre el pivote; hotkeys `W/E/R` cambian modo; un cuadrado blanco central en Scale permite escalar uniformemente; luces y audios son visibles como iconos 2D y pickables. Iconos + gizmos solo en Editor Mode — ocultos en Play.
+**Hito 14 cerrado, mergeado a `main` y publicado en origin.**
+Tag: `v0.14.0-hito14`.
+Verificado automático: suite doctest 113/493 pasando (+7 casos en `test_prefab_serializer.cpp` cubriendo round-trip + cache + manejo de errores). Editor arranca sin warnings, `AssetManager: prefab 'vacio' generado en slot 0` aparece en el log. Verificado por el dev a ojo: select una entidad → `Archivo > Guardar como prefab…` → diálogo nativo aparece prellenado → click Guardar → log `Prefab guardado: …` + AssetBrowser refresca con sección Prefabs → drag al Viewport sobre tile → instancia spawnea con todos los componentes copiados → Ctrl+S + Cerrar + Reabrir preserva el `PrefabLinkComponent`.
 
-**Próximo paso:** Hito 14 — Prefabs. Formato `.moodprefab` para guardar templates de entidades (con componentes + hijos), instanciación desde el AssetBrowser, override local. Plan en `docs/PLAN_HITO14.md`.
+**Próximo paso:** Hito 15 — Skybox, fog, post-procesado. Cubemap textures, fog lineal/exponencial, primer pase de post-procesado (tonemapping placeholder + bloom toggle). Plan en `docs/PLAN_HITO15.md`.
+
+### Hito 13 (anterior, ya cerrado)
+Tag: `v0.13.0-hito13`.
+Suite 106/454. Click en el viewport selecciona la entidad; gizmos de translate/rotate/scale aparecen sobre el pivote; hotkeys `W/E/R` cambian modo; iconos 2D para luces/audios pickables; gizmos + iconos solo en Editor Mode.
 
 ### Hito 12 (anterior, ya cerrado)
 Tag: `v0.12.0-hito12`.
