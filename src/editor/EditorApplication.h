@@ -137,6 +137,21 @@ private:
     ///        puede proceder, `false` si hay que abortarla.
     bool confirmDiscardChanges();
 
+    // Hito 16 refactor: handlers de spawn demos (menu Ayuda) y drops
+    // del viewport. Implementaciones en `DemoSpawners.cpp`. Cada uno
+    // hace su propio `consume*Request` y, si hay request pendiente,
+    // crea/edita la entidad correspondiente. No-op si la condicion no
+    // se cumple (sin scene, etc.).
+    void processSpawnRotatorRequest();
+    void processSpawnAudioSourceRequest();
+    void processSpawnPointLightRequest();
+    void processSpawnPhysicsBoxRequest();
+    void processSpawnEnvironmentRequest();
+    void processSavePrefabRequest();
+    void processViewportTextureDrop();
+    void processViewportMeshDrop();
+    void processViewportPrefabDrop();
+
     /// @brief Lee `<cwd>/.mood/editor_state.json` si existe:
     ///        - preferencias (debugDraw, etc.)
     ///        - lista de proyectos recientes
@@ -190,6 +205,14 @@ private:
     EditorCamera m_editorCamera{45.0f, 30.0f, 30.0f};
     FpsCamera m_playCamera{glm::vec3(-4.5f, 1.6f, 7.5f), -90.0f, 0.0f};
     EditorMode m_mode = EditorMode::Editor;
+
+    // Dimensiones del AABB del jugador (0.6 x 1.8 x 0.6 m). Centrado en la
+    // posicion de la camara FPS. Escala SI realista: una persona promedio.
+    // El half-extent 0.3 m es muy superior al near clipping plane (0.1 m)
+    // asi que no hay riesgo de que el frustum atraviese los muros al pegarse.
+    // Static constexpr en el header para que tanto `updateCameras` como
+    // `renderSceneToViewport` (en archivos separados) lo compartan.
+    static constexpr glm::vec3 k_playerHalfExtents{0.3f, 0.9f, 0.3f};
 
     // Mapa jugable (Hito 4). Se renderiza centrado en el origen del mundo;
     // tileSize=3m (escala SI realista, Hito 5 Bloque 0). Se reemplaza al
