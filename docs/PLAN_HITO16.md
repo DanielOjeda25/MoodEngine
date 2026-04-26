@@ -41,6 +41,34 @@ No-goals: cascadas (CSM) — quedan como pendiente si entran fácil pero el plan
 - [ ] Catálogo de skyboxes (skyboxPath del EnvironmentComponent ya persiste pero no se aplica) — diferido si no entra natural acá.
 - [ ] Anti-aliasing (FXAA / MSAA): cuando los jaggies del shadow map y la geometría se sumen, puede que sea natural agregarlo aquí.
 
+## Bloque 0.5 — Refactor de `EditorApplication.cpp` (deuda técnica acumulada)
+
+> **Motivación:** `EditorApplication.cpp` llegó a ~2011 líneas tras Hito 15
+> (5x más grande que el siguiente archivo). Todos los demás archivos del
+> proyecto están bajo 400 líneas. El Hito 16 va a tocar `renderSceneToViewport`
+> intensivamente para meter el shadow pass; conviene partirlo antes para que
+> el diff del shadow mapping sea legible y los bugs futuros más fáciles de
+> ubicar.
+
+- [ ] Extraer `src/editor/EditorRenderPass.{h,cpp}`: `renderSceneToViewport`,
+      `applyEnvironmentFromScene`, scene-driven loop, post-process pass call.
+      Recibe referencias a los miembros que necesita (renderer, FBs, scene,
+      assetManager, fog/exposure/tonemap).
+- [ ] Extraer `src/editor/EditorProjectActions.{h,cpp}`:
+      `handleNewProject/OpenProject/Save/SaveAs/CloseProject`,
+      `tryOpenProjectPath`, `confirmDiscardChanges`, `addToRecentProjects`,
+      `handleSavePrefab*`. Funciones libres que toman EditorApplication& o
+      una struct con punteros a los miembros relevantes.
+- [ ] Extraer `src/editor/DemoSpawners.{h,cpp}`: todos los handlers de
+      `Ayuda > Agregar X` (rotador, audio, point light, physics box,
+      environment). Como funciones libres que reciben Scene& + AssetManager&
+      + EditorUI&.
+- [ ] `EditorApplication.cpp` queda con ctor/dtor + main loop + glue
+      (consumeXxxRequest + delegacion a los modulos extraidos).
+
+Objetivo de tamaño: ningun archivo > 800 lineas tras el split. Hoy:
+EditorApplication.cpp 2011 → ~600 esperable.
+
 ## Bloque 1 — Depth-only framebuffer + shader
 
 - [ ] `OpenGLFramebuffer` gana `Format::Depth` (o un nuevo `OpenGLDepthFramebuffer`): textura `GL_DEPTH_COMPONENT24` + sin color attachment + `glDrawBuffer(GL_NONE) / glReadBuffer(GL_NONE)`.
