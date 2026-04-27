@@ -164,12 +164,29 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
             if (se.meshRenderer.has_value()) {
                 const auto& mr = *se.meshRenderer;
                 const MeshAssetId meshId = m_assetManager->loadMesh(mr.meshPath);
-                std::vector<TextureAssetId> mats;
+                // Hito 17 upgrader: el campo `materials` puede contener
+                // paths de `.material` (v7) o paths de texturas (v6 con
+                // back-compat). Detectamos por extension: si termina en
+                // `.material` cargamos como material; si no, lo tratamos
+                // como textura y la envolvemos en un material wrapper.
+                std::vector<MaterialAssetId> mats;
                 mats.reserve(mr.materials.size());
-                for (const auto& texPath : mr.materials) {
-                    mats.push_back(texPath.empty()
-                        ? m_assetManager->missingTextureId()
-                        : m_assetManager->loadTexture(texPath));
+                for (const auto& path : mr.materials) {
+                    if (path.empty()) {
+                        mats.push_back(m_assetManager->missingMaterialId());
+                        continue;
+                    }
+                    const bool isMaterial =
+                        path.size() >= 9 &&
+                        path.compare(path.size() - 9, 9, ".material") == 0;
+                    if (isMaterial) {
+                        mats.push_back(m_assetManager->loadMaterial(path));
+                    } else {
+                        const TextureAssetId tex =
+                            m_assetManager->loadTexture(path);
+                        mats.push_back(
+                            m_assetManager->loadMaterialFromTexture(tex));
+                    }
                 }
                 e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
             }

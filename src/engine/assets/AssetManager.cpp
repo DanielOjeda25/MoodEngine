@@ -6,9 +6,13 @@
 #include "engine/audio/AudioClip.h"
 #include "engine/render/IMesh.h"
 #include "engine/render/ITexture.h"
+#include "engine/render/MaterialAsset.h"
 #include "engine/render/MeshAsset.h"
 #include "engine/serialization/PrefabSerializer.h"
 
+#include <nlohmann/json.hpp>
+
+#include <fstream>
 #include <stdexcept>
 #include <utility>
 
@@ -26,6 +30,8 @@ constexpr const char* k_missingMeshPath    = "__missing_cube";
 // AssetManager genera un SavedPrefab vacio para que `getPrefab(0)` no sea
 // null.
 constexpr const char* k_emptyPrefabPath    = "__empty_prefab";
+// Sentinela del material fallback (slot 0). Albedo blanco, mate medio.
+constexpr const char* k_defaultMaterialPath = "__default_material";
 
 /// @brief Mesh stub sin GL — permite que los tests construyan AssetManager
 ///        sin contexto OpenGL (default de MeshFactory). Produccion siempre
@@ -148,6 +154,23 @@ AssetManager::AssetManager(std::string rootDir,
         m_prefabCache.emplace(k_emptyPrefabPath, missingPrefabId());
     }
     Log::assets()->info("AssetManager: prefab 'vacio' generado en slot 0");
+
+    // ---- Slot 0 material: default (Hito 17). Albedo blanco, mate medio.
+    //      Cualquier MeshRenderer sin material asignado cae aca. Render
+    //      con este material se ve dieléctrico mate (similar al Phong
+    //      previo con uShininess=32).
+    {
+        auto def = std::make_unique<MaterialAsset>();
+        def->logicalPath = k_defaultMaterialPath;
+        def->albedoTint = glm::vec3(1.0f);
+        def->metallicMult  = 0.0f;
+        def->roughnessMult = 0.5f;
+        def->aoMult = 1.0f;
+        m_materials.emplace_back(std::move(def));
+        m_materialPaths.emplace_back(k_defaultMaterialPath);
+        m_materialCache.emplace(k_defaultMaterialPath, missingMaterialId());
+    }
+    Log::assets()->info("AssetManager: material default generado en slot 0");
 }
 
 AssetManager::~AssetManager() = default;
@@ -384,6 +407,125 @@ std::string AssetManager::prefabPathOf(PrefabAssetId id) const {
         return m_prefabPaths[missingPrefabId()];
     }
     return m_prefabPaths[id];
+}
+
+// ----------------------------------------------------------------------------
+// Material (Hito 17)
+// ----------------------------------------------------------------------------
+
+MaterialAssetId AssetManager::loadMaterial(std::string_view logicalPath) {
+    const std::string key(logicalPath);
+    if (auto it = m_materialCache.find(key); it != m_materialCache.end()) {
+        return it->second;
+    }
+
+    const auto fs = m_vfs.resolve(logicalPath);
+    if (fs.empty()) {
+        Log::assets()->warn(
+            "AssetManager: material path '{}' rechazado por VFS. Fallback al default.",
+            logicalPath);
+        m_materialCache.emplace(key, missingMaterialId());
+        return missingMaterialId();
+    }
+
+    std::ifstream in(fs);
+    if (!in.good()) {
+        Log::assets()->warn(
+            "AssetManager: no se pudo abrir material '{}'. Fallback al default.",
+            fs.generic_string());
+        m_materialCache.emplace(key, missingMaterialId());
+        return missingMaterialId();
+    }
+
+    nlohmann::json j;
+    try {
+        in >> j;
+    } catch (const std::exception& e) {
+        Log::assets()->warn(
+            "AssetManager: material '{}' no es JSON valido: {}. Fallback al default.",
+            fs.generic_string(), e.what());
+        m_materialCache.emplace(key, missingMaterialId());
+        return missingMaterialId();
+    }
+
+    auto mat = std::make_unique<MaterialAsset>();
+    mat->logicalPath = key;
+
+    // Texturas opcionales: si el path esta presente y no vacio, se carga
+    // (puede caer al missing si el archivo no existe). Sin path => slot 0
+    // (textura "no asignada", el shader usa los multiplicadores escalares).
+    auto loadTexField = [&](const char* field) -> TextureAssetId {
+        if (!j.contains(field)) return 0;
+        const auto& v = j.at(field);
+        if (!v.is_string()) return 0;
+        const std::string p = v.get<std::string>();
+        if (p.empty()) return 0;
+        return loadTexture(p);
+    };
+    mat->albedo            = loadTexField("albedo");
+    mat->metallicRoughness = loadTexField("metallic_roughness");
+    mat->normal            = loadTexField("normal");
+    mat->ao                = loadTexField("ao");
+
+    // Multiplicadores escalares con defaults razonables.
+    if (j.contains("albedo_tint") && j.at("albedo_tint").is_array()
+        && j.at("albedo_tint").size() == 3) {
+        mat->albedoTint = glm::vec3(
+            j.at("albedo_tint")[0].get<f32>(),
+            j.at("albedo_tint")[1].get<f32>(),
+            j.at("albedo_tint")[2].get<f32>());
+    }
+    if (j.contains("metallic"))  mat->metallicMult  = j.at("metallic").get<f32>();
+    if (j.contains("roughness")) mat->roughnessMult = j.at("roughness").get<f32>();
+    if (j.contains("ao"))        mat->aoMult        = j.at("ao").get<f32>();
+
+    const MaterialAssetId id = static_cast<MaterialAssetId>(m_materials.size());
+    m_materials.push_back(std::move(mat));
+    m_materialPaths.push_back(key);
+    m_materialCache.emplace(key, id);
+    Log::assets()->info("AssetManager: cargado material {} -> id {}", logicalPath, id);
+    return id;
+}
+
+MaterialAssetId AssetManager::loadMaterialFromTexture(TextureAssetId textureId) {
+    // Cache key sintetica: `__tex#<id>`. Como los paths con `#` no son
+    // validos en el VFS (solo permitimos paths logicos relativos), no
+    // colisionan con materiales reales que cargan por path.
+    const std::string key = "__tex#" + std::to_string(textureId);
+    if (auto it = m_materialCache.find(key); it != m_materialCache.end()) {
+        return it->second;
+    }
+
+    auto mat = std::make_unique<MaterialAsset>();
+    mat->logicalPath = key;
+    mat->albedo = textureId;
+    // Mate completo: aproxima el shading Blinn-Phong del Hito 11 con un
+    // PBR dieléctrico de roughness alta (los archivos v6 fueron creados
+    // con texturas mate, asi se preserva la apariencia).
+    mat->albedoTint    = glm::vec3(1.0f);
+    mat->metallicMult  = 0.0f;
+    mat->roughnessMult = 1.0f;
+    mat->aoMult        = 1.0f;
+
+    const MaterialAssetId id = static_cast<MaterialAssetId>(m_materials.size());
+    m_materials.push_back(std::move(mat));
+    m_materialPaths.push_back(key);
+    m_materialCache.emplace(key, id);
+    return id;
+}
+
+MaterialAsset* AssetManager::getMaterial(MaterialAssetId id) const {
+    if (id >= m_materials.size()) {
+        return m_materials[missingMaterialId()].get();
+    }
+    return m_materials[id].get();
+}
+
+std::string AssetManager::materialPathOf(MaterialAssetId id) const {
+    if (id >= m_materialPaths.size()) {
+        return m_materialPaths[missingMaterialId()];
+    }
+    return m_materialPaths[id];
 }
 
 } // namespace Mood

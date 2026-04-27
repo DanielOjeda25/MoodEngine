@@ -58,27 +58,29 @@ struct TransformComponent {
 /// @brief Indica que la entidad se dibuja con un mesh + materiales asociados.
 ///        `mesh` es un id resolvible via `AssetManager::getMesh`; si el id es
 ///        invalido, getMesh() cae al slot 0 (cubo primitivo).
-///        `materials` tiene una `TextureAssetId` por submesh del MeshAsset; si
-///        es mas corto que el numero de submeshes, los submeshes restantes
-///        usan el slot 0 (missing.png).
+///        `materials` tiene un `MaterialAssetId` por submesh del MeshAsset.
+///        Si es mas corto que el numero de submeshes, los submeshes
+///        restantes usan el slot 0 (default material).
 ///
 ///        Antes del Hito 10 este componente tenia `IMesh* mesh + TextureAssetId
-///        texture`. La migracion a ids permite (a) persistirlo en .moodmap
-///        (paths logicos estables), (b) soportar modelos importados con
-///        multiples submeshes, (c) swapear el mesh en el Inspector sin tocar
-///        el resto de la entidad.
+///        texture`. Hito 10: migrado a ids para persistir en .moodmap.
+///        Hito 17: el slot pasa de `TextureAssetId` (textura sola) a
+///        `MaterialAssetId` (material PBR completo). El upgrader del
+///        SceneSerializer envuelve cada texture_path viejo (.moodmap v6)
+///        en un material auto-generado al cargar.
 struct MeshRendererComponent {
     MeshAssetId mesh = 0;                       // 0 = cubo primitivo (fallback)
-    std::vector<TextureAssetId> materials;      // 1 textura por submesh
+    std::vector<MaterialAssetId> materials;     // 1 material por submesh
 
     MeshRendererComponent() = default;
-    MeshRendererComponent(MeshAssetId m, TextureAssetId t) : mesh(m), materials{t} {}
-    MeshRendererComponent(MeshAssetId m, std::vector<TextureAssetId> mats)
+    MeshRendererComponent(MeshAssetId m, MaterialAssetId mat)
+        : mesh(m), materials{mat} {}
+    MeshRendererComponent(MeshAssetId m, std::vector<MaterialAssetId> mats)
         : mesh(m), materials(std::move(mats)) {}
 
-    /// @brief Devuelve la textura del submesh i, o el slot 0 (missing) si
+    /// @brief Devuelve el material del submesh i, o el slot 0 (default) si
     ///        la lista es mas corta.
-    TextureAssetId materialOrMissing(usize submeshIndex) const {
+    MaterialAssetId materialOrMissing(usize submeshIndex) const {
         return (submeshIndex < materials.size()) ? materials[submeshIndex] : 0;
     }
 };

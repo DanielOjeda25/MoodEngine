@@ -777,10 +777,15 @@ void EditorApplication::rebuildSceneFromMap() {
             t.scale = glm::vec3(tileSize);
 
             // Mesh id 0 = cubo primitivo generado por el AssetManager.
-            // La textura del tile va como unico material (1 submesh = 1 textura).
+            // Hito 17: el tile se renderiza con un material auto-generado a
+            // partir de la textura del tile (envuelve la textura en un
+            // MaterialAsset mate dieléctrico para que el shader PBR la
+            // muestre similar al lit Phong anterior).
+            const MaterialAssetId tileMat =
+                m_assetManager->loadMaterialFromTexture(
+                    m_map.tileTextureAt(x, y));
             e.addComponent<MeshRendererComponent>(
-                m_assetManager->missingMeshId(),
-                m_map.tileTextureAt(x, y));
+                m_assetManager->missingMeshId(), tileMat);
 
             // Hito 12: cada tile solido tambien es un static body en Jolt
             // (Box de tileSize/2 en los 3 ejes). updateRigidBodies materializa
@@ -844,14 +849,18 @@ void EditorApplication::updateTileEntity(u32 tileX, u32 tileY, TextureAssetId te
         if (!static_cast<bool>(found) && tag.name == name) found = e;
     });
 
+    // Hito 17: el slot por submesh es ahora un MaterialAssetId. Para drops
+    // de textura, generamos un material wrapper auto.
+    const MaterialAssetId matId =
+        m_assetManager->loadMaterialFromTexture(texture);
     if (static_cast<bool>(found)) {
         if (found.hasComponent<MeshRendererComponent>()) {
             auto& mr = found.getComponent<MeshRendererComponent>();
-            if (mr.materials.empty()) mr.materials.push_back(texture);
-            else mr.materials[0] = texture;
+            if (mr.materials.empty()) mr.materials.push_back(matId);
+            else mr.materials[0] = matId;
         } else {
             found.addComponent<MeshRendererComponent>(
-                m_assetManager->missingMeshId(), texture);
+                m_assetManager->missingMeshId(), matId);
         }
         return;
     }
@@ -868,7 +877,7 @@ void EditorApplication::updateTileEntity(u32 tileX, u32 tileY, TextureAssetId te
         origin.z + (static_cast<f32>(tileY) + 0.5f) * tileSize);
     t.scale = glm::vec3(tileSize);
     e.addComponent<MeshRendererComponent>(
-        m_assetManager->missingMeshId(), texture);
+        m_assetManager->missingMeshId(), matId);
 }
 
 void EditorApplication::updateWindowTitle() {

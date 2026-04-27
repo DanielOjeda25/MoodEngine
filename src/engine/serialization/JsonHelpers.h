@@ -45,7 +45,13 @@ namespace Mood {
 // v6 (Hito 15): SavedEntity gana campo opcional `environment` con
 // {skybox_path, fog_*, exposure, tonemap_mode}. Archivos v5 sin
 // `environment` se leen igual.
-constexpr int k_MoodmapFormatVersion = 6;
+// v7 (Hito 17): la lista `mesh_renderer.materials` cambia de paths de
+// textura a paths de material (`.material` JSON). Para back-compat, los
+// archivos v6 se leen detectando que sus paths terminan en una extension
+// de imagen conocida (.png/.jpg/...) y envolviendo cada textura en un
+// material auto-generado al cargar (no se reescribe el archivo). El
+// upgrader vive en `EntitySerializer::parseEntityFromJson`.
+constexpr int k_MoodmapFormatVersion = 7;
 constexpr int k_MoodprojFormatVersion = 1;
 
 /// @brief Verifica que la version declarada en un archivo sea legible.

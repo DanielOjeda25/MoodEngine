@@ -36,7 +36,9 @@ void EditorApplication::processSpawnRotatorRequest() {
     t.position = glm::vec3(0.0f, 4.0f, 0.0f);
     t.scale = glm::vec3(1.0f);
     // Usa el cubo fallback del AssetManager (slot 0) como mesh del rotador.
-    r.addComponent<MeshRendererComponent>(m_assetManager->missingMeshId(), m_wallTextureId);
+    const MaterialAssetId rotMat =
+        m_assetManager->loadMaterialFromTexture(m_wallTextureId);
+    r.addComponent<MeshRendererComponent>(m_assetManager->missingMeshId(), rotMat);
     r.addComponent<ScriptComponent>(std::string{"assets/scripts/rotator.lua"});
     Log::editor()->info("Spawned rotador demo en (0, 4, 0)");
 }
@@ -47,8 +49,10 @@ void EditorApplication::processSpawnPhysicsBoxRequest() {
     auto& t = box.getComponent<TransformComponent>();
     t.position = glm::vec3(0.0f, 6.0f, 0.0f);
     t.scale    = glm::vec3(1.0f);
+    const MaterialAssetId boxMat =
+        m_assetManager->loadMaterialFromTexture(m_wallTextureId);
     box.addComponent<MeshRendererComponent>(
-        m_assetManager->missingMeshId(), m_wallTextureId);
+        m_assetManager->missingMeshId(), boxMat);
     box.addComponent<RigidBodyComponent>(
         RigidBodyComponent::Type::Dynamic,
         RigidBodyComponent::Shape::Box,
@@ -86,6 +90,10 @@ void EditorApplication::processSpawnShadowDemoRequest() {
     // loadTexture deberia ser un cache hit.
     const TextureAssetId gridTex  = m_assetManager->loadTexture("textures/grid.png");
     const TextureAssetId brickTex = m_assetManager->loadTexture("textures/brick.png");
+    const MaterialAssetId gridMat  =
+        m_assetManager->loadMaterialFromTexture(gridTex);
+    const MaterialAssetId brickMat =
+        m_assetManager->loadMaterialFromTexture(brickTex);
     const MeshAssetId    cube     = m_assetManager->missingMeshId(); // cubo primitivo
 
     // 1) Piso plano grande (cubo escalado y=0.1). Centrado en el origen, se
@@ -96,7 +104,7 @@ void EditorApplication::processSpawnShadowDemoRequest() {
         auto& t = floor.getComponent<TransformComponent>();
         t.position = glm::vec3(0.0f, 0.05f, 0.0f);
         t.scale    = glm::vec3(20.0f, 0.1f, 20.0f);
-        floor.addComponent<MeshRendererComponent>(cube, gridTex);
+        floor.addComponent<MeshRendererComponent>(cube, gridMat);
     }
 
     // 2) Columna alta (cubo 1x4x1) que proyecta una sombra alargada bien
@@ -106,7 +114,7 @@ void EditorApplication::processSpawnShadowDemoRequest() {
         auto& t = col.getComponent<TransformComponent>();
         t.position = glm::vec3(2.0f, 2.0f, 0.0f);
         t.scale    = glm::vec3(1.0f, 4.0f, 1.0f);
-        col.addComponent<MeshRendererComponent>(cube, brickTex);
+        col.addComponent<MeshRendererComponent>(cube, brickMat);
     }
 
     // 3) Sol direccional con castShadows. Direccion oblicua (no vertical) para
@@ -313,9 +321,9 @@ void EditorApplication::processViewportMeshDrop() {
         origin.y + 0.5f * tileSize, // sobre el piso, altura = 0.5 tile
         origin.z + (static_cast<f32>(hit.tileY) + 0.5f) * tileSize);
     t.scale = glm::vec3(1.0f);
-    // Material por defecto: slot 0 (missing.png). El usuario puede dropear
-    // texturas encima despues.
-    e.addComponent<MeshRendererComponent>(meshId, TextureAssetId{0});
+    // Material por defecto: slot 0 (default material). El usuario puede
+    // dropear texturas/materiales encima despues.
+    e.addComponent<MeshRendererComponent>(meshId, MaterialAssetId{0});
     Log::editor()->info("Drop mesh '{}' -> tile ({}, {})",
                          meshName, hit.tileX, hit.tileY);
     markDirty();
@@ -364,12 +372,14 @@ void EditorApplication::processViewportPrefabDrop() {
     if (sp->root.meshRenderer.has_value()) {
         const auto& mr = *sp->root.meshRenderer;
         const MeshAssetId meshId = m_assetManager->loadMesh(mr.meshPath);
-        std::vector<TextureAssetId> mats;
+        // Hito 17: cada slot del prefab persiste como `material_path` (puede
+        // ser un .material o vacio). Empty -> default material slot 0.
+        std::vector<MaterialAssetId> mats;
         mats.reserve(mr.materials.size());
-        for (const auto& texPath : mr.materials) {
-            mats.push_back(texPath.empty()
-                ? m_assetManager->missingTextureId()
-                : m_assetManager->loadTexture(texPath));
+        for (const auto& matPath : mr.materials) {
+            mats.push_back(matPath.empty()
+                ? m_assetManager->missingMaterialId()
+                : m_assetManager->loadMaterial(matPath));
         }
         e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
     }

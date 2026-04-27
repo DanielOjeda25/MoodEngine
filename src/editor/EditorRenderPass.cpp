@@ -19,6 +19,7 @@
 #include "core/math/AABB.h"
 #include "engine/render/IRenderer.h"
 #include "engine/render/ITexture.h"
+#include "engine/render/MaterialAsset.h"
 #include "engine/render/MeshAsset.h"
 #include "engine/render/opengl/OpenGLDebugRenderer.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
@@ -227,9 +228,16 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                 for (usize i = 0; i < asset->submeshes.size(); ++i) {
                     const auto& sub = asset->submeshes[i];
                     if (sub.mesh == nullptr) continue;
-                    // Fallback slot 0 (missing.png) si el array es mas corto
-                    // que el numero de submeshes.
-                    const TextureAssetId tex = mr.materialOrMissing(sub.materialIndex);
+                    // Hito 17: el slot por submesh es ahora un MaterialAssetId.
+                    // Bloque 1 todavia usa el lit shader Blinn-Phong, asi que
+                    // bindeamos solo el albedo del material. El switch al
+                    // shader PBR ocurre en el Bloque 2.
+                    const MaterialAssetId matId =
+                        mr.materialOrMissing(sub.materialIndex);
+                    const MaterialAsset* mat = m_assetManager->getMaterial(matId);
+                    const TextureAssetId tex = (mat != nullptr)
+                        ? mat->albedo
+                        : m_assetManager->missingTextureId();
                     m_assetManager->getTexture(tex)->bind(0);
                     m_renderer->drawMesh(*sub.mesh, *m_litShader);
                 }

@@ -53,6 +53,7 @@ std::filesystem::path tempPath(const char* suffix) {
 TEST_CASE("PrefabSerializer: round-trip de entidad con MeshRenderer + Light") {
     AssetManager assets("assets", nullFactory());
     const TextureAssetId brick = assets.loadTexture("textures/brick.png");
+    const MaterialAssetId brickMat = assets.loadMaterialFromTexture(brick);
 
     Scene scene;
     Entity e = scene.createEntity("Antorcha");
@@ -61,7 +62,7 @@ TEST_CASE("PrefabSerializer: round-trip de entidad con MeshRenderer + Light") {
     t.rotationEuler = glm::vec3(0.0f, 90.0f, 0.0f);
     t.scale = glm::vec3(1.5f);
     e.addComponent<MeshRendererComponent>(MeshAssetId{0},
-        std::vector<TextureAssetId>{brick});
+        std::vector<MaterialAssetId>{brickMat});
     LightComponent lc{};
     lc.type      = LightComponent::Type::Point;
     lc.color     = glm::vec3(1.0f, 0.4f, 0.1f);

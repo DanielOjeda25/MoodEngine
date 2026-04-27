@@ -29,6 +29,7 @@ class AudioClip;
 class IMesh;
 class ITexture;
 struct MeshAsset;
+struct MaterialAsset;
 struct SavedPrefab;
 
 /// @brief Identificador estable de una textura dentro de un `AssetManager`.
@@ -51,6 +52,11 @@ using MeshAssetId = u32;
 ///        nunca devuelve null. Loadeo lazy: el `.moodprefab` se parsea al
 ///        invocar `loadPrefab`, no al escanear el directorio.
 using PrefabAssetId = u32;
+
+/// @brief Identificador estable de un MaterialAsset (Hito 17). Valor 0
+///        reservado para el "default material" (albedo blanco, metallic=0,
+///        roughness=0.5) — `getMaterial(0)` nunca es null.
+using MaterialAssetId = u32;
 
 class AssetManager {
 public:
@@ -192,6 +198,44 @@ public:
     /// @brief Cantidad de prefabs cacheados (incluye el slot 0).
     usize prefabCount() const { return m_prefabs.size(); }
 
+    // ---- Material (Hito 17) ----
+
+    /// @brief Carga (o devuelve cacheado) un material por path logico
+    ///        (p.ej. "materials/brass.material"). En fallo devuelve
+    ///        `missingMaterialId()` (default material) y loguea al canal
+    ///        `assets`. Las texturas referenciadas se cargan via
+    ///        `loadTexture`.
+    MaterialAssetId loadMaterial(std::string_view logicalPath);
+
+    /// @brief Crea un material en runtime (sin tocar disco) que envuelve
+    ///        una unica textura albedo. Util para el upgrader del .moodmap
+    ///        v6 -> v7: cada `texture_path` viejo se envuelve en un
+    ///        material auto-generado para preservar la apariencia visual.
+    ///        El material tiene `metallicMult=0`, `roughnessMult=1` (mate
+    ///        completo) — el `lit.frag` PBR con esos parametros se ve
+    ///        practicamente identico al Blinn-Phong del Hito 11.
+    /// @param textureId Id de la textura albedo (puede ser 0 = missing).
+    /// @return Id de un MaterialAsset cacheado por `texture#<id>` (sin
+    ///         conflicto con paths logicos reales que terminan en .material).
+    MaterialAssetId loadMaterialFromTexture(TextureAssetId textureId);
+
+    /// @brief Devuelve el MaterialAsset del id. Nunca null: ids invalidos
+    ///        caen al slot 0 (default material).
+    MaterialAsset* getMaterial(MaterialAssetId id) const;
+
+    /// @brief Id del default material (slot 0). Albedo blanco, metallic=0,
+    ///        roughness=0.5.
+    MaterialAssetId missingMaterialId() const { return 0; }
+
+    /// @brief Path logico con el que se cargo el material (para serializar).
+    ///        Slot 0 devuelve el sentinela `"__default_material"` (no existe
+    ///        en disco). Materiales generados via `loadMaterialFromTexture`
+    ///        tienen path interno tipo `"__tex#<id>"`.
+    std::string materialPathOf(MaterialAssetId id) const;
+
+    /// @brief Cantidad de materiales cacheados (incluye slot 0).
+    usize materialCount() const { return m_materials.size(); }
+
 private:
     VFS m_vfs;
     TextureFactory m_textureFactory;
@@ -216,6 +260,11 @@ private:
     std::unordered_map<std::string, PrefabAssetId> m_prefabCache;
     std::vector<std::unique_ptr<SavedPrefab>> m_prefabs;
     std::vector<std::string> m_prefabPaths; // paralelo a m_prefabs
+
+    // Material (Hito 17). [0] = default material (albedo blanco, mate).
+    std::unordered_map<std::string, MaterialAssetId> m_materialCache;
+    std::vector<std::unique_ptr<MaterialAsset>> m_materials;
+    std::vector<std::string> m_materialPaths; // paralelo a m_materials
 };
 
 } // namespace Mood

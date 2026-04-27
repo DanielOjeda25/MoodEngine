@@ -177,6 +177,7 @@ TEST_CASE("SceneSerializer: save escribe un JSON parseable con los campos clave"
 TEST_CASE("SceneSerializer: round-trip entidades con MeshRenderer (Hito 10)") {
     AssetManager assets("assets", nullFactory());
     const TextureAssetId brick = assets.loadTexture("textures/brick.png");
+    const MaterialAssetId brickMat = assets.loadMaterialFromTexture(brick);
 
     // Scene con 2 entidades no-tile + una tile-like (que NO deberia
     // serializarse por el filtro de prefijo "Tile_").
@@ -188,11 +189,11 @@ TEST_CASE("SceneSerializer: round-trip entidades con MeshRenderer (Hito 10)") {
         ta.rotationEuler = glm::vec3(45.0f, 0.0f, 0.0f);
         ta.scale = glm::vec3(2.0f);
         a.addComponent<MeshRendererComponent>(
-            MeshAssetId{0}, std::vector<TextureAssetId>{brick, brick});
+            MeshAssetId{0}, std::vector<MaterialAssetId>{brickMat, brickMat});
 
         // Una tile-like que debe ser FILTRADA (solo por prefijo del tag).
         Entity t = scene.createEntity("Tile_0_0");
-        t.addComponent<MeshRendererComponent>(MeshAssetId{0}, TextureAssetId{0});
+        t.addComponent<MeshRendererComponent>(MeshAssetId{0}, MaterialAssetId{0});
 
         // Sin MeshRenderer: tambien filtrada (no tiene nada para serializar).
         Entity z = scene.createEntity("vacio");
@@ -217,6 +218,10 @@ TEST_CASE("SceneSerializer: round-trip entidades con MeshRenderer (Hito 10)") {
     // El mesh id 0 es el cubo fallback; path logico = "__missing_cube".
     CHECK(se.meshRenderer->meshPath == "__missing_cube");
     CHECK(se.meshRenderer->materials.size() == 2);
+    // Hito 17: el material auto-generado a partir de una textura se
+    // persiste como el path de la textura subyacente para back-compat
+    // con el .moodmap v6 (los archivos viejos siguen leyendose como
+    // wrappers en runtime; los nuevos no necesitan un .material explicito).
     CHECK(se.meshRenderer->materials[0] == "textures/brick.png");
 
     std::filesystem::remove(path);
@@ -284,6 +289,52 @@ TEST_CASE("SceneSerializer: archivo v1 (sin 'entities') se carga con lista vacia
     const auto r = SceneSerializer::load(path, assets);
     REQUIRE(r.has_value());
     CHECK(r->entities.empty());
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: v6 con texture path en 'materials' carga con upgrader (Hito 17)") {
+    // Simula un .moodmap v6 donde el campo `materials` del MeshRenderer
+    // tenia paths de TEXTURA, no de material. El SavedMeshRenderer del
+    // serializer es agnostico (es vector<string>); el upgrader que envuelve
+    // texturas en materiales auto-generados vive en EditorProjectActions
+    // (loadProject). Aca solo verificamos que el .moodmap v6 SE CARGA sin
+    // explotar y que el path queda como string en el SavedEntity.
+    const auto path = tempPath("v6_materials_as_textures.moodmap");
+    {
+        nlohmann::json j;
+        j["version"]  = 6; // pre-Hito 17
+        j["name"]     = "legacy_v6";
+        j["width"]    = 1;
+        j["height"]   = 1;
+        j["tileSize"] = 1.0f;
+        j["tiles"]    = nlohmann::json::array({
+            {{"type", "empty"}, {"texture", "textures/missing.png"}}
+        });
+        nlohmann::json je;
+        je["tag"] = "Mesh_v6";
+        je["transform"] = {
+            {"position", nlohmann::json::array({0.0f, 0.0f, 0.0f})},
+            {"rotationEuler", nlohmann::json::array({0.0f, 0.0f, 0.0f})},
+            {"scale", nlohmann::json::array({1.0f, 1.0f, 1.0f})}};
+        // Aca esta la prueba: `materials` con un PATH DE TEXTURA (sin
+        // `.material`). El upgrader del consumidor debe tratarlo como
+        // textura y envolverlo en un material wrapper.
+        je["mesh_renderer"] = {
+            {"mesh_path", "__missing_cube"},
+            {"materials", nlohmann::json::array({"textures/brick.png"})}};
+        j["entities"] = nlohmann::json::array({je});
+        std::ofstream out(path);
+        out << j.dump();
+    }
+    AssetManager assets("assets", nullFactory());
+    const auto r = SceneSerializer::load(path, assets);
+    REQUIRE(r.has_value());
+    REQUIRE(r->entities.size() == 1);
+    REQUIRE(r->entities[0].meshRenderer.has_value());
+    // El path se preserva tal cual en el SavedEntity (el upgrader vive
+    // en el consumidor que monta los componentes en una Scene real).
+    CHECK(r->entities[0].meshRenderer->materials.size() == 1);
+    CHECK(r->entities[0].meshRenderer->materials[0] == "textures/brick.png");
     std::filesystem::remove(path);
 }
 

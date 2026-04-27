@@ -6,6 +6,7 @@
 
 #include "engine/assets/AssetManager.h"
 #include "engine/render/ITexture.h"
+#include "engine/render/MaterialAsset.h"
 
 #include <stdexcept>
 #include <string>
@@ -136,4 +137,44 @@ TEST_CASE("AssetManager: si la factoria falla al cargar missing -> el ctor propa
     SpyFactory spy;
     spy.failPaths = {"missing.png"};
     CHECK_THROWS_AS(AssetManager("assets", wrap(spy)), std::runtime_error);
+}
+
+// --- Materiales (Hito 17) ---
+
+TEST_CASE("AssetManager: default material existe en slot 0") {
+    SpyFactory spy;
+    AssetManager am("assets", wrap(spy));
+    REQUIRE(am.materialCount() >= 1);
+    MaterialAsset* def = am.getMaterial(am.missingMaterialId());
+    REQUIRE(def != nullptr);
+    CHECK(def->logicalPath == "__default_material");
+    CHECK(def->albedo == 0); // sin textura asignada
+    CHECK(def->metallicMult == doctest::Approx(0.0f));
+    CHECK(def->roughnessMult == doctest::Approx(0.5f));
+}
+
+TEST_CASE("AssetManager: loadMaterialFromTexture envuelve la textura sin tocar disco") {
+    SpyFactory spy;
+    AssetManager am("assets", wrap(spy));
+    const TextureAssetId tex = am.loadTexture("textures/grid.png");
+    const MaterialAssetId m1 = am.loadMaterialFromTexture(tex);
+    CHECK(m1 != am.missingMaterialId());
+    // Cache: pedir el mismo wrapper devuelve el mismo id sin generar un
+    // material nuevo.
+    const MaterialAssetId m2 = am.loadMaterialFromTexture(tex);
+    CHECK(m1 == m2);
+
+    MaterialAsset* mat = am.getMaterial(m1);
+    REQUIRE(mat != nullptr);
+    CHECK(mat->albedo == tex);
+    CHECK(mat->metallicMult == doctest::Approx(0.0f));
+    CHECK(mat->roughnessMult == doctest::Approx(1.0f)); // mate completo
+}
+
+TEST_CASE("AssetManager: getMaterial con id invalido cae al default") {
+    SpyFactory spy;
+    AssetManager am("assets", wrap(spy));
+    MaterialAsset* mat = am.getMaterial(9999);
+    REQUIRE(mat != nullptr);
+    CHECK(mat == am.getMaterial(am.missingMaterialId()));
 }

@@ -1,6 +1,7 @@
 #include "engine/serialization/EntitySerializer.h"
 
 #include "engine/assets/AssetManager.h"
+#include "engine/render/MaterialAsset.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/serialization/JsonHelpers.h" // adapters glm::vec3 <-> json
@@ -25,9 +26,27 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         const auto& mr = entity.getComponent<MeshRendererComponent>();
         json jmr;
         jmr["mesh_path"] = assets.meshPathOf(mr.mesh);
+        // Hito 17 (v7): el campo `materials` ahora persiste paths de
+        // `.material`. Para materiales auto-generados desde una textura
+        // (path interno tipo `__tex#<id>`) reescribimos al path logico
+        // de la textura referenciada, asi un round-trip "drop textura,
+        // guardar, cargar" sigue funcionando sin requerir un .material
+        // explicito en disco. El loader detecta la extension al cargar.
         jmr["materials"] = json::array();
-        for (TextureAssetId texId : mr.materials) {
-            jmr["materials"].push_back(assets.pathOf(texId));
+        for (MaterialAssetId matId : mr.materials) {
+            std::string matPath = assets.materialPathOf(matId);
+            // Auto-generated material wrapper: persist the underlying
+            // texture path en su lugar (back-compat con escenas pre-PBR).
+            if (matPath.rfind("__tex#", 0) == 0) {
+                const MaterialAsset* m = assets.getMaterial(matId);
+                matPath = (m != nullptr)
+                    ? assets.pathOf(m->albedo)
+                    : std::string{};
+            } else if (matPath.rfind("__", 0) == 0) {
+                // Default material u otro sentinela: persistir como vacio.
+                matPath.clear();
+            }
+            jmr["materials"].push_back(matPath);
         }
         je["mesh_renderer"] = jmr;
     }
