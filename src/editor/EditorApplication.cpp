@@ -316,17 +316,62 @@ EditorApplication::EditorApplication() {
                     if (!project(t.position, sx, sy)) return;
 
                     if (needsIcon) {
-                        const ImU32 col = hasLight ? colLight : colAudio;
-                        const float r = 10.0f;
-                        dl->AddCircleFilled(ImVec2(sx, sy), r, col, 24);
-                        dl->AddCircle(ImVec2(sx, sy), r, colBorder, 24, 1.5f);
+                        const ImVec2 c(sx, sy);
                         if (hasLight) {
                             const auto& lc = e.getComponent<LightComponent>();
-                            if (lc.type == LightComponent::Type::Directional) {
-                                dl->AddLine(ImVec2(sx, sy - r + 1),
-                                             ImVec2(sx, sy + r - 1),
-                                             colBorder, 2.0f);
+                            // Estilo inspirado en Blender: el icono distingue
+                            // a simple vista entre Point (anillo con puntos)
+                            // y Sun (centro con rayos). Los outlines negros
+                            // mantienen legibilidad contra cielos claros.
+                            constexpr f32 kTwoPi = 6.28318530718f;
+                            if (lc.type == LightComponent::Type::Point) {
+                                const f32 rOuter = 11.0f;
+                                const f32 rDots  = 7.0f;
+                                const f32 rCore  = 2.5f;
+                                dl->AddCircle(c, rOuter, colLight, 24, 2.0f);
+                                dl->AddCircle(c, rOuter, colBorder, 24, 0.8f);
+                                for (int i = 0; i < 8; ++i) {
+                                    const f32 a = (f32)i * kTwoPi / 8.0f;
+                                    const ImVec2 p(c.x + std::cos(a) * rDots,
+                                                   c.y + std::sin(a) * rDots);
+                                    dl->AddCircleFilled(p, 1.6f, colLight, 8);
+                                }
+                                dl->AddCircleFilled(c, rCore, colLight, 12);
+                            } else { // Directional / Sun
+                                const f32 rCore     = 3.5f;
+                                const f32 rayInner  = 6.5f;
+                                const f32 rayOuter  = 11.0f;
+                                dl->AddCircleFilled(c, rCore, colLight, 16);
+                                dl->AddCircle(c, rCore, colBorder, 16, 0.8f);
+                                for (int i = 0; i < 8; ++i) {
+                                    const f32 a = (f32)i * kTwoPi / 8.0f
+                                                + kTwoPi / 16.0f; // offset 22.5
+                                    const ImVec2 p1(c.x + std::cos(a) * rayInner,
+                                                    c.y + std::sin(a) * rayInner);
+                                    const ImVec2 p2(c.x + std::cos(a) * rayOuter,
+                                                    c.y + std::sin(a) * rayOuter);
+                                    dl->AddLine(p1, p2, colBorder, 3.0f);
+                                    dl->AddLine(p1, p2, colLight,  1.8f);
+                                }
+                                // Linea de direccion: corta proyeccion del
+                                // vector lc.direction desde la posicion de
+                                // la entidad. Indica visualmente hacia donde
+                                // apunta el sol sin necesidad de gizmo.
+                                glm::vec3 dir = lc.direction;
+                                if (glm::length(dir) > 1e-4f) {
+                                    dir = glm::normalize(dir);
+                                    const glm::vec3 endW = t.position + dir * 2.0f;
+                                    f32 ex, ey;
+                                    if (project(endW, ex, ey)) {
+                                        dl->AddLine(c, ImVec2(ex, ey), colBorder, 3.0f);
+                                        dl->AddLine(c, ImVec2(ex, ey), colLight,  1.5f);
+                                    }
+                                }
                             }
+                        } else { // Audio
+                            const f32 r = 10.0f;
+                            dl->AddCircleFilled(c, r, colAudio, 24);
+                            dl->AddCircle(c, r, colBorder, 24, 1.5f);
                         }
                     }
 
@@ -338,12 +383,26 @@ EditorApplication::EditorApplication() {
 
             // --- 2) Gizmo (translate / rotate / scale) para la seleccion ---
 
-            // Hotkeys W/E/R estilo Unity. Ignorar si ImGui esta capturando
-            // texto (p.ej. un InputText del Inspector esta focuseado).
+            // Hotkeys W/E/R estilo Unity + `.` estilo Blender ("frame
+            // selected"). Ignorar si ImGui esta capturando texto (p.ej. un
+            // InputText del Inspector esta focuseado).
             if (!ImGui::GetIO().WantTextInput) {
                 if (ImGui::IsKeyPressed(ImGuiKey_W, false)) m_gizmoMode = GizmoMode::Translate;
                 if (ImGui::IsKeyPressed(ImGuiKey_E, false)) m_gizmoMode = GizmoMode::Rotate;
                 if (ImGui::IsKeyPressed(ImGuiKey_R, false)) m_gizmoMode = GizmoMode::Scale;
+                if (ImGui::IsKeyPressed(ImGuiKey_Period, false) &&
+                    selected && selected.hasComponent<TransformComponent>()) {
+                    const auto& tf = selected.getComponent<TransformComponent>();
+                    // Bounding sphere approx: para entidades con mesh,
+                    // usar la diagonal del scale como radio (cubrir cubos
+                    // y meshes razonables). Para Light/Audio sin mesh,
+                    // un radio chico para que el zoom sea cercano sin
+                    // pegarse al icono.
+                    const f32 r = selected.hasComponent<MeshRendererComponent>()
+                        ? glm::length(tf.scale) * 0.6f
+                        : 1.0f;
+                    m_editorCamera.focusOn(tf.position, std::max(r, 0.3f));
+                }
             }
 
             if (!selected || !selected.hasComponent<TransformComponent>()) return;

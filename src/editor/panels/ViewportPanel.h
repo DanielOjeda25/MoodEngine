@@ -42,6 +42,13 @@ public:
     ///        frame actual. Requisito para usar `mouseNdcX/Y`.
     bool imageHovered() const { return m_imageHovered; }
 
+    /// @brief `true` si hay un drag-and-drop activo de un asset compatible
+    ///        (textura / mesh / prefab) en este frame, este o no sobre el
+    ///        viewport. Lo usa el editor para mostrar el highlight cyan del
+    ///        tile bajo el cursor solo cuando hay algo que dropear, en lugar
+    ///        de constantemente.
+    bool assetDragActive() const { return m_assetDragActive; }
+
     /// @brief Coordenadas NDC del cursor dentro del area de la imagen,
     ///        rango [-1, 1], Y+ arriba (convencion OpenGL). Sin sentido si
     ///        `imageHovered()` es false. Usar con `pickTile()`.
@@ -141,6 +148,7 @@ private:
     bool m_imageHovered = false;
     float m_mouseNdcX = 0.0f;
     float m_mouseNdcY = 0.0f;
+    bool m_assetDragActive = false; // refrescado cada frame consultando ImGui
 
     TextureDrop m_pendingDrop{};
     MeshDrop m_pendingMeshDrop{};

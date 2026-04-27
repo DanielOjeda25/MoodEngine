@@ -30,6 +30,14 @@ public:
     glm::mat4 viewMatrix() const;
     glm::mat4 projectionMatrix(float aspectRatio) const;
 
+    /// @brief "Frame selected" estilo Blender (tecla `.`): apunta el target
+    ///        a `worldPos` y ajusta el radius para que un objeto del tamano
+    ///        `objectRadius` quede comodamente en cuadro. Mantiene yaw/pitch
+    ///        actuales para no desorientar al usuario. `objectRadius` puede
+    ///        venir del bounding sphere del mesh; para entidades sin mesh
+    ///        (Light/Audio) usar un default chico (~1.0).
+    void focusOn(const glm::vec3& worldPos, float objectRadius = 1.0f);
+
     float fovDeg() const { return m_fovDeg; }
 
 private:

@@ -70,6 +70,17 @@ glm::mat4 EditorCamera::viewMatrix() const {
     return glm::lookAt(position(), m_target, glm::vec3(0.0f, 1.0f, 0.0f));
 }
 
+void EditorCamera::focusOn(const glm::vec3& worldPos, float objectRadius) {
+    m_target = worldPos;
+    // Distancia para que `objectRadius` calce en el frustum vertical: el
+    // half-FOV vertical define el angulo y `radius / sin(halfFov)` es la
+    // distancia minima para que toda la esfera entre. Multiplicamos por 1.6
+    // para dejar margen visual, sin que el objeto ocupe toda la pantalla.
+    const float halfFov = glm::radians(m_fovDeg * 0.5f);
+    const float minDist = objectRadius / std::max(std::sin(halfFov), 1e-3f);
+    m_radius = std::clamp(minDist * 1.6f, k_minRadius, k_maxRadius);
+}
+
 glm::mat4 EditorCamera::projectionMatrix(float aspectRatio) const {
     if (aspectRatio <= 0.0f) {
         aspectRatio = 1.0f; // fallback para paneles colapsados

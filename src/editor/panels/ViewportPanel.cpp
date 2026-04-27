@@ -19,6 +19,20 @@ void ViewportPanel::onImGuiRender() {
     m_mouseNdcX = 0.0f;
     m_mouseNdcY = 0.0f;
 
+    // Detectar si hay un drag-drop activo de un asset compatible. ImGui
+    // expone el payload "actual" (no consumido) con `GetDragDropPayload()`;
+    // usamos su tipo para decidir si mostrar el highlight cyan del tile bajo
+    // el cursor en este frame. Sin drag activo el highlight no aparece, asi
+    // que mover la camara no muestra ningun cubo flotante.
+    m_assetDragActive = false;
+    if (const ImGuiPayload* p = ImGui::GetDragDropPayload(); p != nullptr) {
+        if (p->IsDataType("MOOD_TEXTURE_ASSET") ||
+            p->IsDataType("MOOD_MESH_ASSET") ||
+            p->IsDataType("MOOD_PREFAB_ASSET")) {
+            m_assetDragActive = true;
+        }
+    }
+
     if (!visible) return;
 
     // Quitar padding para que la imagen ocupe todo el panel.

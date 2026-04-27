@@ -274,12 +274,54 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         }
         hasDebugGeometry = true;
     }
-    if (hovered.hit) {
+    // El highlight cyan del tile solo aparece durante un drag activo de un
+    // asset compatible (textura / mesh / prefab). Antes se mostraba siempre
+    // que el cursor estuviera sobre la imagen — UX ruidosa al mover camara.
+    if (hovered.hit && m_ui.viewport().assetDragActive()) {
         const glm::vec3 hoverColor(0.2f, 0.9f, 1.0f); // cyan
         const AABB local = m_map.aabbOfTile(hovered.tileX, hovered.tileY);
         const AABB world{origin + local.min, origin + local.max};
         m_debugRenderer->drawAabb(world, hoverColor);
         hasDebugGeometry = true;
+    }
+
+    // Outline 3D de la entidad seleccionada (estilo Blender/Unity): 12
+    // aristas de un OBB (oriented bounding box) que sigue rotacion + escala
+    // del Transform. Para entidades con MeshRenderer asumimos que el mesh
+    // ocupa el cubo unitario [-0.5, 0.5]^3 en local space (cierto para los
+    // primitivos del Asset Manager y para los .obj importados ahora — habra
+    // que pasar el AABB del MeshAsset cuando los modelos no esten centrados).
+    // Para entidades sin mesh (Light/Audio) saltamos: el icono 2D ya muestra
+    // la seleccion con halo cyan en el overlay.
+    if (m_scene && m_mode == EditorMode::Editor) {
+        Entity sel = m_ui.selectedEntity();
+        if (sel && sel.hasComponent<TransformComponent>() &&
+            sel.hasComponent<MeshRendererComponent>()) {
+            const auto& tf = sel.getComponent<TransformComponent>();
+            const glm::mat4 model = tf.worldMatrix();
+            // 8 esquinas del cubo unitario centrado en el origen.
+            constexpr glm::vec3 kCorners[8] = {
+                {-0.5f, -0.5f, -0.5f}, { 0.5f, -0.5f, -0.5f},
+                { 0.5f,  0.5f, -0.5f}, {-0.5f,  0.5f, -0.5f},
+                {-0.5f, -0.5f,  0.5f}, { 0.5f, -0.5f,  0.5f},
+                { 0.5f,  0.5f,  0.5f}, {-0.5f,  0.5f,  0.5f}};
+            glm::vec3 w[8];
+            for (int i = 0; i < 8; ++i) {
+                const glm::vec4 p = model * glm::vec4(kCorners[i], 1.0f);
+                w[i] = glm::vec3(p);
+            }
+            // 12 aristas: bottom (0-1,1-2,2-3,3-0), top (4-5,5-6,6-7,7-4),
+            // verticales (0-4,1-5,2-6,3-7).
+            constexpr int kEdges[12][2] = {
+                {0,1},{1,2},{2,3},{3,0},
+                {4,5},{5,6},{6,7},{7,4},
+                {0,4},{1,5},{2,6},{3,7}};
+            const glm::vec3 selColor(1.0f, 0.55f, 0.05f); // naranja Blender
+            for (const auto& e : kEdges) {
+                m_debugRenderer->drawLine(w[e[0]], w[e[1]], selColor);
+            }
+            hasDebugGeometry = true;
+        }
     }
     if (hasDebugGeometry) {
         m_debugRenderer->flush(view, projection);
