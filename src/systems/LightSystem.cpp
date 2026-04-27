@@ -14,7 +14,11 @@ namespace Mood {
 
 namespace {
 
-constexpr float k_defaultAmbient = 0.18f;
+// Ambient bajo a partir de Hito 16: con shadow mapping las sombras se
+// notan recien si el ambient no inunda las caras opuestas a la luz. 0.08
+// deja las caras "en sombra" perceptiblemente oscuras pero no totalmente
+// negras (se mantiene legibilidad de la textura).
+constexpr float k_defaultAmbient = 0.08f;
 constexpr float k_specularStrength = 0.4f;
 constexpr float k_shininess = 32.0f;
 
