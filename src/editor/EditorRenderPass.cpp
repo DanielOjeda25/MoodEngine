@@ -17,6 +17,7 @@
 
 #include "core/Log.h"
 #include "core/math/AABB.h"
+#include "engine/animation/Skeleton.h"
 #include "engine/render/IRenderer.h"
 #include "engine/render/ITexture.h"
 #include "engine/render/LightGrid.h"
@@ -41,6 +42,8 @@
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
+
+#include <string>
 
 namespace Mood {
 
@@ -191,24 +194,6 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
             : m_editorCamera.position();
         LightFrameData lights = m_lightSystem->buildFrameData(*m_scene);
 
-        m_pbrShader->bind();
-        m_pbrShader->setMat4("uView", view);
-        m_pbrShader->setMat4("uProjection", projection);
-        // Texture units fijos:
-        //   0 = albedo, 1 = shadowMap, 2 = metallicRoughness, 3 = ao
-        //   4 = irradiance cubemap (IBL diffuse)
-        //   5 = prefilter cubemap  (IBL specular)
-        //   6 = BRDF LUT 2D        (split-sum)
-        // Se setean una sola vez por frame (los samplers no cambian).
-        m_pbrShader->setInt("uAlbedoMap",         0);
-        m_pbrShader->setInt("uShadowMap",         1);
-        m_pbrShader->setInt("uMetallicRoughness", 2);
-        m_pbrShader->setInt("uAoMap",             3);
-        m_pbrShader->setInt("uIrradianceMap",     4);
-        m_pbrShader->setInt("uPrefilterMap",      5);
-        m_pbrShader->setInt("uBrdfLut",           6);
-        m_lightSystem->bindUniforms(*m_pbrShader, lights, cameraPos);
-
         // Hito 18: Forward+ light grid. Recompute desde cero en CPU,
         // sube las point lights + tiles + indices via SSBOs (bindings
         // 2/3/4) y deja al shader leer SOLO las luces de su tile.
@@ -294,45 +279,66 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         }
         m_lightIndicesSsbo->bind(4);
 
-        // Uniforms del grid para que el shader haga la division correcta.
-        m_pbrShader->setInt("uTileSize",        static_cast<int>(k_LightGridTileSize));
-        m_pbrShader->setInt("uTilesX",          static_cast<int>(m_lightGrid->tilesX()));
-        m_pbrShader->setInt("uTilesY",          static_cast<int>(m_lightGrid->tilesY()));
-
-        // IBL bind. Si los tres assets estan disponibles, los bindeamos a
-        // sus units y activamos `uIblEnabled`. Sino, el shader usa
-        // `uAmbient` escalar (bindUniforms del LightSystem ya lo subio).
+        // Hito 19: bindeos de IBL + shadow map se hacen UNA VEZ (global
+        // state). Los uniforms del programa se aplican via lambda a cada
+        // shader que vayamos a usar (`pbr` o `pbr_skinned`).
         const bool iblOk = (m_iblIrradiance && m_iblPrefilter && m_iblBrdfLut);
-        m_pbrShader->setInt("uIblEnabled", iblOk ? 1 : 0);
+        const f32 prefilterMaxLod = iblOk
+            ? static_cast<f32>(m_iblPrefilter->mipLevels() - 1)
+            : 0.0f;
         if (iblOk) {
             m_iblIrradiance->bind(4);
             m_iblPrefilter->bind(5);
             // ITexture::bind activa la unit y bindea GL_TEXTURE_2D.
             m_iblBrdfLut->bind(6);
-            m_pbrShader->setFloat("uPrefilterMaxLod",
-                static_cast<f32>(m_iblPrefilter->mipLevels() - 1));
-        } else {
-            m_pbrShader->setFloat("uPrefilterMaxLod", 0.0f);
         }
-        m_pbrShader->setFloat("uIblIntensity", m_iblIntensity);
-
-        // Hito 16: shadow uniforms.
-        m_pbrShader->setInt("uShadowEnabled", shadowEnabled ? 1 : 0);
-        m_pbrShader->setFloat("uShadowBias", 0.005f);
         if (shadowEnabled && m_shadowPass) {
-            m_pbrShader->setMat4("uLightSpace",
-                                  m_shadowPass->lightSpaceMatrix());
             m_shadowPass->bindShadowMap(1);
-        } else {
-            m_pbrShader->setMat4("uLightSpace", glm::mat4(1.0f));
         }
 
-        // Fog (Hito 15) — mismas formulas que lit, copiadas a pbr.frag.
-        m_pbrShader->setInt  ("uFogMode",    static_cast<int>(m_fog.mode));
-        m_pbrShader->setVec3 ("uFogColor",   m_fog.color);
-        m_pbrShader->setFloat("uFogDensity", m_fog.density);
-        m_pbrShader->setFloat("uFogStart",   m_fog.linearStart);
-        m_pbrShader->setFloat("uFogEnd",     m_fog.linearEnd);
+        // Hito 19: lambda con TODOS los uniforms del shader de escena
+        // (PBR base + IBL + shadow + fog + Forward+ tiles + samplers + lights
+        // + view/proj). La aplicamos al `m_pbrShader` para entidades
+        // estaticas y al `m_pbrSkinnedShader` para entidades skinneadas
+        // — los SSBOs y las texturas ya estan bindeados arriba (global GL
+        // state) asi que ambos programas los ven sin hacer nada extra.
+        auto applyShaderUniforms = [&](IShader& sh) {
+            sh.bind();
+            sh.setMat4("uView", view);
+            sh.setMat4("uProjection", projection);
+            // Texture units fijos:
+            //   0 = albedo, 1 = shadowMap, 2 = metallicRoughness, 3 = ao
+            //   4 = irradiance, 5 = prefilter, 6 = BRDF LUT
+            sh.setInt("uAlbedoMap",         0);
+            sh.setInt("uShadowMap",         1);
+            sh.setInt("uMetallicRoughness", 2);
+            sh.setInt("uAoMap",             3);
+            sh.setInt("uIrradianceMap",     4);
+            sh.setInt("uPrefilterMap",      5);
+            sh.setInt("uBrdfLut",           6);
+            m_lightSystem->bindUniforms(sh, lights, cameraPos);
+
+            sh.setInt("uTileSize", static_cast<int>(k_LightGridTileSize));
+            sh.setInt("uTilesX",   static_cast<int>(m_lightGrid->tilesX()));
+            sh.setInt("uTilesY",   static_cast<int>(m_lightGrid->tilesY()));
+
+            sh.setInt  ("uIblEnabled",      iblOk ? 1 : 0);
+            sh.setFloat("uPrefilterMaxLod", prefilterMaxLod);
+            sh.setFloat("uIblIntensity",    m_iblIntensity);
+
+            sh.setInt  ("uShadowEnabled", shadowEnabled ? 1 : 0);
+            sh.setFloat("uShadowBias",    0.005f);
+            sh.setMat4 ("uLightSpace",
+                shadowEnabled && m_shadowPass
+                    ? m_shadowPass->lightSpaceMatrix()
+                    : glm::mat4(1.0f));
+
+            sh.setInt  ("uFogMode",    static_cast<int>(m_fog.mode));
+            sh.setVec3 ("uFogColor",   m_fog.color);
+            sh.setFloat("uFogDensity", m_fog.density);
+            sh.setFloat("uFogStart",   m_fog.linearStart);
+            sh.setFloat("uFogEnd",     m_fog.linearEnd);
+        };
 
         // Texturas dummy para los slots no usados: el missing del
         // AssetManager (slot 0) sirve como fallback inocuo. Bindeamos
@@ -341,70 +347,103 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         ITexture* dummyTex = m_assetManager->getTexture(
             m_assetManager->missingTextureId());
 
-        m_scene->forEach<TransformComponent, MeshRendererComponent>(
-            [&](Entity, TransformComponent& t, MeshRendererComponent& mr) {
-                MeshAsset* asset = m_assetManager->getMesh(mr.mesh);
-                if (asset == nullptr) return;
-                m_pbrShader->setMat4("uModel", t.worldMatrix());
-                for (usize i = 0; i < asset->submeshes.size(); ++i) {
-                    const auto& sub = asset->submeshes[i];
-                    if (sub.mesh == nullptr) continue;
+        // Lambda que dibuja todos los submeshes de un MeshRenderer con el
+        // shader actual (`sh`). El `uModel` se asume YA seteado por el
+        // caller (mismo Transform para todos los submeshes de la entidad).
+        auto drawMeshRenderer = [&](IShader& sh,
+                                     MeshRendererComponent& mr) {
+            MeshAsset* asset = m_assetManager->getMesh(mr.mesh);
+            if (asset == nullptr) return;
+            for (usize i = 0; i < asset->submeshes.size(); ++i) {
+                const auto& sub = asset->submeshes[i];
+                if (sub.mesh == nullptr) continue;
 
-                    const MaterialAssetId matId =
-                        mr.materialOrMissing(sub.materialIndex);
-                    const MaterialAsset* mat = m_assetManager->getMaterial(matId);
+                const MaterialAssetId matId =
+                    mr.materialOrMissing(sub.materialIndex);
+                const MaterialAsset* mat = m_assetManager->getMaterial(matId);
 
-                    // Albedo (unit 0). Si el material no tiene mapa, bindeamos
-                    // el missing y desactivamos el sample con uHasAlbedoMap=0
-                    // para que el shader use solo `uAlbedoTint`.
-                    const bool hasAlbedo = (mat != nullptr && mat->albedo != 0);
-                    glActiveTexture(GL_TEXTURE0);
-                    m_assetManager->getTexture(hasAlbedo ? mat->albedo : 0)
-                        ->bind(0);
-                    m_pbrShader->setInt("uHasAlbedoMap", hasAlbedo ? 1 : 0);
+                const bool hasAlbedo = (mat != nullptr && mat->albedo != 0);
+                glActiveTexture(GL_TEXTURE0);
+                m_assetManager->getTexture(hasAlbedo ? mat->albedo : 0)
+                    ->bind(0);
+                sh.setInt("uHasAlbedoMap", hasAlbedo ? 1 : 0);
 
-                    // Metallic-Roughness (unit 2).
-                    const bool hasMR =
-                        (mat != nullptr && mat->metallicRoughness != 0);
-                    glActiveTexture(GL_TEXTURE2);
-                    if (hasMR) {
-                        m_assetManager->getTexture(mat->metallicRoughness)
-                            ->bind(2);
-                    } else {
-                        dummyTex->bind(2);
-                    }
-                    m_pbrShader->setInt("uHasMetallicRoughness",
-                                         hasMR ? 1 : 0);
-
-                    // AO (unit 3).
-                    const bool hasAo = (mat != nullptr && mat->ao != 0);
-                    glActiveTexture(GL_TEXTURE3);
-                    if (hasAo) {
-                        m_assetManager->getTexture(mat->ao)->bind(3);
-                    } else {
-                        dummyTex->bind(3);
-                    }
-                    m_pbrShader->setInt("uHasAoMap", hasAo ? 1 : 0);
-
-                    // Multiplicadores escalares.
-                    if (mat != nullptr) {
-                        m_pbrShader->setVec3 ("uAlbedoTint",   mat->albedoTint);
-                        m_pbrShader->setFloat("uMetallicMult", mat->metallicMult);
-                        m_pbrShader->setFloat("uRoughnessMult",mat->roughnessMult);
-                        m_pbrShader->setFloat("uAoMult",       mat->aoMult);
-                    } else {
-                        m_pbrShader->setVec3 ("uAlbedoTint",   glm::vec3(1.0f));
-                        m_pbrShader->setFloat("uMetallicMult", 0.0f);
-                        m_pbrShader->setFloat("uRoughnessMult",0.5f);
-                        m_pbrShader->setFloat("uAoMult",       1.0f);
-                    }
-
-                    // Volver a unit 0 antes del draw (consistente con la
-                    // convencion de los renderers anteriores).
-                    glActiveTexture(GL_TEXTURE0);
-                    m_renderer->drawMesh(*sub.mesh, *m_pbrShader);
+                const bool hasMR =
+                    (mat != nullptr && mat->metallicRoughness != 0);
+                glActiveTexture(GL_TEXTURE2);
+                if (hasMR) {
+                    m_assetManager->getTexture(mat->metallicRoughness)->bind(2);
+                } else {
+                    dummyTex->bind(2);
                 }
+                sh.setInt("uHasMetallicRoughness", hasMR ? 1 : 0);
+
+                const bool hasAo = (mat != nullptr && mat->ao != 0);
+                glActiveTexture(GL_TEXTURE3);
+                if (hasAo) {
+                    m_assetManager->getTexture(mat->ao)->bind(3);
+                } else {
+                    dummyTex->bind(3);
+                }
+                sh.setInt("uHasAoMap", hasAo ? 1 : 0);
+
+                if (mat != nullptr) {
+                    sh.setVec3 ("uAlbedoTint",   mat->albedoTint);
+                    sh.setFloat("uMetallicMult", mat->metallicMult);
+                    sh.setFloat("uRoughnessMult",mat->roughnessMult);
+                    sh.setFloat("uAoMult",       mat->aoMult);
+                } else {
+                    sh.setVec3 ("uAlbedoTint",   glm::vec3(1.0f));
+                    sh.setFloat("uMetallicMult", 0.0f);
+                    sh.setFloat("uRoughnessMult",0.5f);
+                    sh.setFloat("uAoMult",       1.0f);
+                }
+
+                glActiveTexture(GL_TEXTURE0);
+                m_renderer->drawMesh(*sub.mesh, sh);
+            }
+        };
+
+        // Pase A: entidades estaticas (sin SkeletonComponent).
+        applyShaderUniforms(*m_pbrShader);
+        m_scene->forEach<TransformComponent, MeshRendererComponent>(
+            [&](Entity e, TransformComponent& t, MeshRendererComponent& mr) {
+                if (e.hasComponent<SkeletonComponent>()) return; // se dibuja en pase B
+                m_pbrShader->setMat4("uModel", t.worldMatrix());
+                drawMeshRenderer(*m_pbrShader, mr);
             });
+
+        // Pase B: entidades skinneadas. Solo se bindea el shader skinneable
+        // si hay al menos una entidad — escenas sin animaciones no pagan
+        // el shader switch ni los uploads del bone array.
+        bool hasSkinned = false;
+        m_scene->forEach<SkeletonComponent>(
+            [&](Entity, SkeletonComponent&) { hasSkinned = true; });
+        if (hasSkinned && m_pbrSkinnedShader) {
+            applyShaderUniforms(*m_pbrSkinnedShader);
+            m_scene->forEach<TransformComponent, MeshRendererComponent,
+                              SkeletonComponent>(
+                [&](Entity, TransformComponent& t, MeshRendererComponent& mr,
+                    SkeletonComponent& sk) {
+                    m_pbrSkinnedShader->setMat4("uModel", t.worldMatrix());
+                    // Subir uBoneMatrices[N]. AnimationSystem ya las
+                    // compuso este frame; si el array esta vacio (mesh
+                    // sin huesos) saltamos el draw — caer al pase A
+                    // hubiera duplicado entidades.
+                    const usize n = sk.skinningMatrices.size();
+                    if (n == 0) return;
+                    const usize cap = static_cast<usize>(k_maxBonesPerSkeleton);
+                    const usize count = (n < cap) ? n : cap;
+                    // glUniformMatrix4fv array: subimos por nombre indexado.
+                    // El cache de OpenGLShader resuelve cada `[i]` una vez.
+                    for (usize i = 0; i < count; ++i) {
+                        std::string name = "uBoneMatrices[" +
+                                           std::to_string(i) + "]";
+                        m_pbrSkinnedShader->setMat4(name, sk.skinningMatrices[i]);
+                    }
+                    drawMeshRenderer(*m_pbrSkinnedShader, mr);
+                });
+        }
     }
 
     // Tile picking: solo en Editor Mode, cuando el cursor esta sobre la
@@ -471,7 +510,8 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         // Pick por entidad bajo el cursor (mismo flow que click-select).
         const glm::vec2 ndc(m_ui.viewport().mouseNdcX(),
                              m_ui.viewport().mouseNdcY());
-        ScenePickResult ehit = pickEntity(*m_scene, view, projection, ndc);
+        ScenePickResult ehit = pickEntity(*m_scene, view, projection, ndc,
+                                            m_assetManager.get());
         if (ehit && ehit.entity.hasComponent<TransformComponent>()
                   && ehit.entity.hasComponent<MeshRendererComponent>()) {
             const auto& tf = ehit.entity.getComponent<TransformComponent>();

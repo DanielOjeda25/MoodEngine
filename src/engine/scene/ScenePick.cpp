@@ -1,6 +1,8 @@
 #include "engine/scene/ScenePick.h"
 
 #include "core/math/AABB.h"
+#include "engine/assets/AssetManager.h"
+#include "engine/render/MeshAsset.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Scene.h"
 
@@ -56,14 +58,51 @@ f32 raySphere(const glm::vec3& origin, const glm::vec3& dir,
     return t;
 }
 
-/// @brief Construye el AABB world-space aproximado del MeshRenderer:
-///        asume mesh local en [-0.5, 0.5]^3 (cubo y demas primitivos
-///        escalan a ese rango). Meshes importados grandes dan un AABB
-///        demasiado chico — pendiente agregar bounding box por MeshAsset.
-AABB meshAabbWorld(const TransformComponent& t) {
-    // Bounding box locale del cubo unitario escalado por scale.
-    const glm::vec3 half = 0.5f * t.scale;
-    return AABB{ t.position - half, t.position + half };
+/// @brief Construye el AABB world-space del MeshRenderer. Si hay
+///        AssetManager + MeshAsset valido, usa el AABB del bind pose
+///        local del mesh (`MeshAsset::aabbMin/aabbMax`) y lo proyecta al
+///        mundo via los 8 corners (soporta rotaciones del Transform).
+///        Sin assets -> fallback al cubo unitario (legacy / tests).
+AABB meshAabbWorld(const TransformComponent& t,
+                    const MeshRendererComponent* mr,
+                    const AssetManager* assets) {
+    glm::vec3 localMin(-0.5f), localMax(0.5f);
+    if (assets != nullptr && mr != nullptr) {
+        // getMesh devuelve siempre un mesh valido (slot 0 = cubo) o null.
+        if (const MeshAsset* asset = const_cast<AssetManager*>(assets)->getMesh(mr->mesh)) {
+            // Si el AABB del asset esta inicializado (min <= max en los 3 ejes)
+            // lo usamos. Sino dejamos el cubo unitario default.
+            if (asset->aabbMin.x <= asset->aabbMax.x &&
+                asset->aabbMin.y <= asset->aabbMax.y &&
+                asset->aabbMin.z <= asset->aabbMax.z) {
+                localMin = asset->aabbMin;
+                localMax = asset->aabbMax;
+            }
+        }
+    }
+
+    // Proyectar 8 esquinas a world-space y reconstruir AABB axis-aligned.
+    // Cubre rotaciones; con scale uniforme da un AABB un poco holgado
+    // respecto al OBB exacto, suficiente para picking.
+    const glm::vec3 corners[8] = {
+        {localMin.x, localMin.y, localMin.z},
+        {localMax.x, localMin.y, localMin.z},
+        {localMin.x, localMax.y, localMin.z},
+        {localMax.x, localMax.y, localMin.z},
+        {localMin.x, localMin.y, localMax.z},
+        {localMax.x, localMin.y, localMax.z},
+        {localMin.x, localMax.y, localMax.z},
+        {localMax.x, localMax.y, localMax.z},
+    };
+    const glm::mat4 model = t.worldMatrix();
+    glm::vec3 wMin( std::numeric_limits<f32>::max());
+    glm::vec3 wMax(-std::numeric_limits<f32>::max());
+    for (int i = 0; i < 8; ++i) {
+        const glm::vec4 w = model * glm::vec4(corners[i], 1.0f);
+        wMin = glm::min(wMin, glm::vec3(w));
+        wMax = glm::max(wMax, glm::vec3(w));
+    }
+    return AABB{wMin, wMax};
 }
 
 } // namespace
@@ -71,7 +110,8 @@ AABB meshAabbWorld(const TransformComponent& t) {
 ScenePickResult pickEntity(Scene& scene,
                             const glm::mat4& view,
                             const glm::mat4& projection,
-                            const glm::vec2& ndc) {
+                            const glm::vec2& ndc,
+                            const AssetManager* assets) {
     // Construccion del rayo: misma receta que pickTile — unproyectar dos
     // puntos en z=-1 (near) y z=+1 (far) del NDC.
     const glm::mat4 invVP = glm::inverse(projection * view);
@@ -93,7 +133,8 @@ ScenePickResult pickEntity(Scene& scene,
         //   b) Light / AudioSource sin mesh: esfera del icono.
         f32 t_hit = -1.0f;
         if (e.hasComponent<MeshRendererComponent>()) {
-            t_hit = rayAABB(origin, dir, meshAabbWorld(t));
+            const auto& mr = e.getComponent<MeshRendererComponent>();
+            t_hit = rayAABB(origin, dir, meshAabbWorld(t, &mr, assets));
         } else if (e.hasComponent<LightComponent>() ||
                    e.hasComponent<AudioSourceComponent>()) {
             t_hit = raySphere(origin, dir, t.position, k_iconPickRadius);

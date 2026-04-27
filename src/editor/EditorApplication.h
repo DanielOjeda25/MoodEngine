@@ -44,6 +44,7 @@ class LightSystem;
 class PhysicsWorld;
 class SkyboxRenderer;
 class ShadowPass;
+class AnimationSystem;
 
 class EditorApplication {
 public:
@@ -155,6 +156,7 @@ private:
     void processSpawnShadowDemoRequest();
     void processSpawnPbrSpheresRequest();
     void processSpawnLightStressRequest();
+    void processSpawnAnimatedCharacterRequest(); // Hito 19
     void processSavePrefabRequest();
     void processViewportTextureDrop();
     void processViewportMeshDrop();
@@ -189,11 +191,13 @@ private:
     f32 m_iblIntensity = 1.0f;                  // Hito 18, [0..2]
     std::unique_ptr<IShader> m_defaultShader;
     std::unique_ptr<IShader> m_pbrShader; // Hito 17: reemplaza al lit Phong
+    std::unique_ptr<IShader> m_pbrSkinnedShader; // Hito 19: skinning LBS
     std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
     std::unique_ptr<ScriptSystem> m_scriptSystem;
     std::unique_ptr<AudioDevice> m_audioDevice;
     std::unique_ptr<AudioSystem> m_audioSystem;
     std::unique_ptr<LightSystem> m_lightSystem;
+    std::unique_ptr<AnimationSystem> m_animationSystem; // Hito 19
     std::unique_ptr<PhysicsWorld> m_physicsWorld;
     std::unique_ptr<SkyboxRenderer> m_skyboxRenderer;
     std::unique_ptr<ShadowPass> m_shadowPass; // Hito 16

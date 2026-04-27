@@ -23,6 +23,7 @@
 #include "engine/serialization/SceneSerializer.h"
 #include "engine/audio/AudioDevice.h"
 #include "engine/physics/PhysicsWorld.h"
+#include "systems/AnimationSystem.h"
 #include "systems/AudioSystem.h"
 #include "systems/LightSystem.h"
 #include "systems/PostProcessPass.h"
@@ -176,6 +177,11 @@ EditorApplication::EditorApplication() {
     // solo como fallback.
     m_pbrShader = std::make_unique<OpenGLShader>(
         "shaders/pbr.vert", "shaders/pbr.frag");
+    // Hito 19: shader skinneable (LBS 4 huesos). Reusa `pbr.frag` — solo
+    // cambia el vertex shader. Si no hay entidades animadas en la escena,
+    // este programa no se bindea (no paga uniform uploads).
+    m_pbrSkinnedShader = std::make_unique<OpenGLShader>(
+        "shaders/pbr_skinned.vert", "shaders/pbr.frag");
 
     // Factoria real: crea OpenGLTexture desde el path de filesystem. Los tests
     // pasan otra factoria que devuelve mocks sin tocar GL. El cubo fallback
@@ -274,6 +280,7 @@ EditorApplication::EditorApplication() {
     m_scene = std::make_unique<Scene>();
     m_scriptSystem = std::make_unique<ScriptSystem>();
     m_lightSystem  = std::make_unique<LightSystem>();
+    m_animationSystem = std::make_unique<AnimationSystem>(); // Hito 19
     // Hito 12: PhysicsWorld (Jolt). Init es pesado la primera vez del proceso
     // (Factory + RegisterTypes) pero instancias subsecuentes son baratas.
     m_physicsWorld = std::make_unique<PhysicsWorld>();
@@ -971,6 +978,7 @@ EditorApplication::~EditorApplication() {
     m_audioSystem.reset();
     m_audioDevice.reset();
     m_lightSystem.reset();
+    m_animationSystem.reset();
     m_physicsWorld.reset();
     m_iblBrdfLut.reset();
     m_iblPrefilter.reset();
@@ -1203,6 +1211,7 @@ int EditorApplication::run() {
         processSpawnShadowDemoRequest();
         processSpawnPbrSpheresRequest();
         processSpawnLightStressRequest();
+        processSpawnAnimatedCharacterRequest();
         processSpawnPointLightRequest();
         processSpawnAudioSourceRequest();
         processSavePrefabRequest();
@@ -1223,7 +1232,8 @@ int EditorApplication::run() {
             const glm::mat4 view = m_editorCamera.viewMatrix();
             const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
             const ScenePickResult hit = pickEntity(*m_scene, view, projection,
-                                                    glm::vec2(click.ndcX, click.ndcY));
+                                                    glm::vec2(click.ndcX, click.ndcY),
+                                                    m_assetManager.get());
             if (hit) {
                 m_ui.setSelectedEntity(hit.entity);
                 if (hit.entity.hasComponent<TagComponent>()) {
@@ -1256,6 +1266,14 @@ int EditorApplication::run() {
         //      Transform se vean este mismo frame.
         if (m_scene && m_scriptSystem) {
             m_scriptSystem->update(*m_scene, dt);
+        }
+
+        // 3.55) Animacion (Hito 19): avanza time del Animator y rellena el
+        //       SkeletonComponent.skinningMatrices que el render lee. Antes
+        //       del audio para que un sound posicional adjunto a un hueso
+        //       (futuro) ya tenga la pose actualizada — hoy es indistinto.
+        if (m_scene && m_animationSystem) {
+            m_animationSystem->update(*m_scene, *m_assetManager, dt);
         }
 
         // 3.6) Audio: arranca playOnStart, sincroniza posicion 3D, y setea

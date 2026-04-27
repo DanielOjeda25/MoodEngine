@@ -32,20 +32,26 @@ struct ScenePickResult {
 
 /// @brief Dispara un rayo desde la camara a traves de `ndc` y devuelve la
 ///        entidad mas cercana. Entidades con `MeshRendererComponent` se
-///        testean contra un AABB construido desde Transform + cubo unitario
-///        (para el cubo primitivo; los meshes importados usan su mesh box
-///        simplificada a scale 1). Entidades sin mesh (solo Light o
+///        testean contra el AABB del bind pose del MeshAsset escalado por
+///        el Transform (Hito 19) si se pasa el `AssetManager`; sino caen
+///        al cubo unitario `[-0.5, 0.5]^3` escalado por el Transform
+///        (legacy: rompia el pick para meshes con bounds atipicos como
+///        el Fox.glb a escala 0.01). Entidades sin mesh (solo Light o
 ///        AudioSource) se testean contra una esfera de radio fijo alrededor
 ///        del Transform.position (iconos pickables, Bloque 2.5).
 ///
 /// @param scene       Scene sobre la que iterar.
 /// @param view,proj   Matrices activas de la camara.
 /// @param ndc         Coord del cursor en NDC [-1, 1] con Y+ arriba.
+/// @param assets      Opcional. Si esta presente y la entidad tiene mesh,
+///                    se consulta el AABB del MeshAsset. nullptr -> fallback
+///                    al cubo unitario (lo usan los tests sin AssetManager).
 /// @return            `ScenePickResult` con entidad valida si hubo hit;
 ///                    default-constructed (entity falsy) si no.
 ScenePickResult pickEntity(Scene& scene,
                             const glm::mat4& view,
                             const glm::mat4& projection,
-                            const glm::vec2& ndc);
+                            const glm::vec2& ndc,
+                            const AssetManager* assets = nullptr);
 
 } // namespace Mood

@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Mood {
@@ -214,6 +215,28 @@ struct AudioSourceComponent {
 
     AudioSourceComponent() = default;
     AudioSourceComponent(AudioAssetId c) : clip(c) {}
+};
+
+/// @brief Hito 19: marca a una entidad como animable y elige el clip.
+///        El esqueleto vive en el MeshAsset (no se duplica acá). El time
+///        avanza por delta cada frame en `AnimationSystem`. `clipName`
+///        vacio -> primer clip del MeshAsset (default sensato).
+struct AnimatorComponent {
+    std::string clipName;          // vacio = primer clip del MeshAsset
+    float time = 0.0f;              // segundos desde el inicio del clip
+    float speed = 1.0f;             // escala temporal (1=normal, 2=doble, 0=pause)
+    bool playing = true;
+    bool loop = true;
+};
+
+/// @brief Hito 19: matrices de skinning ya compuestas (= globalPose *
+///        inverseBind por hueso). El shader las sube como
+///        `uBoneMatrices[]`. Lo recalcula `AnimationSystem` cada frame.
+///        Esta cacheado en el componente (no en el sistema) porque
+///        `EditorRenderPass` lo necesita por entidad — y el sistema corre
+///        antes que el render del frame.
+struct SkeletonComponent {
+    std::vector<glm::mat4> skinningMatrices; // size == skeleton.bones.size()
 };
 
 } // namespace Mood
