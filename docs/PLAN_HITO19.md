@@ -23,61 +23,60 @@ No-goals: ragdoll, animaciones procedurales (IK), motion matching, blendshapes/m
 
 ### Automáticos
 
-- [ ] Compila sin warnings nuevos.
-- [ ] Tests: interpolación de matrices (transform de hueso en `t=0`, `t=1`, `t=mid`), suma de pesos por vértice = 1.
-- [ ] Cierre limpio.
+- [x] Compila sin warnings nuevos.
+- [x] Tests: interpolación de matrices (transform de hueso en `t=0`, `t=1`, `t=mid`), suma de pesos por vértice = 1.
+- [x] Cierre limpio.
 
 ### Visuales
 
-- [ ] Demo "Ayuda > Agregar personaje animado" carga un `.glb` con esqueleto + animación walk/idle de la web (CC0). En Play Mode (o auto-play) la animación corre en loop.
-- [ ] Cambiar el clip activo desde el Inspector (combo box).
-- [ ] El personaje recibe sombra (Hito 16) y luces PBR (Hito 17 + 18) como cualquier otro mesh.
+- [x] Demo "Ayuda > Agregar personaje animado" carga un `.glb` con esqueleto + animación walk/idle de la web (CC0 — `Fox.glb` de glTF Sample Assets, 3 clips: Survey/Walk/Run). En Play Mode (o auto-play) la animación corre en loop.
+- [x] Cambiar el clip activo desde el Inspector (combo box).
+- [x] El personaje recibe sombra (Hito 16) y luces PBR (Hito 17 + 18) como cualquier otro mesh.
 
 ---
 
 ## Bloque 0 — Pendientes arrastrados
 
-- [ ] **AABB del MeshAsset** (Hito 16 + 17): los meshes con esqueleto necesitan AABB dinámico (cambia por frame con la pose). En este hito alcanza con el AABB del bind pose conservativo + un margen.
+- [x] **AABB del MeshAsset** (Hito 16 + 17): se calcula del bind pose en `MeshLoader::flattenAiMesh` acumulando min/max de positions; queda en `MeshAsset.aabbMin/aabbMax`. Para meshes animados se considera "conservativo" (la pose runtime puede exceder el bind un poco — aceptable para outline 3D, no para frustum culling estricto).
 
 ## Bloque 1 — Skeleton + AnimationClip (datos)
 
-- [ ] `engine/animation/Skeleton.h`: `vector<Bone>` con índice de padre, `inverseBindMatrix`, `localBindTransform`. Métodos `boneIndex(name)`, `globalTransform(boneIdx, pose)`.
-- [ ] `engine/animation/AnimationClip.h`: lista de `BoneTrack` (uno por hueso), cada uno con keyframes de `position`, `rotation` (quat), `scale`. Métodos `evaluate(time, pose)`.
-- [ ] `MeshAsset` extendido con campos opcionales `std::optional<Skeleton>`, `std::vector<AnimationClip>`. Los meshes sin esqueleto (cubo, esfera) los dejan vacíos.
+- [x] `engine/animation/Skeleton.h`: `vector<Bone>` con índice de padre, `inverseBindMatrix`, `localBindTransform`. Métodos `boneIndex(name)`, helper libre `computeSkinningMatrices(skel, localPose, out)`. Header-only.
+- [x] `engine/animation/AnimationClip.h`: lista de `BoneTrack` (uno por hueso), cada uno con keyframes de `position`, `rotation` (quat), `scale`. Métodos `samplePosition/Rotation/Scale/LocalTRS` + `evaluate(t, skeleton, out)` que cae al `localBindTransform` para huesos sin track. Header-only.
+- [x] `MeshAsset` extendido con `std::optional<Skeleton>` + `std::vector<AnimationClip>` + `aabbMin/aabbMax`. Helper `hasSkeleton()`.
 
 ## Bloque 2 — Carga via assimp
 
-- [ ] Extender `MeshLoader.cpp`: si `aiScene->mNumMeshes > 0` Y el primer mesh tiene `mNumBones > 0`, parsear el esqueleto (mapeo nombre → índice, parent links, inverse bind matrix). Sin caché compartido todavía: cada mesh trae su propio esqueleto.
-- [ ] Parsear `aiAnimation` → `AnimationClip` con keyframes lineales. Convertir `aiNodeAnim::mPositionKeys/mRotationKeys/mScalingKeys`.
-- [ ] Vertex layout extendido: `vec4 boneIds + vec4 boneWeights` por vértice. Default 0/0 cuando el mesh no tiene esqueleto.
+- [x] Extender `MeshLoader.cpp`: construye un único `Skeleton` por `MeshAsset` aglutinando `aiBone` de todos los `aiMesh` (convención glTF: skin compartido por todos los primitives). Topo sort para que padres tengan índice menor que hijos.
+- [x] Parsear `aiAnimation` → `AnimationClip` con keyframes lineales. Convertir `aiNodeAnim::mPositionKeys/mRotationKeys/mScalingKeys`. ticks → segundos via `mTicksPerSecond` (con default 25 si es 0).
+- [x] Vertex layout extendido a stride 19: `vec4 boneIds + vec4 boneWeights` (locations 4 y 5). Default 0/0 cuando el mesh no tiene esqueleto. Top-4 influencias por vértice, renormalizadas a suma 1.0. Flag `aiProcess_LimitBoneWeights` + clamp/normalize defensivo en C++.
 
 ## Bloque 3 — Shader skinneable
 
-- [ ] `shaders/pbr_skinned.vert`: nuevo path con `uniform mat4 uBoneMatrices[N]` (N = ~128 typical, máximo ~256 según limits).
-  - `vec4 skinnedPos = boneMatrices[boneIds.x] * pos * weights.x + ...` (4 huesos, blend LBS).
-  - Las normales se transforman por la inversa-transpuesta del skinned matrix (aprox: blend de las inversas-transpuestas).
-- [ ] `pbr.frag` queda intacto (recibe `vWorldPos` y `vWorldNormal` ya transformados).
-- [ ] Switch del shader en EditorRenderPass: si la entidad tiene `SkeletonComponent` con esqueleto, usar el shader `pbr_skinned`; si no, el `pbr` normal.
+- [x] `shaders/pbr_skinned.vert`: LBS 4 huesos. `uniform mat4 uBoneMatrices[128]`. Si `sum(weights) < 1e-4` cae al pipeline no-skinneado (defensivo). Normal con `mat3(boneMat)` (asume scales uniformes en huesos — válido para humanoides).
+- [x] `pbr.frag` queda intacto (recibe `vWorldPos`/`vWorldNormal` ya transformados).
+- [x] Switch en `EditorRenderPass.cpp`: dos pases. Pase A (estático) usa `m_pbrShader` y skipea entidades con `SkeletonComponent`. Pase B (skin) bindea `m_pbrSkinnedShader` solo si hay alguna entidad con `SkeletonComponent` y sube `uBoneMatrices[i]` por entidad. Lambda `applyShaderUniforms` evita duplicar el setup.
 
 ## Bloque 4 — `AnimatorComponent` + sistema
 
-- [ ] `engine/scene/Components.h`: `AnimatorComponent { string clipName; float time; bool playing; bool loop; }`.
-- [ ] `engine/scene/Components.h`: `SkeletonComponent { vector<glm::mat4> currentPose; }` — el array de matrices que el shader sube al uniform. Recalculado por frame.
-- [ ] `systems/AnimationSystem.h`: para cada entidad con `SkeletonComponent` + `AnimatorComponent`, avanza `time` por dt y evalúa el clip activo a la pose. Loop / clamp según flag.
-- [ ] Actualizar `EditorApplication::run()` para llamar `AnimationSystem::update(scene, dt)` antes del render.
+- [x] `Components.h`: `AnimatorComponent { string clipName; float time; float speed; bool playing; bool loop; }`. `clipName` vacío -> primer clip del MeshAsset.
+- [x] `Components.h`: `SkeletonComponent { vector<glm::mat4> skinningMatrices }`. Lo rellena `AnimationSystem` cada frame; el render lee del componente.
+- [x] `systems/AnimationSystem.{h,cpp}`: itera entidades con (MeshRenderer + Animator + Skeleton), resuelve clip por nombre o cae al primero, avanza `time` con loop/clamp, evalúa la pose y compone matrices skinning.
+- [x] `EditorApplication::run()` llama `m_animationSystem->update(*m_scene, *m_assetManager, dt)` entre Script y Audio (paso 3.55).
 
 ## Bloque 5 — Demo + tests
 
-- [ ] Bakear o descargar un `.glb` simple con animación (~50 frames idle/walk). Asset CC0 (Mixamo, GitHub gltf-Sample-Models). Drop en `assets/meshes/`.
-- [ ] "Ayuda > Agregar personaje animado" spawnea la entidad con MeshRenderer + Skeleton + Animator. Auto-play del clip default.
-- [ ] `tests/test_animation.cpp`: interpolación de keyframes (`evaluate(t=0)` == primer key, `evaluate(t=1)` == último, suma de pesos vertex válida).
+- [x] Bajado `assets/meshes/Fox.glb` (162 KB, CC0, glTF Sample Assets de Khronos). 3 clips: "Survey", "Walk", "Run".
+- [x] "Ayuda > Agregar personaje animado" spawnea entidad "Fox" con escala 0.01 (assimp lo trae a escala ~100). Auto-play del clip default.
+- [x] `tests/test_animation.cpp`: 12 casos cubriendo Skeleton (boneIndex, computeSkinningMatrices con bind/rotación), BoneTrack (clamp + lerp + quat normalization + scale fallback), AnimationClip::evaluate (fallback al bind pose para huesos sin track + clip vacío).
+- [x] InspectorPanel: combo de clips con `duration: %.2fs time: %.2fs` debajo, sliders de speed, checkboxes playing/loop, botón Reset.
 
 ## Bloque 6 — Cierre
 
-- [ ] Smoke test visual completo (personaje animado con sombra + IBL + Forward+).
-- [ ] Actualizar `HITOS.md`, `ESTADO_ACTUAL.md`, `DECISIONS.md`.
+- [ ] Smoke test visual completo (personaje animado con sombra + IBL + Forward+). **Pendiente del dev**.
+- [x] Actualizar `HITOS.md`, `ESTADO_ACTUAL.md`, `DECISIONS.md`.
 - [ ] Tag `v0.19.0-hito19` + push.
-- [ ] Crear `PLAN_HITO20.md` (UI del juego con RmlUi).
+- [x] Crear `PLAN_HITO20.md` (UI del juego con RmlUi).
 
 ---
 

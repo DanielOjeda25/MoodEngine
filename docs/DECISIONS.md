@@ -1557,3 +1557,105 @@ Slider en el Inspector + persistido en `.moodmap` solo si != 1.0
 - Replicar el slider en cada `MaterialAsset` (override por
   material). Util pero overkill — el ambient es propiedad del
   environment, no del material.
+
+## 2026-04-27: Vertex layout stride 19 globalmente para meshes assimp (Hito 19)
+
+**Contexto:** el Hito 19 introduce skinning. Hace falta agregar
+`vec4 boneIds` y `vec4 boneWeights` por vertice. La pregunta era
+si tener dos layouts (uno estatico stride 11, uno skinneado stride
+19) o un layout unico.
+
+**Decision:** un layout unico stride 19 floats para TODOS los
+meshes importados via assimp (`MeshLoader`). Los meshes sin
+esqueleto guardan boneIds/boneWeights en 0; el shader skinneable
+detecta `sum(weights) < 1e-4` y cae al pipeline no-skinneado.
+Las primitivas hardcoded (cubo, esfera) MANTIENEN stride 11
+porque por definicion no se animan — agregarles los 8 floats
+extras seria padding muerto en RAM y VBO.
+
+**Razones:**
+- Un solo VAO/VBO por mesh sin importar si tiene huesos o no.
+  Simplifica el `OpenGLMesh::OpenGLMesh()` y deja la decision en
+  el shader.
+- El overhead de 32 bytes por vertice no es significativo para
+  los volumenes que manejamos (Fox.glb pesa 162KB; un cubo de
+  36 verts paga 1152 bytes extra — despreciable).
+- Los shaders existentes (`pbr.vert`, `lit.vert`, `shadow_depth.vert`)
+  NO declaran las locations 4 y 5, asi que GL los ignora aunque
+  el VBO los mande. Cero cambio en esos shaders.
+
+**Alternativas consideradas:**
+- Dos layouts (skinneado/estatico): mas complejidad de codigo,
+  dos paths en `MeshLoader`, switch al crear el VAO. Suma
+  superficie sin beneficio claro.
+- Solo agregar al `pbr_skinned.vert` y dejar `pbr.vert` con
+  stride 11: requiere que `MeshLoader` decida el layout segun
+  si el mesh tiene huesos, y luego el render no puede usar el
+  shader skinneable sobre un mesh estatico aunque quiera (caso
+  hipotetico futuro: animar un cubo con un esqueleto manual).
+
+**Revisar si:** llegan archivos con miles de submeshes estaticos
+y los 32 bytes/vertice empiezan a doler en perfilado.
+
+## 2026-04-27: Un Skeleton compartido por MeshAsset, NO por SubMesh (Hito 19)
+
+**Contexto:** glTF/FBX permiten que multiples meshes (`Primitive`s
+en glTF) compartan un mismo `Skin`. assimp lo expone como aiBone
+duplicados en cada aiMesh — el mismo nombre, mismo offset matrix.
+
+**Decision:** un `MeshAsset` tiene UN `Skeleton` compartido entre
+todos sus submeshes. `MeshLoader::buildSkeleton` aglutina todos los
+aiBone de todos los aiMesh por nombre (deduplicando) y construye un
+solo arbol topologicamente ordenado. Los pesos por vertice de cada
+aiMesh referencian a los indices del esqueleto compartido.
+
+**Razones:**
+- Es como funciona glTF en la practica (un Skin por mesh node).
+- El render bindea UN array de matrices `uBoneMatrices[128]` por
+  entidad y todos sus submeshes lo ven — coherente con la
+  semantica del shader.
+- Si `MeshAsset` tuviera UN Skeleton por SubMesh, el upload del
+  bone array seria por submesh (mas draw calls + mas uniforms).
+
+**Alternativas consideradas:**
+- Un Skeleton por SubMesh: redundante en el caso comun (todos
+  los submeshes comparten skin) y mas costoso de subir.
+- Un Skeleton compartido a nivel proyecto (catalogo de skeletons):
+  cuando llegue retargeting o packing de skeletons (Hito 19.5+).
+
+**Revisar si:** aparece un caso real de submeshes con skeletons
+distintos, o cuando se introduzca retargeting / sharing entre
+personajes.
+
+## 2026-04-27: LBS (Linear Blend Skinning) sin SLERP, k=4 huesos por vertice (Hito 19)
+
+**Contexto:** matemtica de skinning. Las opciones tipicas son:
+- Linear Blend Skinning (LBS): suma ponderada de matrices.
+- Dual Quaternion Skinning (DQS): preserva longitudes de huesos
+  en rotaciones extremas (ej. brazo torcido 180°).
+- LERP de quaternions vs SLERP en interpolacion entre keys.
+- k = numero de influencias por vertice (2, 4, 8).
+
+**Decision:** LBS + k=4 + LERP normalizado (no SLERP).
+
+**Razones:**
+- LBS es lo estandar en juegos (Unity/Unreal/Godot por default).
+  DQS solo gana en torsiones extremas que no son frecuentes.
+- k=4 es el sweet spot universal (Unity, glTF, Mixamo). 2 da
+  artifacts en hombros/caderas; 8 dobla el VBO por marginal
+  ganancia.
+- LERP normalizado (`mix(q0,q1,t)` + `normalize()`) es 5-10x mas
+  barato que SLERP (`acos`/`sin` por sample). Para clips densos
+  como los de Mixamo (~30fps de keys) la diferencia es
+  visualmente imperceptible.
+- Sign-flip de q1 si `dot(q0,q1) < 0` evita el "long way around"
+  caracteristico del LERP en quats.
+
+**Alternativas consideradas:**
+- DQS: descartado por complejidad y poco beneficio en humanoides.
+- SLERP: pendiente como Hito 19.5 si aparecen artifacts visibles.
+- k=2 (mobile-friendly): no aplica, somos PC-first.
+
+**Revisar si:** algun clip muestra artifacts claros (twisting,
+candy-wrapper effect en hombros). En ese caso evaluar SLERP
+antes de DQS.

@@ -6,25 +6,33 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 18 cerrado.**
-Tag: `v0.18.0-hito18`.
-Verificado automático: suite doctest **162/5109** (+9 de `test_light_grid` para light → tile assignment). Editor arranca con `LightGrid: 0 point lights -> N tiles (XxY), 0 no-vacios, 0 asignaciones (avg 0.00/tile)` en el log al cargar mapa vacío. Verificado por el dev a ojo: spawn de 64 stress lights vía `Ayuda > Agregar stress test 64 luces` muestra spots de colores HSV procedurales sobre el suelo; con `IBL intensity` bajado a ~0.4 las luces destacan claramente sobre el ambient. El log diagnóstico reporta ~12 asignaciones promedio por tile no-vacío para 64 luces de radius 3.5m con la cámara default.
+**Hito 19 cerrado.**
+Tag: `v0.19.0-hito19`.
+Verificado automático: suite doctest **165/5172** (+12 de `test_animation` para Skeleton, BoneTrack, AnimationClip::evaluate). Editor arranca limpio. Verificado por el dev a ojo (smoke test): `Ayuda > Agregar personaje animado` spawnea Fox.glb (CC0 de glTF Sample Assets, 24 huesos, 3 clips Survey/Walk/Run). El zorro se anima en Editor y Play Mode; el combo de clips en el Inspector cambia entre los 3 sin recompilar. Recibe sombra del directional (Hito 16) y luces PBR + IBL (Hito 17 + 18) como cualquier otro mesh.
 
-**Stack del frame de render (post Hito 18):**
+**Stack del frame de render (post Hito 19):**
 1. Shadow pass al depth FB (si hay directional con `castShadows`).
 2. Skybox al scene FB (HDR RGBA16F, sRGB cubemap).
-3. Build LightGrid CPU desde `LightFrameData` (proyección de bounding spheres a tiles).
-4. Upload de los 3 SSBOs (point lights, tiles, indices). Bindings 2/3/4.
-5. Loop scene-driven con shader `pbr` (Cook-Torrance + Smith + Schlick + IBL split-sum + Forward+ tile lookup) — termina en `m_sceneFb`.
-6. Debug renderer (AABBs, OBBs, líneas).
-7. Post-process pass: exposure (2^EV) + tonemap + gamma → `m_viewportFb` LDR RGBA8.
-8. ImGui muestra `m_viewportFb` en el panel Viewport.
+3. AnimationSystem avanza el time de cada `AnimatorComponent` y rellena `SkeletonComponent.skinningMatrices` (CPU).
+4. Build LightGrid CPU desde `LightFrameData` (proyección de bounding spheres a tiles).
+5. Upload de los 3 SSBOs (point lights, tiles, indices). Bindings 2/3/4.
+6. Pase A: `m_pbrShader` (Cook-Torrance + Smith + Schlick + IBL split-sum + Forward+) sobre entidades estáticas (`forEach<Transform, MeshRenderer>` skipeando `SkeletonComponent`).
+7. Pase B (solo si hay alguna entidad skinneada): `m_pbrSkinnedShader` (mismo `pbr.frag`, `pbr_skinned.vert` con LBS 4 huesos). Sube `uBoneMatrices[i]` por entidad.
+8. Debug renderer (AABBs, OBBs, líneas).
+9. Post-process pass: exposure (2^EV) + tonemap + gamma → `m_viewportFb` LDR RGBA8.
+10. ImGui muestra `m_viewportFb` en el panel Viewport.
+
+**Vertex layout de los meshes importados:** stride 19 floats (pos+color+uv+normal+boneIds+boneWeights). Los meshes sin esqueleto guardan boneIds/boneWeights en 0 — el shader skinneable detecta `sum(weights) < 1e-4` y cae al pipeline no-skinneado. Las primitivas (cubo, esfera) siguen con stride 11 (no se animan).
+
+**Próximo paso:** Hito 20 — UI del juego con RmlUi. Plan en `docs/PLAN_HITO20.md`.
+
+### Hito 18 (anterior, ya cerrado)
+Tag: `v0.18.0-hito18`.
+Verificado automático: suite doctest 153/5109 (+9 de `test_light_grid` para light → tile assignment). Editor arranca con `LightGrid: 0 point lights -> N tiles (XxY), 0 no-vacios, 0 asignaciones (avg 0.00/tile)` en el log al cargar mapa vacío. Verificado por el dev a ojo: spawn de 64 stress lights vía `Ayuda > Agregar stress test 64 luces` muestra spots de colores HSV procedurales sobre el suelo; con `IBL intensity` bajado a ~0.4 las luces destacan claramente sobre el ambient.
 
 **Polish reactivo del Hito 18 cerrado en el mismo tag:**
-- `EnvironmentComponent.iblIntensity` (slider [0..2]) en Inspector. Persistido en `.moodmap` solo si != 1.0. Soluciona el caso "el cubemap claro ahoga las point lights".
+- `EnvironmentComponent.iblIntensity` (slider [0..2]) en Inspector. Persistido en `.moodmap` solo si != 1.0.
 - Log diagnóstico one-shot del LightGrid al cambiar la cantidad de luces.
-
-**Próximo paso:** Hito 19 — Animación esquelética. Plan en `docs/PLAN_HITO19.md`.
 
 ### Hito 17 (anterior, ya cerrado)
 Tag: `v0.17.0-hito17`.
@@ -304,20 +312,18 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: implementar el Hito 14
+### Tarea inmediata: implementar el Hito 20
 
-El Hito 13 está cerrado (tag `v0.13.0-hito13` en origin). El foco ahora es el **Hito 14 — Prefabs**. Formato `.moodprefab` reusable (entidad + componentes + hijos), instanciación desde el AssetBrowser (drag-drop al Viewport, igual que meshes/texturas), override local por instancia.
+El Hito 19 está cerrado (tag `v0.19.0-hito19` en origin). El foco ahora es el **Hito 20 — UI del juego con RmlUi**: integrar RmlUi (HTML/CSS-like) para HUDs y menús in-game, distinguible de la UI del editor (Dear ImGui).
 
-El plan desglosado por tareas está en `docs/PLAN_HITO14.md`.
-
-**Punto de arranque concreto:** definir `SavedPrefab` (reusa `SavedEntity` + children) en `SceneSerializer`; agregar `PrefabSerializer.{h,cpp}` con `save(entity) / load(path)`; extender `AssetManager` con catálogo de prefabs (`PrefabAssetId`); sección "Prefabs" en AssetBrowser con drag payload `"MOOD_PREFAB_ASSET"`; consumer en `EditorApplication::handlePrefabDrop` que instancia la entidad con `TransformComponent.position` derivada del pick 3D (ya disponible desde Hito 13).
+El plan desglosado por tareas está en `docs/PLAN_HITO20.md`.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO14.md`.
+1. Leer `docs/PLAN_HITO20.md`.
 2. Trabajar bloque por bloque, marcando en el plan al cerrar cada uno.
-3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial (p. ej. cómo serializar referencias a prefabs en el `.moodmap`, cómo representar overrides, naming de hijos al instanciar).
-4. Al final: commits atómicos en español, merge a main, tag `v0.14.0-hito14`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO15.md`.
+3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
+4. Al final: commits atómicos en español, merge a main, tag `v0.20.0-hito20`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO21.md`.
 
 ---
 

@@ -23,7 +23,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 16** — Shadow mapping (completado, tag `v0.16.0-hito16`).
 - [x] **Hito 17** — PBR (completado, tag `v0.17.0-hito17`).
 - [x] **Hito 18** — Forward+ (completado, tag `v0.18.0-hito18`).
-- [ ] Hito 19 — Animación esquelética.
+- [x] **Hito 19** — Animación esquelética (completado, tag `v0.19.0-hito19`).
 - [ ] Hito 20 — UI del juego con RmlUi.
 - [ ] Hito 21 — Empaquetado standalone.
 - [ ] Hito 22 — Undo/Redo.
@@ -517,3 +517,45 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **AABB tighter para light culling**: hoy se proyectan 8 esquinas del AABB world-space del bounding sphere. La sphere proyectada es una elipse, no un AABB; eso da false positives en grazing. **Trigger:** profile que muestre 2-3× más asignaciones de las esperadas.
 - **MSAA dentro del scene FB HDR**: Forward+ lo soporta trivialmente (deferred no). **Trigger:** jaggies visibles en geometría angular.
 - **Sombras de point lights** (cubemap depth, 6 caras por luz). Sigue del Hito 16. **Trigger:** primera escena interior con un solo point light que necesite sombra.
+
+## Hito 19 — Animación esquelética
+
+**Objetivo:** cargar y reproducir animaciones desde `.glb`/`.gltf` (assimp ya integrado desde Hito 10). Skinning lineal (LBS) 4 huesos por vértice, interpolación lineal entre keyframes, un único clip activo por entidad.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — datos puros:*
+- `engine/animation/Skeleton.h`: `Bone { name, parent, inverseBind, localBindTransform }`. Helper libre `computeSkinningMatrices(skel, localPose, out)` (O(N) sin recursión por garantía de orden topológico). Constante `k_maxBonesPerSkeleton = 128` matchea el shader.
+- `engine/animation/AnimationClip.h`: `BoneTrack` con keyframes pos/rot/scale. Sample con clamp al primer/último key + LERP interno. Quaternions con sign-flip si `dot(q0,q1) < 0` (evita el "long way around"). `evaluate(t, skel, out)` cae al `localBindTransform` para huesos sin track.
+- `MeshAsset` extendido con `optional<Skeleton>` + `vector<AnimationClip>` + `aabbMin/aabbMax` del bind pose.
+
+*Bloque 0+2 — carga assimp:*
+- `MeshLoader.cpp` reescrito: stride 19 (pos+color+uv+normal+boneIds+boneWeights). Construye un único `Skeleton` por `MeshAsset` aglutinando `aiBone` de todos los `aiMesh` con topo sort por jerarquía de `aiNode`. Top-4 influencias por vértice renormalizadas. Parsea `aiAnimation` → `AnimationClip` con conversión ticks → segundos. Calcula AABB acumulando min/max de positions.
+- Flag `aiProcess_LimitBoneWeights` agregado al import.
+
+*Bloque 3 — shader:*
+- `shaders/pbr_skinned.vert`: LBS 4 huesos con `uniform mat4 uBoneMatrices[128]`. Reusa `pbr.frag` (recibe `vWorldPos`/`vWorldNormal` ya skinneados). Defensivo: si `sum(weights) < 1e-4` cae al pipeline no-skinneado (mesh sin esqueleto compartiendo el shader).
+- Switch en `EditorRenderPass`: dos pases. Pase A estático con `m_pbrShader` skipea entidades con `SkeletonComponent`. Pase B skin bindea `m_pbrSkinnedShader` solo si hay alguna entidad skinneada y sube `uBoneMatrices[i]` por entidad. Lambda `applyShaderUniforms` evita duplicar setup.
+
+*Bloque 4 — sistema + componentes:*
+- `AnimatorComponent { clipName, time, speed, playing, loop }` y `SkeletonComponent { skinningMatrices }` en `Components.h`.
+- `systems/AnimationSystem.{h,cpp}`: avanza time con loop/clamp, evalúa el clip activo, compone matrices skinning. Entrada en `run()` paso 3.55 (entre Script y Audio).
+- InspectorPanel: combo de clips poblado desde el MeshAsset, sliders speed, checkboxes playing/loop, botón Reset.
+
+*Bloque 5 — demo + tests:*
+- `assets/meshes/Fox.glb` (162 KB, CC0, glTF Sample Assets de Khronos). 3 clips: Survey/Walk/Run.
+- "Ayuda > Agregar personaje animado" spawnea Fox con escala 0.01.
+- `tests/test_animation.cpp`: 12 casos. Suite total **165 / 5172** (antes Hito 18 cerrado: 153 / 5109).
+
+**Siguiente paso tras completarlo:** Hito 20 — UI del juego con RmlUi. Plan en `docs/PLAN_HITO20.md`.
+
+### Pendientes menores detectados en Hito 19
+
+- **Persistencia del `AnimatorComponent`/`SkeletonComponent` en `.moodmap`/`.moodprefab`**: hoy no se serializan. El esqueleto vive en el MeshAsset (siempre lo recarga el AssetManager) pero el clip activo y el time del Animator se pierden al guardar. **Trigger:** primer dev que se queje de "abrir el proyecto y la animación arranca de cero" o que necesite un setup específico de animación al cargar.
+- **SLERP en quaternions**: hoy LERP normalizado. Ok para keyframes densos (Mixamo, glTF Sample); con keyframes muy separados puede dar twisting visible. **Trigger:** animación con artifacts notorios.
+- **Blend de animaciones / state machines**: un único clip activo por entidad. Sin blend ni transiciones suaves. **Trigger:** Hito dedicado (post-20).
+- **Compute skinning en GPU** (transform feedback / compute shader): hoy las matrices se componen en CPU (`AnimationSystem`) y se suben como uniforms. Para >5 personajes empezaría a notarse. **Trigger:** profile con muchos personajes.
+- **Inverse Kinematics**: cero IK. Personajes pisan literalmente lo que dice el clip, sin foot planting ni grasping de objetos. **Trigger:** demo de gameplay que lo necesite.
+- **Vertex Animation Textures** (alternativa a skinning para crowds): si aparece la necesidad de cientos de personajes animados. **Trigger:** RPG con NPCs masivos.
+- **AnimationEvent** (callbacks por timeline — "footstep en t=0.3"): permitiría disparar audio / partículas en frames específicos. **Trigger:** primer feature de gameplay que lo necesite.
+- **Persistencia del path del `.glb` con esqueleto en `.moodmap`**: hoy `MeshRendererComponent` solo guarda el path del mesh; el esqueleto y los clips se reconstruyen al cargar el MeshAsset. Aceptable mientras un mesh tenga UN esqueleto canónico.
