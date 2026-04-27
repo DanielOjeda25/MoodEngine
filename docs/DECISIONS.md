@@ -1264,3 +1264,168 @@ Light/Audio mantienen el halo 2D porque no tienen mesh).
 **Alternativas consideradas:** stencil-based outline (silueta exacta
 del mesh). Mas elegante pero require pase extra + soporte de stencil
 en el FBO HDR; postergado hasta que aparezca demanda real.
+
+## 2026-04-27: PBR metallic-roughness con IBL split-sum (Hito 17)
+
+**Contexto:** primera implementacion de PBR. Reemplaza al Blinn-Phong
+del Hito 11. Decisiones que cierran el espacio de diseno entre la
+formula del shader y la pipeline de assets.
+
+**Decisiones tomadas:**
+
+- **Cook-Torrance estandar (GGX + Smith + Schlick).** No Disney
+  Principled, no Frostbite, no clearcoat/sheen. Es la formula que
+  todos los engines AAA usan como baseline; cualquier extension
+  futura (anisotropia, transmission) se agrega sin romper el path
+  base.
+
+- **Workflow metallic-roughness sobre specular-glossiness.** Mas
+  intuitivo (menos artist-confusion: "metal o no?" es booleano,
+  roughness es una escala lineal). Es el estandar de glTF 2.0 y
+  Substance — alineamos con el ecosistema.
+
+- **Convencion glTF para MR packed:** R=AO, G=roughness, B=metallic
+  en una sola textura. Ahorra samples + memoria sin perder fidelidad
+  perceptual. Si aparece un input con encoding distinto, el loader
+  agrega un campo `mr_encoding` al `.material`.
+
+- **`MaterialAsset` como JSON `.material` separado del `.moodmap`,
+  no inline.** Reusable entre escenas, auditable diff-friendly,
+  compatible con futuro editor de grafo (Hito 23). Costo: un
+  archivo extra por material. Aceptable (los materials se reusan).
+
+- **Wrappers `__tex#<id>` para back-compat de `.moodmap` v6.** Cada
+  textura referenciada en formato viejo se envuelve en un material
+  auto-generado al cargar. Persistir el wrapper como `texture_path`
+  (no como path sintetico) hace que el archivo siga siendo legible
+  por v7+ sin requerir un `.material` explicito en disco.
+
+- **IBL split-sum de Karis (Real Shading in UE4, 2013).** Standard
+  de la industria desde 2013, separable en dos terminos
+  precomputables: prefilter cubemap por roughness + BRDF LUT
+  universal. Permite IBL especular convincente con mips en lugar
+  de raytracing.
+
+- **Pre-bake offline en Python.** Scripts `tools/bake_ibl.py` y
+  `tools/bake_brdf_lut.py` con numpy. Lento (~94s), corre solo si
+  cambia el cubemap fuente. Alternativa real-time en C++ con FBO
+  + 6 caras × N mips queda como pendiente futuro (mas complejo de
+  implementar, beneficio marginal mientras el dev no cambie de
+  skybox seguido).
+
+- **Cubemaps LDR PNG, no HDR.** Limitacion conocida: los
+  highlights especulares no tienen rango dinamico. Esta decision
+  es pragmatica (Pillow no escribe `.hdr` Radiance facil) y se
+  revisa cuando aparezca un skybox que lo necesite.
+
+**Razones del split-sum vs alternativas:**
+- Real-time IBL via raytracing (RTX): hardware-only.
+- IBL via texture3D del environment: caro en memoria.
+- Importance sampling per-frag en shader: caro en samples.
+Split-sum es el sweet spot.
+
+## 2026-04-27: Cubemaps de color con `GL_SRGB8_ALPHA8` (Hito 17 fix doble-gamma)
+
+**Contexto:** al activar IBL la escena se veia muy clara, casi
+saturada. Causa: los cubemaps PNG (skybox + IBL) son sRGB-encoded en
+disco; cargados como `GL_RGBA8` GL los lee como linear, suma colores
+inflados al ambient, y el post-process aplica `pow(1/2.2)` al final
+duplicando el gamma encode.
+
+**Decision:** los cubemaps de color (skybox + irradiance + prefilter)
+se cargan con internal format `GL_SRGB8_ALPHA8`. GL hace el decode
+automatico al samplear (`pow(2.2)`), el shader trabaja en linear, y
+el post-process hace UN solo gamma encode al final. Resultado:
+colores fisicamente correctos.
+
+**Excepcion:** la BRDF LUT 2D NO es sRGB (es una tabla numerica de
+scale/bias del split-sum). Se carga como `GL_RGBA8` linear.
+
+**Razones:** es el bug clasico de doble-gamma. La unica forma
+correcta de manejar texturas-color es declararlas sRGB en GPU; el
+hardware ya tiene fast-path para el decode.
+
+**Trade-off:** el cubemap se ve un ~50% mas oscuro que antes en
+el viewport, pero ese era el bug — ahora la escena se ve correcta
+relativa al directional light. Sin esto el PBR diffuse IBL salia
+inflado y los metales reflejaban un cielo blanqueado.
+
+## 2026-04-27: `MeshRenderer.materials` migra a `vector<MaterialAssetId>` con bump v6 -> v7
+
+**Contexto:** hasta el Hito 16 el slot por submesh era una
+`TextureAssetId` (solo albedo). El PBR necesita mas: albedo +
+metallic + roughness + AO + normal. Tres opciones:
+1. Embed los floats en el componente (struct anidada).
+2. Mantener vector<TextureAssetId> + agregar arrays paralelos
+   para metallic/roughness/etc.
+3. Indireccion a un MaterialAsset por id.
+
+**Decision:** opcion 3. `vector<MaterialAssetId>`. El
+`MaterialAsset` vive en el AssetManager (single source of truth),
+multiples entidades pueden compartir el mismo material, y el
+serializer persiste un solo path por slot.
+
+**Razones:**
+- Compartir materiales entre entidades es clave (un material "oro
+  pulido" puede aplicarse a 50 props sin duplicar datos).
+- Mutar el material desde el Inspector se propaga
+  automaticamente a todas las instancias (deseado en este flow).
+- El serializer queda mas simple: 1 string por slot, no 5 fields.
+- Editor de grafo de materiales (Hito 23) opera sobre
+  `MaterialAsset`, no sobre componentes.
+
+**Trade-off:** dos MeshRenderers no pueden tener overrides
+distintos del MISMO material sin clonar el material primero. No
+es un caso comun en la pipeline actual; cuando aparezca,
+agregamos un patron tipo "material instance" (Unreal-style) sobre
+el catalogo existente.
+
+**Bump de version:** v6 → v7 con upgrader que detecta paths
+terminados en `.material` (v7) vs paths de imagen (v6) y los
+trata correctamente. Archivos viejos cargan sin warning.
+
+## 2026-04-27: "Nuevo Proyecto" crea su propia carpeta (Unity/Godot)
+
+**Contexto:** el handler `handleNewProject` usaba el `.moodproj`
+como pivote y creaba `maps/` + `textures/` en su parent dir.
+Cuando el dev elegia `Escritorio/test.moodproj`, el Escritorio
+quedaba con carpetas sueltas — feo y rompe el patron mental "un
+proyecto vive en su carpeta".
+
+**Decision:** si el directorio padre del path elegido NO se llama
+igual que el proyecto, crear `<parent>/<name>/` y poner el
+`.moodproj` + subcarpetas adentro. Si YA esta dentro de una
+carpeta con el mismo nombre (ej. el dev ya creo la carpeta y
+guarda `<dir>/foo/foo.moodproj`), no se agrega un nivel extra
+(DWIM: respeta la intencion explicita).
+
+**Razones:** convencion Unity/Godot/UE. Cualquier dev que viene
+de esos engines lo espera asi. El no-anidar-de-mas evita ambiguedad.
+
+**Alternativas consideradas:**
+- Dialog separado para "carpeta destino" + "nombre del proyecto":
+  mas formal pero rompe el flujo de un solo `pfd::save_file`.
+- Forzar siempre subcarpeta: incomodo para devs que ya armaron
+  estructura por su cuenta.
+
+## 2026-04-27: Sphere primitive en `AssetManager` con slot reservado
+
+**Contexto:** el showcase de PBR del Hito 17 necesita esferas
+porque el shading no se ve igual en cubos. Hasta el Hito 16
+el motor solo tenia `createCubeMesh`.
+
+**Decision:** agregar `createSphereMesh(segments=32)` en
+`PrimitiveMeshes` + un `MeshAssetId primitiveSphereId()` en
+`AssetManager` reservado en el ctor (slot logico
+`__primitive_sphere`, similar al `__missing_cube` del slot 0).
+
+**Razones:**
+- Sin esto, el showcase requiere un `.obj` esfera importado
+  (assimp), agregando complejidad de pipeline a un demo.
+- Generar la mesh en runtime es trivial (UV sphere ~6 lineas).
+- Cualquier futuro showcase / debug visual la va a usar.
+
+**Alternativas consideradas:**
+- Importar `assets/meshes/sphere.obj` desde algun lado (Blender
+  default sphere). Costo: un archivo binario en el repo +
+  dependencia de assimp para algo que se genera analiticamente.

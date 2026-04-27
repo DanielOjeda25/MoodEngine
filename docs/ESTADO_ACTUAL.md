@@ -6,19 +6,28 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 16 cerrado.**
+**Hito 17 cerrado.**
+Tag: `v0.17.0-hito17`.
+Verificado automático: suite doctest **144/649** (+8 de `test_pbr_brdf` + 7 de `test_material_serializer` + 4 de `test_asset_manager` para material catalog). Editor arranca con `IBL cargado: irradiance + prefilter (5 mips) + BRDF LUT.` y `AssetManager: esfera primitiva generada en slot N` en el log. Verificado por el dev a ojo: grid 3×3 de esferas (`Ayuda > Agregar esferas PBR de prueba`) muestra el rango completo metallic 0/0.5/1 × roughness 0.05/0.5/1.0 — esquina inferior-derecha refleja el cielo como espejo, esquina superior-izquierda es chalk mate. Inspector con sliders en vivo de albedoTint/metallic/roughness/ao actualiza el shader sin relanzar. Drag de `.material` desde AssetBrowser sobre cualquier mesh asigna el material al primer slot.
+
+**Stack del frame de render (post Hito 17):**
+1. Shadow pass al depth FB (si hay directional con `castShadows`).
+2. Skybox al scene FB (HDR RGBA16F, sRGB cubemap).
+3. Loop scene-driven con shader `pbr` (Cook-Torrance + Smith + Schlick + IBL split-sum) — termina en `m_sceneFb`.
+4. Debug renderer (AABBs, OBBs, líneas).
+5. Post-process pass: exposure (2^EV) + tonemap (None/Reinhard/ACES) + gamma → `m_viewportFb` LDR RGBA8.
+6. ImGui renderiza el `m_viewportFb` en el panel Viewport.
+
+**Polish reactivo del Hito 17 cerrado en el mismo tag:**
+- `fix(editor): "Nuevo Proyecto" crea su propia carpeta` — convención Unity/Godot, evita contaminar el directorio padre con `maps/`/`textures/` sueltas.
+- LightSystem limpia uniforms `uSpecularStrength`/`uShininess` que eran del Blinn-Phong.
+- Fix doble-gamma: cubemaps de color cargan como `GL_SRGB8_ALPHA8` (skybox + IBL) — antes se veía todo muy claro porque el post-process aplicaba gamma encode sobre datos ya gamma-encoded.
+
+**Próximo paso:** Hito 18 — Deferred / Forward+. Plan en `docs/PLAN_HITO18.md`.
+
+### Hito 16 (anterior, ya cerrado)
 Tag: `v0.16.0-hito16`.
-Verificado automático: suite doctest **125/580** (+5 de `computeShadowMatrices` + 1 round-trip de `castShadows`). Editor arranca con `OpenGLShadowMap inicializado (2048 x 2048)` y `ShadowPass inicializado (shader compilado)` en el log. Al spawnear "Ayuda > Agregar demo de sombras", aparece `ShadowPass ACTIVO (directional con castShadows detectada, dir=(...))`. Verificado por el dev a ojo: piso 20×20 + columna 1×4×1 + sol oblicuo proyecta sombra alargada visible; toggle `castShadows` desde Inspector enciende/apaga la sombra en vivo; round-trip de `castShadows` en `.moodmap` preservado al reabrir.
-
-**Polish reactivo del hito (no en plan original) cerrado en el mismo tag:**
-- Refactor de `EditorApplication.cpp` (2011 → 1154 líneas): `EditorRenderPass.cpp`, `EditorProjectActions.cpp`, `DemoSpawners.cpp`.
-- `k_defaultAmbient` 0.18 → 0.08 (sombras visibles).
-- Cubo cyan del hover de tile **solo durante drag de asset**.
-- Iconos Blender-style para luces (Point: anillo + dots; Sun: core + 8 rayos + línea de dirección).
-- Tecla `.` "frame selected" en `EditorCamera::focusOn`.
-- Outline OBB naranja (12 aristas) para entidad seleccionada con mesh.
-
-**Próximo paso:** Hito 17 — PBR (metallic-roughness workflow + IBL básico desde el cubemap del skybox). Plan en `docs/PLAN_HITO17.md`.
+Suite 125/580. Shadow mapping con sampler2DShadow + PCF 3×3 hardware. `castShadows` checkbox + round-trip en `.moodmap`. Polish UX (iconos Blender, frame selected, outline OBB, cubo cyan condicional, refactor 2011→1154 líneas).
 
 ### Hito 15 (anterior, ya cerrado)
 Tag: `v0.15.0-hito15`.

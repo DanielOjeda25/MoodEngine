@@ -21,7 +21,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 14** — Prefabs (completado, tag `v0.14.0-hito14`).
 - [x] **Hito 15** — Skybox, fog, post-procesado (completado, tag `v0.15.0-hito15`).
 - [x] **Hito 16** — Shadow mapping (completado, tag `v0.16.0-hito16`).
-- [ ] Hito 17 — PBR.
+- [x] **Hito 17** — PBR (completado, tag `v0.17.0-hito17`).
 - [ ] Hito 18 — Deferred / Forward+.
 - [ ] Hito 19 — Animación esquelética.
 - [ ] Hito 20 — UI del juego con RmlUi.
@@ -426,3 +426,54 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Soft shadows / VSM / PCSS** para sombras con penumbra realista. **Trigger:** post-PBR.
 - **Bias por geometría** (slope-scale bias) para reducir peter-panning sin front-face culling. **Trigger:** si front-face culling rompe sombras de geometría no-cerrada (planos, sprites).
 - **AABB del MeshAsset** para outlines más precisos en meshes no centrados en `[-0.5, 0.5]³`. Hoy el outline asume cubo unitario. **Trigger:** primer mesh importado con bounds atípicos.
+
+## Hito 17 — PBR (Physically Based Rendering)
+
+**Objetivo:** reemplazar el shading Blinn-Phong por PBR metallic-roughness con IBL básico desde el cubemap del skybox. Materiales editables en runtime via Inspector + sliders, persistibles en `.material` JSON. Showcase 3×3 esferas (metallic × roughness) verificable en una sola toma.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — datos + serialización:*
+- `engine/render/MaterialAsset.h`: 4 slots de textura (albedo, MR packed, normal, AO) + 4 escalares fallback (`albedoTint`, `metallic`, `roughness`, `ao`). Convención glTF para MR packed (R=AO, G=rough, B=metal).
+- `AssetManager` extendido con catálogo `MaterialAssetId` (slot 0 = default mate dieléctrico) + `loadMaterial(.material JSON)` + `loadMaterialFromTexture` (wrapper auto para back-compat) + `createMaterial(prototype)` (helper runtime sin tocar disco).
+- `MeshRendererComponent.materials`: `vector<TextureAssetId>` → `vector<MaterialAssetId>`.
+- Bump `k_MoodmapFormatVersion` 6 → 7. Upgrader detecta extensión: `.material` se carga como material, otra cosa se trata como textura y se envuelve en wrapper.
+
+*Bloque 2 — shaders:*
+- `shaders/pbr.{vert,frag}` reemplazan a `lit.{vert,frag}`. Cook-Torrance con GGX (Trowbridge-Reitz) + Smith-Schlick + Fresnel-Schlick. Energy conservation explicita (`kS = F`, `kD = (1-kS)*(1-metallic)`).
+- Shadow factor del Hito 16 multiplica solo el término directo del directional (no el IBL).
+
+*Bloque 3 — IBL:*
+- `tools/bake_brdf_lut.py`: tabla universal 256×256 (RG = scale/bias del split-sum de Karis), 1024 samples Hammersley/texel.
+- `tools/bake_ibl.py`: irradiance 32×32 (cosine-weighted, 2048 samples) + prefilter mip chain 5 niveles (128→8) con GGX importance sampling. Lento offline (~94s), runtime cero.
+- Assets pre-bakeados en `assets/ibl/sky_day/` y `assets/ibl/brdf_lut.png`.
+- `OpenGLCubemapTexture` extendido con mip chain + flag `sRgb`. Los cubemaps de color (skybox + IBL) se cargan como `GL_SRGB8_ALPHA8` para que GL haga el decode automático y no haya doble-gamma con el post-process.
+- IBL split-sum aplicado en `pbr.frag` (irradiance unit 4, prefilter unit 5, BRDF LUT unit 6). Fallback a `uAmbient` escalar si los assets no están.
+
+*Bloque 4 — Inspector + UX:*
+- InspectorPanel con sliders en vivo de `albedoTint` (ColorEdit3), `metallic`, `roughness`, `ao` por slot del MeshRenderer. Editar muta el `MaterialAsset` in-place; el render del frame siguiente lo ve.
+- AssetBrowser nueva sección "Materiales" lista los `.material` JSON. Drag payload `MOOD_MATERIAL_ASSET`.
+- ViewportPanel con `enum AssetDragKind { None, Texture, Mesh, Prefab, Material }` para distinguir highlights: cubo cyan (drag a tile) vs OBB amarillo (drag a entidad).
+- Drop de material vía `pickEntity` reasigna el primer slot del MeshRenderer.
+- 5 `.material` samples en `assets/materials/` (oro_pulido, cobre_rugoso, plastico_azul, acero_pulido, caucho_negro).
+
+*Bloque 5 — demo + tests:*
+- `createSphereMesh()` en PrimitiveMeshes (UV sphere, 32 segs). `AssetManager::primitiveSphereId()` reservado en el ctor.
+- "Ayuda > Agregar esferas PBR de prueba" spawnea un grid 3×3: eje X = metallic (0.0/0.5/1.0), eje Y = roughness (0.05/0.5/1.0).
+- `engine/render/PbrMath.h`: helpers puros C++ (Fresnel-Schlick, GGX, Smith) compartidos con el shader.
+- Tests nuevos: `test_pbr_brdf.cpp` (8 casos: F0 dieléctrico vs metálico, Fresnel a 0/90°/intermedios, GGX max y monotonía, Smith en [0,1] y NdotL=0). `test_material_serializer.cpp` (7 casos: round-trip, defaults faltantes, cache, archivo inexistente, JSON inválido, paths de textura, createMaterial slots distintos). Suite total **144 / 649**.
+
+**Polish reactivo del hito:**
+- `fix(editor): "Nuevo Proyecto" crea su propia carpeta` — antes contaminaba el directorio padre con `maps/` y `textures/` sueltas; ahora `<dir>/<name>/` con todo adentro (Unity/Godot convention).
+- LightSystem deja de subir `uSpecularStrength`/`uShininess` (eran del Blinn-Phong, ya no aplican).
+
+**Siguiente paso tras completarlo:** Hito 18 — Deferred / Forward+. Plan en `docs/PLAN_HITO18.md`.
+
+### Pendientes menores detectados en Hito 17
+
+- **HDR cubemaps reales** (`.hdr` Radiance RGBE). Hoy los cubemaps son PNG 8-bit LDR — los reflejos especulares no tienen rango dinámico real. **Trigger:** cuando aparezca un skybox con highlights >1.0 que ameriten el rango.
+- **Normal mapping**: el shader `pbr.frag` no samplea el slot `normal` aún (los meshes actuales no traen tangentes). **Trigger:** primer mesh importado con normal map, o agregar tangentes a `createCubeMesh`/`createSphereMesh`.
+- **AO sample real desde MR packed (canal R)**: hoy el shader respeta solo `uAoMap` separado y `uAoMult` escalar. **Trigger:** materiales glTF importados con AO en el R del MR packed.
+- **Renderer de equirectangular → cubemap** para que el dev pueda dropear un `.hdr` panorámico y se convierta en cubemap automáticamente. **Trigger:** integración con HDR sources externos.
+- **Editor de grafo de materiales** (substance-style). **Trigger:** Hito 23 (es un hito dedicado).
+- **Multi-submesh material assignment desde drag**: hoy el drop de material asigna SOLO al primer slot. **Trigger:** primer mesh con submeshes que necesite materiales distintos.
