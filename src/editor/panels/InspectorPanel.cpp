@@ -145,6 +145,11 @@ void InspectorPanel::onImGuiRender() {
             if (ImGui::DragFloat3("direction##lt", &lt.direction.x, 0.01f, -1.0f, 1.0f)) {
                 m_editedThisFrame = true;
             }
+            // Hito 16: solo directional puede emitir shadow map (point shadows
+            // requeririan cubemap depth, fuera de scope).
+            if (ImGui::Checkbox("castShadows##lt", &lt.castShadows)) {
+                m_editedThisFrame = true;
+            }
         }
         ImGui::Separator();
     }

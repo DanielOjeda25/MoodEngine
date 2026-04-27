@@ -14,6 +14,7 @@ in vec3 vColor;
 in vec2 vUv;
 in vec3 vWorldPos;
 in vec3 vWorldNormal;
+in vec4 vLightSpacePos;   // Hito 16: posicion en clip-space de la luz
 
 uniform sampler2D uTexture;
 
@@ -40,6 +41,47 @@ uniform int uActivePointLights;   // [0, MAX_POINT_LIGHTS]
 
 uniform float uSpecularStrength;  // global (todas las superficies por igual)
 uniform float uShininess;         // exponente Blinn-Phong (32 = mate-medio)
+
+// Shadow mapping (Hito 16). El shadow map del directional light se samplea
+// con `sampler2DShadow` (compare automatico depth_ref vs stored). PCF 3x3
+// suaviza el borde — con `sampler2DShadow` cada `texture()` ya hace 4 taps
+// hardware-PCF, asi que en total son 9 cells * 4 taps = 36 muestras
+// efectivas. Si el costo se nota en escenas grandes, bajar a 1x1 (1 tap).
+uniform int        uShadowEnabled; // 0 = sin shadows (uShadowMap puede no estar bound)
+uniform sampler2DShadow uShadowMap;
+uniform float      uShadowBias;    // bias para evitar shadow acne; default ~0.005
+
+float sampleShadow(vec4 lightSpacePos) {
+    if (uShadowEnabled == 0) return 1.0;
+
+    // Proyectar a NDC [-1, 1] y mapear a [0, 1].
+    vec3 proj = lightSpacePos.xyz / max(lightSpacePos.w, 1e-5);
+    proj = proj * 0.5 + 0.5;
+
+    // Fuera del frustum de la luz: tratar como totalmente iluminado.
+    // (El sampler tiene clamp_to_border + border depth=1, asi que un sample
+    // afuera de [0,1] devuelve 1; pero el `proj.z > 1` es nuestro caso fast
+    // path para no pagar el sample.)
+    if (proj.z > 1.0) return 1.0;
+
+    // Aplicamos el bias al depth de referencia para que la cara que recibe
+    // luz no se sombree a si misma (shadow acne).
+    float refDepth = proj.z - uShadowBias;
+
+    // PCF 3x3 sobre el shadow map. Cada texture() con sampler2DShadow ya
+    // hace hardware PCF de 4 taps, asi que esto totaliza 36 muestras
+    // efectivas.
+    vec2 texelSize = 1.0 / vec2(textureSize(uShadowMap, 0));
+    float sum = 0.0;
+    for (int y = -1; y <= 1; ++y) {
+        for (int x = -1; x <= 1; ++x) {
+            vec2 offset = vec2(float(x), float(y)) * texelSize;
+            sum += texture(uShadowMap,
+                           vec3(proj.xy + offset, refDepth));
+        }
+    }
+    return sum / 9.0;
+}
 
 // Fog (Hito 15 Bloque 2). `uFogMode`: 0=off, 1=lineal, 2=exp, 3=exp2.
 // Misma matematica que `engine/render/Fog.h` (testeable sin GL).
@@ -107,7 +149,13 @@ void main() {
     vec3 V = normalize(uCameraPos - vWorldPos);
 
     vec3 lighting = uAmbient * albedo;
-    lighting += evalDirectional(uDirectional, N, V, albedo);
+    // Hito 16: la directional light se atenua por el shadow factor.
+    // `sampleShadow` devuelve 1.0 si no hay shadows o el frag esta
+    // iluminado, ~0 si esta totalmente en sombra (con PCF graduado en
+    // los bordes). Solo afecta a la directional — point lights por
+    // ahora no proyectan sombras.
+    float shadowF = sampleShadow(vLightSpacePos);
+    lighting += evalDirectional(uDirectional, N, V, albedo) * shadowF;
 
     int n = min(uActivePointLights, MAX_POINT_LIGHTS);
     for (int i = 0; i < n; ++i) {

@@ -39,6 +39,7 @@ class AudioSystem;
 class LightSystem;
 class PhysicsWorld;
 class SkyboxRenderer;
+class ShadowPass;
 
 class EditorApplication {
 public:
@@ -147,6 +148,7 @@ private:
     void processSpawnPointLightRequest();
     void processSpawnPhysicsBoxRequest();
     void processSpawnEnvironmentRequest();
+    void processSpawnShadowDemoRequest();
     void processSavePrefabRequest();
     void processViewportTextureDrop();
     void processViewportMeshDrop();
@@ -186,6 +188,11 @@ private:
     std::unique_ptr<LightSystem> m_lightSystem;
     std::unique_ptr<PhysicsWorld> m_physicsWorld;
     std::unique_ptr<SkyboxRenderer> m_skyboxRenderer;
+    std::unique_ptr<ShadowPass> m_shadowPass; // Hito 16
+    // Para loguear la primera vez que el shadow pass se activa / desactiva
+    // (cambio de estado del directional light con castShadows). Se actualiza
+    // dentro de `renderSceneToViewport`.
+    bool m_shadowEnabledLastFrame = false;
 
     // Estado de render del frame actual. Lo regenera
     // `applyEnvironmentFromScene` cada frame (reset a defaults + override

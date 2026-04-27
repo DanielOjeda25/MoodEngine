@@ -185,6 +185,7 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
                 lc.radius    = sl.radius;
                 lc.direction = sl.direction;
                 lc.enabled   = sl.enabled;
+                lc.castShadows = sl.castShadows; // Hito 16
                 e.addComponent<LightComponent>(lc);
             }
             // Hito 12: aplicar RigidBodyComponent persistido. El body se

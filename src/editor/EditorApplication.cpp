@@ -23,6 +23,7 @@
 #include "systems/AudioSystem.h"
 #include "systems/LightSystem.h"
 #include "systems/PostProcessPass.h"
+#include "systems/ShadowPass.h"
 #include "systems/SkyboxRenderer.h"
 #include "systems/PhysicsSystem.h"
 #include "systems/ScriptSystem.h"
@@ -205,6 +206,17 @@ EditorApplication::EditorApplication() {
     // Post-process pass (Hito 15 Bloque 3). Toma `m_sceneFb` (HDR) y
     // produce `m_viewportFb` (LDR) tras exposicion + tonemap + gamma.
     m_postProcess = std::make_unique<PostProcessPass>();
+
+    // Shadow pass (Hito 16). Owns un depth FB + shader shadow_depth.
+    // El render pass lo usa antes del lit cuando hay una directional con
+    // `castShadows=true`.
+    try {
+        m_shadowPass = std::make_unique<ShadowPass>(2048);
+    } catch (const std::exception& e) {
+        Log::render()->warn("ShadowPass no disponible: {}. Sombras off.",
+                             e.what());
+        m_shadowPass.reset();
+    }
 
     m_scene = std::make_unique<Scene>();
     m_scriptSystem = std::make_unique<ScriptSystem>();
@@ -840,6 +852,7 @@ EditorApplication::~EditorApplication() {
     m_lightSystem.reset();
     m_physicsWorld.reset();
     m_skyboxRenderer.reset();
+    m_shadowPass.reset();
     m_postProcess.reset();
     m_debugRenderer.reset();
     m_assetManager.reset(); // dueño de las texturas y meshes (incluido el cubo fallback)
@@ -1059,6 +1072,7 @@ int EditorApplication::run() {
         processSpawnRotatorRequest();
         processSpawnPhysicsBoxRequest();
         processSpawnEnvironmentRequest();
+        processSpawnShadowDemoRequest();
         processSpawnPointLightRequest();
         processSpawnAudioSourceRequest();
         processSavePrefabRequest();

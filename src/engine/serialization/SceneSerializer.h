@@ -72,6 +72,7 @@ struct SavedLight {
     f32 radius = 10.0f;                    // solo Point
     glm::vec3 direction{0.0f, -1.0f, 0.0f}; // solo Directional
     bool enabled = true;
+    bool castShadows = false;              // solo Directional (Hito 16)
 };
 
 /// @brief Copia persistida de un RigidBodyComponent (Hito 12).

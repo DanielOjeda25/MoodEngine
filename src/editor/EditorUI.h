@@ -127,6 +127,17 @@ public:
         return r;
     }
 
+    /// @brief Hito 16: request para spawnear un mini-set de demo de sombras
+    ///        (piso plano + columna + luz direccional con castShadows=true)
+    ///        que permita ver el resultado del shadow mapping de forma clara
+    ///        sin tener que armar manualmente la escena.
+    void requestSpawnShadowDemo() { m_spawnShadowDemoRequested = true; }
+    bool consumeSpawnShadowDemoRequest() {
+        const bool r = m_spawnShadowDemoRequested;
+        m_spawnShadowDemoRequested = false;
+        return r;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -220,6 +231,7 @@ private:
     bool m_spawnPhysicsBoxRequested = false;
     bool m_savePrefabRequested = false;
     bool m_spawnEnvironmentRequested = false;
+    bool m_spawnShadowDemoRequested = false; // Hito 16
     bool m_recentsDirty = false; // Hito 15 polish: edicion manual de la lista de recientes
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;

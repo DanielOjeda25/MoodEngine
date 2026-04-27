@@ -308,11 +308,12 @@ TEST_CASE("SceneSerializer: round-trip de LightComponent (Hito 11)") {
     Entity d = scene.createEntity("Sol");
     {
         LightComponent lc{};
-        lc.type      = LightComponent::Type::Directional;
-        lc.direction = glm::vec3(0.0f, -1.0f, 0.3f);
-        lc.color     = glm::vec3(1.0f, 0.8f, 0.6f);
-        lc.intensity = 0.5f;
-        lc.enabled   = true;
+        lc.type        = LightComponent::Type::Directional;
+        lc.direction   = glm::vec3(0.0f, -1.0f, 0.3f);
+        lc.color       = glm::vec3(1.0f, 0.8f, 0.6f);
+        lc.intensity   = 0.5f;
+        lc.enabled     = true;
+        lc.castShadows = true; // Hito 16
         d.addComponent<LightComponent>(lc);
     }
 
@@ -342,10 +343,14 @@ TEST_CASE("SceneSerializer: round-trip de LightComponent (Hito 11)") {
     CHECK(sePoint->light->color.r   == doctest::Approx(1.0f));
     CHECK(sePoint->light->color.g   == doctest::Approx(0.95f));
     CHECK(sePoint->light->enabled);
+    // Point light no usa castShadows: el default false debe persistir.
+    CHECK_FALSE(sePoint->light->castShadows);
 
     CHECK(seDir->light->type == "directional");
     CHECK(seDir->light->direction.y == doctest::Approx(-1.0f));
     CHECK(seDir->light->intensity   == doctest::Approx(0.5f));
+    // Hito 16: castShadows=true debe persistir.
+    CHECK(seDir->light->castShadows);
 
     std::filesystem::remove(path);
 }

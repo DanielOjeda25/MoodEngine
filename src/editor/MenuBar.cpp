@@ -97,6 +97,12 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar Environment", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnEnvironment();
             }
+            // Demo Hito 16: piso plano + columna + sol direccional con
+            // castShadows=true. Pensado para ver shadow mapping aislado sin
+            // que el mapa de tiles tape la sombra contra los muros.
+            if (ImGui::MenuItem("Agregar demo de sombras", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnShadowDemo();
+            }
             ImGui::EndMenu();
         }
 

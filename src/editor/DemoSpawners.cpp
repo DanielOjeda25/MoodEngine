@@ -78,6 +78,59 @@ void EditorApplication::processSpawnEnvironmentRequest() {
     }
 }
 
+void EditorApplication::processSpawnShadowDemoRequest() {
+    if (!(m_ui.consumeSpawnShadowDemoRequest() && m_scene && m_assetManager)) return;
+
+    // Texturas: grid para el piso (lectura clara de la sombra), brick para la
+    // columna. Ambos ya estan cargados durante buildInitialTestMap, asi que
+    // loadTexture deberia ser un cache hit.
+    const TextureAssetId gridTex  = m_assetManager->loadTexture("textures/grid.png");
+    const TextureAssetId brickTex = m_assetManager->loadTexture("textures/brick.png");
+    const MeshAssetId    cube     = m_assetManager->missingMeshId(); // cubo primitivo
+
+    // 1) Piso plano grande (cubo escalado y=0.1). Centrado en el origen, se
+    //    apoya con su cara superior en y=0.1 — un poco encima del suelo de
+    //    tiles (y=0.0) para evitar z-fighting si conviven.
+    {
+        Entity floor = m_scene->createEntity("DemoSombras_Piso");
+        auto& t = floor.getComponent<TransformComponent>();
+        t.position = glm::vec3(0.0f, 0.05f, 0.0f);
+        t.scale    = glm::vec3(20.0f, 0.1f, 20.0f);
+        floor.addComponent<MeshRendererComponent>(cube, gridTex);
+    }
+
+    // 2) Columna alta (cubo 1x4x1) que proyecta una sombra alargada bien
+    //    visible sobre el piso.
+    {
+        Entity col = m_scene->createEntity("DemoSombras_Columna");
+        auto& t = col.getComponent<TransformComponent>();
+        t.position = glm::vec3(2.0f, 2.0f, 0.0f);
+        t.scale    = glm::vec3(1.0f, 4.0f, 1.0f);
+        col.addComponent<MeshRendererComponent>(cube, brickTex);
+    }
+
+    // 3) Sol direccional con castShadows. Direccion oblicua (no vertical) para
+    //    que la sombra de la columna salga LARGA contra el piso. Intensidad
+    //    1.0 — alcanza para ver claro contra el ambient 0.08.
+    {
+        Entity sun = m_scene->createEntity("DemoSombras_Sol");
+        LightComponent lc{};
+        lc.type        = LightComponent::Type::Directional;
+        lc.color       = glm::vec3(1.0f, 0.97f, 0.92f);
+        lc.intensity   = 1.0f;
+        lc.direction   = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
+        lc.enabled     = true;
+        lc.castShadows = true;
+        sun.addComponent<LightComponent>(lc);
+        m_ui.setSelectedEntity(sun);
+    }
+
+    Log::editor()->info(
+        "Spawned demo de sombras: piso 20x20, columna 1x4x1 en (2, 2, 0), "
+        "sol direccional con castShadows=true");
+    markDirty();
+}
+
 void EditorApplication::processSpawnPointLightRequest() {
     if (!(m_ui.consumeSpawnPointLightRequest() && m_scene)) return;
     Entity light = m_scene->createEntity("Luz demo");
@@ -331,6 +384,7 @@ void EditorApplication::processViewportPrefabDrop() {
         lc.radius    = l.radius;
         lc.direction = l.direction;
         lc.enabled   = l.enabled;
+        lc.castShadows = l.castShadows; // Hito 16
         e.addComponent<LightComponent>(lc);
     }
     if (sp->root.rigidBody.has_value()) {

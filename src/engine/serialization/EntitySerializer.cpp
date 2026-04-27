@@ -42,6 +42,10 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         jl["radius"]    = lc.radius;
         jl["direction"] = lc.direction;
         jl["enabled"]   = lc.enabled;
+        // Hito 16: solo persistimos castShadows si es true para no ensuciar
+        // mapas viejos con un campo nuevo. Los archivos sin el campo lo
+        // interpretan como false al cargar (default del SavedLight).
+        if (lc.castShadows) jl["cast_shadows"] = true;
         je["light"] = jl;
     }
 
@@ -124,6 +128,7 @@ SavedEntity parseEntityFromJson(const json& j) {
         sl.radius    = jl.value("radius",    10.0f);
         sl.direction = jl.value("direction", glm::vec3{0.0f, -1.0f, 0.0f});
         sl.enabled   = jl.value("enabled",   true);
+        sl.castShadows = jl.value("cast_shadows", false); // Hito 16, opcional
         se.light = std::move(sl);
     }
     if (j.contains("rigid_body")) {

@@ -107,6 +107,7 @@ struct LightComponent {
     float radius = 10.0f;                    // solo Point
     glm::vec3 direction{0.0f, -1.0f, 0.0f};  // solo Directional, normalizada
     bool enabled = true;
+    bool castShadows = false;                // solo Directional (Hito 16)
 };
 
 /// @brief Behavior en Lua (Hito 8). `path` es logico (ej. "scripts/rotator.lua").

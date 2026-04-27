@@ -265,6 +265,7 @@ add_executable(MoodEditor
     src/systems/PhysicsSystem.cpp
     src/systems/PostProcessPass.cpp
     src/systems/ScriptSystem.cpp
+    src/systems/ShadowPass.cpp
     src/systems/SkyboxRenderer.cpp
 
     src/engine/scripting/LuaBindings.cpp
@@ -275,6 +276,7 @@ add_executable(MoodEditor
     src/engine/render/opengl/OpenGLRenderer.cpp
     src/engine/render/opengl/OpenGLTexture.cpp
     src/engine/render/opengl/OpenGLCubemapTexture.cpp
+    src/engine/render/opengl/OpenGLShadowMap.cpp
     src/engine/render/opengl/OpenGLDebugRenderer.cpp
 
     src/editor/DemoSpawners.cpp

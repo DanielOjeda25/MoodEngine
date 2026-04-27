@@ -15,6 +15,7 @@
 
 #include "editor/EditorApplication.h"
 
+#include "core/Log.h"
 #include "core/math/AABB.h"
 #include "engine/render/IRenderer.h"
 #include "engine/render/ITexture.h"
@@ -28,7 +29,10 @@
 #include "engine/scene/ViewportPick.h"
 #include "systems/LightSystem.h"
 #include "systems/PostProcessPass.h"
+#include "systems/ShadowPass.h"
 #include "systems/SkyboxRenderer.h"
+
+#include <glad/gl.h>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
@@ -67,6 +71,53 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         // El HDR es el target del render real; el LDR es el que ImGui muestra.
         m_sceneFb->resize(desiredW, desiredH);
         m_viewportFb->resize(desiredW, desiredH);
+    }
+
+    // Hito 16: Shadow pass ANTES de bindear el scene FB. Buscamos la
+    // primera DirectionalLight con `enabled && castShadows` y, si existe,
+    // renderizamos al shadow map. Las matrices del light-space quedan en
+    // `m_shadowPass->lightSpaceMatrix()` para subir como uniform al lit
+    // shader despues. Sin directional con shadows: `shadowEnabled = 0` y
+    // el lit shader saltea el sample.
+    bool shadowEnabled = false;
+    glm::vec3 shadowLightDir(0.0f, -1.0f, 0.0f);
+    if (m_scene && m_shadowPass) {
+        m_scene->forEach<LightComponent>(
+            [&](Entity, LightComponent& lc) {
+                if (shadowEnabled) return;
+                if (!lc.enabled) return;
+                if (lc.type != LightComponent::Type::Directional) return;
+                if (!lc.castShadows) return;
+                shadowEnabled = true;
+                shadowLightDir = lc.direction;
+            });
+    }
+    if (shadowEnabled) {
+        // Bounding sphere fijo centrado en el origen del mapa, radius
+        // grande para cubrir tiles + props. Cuando llegue CSM (Hito futuro)
+        // esto se reemplaza por una serie de cascadas calculadas del frustum
+        // de la camara.
+        const glm::vec3 sceneCenter = mapWorldOrigin() +
+            glm::vec3(m_map.width()  * m_map.tileSize() * 0.5f,
+                      0.0f,
+                      m_map.height() * m_map.tileSize() * 0.5f);
+        const f32 sceneRadius = std::max(m_map.width(), m_map.height())
+                              * m_map.tileSize() * 0.75f + 5.0f;
+        m_shadowPass->record(*m_scene, *m_assetManager, *m_renderer,
+                             shadowLightDir, sceneCenter, sceneRadius);
+    }
+    // Log one-shot del cambio de estado del shadow pass — util para confirmar
+    // visualmente que el directional con castShadows fue detectado.
+    if (shadowEnabled != m_shadowEnabledLastFrame) {
+        if (shadowEnabled) {
+            Log::render()->info(
+                "ShadowPass ACTIVO (directional con castShadows detectada, "
+                "dir=({:.2f},{:.2f},{:.2f}))",
+                shadowLightDir.x, shadowLightDir.y, shadowLightDir.z);
+        } else {
+            Log::render()->info("ShadowPass inactivo (sin directional con castShadows)");
+        }
+        m_shadowEnabledLastFrame = shadowEnabled;
     }
 
     // El render de la escena (sky + lit + fog + debug) escribe al HDR.
@@ -138,6 +189,24 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         m_litShader->setMat4("uProjection", projection);
         m_litShader->setInt("uTexture", 0);
         m_lightSystem->bindUniforms(*m_litShader, lights, cameraPos);
+
+        // Hito 16: shadow uniforms. Si hay directional con castShadows el
+        // shadow pass ya escribio al depth FB; subimos la lightSpace matrix
+        // y bindeamos el shadow map al texture unit 1 (unit 0 = albedo).
+        // `uShadowEnabled = 0` cuando no hay shadows: el lit saltea el
+        // sample y el sampler2DShadow puede quedar sin bindear sin crashear.
+        m_litShader->setInt("uShadowEnabled", shadowEnabled ? 1 : 0);
+        m_litShader->setInt("uShadowMap", 1);
+        m_litShader->setFloat("uShadowBias", 0.005f);
+        if (shadowEnabled && m_shadowPass) {
+            m_litShader->setMat4("uLightSpace",
+                                  m_shadowPass->lightSpaceMatrix());
+            m_shadowPass->bindShadowMap(1);
+        } else {
+            m_litShader->setMat4("uLightSpace", glm::mat4(1.0f));
+        }
+        // Volver al texture unit 0 para los albedos del scene-driven loop.
+        glActiveTexture(GL_TEXTURE0);
 
         // Hito 15 Bloque 2: fog. En este bloque los parametros viven en un
         // member del EditorApplication (`m_fog`) inicializado por default

@@ -12,11 +12,13 @@ layout(location = 3) in vec3 aNormal;
 uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProjection;
+uniform mat4 uLightSpace;  // Hito 16: lightProj * lightView, identidad si no hay shadows
 
 out vec3 vColor;
 out vec2 vUv;
 out vec3 vWorldPos;
 out vec3 vWorldNormal;
+out vec4 vLightSpacePos;   // posicion en light-clip-space para shadow sample
 
 void main() {
     vColor = aColor;
@@ -31,6 +33,12 @@ void main() {
     // a un uniform `uNormalMatrix` que el CPU pre-calcula.
     mat3 normalMatrix = mat3(transpose(inverse(uModel)));
     vWorldNormal = normalize(normalMatrix * aNormal);
+
+    // Posicion en clip-space de la luz para sampling del shadow map.
+    // Si el shadow map no esta activo, `uLightSpace` es la identidad y
+    // este valor queda en (worldPos, 1.0) — el frag shader igual lo
+    // ignora porque `uShadowEnabled = 0`.
+    vLightSpacePos = uLightSpace * worldPos4;
 
     gl_Position = uProjection * uView * worldPos4;
 }
