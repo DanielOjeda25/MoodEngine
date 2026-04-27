@@ -20,7 +20,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 13** — Gizmos y selección (completado, tag `v0.13.0-hito13`).
 - [x] **Hito 14** — Prefabs (completado, tag `v0.14.0-hito14`).
 - [x] **Hito 15** — Skybox, fog, post-procesado (completado, tag `v0.15.0-hito15`).
-- [ ] Hito 16 — Shadow mapping.
+- [x] **Hito 16** — Shadow mapping (completado, tag `v0.16.0-hito16`).
 - [ ] Hito 17 — PBR.
 - [ ] Hito 18 — Deferred / Forward+.
 - [ ] Hito 19 — Animación esquelética.
@@ -390,3 +390,39 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Anti-aliasing** (MSAA o FXAA). **Trigger:** jaggies visibles.
 - **Skybox procedural** (atmospheric scattering). **Trigger:** demo de ciclo día/noche.
 - **`ICubemapTexture` abstracta**. **Trigger:** segundo consumidor de cubemaps (IBL Hito 17).
+
+## Hito 16 — Shadow mapping
+
+**Objetivo:** sombras dinámicas para la directional light principal con shadow map depth-only + PCF 3×3 hardware. Toggle por luz vía `castShadows`, persistido en `.moodmap` y `.moodprefab`.
+
+**Criterios de aceptación cumplidos:**
+- `OpenGLShadowMap` (FBO depth-only 2048×2048, `GL_DEPTH_COMPONENT24`, `GL_COMPARE_REF_TO_TEXTURE` + `GL_LEQUAL`, border depth=1 para que muestras fuera del frustum sean "iluminadas").
+- `shaders/shadow_depth.{vert,frag}` (vert con `uLightSpace * uModel * pos`, frag vacío).
+- `ShadowPass` (recorre `Scene::forEach<Transform, MeshRenderer>` con front-face culling para reducir peter-panning).
+- `lit.{vert,frag}` extendido: uniform `uLightSpace`, `vLightSpacePos` interpolado, `sampleShadow()` con PCF 3×3 sobre `sampler2DShadow` (36 muestras efectivas con hardware PCF de 4 taps).
+- `LightComponent.castShadows` (solo Directional). Checkbox en el Inspector + round-trip en `.moodmap` (campo `cast_shadows` opcional, default false → archivos viejos compatibles sin bump de versión).
+- `engine/render/ShadowMath.h`: helper puro (sin GL) con `computeShadowMatrices(lightDir, sceneCenter, sceneRadius)`. Refactor de `ShadowPass` para usarlo. Permite testear el cálculo de matrices.
+- Tests nuevos: `test_shadow_proj.cpp` (5 casos: centro NDC, bounding sphere dentro del frustum, fallback de zero-dir, normalización idempotente, `chooseLightUp`). Extensión de `test_scene_serializer` con round-trip de `castShadows`. Suite total **125 / 580**.
+- Demo "Ayuda > Agregar demo de sombras": piso plano 20×20 + columna 1×4×1 + sol oblicuo con `castShadows=true`. Smoke test visual confirmado.
+
+**Bloque 0.5: refactor de `EditorApplication.cpp`** (preventivo ante crecimiento del archivo, pedido del dev). Pasó de **2011 → 1154 líneas (-43%)**:
+- `editor/EditorRenderPass.cpp` — `renderSceneToViewport` + `applyEnvironmentFromScene`.
+- `editor/EditorProjectActions.cpp` — handlers de Nuevo/Abrir/Guardar/Cerrar proyecto + `tryOpenProjectPath` + `loadEditorState`/`saveEditorState`.
+- `editor/DemoSpawners.cpp` — handlers `processSpawn*Request` + drops del viewport.
+
+**Polish reactivo del hito (no en plan original):**
+- `k_defaultAmbient` bajado de 0.18 a 0.08: las sombras se notan recién con un ambient más bajo.
+- Cubo cyan del hover de tile **solo aparece durante drag de asset** (textura/mesh/prefab). Antes se mostraba siempre que el cursor estuviera sobre la imagen — UX ruidosa.
+- Iconos de luces estilo Blender en el viewport overlay: anillo + dots para Point, core + 8 rayos para Sun, con línea proyectada hacia donde apunta `direction`.
+- Tecla `.` "frame selected" estilo Blender: re-centra el target de la `EditorCamera` y ajusta el radius para que la entidad seleccionada entre en cuadro. Mantiene yaw/pitch.
+- Outline OBB naranja (12 aristas vía `OpenGLDebugRenderer`) para la entidad seleccionada con mesh — sigue rotación y escala.
+
+**Siguiente paso tras completarlo:** Hito 17 — PBR (metallic-roughness workflow, IBL básico desde el cubemap del skybox). Plan en `docs/PLAN_HITO17.md`.
+
+### Pendientes menores detectados en Hito 16
+
+- **Cascaded Shadow Maps (CSM)** para escenas grandes. Hoy 1 sola cascada con bounding sphere fijo del mapa. **Trigger:** mundos > 50 m de extensión donde la resolución del shadow map se note pixelada.
+- **Sombras de point lights** (cubemap depth, 6 caras). **Trigger:** demos con interiores donde la directional no alcanza.
+- **Soft shadows / VSM / PCSS** para sombras con penumbra realista. **Trigger:** post-PBR.
+- **Bias por geometría** (slope-scale bias) para reducir peter-panning sin front-face culling. **Trigger:** si front-face culling rompe sombras de geometría no-cerrada (planos, sprites).
+- **AABB del MeshAsset** para outlines más precisos en meshes no centrados en `[-0.5, 0.5]³`. Hoy el outline asume cubo unitario. **Trigger:** primer mesh importado con bounds atípicos.

@@ -6,11 +6,23 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 15 cerrado, mergeado a `main` y publicado en origin.**
-Tag: `v0.15.0-hito15`.
-Verificado automático: suite doctest 120/530 (+6 de fog numérico + 1 de round-trip Environment). Editor arranca con `SkyboxRenderer inicializado` y `PostProcessPass inicializado` en el log; el Welcome modal aparece SIEMPRE (no auto-open). Verificado por el dev a ojo: skybox visible detrás de la sala, fog se aplica en vivo desde Inspector, exposure / tonemap reactivos sin relanzar, `EnvironmentComponent` se persiste con el `.moodmap` y se reaplica al reabrir.
+**Hito 16 cerrado.**
+Tag: `v0.16.0-hito16`.
+Verificado automático: suite doctest **125/580** (+5 de `computeShadowMatrices` + 1 round-trip de `castShadows`). Editor arranca con `OpenGLShadowMap inicializado (2048 x 2048)` y `ShadowPass inicializado (shader compilado)` en el log. Al spawnear "Ayuda > Agregar demo de sombras", aparece `ShadowPass ACTIVO (directional con castShadows detectada, dir=(...))`. Verificado por el dev a ojo: piso 20×20 + columna 1×4×1 + sol oblicuo proyecta sombra alargada visible; toggle `castShadows` desde Inspector enciende/apaga la sombra en vivo; round-trip de `castShadows` en `.moodmap` preservado al reabrir.
 
-**Próximo paso:** Hito 16 — Shadow mapping. Shadow map de la directional light principal + PCF + sample en `lit.frag`. Plan en `docs/PLAN_HITO16.md`.
+**Polish reactivo del hito (no en plan original) cerrado en el mismo tag:**
+- Refactor de `EditorApplication.cpp` (2011 → 1154 líneas): `EditorRenderPass.cpp`, `EditorProjectActions.cpp`, `DemoSpawners.cpp`.
+- `k_defaultAmbient` 0.18 → 0.08 (sombras visibles).
+- Cubo cyan del hover de tile **solo durante drag de asset**.
+- Iconos Blender-style para luces (Point: anillo + dots; Sun: core + 8 rayos + línea de dirección).
+- Tecla `.` "frame selected" en `EditorCamera::focusOn`.
+- Outline OBB naranja (12 aristas) para entidad seleccionada con mesh.
+
+**Próximo paso:** Hito 17 — PBR (metallic-roughness workflow + IBL básico desde el cubemap del skybox). Plan en `docs/PLAN_HITO17.md`.
+
+### Hito 15 (anterior, ya cerrado)
+Tag: `v0.15.0-hito15`.
+Suite 120/530 (+6 de fog numérico + 1 de round-trip Environment). Editor arranca con `SkyboxRenderer inicializado` y `PostProcessPass inicializado`; el Welcome modal aparece SIEMPRE (no auto-open). Verificado por el dev a ojo: skybox visible detrás de la sala, fog se aplica en vivo desde Inspector, exposure / tonemap reactivos sin relanzar, `EnvironmentComponent` se persiste con el `.moodmap`.
 
 ### Hito 14 (anterior, ya cerrado)
 Tag: `v0.14.0-hito14`.

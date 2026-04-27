@@ -1110,3 +1110,157 @@ trivialmente reversible — cualquier "Abrir Proyecto..." vuelve a
 agregar el path al tope).
 **Alternativas consideradas:** dialogo de confirmacion al borrar
 ("Estas seguro?"). Para una operacion reversible es ruido.
+
+## 2026-04-26: Shadow mapping con sampler2DShadow + PCF 3x3 hardware (Hito 16)
+
+**Contexto:** primera implementacion de sombras dinamicas. Decisiones
+que se tomaron para no resolver el problema de "sombras realistas" pero
+si tener una base que funcione y se pueda iterar.
+**Decision:** sampler hardware-PCF con `GL_COMPARE_REF_TO_TEXTURE` +
+`GL_LEQUAL`, 1 cascada con bounding sphere fijo del mapa,
+`GL_DEPTH_COMPONENT24` 2048x2048, front-face culling durante el shadow
+pass para reducir peter-panning, border depth=1 para que muestras
+fuera del frustum cuenten como "iluminadas". El loop del shadow pass
+filtra solo entidades con `MeshRendererComponent`.
+**Razones:**
+- `sampler2DShadow` da PCF gratis (4 taps por `texture()`) — con un
+  PCF 3x3 del shader son 36 muestras efectivas por pixel.
+- 1 cascada con bounding sphere alcanza para los mapas 8x8 actuales;
+  CSM se posterga hasta que la resolucion se note pixelada.
+- Front-face culling se eligio sobre slope-scale bias porque es mas
+  simple y no requiere tunear el bias por escena. Limitacion conocida:
+  no funciona en geometria abierta (planos sueltos), pero ningun
+  mesh actual la tiene.
+- Border depth=1 evita el clasico bug de sombras "infinitas" cuando
+  la geometria se extiende fuera del frustum de la luz.
+**Alternativas consideradas:** VSM/PCSS (muy temprano para tunear),
+deferred shadows (atado al pipeline forward actual), sombras de point
+lights con cubemap (postergado a hitos posteriores).
+
+## 2026-04-26: `castShadows` opcional en .moodmap sin bump de version
+
+**Contexto:** agregar `castShadows: bool` a `LightComponent` requeria
+decidir si bumpeabamos el formato (v6 -> v7) o lo tratabamos como
+campo opcional con default false.
+**Decision:** campo opcional. Solo se serializa si `castShadows=true`,
+y al cargar el default es false. `k_MoodmapFormatVersion` se queda en
+6.
+**Razones:** archivos viejos (sin `cast_shadows`) cargan como antes
+sin warnings de version. El bump solo se hace cuando el formato
+introduce un campo no-opcional o cambia semantica.
+**Alternativas consideradas:** bump de version con migracion implicita.
+Mas ruidoso, sin beneficio funcional aca.
+
+## 2026-04-26: `ShadowMath.h` separado de `ShadowPass` para testabilidad
+
+**Contexto:** las matrices del shadow pass (lightView, lightProj,
+producto lightSpace) son matematica pura GLM pero estaban acopladas
+al `ShadowPass.cpp` que tira `glad/gl.h` y abre el FBO.
+**Decision:** extraer a `engine/render/ShadowMath.h` un helper
+header-only con `computeShadowMatrices(lightDir, sceneCenter,
+sceneRadius) -> ShadowMatrices`. `ShadowPass` lo consume.
+**Razones:**
+- Permite testear las matrices con doctest sin GL ni mock (5 casos en
+  `test_shadow_proj.cpp`: centro NDC, sphere fits, fallback de
+  zero-dir, normalizacion idempotente).
+- En hitos posteriores el helper se va a reusar para visualizar el
+  frustum de la luz como debug overlay.
+**Alternativas consideradas:** dejar todo dentro de `ShadowPass.cpp`
+y testear via integration test con un FBO real. Costo en tiempo y
+complejidad mucho mayor para el mismo coverage.
+
+## 2026-04-26: Ambient global bajado a 0.08 al activar shadow mapping
+
+**Contexto:** con `k_defaultAmbient=0.18` (Hito 11) las caras "en
+sombra" del shading direccional ya quedaban a ~0.18 del color, asi
+que cualquier sombra adicional del shadow map se notaba apenas. El
+dev reporto "no se ven sombras" antes de identificar la causa.
+**Decision:** `k_defaultAmbient = 0.08f` en `LightSystem.cpp`.
+**Razones:** con shadow mapping las sombras tienen que oscurecer
+visiblemente las caras opuestas a la luz; un ambient bajo hace
+contraste. Aun queda iluminacion residual para no perder legibilidad
+de texturas en sombra completa.
+**Trade-off:** escenas heredadas que dependian del ambient alto se
+van a ver mas oscuras. Mitigacion: cuando aparezca PBR + IBL (Hito
+17) el "ambient" deja de ser un escalar global y pasa a ser un
+sample del cubemap irradiance, asi que esto se vuelve obsoleto.
+
+## 2026-04-26: Highlight cyan del tile solo durante drag de asset
+
+**Contexto:** en Hitos 5-10 el cubo cyan del tile bajo el cursor se
+mostraba siempre que el cursor estuviera sobre la imagen del
+viewport. UX ruidosa: al mover la camara o seleccionar entidades, el
+cubo seguia al mouse y desviaba la atencion.
+**Decision:** condicionar el cubo a `ViewportPanel::assetDragActive()`,
+que es true solo cuando hay un payload ImGui de tipo
+`MOOD_TEXTURE_ASSET`, `MOOD_MESH_ASSET` o `MOOD_PREFAB_ASSET` activo
+en el frame.
+**Razones:** el cubo originalmente fue affordance del drag&drop;
+mostrarlo sin drag perdio su semantica. La seleccion ya tiene su
+propio outline OBB (decision siguiente).
+**Alternativas consideradas:** togglearlo con una hotkey (F5).
+Costo: el dev tiene que recordarlo. Acoplarlo al drag es invisible.
+
+## 2026-04-26: Iconos de luces estilo Blender (Point: anillo + dots, Sun: rayos)
+
+**Contexto:** los iconos de Hito 13 eran un circulo amarillo plano con
+una linea vertical para distinguir Directional. Funcional pero
+indiscernible a primera vista.
+**Decision:** redibujar en el overlay 2D con primitivas de ImGui:
+- Point: anillo grueso + 8 dots en circulo + core central (estilo
+  "atomo" de Blender).
+- Sun: core lleno + 8 rayos cortos a 22.5 deg offset + linea de
+  direccion proyectada desde la posicion siguiendo `lc.direction`.
+**Razones:** alineamiento con la convencion del usuario (viene de
+Blender). La linea de direccion del Sun es informativa: muestra
+adonde apunta sin tener que abrir el Inspector.
+**Alternativas consideradas:** texturas de iconos (PNG sprites). Mas
+flexible pero require asset pipeline + escalado por DPI; primitivas
+2D son resolution-independent.
+
+## 2026-04-26: Tecla `.` "frame selected" estilo Blender
+
+**Contexto:** ergonomia comun de DCCs (Blender, Maya, etc.). Sin
+esto, alejarse de una entidad para hacer otra cosa requiere navegar
+manualmente con orbit + pan + zoom para volver.
+**Decision:** `EditorCamera::focusOn(worldPos, objectRadius)` que
+re-centra `m_target` y ajusta `m_radius` segun half-FOV +
+`objectRadius * 1.6` para dejar margen visual. Mantiene yaw/pitch
+para no desorientar al usuario. Hotkey `.` (ImGuiKey_Period) en el
+overlay del viewport.
+**Razones:**
+- 1.6x del minimo geometrico evita que el objeto ocupe toda la
+  pantalla.
+- Mantener yaw/pitch matchea expectativa de Blender ("centrar la
+  vista actual en X", no "resetear la vista").
+- `objectRadius = length(scale) * 0.6` aproxima el bounding sphere
+  de un cubo unitario (sqrt(3)/2 ~= 0.866) con margen.
+**Alternativas consideradas:** AABB exacto del MeshAsset. Postergado
+hasta que el helper exista (hoy MeshAsset no expone bounds).
+
+## 2026-04-26: Outline OBB naranja para entidad seleccionada con mesh
+
+**Contexto:** la seleccion en hitos previos solo se mostraba con un
+halo cyan en la posicion proyectada de la entidad — fino para
+luces/audios sin mesh, pero invisible cuando hay un mesh grande
+detras del halo. El dev pidio explicitamente "un reborde para verlo
+mejor en el mundo".
+**Decision:** dibujar las 12 aristas del cubo unitario [-0.5, 0.5]^3
+transformadas por `Transform::worldMatrix()`, en color naranja
+Blender (`(1.0, 0.55, 0.05)`), via el `OpenGLDebugRenderer` ya
+existente. Solo entidades con `MeshRendererComponent` (las
+Light/Audio mantienen el halo 2D porque no tienen mesh).
+**Razones:**
+- OBB sigue rotacion + escala (no AABB axis-aligned, que se veria
+  desalineado con la geometria al rotar).
+- Reusa el `OpenGLDebugRenderer` (lineas GL_LINES) sin agregar nuevo
+  pipeline.
+- Cubo unitario asume que el mesh ocupa ese rango en local space —
+  cierto para primitivos y para `pyramid.obj`. Limitacion documentada.
+**Trade-offs:**
+- Sufre depth test contra la escena: si la entidad esta detras de un
+  muro, parte del outline no se ve. Trade-off aceptado por
+  legibilidad espacial; siempre-encima se sentiria "flotante".
+**Alternativas consideradas:** stencil-based outline (silueta exacta
+del mesh). Mas elegante pero require pase extra + soporte de stencil
+en el FBO HDR; postergado hasta que aparezca demanda real.
