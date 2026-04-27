@@ -78,12 +78,36 @@ void EditorApplication::handleNewProject() {
         moodprojPath += ".moodproj";
     }
 
-    const std::filesystem::path root = moodprojPath.parent_path();
+    std::filesystem::path root = moodprojPath.parent_path();
     const std::string name = moodprojPath.stem().generic_string();
     if (name.empty() || root.empty()) {
         pfd::message("MoodEngine", "Nombre o carpeta del proyecto invalidos.",
                      pfd::choice::ok, pfd::icon::warning);
         return;
+    }
+
+    // Convencion Unity/Godot: cada proyecto vive en su propia carpeta. Si el
+    // usuario eligio `<dir>/test.moodproj` SIN estar dentro de una carpeta
+    // que ya se llama `test`, creamos `<dir>/test/` y movemos el proyecto
+    // ahi. Asi `<dir>/maps`, `<dir>/textures` no contaminan el directorio
+    // padre (ej. el Escritorio).
+    if (root.filename().generic_string() != name) {
+        const std::filesystem::path subRoot = root / name;
+        std::error_code ec;
+        std::filesystem::create_directories(subRoot, ec);
+        if (ec) {
+            pfd::message("MoodEngine",
+                std::string("No se pudo crear la carpeta del proyecto:\n") +
+                subRoot.generic_string() + "\n" + ec.message(),
+                pfd::choice::ok, pfd::icon::error);
+            return;
+        }
+        root = subRoot;
+        moodprojPath = subRoot / (name + ".moodproj");
+        Log::editor()->info(
+            "Nuevo proyecto: carpeta creada en '{}' (DWIM: el .moodproj y sus "
+            "subcarpetas maps/, textures/ viven adentro).",
+            subRoot.generic_string());
     }
 
     auto created = ProjectSerializer::createNewProject(root, name);
