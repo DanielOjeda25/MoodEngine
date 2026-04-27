@@ -226,6 +226,12 @@ void InspectorPanel::onImGuiRender() {
             env.tonemapMode = static_cast<u32>(toneIdx);
             m_editedThisFrame = true;
         }
+        // Hito 18: control del aporte del IBL al ambient. Util cuando el
+        // skybox es muy claro y "ahoga" la directional + point lights.
+        if (ImGui::SliderFloat("IBL intensity##env",
+                                &env.iblIntensity, 0.0f, 2.0f, "%.2f")) {
+            m_editedThisFrame = true;
+        }
         ImGui::Separator();
     }
 

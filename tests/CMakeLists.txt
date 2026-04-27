@@ -26,6 +26,7 @@ add_executable(mood_tests
     test_shadow_proj.cpp
     test_pbr_brdf.cpp
     test_material_serializer.cpp
+    test_light_grid.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -51,6 +52,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/audio/miniaudio_impl.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/AudioSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/LightSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/render/LightGrid.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Log.cpp
     ${CMAKE_SOURCE_DIR}/src/core/LogRingSink.cpp
 )

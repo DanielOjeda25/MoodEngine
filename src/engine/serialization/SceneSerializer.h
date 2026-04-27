@@ -98,6 +98,7 @@ struct SavedEnvironment {
     f32 fogLinearEnd = 50.0f;
     f32 exposure = 0.0f;
     std::string tonemapMode{"aces"};       // "none" | "reinhard" | "aces"
+    f32 iblIntensity = 1.0f;               // Hito 18, opcional en JSON
 };
 
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh

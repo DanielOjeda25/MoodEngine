@@ -33,6 +33,8 @@ class IMesh;
 class ITexture;
 class OpenGLCubemapTexture;
 class OpenGLDebugRenderer;
+class OpenGLSSBO;
+class LightGrid;
 class PostProcessPass;
 enum class TonemapMode : i32;
 class ScriptSystem;
@@ -152,6 +154,7 @@ private:
     void processSpawnEnvironmentRequest();
     void processSpawnShadowDemoRequest();
     void processSpawnPbrSpheresRequest();
+    void processSpawnLightStressRequest();
     void processSavePrefabRequest();
     void processViewportTextureDrop();
     void processViewportMeshDrop();
@@ -183,6 +186,7 @@ private:
     std::unique_ptr<PostProcessPass> m_postProcess;
     f32 m_exposure = 0.0f;                      // EVs, [-5..+5] tipico
     TonemapMode m_tonemap = TonemapMode{2};     // ACES por default
+    f32 m_iblIntensity = 1.0f;                  // Hito 18, [0..2]
     std::unique_ptr<IShader> m_defaultShader;
     std::unique_ptr<IShader> m_pbrShader; // Hito 17: reemplaza al lit Phong
     std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
@@ -193,6 +197,17 @@ private:
     std::unique_ptr<PhysicsWorld> m_physicsWorld;
     std::unique_ptr<SkyboxRenderer> m_skyboxRenderer;
     std::unique_ptr<ShadowPass> m_shadowPass; // Hito 16
+
+    // Forward+ light grid (Hito 18). El grid se recompute por frame en
+    // CPU (`LightGrid::compute`) y se sube a tres SSBOs:
+    //   - m_pointLightsSsbo (binding 2): array de PointLight std430.
+    //   - m_lightTilesSsbo  (binding 3): array de TileLightList por tile.
+    //   - m_lightIndicesSsbo (binding 4): flat array de indices.
+    // El shader pbr.frag lookup en SSBO 3 -> SSBO 4 -> SSBO 2 por tile.
+    std::unique_ptr<LightGrid>   m_lightGrid;
+    std::unique_ptr<OpenGLSSBO>  m_pointLightsSsbo;
+    std::unique_ptr<OpenGLSSBO>  m_lightTilesSsbo;
+    std::unique_ptr<OpenGLSSBO>  m_lightIndicesSsbo;
 
     // IBL (Hito 17 Bloque 3). Tres recursos:
     //   - irradiance cubemap (32x32): integral cosine-weighted del sky para
@@ -205,10 +220,16 @@ private:
     std::unique_ptr<OpenGLCubemapTexture> m_iblIrradiance;
     std::unique_ptr<OpenGLCubemapTexture> m_iblPrefilter;
     std::unique_ptr<ITexture>             m_iblBrdfLut;
-    // Para loguear la primera vez que el shadow pass se activa / desactiva
     // (cambio de estado del directional light con castShadows). Se actualiza
     // dentro de `renderSceneToViewport`.
+    // Hito 16: para loguear la primera vez que el shadow pass se activa
+    // / desactiva (cambio de estado del directional light con
+    // castShadows). Se actualiza dentro de `renderSceneToViewport`.
     bool m_shadowEnabledLastFrame = false;
+    // Hito 18: log diagnostico del LightGrid una sola vez por cambio
+    // de cantidad de luces. Util para validar que el grid se popule
+    // correctamente sin spammear el log cada frame.
+    u32 m_lastLoggedPointLightCount = 9999u;
 
     // Estado de render del frame actual. Lo regenera
     // `applyEnvironmentFromScene` cada frame (reset a defaults + override

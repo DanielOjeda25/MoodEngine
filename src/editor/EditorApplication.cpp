@@ -9,7 +9,9 @@
 #include "engine/render/opengl/OpenGLMesh.h"
 #include "engine/render/opengl/OpenGLRenderer.h"
 #include "engine/render/opengl/OpenGLShader.h"
+#include "engine/render/LightGrid.h"
 #include "engine/render/opengl/OpenGLCubemapTexture.h"
+#include "engine/render/opengl/OpenGLSSBO.h"
 #include "engine/render/opengl/OpenGLTexture.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
@@ -260,6 +262,14 @@ EditorApplication::EditorApplication() {
                              e.what());
         m_shadowPass.reset();
     }
+
+    // Forward+ light grid (Hito 18). Construimos los 3 SSBOs vacios al
+    // arranque; se llenan por frame en `renderSceneToViewport`. El
+    // LightGrid en si es CPU-only.
+    m_lightGrid          = std::make_unique<LightGrid>();
+    m_pointLightsSsbo    = std::make_unique<OpenGLSSBO>();
+    m_lightTilesSsbo     = std::make_unique<OpenGLSSBO>();
+    m_lightIndicesSsbo   = std::make_unique<OpenGLSSBO>();
 
     m_scene = std::make_unique<Scene>();
     m_scriptSystem = std::make_unique<ScriptSystem>();
@@ -966,6 +976,10 @@ EditorApplication::~EditorApplication() {
     m_iblPrefilter.reset();
     m_iblIrradiance.reset();
     m_skyboxRenderer.reset();
+    m_lightIndicesSsbo.reset();
+    m_lightTilesSsbo.reset();
+    m_pointLightsSsbo.reset();
+    m_lightGrid.reset();
     m_shadowPass.reset();
     m_postProcess.reset();
     m_debugRenderer.reset();
@@ -1188,6 +1202,7 @@ int EditorApplication::run() {
         processSpawnEnvironmentRequest();
         processSpawnShadowDemoRequest();
         processSpawnPbrSpheresRequest();
+        processSpawnLightStressRequest();
         processSpawnPointLightRequest();
         processSpawnAudioSourceRequest();
         processSavePrefabRequest();

@@ -193,6 +193,71 @@ void EditorApplication::processSpawnPbrSpheresRequest() {
     markDirty();
 }
 
+void EditorApplication::processSpawnLightStressRequest() {
+    if (!(m_ui.consumeSpawnLightStressRequest() && m_scene)) return;
+
+    // 64 point lights en grid 8x8 sobre y=2, espaciado 2.5m. Cubre un
+    // area de ~17.5m x 17.5m centrada en el origen. Colores procedurales
+    // tipo HSV (hue rotando, saturacion alta, value alto) para que cada
+    // luz se distinga claramente del vecino.
+    constexpr int kRows = 8;
+    constexpr int kCols = 8;
+    constexpr f32 kSpacing = 2.5f;
+    constexpr f32 kHeight  = 2.0f;
+    constexpr f32 kRadius  = 3.5f;     // pequenas para que el grid sea util
+    constexpr f32 kIntensity = 1.2f;
+
+    // HSV -> RGB inline. h en [0,1).
+    auto hsvToRgb = [](f32 h, f32 s, f32 v) -> glm::vec3 {
+        const f32 i = std::floor(h * 6.0f);
+        const f32 f = h * 6.0f - i;
+        const f32 p = v * (1.0f - s);
+        const f32 q = v * (1.0f - f * s);
+        const f32 t = v * (1.0f - (1.0f - f) * s);
+        switch (static_cast<int>(i) % 6) {
+            case 0: return {v, t, p};
+            case 1: return {q, v, p};
+            case 2: return {p, v, t};
+            case 3: return {p, q, v};
+            case 4: return {t, p, v};
+            case 5: return {v, p, q};
+        }
+        return {v, v, v};
+    };
+
+    const f32 baseX = -static_cast<f32>(kCols - 1) * 0.5f * kSpacing;
+    const f32 baseZ = -static_cast<f32>(kRows - 1) * 0.5f * kSpacing;
+
+    int spawned = 0;
+    for (int r = 0; r < kRows; ++r) {
+        for (int c = 0; c < kCols; ++c) {
+            const f32 hue = static_cast<f32>(spawned) / 64.0f;
+            const glm::vec3 color = hsvToRgb(hue, 0.85f, 1.0f);
+
+            char name[64];
+            std::snprintf(name, sizeof(name), "StressLight_%02d_%02d", r, c);
+            Entity light = m_scene->createEntity(name);
+            auto& t = light.getComponent<TransformComponent>();
+            t.position = glm::vec3(
+                baseX + static_cast<f32>(c) * kSpacing,
+                kHeight,
+                baseZ + static_cast<f32>(r) * kSpacing);
+            LightComponent lc{};
+            lc.type      = LightComponent::Type::Point;
+            lc.color     = color;
+            lc.intensity = kIntensity;
+            lc.radius    = kRadius;
+            lc.enabled   = true;
+            light.addComponent<LightComponent>(lc);
+            ++spawned;
+        }
+    }
+    Log::editor()->info(
+        "Spawned stress test {} point lights ({}x{} grid, radius={}m)",
+        spawned, kCols, kRows, kRadius);
+    markDirty();
+}
+
 void EditorApplication::processSpawnPointLightRequest() {
     if (!(m_ui.consumeSpawnPointLightRequest() && m_scene)) return;
     Entity light = m_scene->createEntity("Luz demo");

@@ -172,6 +172,14 @@ struct EnvironmentComponent {
     // Post-process
     float exposure = 0.0f;              // EVs
     u32 tonemapMode = 2;                // 0=None, 1=Reinhard, 2=ACES
+
+    // IBL intensity (Hito 18). Multiplicador del aporte del IBL al
+    // ambient del PBR. 1.0 = aporte completo del cubemap; 0.0 = sin
+    // IBL (cae a `uAmbient` escalar). Util cuando el cubemap es muy
+    // claro y "ahoga" las point lights y el directional. Tipicos:
+    // 0.4-0.7 para escenas con luces directas; 1.0 para escenas
+    // exteriores donde el cielo manda.
+    float iblIntensity = 1.0f;
 };
 
 /// @brief Marca a una entidad como instancia de un prefab (Hito 14).

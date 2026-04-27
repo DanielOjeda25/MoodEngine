@@ -109,6 +109,13 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar esferas PBR de prueba", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnPbrSpheres();
             }
+            // Demo Hito 18: stress test del Forward+ — 64 point lights
+            // (8x8 grid sobre y=2) con colores procedurales. Sin tile
+            // culling el shader iterria 64 veces por fragment; con
+            // culling solo procesa las que afectan cada tile.
+            if (ImGui::MenuItem("Agregar stress test 64 luces", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnLightStress();
+            }
             ImGui::EndMenu();
         }
 

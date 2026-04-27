@@ -15,10 +15,13 @@ namespace Mood {
 class Scene;
 class IShader;
 
-/// @brief Limite hard del shader. Si una scene tiene mas point lights que
-///        esto, el resto se ignora con un warn al loguear (Hito 18 con
-///        deferred / forward+ levanta el limite).
-constexpr u32 k_MaxPointLights = 8;
+/// @brief Limite hard de point lights por frame. Hito 18 (Forward+)
+///        subio el cap de 8 a 256 al migrar el storage de uniform array
+///        a SSBO. El shader loopea solo las luces del tile actual, asi
+///        que el costo de tener mas luces "potenciales" es la asignacion
+///        CPU del light grid + el tamaño del SSBO. 256 alcanza para
+///        escenas densas; subir mas si aparece un caso real.
+constexpr u32 k_MaxPointLights = 256;
 
 struct DirectionalLightData {
     glm::vec3 direction{0.0f, -1.0f, 0.0f}; // hacia donde apunta

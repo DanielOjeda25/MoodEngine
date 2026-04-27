@@ -148,6 +148,18 @@ public:
         return r;
     }
 
+    /// @brief Hito 18: request para spawnear 64 point lights de prueba
+    ///        en grid 8x8 sobre el plano del demo de sombras. Stress test
+    ///        del Forward+ — sin tile culling el shader iterria 64 veces
+    ///        por fragment, con culling solo las que realmente afectan
+    ///        cada tile (~3-8 tipicas).
+    void requestSpawnLightStress() { m_spawnLightStressRequested = true; }
+    bool consumeSpawnLightStressRequest() {
+        const bool r = m_spawnLightStressRequested;
+        m_spawnLightStressRequested = false;
+        return r;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -243,6 +255,7 @@ private:
     bool m_spawnEnvironmentRequested = false;
     bool m_spawnShadowDemoRequested = false; // Hito 16
     bool m_spawnPbrSpheresRequested = false; // Hito 17
+    bool m_spawnLightStressRequested = false; // Hito 18
     bool m_recentsDirty = false; // Hito 15 polish: edicion manual de la lista de recientes
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;

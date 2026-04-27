@@ -277,7 +277,10 @@ add_executable(MoodEditor
     src/engine/render/opengl/OpenGLTexture.cpp
     src/engine/render/opengl/OpenGLCubemapTexture.cpp
     src/engine/render/opengl/OpenGLShadowMap.cpp
+    src/engine/render/opengl/OpenGLSSBO.cpp
     src/engine/render/opengl/OpenGLDebugRenderer.cpp
+
+    src/engine/render/LightGrid.cpp
 
     src/editor/DemoSpawners.cpp
     src/editor/EditorApplication.cpp

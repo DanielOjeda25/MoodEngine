@@ -220,15 +220,16 @@ TEST_CASE("LightSystem::bindUniforms sube los nombres esperados al shader") {
     CHECK(sh.ints.count("uDirectional.enabled") == 1);
     CHECK(sh.ints["uDirectional.enabled"] == 1);
 
-    // Point lights — solo las activas, indexadas por i.
-    CHECK(sh.ints["uActivePointLights"] == 2);
-    CHECK(sh.vec3s.count("uPointLights[0].position") == 1);
-    CHECK(sh.vec3s.count("uPointLights[1].position") == 1);
-    CHECK(sh.vec3s.count("uPointLights[2].position") == 0); // no debe subir
-    CHECK(sh.floats.count("uPointLights[0].radius") == 1);
-    CHECK(sh.floats.count("uPointLights[1].radius") == 1);
-    // Order-independent: alguno de los dos slots tiene el radius de p0 (7.0).
-    const bool hasR7 = std::abs(sh.floats["uPointLights[0].radius"] - 7.0f) < 1e-3f
-                     || std::abs(sh.floats["uPointLights[1].radius"] - 7.0f) < 1e-3f;
-    CHECK(hasR7);
+    // Hito 18: las point lights ya NO se suben como uniform array
+    // desde LightSystem::bindUniforms. Viven en un SSBO (binding 2)
+    // que el EditorRenderPass actualiza por frame; la indexacion la
+    // hace el LightGrid (binding 3 + 4). Verificamos que NO aparezcan
+    // como uniforms.
+    CHECK(sh.ints.count("uActivePointLights") == 0);
+    CHECK(sh.vec3s.count("uPointLights[0].position") == 0);
+    CHECK(sh.vec3s.count("uPointLights[1].position") == 0);
+
+    // El frame data SI sigue trayendo las point lights — lo que
+    // cambia es el path de upload a GPU, no la enumeracion CPU.
+    CHECK(data.pointLights.size() == 2);
 }

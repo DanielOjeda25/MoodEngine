@@ -102,6 +102,9 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         const char* toneModes[] = {"none", "reinhard", "aces"};
         const u32 tm = (env.tonemapMode < 3) ? env.tonemapMode : 0;
         je2["tonemap_mode"] = toneModes[tm];
+        // Hito 18: solo persistir si != 1.0 (default) para no ensuciar
+        // archivos viejos con un campo nuevo.
+        if (env.iblIntensity != 1.0f) je2["ibl_intensity"] = env.iblIntensity;
         je["environment"] = je2;
     }
 
@@ -170,6 +173,7 @@ SavedEntity parseEntityFromJson(const json& j) {
         se2.fogLinearEnd   = je.value("fog_linear_end",   50.0f);
         se2.exposure       = je.value("exposure",        0.0f);
         se2.tonemapMode    = je.value("tonemap_mode",    std::string{"aces"});
+        se2.iblIntensity   = je.value("ibl_intensity",   1.0f); // Hito 18
         se.environment = std::move(se2);
     }
     se.prefabPath = j.value("prefab_path", std::string{});

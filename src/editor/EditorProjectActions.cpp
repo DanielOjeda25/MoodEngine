@@ -261,6 +261,7 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
                 if      (s.tonemapMode == "reinhard") env.tonemapMode = 1;
                 else if (s.tonemapMode == "aces")     env.tonemapMode = 2;
                 else                                  env.tonemapMode = 0;
+                env.iblIntensity   = s.iblIntensity; // Hito 18
                 e.addComponent<EnvironmentComponent>(env);
             }
             // Hito 14: link al prefab de origen, si la entidad fue

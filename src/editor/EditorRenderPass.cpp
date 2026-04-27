@@ -19,11 +19,13 @@
 #include "core/math/AABB.h"
 #include "engine/render/IRenderer.h"
 #include "engine/render/ITexture.h"
+#include "engine/render/LightGrid.h"
 #include "engine/render/MaterialAsset.h"
 #include "engine/render/MeshAsset.h"
 #include "engine/render/opengl/OpenGLCubemapTexture.h"
 #include "engine/render/opengl/OpenGLDebugRenderer.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
+#include "engine/render/opengl/OpenGLSSBO.h"
 #include "engine/render/opengl/OpenGLShader.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
@@ -45,9 +47,10 @@ namespace Mood {
 void EditorApplication::applyEnvironmentFromScene() {
     // Reset a defaults primero. Sin este reset, abrir un proyecto sin
     // Environment hereda los valores del proyecto anterior.
-    m_fog      = FogParams{};
-    m_exposure = 0.0f;
-    m_tonemap  = TonemapMode::ACES;
+    m_fog          = FogParams{};
+    m_exposure     = 0.0f;
+    m_tonemap      = TonemapMode::ACES;
+    m_iblIntensity = 1.0f;
 
     if (!m_scene) return;
 
@@ -63,6 +66,7 @@ void EditorApplication::applyEnvironmentFromScene() {
             m_fog.linearEnd   = env.fogLinearEnd;
             m_exposure        = env.exposure;
             m_tonemap         = static_cast<TonemapMode>(env.tonemapMode);
+            m_iblIntensity    = env.iblIntensity;
         });
 }
 
@@ -205,6 +209,96 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         m_pbrShader->setInt("uBrdfLut",           6);
         m_lightSystem->bindUniforms(*m_pbrShader, lights, cameraPos);
 
+        // Hito 18: Forward+ light grid. Recompute desde cero en CPU,
+        // sube las point lights + tiles + indices via SSBOs (bindings
+        // 2/3/4) y deja al shader leer SOLO las luces de su tile.
+        const u32 fbW = m_sceneFb->width();
+        const u32 fbH = m_sceneFb->height();
+        m_lightGrid->compute(lights, view, projection, fbW, fbH);
+
+        // Log diagnostico one-shot: cuando cambia la cantidad de point
+        // lights, reportamos cuantas hay, cuantos tiles tiene el grid,
+        // cuantas asignaciones totales hizo y el promedio por tile no-vacio.
+        // Util para verificar que el culling funciona (asignaciones <<
+        // luces*tiles si las luces son chicas).
+        const u32 pcount = static_cast<u32>(lights.pointLights.size());
+        if (pcount != m_lastLoggedPointLightCount) {
+            const u32 totalAssign = m_lightGrid->totalAssignments();
+            u32 nonEmpty = 0;
+            for (const auto& t : m_lightGrid->tileData()) if (t.count > 0) ++nonEmpty;
+            const f32 avgPerNonEmpty = nonEmpty > 0
+                ? static_cast<f32>(totalAssign) / static_cast<f32>(nonEmpty)
+                : 0.0f;
+            Log::render()->info(
+                "LightGrid: {} point lights -> {} tiles ({}x{}), {} no-vacios, "
+                "{} asignaciones (avg {:.2f}/tile)",
+                pcount, m_lightGrid->tileCount(),
+                m_lightGrid->tilesX(), m_lightGrid->tilesY(),
+                nonEmpty, totalAssign, avgPerNonEmpty);
+            m_lastLoggedPointLightCount = pcount;
+        }
+
+        // SSBO 2: point light data (std430). Layout en C++ debe matchear
+        // el del shader: vec3 + pad + vec3 + float + float + 3*pad.
+        // Construimos un buffer flat de floats (12 floats = 48 bytes
+        // por luz) para evitar mismatches de alignment con el struct
+        // `PointLightData` que tiene padding implicito distinto.
+        struct PointLightStd430 {
+            f32 posX, posY, posZ; f32 _pad0;
+            f32 colR, colG, colB; f32 intensity;
+            f32 radius; f32 _pad1, _pad2, _pad3;
+        };
+        static_assert(sizeof(PointLightStd430) == 48,
+                      "PointLight std430 layout mismatch con el shader");
+        std::vector<PointLightStd430> packed;
+        packed.reserve(lights.pointLights.size());
+        for (const auto& p : lights.pointLights) {
+            PointLightStd430 e{};
+            e.posX = p.position.x; e.posY = p.position.y; e.posZ = p.position.z;
+            e.colR = p.color.x;    e.colG = p.color.y;    e.colB = p.color.z;
+            e.intensity = p.intensity;
+            e.radius    = p.radius;
+            packed.push_back(e);
+        }
+        // SSBOs no soportan size 0; subimos al menos un slot dummy para
+        // que el `glBufferData` no falle. El shader nunca lo lee porque
+        // `tile.count == 0` cuando no hay luces.
+        if (packed.empty()) packed.push_back(PointLightStd430{});
+        m_pointLightsSsbo->upload(packed.data(),
+            static_cast<GLsizeiptr>(packed.size() * sizeof(PointLightStd430)));
+        m_pointLightsSsbo->bind(2);
+
+        // SSBO 3: tile data (uvec2 = 8 bytes per tile).
+        const auto& tileData = m_lightGrid->tileData();
+        const auto totalTiles = tileData.empty() ? 1u
+                              : static_cast<u32>(tileData.size());
+        if (tileData.empty()) {
+            // Defensivo: si el grid es 0x0 (FB sin tamano), subir un tile
+            // sentinela vacio.
+            LightTileData zero{0u, 0u};
+            m_lightTilesSsbo->upload(&zero, sizeof(LightTileData));
+        } else {
+            m_lightTilesSsbo->upload(tileData.data(),
+                static_cast<GLsizeiptr>(tileData.size() * sizeof(LightTileData)));
+        }
+        m_lightTilesSsbo->bind(3);
+
+        // SSBO 4: light indices (flat array de uint).
+        const auto& indices = m_lightGrid->lightIndices();
+        if (indices.empty()) {
+            const u32 zero = 0u;
+            m_lightIndicesSsbo->upload(&zero, sizeof(u32));
+        } else {
+            m_lightIndicesSsbo->upload(indices.data(),
+                static_cast<GLsizeiptr>(indices.size() * sizeof(u32)));
+        }
+        m_lightIndicesSsbo->bind(4);
+
+        // Uniforms del grid para que el shader haga la division correcta.
+        m_pbrShader->setInt("uTileSize",        static_cast<int>(k_LightGridTileSize));
+        m_pbrShader->setInt("uTilesX",          static_cast<int>(m_lightGrid->tilesX()));
+        m_pbrShader->setInt("uTilesY",          static_cast<int>(m_lightGrid->tilesY()));
+
         // IBL bind. Si los tres assets estan disponibles, los bindeamos a
         // sus units y activamos `uIblEnabled`. Sino, el shader usa
         // `uAmbient` escalar (bindUniforms del LightSystem ya lo subio).
@@ -220,6 +314,7 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         } else {
             m_pbrShader->setFloat("uPrefilterMaxLod", 0.0f);
         }
+        m_pbrShader->setFloat("uIblIntensity", m_iblIntensity);
 
         // Hito 16: shadow uniforms.
         m_pbrShader->setInt("uShadowEnabled", shadowEnabled ? 1 : 0);

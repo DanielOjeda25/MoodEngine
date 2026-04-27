@@ -12,11 +12,13 @@
 //   kD = (1 - kS) * (1 - metallic)   // metallics no tienen diffuse
 //   F0 = mix(0.04, albedo, metallic) // dieléctrico estándar 4%
 //
-// Luces directas: directional (con shadow factor del Hito 16) + N point
-// lights (sin sombras todavia). Sin IBL: el ambient es un escalar global
-// — Bloque 3 lo reemplaza por irradiance/prefilter cubemaps.
+// Luces directas: directional (con shadow factor del Hito 16) + point
+// lights via Forward+ tile-based culling (Hito 18). Las point lights
+// viven en un SSBO global; un par de SSBOs adicionales describen el
+// `LightGrid` (offset/count por tile + flat array de indices). El shader
+// loopea SOLO las luces que afectan al tile del fragment, escalando
+// linealmente con luces visibles en lugar de N_total.
 
-#define MAX_POINT_LIGHTS 8
 #define PI 3.14159265359
 
 in vec3 vColor;
@@ -52,16 +54,42 @@ struct DirLight {
 };
 uniform DirLight uDirectional;
 
+// Hito 18: point lights migradas a SSBOs (Forward+).
+//
+// std430 layout para `PointLight`: cada `vec3` toma 16 bytes (alineamiento
+// de vec4) sin que necesitemos struct padding. El CPU sube un buffer
+// matcheando este layout exacto.
 struct PointLight {
     vec3 position;
+    float pad0;       // padding std430 implícito
     vec3 color;
     float intensity;
     float radius;
+    float pad1;       // alinea el siguiente PointLight a 16 bytes
+    float pad2;
+    float pad3;
 };
-uniform PointLight uPointLights[MAX_POINT_LIGHTS];
-uniform int uActivePointLights;
+layout(std430, binding = 2) readonly buffer PointLightBuffer {
+    PointLight uPointLights[];
+};
 
-// uSpecularStrength / uShininess del lit shader ya no se usan en PBR.
+// LightGrid (Forward+): por tile, donde empezar a leer y cuantas luces
+// procesar.
+struct TileLightList {
+    uint offset;
+    uint count;
+};
+layout(std430, binding = 3) readonly buffer TileBuffer {
+    TileLightList uTiles[];
+};
+layout(std430, binding = 4) readonly buffer LightIndexBuffer {
+    uint uLightIndices[];
+};
+
+// Tamaño del tile (matchea k_LightGridTileSize en C++).
+uniform int  uTileSize;       // = 16
+uniform int  uTilesX;
+uniform int  uTilesY;
 
 // --- IBL (Hito 17 Bloque 3) ---
 // Tres mapas pre-bakeados ofreciendo el termino indirecto:
@@ -74,6 +102,7 @@ uniform samplerCube  uIrradianceMap;     // unit 4
 uniform samplerCube  uPrefilterMap;      // unit 5
 uniform sampler2D    uBrdfLut;           // unit 6
 uniform float        uPrefilterMaxLod;   // mipLevels - 1 del prefilter
+uniform float        uIblIntensity;      // Hito 18: multiplicador del IBL
 
 // --- Shadow mapping (Hito 16) ---
 uniform int             uShadowEnabled;
@@ -246,7 +275,7 @@ void main() {
         vec2 envBrdf = texture(uBrdfLut, vec2(NdotV, roughness)).rg;
         vec3 specularIBL = prefiltered * (F * envBrdf.x + envBrdf.y);
 
-        ambient = (kD_ibl * diffuseIBL + specularIBL) * ao;
+        ambient = (kD_ibl * diffuseIBL + specularIBL) * ao * uIblIntensity;
     } else {
         ambient = uAmbient * albedo * ao;
     }
@@ -261,18 +290,23 @@ void main() {
               * shadowF;
     }
 
-    // Point lights con atenuacion smooth basada en radius (consistente
-    // con LightSystem).
-    int n = min(uActivePointLights, MAX_POINT_LIGHTS);
-    for (int i = 0; i < n; ++i) {
-        vec3 toL = uPointLights[i].position - vWorldPos;
+    // Point lights via Forward+ tile lookup. gl_FragCoord.xy esta en
+    // pixeles (origen abajo-izquierda en GL); el LightGrid mapea (x,y)
+    // -> tile a 16 pixeles. Solo iteramos las luces del tile actual.
+    int tileX = clamp(int(gl_FragCoord.x) / uTileSize, 0, uTilesX - 1);
+    int tileY = clamp(int(gl_FragCoord.y) / uTileSize, 0, uTilesY - 1);
+    uint tileIdx = uint(tileY * uTilesX + tileX);
+    TileLightList tile = uTiles[tileIdx];
+    for (uint k = 0u; k < tile.count; ++k) {
+        uint lightIdx = uLightIndices[tile.offset + k];
+        PointLight pl = uPointLights[lightIdx];
+        vec3 toL = pl.position - vWorldPos;
         float dist = length(toL);
-        if (dist > uPointLights[i].radius) continue;
+        if (dist > pl.radius) continue;
         vec3 L = toL / max(dist, 1e-4);
-        float t = 1.0 - clamp(dist / uPointLights[i].radius, 0.0, 1.0);
+        float t = 1.0 - clamp(dist / pl.radius, 0.0, 1.0);
         float attenuation = t * t;
-        vec3 radiance = uPointLights[i].color * uPointLights[i].intensity
-                      * attenuation;
+        vec3 radiance = pl.color * pl.intensity * attenuation;
         lo += evalBrdf(N, V, L, radiance, albedo, metallic, roughness, F0);
     }
 

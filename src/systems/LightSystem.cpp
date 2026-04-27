@@ -8,8 +8,6 @@
 
 #include <glm/geometric.hpp>
 
-#include <cstdio>
-
 namespace Mood {
 
 namespace {
@@ -69,9 +67,6 @@ void LightSystem::bindUniforms(IShader& shader,
                                 const glm::vec3& cameraPos) {
     shader.setVec3("uCameraPos", cameraPos);
     shader.setVec3("uAmbient", glm::vec3(k_defaultAmbient));
-    // Hito 17: el PBR no consume `uSpecularStrength` ni `uShininess`
-    // (eran del Blinn-Phong del Hito 11). Removidos para no spammear el
-    // GL warning callback con "uniform no encontrado".
 
     // Directional. Cuando enabled=false el shader la salta por el flag.
     shader.setVec3("uDirectional.direction", data.directional.direction);
@@ -79,21 +74,11 @@ void LightSystem::bindUniforms(IShader& shader,
     shader.setFloat("uDirectional.intensity", data.directional.intensity);
     shader.setInt("uDirectional.enabled",   data.directional.enabled ? 1 : 0);
 
-    // Point lights. Solo subimos las activas; el shader limita el loop con
-    // uActivePointLights, asi que no hace falta poblar slots no usados.
-    const int active = static_cast<int>(data.pointLights.size());
-    shader.setInt("uActivePointLights", active);
-    char buf[64];
-    for (int i = 0; i < active; ++i) {
-        std::snprintf(buf, sizeof(buf), "uPointLights[%d].position", i);
-        shader.setVec3(buf, data.pointLights[i].position);
-        std::snprintf(buf, sizeof(buf), "uPointLights[%d].color", i);
-        shader.setVec3(buf, data.pointLights[i].color);
-        std::snprintf(buf, sizeof(buf), "uPointLights[%d].intensity", i);
-        shader.setFloat(buf, data.pointLights[i].intensity);
-        std::snprintf(buf, sizeof(buf), "uPointLights[%d].radius", i);
-        shader.setFloat(buf, data.pointLights[i].radius);
-    }
+    // Hito 18: las point lights ya NO se suben aca como uniform array.
+    // Viven en un SSBO `PointLightBuffer` (binding 2) y el shader las
+    // resuelve por tile via el LightGrid (SSBOs binding 3 + 4). El
+    // EditorRenderPass arma el LightGrid y bindea los tres SSBOs entre
+    // `bindUniforms` y los draw calls.
 }
 
 } // namespace Mood
