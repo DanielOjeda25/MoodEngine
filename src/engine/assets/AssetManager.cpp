@@ -142,6 +142,30 @@ AssetManager::AssetManager(std::string rootDir,
     }
     Log::assets()->info("AssetManager: fallback mesh 'cubo primitivo' generado en slot 0");
 
+    // ---- Slot reservado: esfera primitiva (Hito 17) ----
+    {
+        auto sphereData = createSphereMesh(32u);
+        auto sphereMesh = std::make_unique<MeshAsset>();
+        sphereMesh->logicalPath = "__primitive_sphere";
+        SubMesh sm{};
+        sm.materialIndex = 0;
+        u32 strideFloats = 0;
+        for (const auto& a : sphereData.attributes) strideFloats += a.componentCount;
+        sm.vertexCount = static_cast<u32>(sphereData.vertices.size() / strideFloats);
+        sm.mesh = m_meshFactory(sphereData.vertices, sphereData.attributes);
+        if (sm.mesh != nullptr) {
+            sphereMesh->submeshes.push_back(std::move(sm));
+            m_primitiveSphereId = static_cast<MeshAssetId>(m_meshes.size());
+            m_meshes.emplace_back(std::move(sphereMesh));
+            m_meshCache.emplace("__primitive_sphere", m_primitiveSphereId);
+            Log::assets()->info(
+                "AssetManager: esfera primitiva generada en slot {} ({} verts)",
+                m_primitiveSphereId, sm.vertexCount);
+        } else {
+            Log::assets()->warn("AssetManager: MeshFactory devolvio null para la esfera (skip)");
+        }
+    }
+
     // ---- Slot 0 prefab: SavedPrefab vacio (no requiere archivo). Sirve
     //      como "default" cuando un id de prefab es invalido o el archivo
     //      no se pudo parsear. Su `root` queda tag vacio + Transform default.
@@ -508,6 +532,17 @@ MaterialAssetId AssetManager::loadMaterialFromTexture(TextureAssetId textureId) 
     mat->aoMult        = 1.0f;
 
     const MaterialAssetId id = static_cast<MaterialAssetId>(m_materials.size());
+    m_materials.push_back(std::move(mat));
+    m_materialPaths.push_back(key);
+    m_materialCache.emplace(key, id);
+    return id;
+}
+
+MaterialAssetId AssetManager::createMaterial(const MaterialAsset& prototype) {
+    auto mat = std::make_unique<MaterialAsset>(prototype);
+    const MaterialAssetId id = static_cast<MaterialAssetId>(m_materials.size());
+    const std::string key = "__runtime#" + std::to_string(id);
+    mat->logicalPath = key;
     m_materials.push_back(std::move(mat));
     m_materialPaths.push_back(key);
     m_materialCache.emplace(key, id);

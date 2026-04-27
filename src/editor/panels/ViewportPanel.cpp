@@ -24,13 +24,12 @@ void ViewportPanel::onImGuiRender() {
     // usamos su tipo para decidir si mostrar el highlight cyan del tile bajo
     // el cursor en este frame. Sin drag activo el highlight no aparece, asi
     // que mover la camara no muestra ningun cubo flotante.
-    m_assetDragActive = false;
+    m_assetDragKind = AssetDragKind::None;
     if (const ImGuiPayload* p = ImGui::GetDragDropPayload(); p != nullptr) {
-        if (p->IsDataType("MOOD_TEXTURE_ASSET") ||
-            p->IsDataType("MOOD_MESH_ASSET") ||
-            p->IsDataType("MOOD_PREFAB_ASSET")) {
-            m_assetDragActive = true;
-        }
+        if      (p->IsDataType("MOOD_TEXTURE_ASSET"))  m_assetDragKind = AssetDragKind::Texture;
+        else if (p->IsDataType("MOOD_MESH_ASSET"))     m_assetDragKind = AssetDragKind::Mesh;
+        else if (p->IsDataType("MOOD_PREFAB_ASSET"))   m_assetDragKind = AssetDragKind::Prefab;
+        else if (p->IsDataType("MOOD_MATERIAL_ASSET")) m_assetDragKind = AssetDragKind::Material;
     }
 
     if (!visible) return;
@@ -115,6 +114,18 @@ void ViewportPanel::onImGuiRender() {
                         float ndcY = 0.0f;
                         mousePosToNdc(ImGui::GetMousePos(), ndcX, ndcY);
                         m_pendingPrefabDrop = PrefabDrop{true, ndcX, ndcY, id};
+                    }
+                }
+                if (const ImGuiPayload* payload =
+                        ImGui::AcceptDragDropPayload("MOOD_MATERIAL_ASSET")) {
+                    u32 id = 0;
+                    if (payload->DataSize == sizeof(id)) {
+                        std::memcpy(&id, payload->Data, sizeof(id));
+                        float ndcX = 0.0f;
+                        float ndcY = 0.0f;
+                        mousePosToNdc(ImGui::GetMousePos(), ndcX, ndcY);
+                        m_pendingMaterialDrop =
+                            MaterialDrop{true, ndcX, ndcY, id};
                     }
                 }
                 ImGui::EndDragDropTarget();

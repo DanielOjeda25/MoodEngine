@@ -9,6 +9,7 @@
 #include "engine/render/opengl/OpenGLMesh.h"
 #include "engine/render/opengl/OpenGLRenderer.h"
 #include "engine/render/opengl/OpenGLShader.h"
+#include "engine/render/opengl/OpenGLCubemapTexture.h"
 #include "engine/render/opengl/OpenGLTexture.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
@@ -166,10 +167,13 @@ EditorApplication::EditorApplication() {
 
     m_defaultShader = std::make_unique<OpenGLShader>(
         "shaders/default.vert", "shaders/default.frag");
-    // Hito 11: shader iluminado para todas las entidades con MeshRenderer.
-    // El default queda vivo solo para emergencias (UI/debug si aparece).
-    m_litShader = std::make_unique<OpenGLShader>(
-        "shaders/lit.vert", "shaders/lit.frag");
+    // Hito 17: shader PBR (Cook-Torrance + metallic-roughness) reemplaza
+    // al `lit` Phong/Blinn-Phong del Hito 11. El render loop sigue usando
+    // un shader unico para la escena; el material por submesh decide los
+    // parametros (albedo, metallic, roughness). El default queda vivo
+    // solo como fallback.
+    m_pbrShader = std::make_unique<OpenGLShader>(
+        "shaders/pbr.vert", "shaders/pbr.frag");
 
     // Factoria real: crea OpenGLTexture desde el path de filesystem. Los tests
     // pasan otra factoria que devuelve mocks sin tocar GL. El cubo fallback
@@ -199,6 +203,45 @@ EditorApplication::EditorApplication() {
         Log::render()->warn("SkyboxRenderer no disponible: {}. Sky fallback al clear color.",
                              e.what());
         m_skyboxRenderer.reset();
+    }
+
+    // IBL (Hito 17 Bloque 3): irradiance + prefilter + BRDF LUT pre-bakeados
+    // por `tools/bake_ibl.py` y `tools/bake_brdf_lut.py`. Si alguno falta,
+    // el shader cae al ambient escalar (uAmbient) sin crashear.
+    try {
+        const std::string base = "assets/ibl/sky_day";
+        std::array<std::string, 6> irrPaths{
+            base + "/irradiance/px.png", base + "/irradiance/nx.png",
+            base + "/irradiance/py.png", base + "/irradiance/ny.png",
+            base + "/irradiance/pz.png", base + "/irradiance/nz.png"};
+        m_iblIrradiance = std::make_unique<OpenGLCubemapTexture>(irrPaths);
+
+        // Prefilter mip chain. El bake script genera 5 niveles (mip 0-4).
+        std::vector<std::array<std::string, 6>> prefilterMips;
+        for (int mip = 0; mip < 5; ++mip) {
+            const std::string m = base + "/prefilter/mip_" + std::to_string(mip);
+            prefilterMips.push_back({
+                m + "/px.png", m + "/nx.png",
+                m + "/py.png", m + "/ny.png",
+                m + "/pz.png", m + "/nz.png"});
+        }
+        m_iblPrefilter = std::make_unique<OpenGLCubemapTexture>(prefilterMips);
+
+        // BRDF LUT como textura 2D estandar. La factory del AssetManager
+        // crea OpenGLTexture, que aplica srgb-from-png + mipmaps. Para el
+        // LUT idealmente queremos linear sin mips, pero por ahora el path
+        // logico es suficiente — la tabla esta encoded en RGBA8 sin gamma
+        // aplicada por el script. Aceptable para Bloque 3.
+        m_iblBrdfLut = std::make_unique<OpenGLTexture>("assets/ibl/brdf_lut.png");
+
+        Log::render()->info(
+            "IBL cargado: irradiance + prefilter (5 mips) + BRDF LUT.");
+    } catch (const std::exception& e) {
+        Log::render()->warn("IBL no disponible: {}. Cae al ambient escalar.",
+                             e.what());
+        m_iblIrradiance.reset();
+        m_iblPrefilter.reset();
+        m_iblBrdfLut.reset();
     }
 
     m_ui.viewport().setFramebuffer(m_viewportFb.get());
@@ -919,12 +962,15 @@ EditorApplication::~EditorApplication() {
     m_audioDevice.reset();
     m_lightSystem.reset();
     m_physicsWorld.reset();
+    m_iblBrdfLut.reset();
+    m_iblPrefilter.reset();
+    m_iblIrradiance.reset();
     m_skyboxRenderer.reset();
     m_shadowPass.reset();
     m_postProcess.reset();
     m_debugRenderer.reset();
     m_assetManager.reset(); // dueño de las texturas y meshes (incluido el cubo fallback)
-    m_litShader.reset();
+    m_pbrShader.reset();
     m_defaultShader.reset();
     m_viewportFb.reset();
     m_sceneFb.reset();
@@ -1141,6 +1187,7 @@ int EditorApplication::run() {
         processSpawnPhysicsBoxRequest();
         processSpawnEnvironmentRequest();
         processSpawnShadowDemoRequest();
+        processSpawnPbrSpheresRequest();
         processSpawnPointLightRequest();
         processSpawnAudioSourceRequest();
         processSavePrefabRequest();
@@ -1179,6 +1226,7 @@ int EditorApplication::run() {
         processViewportTextureDrop();
         processViewportMeshDrop();
         processViewportPrefabDrop();
+        processViewportMaterialDrop();
 
         // 3) Input -> camaras.
         updateCameras(dt);

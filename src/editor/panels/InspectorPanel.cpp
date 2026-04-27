@@ -3,6 +3,7 @@
 #include "editor/EditorUI.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/audio/AudioClip.h"
+#include "engine/render/MaterialAsset.h"
 #include "engine/render/MeshAsset.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
@@ -94,10 +95,45 @@ void InspectorPanel::onImGuiRender() {
         }
         ImGui::Text("materials: %u", static_cast<u32>(mr.materials.size()));
         for (usize i = 0; i < mr.materials.size(); ++i) {
-            ImGui::BulletText("  [%zu] texture id %u", i,
-                               static_cast<unsigned>(mr.materials[i]));
+            const MaterialAssetId matId = mr.materials[i];
+            const std::string matPath = m_assets->materialPathOf(matId);
+            ImGui::PushID(static_cast<int>(i));
+            // Header del slot: path del material (read-only).
+            ImGui::SeparatorText(("Material slot " + std::to_string(i)).c_str());
+            ImGui::TextDisabled("%s (id %u)", matPath.c_str(),
+                                  static_cast<unsigned>(matId));
+
+            MaterialAsset* mat = m_assets->getMaterial(matId);
+            if (mat != nullptr) {
+                // Sliders de los multiplicadores escalares. Editar muta el
+                // MaterialAsset in-place: el render del frame siguiente lo
+                // recoge automaticamente (no hay copia por entidad).
+                if (ImGui::ColorEdit3("albedoTint",
+                        &mat->albedoTint.x, ImGuiColorEditFlags_NoInputs)) {
+                    m_editedThisFrame = true;
+                }
+                if (ImGui::SliderFloat("metallic",
+                        &mat->metallicMult, 0.0f, 1.0f, "%.2f")) {
+                    m_editedThisFrame = true;
+                }
+                if (ImGui::SliderFloat("roughness",
+                        &mat->roughnessMult, 0.04f, 1.0f, "%.2f")) {
+                    m_editedThisFrame = true;
+                }
+                if (ImGui::SliderFloat("ao",
+                        &mat->aoMult, 0.0f, 1.0f, "%.2f")) {
+                    m_editedThisFrame = true;
+                }
+                // Estado de las texturas — read-only por ahora; el drop
+                // de texturas / .material desde AssetBrowser se agregara
+                // en un commit posterior.
+                ImGui::TextDisabled(
+                    "albedo: %u  MR: %u  normal: %u  ao: %u",
+                    mat->albedo, mat->metallicRoughness,
+                    mat->normal,  mat->ao);
+            }
+            ImGui::PopID();
         }
-        ImGui::TextDisabled("(editor de materiales en hitos posteriores)");
         ImGui::Separator();
     }
 

@@ -12,6 +12,7 @@
 
 #include "core/Log.h"
 #include "engine/assets/AssetManager.h"
+#include "engine/render/MaterialAsset.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
@@ -136,6 +137,51 @@ void EditorApplication::processSpawnShadowDemoRequest() {
     Log::editor()->info(
         "Spawned demo de sombras: piso 20x20, columna 1x4x1 en (2, 2, 0), "
         "sol direccional con castShadows=true");
+    markDirty();
+}
+
+void EditorApplication::processSpawnPbrSpheresRequest() {
+    if (!(m_ui.consumeSpawnPbrSpheresRequest() && m_scene && m_assetManager)) return;
+
+    const MeshAssetId sphere = m_assetManager->primitiveSphereId();
+    if (sphere == 0) {
+        Log::editor()->warn("Spawn esferas PBR: primitive sphere no disponible");
+        return;
+    }
+
+    // 4 esferas en fila (y=4) con materiales PBR distintos para
+    // showcase del shader. Sin texturas: solo albedoTint + metallic +
+    // roughness. AssetManager::createMaterial reserva un slot nuevo por
+    // cada llamada.
+    struct Spec {
+        const char* name;
+        glm::vec3 tint;
+        f32 metallic;
+        f32 roughness;
+        f32 xPos;
+    };
+    const Spec specs[] = {
+        {"PBR_Oro",          glm::vec3(1.00f, 0.84f, 0.41f), 1.0f, 0.10f, -3.75f},
+        {"PBR_CobreRugoso",  glm::vec3(0.95f, 0.64f, 0.54f), 1.0f, 0.55f, -1.25f},
+        {"PBR_PlasticoAzul", glm::vec3(0.20f, 0.40f, 0.85f), 0.0f, 0.25f,  1.25f},
+        {"PBR_BlancoMate",   glm::vec3(0.95f, 0.95f, 0.95f), 0.0f, 1.00f,  3.75f},
+    };
+
+    for (const Spec& s : specs) {
+        MaterialAsset prototype{};
+        prototype.albedoTint    = s.tint;
+        prototype.metallicMult  = s.metallic;
+        prototype.roughnessMult = s.roughness;
+        const MaterialAssetId matId = m_assetManager->createMaterial(prototype);
+
+        Entity sph = m_scene->createEntity(s.name);
+        auto& t = sph.getComponent<TransformComponent>();
+        t.position = glm::vec3(s.xPos, 4.0f, 0.0f);
+        t.scale    = glm::vec3(1.5f);
+        sph.addComponent<MeshRendererComponent>(sphere, matId);
+    }
+    Log::editor()->info(
+        "Spawned 4 esferas PBR (oro/cobre/plastico/blanco) en y=4");
     markDirty();
 }
 
@@ -417,6 +463,45 @@ void EditorApplication::processViewportPrefabDrop() {
     m_ui.setSelectedEntity(e);
     Log::editor()->info("Drop prefab '{}' -> tile ({}, {})",
                          prefabPath, hit.tileX, hit.tileY);
+    markDirty();
+}
+
+void EditorApplication::processViewportMaterialDrop() {
+    const ViewportPanel::MaterialDrop drop = m_ui.viewport().consumeMaterialDrop();
+    if (!(drop.pending && m_mode == EditorMode::Editor && m_scene)) return;
+
+    const float aspect = (m_viewportFb->height() > 0)
+        ? static_cast<float>(m_viewportFb->width()) / static_cast<float>(m_viewportFb->height())
+        : 1.0f;
+    const glm::mat4 view = m_editorCamera.viewMatrix();
+    const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
+
+    // Pick por entidad (usa los AABBs de meshes — mismo flow que el
+    // click-select). Asignar material al PRIMER slot del MeshRenderer.
+    ScenePickResult hit = pickEntity(*m_scene, view, projection,
+        glm::vec2(drop.ndcX, drop.ndcY));
+    if (!hit) {
+        Log::editor()->info("Drop material: no hay entidad bajo el cursor");
+        return;
+    }
+    if (!hit.entity.hasComponent<MeshRendererComponent>()) {
+        Log::editor()->info("Drop material: la entidad no tiene MeshRenderer");
+        return;
+    }
+
+    const auto matId = static_cast<MaterialAssetId>(drop.materialId);
+    auto& mr = hit.entity.getComponent<MeshRendererComponent>();
+    if (mr.materials.empty()) {
+        mr.materials.push_back(matId);
+    } else {
+        mr.materials[0] = matId;
+    }
+    m_ui.setSelectedEntity(hit.entity);
+    const std::string tagName = hit.entity.hasComponent<TagComponent>()
+        ? hit.entity.getComponent<TagComponent>().name
+        : std::string{"(sin tag)"};
+    Log::editor()->info("Drop material id {} -> entidad '{}'",
+                         drop.materialId, tagName);
     markDirty();
 }
 

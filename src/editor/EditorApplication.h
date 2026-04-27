@@ -30,6 +30,8 @@ class IFramebuffer;
 class OpenGLFramebuffer;
 class IShader;
 class IMesh;
+class ITexture;
+class OpenGLCubemapTexture;
 class OpenGLDebugRenderer;
 class PostProcessPass;
 enum class TonemapMode : i32;
@@ -149,10 +151,12 @@ private:
     void processSpawnPhysicsBoxRequest();
     void processSpawnEnvironmentRequest();
     void processSpawnShadowDemoRequest();
+    void processSpawnPbrSpheresRequest();
     void processSavePrefabRequest();
     void processViewportTextureDrop();
     void processViewportMeshDrop();
     void processViewportPrefabDrop();
+    void processViewportMaterialDrop();
 
     /// @brief Lee `<cwd>/.mood/editor_state.json` si existe:
     ///        - preferencias (debugDraw, etc.)
@@ -180,7 +184,7 @@ private:
     f32 m_exposure = 0.0f;                      // EVs, [-5..+5] tipico
     TonemapMode m_tonemap = TonemapMode{2};     // ACES por default
     std::unique_ptr<IShader> m_defaultShader;
-    std::unique_ptr<IShader> m_litShader;
+    std::unique_ptr<IShader> m_pbrShader; // Hito 17: reemplaza al lit Phong
     std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
     std::unique_ptr<ScriptSystem> m_scriptSystem;
     std::unique_ptr<AudioDevice> m_audioDevice;
@@ -189,6 +193,18 @@ private:
     std::unique_ptr<PhysicsWorld> m_physicsWorld;
     std::unique_ptr<SkyboxRenderer> m_skyboxRenderer;
     std::unique_ptr<ShadowPass> m_shadowPass; // Hito 16
+
+    // IBL (Hito 17 Bloque 3). Tres recursos:
+    //   - irradiance cubemap (32x32): integral cosine-weighted del sky para
+    //     el termino diffuse de la indirecta.
+    //   - prefilter cubemap con mip chain (128 base, 5 niveles): aproxima
+    //     el termino especular pre-integrado por roughness.
+    //   - BRDF LUT 2D (256x256, RG channels): split-sum de Epic.
+    // Tolera fallo de carga: el shader cae a `uAmbient` escalar si los
+    // tres no estan disponibles (mismo comportamiento que pre-Hito 17).
+    std::unique_ptr<OpenGLCubemapTexture> m_iblIrradiance;
+    std::unique_ptr<OpenGLCubemapTexture> m_iblPrefilter;
+    std::unique_ptr<ITexture>             m_iblBrdfLut;
     // Para loguear la primera vez que el shadow pass se activa / desactiva
     // (cambio de estado del directional light con castShadows). Se actualiza
     // dentro de `renderSceneToViewport`.

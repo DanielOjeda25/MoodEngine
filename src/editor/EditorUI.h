@@ -138,6 +138,16 @@ public:
         return r;
     }
 
+    /// @brief Hito 17 Bloque 3: request para spawnear 4 esferas con
+    ///        materiales PBR distintos (oro pulido, cobre rugoso, plastico
+    ///        azul, blanco mate). Showcase visual del shader PBR + IBL.
+    void requestSpawnPbrSpheres() { m_spawnPbrSpheresRequested = true; }
+    bool consumeSpawnPbrSpheresRequest() {
+        const bool r = m_spawnPbrSpheresRequested;
+        m_spawnPbrSpheresRequested = false;
+        return r;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -232,6 +242,7 @@ private:
     bool m_savePrefabRequested = false;
     bool m_spawnEnvironmentRequested = false;
     bool m_spawnShadowDemoRequested = false; // Hito 16
+    bool m_spawnPbrSpheresRequested = false; // Hito 17
     bool m_recentsDirty = false; // Hito 15 polish: edicion manual de la lista de recientes
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;

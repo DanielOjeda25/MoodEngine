@@ -20,6 +20,7 @@
 
 #include <array>
 #include <string>
+#include <vector>
 
 namespace Mood {
 
@@ -29,7 +30,24 @@ public:
     ///        falla, lanza `std::runtime_error` con el path culpable.
     /// @param paths Array de 6 paths del filesystem en orden:
     ///              [+X, -X, +Y, -Y, +Z, -Z].
-    explicit OpenGLCubemapTexture(const std::array<std::string, 6>& paths);
+    /// @param sRgb  Si true (default), las texturas se cargan como
+    ///              `GL_SRGB8_ALPHA8` y GL aplica decode automatico al
+    ///              samplear: los PNG con colores tipo skybox / IBL son
+    ///              sRGB-encoded y necesitan esta conversion para sumarse
+    ///              correctamente en el espacio linear del shader. Pasar
+    ///              `false` para datos numericos puros (BRDF LUT, etc.).
+    explicit OpenGLCubemapTexture(const std::array<std::string, 6>& paths,
+                                   bool sRgb = true);
+
+    /// @brief Hito 17: cubemap con mip chain explicita para IBL prefilter.
+    ///        Cada `mips[i]` es el set de 6 caras de un nivel de mip
+    ///        (mips[0] = mip 0, mips[N-1] = mip mas bajo). Sample con
+    ///        `textureLod(cube, dir, lod)` en el shader.
+    /// @param mips Vector de mip levels; cada nivel es un array de 6 paths.
+    /// @param sRgb Igual que el ctor de single-mip.
+    explicit OpenGLCubemapTexture(
+        const std::vector<std::array<std::string, 6>>& mips,
+        bool sRgb = true);
 
     ~OpenGLCubemapTexture();
 
@@ -43,8 +61,13 @@ public:
     ///        cubemap no se muestra desde ImGui).
     GLuint glHandle() const { return m_id; }
 
+    /// @brief Cantidad de niveles de mip (1 si se construyo desde 6 PNGs sin
+    ///        chain). Sirve al shader para clamping del LOD del prefilter.
+    u32 mipLevels() const { return m_mipLevels; }
+
 private:
     GLuint m_id = 0;
+    u32 m_mipLevels = 1;
 };
 
 } // namespace Mood

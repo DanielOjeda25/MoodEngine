@@ -21,12 +21,14 @@
 #include "engine/render/ITexture.h"
 #include "engine/render/MaterialAsset.h"
 #include "engine/render/MeshAsset.h"
+#include "engine/render/opengl/OpenGLCubemapTexture.h"
 #include "engine/render/opengl/OpenGLDebugRenderer.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/render/opengl/OpenGLShader.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
+#include "engine/scene/ScenePick.h"
 #include "engine/scene/ViewportPick.h"
 #include "systems/LightSystem.h"
 #include "systems/PostProcessPass.h"
@@ -185,61 +187,127 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
             : m_editorCamera.position();
         LightFrameData lights = m_lightSystem->buildFrameData(*m_scene);
 
-        m_litShader->bind();
-        m_litShader->setMat4("uView", view);
-        m_litShader->setMat4("uProjection", projection);
-        m_litShader->setInt("uTexture", 0);
-        m_lightSystem->bindUniforms(*m_litShader, lights, cameraPos);
+        m_pbrShader->bind();
+        m_pbrShader->setMat4("uView", view);
+        m_pbrShader->setMat4("uProjection", projection);
+        // Texture units fijos:
+        //   0 = albedo, 1 = shadowMap, 2 = metallicRoughness, 3 = ao
+        //   4 = irradiance cubemap (IBL diffuse)
+        //   5 = prefilter cubemap  (IBL specular)
+        //   6 = BRDF LUT 2D        (split-sum)
+        // Se setean una sola vez por frame (los samplers no cambian).
+        m_pbrShader->setInt("uAlbedoMap",         0);
+        m_pbrShader->setInt("uShadowMap",         1);
+        m_pbrShader->setInt("uMetallicRoughness", 2);
+        m_pbrShader->setInt("uAoMap",             3);
+        m_pbrShader->setInt("uIrradianceMap",     4);
+        m_pbrShader->setInt("uPrefilterMap",      5);
+        m_pbrShader->setInt("uBrdfLut",           6);
+        m_lightSystem->bindUniforms(*m_pbrShader, lights, cameraPos);
 
-        // Hito 16: shadow uniforms. Si hay directional con castShadows el
-        // shadow pass ya escribio al depth FB; subimos la lightSpace matrix
-        // y bindeamos el shadow map al texture unit 1 (unit 0 = albedo).
-        // `uShadowEnabled = 0` cuando no hay shadows: el lit saltea el
-        // sample y el sampler2DShadow puede quedar sin bindear sin crashear.
-        m_litShader->setInt("uShadowEnabled", shadowEnabled ? 1 : 0);
-        m_litShader->setInt("uShadowMap", 1);
-        m_litShader->setFloat("uShadowBias", 0.005f);
+        // IBL bind. Si los tres assets estan disponibles, los bindeamos a
+        // sus units y activamos `uIblEnabled`. Sino, el shader usa
+        // `uAmbient` escalar (bindUniforms del LightSystem ya lo subio).
+        const bool iblOk = (m_iblIrradiance && m_iblPrefilter && m_iblBrdfLut);
+        m_pbrShader->setInt("uIblEnabled", iblOk ? 1 : 0);
+        if (iblOk) {
+            m_iblIrradiance->bind(4);
+            m_iblPrefilter->bind(5);
+            // ITexture::bind activa la unit y bindea GL_TEXTURE_2D.
+            m_iblBrdfLut->bind(6);
+            m_pbrShader->setFloat("uPrefilterMaxLod",
+                static_cast<f32>(m_iblPrefilter->mipLevels() - 1));
+        } else {
+            m_pbrShader->setFloat("uPrefilterMaxLod", 0.0f);
+        }
+
+        // Hito 16: shadow uniforms.
+        m_pbrShader->setInt("uShadowEnabled", shadowEnabled ? 1 : 0);
+        m_pbrShader->setFloat("uShadowBias", 0.005f);
         if (shadowEnabled && m_shadowPass) {
-            m_litShader->setMat4("uLightSpace",
+            m_pbrShader->setMat4("uLightSpace",
                                   m_shadowPass->lightSpaceMatrix());
             m_shadowPass->bindShadowMap(1);
         } else {
-            m_litShader->setMat4("uLightSpace", glm::mat4(1.0f));
+            m_pbrShader->setMat4("uLightSpace", glm::mat4(1.0f));
         }
-        // Volver al texture unit 0 para los albedos del scene-driven loop.
-        glActiveTexture(GL_TEXTURE0);
 
-        // Hito 15 Bloque 2: fog. En este bloque los parametros viven en un
-        // member del EditorApplication (`m_fog`) inicializado por default
-        // a Exp con densidad sutil para que el smoke test sea visible. El
-        // Bloque 4 agrega `EnvironmentComponent` y la fuente pasa a la
-        // entidad sentinel "Environment" de la scene.
-        m_litShader->setInt  ("uFogMode",    static_cast<int>(m_fog.mode));
-        m_litShader->setVec3 ("uFogColor",   m_fog.color);
-        m_litShader->setFloat("uFogDensity", m_fog.density);
-        m_litShader->setFloat("uFogStart",   m_fog.linearStart);
-        m_litShader->setFloat("uFogEnd",     m_fog.linearEnd);
+        // Fog (Hito 15) — mismas formulas que lit, copiadas a pbr.frag.
+        m_pbrShader->setInt  ("uFogMode",    static_cast<int>(m_fog.mode));
+        m_pbrShader->setVec3 ("uFogColor",   m_fog.color);
+        m_pbrShader->setFloat("uFogDensity", m_fog.density);
+        m_pbrShader->setFloat("uFogStart",   m_fog.linearStart);
+        m_pbrShader->setFloat("uFogEnd",     m_fog.linearEnd);
+
+        // Texturas dummy para los slots no usados: el missing del
+        // AssetManager (slot 0) sirve como fallback inocuo. Bindeamos
+        // SIEMPRE las 3 unidades extra (2, 3) para evitar warnings de
+        // "sampler bound to texture not written" del GL debug callback.
+        ITexture* dummyTex = m_assetManager->getTexture(
+            m_assetManager->missingTextureId());
 
         m_scene->forEach<TransformComponent, MeshRendererComponent>(
             [&](Entity, TransformComponent& t, MeshRendererComponent& mr) {
                 MeshAsset* asset = m_assetManager->getMesh(mr.mesh);
                 if (asset == nullptr) return;
-                m_litShader->setMat4("uModel", t.worldMatrix());
+                m_pbrShader->setMat4("uModel", t.worldMatrix());
                 for (usize i = 0; i < asset->submeshes.size(); ++i) {
                     const auto& sub = asset->submeshes[i];
                     if (sub.mesh == nullptr) continue;
-                    // Hito 17: el slot por submesh es ahora un MaterialAssetId.
-                    // Bloque 1 todavia usa el lit shader Blinn-Phong, asi que
-                    // bindeamos solo el albedo del material. El switch al
-                    // shader PBR ocurre en el Bloque 2.
+
                     const MaterialAssetId matId =
                         mr.materialOrMissing(sub.materialIndex);
                     const MaterialAsset* mat = m_assetManager->getMaterial(matId);
-                    const TextureAssetId tex = (mat != nullptr)
-                        ? mat->albedo
-                        : m_assetManager->missingTextureId();
-                    m_assetManager->getTexture(tex)->bind(0);
-                    m_renderer->drawMesh(*sub.mesh, *m_litShader);
+
+                    // Albedo (unit 0). Si el material no tiene mapa, bindeamos
+                    // el missing y desactivamos el sample con uHasAlbedoMap=0
+                    // para que el shader use solo `uAlbedoTint`.
+                    const bool hasAlbedo = (mat != nullptr && mat->albedo != 0);
+                    glActiveTexture(GL_TEXTURE0);
+                    m_assetManager->getTexture(hasAlbedo ? mat->albedo : 0)
+                        ->bind(0);
+                    m_pbrShader->setInt("uHasAlbedoMap", hasAlbedo ? 1 : 0);
+
+                    // Metallic-Roughness (unit 2).
+                    const bool hasMR =
+                        (mat != nullptr && mat->metallicRoughness != 0);
+                    glActiveTexture(GL_TEXTURE2);
+                    if (hasMR) {
+                        m_assetManager->getTexture(mat->metallicRoughness)
+                            ->bind(2);
+                    } else {
+                        dummyTex->bind(2);
+                    }
+                    m_pbrShader->setInt("uHasMetallicRoughness",
+                                         hasMR ? 1 : 0);
+
+                    // AO (unit 3).
+                    const bool hasAo = (mat != nullptr && mat->ao != 0);
+                    glActiveTexture(GL_TEXTURE3);
+                    if (hasAo) {
+                        m_assetManager->getTexture(mat->ao)->bind(3);
+                    } else {
+                        dummyTex->bind(3);
+                    }
+                    m_pbrShader->setInt("uHasAoMap", hasAo ? 1 : 0);
+
+                    // Multiplicadores escalares.
+                    if (mat != nullptr) {
+                        m_pbrShader->setVec3 ("uAlbedoTint",   mat->albedoTint);
+                        m_pbrShader->setFloat("uMetallicMult", mat->metallicMult);
+                        m_pbrShader->setFloat("uRoughnessMult",mat->roughnessMult);
+                        m_pbrShader->setFloat("uAoMult",       mat->aoMult);
+                    } else {
+                        m_pbrShader->setVec3 ("uAlbedoTint",   glm::vec3(1.0f));
+                        m_pbrShader->setFloat("uMetallicMult", 0.0f);
+                        m_pbrShader->setFloat("uRoughnessMult",0.5f);
+                        m_pbrShader->setFloat("uAoMult",       1.0f);
+                    }
+
+                    // Volver a unit 0 antes del draw (consistente con la
+                    // convencion de los renderers anteriores).
+                    glActiveTexture(GL_TEXTURE0);
+                    m_renderer->drawMesh(*sub.mesh, *m_pbrShader);
                 }
             });
     }
@@ -282,15 +350,60 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
         }
         hasDebugGeometry = true;
     }
-    // El highlight cyan del tile solo aparece durante un drag activo de un
-    // asset compatible (textura / mesh / prefab). Antes se mostraba siempre
-    // que el cursor estuviera sobre la imagen — UX ruidosa al mover camara.
-    if (hovered.hit && m_ui.viewport().assetDragActive()) {
+    // Highlights de drag-and-drop. Distinguen segun el tipo de payload:
+    //   - Texture / Mesh / Prefab apuntan a un TILE -> cubo cyan sobre
+    //     el tile bajo el cursor (raycast vs grid).
+    //   - Material apunta a una ENTIDAD -> OBB amarillo sobre el mesh
+    //     bajo el cursor (raycast vs Scene). El cubo cyan no aplica
+    //     porque el material puede asignarse a entidades fuera del
+    //     grid (ej. esferas demo flotantes).
+    using DragKind = ViewportPanel::AssetDragKind;
+    const DragKind dragKind = m_ui.viewport().assetDragKind();
+    const bool dragIsTile =
+        dragKind == DragKind::Texture
+        || dragKind == DragKind::Mesh
+        || dragKind == DragKind::Prefab;
+    if (hovered.hit && dragIsTile) {
         const glm::vec3 hoverColor(0.2f, 0.9f, 1.0f); // cyan
         const AABB local = m_map.aabbOfTile(hovered.tileX, hovered.tileY);
         const AABB world{origin + local.min, origin + local.max};
         m_debugRenderer->drawAabb(world, hoverColor);
         hasDebugGeometry = true;
+    }
+    if (dragKind == DragKind::Material && m_scene
+        && m_mode == EditorMode::Editor
+        && m_ui.viewport().imageHovered()) {
+        // Pick por entidad bajo el cursor (mismo flow que click-select).
+        const glm::vec2 ndc(m_ui.viewport().mouseNdcX(),
+                             m_ui.viewport().mouseNdcY());
+        ScenePickResult ehit = pickEntity(*m_scene, view, projection, ndc);
+        if (ehit && ehit.entity.hasComponent<TransformComponent>()
+                  && ehit.entity.hasComponent<MeshRendererComponent>()) {
+            const auto& tf = ehit.entity.getComponent<TransformComponent>();
+            const glm::mat4 model = tf.worldMatrix();
+            constexpr glm::vec3 kCorners[8] = {
+                {-0.5f, -0.5f, -0.5f}, { 0.5f, -0.5f, -0.5f},
+                { 0.5f,  0.5f, -0.5f}, {-0.5f,  0.5f, -0.5f},
+                {-0.5f, -0.5f,  0.5f}, { 0.5f, -0.5f,  0.5f},
+                { 0.5f,  0.5f,  0.5f}, {-0.5f,  0.5f,  0.5f}};
+            glm::vec3 w[8];
+            for (int i = 0; i < 8; ++i) {
+                const glm::vec4 p = model * glm::vec4(kCorners[i], 1.0f);
+                w[i] = glm::vec3(p);
+            }
+            constexpr int kEdges[12][2] = {
+                {0,1},{1,2},{2,3},{3,0},
+                {4,5},{5,6},{6,7},{7,4},
+                {0,4},{1,5},{2,6},{3,7}};
+            // Color amarillo brillante para el highlight de drop. Distinto
+            // del naranja del outline de seleccion para que el dev sepa
+            // "estoy sobre algo dropeable" vs "esto esta seleccionado".
+            const glm::vec3 dropColor(1.0f, 0.95f, 0.15f);
+            for (const auto& e : kEdges) {
+                m_debugRenderer->drawLine(w[e[0]], w[e[1]], dropColor);
+            }
+            hasDebugGeometry = true;
+        }
     }
 
     // Outline 3D de la entidad seleccionada (estilo Blender/Unity): 12

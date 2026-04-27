@@ -23,4 +23,12 @@ struct MeshData {
 ///        Orden de atributos: pos(3) + color(3) + uv(2) + normal(3) -> stride 11.
 MeshData createCubeMesh();
 
+/// @brief UV sphere de radio 0.5 centrada en el origen (Hito 17). Geometria
+///        triangulada sin EBO para matchear el layout del cubo. Util para
+///        debug visual del PBR (los esferos muestran el dot(N, L) en
+///        toda la superficie a la vez).
+/// @param segments Cantidad de divisiones longitudinales (alrededor del
+///        eje Y). El paralelo es `segments / 2`.
+MeshData createSphereMesh(u32 segments = 32);
+
 } // namespace Mood

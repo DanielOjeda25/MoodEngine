@@ -1,0 +1,6 @@
+{
+  "albedo_tint": [0.20, 0.40, 0.85],
+  "metallic":  0.0,
+  "roughness": 0.25,
+  "ao":        1.0
+}

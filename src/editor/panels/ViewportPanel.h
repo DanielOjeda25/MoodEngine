@@ -42,12 +42,21 @@ public:
     ///        frame actual. Requisito para usar `mouseNdcX/Y`.
     bool imageHovered() const { return m_imageHovered; }
 
-    /// @brief `true` si hay un drag-and-drop activo de un asset compatible
-    ///        (textura / mesh / prefab) en este frame, este o no sobre el
-    ///        viewport. Lo usa el editor para mostrar el highlight cyan del
-    ///        tile bajo el cursor solo cuando hay algo que dropear, en lugar
-    ///        de constantemente.
-    bool assetDragActive() const { return m_assetDragActive; }
+    /// @brief Tipo del drag-and-drop activo en este frame, si lo hay.
+    ///        El editor usa esta info para decidir QUE highlight dibujar:
+    ///        - Texture/Mesh/Prefab apuntan a UN TILE -> cubo cyan sobre
+    ///          el tile bajo el cursor.
+    ///        - Material apunta a UNA ENTIDAD -> outline OBB sobre el
+    ///          mesh bajo el cursor.
+    ///        `None` significa que no hay drag activo (no se dibuja nada).
+    enum class AssetDragKind { None, Texture, Mesh, Prefab, Material };
+    AssetDragKind assetDragKind() const { return m_assetDragKind; }
+
+    /// @brief Helper booleano para callsites que solo necesitan saber si
+    ///        hay algun drag activo (sin importar el tipo).
+    bool assetDragActive() const {
+        return m_assetDragKind != AssetDragKind::None;
+    }
 
     /// @brief Coordenadas NDC del cursor dentro del area de la imagen,
     ///        rango [-1, 1], Y+ arriba (convencion OpenGL). Sin sentido si
@@ -106,6 +115,22 @@ public:
         return r;
     }
 
+    /// @brief Drop de un material sobre el viewport (Hito 17 Bloque 4).
+    ///        Reasigna el primer slot del MeshRenderer de la entidad bajo
+    ///        el cursor.
+    struct MaterialDrop {
+        bool pending = false;
+        float ndcX = 0.0f;
+        float ndcY = 0.0f;
+        u32 materialId = 0; // castear a MaterialAssetId en el consumidor
+    };
+
+    MaterialDrop consumeMaterialDrop() {
+        MaterialDrop r = m_pendingMaterialDrop;
+        m_pendingMaterialDrop = MaterialDrop{};
+        return r;
+    }
+
     /// @brief Click izquierdo sobre la imagen del viewport (Hito 13).
     ///        Distingue click puro de drag: dispara solo si el mouse bajó
     ///        y subió sin desplazarse más de 4 pixeles.
@@ -148,11 +173,12 @@ private:
     bool m_imageHovered = false;
     float m_mouseNdcX = 0.0f;
     float m_mouseNdcY = 0.0f;
-    bool m_assetDragActive = false; // refrescado cada frame consultando ImGui
+    AssetDragKind m_assetDragKind = AssetDragKind::None; // refrescado cada frame
 
     TextureDrop m_pendingDrop{};
     MeshDrop m_pendingMeshDrop{};
     PrefabDrop m_pendingPrefabDrop{};
+    MaterialDrop m_pendingMaterialDrop{};
     ClickSelect m_pendingClick{};
     OverlayDraw m_overlayDraw{};
 

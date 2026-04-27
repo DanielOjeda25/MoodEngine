@@ -16,15 +16,17 @@ namespace {
 
 // Directorio relativo al cwd donde buscamos texturas. Cuando el VFS soporte
 // lookup inverso, esto sale de ahi.
-constexpr const char* k_textureDir = "assets/textures";
-constexpr const char* k_audioDir   = "assets/audio";
-constexpr const char* k_meshDir    = "assets/meshes";
-constexpr const char* k_prefabDir  = "assets/prefabs";
+constexpr const char* k_textureDir  = "assets/textures";
+constexpr const char* k_audioDir    = "assets/audio";
+constexpr const char* k_meshDir     = "assets/meshes";
+constexpr const char* k_prefabDir   = "assets/prefabs";
+constexpr const char* k_materialDir = "assets/materials";
 constexpr float k_thumbSize = 64.0f;
-constexpr const char* k_logicalPrefix       = "textures/";
-constexpr const char* k_audioLogicalPrefix  = "audio/";
-constexpr const char* k_meshLogicalPrefix   = "meshes/";
-constexpr const char* k_prefabLogicalPrefix = "prefabs/";
+constexpr const char* k_logicalPrefix         = "textures/";
+constexpr const char* k_audioLogicalPrefix    = "audio/";
+constexpr const char* k_meshLogicalPrefix     = "meshes/";
+constexpr const char* k_prefabLogicalPrefix   = "prefabs/";
+constexpr const char* k_materialLogicalPrefix = "materials/";
 
 bool isPng(const std::filesystem::path& p) {
     auto ext = p.extension().string();
@@ -52,6 +54,13 @@ bool isPrefab(const std::filesystem::path& p) {
     std::transform(ext.begin(), ext.end(), ext.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return ext == ".moodprefab";
+}
+
+bool isMaterial(const std::filesystem::path& p) {
+    auto ext = p.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return ext == ".material";
 }
 
 } // namespace
@@ -140,11 +149,33 @@ void AssetBrowserPanel::rescan() {
                   });
     }
 
+    // Materiales: busca en assets/materials/ por *.material. Los carga
+    // con `loadMaterial` (lee JSON + cachea); si alguno falla cae al
+    // default material y el log avisa.
+    m_materialEntries.clear();
+    std::error_code mat_ec;
+    auto mat_it = std::filesystem::directory_iterator(k_materialDir, mat_ec);
+    if (!mat_ec) {
+        for (const auto& entry : mat_it) {
+            if (!entry.is_regular_file() || !isMaterial(entry.path())) continue;
+            MaterialEntry me;
+            me.displayName = entry.path().filename().string();
+            me.logicalPath = std::string(k_materialLogicalPrefix) + me.displayName;
+            me.id = m_assetManager->loadMaterial(me.logicalPath);
+            m_materialEntries.push_back(std::move(me));
+        }
+        std::sort(m_materialEntries.begin(), m_materialEntries.end(),
+                  [](const MaterialEntry& a, const MaterialEntry& b) {
+                      return a.displayName < b.displayName;
+                  });
+    }
+
     m_scanned = true;
     Log::assets()->info(
-        "AssetBrowserPanel: {} texturas, {} audios, {} meshes, {} prefabs listados",
+        "AssetBrowserPanel: {} texturas, {} audios, {} meshes, {} prefabs, "
+        "{} materiales listados",
         m_entries.size(), m_audioEntries.size(), m_meshEntries.size(),
-        m_prefabEntries.size());
+        m_prefabEntries.size(), m_materialEntries.size());
 }
 
 void AssetBrowserPanel::onImGuiRender() {
@@ -293,6 +324,31 @@ void AssetBrowserPanel::onImGuiRender() {
                 }
                 ImGui::SameLine();
                 ImGui::TextDisabled("(prefab)");
+                ImGui::PopID();
+            }
+        }
+    }
+
+    // --- Seccion Materiales (Hito 17 Bloque 4) ---
+    // Lista los `.material` JSON de assets/materials/ con drag payload
+    // `MOOD_MATERIAL_ASSET` (u32 id). Drop sobre el viewport asigna el
+    // material al primer slot del MeshRenderer de la entidad bajo el
+    // cursor (handler en EditorApplication).
+    if (!m_materialEntries.empty()) {
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Materiales", ImGuiTreeNodeFlags_DefaultOpen)) {
+            for (const auto& me : m_materialEntries) {
+                ImGui::PushID(me.logicalPath.c_str());
+                ImGui::Selectable(me.displayName.c_str(), false);
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                    ImGui::SetDragDropPayload("MOOD_MATERIAL_ASSET",
+                                               &me.id, sizeof(me.id));
+                    ImGui::TextUnformatted(me.displayName.c_str());
+                    ImGui::EndDragDropSource();
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("(material)");
                 ImGui::PopID();
             }
         }

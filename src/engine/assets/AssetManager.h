@@ -169,6 +169,12 @@ public:
     ///        vale 0.
     MeshAssetId missingMeshId() const { return 0; }
 
+    /// @brief Id de la esfera primitiva (Hito 17). Generada en el
+    ///        constructor junto con el cubo, slot logico
+    ///        "__primitive_sphere". Util para showcase de PBR sin tener
+    ///        que importar un .obj.
+    MeshAssetId primitiveSphereId() const { return m_primitiveSphereId; }
+
     /// @brief Path logico asociado al mesh. Slot 0 devuelve el path sentinela
     ///        "__missing_cube" (no existe en disco; solo uso interno del
     ///        serializer para detectar "sin mesh real cargado").
@@ -219,6 +225,15 @@ public:
     ///         conflicto con paths logicos reales que terminan en .material).
     MaterialAssetId loadMaterialFromTexture(TextureAssetId textureId);
 
+    /// @brief Crea un material nuevo con los parametros del prototype.
+    ///        Sin cache: cada llamada genera un slot distinto. La cache
+    ///        key sintetica (`__runtime#<id>`) evita colisiones con
+    ///        materiales cargados desde disco. Util para spawn de
+    ///        showcases (Hito 17 esferas PBR) o herramientas que generan
+    ///        materiales programaticamente.
+    /// @return Id estable del material recien creado.
+    MaterialAssetId createMaterial(const MaterialAsset& prototype);
+
     /// @brief Devuelve el MaterialAsset del id. Nunca null: ids invalidos
     ///        caen al slot 0 (default material).
     MaterialAsset* getMaterial(MaterialAssetId id) const;
@@ -255,6 +270,7 @@ private:
     // Mesh (Hito 10). [0] = cubo primitivo (fallback).
     std::unordered_map<std::string, MeshAssetId> m_meshCache;
     std::vector<std::unique_ptr<MeshAsset>> m_meshes;
+    MeshAssetId m_primitiveSphereId = 0; // Hito 17, llenado en el ctor
 
     // Prefab (Hito 14). [0] = prefab vacio (root sin componentes).
     std::unordered_map<std::string, PrefabAssetId> m_prefabCache;

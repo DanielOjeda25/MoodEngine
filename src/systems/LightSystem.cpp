@@ -17,10 +17,10 @@ namespace {
 // Ambient bajo a partir de Hito 16: con shadow mapping las sombras se
 // notan recien si el ambient no inunda las caras opuestas a la luz. 0.08
 // deja las caras "en sombra" perceptiblemente oscuras pero no totalmente
-// negras (se mantiene legibilidad de la textura).
+// negras (se mantiene legibilidad de la textura). Hito 17: solo sirve
+// como FALLBACK del PBR cuando uIblEnabled = 0 (IBL no cargado);
+// normalmente el shader usa el irradiance map en su lugar.
 constexpr float k_defaultAmbient = 0.08f;
-constexpr float k_specularStrength = 0.4f;
-constexpr float k_shininess = 32.0f;
 
 } // namespace
 
@@ -69,8 +69,9 @@ void LightSystem::bindUniforms(IShader& shader,
                                 const glm::vec3& cameraPos) {
     shader.setVec3("uCameraPos", cameraPos);
     shader.setVec3("uAmbient", glm::vec3(k_defaultAmbient));
-    shader.setFloat("uSpecularStrength", k_specularStrength);
-    shader.setFloat("uShininess", k_shininess);
+    // Hito 17: el PBR no consume `uSpecularStrength` ni `uShininess`
+    // (eran del Blinn-Phong del Hito 11). Removidos para no spammear el
+    // GL warning callback con "uniform no encontrado".
 
     // Directional. Cuando enabled=false el shader la salta por el flag.
     shader.setVec3("uDirectional.direction", data.directional.direction);

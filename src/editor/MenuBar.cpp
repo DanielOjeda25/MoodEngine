@@ -103,6 +103,12 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar demo de sombras", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnShadowDemo();
             }
+            // Demo Hito 17: 4 esferas con materiales PBR distintos (oro
+            // pulido, cobre rugoso, plastico azul, blanco mate). Permite
+            // ver el efecto del IBL specular + diffuse en una sola toma.
+            if (ImGui::MenuItem("Agregar esferas PBR de prueba", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnPbrSpheres();
+            }
             ImGui::EndMenu();
         }
 

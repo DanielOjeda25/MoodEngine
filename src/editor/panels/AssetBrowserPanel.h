@@ -66,11 +66,18 @@ private:
         PrefabAssetId id = 0;
     };
 
+    struct MaterialEntry {
+        std::string logicalPath; // "materials/foo.material"
+        std::string displayName; // "foo.material"
+        MaterialAssetId id = 0;
+    };
+
     AssetManager* m_assetManager = nullptr;
     std::vector<Entry> m_entries;
     std::vector<AudioEntry> m_audioEntries;
     std::vector<MeshEntry> m_meshEntries;
     std::vector<PrefabEntry> m_prefabEntries;
+    std::vector<MaterialEntry> m_materialEntries;
     std::optional<std::string> m_selected;
     bool m_scanned = false;
     bool m_reloadRequested = false;
