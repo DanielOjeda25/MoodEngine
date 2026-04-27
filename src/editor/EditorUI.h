@@ -160,6 +160,18 @@ public:
         return r;
     }
 
+    /// @brief Hito 19: request para spawnear `assets/meshes/Fox.glb`
+    ///        (CC0, glTF Sample Assets) con AnimatorComponent + clip
+    ///        default ("Survey"/"Walk"/"Run" segun viene en el archivo).
+    ///        Se ve animado tanto en Editor como en Play Mode (el sistema
+    ///        no condiciona por modo).
+    void requestSpawnAnimatedCharacter() { m_spawnAnimatedCharacterRequested = true; }
+    bool consumeSpawnAnimatedCharacterRequest() {
+        const bool r = m_spawnAnimatedCharacterRequested;
+        m_spawnAnimatedCharacterRequested = false;
+        return r;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -256,6 +268,7 @@ private:
     bool m_spawnShadowDemoRequested = false; // Hito 16
     bool m_spawnPbrSpheresRequested = false; // Hito 17
     bool m_spawnLightStressRequested = false; // Hito 18
+    bool m_spawnAnimatedCharacterRequested = false; // Hito 19
     bool m_recentsDirty = false; // Hito 15 polish: edicion manual de la lista de recientes
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;

@@ -364,6 +364,62 @@ void InspectorPanel::onImGuiRender() {
         ImGui::Separator();
     }
 
+    // --- AnimatorComponent (Hito 19) ---
+    // Combo de clips poblado desde el MeshAsset de la entidad. Editar
+    // el clipName resetea `time` para que el clip nuevo arranque desde
+    // el frame 0.
+    if (e.hasComponent<AnimatorComponent>()) {
+        auto& anim = e.getComponent<AnimatorComponent>();
+        ImGui::TextDisabled("Animator");
+
+        // Necesitamos el MeshAsset para listar los clips. Lo resolvemos
+        // via MeshRenderer (mismo flujo que el AnimationSystem).
+        if (m_assets != nullptr && e.hasComponent<MeshRendererComponent>()) {
+            const auto& mr = e.getComponent<MeshRendererComponent>();
+            const MeshAsset* mesh = m_assets->getMesh(mr.mesh);
+            if (mesh != nullptr && !mesh->animations.empty()) {
+                std::vector<std::string> clipNames;
+                clipNames.reserve(mesh->animations.size());
+                for (const auto& c : mesh->animations) clipNames.push_back(c.name);
+
+                int currentIdx = 0;
+                for (int i = 0; i < static_cast<int>(clipNames.size()); ++i) {
+                    if (clipNames[i] == anim.clipName) { currentIdx = i; break; }
+                }
+                if (ImGui::BeginCombo("clip##anim", clipNames[currentIdx].c_str())) {
+                    for (int i = 0; i < static_cast<int>(clipNames.size()); ++i) {
+                        const bool selected = (currentIdx == i);
+                        if (ImGui::Selectable(clipNames[i].c_str(), selected)) {
+                            anim.clipName = clipNames[i];
+                            anim.time = 0.0f; // reset al cambiar
+                            m_editedThisFrame = true;
+                        }
+                        if (selected) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                ImGui::TextDisabled(
+                    "duration: %.2fs  time: %.2fs",
+                    mesh->animations[currentIdx].duration, anim.time);
+            } else {
+                ImGui::TextDisabled("Mesh sin animaciones");
+            }
+        }
+
+        if (ImGui::DragFloat("speed##anim", &anim.speed, 0.05f, 0.0f, 10.0f)) {
+            m_editedThisFrame = true;
+        }
+        if (ImGui::Checkbox("playing##anim", &anim.playing)) { m_editedThisFrame = true; }
+        ImGui::SameLine();
+        if (ImGui::Checkbox("loop##anim", &anim.loop)) { m_editedThisFrame = true; }
+        ImGui::SameLine();
+        if (ImGui::Button("Reset##anim")) {
+            anim.time = 0.0f;
+            m_editedThisFrame = true;
+        }
+        ImGui::Separator();
+    }
+
     ImGui::End();
 }
 

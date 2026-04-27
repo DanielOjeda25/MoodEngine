@@ -13,6 +13,7 @@
 #include "core/Log.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/render/MaterialAsset.h"
+#include "engine/render/MeshAsset.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
@@ -255,6 +256,56 @@ void EditorApplication::processSpawnLightStressRequest() {
     Log::editor()->info(
         "Spawned stress test {} point lights ({}x{} grid, radius={}m)",
         spawned, kCols, kRows, kRadius);
+    markDirty();
+}
+
+void EditorApplication::processSpawnAnimatedCharacterRequest() {
+    if (!(m_ui.consumeSpawnAnimatedCharacterRequest() && m_scene
+          && m_assetManager)) return;
+
+    // Asset CC0 de glTF Sample Assets (KhronosGroup). Trae 3 clips:
+    // "Survey", "Walk", "Run". El Animator con clipName vacio toma el
+    // primero ("Survey").
+    const MeshAssetId foxMesh = m_assetManager->loadMesh("meshes/Fox.glb");
+    if (foxMesh == m_assetManager->missingMeshId()) {
+        Log::editor()->warn(
+            "Spawn personaje animado: 'meshes/Fox.glb' no se pudo cargar");
+        return;
+    }
+    const MeshAsset* asset = m_assetManager->getMesh(foxMesh);
+    if (asset == nullptr || !asset->hasSkeleton()) {
+        Log::editor()->warn(
+            "Spawn personaje animado: 'meshes/Fox.glb' no tiene esqueleto");
+        return;
+    }
+
+    Entity fox = m_scene->createEntity("Fox");
+    auto& t = fox.getComponent<TransformComponent>();
+    // Fox.glb viene en cm escalado por glTF — assimp lo deja en escala
+    // ~100 unidades. Lo bajamos a 0.01 para que mida ~1.5m que es la
+    // escala real del modelo, comparable al jugador (1.8m).
+    t.position = glm::vec3(0.0f, 0.0f, -3.0f);
+    t.scale    = glm::vec3(0.01f);
+
+    // Material default (gris mate). El AssetManager ya tiene el slot 0
+    // como default; los materiales por submesh se asignan al primero.
+    fox.addComponent<MeshRendererComponent>(foxMesh, /*material=*/0u);
+
+    AnimatorComponent anim{};
+    anim.clipName = "";   // primer clip del MeshAsset
+    anim.playing  = true;
+    anim.loop     = true;
+    fox.addComponent<AnimatorComponent>(anim);
+
+    SkeletonComponent skel{};
+    // skinningMatrices se rellena en el primer update de AnimationSystem.
+    fox.addComponent<SkeletonComponent>(skel);
+
+    Log::editor()->info(
+        "Spawned personaje animado 'Fox' ({} bones, {} clips). "
+        "Editar 'clipName' del Animator desde el Inspector para cambiar "
+        "entre Survey/Walk/Run.",
+        asset->skeleton->bones.size(), asset->animations.size());
     markDirty();
 }
 
@@ -552,7 +603,8 @@ void EditorApplication::processViewportMaterialDrop() {
     // Pick por entidad (usa los AABBs de meshes — mismo flow que el
     // click-select). Asignar material al PRIMER slot del MeshRenderer.
     ScenePickResult hit = pickEntity(*m_scene, view, projection,
-        glm::vec2(drop.ndcX, drop.ndcY));
+        glm::vec2(drop.ndcX, drop.ndcY),
+        m_assetManager.get());
     if (!hit) {
         Log::editor()->info("Drop material: no hay entidad bajo el cursor");
         return;

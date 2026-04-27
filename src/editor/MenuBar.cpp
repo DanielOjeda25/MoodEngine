@@ -116,6 +116,12 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar stress test 64 luces", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnLightStress();
             }
+            // Demo Hito 19: spawnea el personaje Fox.glb (CC0) con
+            // animacion. Se ve en loop tanto en Editor como Play Mode.
+            // Cambiar el clip activo desde el Inspector (Animator).
+            if (ImGui::MenuItem("Agregar personaje animado", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnAnimatedCharacter();
+            }
             ImGui::EndMenu();
         }
 
