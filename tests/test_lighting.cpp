@@ -210,8 +210,8 @@ TEST_CASE("LightSystem::bindUniforms sube los nombres esperados al shader") {
     // Globales esperados.
     CHECK(sh.vec3s.count("uCameraPos") == 1);
     CHECK(sh.vec3s.count("uAmbient")   == 1);
-    CHECK(sh.floats.count("uSpecularStrength") == 1);
-    CHECK(sh.floats.count("uShininess") == 1);
+    // Hito 17: uSpecularStrength / uShininess fueron removidos del
+    // LightSystem (eran del Blinn-Phong; el PBR usa metallic-roughness).
 
     // Directional fields.
     CHECK(sh.vec3s.count("uDirectional.direction") == 1);

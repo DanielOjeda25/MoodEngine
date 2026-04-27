@@ -24,6 +24,8 @@ add_executable(mood_tests
     test_prefab_serializer.cpp
     test_fog.cpp
     test_shadow_proj.cpp
+    test_pbr_brdf.cpp
+    test_material_serializer.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para

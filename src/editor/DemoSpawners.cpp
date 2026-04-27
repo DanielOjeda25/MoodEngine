@@ -149,39 +149,47 @@ void EditorApplication::processSpawnPbrSpheresRequest() {
         return;
     }
 
-    // 4 esferas en fila (y=4) con materiales PBR distintos para
-    // showcase del shader. Sin texturas: solo albedoTint + metallic +
-    // roughness. AssetManager::createMaterial reserva un slot nuevo por
-    // cada llamada.
-    struct Spec {
-        const char* name;
-        glm::vec3 tint;
-        f32 metallic;
-        f32 roughness;
-        f32 xPos;
-    };
-    const Spec specs[] = {
-        {"PBR_Oro",          glm::vec3(1.00f, 0.84f, 0.41f), 1.0f, 0.10f, -3.75f},
-        {"PBR_CobreRugoso",  glm::vec3(0.95f, 0.64f, 0.54f), 1.0f, 0.55f, -1.25f},
-        {"PBR_PlasticoAzul", glm::vec3(0.20f, 0.40f, 0.85f), 0.0f, 0.25f,  1.25f},
-        {"PBR_BlancoMate",   glm::vec3(0.95f, 0.95f, 0.95f), 0.0f, 1.00f,  3.75f},
-    };
+    // Showcase grid 3x3 (Hito 17 Bloque 5): eje X = metallic creciente
+    // (0.0, 0.5, 1.0), eje Y = roughness creciente (0.05, 0.5, 1.0).
+    // Las 9 esferas comparten un albedoTint neutro (gris claro) para
+    // que las diferencias se vean en el shading, no en el color.
+    // Convencion del eje Z: las esferas miran al +X del mundo, asi al
+    // orbitar la camara con el default editor camera quedan en cuadro.
+    const glm::vec3 baseTint(0.85f, 0.85f, 0.88f);
+    const f32 spacing  = 2.5f;
+    const f32 baseY    = 4.0f;
+    const f32 baseX    = -spacing; // columna del medio en x=0
+    const f32 baseZ    = -spacing; // fila inferior en z=0
+    const f32 metVals[3]   = {0.0f, 0.5f, 1.0f};
+    const f32 rouVals[3]   = {0.05f, 0.5f, 1.0f}; // 0.05 evita NaN en GGX
 
-    for (const Spec& s : specs) {
-        MaterialAsset prototype{};
-        prototype.albedoTint    = s.tint;
-        prototype.metallicMult  = s.metallic;
-        prototype.roughnessMult = s.roughness;
-        const MaterialAssetId matId = m_assetManager->createMaterial(prototype);
+    int spawned = 0;
+    for (int my = 0; my < 3; ++my) {            // filas (roughness)
+        for (int mx = 0; mx < 3; ++mx) {         // columnas (metallic)
+            MaterialAsset prototype{};
+            prototype.albedoTint    = baseTint;
+            prototype.metallicMult  = metVals[mx];
+            prototype.roughnessMult = rouVals[my];
+            const MaterialAssetId matId =
+                m_assetManager->createMaterial(prototype);
 
-        Entity sph = m_scene->createEntity(s.name);
-        auto& t = sph.getComponent<TransformComponent>();
-        t.position = glm::vec3(s.xPos, 4.0f, 0.0f);
-        t.scale    = glm::vec3(1.5f);
-        sph.addComponent<MeshRendererComponent>(sphere, matId);
+            char name[64];
+            std::snprintf(name, sizeof(name),
+                          "PBR_M%.1f_R%.2f", metVals[mx], rouVals[my]);
+            Entity sph = m_scene->createEntity(name);
+            auto& t = sph.getComponent<TransformComponent>();
+            t.position = glm::vec3(
+                baseX + static_cast<f32>(mx) * spacing,
+                baseY + static_cast<f32>(my) * spacing,
+                baseZ);
+            t.scale = glm::vec3(1.0f);
+            sph.addComponent<MeshRendererComponent>(sphere, matId);
+            ++spawned;
+        }
     }
     Log::editor()->info(
-        "Spawned 4 esferas PBR (oro/cobre/plastico/blanco) en y=4");
+        "Spawned showcase PBR grid 3x3 ({} esferas): metallic en X "
+        "(0/0.5/1), roughness en Y (0.05/0.5/1)", spawned);
     markDirty();
 }
 
