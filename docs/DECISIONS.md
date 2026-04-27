@@ -1429,3 +1429,131 @@ el motor solo tenia `createCubeMesh`.
 - Importar `assets/meshes/sphere.obj` desde algun lado (Blender
   default sphere). Costo: un archivo binario en el repo +
   dependencia de assimp para algo que se genera analiticamente.
+
+## 2026-04-27: Forward+ tile-based culling sobre Deferred (Hito 18)
+
+**Contexto:** subir el cap de point lights de 8 (uniform array) a
+256+ requiere cambiar la arquitectura. Las dos opciones estandar son
+Forward+ y Deferred shading.
+
+**Decision:** Forward+ con tile size 16x16 px, light grid CPU-side,
+SSBOs para luces + tiles + indices.
+
+**Razones:**
+- Compatibilidad con el HDR + post-process actual del Hito 15: el
+  scene FB sigue siendo un solo color attachment RGBA16F. Deferred
+  requiere G-buffer multi-target (albedo + normal + material +
+  depth) — refactor grande del FB y el shader pbr.
+- MSAA "trivial" en Forward+. En Deferred es complicado porque
+  los samples del G-buffer requieren resolve + lighting per-sample.
+- Reusa el shader pbr.frag intacto: solo cambia el loop de point
+  lights, no el modelo de iluminacion.
+- El target de luces simultaneas del proyecto (~30-100) entra
+  comodamente en Forward+ sin necesidad del power-of-2 culling de
+  Deferred.
+
+**Trade-off aceptado:** Deferred escala mejor a 1000+ luces densas
+(tipico en escenas urbanas nocturnas con farolas en cada esquina).
+No es el caso del proyecto. Si aparece, Hito 18.5 hace el switch.
+
+**Alternativas consideradas:**
+- Clustered shading (Forward++): hito 18.5 si los Z-bins se
+  vuelven necesarios.
+- Texture-based light grid (en vez de SSBO): mas barato en GPUs
+  viejas pero con limites de samplers; SSBO es lo moderno y el
+  motor pide GL 4.5.
+
+## 2026-04-27: Light grid CPU-side via 8-corner AABB del bounding sphere
+
+**Contexto:** el LightGrid necesita decidir, por cada point light,
+a que tiles afecta. Las opciones son:
+1. AABB del bounding sphere world-space proyectado a screen-space.
+2. Sphere proyectada como elipse (matematica de Mara/Lengyel).
+3. Frustum-vs-sphere por tile (test exacto pero N_tiles * N_luces
+   testeos).
+
+**Decision:** opcion 1. Para cada luz, tomamos las 8 esquinas del
+AABB world-space (`center +/- radius` en cada eje), las proyectamos
+a NDC, sacamos min/max XY, clampeamos al viewport, y marcamos los
+tiles del rectangulo resultante.
+
+**Razones:**
+- Simple de implementar y de testear (helper puro
+  `projectSphereToTileRange`).
+- Conservativo: nunca mete una luz en menos tiles de los que
+  realmente la afectan. False positives (asignar la luz a tiles
+  donde no llega) son aceptables — el shader hace `if (dist >
+  radius) continue` y la luz se descarta a nivel fragment.
+- El caso "sphere cruza el plano near de la camara" se maneja
+  marcando todo el viewport (alguna parte de la sphere puede
+  iluminar cualquier pixel, no se puede acotar barato).
+
+**Trade-off aceptado:** la elipse exacta daria menos false positives
+~30-50% segun benchmarks publicos. Para el target de 64-256 luces
+del motor el costo extra del AABB no se mide; cuando aparezca,
+Hito 18.5 mejora el algoritmo.
+
+## 2026-04-27: SSBO std430 layout con padding C++ explicito
+
+**Contexto:** las point lights migran de uniform array a SSBO. El
+layout std430 de GLSL tiene reglas de alineamiento (vec3 alineado a
+16, vec4 a 16, struct a max(miembros)). Si el C++ no replica el
+layout exacto, los miembros se desalinean y el shader lee basura.
+
+**Decision:** struct C++ `PointLightStd430` con padding floats
+explicitos para totalizar 48 bytes (3 vec4 alignados):
+```
+vec3 position; float pad0;       // 16B
+vec3 color;    float intensity;  // 16B
+float radius;  float pad1, pad2, pad3;  // 16B
+```
+`static_assert(sizeof(PointLightStd430) == 48)` garantiza el match
+en compile-time. El shader replica el mismo layout con padding
+floats.
+
+**Razones:**
+- std430 NO usa el padding implicito de std140 (que aliña vec3 a
+  vec4 silenciosamente). Sin padding explicito en C++, el segundo
+  PointLight del array empieza 4 bytes antes de lo que GLSL espera.
+- `static_assert` lo detecta antes de runtime.
+- La duplicacion del padding en C++ y GLSL es minima (12 bytes de
+  pads); los costos en complejidad son menores al beneficio de un
+  layout deterministico.
+
+**Alternativas consideradas:**
+- Pack manual a `std::vector<float>` y cargar sin struct intermedio.
+  Mas error-prone (offsets numericos en el codigo) y peor
+  legibilidad.
+- `layout(std140)` que tiene reglas mas estrictas y el C++ default
+  con vec3 + 1 float lo respetaria sin pads explicitos. Costo:
+  std140 padea TODO al multiplo de vec4, los arrays de scalars
+  pasan a 16B/elemento — gran gasto de memoria en `uLightIndices[]`.
+
+## 2026-04-27: `iblIntensity` en EnvironmentComponent como slider
+
+**Contexto:** durante el smoke test del Hito 18 el dev reporto que
+la escena se veia "muy brillante" sin point lights. La causa
+probable: el cubemap del skybox aporta mucho diffuse IBL que
+ahoga el contraste de las luces directas. La solucion no es bajar
+el cubemap (es el aspecto deseado del cielo) sino dejar que el
+material o environment local diga "yo no quiero tanto IBL aqui".
+
+**Decision:** agregar `EnvironmentComponent.iblIntensity` (default
+1.0, range [0, 2]) como multiplicador del termino IBL en el shader.
+Slider en el Inspector + persistido en `.moodmap` solo si != 1.0
+(no bumpea ni ensucia archivos viejos).
+
+**Razones:**
+- Da control sin romper nada: el dev decide si quiere mas o menos
+  ambient IBL por escena.
+- El range [0, 2] permite tanto bajarlo (escenas indoor con luces
+  artificiales dominantes) como subirlo (open-world brillante).
+- Persistido como campo opcional: archivos viejos siguen cargando
+  con default 1.0 sin warnings.
+
+**Alternativas consideradas:**
+- Bajar el IBL globalmente a 0.5 por default. Decision de UX
+  arbitraria que rompe la apariencia "exterior" para todos.
+- Replicar el slider en cada `MaterialAsset` (override por
+  material). Util pero overkill — el ambient es propiedad del
+  environment, no del material.

@@ -22,7 +22,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 15** — Skybox, fog, post-procesado (completado, tag `v0.15.0-hito15`).
 - [x] **Hito 16** — Shadow mapping (completado, tag `v0.16.0-hito16`).
 - [x] **Hito 17** — PBR (completado, tag `v0.17.0-hito17`).
-- [ ] Hito 18 — Deferred / Forward+.
+- [x] **Hito 18** — Forward+ (completado, tag `v0.18.0-hito18`).
 - [ ] Hito 19 — Animación esquelética.
 - [ ] Hito 20 — UI del juego con RmlUi.
 - [ ] Hito 21 — Empaquetado standalone.
@@ -477,3 +477,43 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Renderer de equirectangular → cubemap** para que el dev pueda dropear un `.hdr` panorámico y se convierta en cubemap automáticamente. **Trigger:** integración con HDR sources externos.
 - **Editor de grafo de materiales** (substance-style). **Trigger:** Hito 23 (es un hito dedicado).
 - **Multi-submesh material assignment desde drag**: hoy el drop de material asigna SOLO al primer slot. **Trigger:** primer mesh con submeshes que necesite materiales distintos.
+
+## Hito 18 — Forward+ (renderer escalable a muchas luces)
+
+**Objetivo:** subir el cap de point lights por escena de 8 (uniform array) a 256+ (SSBO) y cullear por tile en CPU para que el shader procese SOLO las luces que afectan a cada fragment. Migra el path de iluminación del PBR del forward simple del Hito 17 a Forward+ tile-based.
+
+**Decisión Forward+ vs Deferred:** Forward+. Mantiene compatibilidad con el HDR + post-process actual, no requiere G-buffer extra de memoria y funciona bien con MSAA cuando aparezca. Deferred queda como Hito 18.5 si Forward+ no escala (no esperado para los tamaños de escena del proyecto).
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — LightGrid CPU:*
+- `engine/render/LightGrid.h/.cpp`: tile size 16×16, AABB del bounding sphere de cada luz proyectado a screen-space (8 esquinas), prefix-sum de counts → flat array de indices. CPU-only, testeable.
+- `projectSphereToTileRange()` helper puro maneja casos: luz delante (caso normal), luz detrás (descarta), luz parcial cruzando la cámara (marca todo el viewport).
+- Convención de coords matchea `gl_FragCoord` (origen abajo-izquierda).
+
+*Bloque 2 — GPU upload via SSBO:*
+- `engine/render/opengl/OpenGLSSBO.h/.cpp`: wrapper RAII de `GL_SHADER_STORAGE_BUFFER`. `upload()` reusa storage si capacidad alcanza (`glBufferSubData`); crece con `glBufferData GL_DYNAMIC_DRAW`.
+- 3 SSBOs por frame: PointLight (binding 2), TileLightList (binding 3), uint indices (binding 4). Layout std430 con padding explícito en C++ (`PointLightStd430` 48 bytes, matchea el `struct PointLight` de GLSL).
+
+*Bloque 3 — Shader + integración:*
+- `pbr.frag` reemplaza el `uniform PointLight uPointLights[8]` por `layout(std430, binding=2) buffer PointLightBuffer`. Loop por tile: `gl_FragCoord / 16` → tileIdx → lookup en `uTiles[]` → loop sobre `uLightIndices[offset, offset+count)`.
+- `LightSystem::bindUniforms` deja de subir `uPointLights[].position`/etc. via `glUniform`; el bindeo lo hace `EditorRenderPass` con los SSBOs.
+- `k_MaxPointLights` 8 → 256 (sigue habiendo cap por seguridad pero es 32× más alto).
+
+*Bloque 4 — Demo + tests:*
+- "Ayuda > Agregar stress test 64 luces" spawnea grid 8×8 de point lights con colores procedurales HSV (hue rotando, saturation 0.85, value 1.0). Cobertura ~17.5×17.5 m, intensidad 1.2, radius 3.5 m.
+- `tests/test_light_grid.cpp` (9 casos): luz centrada, luz detrás de cámara, luz lateral fuera de frustum, luz que cruza la cámara, dimensiones de tile correctas, tile no-vacio cuando luz visible, offsets prefix-sum válidos, viewport 0×0 no crashea, luces fuera del frustum no aparecen en el flat array. Suite total **162 / 5109**.
+
+**Polish reactivo del hito:**
+- **`EnvironmentComponent.iblIntensity`** (slider [0..2], default 1.0) en el Inspector. Persistido en `.moodmap` solo si != 1.0 (no ensucia archivos viejos). Resuelve el caso "el cubemap es muy claro y ahoga las point lights" — útil cuando el dev quiere que las luces directas dominen sobre el ambient IBL.
+- Log diagnóstico one-shot del LightGrid (`LightGrid: N point lights -> M tiles, K no-vacios, T asignaciones`) cuando cambia la cantidad de luces. Diagnóstico de regresión sin spamear el log cada frame.
+
+**Siguiente paso tras completarlo:** Hito 19 — Animación esquelética. Plan en `docs/PLAN_HITO19.md`.
+
+### Pendientes menores detectados en Hito 18
+
+- **Compute shader culling** del LightGrid (mover de CPU a GPU). Hoy CPU-side es ≤1ms con 64 luces; ~5ms con 256 luces empieza a doler. **Trigger:** demo con >100 luces o menos cap se vuelve aceptable bajo profile.
+- **Cluster por profundidad (Forward++ / Z-bins)**: en escenas con luces apiladas en profundidad, todas caen en los mismos tiles XY pero a distancias muy distintas. **Trigger:** primer artista que arme una escena con muchas luces dispuestas verticalmente.
+- **AABB tighter para light culling**: hoy se proyectan 8 esquinas del AABB world-space del bounding sphere. La sphere proyectada es una elipse, no un AABB; eso da false positives en grazing. **Trigger:** profile que muestre 2-3× más asignaciones de las esperadas.
+- **MSAA dentro del scene FB HDR**: Forward+ lo soporta trivialmente (deferred no). **Trigger:** jaggies visibles en geometría angular.
+- **Sombras de point lights** (cubemap depth, 6 caras por luz). Sigue del Hito 16. **Trigger:** primera escena interior con un solo point light que necesite sombra.

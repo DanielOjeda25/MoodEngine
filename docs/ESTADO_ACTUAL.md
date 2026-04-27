@@ -6,7 +6,27 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 17 cerrado.**
+**Hito 18 cerrado.**
+Tag: `v0.18.0-hito18`.
+Verificado automático: suite doctest **162/5109** (+9 de `test_light_grid` para light → tile assignment). Editor arranca con `LightGrid: 0 point lights -> N tiles (XxY), 0 no-vacios, 0 asignaciones (avg 0.00/tile)` en el log al cargar mapa vacío. Verificado por el dev a ojo: spawn de 64 stress lights vía `Ayuda > Agregar stress test 64 luces` muestra spots de colores HSV procedurales sobre el suelo; con `IBL intensity` bajado a ~0.4 las luces destacan claramente sobre el ambient. El log diagnóstico reporta ~12 asignaciones promedio por tile no-vacío para 64 luces de radius 3.5m con la cámara default.
+
+**Stack del frame de render (post Hito 18):**
+1. Shadow pass al depth FB (si hay directional con `castShadows`).
+2. Skybox al scene FB (HDR RGBA16F, sRGB cubemap).
+3. Build LightGrid CPU desde `LightFrameData` (proyección de bounding spheres a tiles).
+4. Upload de los 3 SSBOs (point lights, tiles, indices). Bindings 2/3/4.
+5. Loop scene-driven con shader `pbr` (Cook-Torrance + Smith + Schlick + IBL split-sum + Forward+ tile lookup) — termina en `m_sceneFb`.
+6. Debug renderer (AABBs, OBBs, líneas).
+7. Post-process pass: exposure (2^EV) + tonemap + gamma → `m_viewportFb` LDR RGBA8.
+8. ImGui muestra `m_viewportFb` en el panel Viewport.
+
+**Polish reactivo del Hito 18 cerrado en el mismo tag:**
+- `EnvironmentComponent.iblIntensity` (slider [0..2]) en Inspector. Persistido en `.moodmap` solo si != 1.0. Soluciona el caso "el cubemap claro ahoga las point lights".
+- Log diagnóstico one-shot del LightGrid al cambiar la cantidad de luces.
+
+**Próximo paso:** Hito 19 — Animación esquelética. Plan en `docs/PLAN_HITO19.md`.
+
+### Hito 17 (anterior, ya cerrado)
 Tag: `v0.17.0-hito17`.
 Verificado automático: suite doctest **144/649** (+8 de `test_pbr_brdf` + 7 de `test_material_serializer` + 4 de `test_asset_manager` para material catalog). Editor arranca con `IBL cargado: irradiance + prefilter (5 mips) + BRDF LUT.` y `AssetManager: esfera primitiva generada en slot N` en el log. Verificado por el dev a ojo: grid 3×3 de esferas (`Ayuda > Agregar esferas PBR de prueba`) muestra el rango completo metallic 0/0.5/1 × roughness 0.05/0.5/1.0 — esquina inferior-derecha refleja el cielo como espejo, esquina superior-izquierda es chalk mate. Inspector con sliders en vivo de albedoTint/metallic/roughness/ao actualiza el shader sin relanzar. Drag de `.material` desde AssetBrowser sobre cualquier mesh asigna el material al primer slot.
 
