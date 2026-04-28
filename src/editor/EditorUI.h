@@ -77,6 +77,15 @@ public:
         return r;
     }
 
+    /// @brief Hito 23 Bloque 3: spawnea un enemigo demo con
+    ///        NavAgentComponent que persigue al jugador en Play Mode.
+    void requestSpawnEnemyDemo() { m_spawnEnemyDemoRequested = true; }
+    bool consumeSpawnEnemyDemoRequest() {
+        const bool r = m_spawnEnemyDemoRequested;
+        m_spawnEnemyDemoRequested = false;
+        return r;
+    }
+
     /// @brief Demo del Hito 20 Bloque 5: request para crear una entidad
     ///        con ScriptComponent apuntando a `scripts/hud_demo.lua`,
     ///        que ejercita la tabla `hud` (setHp/setAmmo/setPaused).
@@ -273,6 +282,7 @@ private:
     bool m_hasProject = false;
     bool m_spawnRotatorRequested = false;
     bool m_spawnHudDemoRequested = false;
+    bool m_spawnEnemyDemoRequested = false;
     bool m_spawnAudioSourceRequested = false;
     bool m_spawnPointLightRequested = false;
     bool m_spawnPhysicsBoxRequested = false;

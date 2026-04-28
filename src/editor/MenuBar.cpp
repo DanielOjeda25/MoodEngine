@@ -93,6 +93,11 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar HUD demo", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnHudDemo();
             }
+            // Demo Hito 23 Bloque 3: enemigo NavAgent que persigue al
+            // jugador en Play Mode. Mesh = Fox.glb caminando.
+            if (ImGui::MenuItem("Agregar enemigo demo", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnEnemyDemo();
+            }
             // Demo Hito 9: spawnea una entidad con AudioSourceComponent
             // (beep.wav loop 3D) en una esquina del mapa. En Play Mode,
             // acercarse debería subir el volumen por atenuacion 3D.

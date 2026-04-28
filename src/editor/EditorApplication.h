@@ -146,6 +146,7 @@ private:
     // se cumple (sin scene, etc.).
     void processSpawnRotatorRequest();
     void processSpawnHudDemoRequest(); // Hito 20 Bloque 5
+    void processSpawnEnemyDemoRequest(); // Hito 23 Bloque 3
     void processSpawnAudioSourceRequest();
     void processSpawnPointLightRequest();
     void processSpawnPhysicsBoxRequest();

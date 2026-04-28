@@ -45,6 +45,67 @@ void EditorApplication::processSpawnRotatorRequest() {
     Log::editor()->info("Spawned rotador demo en (0, 4, 0)");
 }
 
+void EditorApplication::processSpawnEnemyDemoRequest() {
+    if (!(m_ui.consumeSpawnEnemyDemoRequest() && m_scene && m_assetManager)) return;
+
+    // Usamos Fox.glb como mesh del enemigo — ya esta en assets/meshes,
+    // anima walk, y libera al packager de tener que copiar otro modelo.
+    // Cuando aparezca un asset enemy.glb propio, cambiar aca.
+    const MeshAssetId foxMesh = m_assetManager->loadMesh("meshes/Fox.glb");
+    if (foxMesh == m_assetManager->missingMeshId()) {
+        Log::editor()->warn(
+            "Spawn enemigo demo: 'meshes/Fox.glb' no se pudo cargar");
+        return;
+    }
+    const MeshAsset* asset = m_assetManager->getMesh(foxMesh);
+    if (asset == nullptr || !asset->hasSkeleton()) {
+        Log::editor()->warn(
+            "Spawn enemigo demo: 'meshes/Fox.glb' no tiene esqueleto");
+        return;
+    }
+
+    Entity enemy = m_scene->createEntity("Enemigo");
+    auto& t = enemy.getComponent<TransformComponent>();
+    // Posicion: una esquina del mapa (tile 1,1 — adentro del perimetro).
+    const glm::vec3 origin = mapWorldOrigin();
+    const f32 tileSize = m_map.tileSize();
+    t.position = glm::vec3(
+        origin.x + 1.5f * tileSize,
+        origin.y,
+        origin.z + 1.5f * tileSize);
+    t.scale = glm::vec3(0.01f); // mismo factor que el demo de personaje animado
+
+    // Material instance unico (clone del default).
+    MaterialAsset proto{};
+    if (const MaterialAsset* def =
+            m_assetManager->getMaterial(m_assetManager->missingMaterialId());
+        def != nullptr) {
+        proto = *def;
+    }
+    const MaterialAssetId enemyMat = m_assetManager->createMaterial(proto);
+    enemy.addComponent<MeshRendererComponent>(foxMesh, enemyMat);
+
+    // Animator con clip "Walk" — el zorro de Khronos trae Survey/Walk/Run.
+    AnimatorComponent anim{};
+    anim.clipName = "Walk";
+    anim.playing  = true;
+    anim.loop     = true;
+    enemy.addComponent<AnimatorComponent>(anim);
+    enemy.addComponent<SkeletonComponent>(SkeletonComponent{});
+
+    // NavAgent: el target lo settea EditorApplication cada frame al
+    // playCamera.position(). Speed conservadora (2 m/s = caminata).
+    NavAgentComponent nav{};
+    nav.speed = 2.0f;
+    nav.active = true;
+    enemy.addComponent<NavAgentComponent>(nav);
+
+    Log::editor()->info(
+        "Spawned enemigo demo en (1.5, 1.5) tiles. Entrar en Play Mode "
+        "para que persiga al jugador.");
+    markDirty();
+}
+
 void EditorApplication::processSpawnHudDemoRequest() {
     if (!(m_ui.consumeSpawnHudDemoRequest() && m_scene)) return;
     // No tiene mesh visible — la entidad existe solo para hostear el

@@ -444,6 +444,7 @@ int EditorApplication::run() {
         // legible.
         processSpawnRotatorRequest();
         processSpawnHudDemoRequest();
+        processSpawnEnemyDemoRequest();
         processSpawnPhysicsBoxRequest();
         processSpawnEnvironmentRequest();
         processSpawnShadowDemoRequest();
