@@ -1,92 +1,108 @@
-# Plan — Hito 22: TBD (candidatos por priorizar)
+# Plan — Hito 22: Workflow de scripting Lua
 
 > **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 21 cerrado).
 >
-> **Estado:** **TBD**. El Hito 21 cerró en `v0.21.0-hito21` con MoodPlayer + packager funcionando. Antes de empezar el Hito 22, conversar con el dev qué línea de trabajo prioriza. Este documento esboza candidatos; cuando se decida uno, actualizar el plan con el desglose de bloques concretos.
+> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
 
 ---
 
-## Candidato A: Workflow de scripting
+## Objetivo
 
-**Por qué importa ahora:** el motor ya tiene Lua corriendo (Hito 8) + bindings (`self.transform`, `hud`, `log`) + hot-reload por mtime. Lo que falta es UX en el editor: hoy hay que alt-tab a VS Code para escribir un script, dropearlo a una entidad pegando el path a mano, y ver errores en el panel Inspector con texto plano.
+Cerrar el gap UX que tiene hoy el motor entre "Lua corre" y "el dev escribe scripts cómodo". La infra del Hito 8 funciona: `ScriptComponent`, hot-reload por mtime, bindings (`self.transform`, `hud`, `log`), Inspector con InputText + Recargar + lastError. Pero hoy el dev:
 
-**Bloques tentativos:**
-- **A1 — Tab "Scripts" en el Asset Browser**: lista los `.lua` de `assets/scripts/` con metadata (líneas, last modified). Drag de un script a una entidad del Hierarchy → asigna ScriptComponent automáticamente. Pequeño, ~1 día.
-- **A2 — "Nuevo Script" desde menú**: abre file dialog, crea `assets/scripts/foo.lua` con un template (`function onUpdate(self, dt) end`). Pequeño.
-- **A3 — Mini editor de código in-place**: nuevo panel `Script Editor` con `ImGuiColorTextEdit` (lib externa que se integra fácil). Syntax highlighting Lua básico, save con Ctrl+S, error highlighting en la línea del último `lastError`. Mediano.
-- **A4 — Doc panel**: panel "Lua API" navegable que lista los bindings disponibles (self.\*, hud.\*, log.\*) con ejemplos de uso. Pequeño una vez que A3 está.
+- Tiene que escribir el path del `.lua` a mano en el Inspector (no hay browser de scripts).
+- No tiene forma rápida de crear un script nuevo (alt-tab a VS Code, mkdir, edit, paste path).
+- Si un script tira error, lo ve como string en el Inspector — no en su contexto en el archivo.
+- No hay referencia visible de qué bindings existen (`self.tag`, `hud.setHp`, etc.).
 
-**Riesgos:** ImGuiColorTextEdit es una nueva dependencia (CPM la baja). Verificar licencia compatible.
+Este hito ataca esos 4 puntos.
 
----
-
-## Candidato B: Exposed properties Lua
-
-**Por qué importa:** estilo Unity. Hoy los scripts tienen constantes hardcoded (`local DEG_PER_SEC = 45.0` en `rotator.lua`). Un dev quisiera setearlas desde el Inspector sin tocar el .lua. Esto es la diferencia entre "scripts genéricos" y "scripts reusables como componentes".
-
-**Bloques tentativos:**
-- **B1 — Sintaxis declarativa**: el script declara `--[[exposed]] local speed = 5.0` y la pre-pass del ScriptSystem detecta esos comentarios mágicos al cargar.
-- **B2 — Schema en `.moodmap`**: el `ScriptComponent` serializado guarda los valores override del usuario por entidad.
-- **B3 — Inspector dinámico**: al seleccionar una entidad con script, el Inspector lista las exposed properties y permite editarlas (DragFloat, ColorEdit, InputText según tipo).
-- **B4 — Reload sin perder valores**: hot-reload no pisa los overrides del Inspector.
-
-**Riesgos:** schema upgrade del `.moodmap`. Hay que decidir cómo persistir tipos arbitrarios (number vs string vs vec3 vs entity ref).
+No-goals: debugger interactivo, autocomplete real, exposed properties (eso es Hito 23+ — ver Candidato B en versión anterior de este doc).
 
 ---
 
-## Candidato C: AI / pathfinding
+## Criterios de aceptación
 
-**Por qué importa:** un shooter "Wolfenstein-like" necesita enemigos que se muevan. Hoy hay física (Jolt) pero no hay nada que decida hacia dónde. Pathfinding sobre el GridMap es la base.
+### Automáticos
 
-**Bloques tentativos:**
-- **C1 — A\* sobre GridMap**: función pura `findPath(map, start, end) -> vector<TileCoord>`. Tests headless directos. Pequeño-mediano.
-- **C2 — `NavAgentComponent`**: target + speed + path cache. AnimationSystem-equivalent pero para navegación.
-- **C3 — Demo enemigo**: una entidad que persigue al player en Play Mode. Steering simple (direccion del próximo tile).
-- **C4 — Visualización del path**: en F1 debug, dibujar el path activo de cada NavAgent como línea cyan.
+- [ ] Compila sin warnings nuevos.
+- [ ] Tests: `AssetBrowserPanel` lista scripts; `processViewportScriptDrop` agrega `ScriptComponent` a la entidad bajo el cursor.
+- [ ] Suite total >= 179 (sin regresiones).
 
-**Riesgos:** A\* sobre grid es directo, pero el día que se quiera off-grid (mallas con assimp tienen geometría arbitraria) la abstracción se tiene que rehacer. V1 grid-only.
+### Visuales
 
----
-
-## Candidato D: Save / load de gameplay
-
-**Por qué importa:** el player puede cargar un proyecto, pero no puede "guardar partida". Si el HUD baja a HP=0, no hay forma de continuar después. Es un feature que separa demo de juego real.
-
-**Bloques tentativos:**
-- **D1 — Schema `.moodsave`**: estado serializable del runtime (player position, HUD, scripts state, entity overrides). Distinto del `.moodmap` (snapshot vs definición).
-- **D2 — `Quick save / Quick load`**: hotkeys F5/F9 estilo Half-Life que persisten/restauran el estado.
-- **D3 — Lua API**: `save.write(slot)` / `save.load(slot)` desde scripts.
-
-**Riesgos:** decidir qué se persiste y qué no. Las texturas/meshes obviamente NO; los Transforms y los scripts SÍ. Los rigid bodies de Jolt mantienen estado interno (velocidades, impulsos) que sería ideal preservar.
+- [ ] Asset Browser tiene una sección "Scripts" con los `.lua` de `assets/scripts/`.
+- [ ] Drag de un script al viewport sobre una entidad la asigna como su `ScriptComponent`. Highlight amarillo durante el drag (mismo patrón del drop de Material).
+- [ ] `Ayuda > Nuevo Script...` crea `assets/scripts/<nombre>.lua` con template y lo selecciona en el browser.
+- [ ] Panel "Lua API" con tabs por tabla (`self`, `hud`, `log`) listando los miembros disponibles.
+- [ ] (Opcional, si entra en alcance) Panel "Script Editor" con `ImGuiColorTextEdit`: editar el script seleccionado, Ctrl+S guarda y dispara hot-reload.
 
 ---
 
-## Candidato E: Networking básico
+## Bloque 1 — Scripts en el Asset Browser
 
-**Por qué importa:** multiplayer es un feature top-tier. Pero también es una bestia gigante que abre 50 sub-problemas (autoritative server vs P2P, lag compensation, anti-cheat, NAT punching, sincronización de scripts...).
+- [ ] `AssetBrowserPanel`: scan `assets/scripts/*.lua` igual que hoy hace con texturas/audio/meshes/prefabs/materials. Sección colapsable nueva, con el path lógico + line count.
+- [ ] Drag source con payload `MOOD_SCRIPT_ASSET` (el path lógico como string).
+- [ ] Refrescar la lista al mismo tiempo que el resto (post hot-reload).
 
-**Recomendación:** **NO arrancar con esto** hasta que haya pedido específico del dev. Los hitos previos no setearon ninguna abstracción para clientes/servidor; arrancar networking implica reabrir Scene/Components/Serialization desde cero.
+## Bloque 2 — Drop de script al viewport
+
+- [ ] `ViewportPanel::AssetDragKind::Script` + `consumeScriptDrop()`. Highlight 3D durante el drag estilo Material drop (OBB amarillo sobre la entidad bajo el cursor).
+- [ ] `EditorApplication::processViewportScriptDrop()`: pickEntity → `addOrReplace<ScriptComponent>(path)`. markDirty.
+- [ ] Test headless: drop simulado agrega el componente.
+
+## Bloque 3 — "Nuevo Script" en el menú
+
+- [ ] `Ayuda > Nuevo Script...` (o `Archivo > Nuevo Script...`, definir cuál). Abre `pfd::save_file` con default name + filtro `*.lua`.
+- [ ] Si el path está dentro de `assets/scripts/`, escribir un template:
+  ```lua
+  -- Auto-generado por MoodEngine.
+  function onUpdate(self, dt)
+      -- self.transform.position.x = self.transform.position.x + dt
+  end
+  ```
+- [ ] Refrescar Asset Browser para que el script aparezca.
+
+## Bloque 4 — Panel "Lua API"
+
+- [ ] Nuevo `LuaApiPanel` en `editor/panels/`. Lista hardcoded inicial (sincronizada manualmente con `LuaBindings.cpp`):
+  - `self.tag` (string, read-only)
+  - `self.transform.position/rotationEuler/scale` (vec3, mutable)
+  - `log.info(msg)` / `log.warn(msg)`
+  - `hud.setHp/setAmmo/setPaused` / `hud.getHp/getAmmo/getPaused`
+- [ ] Tabs por tabla con un mini-snippet de uso por método.
+- [ ] Agregado al dockspace por default.
+
+## Bloque 5 — (stretch) Mini editor de código in-place
+
+- [ ] Evaluar si `ImGuiColorTextEdit` (https://github.com/BalazsJako/ImGuiColorTextEdit) entra como dep CPM (license check + tamaño).
+- [ ] Si entra: nuevo `ScriptEditorPanel`. Al seleccionar un script en el Asset Browser, se abre acá. Ctrl+S guarda al disco, lo cual dispara el hot-reload del ScriptSystem (sin código adicional).
+- [ ] Error highlighting: la línea del último `lastError` del ScriptComponent se pinta en rojo.
+
+**Si Bloque 5 no entra**: dejar como pendiente del Hito 23 — los 4 bloques anteriores ya entregan el grueso del workflow.
+
+## Bloque 6 — Tests + cierre
+
+- [ ] Tests headless del scan de scripts y del drop processor.
+- [ ] Smoke manual del flujo completo: nuevo script → drag a entidad → Play Mode → verificar que corre.
+- [ ] Actualizar `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 con el estado del scripting workflow.
+- [ ] Commits atómicos en español: `feat(editor)`, `feat(scripts)`, `test(scripts)`.
+- [ ] Tag `v0.22.0-hito22`.
+- [ ] Crear `docs/PLAN_HITO23.md` con candidatos (siguiente: exposed properties Lua, AI/pathfinding, save/load, networking).
+- [ ] Actualizar `ESTADO_ACTUAL.md` y `HITOS.md`.
 
 ---
 
-## Decisión recomendada
+## Decisiones a tomar
 
-Sin más contexto del dev, mi sugerencia es **A (workflow de scripting)** como Hito 22. Razones:
-
-1. La infra Lua ya está. Una mejora UX se ve y se siente al instante.
-2. Bloque por bloque es pequeño-mediano (no un sub-engine como C o E).
-3. Desbloquea iteración más rápida en hitos posteriores: si vamos por C (AI) después, el dev va a escribir mucho Lua para definir comportamientos de enemigos. Tener buen tooling de scripts antes hace que C corra más rápido.
-
-Si el dev tiene un juego concreto en mente (ej. "quiero un shooter 3D con enemigos") la priorización cambia y C podría ir primero — porque sin AI no hay gameplay loop, mientras que el workflow de scripting es polish.
+- [ ] **¿"Nuevo Script" en `Ayuda` o en `Archivo`?** Mi voto: `Archivo` (es creación de asset). Ver consistencia con "Nuevo Proyecto" / "Guardar como prefab".
+- [ ] **¿`ImGuiColorTextEdit` cabe?** Verificar antes de Bloque 5. Si no, dejar como Hito 23 sin drama.
+- [ ] **¿Drop de script va a Hierarchy también o solo Viewport?** V1: solo Viewport (consistente con el resto de drops). Hierarchy queda para un hito de "drop a entidad por nombre" si aparece pedido.
 
 ---
 
-## Antes de arrancar
+## Riesgos identificados
 
-Cuando se elija el candidato:
-
-1. Borrar las secciones que no apliquen y dejar solo el plan del candidato elegido.
-2. Desglosar cada bloque con criterios de aceptación medibles.
-3. Identificar dependencias externas nuevas (ImGuiColorTextEdit para A, librería de pathfinding o implementación propia para C, etc.).
-4. Estimar bloques en sesiones (~2-4 hs cada uno).
-5. Listar pendientes arrastrados del Hito 21 que se podrían atacar de paso (ver `HITOS.md` sección "Pendientes menores detectados en Hito 21").
+- **`addOrReplace<ScriptComponent>` no existe en `Entity`**: hoy el editor solo agrega via `addComponent`. Si la entidad ya tiene `ScriptComponent`, `addComponent` puede duplicar o tirar excepción según entt config. Validar y si hace falta agregar el helper.
+- **Hot-reload re-ejecuta el script**: cuando el dev guarda desde el editor, el ScriptSystem detecta el cambio de mtime y re-corre `onUpdate`. Verificar que el flow no pierde el estado del Animator/RigidBody.
+- **Path absoluto vs lógico en `pfd::save_file`**: si el usuario elige un path fuera de `assets/scripts/`, el ScriptComponent no lo va a encontrar (AssetManager busca paths relativos a `assets/`). Validar y forzar dentro de `assets/scripts/` (mover el archivo si hace falta).
