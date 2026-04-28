@@ -287,9 +287,16 @@ void EditorApplication::processSpawnAnimatedCharacterRequest() {
     t.position = glm::vec3(0.0f, 0.0f, -3.0f);
     t.scale    = glm::vec3(0.01f);
 
-    // Material default (gris mate). El AssetManager ya tiene el slot 0
-    // como default; los materiales por submesh se asignan al primero.
-    fox.addComponent<MeshRendererComponent>(foxMesh, /*material=*/0u);
+    // Material instance unico (clone del default). Asi varios "Agregar
+    // personaje animado" no comparten material editable.
+    MaterialAsset proto{};
+    if (const MaterialAsset* def =
+            m_assetManager->getMaterial(m_assetManager->missingMaterialId());
+        def != nullptr) {
+        proto = *def;
+    }
+    const MaterialAssetId foxMat = m_assetManager->createMaterial(proto);
+    fox.addComponent<MeshRendererComponent>(foxMesh, foxMat);
 
     AnimatorComponent anim{};
     anim.clipName = "";   // primer clip del MeshAsset
@@ -480,6 +487,7 @@ void EditorApplication::processViewportMeshDrop() {
     if (!hit.hit) return;
 
     const auto meshId = static_cast<MeshAssetId>(mdrop.meshId);
+    const MeshAsset* asset = m_assetManager->getMesh(meshId);
     const glm::vec3 origin = mapWorldOrigin();
     const f32 tileSize = m_map.tileSize();
     // Nombre incremental por si spawneamos varios del mismo mesh.
@@ -490,12 +498,52 @@ void EditorApplication::processViewportMeshDrop() {
         origin.x + (static_cast<f32>(hit.tileX) + 0.5f) * tileSize,
         origin.y + 0.5f * tileSize, // sobre el piso, altura = 0.5 tile
         origin.z + (static_cast<f32>(hit.tileY) + 0.5f) * tileSize);
-    t.scale = glm::vec3(1.0f);
-    // Material por defecto: slot 0 (default material). El usuario puede
-    // dropear texturas/materiales encima despues.
-    e.addComponent<MeshRendererComponent>(meshId, MaterialAssetId{0});
-    Log::editor()->info("Drop mesh '{}' -> tile ({}, {})",
-                         meshName, hit.tileX, hit.tileY);
+
+    // Auto-escala basada en el AABB del bind pose: meshes glTF/FBX en
+    // unidades originales (cm/in) caen en escala >>1 al importar. Si la
+    // altura del bind pose excede 3m, escalamos para que la entidad
+    // mida ~1.5m de alto (referencia humana). Los meshes ya razonables
+    // (cubos, primitivas, modelos en metros) pasan derecho con scale=1.
+    f32 autoScale = 1.0f;
+    if (asset != nullptr) {
+        const f32 height = asset->aabbMax.y - asset->aabbMin.y;
+        if (height > 3.0f) {
+            autoScale = 1.5f / height;
+        }
+    }
+    t.scale = glm::vec3(autoScale);
+
+    // Material instance unico por drop. Si reusaramos `MaterialAssetId{0}`
+    // (default compartido), editar sliders del Inspector mutaria el
+    // material global y todas las entidades cambiarian color juntas.
+    // Cloning del default via createMaterial garantiza que cada instancia
+    // tenga su propio material editable.
+    MaterialAsset prototype{};
+    if (const MaterialAsset* def =
+            m_assetManager->getMaterial(m_assetManager->missingMaterialId());
+        def != nullptr) {
+        prototype = *def;
+    }
+    const MaterialAssetId matId = m_assetManager->createMaterial(prototype);
+    e.addComponent<MeshRendererComponent>(meshId, matId);
+
+    // Hito 19: si el mesh tiene esqueleto + animaciones, auto-agregar
+    // Animator + Skeleton para que se anime al instante. Sin esto el
+    // mesh queda en bind pose estatico, lo cual es confuso para el
+    // usuario que espera ver el zorro caminar.
+    if (asset != nullptr && asset->hasSkeleton() && !asset->animations.empty()) {
+        AnimatorComponent anim{};
+        anim.clipName = "";   // primer clip
+        anim.playing  = true;
+        anim.loop     = true;
+        e.addComponent<AnimatorComponent>(anim);
+        e.addComponent<SkeletonComponent>(SkeletonComponent{});
+    }
+
+    Log::editor()->info(
+        "Drop mesh '{}' -> tile ({}, {}), autoscale={:.4f}{}",
+        meshName, hit.tileX, hit.tileY, autoScale,
+        (asset && asset->hasSkeleton()) ? " (skinned + animator)" : "");
     markDirty();
 }
 
