@@ -45,6 +45,7 @@ class PhysicsWorld;
 class SkyboxRenderer;
 class ShadowPass;
 class AnimationSystem;
+class UiLayer;
 
 class EditorApplication {
 public:
@@ -198,6 +199,7 @@ private:
     std::unique_ptr<AudioSystem> m_audioSystem;
     std::unique_ptr<LightSystem> m_lightSystem;
     std::unique_ptr<AnimationSystem> m_animationSystem; // Hito 19
+    std::unique_ptr<UiLayer> m_uiLayer; // Hito 20: RmlUi (UI del juego)
     std::unique_ptr<PhysicsWorld> m_physicsWorld;
     std::unique_ptr<SkyboxRenderer> m_skyboxRenderer;
     std::unique_ptr<ShadowPass> m_shadowPass; // Hito 16

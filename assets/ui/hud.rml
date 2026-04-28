@@ -1,0 +1,17 @@
+<rml>
+<head>
+    <link type="text/rcss" href="hud.rcss"/>
+    <title>HUD</title>
+</head>
+<body data-model="hud">
+    <div id="crosshair"/>
+    <div id="hp-block">
+        <div class="label">HP</div>
+        <div class="value">{{hp}}</div>
+    </div>
+    <div id="ammo-block">
+        <div class="label">AMMO</div>
+        <div class="value">{{ammo}}</div>
+    </div>
+</body>
+</rml>

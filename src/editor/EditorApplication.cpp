@@ -10,6 +10,7 @@
 #include "engine/render/opengl/OpenGLRenderer.h"
 #include "engine/render/opengl/OpenGLShader.h"
 #include "engine/render/LightGrid.h"
+#include "engine/ui/UiLayer.h"
 #include "engine/render/opengl/OpenGLCubemapTexture.h"
 #include "engine/render/opengl/OpenGLSSBO.h"
 #include "engine/render/opengl/OpenGLTexture.h"
@@ -281,6 +282,10 @@ EditorApplication::EditorApplication() {
     m_scriptSystem = std::make_unique<ScriptSystem>();
     m_lightSystem  = std::make_unique<LightSystem>();
     m_animationSystem = std::make_unique<AnimationSystem>(); // Hito 19
+    // Hito 20: capa de UI del juego (RmlUi). Distinto de Dear ImGui que
+    // es la UI del editor. Si la inicializacion de RmlUi falla, el
+    // editor sigue funcionando sin UI de juego.
+    m_uiLayer = std::make_unique<UiLayer>();
     // Hito 12: PhysicsWorld (Jolt). Init es pesado la primera vez del proceso
     // (Factory + RegisterTypes) pero instancias subsecuentes son baratas.
     m_physicsWorld = std::make_unique<PhysicsWorld>();
@@ -462,6 +467,44 @@ EditorApplication::EditorApplication() {
                         ? glm::length(tf.scale) * 0.6f
                         : 1.0f;
                     m_editorCamera.focusOn(tf.position, std::max(r, 0.3f));
+                }
+                // Tecla Delete / Backspace: elimina la entidad seleccionada.
+                // Filtra tiles del mapa de prueba (Tile_X_Y) — esos vienen
+                // de `m_map` y reaparecen al rebuild; eliminarlos solo
+                // confunde. Para tiles, el flujo correcto es editarlos en
+                // el GridMap (futuro: panel del mapa).
+                const bool delPressed =
+                    ImGui::IsKeyPressed(ImGuiKey_Delete, false) ||
+                    ImGui::IsKeyPressed(ImGuiKey_Backspace, false);
+                if (delPressed && selected && m_scene) {
+                    const std::string tagName =
+                        selected.hasComponent<TagComponent>()
+                            ? selected.getComponent<TagComponent>().name
+                            : std::string{"(sin tag)"};
+                    const bool isTile = tagName.size() >= 5
+                        && tagName.compare(0, 5, "Tile_") == 0;
+                    if (isTile) {
+                        Log::editor()->info(
+                            "Delete: '{}' es un tile del mapa, no se elimina "
+                            "(usar editor de mapa para limpiar tiles).",
+                            tagName);
+                    } else {
+                        // Cleanup de side-effects antes del destroy:
+                        // - Jolt body (si era rigid body).
+                        if (selected.hasComponent<RigidBodyComponent>()
+                            && m_physicsWorld) {
+                            auto& rb = selected.getComponent<RigidBodyComponent>();
+                            if (rb.bodyId != 0) {
+                                m_physicsWorld->destroyBody(rb.bodyId);
+                                rb.bodyId = 0;
+                            }
+                        }
+                        m_scene->destroyEntity(selected);
+                        m_ui.setSelectedEntity(Entity{});
+                        Log::editor()->info(
+                            "Eliminada entidad '{}' del mapa.", tagName);
+                        markDirty();
+                    }
                 }
             }
 
@@ -978,6 +1021,11 @@ EditorApplication::~EditorApplication() {
     m_audioSystem.reset();
     m_audioDevice.reset();
     m_lightSystem.reset();
+    // Hito 20: el UiLayer debe destruirse antes que GL muera porque
+    // RmlUi puede emitir glDeleteTextures durante Shutdown. Como el
+    // editor cleanup destruye la window/contexto al final, ordenamos
+    // este reset cerca del top.
+    m_uiLayer.reset();
     m_animationSystem.reset();
     m_physicsWorld.reset();
     m_iblBrdfLut.reset();
@@ -1024,7 +1072,21 @@ void EditorApplication::processEvents() {
         } else if (ev.type == SDL_KEYDOWN &&
                    ev.key.keysym.sym == SDLK_ESCAPE &&
                    m_mode == EditorMode::Play) {
-            exitPlayMode();
+            // Hito 20 Bloque 4: Esc togglea menu de pausa en lugar de
+            // salir directo. Sin pausa -> mostrar menu + cursor visible.
+            // Con pausa -> cerrar menu + cursor relativo (gameplay).
+            // Si el UiLayer no esta disponible, fallback al
+            // comportamiento previo (exit directo).
+            if (m_uiLayer && m_uiLayer->isAvailable()) {
+                const bool wasPaused = m_uiLayer->isPauseVisible();
+                m_uiLayer->setPauseVisible(!wasPaused);
+                SDL_SetRelativeMouseMode(wasPaused ? SDL_TRUE : SDL_FALSE);
+                if (wasPaused) {
+                    SDL_GetRelativeMouseState(nullptr, nullptr); // descartar delta
+                }
+            } else {
+                exitPlayMode();
+            }
         } else if (ev.type == SDL_KEYDOWN &&
                    ev.key.keysym.sym == SDLK_F1 &&
                    ev.key.repeat == 0) {
@@ -1078,6 +1140,8 @@ void EditorApplication::enterPlayMode() {
     SDL_SetRelativeMouseMode(SDL_TRUE);
     // Descartar cualquier delta acumulado para evitar un salto inicial de la vista.
     SDL_GetRelativeMouseState(nullptr, nullptr);
+    // Hito 20: HUD visible solo en Play Mode.
+    if (m_uiLayer) m_uiLayer->setHudVisible(true);
     Log::editor()->info("Play Mode activo (WASD + mouse. Esc para salir)");
 }
 
@@ -1085,6 +1149,7 @@ void EditorApplication::exitPlayMode() {
     m_mode = EditorMode::Editor;
     m_ui.setMode(EditorMode::Editor);
     SDL_SetRelativeMouseMode(SDL_FALSE);
+    if (m_uiLayer) m_uiLayer->setHudVisible(false);
     Log::editor()->info("Editor Mode activo");
 }
 
@@ -1099,6 +1164,10 @@ void EditorApplication::updateCameras(f32 dt) {
         if (panDx != 0.0f || panDy != 0.0f) m_editorCamera.applyPan(panDx, panDy);
         if (wheel != 0.0f) m_editorCamera.applyWheel(wheel);
     } else {
+        // Hito 20 Bloque 4: con el menu de pausa visible el gameplay
+        // se congela — no leemos input ni actualizamos posicion del
+        // jugador. El cursor esta libre para el menu RmlUi.
+        if (m_uiLayer && m_uiLayer->isPauseVisible()) return;
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
         glm::vec3 dir(0.0f);
         if (keys[SDL_SCANCODE_W]) dir.z += 1.0f;
@@ -1252,6 +1321,51 @@ int EditorApplication::run() {
         processViewportMeshDrop();
         processViewportPrefabDrop();
         processViewportMaterialDrop();
+
+        // Hito 20 Bloque 4: consumir acciones del menu de pausa
+        // (botones del overlay). Resume cierra el menu y vuelve al
+        // gameplay; Quit sale del Play Mode; Options muestra un popup
+        // placeholder por ahora.
+        if (m_uiLayer) {
+            switch (m_uiLayer->consumePauseAction()) {
+                case UiLayer::PauseAction::Resume:
+                    m_uiLayer->setPauseVisible(false);
+                    SDL_SetRelativeMouseMode(SDL_TRUE);
+                    SDL_GetRelativeMouseState(nullptr, nullptr);
+                    break;
+                case UiLayer::PauseAction::Quit:
+                    m_uiLayer->setPauseVisible(false);
+                    exitPlayMode();
+                    break;
+                case UiLayer::PauseAction::Options:
+                    Log::editor()->info(
+                        "Pause: 'Opciones' aun no implementado.");
+                    break;
+                case UiLayer::PauseAction::None:
+                default:
+                    break;
+            }
+        }
+
+        // Hito 20 Bloque 4: input del mouse al UiLayer cuando el menu de
+        // pausa esta visible. Convertimos NDC del ViewportPanel a pixel
+        // coords del FB, y rute amos clicks al RmlUi context. Solo si el
+        // mouse cae sobre la imagen del viewport (no clickeamos botones
+        // de la pausa accidentalmente al apretar afuera).
+        if (m_uiLayer && m_uiLayer->isPauseVisible()
+            && m_ui.viewport().imageHovered() && m_viewportFb) {
+            const float ndcX = m_ui.viewport().mouseNdcX();
+            const float ndcY = m_ui.viewport().mouseNdcY();
+            const int px = static_cast<int>(
+                (ndcX * 0.5f + 0.5f) * static_cast<f32>(m_viewportFb->width()));
+            // ViewportPanel devuelve NDC con Y+=arriba (convencion GL),
+            // RmlUi espera origen TOP-left. Invertimos Y.
+            const int py = static_cast<int>(
+                (1.0f - (ndcY * 0.5f + 0.5f)) * static_cast<f32>(m_viewportFb->height()));
+            m_uiLayer->processMouseMove(px, py);
+            if (ImGui::IsMouseClicked(0))  m_uiLayer->processMouseButton(0, true);
+            if (ImGui::IsMouseReleased(0)) m_uiLayer->processMouseButton(0, false);
+        }
 
         // 3) Input -> camaras.
         updateCameras(dt);

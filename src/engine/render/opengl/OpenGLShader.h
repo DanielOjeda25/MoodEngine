@@ -30,6 +30,7 @@ public:
 
     void setInt(std::string_view name, int value) override;
     void setFloat(std::string_view name, float value) override;
+    void setVec2(std::string_view name, const glm::vec2& value) override;
     void setVec3(std::string_view name, const glm::vec3& value) override;
     void setVec4(std::string_view name, const glm::vec4& value) override;
     void setMat4(std::string_view name, const glm::mat4& value) override;

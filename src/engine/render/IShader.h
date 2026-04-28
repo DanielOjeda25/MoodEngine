@@ -25,6 +25,7 @@ public:
     // virtuales. Se iran agregando mas cuando los hitos las pidan.
     virtual void setInt(std::string_view name, int value) = 0;
     virtual void setFloat(std::string_view name, float value) = 0;
+    virtual void setVec2(std::string_view name, const glm::vec2& value) = 0;
     virtual void setVec3(std::string_view name, const glm::vec3& value) = 0;
     virtual void setVec4(std::string_view name, const glm::vec4& value) = 0;
     virtual void setMat4(std::string_view name, const glm::mat4& value) = 0;

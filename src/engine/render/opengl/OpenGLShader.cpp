@@ -118,6 +118,10 @@ void OpenGLShader::setFloat(std::string_view name, float value) {
     glUniform1f(locationOf(name), value);
 }
 
+void OpenGLShader::setVec2(std::string_view name, const glm::vec2& value) {
+    glUniform2fv(locationOf(name), 1, glm::value_ptr(value));
+}
+
 void OpenGLShader::setVec3(std::string_view name, const glm::vec3& value) {
     glUniform3fv(locationOf(name), 1, glm::value_ptr(value));
 }

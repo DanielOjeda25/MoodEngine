@@ -1,0 +1,16 @@
+<rml>
+<head>
+    <link type="text/rcss" href="pause_menu.rcss"/>
+    <title>Pause</title>
+</head>
+<body>
+    <div id="overlay">
+        <div id="panel">
+            <div id="title">Pausa</div>
+            <button onclick="resume" id="btn-resume">Continuar</button>
+            <button onclick="options" id="btn-options">Opciones</button>
+            <button onclick="quit"   id="btn-quit">Salir al editor</button>
+        </div>
+    </div>
+</body>
+</rml>

@@ -202,6 +202,44 @@ CPMAddPackage(
         "ASSIMP_INJECT_DEBUG_POSTFIX OFF"
 )
 
+# FreeType (Hito 20, dep de RmlUi): renderiza glyphs para el font engine.
+# Mirror oficial en GitHub. Pequeno (sin tests / docs / demos).
+CPMAddPackage(
+    NAME freetype
+    GITHUB_REPOSITORY freetype/freetype
+    GIT_TAG VER-2-13-3
+    OPTIONS
+        "FT_DISABLE_BROTLI ON"
+        "FT_DISABLE_BZIP2 ON"
+        "FT_DISABLE_PNG ON"
+        "FT_DISABLE_HARFBUZZ ON"
+        "FT_DISABLE_ZLIB ON"
+)
+# RmlUi resuelve FreeType via `find_package(Freetype)` o el target
+# `Freetype::Freetype`. CPM construye el target `freetype` (lowercase);
+# creamos el alias para que RmlUi lo encuentre.
+if (TARGET freetype AND NOT TARGET Freetype::Freetype)
+    add_library(Freetype::Freetype ALIAS freetype)
+endif()
+
+# RmlUi (Hito 20): UI del juego (HUDs, menus). Distinto de Dear ImGui que
+# es la UI del editor. Ofrece HTML/CSS subset + scripting opcional.
+# Desactivamos samples / tests / lua plugin propio (lo bindeamos a mano
+# con sol2). FreeType para glyph rendering ya viene como dep transitiva
+# de RmlUi cuando ENABLE_FREETYPE_INTERFACE=ON.
+CPMAddPackage(
+    NAME RmlUi
+    GITHUB_REPOSITORY mikke89/RmlUi
+    GIT_TAG 6.0
+    OPTIONS
+        "BUILD_SHARED_LIBS OFF"
+        "RMLUI_SAMPLES OFF"
+        "RMLUI_TESTS_TARGETS OFF"
+        "RMLUI_LUA_BINDINGS OFF"
+        "RMLUI_FONT_ENGINE freetype"
+        "RMLUI_INSTALL_TARGETS OFF"
+)
+
 # ---------------------------------------------------------------------------
 # Target interno: ImGui compilado como libreria estatica con backends SDL2 + OpenGL3
 # ---------------------------------------------------------------------------
@@ -283,6 +321,10 @@ add_executable(MoodEditor
 
     src/engine/render/LightGrid.cpp
 
+    src/engine/ui/RmlRenderer.cpp
+    src/engine/ui/RmlSystem.cpp
+    src/engine/ui/UiLayer.cpp
+
     src/editor/DemoSpawners.cpp
     src/editor/EditorApplication.cpp
     src/editor/EditorProjectActions.cpp
@@ -317,6 +359,7 @@ target_link_libraries(MoodEditor PRIVATE
     miniaudio
     assimp::assimp
     Jolt
+    RmlUi::Core
     OpenGL::GL
 )
 
