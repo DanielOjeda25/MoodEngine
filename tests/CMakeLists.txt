@@ -30,6 +30,7 @@ add_executable(mood_tests
     test_animation.cpp
     test_game_state.cpp
     test_package_builder.cpp
+    test_nav_system.cpp
     test_pathfinding.cpp
     test_scene_loader.cpp
 
@@ -42,6 +43,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scene/ScenePick.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/GridMap.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/Pathfinding.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/NavSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/PhysicsSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/ScriptSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/LuaBindings.cpp
