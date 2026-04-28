@@ -11,6 +11,7 @@
 #include "editor/panels/AssetBrowserPanel.h"
 #include "editor/panels/ConsolePanel.h"
 #include "editor/panels/HierarchyPanel.h"
+#include "editor/panels/LuaApiPanel.h"
 #include "editor/panels/InspectorPanel.h"
 #include "editor/panels/ViewportPanel.h"
 #include "engine/scene/Entity.h"
@@ -260,6 +261,7 @@ private:
     InspectorPanel m_inspector;
     AssetBrowserPanel m_assetBrowser;
     ConsolePanel m_console;
+    LuaApiPanel m_luaApi;
     Entity m_selectedEntity;
 
     std::vector<IPanel*> m_panels;
