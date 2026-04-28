@@ -104,6 +104,35 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                 AABB{pos - k_playerHalfExtents, pos + k_playerHalfExtents},
                 playerColor);
         }
+
+        // Hito 23 Bloque 4: path activo de cada NavAgent como
+        // polyline cyan. El waypoint actual (`pathIndex`) se marca
+        // con un AABB chiquito brillante para distinguirlo.
+        if (m_scene) {
+            const glm::vec3 pathColor(0.2f, 0.9f, 1.0f);   // cyan
+            const glm::vec3 cursorColor(0.0f, 1.0f, 1.0f); // cyan brillante
+            const f32 tileSize = m_map.tileSize();
+            auto tileToWorld = [&](const glm::ivec2& t) {
+                return glm::vec3(
+                    worldOrigin.x + (static_cast<f32>(t.x) + 0.5f) * tileSize,
+                    worldOrigin.y + 0.5f * tileSize,
+                    worldOrigin.z + (static_cast<f32>(t.y) + 0.5f) * tileSize);
+            };
+            m_scene->forEach<NavAgentComponent>(
+                [&](Entity, NavAgentComponent& nav) {
+                    if (nav.path.size() < 2) return;
+                    for (usize i = 0; i + 1 < nav.path.size(); ++i) {
+                        dbg.drawLine(tileToWorld(nav.path[i]),
+                                      tileToWorld(nav.path[i + 1]),
+                                      pathColor);
+                    }
+                    if (nav.pathIndex < nav.path.size()) {
+                        const glm::vec3 c = tileToWorld(nav.path[nav.pathIndex]);
+                        const glm::vec3 he(0.25f);
+                        dbg.drawAabb(AABB{c - he, c + he}, cursorColor);
+                    }
+                });
+        }
     }
 
     // Highlights de drag-and-drop. Distinguen segun el tipo de payload:
