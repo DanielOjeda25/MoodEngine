@@ -1875,3 +1875,36 @@ Las opciones eran:
 - Se gana: simplicidad, sin migración, comportamiento "just works" para el caso 99%.
 
 **Revisar si:** aparece un dev que necesite persistir clipName / playing / time específicos por entidad — extender `SavedEntity` con `animator?` opcional + leer en `SceneLoader` si está presente, sino caer al auto-add actual.
+
+
+## 2026-04-28: importRotationEuler como fix general de orientación Z-up→Y-up (Hito 23)
+
+**Contexto:** glTF tiene convención de ejes fija (Y-up, +Z forward, right-handed). Los assets exportados desde DCC tools en Z-up (Cesium, Blender con +Z up por default, etc.) ponen una rotación de -90° X en su nodo raíz para reorientar al runtime. Cuando assimp importa estos `.glb`, lee los vértices en mesh-local (Z-up) y deja la rotación del rootNode en `scene->mRootNode->mTransformation`. Nuestro `MeshLoader` en el Hito 10 nunca leyó ese transform — los vértices se renderizaban tal cual estaban, así que CesiumMan aparecía acostado.
+
+Con dos modelos (Fox.glb Y-up nativo + CesiumMan.glb Z-up convertido) el pipeline empezó a fallar de manera inconsistente: Fox bien, CesiumMan acostado. El usuario pidió fix general — no hardcoded por modelo.
+
+Las opciones eran:
+1. **Bake del root transform en los vértices** (`aiProcess_PreTransformVertices` o manual). Funciona para meshes estáticos pero rompe skinning (los inverse-bind matrices quedan desfasados).
+2. **Bake del root transform en TODOS los lados** (vértices + inverse-bind matrices + bone hierarchy). Complejo, frágil.
+3. **Aplicar al runtime via uniforme `uModel`**: multiplicar `meshAsset->importTransform` después del `Transform` de la entidad. Limpio pero invisible al Inspector — el dev ve `rotation=(0,0,0)` mientras el modelo está rotado.
+4. **Aplicar al spawn time como rotación del Transform**: extraer Euler del root transform al cargar; cada spawn path lo copia a `tf.rotationEuler`.
+
+**Decisión:** opción 4. `MeshLoader` extrae el Euler XYZ del rootNode (`glm::extractEulerAngleYXZ` con orden YXZ matchea nuestro `worldMatrix`) y lo guarda en `MeshAsset::importRotationEuler`. Cada spawn path lo copia.
+
+**Razones:**
+- **Visible y editable**: el dev ve la rotación en el Inspector y puede ajustarla post-spawn si el modelo necesita un override (ej. enemigo mirando a otra dirección).
+- **Sin tocar render**: cero cambios en el SceneRenderer / shaders.
+- **Compatible con skinning**: la rotación se aplica al model matrix de la entidad, fuera del pipeline de bones. Skinning math intocada.
+- **Fix general por origen**: cualquier `.glb` futuro (BrainStem, RiggedFigure, modelos de Quaternius, Mixamo) hereda el fix sin hardcodeo.
+
+**Helper acompañante** `rotatedAabbWorldY`: rota los 8 corners del AABB por la importRotation y devuelve el rango world-Y. Necesario para que el autoscale (que asume `aabb.y_max - aabb.y_min` = altura) y el floor offset (`-aabbMin.y`) usen el axis correcto post-rotación. Sin esto, CesiumMan caería en autoscale calculado sobre la `aabb.y` (que es ancho de brazos = 1.14m, no la altura real = 1.5m que está en `aabb.z`) — lo que daría escala incorrecta para modelos altos.
+
+**Alternativas consideradas:**
+- **Opción 3 (uniforme uModel)**: descartada porque oculta la rotación al editor. Si el dev edita la rotación en el Inspector, no sabe si está sobre la rotación de import o no.
+- **Opción 1 (bake estático)**: descartada porque la mayoría de los assets que importamos son skinned.
+
+**Trade-offs:**
+- Se pierde: el `Inspector` muestra `rotation=(-90, 0, 0)` para CesiumMan; un dev que mire el `.moodmap` puede confundirse pensando que él rotó manualmente. Solución: el log del MeshLoader muestra `import rot=...` al cargar, así queda registro.
+- Se gana: cualquier modelo Z-up futuro funciona sin cambios de código. Editor y player heredan el fix por igual.
+
+**Revisar si:** aparece un dev que necesite "rotación 0 absoluta sin compensación" (caso raro — implica vértices ya pre-transformados en Y-up). Solución alternativa: flag `MeshAsset::skipImportRotation` que el spawn paths consulten. Hoy no aplica.

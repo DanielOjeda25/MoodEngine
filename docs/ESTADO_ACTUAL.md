@@ -6,7 +6,15 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 22 cerrado.**
+**Hito 23 cerrado.**
+Tag: `v0.23.0-hito23`.
+Verificado automático: suite doctest **192/5283** (+10 de `test_pathfinding` + `test_nav_system`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo (smoke test): "Ayuda > Agregar enemigo demo" spawnea un CesiumMan (CC0 humanoide bipédo) parado al ras del piso. En Play Mode el enemigo camina hacia el jugador siguiendo paths A* sobre el GridMap, respetando muros via moveAndSlide. F1 dibuja el path activo como polyline cyan + waypoint actual brillante.
+
+**Cambio importante en assets:** `MeshAsset::importRotationEuler` extraído del `mTransformation` del rootNode de assimp. Glb autoreados Z-up (CesiumMan, BrainStem, etc.) reciben automáticamente -90° X de rotación al spawnearse; Y-up nativos (Fox, pyramid) reciben 0. Sin esto, cualquier `.glb` Z-up dropeado al viewport quedaba acostado. Fix general — no hardcodeado por modelo. Acompaña helper `rotatedAabbWorldY` para que el autoscale + floor offset usen la altura post-rotación.
+
+**Próximo paso:** Hito 24 (TBD). Plan en `docs/PLAN_HITO24.md` con candidatos (mini editor de scripts, exposed properties Lua, save/load, networking, asset pack realista de Quaternius/Sketchfab para tests físicos).
+
+### Hito 22 (anterior, ya cerrado)
 Tag: `v0.22.0-hito22`.
 Verificado automático: suite doctest **182/5234** (+3 de `test_scene_loader` para el fix arrastrado del Fox). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo (smoke test): scripts dropeables desde el Asset Browser sobre entidades del viewport (`Drop script 'scripts/rotator.lua' -> entidad 'X'` en log), nuevo script via `Archivo > Nuevo Script...`, panel "Lua API" en el dockspace, Fox persistido en `.moodmap` se anima al cargar.
 
@@ -353,16 +361,16 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: definir y abrir el Hito 23
+### Tarea inmediata: definir y abrir el Hito 24
 
-El Hito 22 está cerrado (tag `v0.22.0-hito22` en origin). El próximo hito está **TBD**. Candidatos en `docs/PLAN_HITO23.md`. El más natural si se sigue scripting es retomar el mini editor in-place (Bloque 5 deferido), pero hay otras líneas perfectamente válidas: AI/pathfinding, save/load, exposed properties Lua, networking. Conversar con el dev antes de codear.
+El Hito 23 está cerrado (tag `v0.23.0-hito23` en origin). El próximo hito está **TBD**. Candidatos en `docs/PLAN_HITO24.md`: mini editor de scripts in-place (deferido del Hito 22), exposed properties Lua, save/load de gameplay, networking, asset pack realista (Quaternius/Sketchfab) para probar físicas con props variados, polish del NavAgent (rotación hacia movimiento), persistencia de NavAgent en `.moodmap`.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO23.md` (candidatos) y discutir con el dev qué se prioriza.
+1. Leer `docs/PLAN_HITO24.md` (candidatos) y discutir con el dev qué se prioriza.
 2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
 3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.23.0-hito23`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO24.md`.
+4. Al final: commits atómicos en español, merge a main, tag `v0.24.0-hito24`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO25.md`.
 
 ---
 

@@ -1,4 +1,6 @@
-# Plan — Hito 23: AI / pathfinding básico
+# Plan — Hito 23: AI / pathfinding básico — **CERRADO**
+
+> **Estado:** cerrado en tag `v0.23.0-hito23`. Los 6 bloques se completaron según plan. Bonus reactivo: fix general de orientación Z-up→Y-up via `MeshAsset::importRotationEuler` (cualquier `.glb` arrastrado al viewport queda parado, sin hardcodear). Resumen final en `HITOS.md` (sección Hito 23). Pendientes menores listados al cierre.
 
 > **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 22 cerrado).
 >

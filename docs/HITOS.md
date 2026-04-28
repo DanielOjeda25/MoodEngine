@@ -711,3 +711,48 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Drop a Hierarchy items**: hoy solo Viewport. Si el usuario quiere asignar script a una Light/Audio sin mesh visible, hoy tiene que clickearla y editarla en el Inspector. **Trigger:** primer pedido específico.
 - **Persistencia opcional del Animator (clipName / time)**: el auto-add usa defaults. Si el dev necesita clipName="Walk" guardado por entidad, hay que extender `SavedEntity` con un campo opcional `animator: { clipName, playing, loop }`.
 - **"Nuevo Script" abre el editor externo del usuario**: hoy crea el archivo y deja al dev hacer alt-tab. Una mejora UX sería invocar `start <path>` (Windows) tras crear, para que el editor default lo abra automáticamente. **Trigger:** primer usuario que diga "tuve que ir a buscar el archivo".
+
+---
+
+## Hito 23 — AI / pathfinding básico
+
+**Objetivo:** primer eslabón de "el motor puede sostener un juego". Hasta el Hito 22 había render + scripts + física + packaging — pero nada que el jugador pueda enfrentar. Este hito agrega A\* sobre GridMap, `NavAgentComponent` + `NavSystem`, y un demo de enemigo que persigue al jugador. Sin esto, todo lo anterior era plumbing — con un enemigo que persigue, el motor recién muestra que puede hacer un juego.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — A\* sobre GridMap:*
+- `engine/world/Pathfinding::findPath(map, start, goal)` — función pura. 4-connected (sin diagonales) + heurística Manhattan. Retorna vector de TileCoord; vacío si no hay path. Sin corner-cutting drama.
+- 6 tests headless: sala vacía 8x8, muro al medio (bordea), sin path posible, start==goal, fuera del grid, goal sólido.
+
+*Bloque 2 — NavAgent + NavSystem:*
+- `NavAgentComponent { target, speed, active, path, pathIndex, repathAccumulator, lastPathTarget }`. Estado interno (path / accumulators) NO se persiste — runtime-only.
+- `systems/NavSystem`: por frame, recompute path con throttle 0.5s o si target se aleja > 1m del último path. Steering 4-conn en plano XZ (Y constante). Colisión vía `moveAndSlide` igual que el player. Avanza waypoint cuando dist < tileSize/2. Cuando llega al final, queda quieto.
+- Cableado en EditorApplication: corre solo en Play Mode. Antes del update, se settea `nav.target = m_playCamera.position()` para que enemigos persigan al jugador.
+
+*Bloque 3 — Demo enemigo + fix de orientación general:*
+- "Ayuda > Agregar enemigo demo" spawnea un CesiumMan con NavAgent + Animator (clip default playing). Sin RigidBody — NavSystem ya hace moveAndSlide.
+- **Fix arrastrado del Hito 19:** `MeshAsset::importRotationEuler` extraído del `mTransformation` del rootNode de assimp. glTF Y-up nativos (Fox) traen `(0,0,0)`; Z-up convertidos por glTF (CesiumMan, BrainStem, etc.) traen `(-90, 0, 0)`. `processViewportMeshDrop` y `processSpawnEnemyDemoRequest` aplican esta rotación al spawn — cualquier `.glb` arrastrado al viewport queda parado, sin hardcodear por modelo.
+- Helper `rotatedAabbWorldY(aabbMin, aabbMax, eulerDeg)` calcula el rango world-Y del AABB después de aplicar la rotación de import. Usado para autoscale (altura visual real, no axis crudo) + floor offset (anclar pies a y=0).
+- Asset nuevo: `assets/meshes/CesiumMan.glb` (438 KB, CC0 de Khronos glTF Sample Assets, humanoide bipédo con clip de caminata).
+
+*Bloque 4 — F1 debug del path:*
+- `drawEditorScene3DOverlay` con `m_debugDraw == true` itera entidades con NavAgentComponent y dibuja el path actual como polyline cyan entre centros de tiles. Waypoint actual (`path[pathIndex]`) marcado con AABB chiquito brillante. Útil para ver si el agente está atascado o si recomputa cuando debería.
+
+*Bloque 5 — MoodPlayer integration:*
+- `PlayerApplication` agrega `m_navSystem` y lo invoca con el mismo patrón que el editor: actualiza target a `m_playCamera.position()` y llama `update`. Skipea cuando `GameState::paused()`. Un proyecto empaquetado con un enemigo persistido corre el comportamiento NavAgent al ejecutar el `MoodPlayer.exe` — sin código extra del dev.
+
+*Bloque 6 — tests:*
+- `tests/test_pathfinding.cpp` (6 casos del Bloque 1).
+- `tests/test_nav_system.cpp` (4 casos): agente avanza al target, llega y se queda quieto, target inalcanzable no se mueve, agente inactive no se mueve.
+- Suite total **192/5283** (antes Hito 22 cerrado: 182/5234).
+
+**Siguiente paso tras completarlo:** Hito 24 (TBD). Plan en `docs/PLAN_HITO24.md`.
+
+### Pendientes menores detectados en Hito 23
+
+- **Rotación del NavAgent hacia su movimiento**: hoy el enemigo camina sin girar — siempre mira en su dirección original. El user lo reportó como "se mueve robóticamente, es un detalle". Fix corto: en `NavSystem::update`, después de calcular `dir` en XZ, setear `tf.rotationEuler.y = atan2(...)`. La fórmula depende del axis "forward" del modelo; para CesiumMan post-importRotation (-90 X) seguramente es `atan2(-dir.z, dir.x)`. **Trigger:** rendering aceptable hoy, polish para Hito 24.
+- **Persistencia del NavAgent en `.moodmap`**: V1 NO se persiste (runtime tactico). Si el dev necesita que el enemigo demo "viva" entre cierres del editor, extender `SavedEntity` con `nav_agent: { speed }` (los flags + path se recomputan al runtime). **Trigger:** primer dev que pida "guardar el enemigo en el mapa".
+- **Re-pathfind cuando el path se vuelve inválido**: hoy el throttle es 0.5s + delta target. Si un muro aparece in-the-middle (futuro: tile editor en runtime), el path queda inválido hasta el próximo recompute. Mitigación: invalidar al cambiar GridMap. **Trigger:** primer feature que mute tiles en runtime.
+- **Asset pack realista para tests físicos**: el dev mencionó querer modelos/mapas más realistas (al estilo Source) para probar físicas en escenarios variados. Se descartó Source por legales + formatos turbios. Alternativas viables: Quaternius (CC0), Sketchfab (CC0/CC-BY), Polyhaven (CC0), Mixamo. Plan: en algún hito posterior, descargar 3-5 props (cajas, barriles, mobiliario) + 1-2 personajes humanoides para enriquecer los demos.
+- **Diagonales (8-connected)**: V1 4-conn produce paths visiblemente "boxy". 8-conn con check de corner-cutting daría rutas más naturales. **Trigger:** primera escena donde se note el zigzag.
+- **Performance del A\***: 64 nodos (mapa 8x8) es trivial. Si el GridMap escala a 64x64 (4096 nodos), priority_queue empieza a notarse. Mitigaciones: pool de nodos, jump point search. **Trigger:** profile con frame drops por NavSystem.
