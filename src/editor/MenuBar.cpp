@@ -37,6 +37,12 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                 ui.requestProjectAction(ProjectAction::PackageProject);
             }
             ImGui::Separator();
+            // Hito 22 Bloque 3: crea un .lua nuevo en assets/scripts/.
+            // Los scripts son assets globales del repo (igual que prefabs),
+            // asi que no se exige proyecto activo.
+            if (ImGui::MenuItem("Nuevo Script...")) {
+                ui.requestProjectAction(ProjectAction::NewScript);
+            }
             // Hito 14: guardar la entidad seleccionada como prefab. Los
             // prefabs son assets globales del repo (`<cwd>/assets/prefabs/`),
             // no per-proyecto, asi que basta con tener una entidad

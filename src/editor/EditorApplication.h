@@ -120,6 +120,11 @@ private:
     ///        hay dirty. Muestra MessageBox con resultado.
     void handlePackageProject();
 
+    /// @brief Hito 22 Bloque 3: crea un .lua nuevo en
+    ///        `assets/scripts/<nombre>.lua` con un template, y refresca
+    ///        el Asset Browser para que aparezca en la lista.
+    void handleNewScript();
+
     /// @brief Intenta abrir el proyecto en `moodprojPath`. Devuelve true si
     ///        quedo activo; false si fallo (loguea la causa).
     bool tryOpenProjectPath(const std::filesystem::path& moodprojPath);

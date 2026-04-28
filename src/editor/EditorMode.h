@@ -22,6 +22,7 @@ enum class ProjectAction {
     SaveAs,
     CloseProject,
     PackageProject, // Hito 21 Bloque 5: empaqueta el proyecto activo
+    NewScript,      // Hito 22 Bloque 3: crea assets/scripts/<nombre>.lua
 };
 
 } // namespace Mood

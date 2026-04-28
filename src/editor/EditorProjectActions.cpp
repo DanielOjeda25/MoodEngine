@@ -338,6 +338,67 @@ void EditorApplication::handlePackageProject() {
     }
 }
 
+void EditorApplication::handleNewScript() {
+    namespace fs = std::filesystem;
+    const fs::path scriptsDir = fs::path("assets") / "scripts";
+    std::error_code ec;
+    fs::create_directories(scriptsDir, ec);
+
+    auto selection = pfd::save_file(
+        "Nuevo Script Lua",
+        (scriptsDir / "nuevo.lua").generic_string(),
+        {"Lua scripts", "*.lua"}).result();
+    if (selection.empty()) return;
+
+    fs::path target = fs::path(selection);
+    if (target.extension() != ".lua") target += ".lua";
+
+    // Forzar dentro de assets/scripts/ — si el usuario eligio otro path
+    // (algun escritorio random), movemos el target a assets/scripts/
+    // con el nombre que eligio. Sin esto el AssetManager (que mira
+    // bajo `assets/` para resolver paths logicos como
+    // "scripts/foo.lua") no lo encontraria.
+    const fs::path scriptsAbs = fs::absolute(scriptsDir, ec);
+    fs::path targetAbs = fs::absolute(target, ec);
+    if (targetAbs.parent_path() != scriptsAbs) {
+        const fs::path moved = scriptsDir / target.filename();
+        Log::editor()->info(
+            "Nuevo Script: '{}' fuera de assets/scripts/, redirigido a '{}'",
+            target.generic_string(), moved.generic_string());
+        target = moved;
+    }
+
+    if (fs::exists(target)) {
+        const auto choice = pfd::message(
+            "MoodEngine — Nuevo Script",
+            "El archivo '" + target.generic_string() + "' ya existe. Sobreescribir?",
+            pfd::choice::yes_no, pfd::icon::warning).result();
+        if (choice != pfd::button::yes) return;
+    }
+
+    std::ofstream f(target);
+    if (!f.is_open()) {
+        Log::editor()->error("Nuevo Script: no se pudo crear '{}'",
+                              target.generic_string());
+        return;
+    }
+    // Template minimo: la firma que ScriptSystem espera. El comentario
+    // del cuerpo da una pista de los bindings disponibles sin abrumar.
+    f << "-- Auto-generado por MoodEngine.\n"
+      << "-- Bindings disponibles: self.tag, self.transform.position/.rotationEuler/.scale,\n"
+      << "-- log.info(msg), log.warn(msg), hud.setHp(v)/setAmmo(v)/setPaused(b).\n"
+      << "\n"
+      << "function onUpdate(self, dt)\n"
+      << "    -- self.transform.position.x = self.transform.position.x + dt\n"
+      << "end\n";
+    f.close();
+
+    Log::editor()->info("Nuevo Script creado: '{}'", target.generic_string());
+    // Refrescar el Asset Browser para que el script nuevo aparezca en
+    // la seccion Scripts sin reabrir el editor.
+    m_ui.assetBrowser().rescan();
+}
+
 void EditorApplication::loadEditorState() {
     const auto path = std::filesystem::path(".mood") / "editor_state.json";
     std::ifstream in(path);

@@ -406,6 +406,7 @@ int EditorApplication::run() {
             case ProjectAction::SaveAs:       handleSaveAs();       break;
             case ProjectAction::CloseProject:   handleCloseProject();   break;
             case ProjectAction::PackageProject: handlePackageProject(); break;
+            case ProjectAction::NewScript:      handleNewScript();      break;
             case ProjectAction::None:           break;
         }
 
