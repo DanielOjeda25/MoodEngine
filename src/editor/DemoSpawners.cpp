@@ -506,10 +506,6 @@ void EditorApplication::processViewportMeshDrop() {
     const std::string meshName = m_assetManager->meshPathOf(meshId);
     Entity e = m_scene->createEntity("Mesh_" + meshName);
     auto& t = e.getComponent<TransformComponent>();
-    t.position = glm::vec3(
-        origin.x + (static_cast<f32>(hit.tileX) + 0.5f) * tileSize,
-        origin.y + 0.5f * tileSize, // sobre el piso, altura = 0.5 tile
-        origin.z + (static_cast<f32>(hit.tileY) + 0.5f) * tileSize);
 
     // Auto-escala basada en el AABB del bind pose: meshes glTF/FBX en
     // unidades originales (cm/in) caen en escala >>1 al importar. Si la
@@ -524,6 +520,16 @@ void EditorApplication::processViewportMeshDrop() {
         }
     }
     t.scale = glm::vec3(autoScale);
+
+    // Posicion: XZ en el centro del tile bajo el cursor, Y al ras del
+    // piso (y=0). Para anclarlo al piso desplazamos por -autoScale *
+    // aabbMin.y — funciona tanto si el mesh tiene origen en el bottom
+    // (glTF tipico, aabbMin.y=0) como si esta centrado (aabbMin.y=-h/2).
+    const f32 yFloorOffset = (asset != nullptr) ? -autoScale * asset->aabbMin.y : 0.0f;
+    t.position = glm::vec3(
+        origin.x + (static_cast<f32>(hit.tileX) + 0.5f) * tileSize,
+        origin.y + yFloorOffset,
+        origin.z + (static_cast<f32>(hit.tileY) + 0.5f) * tileSize);
 
     // Material instance unico por drop. Si reusaramos `MaterialAssetId{0}`
     // (default compartido), editar sliders del Inspector mutaria el
