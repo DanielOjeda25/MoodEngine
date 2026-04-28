@@ -16,6 +16,7 @@
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/trigonometric.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include <string>
@@ -237,6 +238,37 @@ struct AnimatorComponent {
 ///        antes que el render del frame.
 struct SkeletonComponent {
     std::vector<glm::mat4> skinningMatrices; // size == skeleton.bones.size()
+};
+
+/// @brief Hito 23: agente navegable. NavSystem lo procesa cada frame
+///        para mover la entidad hacia `target` siguiendo paths del A*
+///        sobre el GridMap. La entidad NO debe tener tambien
+///        RigidBodyComponent::Dynamic — el NavSystem ya hace
+///        moveAndSlide y crear ambos handlers daria peleas de
+///        autoridad sobre el Transform.
+struct NavAgentComponent {
+    /// @brief Posicion world-space hacia donde el agente trata de ir.
+    ///        El caller (sistema o script) la actualiza por frame; el
+    ///        NavSystem detecta cambios > 1 tile y recomputa el path.
+    glm::vec3 target{0.0f};
+    /// @brief Velocidad de avance en m/s. Default = 2 m/s ~ caminar.
+    f32 speed = 2.0f;
+    /// @brief Si false, el sistema lo skipea (idle).
+    bool active = true;
+
+    /// --- Estado interno (no serializar) ---
+    /// Path en grid coords desde la posicion actual hasta target. Se
+    /// recomputa segun `repathAccumulator` o si target se aleja
+    /// > tileSize del ultimo target pathed.
+    std::vector<glm::ivec2> path;
+    /// Indice del proximo waypoint en `path` que el agente esta
+    /// caminando. Si `pathIndex >= path.size()` el agente llego.
+    usize pathIndex = 0;
+    /// Acumulador para throttle de re-pathfinding (cada 0.5s).
+    f32 repathAccumulator = 0.0f;
+    /// Target world-space del ultimo path computado — para detectar
+    /// si el target real se movio mas que un tile y forzar repath.
+    glm::vec3 lastPathTarget{1e9f};
 };
 
 } // namespace Mood

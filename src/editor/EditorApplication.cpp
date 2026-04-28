@@ -21,6 +21,7 @@
 #include "systems/AnimationSystem.h"
 #include "systems/AudioSystem.h"
 #include "systems/LightSystem.h"
+#include "systems/NavSystem.h"
 #include "systems/PostProcessPass.h"
 #include "systems/ShadowPass.h"
 #include "systems/SkyboxRenderer.h"
@@ -176,6 +177,7 @@ EditorApplication::EditorApplication() {
     m_scene = std::make_unique<Scene>();
     m_scriptSystem = std::make_unique<ScriptSystem>();
     m_animationSystem = std::make_unique<AnimationSystem>(); // Hito 19
+    m_navSystem       = std::make_unique<NavSystem>();       // Hito 23
     // Hito 12: PhysicsWorld (Jolt). Init es pesado la primera vez del proceso
     // (Factory + RegisterTypes) pero instancias subsecuentes son baratas.
     m_physicsWorld = std::make_unique<PhysicsWorld>();
@@ -255,6 +257,7 @@ EditorApplication::~EditorApplication() {
     m_audioSystem.reset();
     m_audioDevice.reset();
     m_animationSystem.reset();
+    m_navSystem.reset();
     m_physicsWorld.reset();
     m_assetManager.reset(); // dueño de texturas y meshes (incluido el cubo fallback)
     // SceneRenderer destruye en orden inverso al ctor todos sus recursos
@@ -508,6 +511,22 @@ int EditorApplication::run() {
         //       (futuro) ya tenga la pose actualizada — hoy es indistinto.
         if (m_scene && m_animationSystem) {
             m_animationSystem->update(*m_scene, *m_assetManager, dt);
+        }
+
+        // 3.57) Navegacion (Hito 23): solo en Play Mode. En Editor Mode los
+        //       agentes no se mueven (mismo criterio que la fisica).
+        //       Antes del NavSystem actualizamos el `target` de cada agente
+        //       a la posicion del FpsCamera — los enemigos persiguen al
+        //       jugador. Si en el futuro un script Lua quiere setear otro
+        //       target (patrol, idle, item), lo va a poder hacer via
+        //       binding cuando se exponga NavAgent a sol2.
+        if (m_mode == EditorMode::Play && m_scene && m_navSystem) {
+            const glm::vec3 playerPos = m_playCamera.position();
+            m_scene->forEach<NavAgentComponent>(
+                [&](Entity, NavAgentComponent& nav) {
+                    nav.target = playerPos;
+                });
+            m_navSystem->update(*m_scene, m_map, mapWorldOrigin(), dt);
         }
 
         // 3.6) Audio: arranca playOnStart, sincroniza posicion 3D, y setea

@@ -33,6 +33,7 @@ class AudioDevice;
 class AudioSystem;
 class PhysicsWorld;
 class AnimationSystem;
+class NavSystem;
 
 class EditorApplication {
 public:
@@ -185,6 +186,7 @@ private:
     std::unique_ptr<AudioDevice> m_audioDevice;
     std::unique_ptr<AudioSystem> m_audioSystem;
     std::unique_ptr<AnimationSystem> m_animationSystem; // Hito 19
+    std::unique_ptr<NavSystem>       m_navSystem;       // Hito 23
 
     // Hito 20: HUD del juego (HP / Ammo / crosshair) y menu de pausa.
     // Implementado via el OverlayDraw del ViewportPanel — drawlist de
