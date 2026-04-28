@@ -1,6 +1,7 @@
 #include "engine/serialization/SceneLoader.h"
 
 #include "engine/assets/AssetManager.h"
+#include "engine/render/MeshAsset.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
@@ -45,6 +46,22 @@ void applyEntitiesToScene(const SavedMap& saved,
                 }
             }
             e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
+
+            // Hito 22 fix arrastrado del Hito 19: si el mesh trae
+            // skeleton + clips, auto-agregar Animator + Skeleton igual
+            // que `processViewportMeshDrop`. Sin esto, un Fox.glb
+            // guardado en `.moodmap` reaparece en bind pose porque
+            // esos dos componentes no se serializan.
+            const MeshAsset* asset = assets.getMesh(meshId);
+            if (asset != nullptr && asset->hasSkeleton()
+                && !asset->animations.empty()) {
+                AnimatorComponent anim{};
+                anim.clipName = "";   // primer clip
+                anim.playing  = true;
+                anim.loop     = true;
+                e.addComponent<AnimatorComponent>(anim);
+                e.addComponent<SkeletonComponent>(SkeletonComponent{});
+            }
         }
 
         if (se.light.has_value()) {
