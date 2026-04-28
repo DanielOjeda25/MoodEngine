@@ -23,6 +23,7 @@
 #include "platform/Window.h"
 #include "systems/AnimationSystem.h"
 #include "systems/AudioSystem.h"
+#include "systems/NavSystem.h"
 #include "systems/PhysicsSystem.h"
 #include "systems/ScriptSystem.h"
 
@@ -98,6 +99,7 @@ PlayerApplication::PlayerApplication() {
     m_audioDevice     = std::make_unique<AudioDevice>();
     m_audioSystem     = std::make_unique<AudioSystem>(*m_audioDevice, *m_assetManager);
     m_animationSystem = std::make_unique<AnimationSystem>();
+    m_navSystem       = std::make_unique<NavSystem>();
     m_physicsWorld    = std::make_unique<PhysicsWorld>();
 
     // Player arranca en Play Mode directo: cursor capturado por SDL,
@@ -188,6 +190,7 @@ PlayerApplication::~PlayerApplication() {
     m_audioSystem.reset();
     m_audioDevice.reset();
     m_animationSystem.reset();
+    m_navSystem.reset();
     m_physicsWorld.reset();
     m_scene.reset();
     m_assetManager.reset();
@@ -438,6 +441,18 @@ int PlayerApplication::run() {
         }
         if (m_scene && m_animationSystem && m_assetManager) {
             m_animationSystem->update(*m_scene, *m_assetManager, dt);
+        }
+
+        // Hito 23: NavAgents persiguen al jugador. El target se updatea
+        // antes del NavSystem.update — sin pause check porque el player
+        // no tiene Editor Mode, todo el tiempo es "Play".
+        if (m_scene && m_navSystem && !GameState::paused()) {
+            const glm::vec3 playerPos = m_playCamera.position();
+            m_scene->forEach<NavAgentComponent>(
+                [&](Entity, NavAgentComponent& nav) {
+                    nav.target = playerPos;
+                });
+            m_navSystem->update(*m_scene, m_map, mapWorldOrigin(), dt);
         }
         if (m_scene && m_audioSystem) {
             m_audioSystem->update(*m_scene, dt);
