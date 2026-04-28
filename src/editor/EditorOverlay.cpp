@@ -1,5 +1,6 @@
 #include "editor/EditorApplication.h"
 
+#include "engine/render/SceneRenderer.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
@@ -24,7 +25,7 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
     // - Halo de seleccion.
     // - Gizmo translate/rotate/scale + hotkeys W/E/R/Period.
     // - Delete/Backspace borra la entidad seleccionada (excepto tiles).
-    const glm::mat4 vp = m_lastProjection * m_lastView;
+    const glm::mat4 vp = m_sceneRenderer->lastProjection() * m_sceneRenderer->lastView();
 
     // Helper: worldPos -> pixel-space.
     auto project = [&](const glm::vec3& p, float& sx, float& sy) -> bool {
@@ -447,7 +448,7 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
             // alrededor del eje (regla de la mano derecha vista desde +axis).
             // Aprox: invertir si axis . camera_forward > 0 — el eje
             // apunta hacia donde mira la camara.
-            const glm::vec3 camPos = glm::vec3(glm::inverse(m_lastView)[3]);
+            const glm::vec3 camPos = glm::vec3(glm::inverse(m_sceneRenderer->lastView())[3]);
             const glm::vec3 camToOrigin = worldOrigin - camPos;
             const f32 sgn = (glm::dot(axes[m_gizmo.axis], camToOrigin) > 0.0f) ? 1.0f : -1.0f;
             nr[m_gizmo.axis] = m_gizmo.startValue[m_gizmo.axis] + sgn * deltaDeg;

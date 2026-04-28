@@ -3,15 +3,9 @@
 #include "core/Log.h"
 #include "core/math/AABB.h"
 #include "engine/render/ITexture.h"
-#include "engine/render/MeshAsset.h"
-#include "engine/render/opengl/OpenGLDebugRenderer.h"
+#include "engine/render/SceneRenderer.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/render/opengl/OpenGLMesh.h"
-#include "engine/render/opengl/OpenGLRenderer.h"
-#include "engine/render/opengl/OpenGLShader.h"
-#include "engine/render/LightGrid.h"
-#include "engine/render/opengl/OpenGLCubemapTexture.h"
-#include "engine/render/opengl/OpenGLSSBO.h"
 #include "engine/render/opengl/OpenGLTexture.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
@@ -155,34 +149,11 @@ EditorApplication::EditorApplication() {
         throw std::runtime_error("ImGui_ImplOpenGL3_Init fallo");
     }
 
-    // --- RHI + recursos del viewport offscreen ---
-    m_renderer = std::make_unique<OpenGLRenderer>();
-    m_renderer->init();
-
-    // Hito 15 Bloque 3: dos framebuffers para el viewport.
-    //   - `m_sceneFb`: HDR (RGBA16F). Donde se pinta sky + escena + lit + fog.
-    //     Soporta valores > 1.0 que el tonemap luego comprime.
-    //   - `m_viewportFb`: LDR (RGBA8). Resultado del post-process pass; lo que
-    //     ImGui muestra dentro del ViewportPanel (asume sRGB / RGBA8).
-    m_sceneFb = std::make_unique<OpenGLFramebuffer>(
-        1280u, 720u, OpenGLFramebuffer::Format::HDR);
-    m_viewportFb = std::make_unique<OpenGLFramebuffer>(
-        1280u, 720u, OpenGLFramebuffer::Format::LDR);
-
-    m_defaultShader = std::make_unique<OpenGLShader>(
-        "shaders/default.vert", "shaders/default.frag");
-    // Hito 17: shader PBR (Cook-Torrance + metallic-roughness) reemplaza
-    // al `lit` Phong/Blinn-Phong del Hito 11. El render loop sigue usando
-    // un shader unico para la escena; el material por submesh decide los
-    // parametros (albedo, metallic, roughness). El default queda vivo
-    // solo como fallback.
-    m_pbrShader = std::make_unique<OpenGLShader>(
-        "shaders/pbr.vert", "shaders/pbr.frag");
-    // Hito 19: shader skinneable (LBS 4 huesos). Reusa `pbr.frag` — solo
-    // cambia el vertex shader. Si no hay entidades animadas en la escena,
-    // este programa no se bindea (no paga uniform uploads).
-    m_pbrSkinnedShader = std::make_unique<OpenGLShader>(
-        "shaders/pbr_skinned.vert", "shaders/pbr.frag");
+    // Hito 21 Bloque 2: SceneRenderer es dueno del pipeline completo de
+    // render (FBs, shaders PBR, skybox, shadow, post-process, IBL, light
+    // grid + SSBOs, debug renderer). El editor solo le pasa scene +
+    // assets + camara + tamano del panel cada frame.
+    m_sceneRenderer = std::make_unique<SceneRenderer>();
 
     // Factoria real: crea OpenGLTexture desde el path de filesystem. Los tests
     // pasan otra factoria que devuelve mocks sin tocar GL. El cubo fallback
@@ -200,87 +171,10 @@ EditorApplication::EditorApplication() {
         });
     m_ui.assetBrowser().setAssetManager(m_assetManager.get());
 
-    m_debugRenderer = std::make_unique<OpenGLDebugRenderer>();
-
-    // Skybox (Hito 15 Bloque 1): cubemap default `assets/skyboxes/sky_day/`.
-    // Tolera fallo de carga (en CI sin assets, o si el path cambia): el
-    // motor sigue corriendo con clear color visible.
-    try {
-        m_skyboxRenderer =
-            std::make_unique<SkyboxRenderer>("assets/skyboxes/sky_day");
-    } catch (const std::exception& e) {
-        Log::render()->warn("SkyboxRenderer no disponible: {}. Sky fallback al clear color.",
-                             e.what());
-        m_skyboxRenderer.reset();
-    }
-
-    // IBL (Hito 17 Bloque 3): irradiance + prefilter + BRDF LUT pre-bakeados
-    // por `tools/bake_ibl.py` y `tools/bake_brdf_lut.py`. Si alguno falta,
-    // el shader cae al ambient escalar (uAmbient) sin crashear.
-    try {
-        const std::string base = "assets/ibl/sky_day";
-        std::array<std::string, 6> irrPaths{
-            base + "/irradiance/px.png", base + "/irradiance/nx.png",
-            base + "/irradiance/py.png", base + "/irradiance/ny.png",
-            base + "/irradiance/pz.png", base + "/irradiance/nz.png"};
-        m_iblIrradiance = std::make_unique<OpenGLCubemapTexture>(irrPaths);
-
-        // Prefilter mip chain. El bake script genera 5 niveles (mip 0-4).
-        std::vector<std::array<std::string, 6>> prefilterMips;
-        for (int mip = 0; mip < 5; ++mip) {
-            const std::string m = base + "/prefilter/mip_" + std::to_string(mip);
-            prefilterMips.push_back({
-                m + "/px.png", m + "/nx.png",
-                m + "/py.png", m + "/ny.png",
-                m + "/pz.png", m + "/nz.png"});
-        }
-        m_iblPrefilter = std::make_unique<OpenGLCubemapTexture>(prefilterMips);
-
-        // BRDF LUT como textura 2D estandar. La factory del AssetManager
-        // crea OpenGLTexture, que aplica srgb-from-png + mipmaps. Para el
-        // LUT idealmente queremos linear sin mips, pero por ahora el path
-        // logico es suficiente — la tabla esta encoded en RGBA8 sin gamma
-        // aplicada por el script. Aceptable para Bloque 3.
-        m_iblBrdfLut = std::make_unique<OpenGLTexture>("assets/ibl/brdf_lut.png");
-
-        Log::render()->info(
-            "IBL cargado: irradiance + prefilter (5 mips) + BRDF LUT.");
-    } catch (const std::exception& e) {
-        Log::render()->warn("IBL no disponible: {}. Cae al ambient escalar.",
-                             e.what());
-        m_iblIrradiance.reset();
-        m_iblPrefilter.reset();
-        m_iblBrdfLut.reset();
-    }
-
-    m_ui.viewport().setFramebuffer(m_viewportFb.get());
-
-    // Post-process pass (Hito 15 Bloque 3). Toma `m_sceneFb` (HDR) y
-    // produce `m_viewportFb` (LDR) tras exposicion + tonemap + gamma.
-    m_postProcess = std::make_unique<PostProcessPass>();
-
-    // Shadow pass (Hito 16). Owns un depth FB + shader shadow_depth.
-    // El render pass lo usa antes del lit cuando hay una directional con
-    // `castShadows=true`.
-    try {
-        m_shadowPass = std::make_unique<ShadowPass>(2048);
-    } catch (const std::exception& e) {
-        Log::render()->warn("ShadowPass no disponible: {}. Sombras off.",
-                             e.what());
-        m_shadowPass.reset();
-    }
-
-    // Forward+ light grid (Hito 18). Construimos los 3 SSBOs vacios al
-    // arranque; se llenan por frame en `renderSceneToViewport`. El
-    // LightGrid en si es CPU-only.
-    m_lightGrid          = std::make_unique<LightGrid>();
-    m_pointLightsSsbo    = std::make_unique<OpenGLSSBO>();
-    m_lightTilesSsbo     = std::make_unique<OpenGLSSBO>();
-    m_lightIndicesSsbo   = std::make_unique<OpenGLSSBO>();
+    m_ui.viewport().setFramebuffer(&m_sceneRenderer->viewportFb());
 
     m_scene = std::make_unique<Scene>();
     m_scriptSystem = std::make_unique<ScriptSystem>();
-    m_lightSystem  = std::make_unique<LightSystem>();
     m_animationSystem = std::make_unique<AnimationSystem>(); // Hito 19
     // Hito 12: PhysicsWorld (Jolt). Init es pesado la primera vez del proceso
     // (Factory + RegisterTypes) pero instancias subsecuentes son baratas.
@@ -360,26 +254,12 @@ EditorApplication::~EditorApplication() {
     // toca el device en su destructor; stopAll lo llamamos antes via clear.
     m_audioSystem.reset();
     m_audioDevice.reset();
-    m_lightSystem.reset();
     m_animationSystem.reset();
     m_physicsWorld.reset();
-    m_iblBrdfLut.reset();
-    m_iblPrefilter.reset();
-    m_iblIrradiance.reset();
-    m_skyboxRenderer.reset();
-    m_lightIndicesSsbo.reset();
-    m_lightTilesSsbo.reset();
-    m_pointLightsSsbo.reset();
-    m_lightGrid.reset();
-    m_shadowPass.reset();
-    m_postProcess.reset();
-    m_debugRenderer.reset();
-    m_assetManager.reset(); // dueño de las texturas y meshes (incluido el cubo fallback)
-    m_pbrShader.reset();
-    m_defaultShader.reset();
-    m_viewportFb.reset();
-    m_sceneFb.reset();
-    m_renderer.reset();
+    m_assetManager.reset(); // dueño de texturas y meshes (incluido el cubo fallback)
+    // SceneRenderer destruye en orden inverso al ctor todos sus recursos
+    // GL (FBs, shaders, IBL textures, debug renderer, etc.).
+    m_sceneRenderer.reset();
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
@@ -470,7 +350,15 @@ glm::vec3 EditorApplication::mapWorldOrigin() const {
     );
 }
 
-// `renderSceneToViewport` movido a `EditorRenderPass.cpp` (Hito 16).
+f32 EditorApplication::viewportAspect() const {
+    const auto& fb = m_sceneRenderer->viewportFb();
+    return (fb.height() > 0)
+        ? static_cast<f32>(fb.width()) / static_cast<f32>(fb.height())
+        : 1.0f;
+}
+
+// `renderSceneToViewport` orquesta SceneRenderer + overlay 3D del editor.
+// La definicion vive en `EditorRenderPass.cpp` (Hito 21 Bloque 2).
 
 int EditorApplication::run() {
     m_deltaTimer.reset();
@@ -571,9 +459,7 @@ int EditorApplication::run() {
         m_gizmoConsumedClick = false;
         if (click.pending && !skipClickDueToGizmo &&
             m_mode == EditorMode::Editor && m_scene) {
-            const float aspect = (m_viewportFb->height() > 0)
-                ? static_cast<float>(m_viewportFb->width()) / static_cast<float>(m_viewportFb->height())
-                : 1.0f;
+            const float aspect = viewportAspect();
             const glm::mat4 view = m_editorCamera.viewMatrix();
             const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
             const ScenePickResult hit = pickEntity(*m_scene, view, projection,

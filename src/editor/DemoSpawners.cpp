@@ -470,9 +470,7 @@ void EditorApplication::processViewportTextureDrop() {
     const ViewportPanel::TextureDrop drop = m_ui.viewport().consumeTextureDrop();
     if (!(drop.pending && m_mode == EditorMode::Editor)) return;
 
-    const float aspect = (m_viewportFb->height() > 0)
-        ? static_cast<float>(m_viewportFb->width()) / static_cast<float>(m_viewportFb->height())
-        : 1.0f;
+    const float aspect = viewportAspect();
     const glm::mat4 view = m_editorCamera.viewMatrix();
     const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
     const TilePickResult hit = pickTile(m_map, mapWorldOrigin(), view, projection,
@@ -493,9 +491,7 @@ void EditorApplication::processViewportMeshDrop() {
     const ViewportPanel::MeshDrop mdrop = m_ui.viewport().consumeMeshDrop();
     if (!(mdrop.pending && m_mode == EditorMode::Editor && m_scene)) return;
 
-    const float aspect = (m_viewportFb->height() > 0)
-        ? static_cast<float>(m_viewportFb->width()) / static_cast<float>(m_viewportFb->height())
-        : 1.0f;
+    const float aspect = viewportAspect();
     const glm::mat4 view = m_editorCamera.viewMatrix();
     const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
     const TilePickResult hit = pickTile(m_map, mapWorldOrigin(), view, projection,
@@ -567,9 +563,7 @@ void EditorApplication::processViewportPrefabDrop() {
     const ViewportPanel::PrefabDrop pdrop = m_ui.viewport().consumePrefabDrop();
     if (!(pdrop.pending && m_mode == EditorMode::Editor && m_scene && m_assetManager)) return;
 
-    const float aspect = (m_viewportFb->height() > 0)
-        ? static_cast<float>(m_viewportFb->width()) / static_cast<float>(m_viewportFb->height())
-        : 1.0f;
+    const float aspect = viewportAspect();
     const glm::mat4 view = m_editorCamera.viewMatrix();
     const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
     const TilePickResult hit = pickTile(m_map, mapWorldOrigin(), view, projection,
@@ -658,9 +652,7 @@ void EditorApplication::processViewportMaterialDrop() {
     const ViewportPanel::MaterialDrop drop = m_ui.viewport().consumeMaterialDrop();
     if (!(drop.pending && m_mode == EditorMode::Editor && m_scene)) return;
 
-    const float aspect = (m_viewportFb->height() > 0)
-        ? static_cast<float>(m_viewportFb->width()) / static_cast<float>(m_viewportFb->height())
-        : 1.0f;
+    const float aspect = viewportAspect();
     const glm::mat4 view = m_editorCamera.viewMatrix();
     const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
 

@@ -25,25 +25,13 @@
 
 namespace Mood {
 
-class IRenderer;
 class IFramebuffer;
-class OpenGLFramebuffer;
-class IShader;
 class IMesh;
-class ITexture;
-class OpenGLCubemapTexture;
-class OpenGLDebugRenderer;
-class OpenGLSSBO;
-class LightGrid;
-class PostProcessPass;
-enum class TonemapMode : i32;
+class SceneRenderer;
 class ScriptSystem;
 class AudioDevice;
 class AudioSystem;
-class LightSystem;
 class PhysicsWorld;
-class SkyboxRenderer;
-class ShadowPass;
 class AnimationSystem;
 
 class EditorApplication {
@@ -79,6 +67,12 @@ private:
     ///        con el mapa centrado en el origen del mundo.
     glm::vec3 mapWorldOrigin() const;
 
+    /// @brief Aspect ratio del framebuffer del viewport (LDR final). Lo
+    ///        usan todos los pasos que necesitan armar projection matrix
+    ///        (drops, raycast, render). Aislado en un helper para que el
+    ///        callsite no dependa del owner del FB (SceneRenderer).
+    f32 viewportAspect() const;
+
     /// @brief Reemplaza m_map con la sala 8x8 hardcodeada (perimetro grid,
     ///        columna central brick). Se usa al arrancar y al cerrar proyecto.
     void buildInitialTestMap();
@@ -98,14 +92,6 @@ private:
     ///        textura sobre un tile), usar `updateTileEntity` que conserva
     ///        handles y seleccion.
     void rebuildSceneFromMap();
-
-    /// @brief Hito 15: resetea m_fog/m_exposure/m_tonemap a defaults y aplica
-    ///        el primer EnvironmentComponent encontrado en `m_scene`. Si no
-    ///        hay ninguno, quedan los defaults. Llamado por `renderSceneToViewport`
-    ///        cada frame y por `tryOpenProjectPath` justo despues de cargar
-    ///        las entidades — asi el primer render del proyecto nuevo ya
-    ///        muestra los valores guardados sin un frame intermedio default.
-    void applyEnvironmentFromScene();
 
     /// @brief Edit localizado para una sola tile. Si la entidad ya existe
     ///        (`Tile_X_Y`), le actualiza el MeshRenderer in-place; si no,
@@ -177,27 +163,17 @@ private:
 
     std::unique_ptr<Window> m_window;
 
-    // RHI y recursos graficos. Se destruyen en orden inverso antes del
-    // contexto GL (ver destructor).
-    std::unique_ptr<IRenderer> m_renderer;
-    // Hito 15 Bloque 3: pipeline HDR. Sky + escena + lit + fog escriben a
-    // `m_sceneFb` (RGBA16F). El post-process pass lo procesa con
-    // exposicion + tonemap + gamma y deja el resultado en `m_viewportFb`
-    // (RGBA8) que es lo que muestra el panel Viewport.
-    std::unique_ptr<OpenGLFramebuffer> m_sceneFb;
-    std::unique_ptr<OpenGLFramebuffer> m_viewportFb;
-    std::unique_ptr<PostProcessPass> m_postProcess;
-    f32 m_exposure = 0.0f;                      // EVs, [-5..+5] tipico
-    TonemapMode m_tonemap = TonemapMode{2};     // ACES por default
-    f32 m_iblIntensity = 1.0f;                  // Hito 18, [0..2]
-    std::unique_ptr<IShader> m_defaultShader;
-    std::unique_ptr<IShader> m_pbrShader; // Hito 17: reemplaza al lit Phong
-    std::unique_ptr<IShader> m_pbrSkinnedShader; // Hito 19: skinning LBS
-    std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
+    // Hito 21 Bloque 2: todo el pipeline de render (FBs, shaders PBR,
+    // skybox, shadow, post-process, IBL, light grid + SSBOs, debug
+    // renderer) vive en SceneRenderer — compartido con MoodPlayer.
+    // El editor solo le pasa scene + assets + camara + tamano del
+    // panel cada frame, y agrega su debug 3D entre `renderScene` y
+    // `endFrame`.
+    std::unique_ptr<SceneRenderer> m_sceneRenderer;
+
     std::unique_ptr<ScriptSystem> m_scriptSystem;
     std::unique_ptr<AudioDevice> m_audioDevice;
     std::unique_ptr<AudioSystem> m_audioSystem;
-    std::unique_ptr<LightSystem> m_lightSystem;
     std::unique_ptr<AnimationSystem> m_animationSystem; // Hito 19
 
     // Hito 20: HUD del juego (HP / Ammo / crosshair) y menu de pausa.
@@ -238,48 +214,18 @@ private:
     ///        destroy. Llamado desde el handler de tecla Delete/Backspace
     ///        en `processEvents`.
     void deleteSelectedEntity();
+
+    /// @brief Editor-side overlay 3D que se dibuja DENTRO del scene FB
+    ///        entre `SceneRenderer::renderScene` y `endFrame`. Usa el
+    ///        debug renderer del SceneRenderer para acumular: tile
+    ///        picking + drag highlights (cyan/yellow), OBB de la
+    ///        entidad seleccionada (naranja), F1 debug AABBs (tiles +
+    ///        player). Implementado en `EditorSceneOverlay.cpp`.
+    void drawEditorScene3DOverlay(const glm::mat4& view,
+                                   const glm::mat4& projection,
+                                   const glm::vec3& worldOrigin);
+
     std::unique_ptr<PhysicsWorld> m_physicsWorld;
-    std::unique_ptr<SkyboxRenderer> m_skyboxRenderer;
-    std::unique_ptr<ShadowPass> m_shadowPass; // Hito 16
-
-    // Forward+ light grid (Hito 18). El grid se recompute por frame en
-    // CPU (`LightGrid::compute`) y se sube a tres SSBOs:
-    //   - m_pointLightsSsbo (binding 2): array de PointLight std430.
-    //   - m_lightTilesSsbo  (binding 3): array de TileLightList por tile.
-    //   - m_lightIndicesSsbo (binding 4): flat array de indices.
-    // El shader pbr.frag lookup en SSBO 3 -> SSBO 4 -> SSBO 2 por tile.
-    std::unique_ptr<LightGrid>   m_lightGrid;
-    std::unique_ptr<OpenGLSSBO>  m_pointLightsSsbo;
-    std::unique_ptr<OpenGLSSBO>  m_lightTilesSsbo;
-    std::unique_ptr<OpenGLSSBO>  m_lightIndicesSsbo;
-
-    // IBL (Hito 17 Bloque 3). Tres recursos:
-    //   - irradiance cubemap (32x32): integral cosine-weighted del sky para
-    //     el termino diffuse de la indirecta.
-    //   - prefilter cubemap con mip chain (128 base, 5 niveles): aproxima
-    //     el termino especular pre-integrado por roughness.
-    //   - BRDF LUT 2D (256x256, RG channels): split-sum de Epic.
-    // Tolera fallo de carga: el shader cae a `uAmbient` escalar si los
-    // tres no estan disponibles (mismo comportamiento que pre-Hito 17).
-    std::unique_ptr<OpenGLCubemapTexture> m_iblIrradiance;
-    std::unique_ptr<OpenGLCubemapTexture> m_iblPrefilter;
-    std::unique_ptr<ITexture>             m_iblBrdfLut;
-    // (cambio de estado del directional light con castShadows). Se actualiza
-    // dentro de `renderSceneToViewport`.
-    // Hito 16: para loguear la primera vez que el shadow pass se activa
-    // / desactiva (cambio de estado del directional light con
-    // castShadows). Se actualiza dentro de `renderSceneToViewport`.
-    bool m_shadowEnabledLastFrame = false;
-    // Hito 18: log diagnostico del LightGrid una sola vez por cambio
-    // de cantidad de luces. Util para validar que el grid se popule
-    // correctamente sin spammear el log cada frame.
-    u32 m_lastLoggedPointLightCount = 9999u;
-
-    // Estado de render del frame actual. Lo regenera
-    // `applyEnvironmentFromScene` cada frame (reset a defaults + override
-    // con el primer EnvironmentComponent encontrado). Sin Environment los
-    // valores quedan en sus defaults (fog Off, sin exposure, tonemap ACES).
-    FogParams m_fog{};
 
     // AssetManager: owner de todas las texturas cargadas. Se destruye ANTES
     // del contexto GL (ver destructor).
@@ -306,13 +252,6 @@ private:
     // tileSize=3m (escala SI realista, Hito 5 Bloque 0). Se reemplaza al
     // abrir proyectos y se resetea al mapa de prueba al cerrar.
     GridMap m_map{8u, 8u, 3.0f};
-
-    // Matrices activas del ultimo frame de render (Hito 13). Las guarda
-    // `renderSceneToViewport`; las lee el overlay del ViewportPanel (iconos,
-    // gizmos) con un frame de lag, imperceptible a 60fps.
-    glm::mat4 m_lastView{1.0f};
-    glm::mat4 m_lastProjection{1.0f};
-    f32 m_lastAspect = 1.0f;
 
     // Modo del gizmo (Hito 13 Bloque 3-5). Cambia con W/E/R estilo Unity.
     enum class GizmoMode : u8 { Translate = 0, Rotate = 1, Scale = 2 };

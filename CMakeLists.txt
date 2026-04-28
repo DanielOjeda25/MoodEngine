@@ -294,6 +294,7 @@ add_executable(MoodEditor
     src/engine/render/opengl/OpenGLDebugRenderer.cpp
 
     src/engine/render/LightGrid.cpp
+    src/engine/render/SceneRenderer.cpp
 
     src/editor/DemoSpawners.cpp
     src/editor/EditorApplication.cpp

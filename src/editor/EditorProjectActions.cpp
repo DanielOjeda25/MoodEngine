@@ -17,6 +17,7 @@
 
 #include "core/Log.h"
 #include "engine/assets/AssetManager.h"
+#include "engine/render/SceneRenderer.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
@@ -275,7 +276,9 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
     // Hito 15: aplicar el Environment del proyecto recien cargado YA, en
     // lugar de esperar al primer renderSceneToViewport. Asi la primera frame
     // muestra el fog/exposure/tonemap guardados, sin un flash a defaults.
-    applyEnvironmentFromScene();
+    if (m_scene && m_sceneRenderer) {
+        m_sceneRenderer->applyEnvironmentFromScene(*m_scene);
+    }
 
     m_project = std::move(loaded);
     m_currentMapPath = m_project->defaultMap;
