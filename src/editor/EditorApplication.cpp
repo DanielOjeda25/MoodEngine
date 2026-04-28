@@ -404,8 +404,9 @@ int EditorApplication::run() {
             case ProjectAction::OpenProject:  handleOpenProject();  break;
             case ProjectAction::Save:         handleSave();         break;
             case ProjectAction::SaveAs:       handleSaveAs();       break;
-            case ProjectAction::CloseProject: handleCloseProject(); break;
-            case ProjectAction::None:         break;
+            case ProjectAction::CloseProject:   handleCloseProject();   break;
+            case ProjectAction::PackageProject: handlePackageProject(); break;
+            case ProjectAction::None:           break;
         }
 
         // Hito 15 polish: el modal Welcome puede editar la lista de

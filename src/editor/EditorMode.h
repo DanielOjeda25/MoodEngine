@@ -21,6 +21,7 @@ enum class ProjectAction {
     Save,
     SaveAs,
     CloseProject,
+    PackageProject, // Hito 21 Bloque 5: empaqueta el proyecto activo
 };
 
 } // namespace Mood

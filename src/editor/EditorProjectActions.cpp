@@ -17,9 +17,12 @@
 
 #include "core/Log.h"
 #include "engine/assets/AssetManager.h"
+#include "engine/packaging/PackageBuilder.h"
 #include "engine/render/SceneRenderer.h"
 #include "engine/serialization/SceneLoader.h"
 #include "engine/scene/Components.h"
+
+#include <SDL.h>
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
 #include "engine/serialization/ProjectSerializer.h"
@@ -267,6 +270,72 @@ void EditorApplication::handleCloseProject() {
     buildInitialTestMap();
     rebuildSceneFromMap();
     updateWindowTitle();
+}
+
+void EditorApplication::handlePackageProject() {
+    if (!m_project.has_value()) return;
+
+    // Si hay cambios sin guardar, ofrecer guardar primero — el packager
+    // copia el .moodproj de disco, no el estado en memoria.
+    if (m_projectDirty) {
+        const auto choice = pfd::message(
+            "MoodEngine — Empaquetar proyecto",
+            "Tenes cambios sin guardar. Empaquetar el proyecto guardado actualmente "
+            "no incluira esos cambios. Guardar primero?",
+            pfd::choice::yes_no_cancel,
+            pfd::icon::warning).result();
+        if (choice == pfd::button::cancel) return;
+        if (choice == pfd::button::yes) {
+            handleSave();
+            if (m_projectDirty) {
+                Log::editor()->warn("Empaquetado abortado: el guardado fallo");
+                return;
+            }
+        }
+    }
+
+    auto selection = pfd::select_folder(
+        "Carpeta destino del paquete",
+        m_project->root.parent_path().generic_string()).result();
+    if (selection.empty()) return;
+
+    // Localizar el .exe del editor — junto a el viven MoodPlayer.exe,
+    // SDL2*.dll, assets/, shaders/.
+    char* base = SDL_GetBasePath();
+    const std::filesystem::path exeDir = base
+        ? std::filesystem::path(base)
+        : std::filesystem::current_path();
+    if (base) SDL_free(base);
+
+#ifdef NDEBUG
+    constexpr bool kIsDebug = false;
+#else
+    constexpr bool kIsDebug = true;
+#endif
+
+    PackageBuilder::BuildConfig cfg{
+        *m_project,
+        m_project->root / (m_project->name + ".moodproj"),
+        std::filesystem::path(selection),
+        exeDir,
+        kIsDebug
+    };
+    const auto result = PackageBuilder::build(cfg);
+
+    if (result.ok) {
+        const std::string msg =
+            "Paquete creado en:\n" + result.outputDir.generic_string() +
+            "\n\n" + std::to_string(result.filesCopied) + " archivos copiados.";
+        pfd::message("MoodEngine — Empaquetado completo",
+                      msg, pfd::choice::ok, pfd::icon::info);
+        Log::editor()->info("Empaquetado OK: {} ({} archivos)",
+                             result.outputDir.generic_string(), result.filesCopied);
+    } else {
+        pfd::message("MoodEngine — Empaquetado fallo",
+                      "Error: " + result.error,
+                      pfd::choice::ok, pfd::icon::error);
+        Log::editor()->error("Empaquetado fallo: {}", result.error);
+    }
 }
 
 void EditorApplication::loadEditorState() {

@@ -28,6 +28,15 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                 ui.requestProjectAction(ProjectAction::CloseProject);
             }
             ImGui::Separator();
+            // Hito 21 Bloque 5: empaqueta el proyecto activo en una
+            // carpeta autocontenida (MoodPlayer.exe + DLLs + assets +
+            // shaders + project + game.json). Solo disponible con
+            // proyecto guardado — si esta dirty obliga a Save primero.
+            if (ImGui::MenuItem("Empaquetar proyecto...", nullptr, false,
+                                ui.hasProject())) {
+                ui.requestProjectAction(ProjectAction::PackageProject);
+            }
+            ImGui::Separator();
             // Hito 14: guardar la entidad seleccionada como prefab. Los
             // prefabs son assets globales del repo (`<cwd>/assets/prefabs/`),
             // no per-proyecto, asi que basta con tener una entidad

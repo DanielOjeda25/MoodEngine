@@ -115,6 +115,10 @@ private:
     void handleSave();
     void handleSaveAs();
     void handleCloseProject();
+    /// @brief Hito 21 Bloque 5: empaqueta el proyecto activo en una
+    ///        carpeta destino (file dialog). Pide guardar primero si
+    ///        hay dirty. Muestra MessageBox con resultado.
+    void handlePackageProject();
 
     /// @brief Intenta abrir el proyecto en `moodprojPath`. Devuelve true si
     ///        quedo activo; false si fallo (loguea la causa).

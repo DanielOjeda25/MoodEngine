@@ -261,6 +261,8 @@ add_library(mood_engine_lib STATIC
     src/engine/game/GameOverlay.cpp
     src/engine/game/GameState.cpp
 
+    src/engine/packaging/PackageBuilder.cpp
+
     src/engine/physics/PhysicsWorld.cpp
 
     src/engine/serialization/EntitySerializer.cpp
