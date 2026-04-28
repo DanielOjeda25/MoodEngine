@@ -28,6 +28,7 @@ add_executable(mood_tests
     test_material_serializer.cpp
     test_light_grid.cpp
     test_animation.cpp
+    test_game_state.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -40,6 +41,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/systems/PhysicsSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/ScriptSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/LuaBindings.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/game/GameState.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/VFS.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/AssetManager.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/MeshLoader.cpp

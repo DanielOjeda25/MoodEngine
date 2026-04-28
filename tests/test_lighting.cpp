@@ -34,6 +34,9 @@ public:
     void setFloat(std::string_view n, float v) override {
         floats[std::string(n)] = v; ++calls;
     }
+    void setVec2(std::string_view n, const glm::vec2& v) override {
+        vec2s[std::string(n)] = v; ++calls;
+    }
     void setVec3(std::string_view n, const glm::vec3& v) override {
         vec3s[std::string(n)] = v; ++calls;
     }
@@ -46,6 +49,7 @@ public:
 
     std::unordered_map<std::string, int> ints;
     std::unordered_map<std::string, float> floats;
+    std::unordered_map<std::string, glm::vec2> vec2s;
     std::unordered_map<std::string, glm::vec3> vec3s;
     std::unordered_map<std::string, glm::vec4> vec4s;
     std::unordered_map<std::string, glm::mat4> mat4s;
