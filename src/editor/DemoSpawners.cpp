@@ -24,12 +24,48 @@
 
 #include <portable-file-dialogs.h>
 
+#include <glm/ext/matrix_transform.hpp>
+
+#include <algorithm>
 #include <filesystem>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace Mood {
+
+namespace {
+
+// Hito 23: rota un AABB por un Euler en orden YXZ (mismo que
+// TransformComponent::worldMatrix) y devuelve el rango Y resultante en
+// world-space. Util para autoscale + floor offset post-rotacion.
+struct WorldYBounds { f32 minY = 0.0f; f32 maxY = 0.0f; };
+WorldYBounds rotatedAabbWorldY(const glm::vec3& aabbMin,
+                                 const glm::vec3& aabbMax,
+                                 const glm::vec3& eulerDeg) {
+    glm::mat4 R(1.0f);
+    R = glm::rotate(R, glm::radians(eulerDeg.y), glm::vec3(0.0f, 1.0f, 0.0f));
+    R = glm::rotate(R, glm::radians(eulerDeg.x), glm::vec3(1.0f, 0.0f, 0.0f));
+    R = glm::rotate(R, glm::radians(eulerDeg.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+    f32 minY = std::numeric_limits<f32>::max();
+    f32 maxY = std::numeric_limits<f32>::lowest();
+    for (int xi = 0; xi <= 1; ++xi)
+    for (int yi = 0; yi <= 1; ++yi)
+    for (int zi = 0; zi <= 1; ++zi) {
+        const glm::vec3 p(
+            xi ? aabbMax.x : aabbMin.x,
+            yi ? aabbMax.y : aabbMin.y,
+            zi ? aabbMax.z : aabbMin.z);
+        const glm::vec3 rp = glm::vec3(R * glm::vec4(p, 1.0f));
+        minY = std::min(minY, rp.y);
+        maxY = std::max(maxY, rp.y);
+    }
+    return {minY, maxY};
+}
+
+} // namespace
 
 void EditorApplication::processSpawnRotatorRequest() {
     if (!(m_ui.consumeSpawnRotatorRequest() && m_scene)) return;
@@ -48,32 +84,38 @@ void EditorApplication::processSpawnRotatorRequest() {
 void EditorApplication::processSpawnEnemyDemoRequest() {
     if (!(m_ui.consumeSpawnEnemyDemoRequest() && m_scene && m_assetManager)) return;
 
-    // Usamos Fox.glb como mesh del enemigo — ya esta en assets/meshes,
-    // anima walk, y libera al packager de tener que copiar otro modelo.
-    // Cuando aparezca un asset enemy.glb propio, cambiar aca.
-    const MeshAssetId foxMesh = m_assetManager->loadMesh("meshes/Fox.glb");
-    if (foxMesh == m_assetManager->missingMeshId()) {
+    // CesiumMan.glb (CC0, glTF Sample Assets): humanoide simple con
+    // animacion de caminata. Mejor que Fox para "enemigo" porque
+    // bipedo se siente como adversario, no mascota.
+    const MeshAssetId enemyMesh = m_assetManager->loadMesh("meshes/CesiumMan.glb");
+    if (enemyMesh == m_assetManager->missingMeshId()) {
         Log::editor()->warn(
-            "Spawn enemigo demo: 'meshes/Fox.glb' no se pudo cargar");
+            "Spawn enemigo demo: 'meshes/CesiumMan.glb' no se pudo cargar");
         return;
     }
-    const MeshAsset* asset = m_assetManager->getMesh(foxMesh);
+    const MeshAsset* asset = m_assetManager->getMesh(enemyMesh);
     if (asset == nullptr || !asset->hasSkeleton()) {
         Log::editor()->warn(
-            "Spawn enemigo demo: 'meshes/Fox.glb' no tiene esqueleto");
+            "Spawn enemigo demo: 'meshes/CesiumMan.glb' no tiene esqueleto");
         return;
     }
 
     Entity enemy = m_scene->createEntity("Enemigo");
     auto& t = enemy.getComponent<TransformComponent>();
-    // Posicion: una esquina del mapa (tile 1,1 — adentro del perimetro).
+    t.scale = glm::vec3(1.0f);
+    // Orientacion segun el rootNode del .glb: para CesiumMan (Z-up)
+    // queda -90° X automaticamente; para Fox queda 0.
+    t.rotationEuler = asset->importRotationEuler;
+    // Piso al ras: usamos el AABB rotado a world-Y para anclar los
+    // pies a y=0.
+    const auto wy = rotatedAabbWorldY(asset->aabbMin, asset->aabbMax,
+                                        asset->importRotationEuler);
     const glm::vec3 origin = mapWorldOrigin();
     const f32 tileSize = m_map.tileSize();
     t.position = glm::vec3(
         origin.x + 1.5f * tileSize,
-        origin.y,
+        origin.y + (-wy.minY),
         origin.z + 1.5f * tileSize);
-    t.scale = glm::vec3(0.01f); // mismo factor que el demo de personaje animado
 
     // Material instance unico (clone del default).
     MaterialAsset proto{};
@@ -83,11 +125,12 @@ void EditorApplication::processSpawnEnemyDemoRequest() {
         proto = *def;
     }
     const MaterialAssetId enemyMat = m_assetManager->createMaterial(proto);
-    enemy.addComponent<MeshRendererComponent>(foxMesh, enemyMat);
+    enemy.addComponent<MeshRendererComponent>(enemyMesh, enemyMat);
 
-    // Animator con clip "Walk" — el zorro de Khronos trae Survey/Walk/Run.
+    // Animator con clipName vacio = primer clip del MeshAsset.
+    // CesiumMan tiene un solo clip de caminata.
     AnimatorComponent anim{};
-    anim.clipName = "Walk";
+    anim.clipName = "";
     anim.playing  = true;
     anim.loop     = true;
     enemy.addComponent<AnimatorComponent>(anim);
@@ -568,14 +611,23 @@ void EditorApplication::processViewportMeshDrop() {
     Entity e = m_scene->createEntity("Mesh_" + meshName);
     auto& t = e.getComponent<TransformComponent>();
 
-    // Auto-escala basada en el AABB del bind pose: meshes glTF/FBX en
-    // unidades originales (cm/in) caen en escala >>1 al importar. Si la
-    // altura del bind pose excede 3m, escalamos para que la entidad
-    // mida ~1.5m de alto (referencia humana). Los meshes ya razonables
-    // (cubos, primitivas, modelos en metros) pasan derecho con scale=1.
+    // Aplicar la rotacion de import primero — el AABB rotado nos da
+    // la altura correcta para autoscale + floor offset (CesiumMan
+    // tipo Z-up tiene altura en Z; si usaramos aabb.y crudo seria el
+    // ancho de brazos y los calculos de abajo darian basura).
+    const glm::vec3 importEuler = (asset != nullptr)
+        ? asset->importRotationEuler : glm::vec3(0.0f);
+    t.rotationEuler = importEuler;
+
+    // Auto-escala: meshes glTF/FBX en unidades originales (cm/in) caen
+    // en escala >>1 al importar. Si la altura post-rotacion excede 3m,
+    // escalamos para que la entidad mida ~1.5m. Los meshes ya razonables
+    // (cubos, primitivas, modelos en metros) pasan con scale=1.
     f32 autoScale = 1.0f;
+    WorldYBounds wy{};
     if (asset != nullptr) {
-        const f32 height = asset->aabbMax.y - asset->aabbMin.y;
+        wy = rotatedAabbWorldY(asset->aabbMin, asset->aabbMax, importEuler);
+        const f32 height = wy.maxY - wy.minY;
         if (height > 3.0f) {
             autoScale = 1.5f / height;
         }
@@ -583,10 +635,8 @@ void EditorApplication::processViewportMeshDrop() {
     t.scale = glm::vec3(autoScale);
 
     // Posicion: XZ en el centro del tile bajo el cursor, Y al ras del
-    // piso (y=0). Para anclarlo al piso desplazamos por -autoScale *
-    // aabbMin.y — funciona tanto si el mesh tiene origen en el bottom
-    // (glTF tipico, aabbMin.y=0) como si esta centrado (aabbMin.y=-h/2).
-    const f32 yFloorOffset = (asset != nullptr) ? -autoScale * asset->aabbMin.y : 0.0f;
+    // piso (world y=0). Anclamos el bottom del AABB rotado al piso.
+    const f32 yFloorOffset = -autoScale * wy.minY;
     t.position = glm::vec3(
         origin.x + (static_cast<f32>(hit.tileX) + 0.5f) * tileSize,
         origin.y + yFloorOffset,

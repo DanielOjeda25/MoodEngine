@@ -59,6 +59,14 @@ struct MeshAsset {
     glm::vec3 aabbMin{-0.5f};
     glm::vec3 aabbMax{ 0.5f};
 
+    /// Hito 23: rotacion del rootNode de assimp en grados (orden YXZ
+    /// igual que TransformComponent). Para glTF Y-up nativos (Fox.glb)
+    /// queda en 0; para modelos Z-up convertidos por glTF (CesiumMan)
+    /// trae -90° en X. Los spawn paths la copian a la entidad para
+    /// que CualquierMesh.glb spawnee con la orientacion correcta sin
+    /// hardcodear por personaje.
+    glm::vec3 importRotationEuler{0.0f};
+
     /// Esqueleto (Hito 19). Vacio para meshes estaticos.
     std::optional<Skeleton> skeleton;
 

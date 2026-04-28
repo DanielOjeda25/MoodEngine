@@ -11,7 +11,10 @@
 #include <assimp/scene.h>
 
 #include <glm/gtc/quaternion.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/euler_angles.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/trigonometric.hpp>
 #include <glm/vec3.hpp>
 
 #include <algorithm>
@@ -477,10 +480,36 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
         parseAnimations(*scene, indexByName, asset->animations);
     }
 
-    Log::assets()->info("MeshLoader: '{}' cargado ({} submeshes, {} vertices, {} bones, {} clips)",
-                         logicalPath, asset->submeshes.size(), asset->totalVertexCount(),
-                         asset->hasSkeleton() ? asset->skeleton->bones.size() : usize{0},
-                         asset->animations.size());
+    // Hito 23: rotacion del rootNode de assimp como Euler XYZ (en
+    // grados, con orden YXZ igual que TransformComponent::worldMatrix).
+    // glTF Y-up nativos (Fox) traen rootNode = identidad -> 0; modelos
+    // Z-up convertidos por glTF (CesiumMan) traen -90° en X. Los spawn
+    // paths copian este Euler al entity Transform para orientacion
+    // correcta sin hardcodear por modelo.
+    const glm::mat4 rootTransform = toGlm(scene->mRootNode->mTransformation);
+    {
+        float yawRad = 0.0f, pitchRad = 0.0f, rollRad = 0.0f;
+        glm::extractEulerAngleYXZ(rootTransform, yawRad, pitchRad, rollRad);
+        asset->importRotationEuler = glm::vec3(
+            glm::degrees(pitchRad),
+            glm::degrees(yawRad),
+            glm::degrees(rollRad));
+    }
+
+    Log::assets()->info(
+        "MeshLoader: '{}' cargado ({} submeshes, {} vertices, {} bones, {} clips, "
+        "import rot=({:.1f},{:.1f},{:.1f}))",
+        logicalPath, asset->submeshes.size(), asset->totalVertexCount(),
+        asset->hasSkeleton() ? asset->skeleton->bones.size() : usize{0},
+        asset->animations.size(),
+        asset->importRotationEuler.x,
+        asset->importRotationEuler.y,
+        asset->importRotationEuler.z);
+    Log::assets()->debug(
+        "MeshLoader: '{}' AABB min=({:.3f},{:.3f},{:.3f}) max=({:.3f},{:.3f},{:.3f})",
+        logicalPath,
+        asset->aabbMin.x, asset->aabbMin.y, asset->aabbMin.z,
+        asset->aabbMax.x, asset->aabbMax.y, asset->aabbMax.z);
     return asset;
 }
 
