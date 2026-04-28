@@ -147,6 +147,45 @@ void EditorApplication::updateRigidBodies(f32 dt) {
     }
 }
 
+void EditorApplication::deleteSelectedEntity() {
+    if (!m_scene) return;
+    Entity selected = m_ui.selectedEntity();
+    if (!selected) return;
+
+    const std::string tagName =
+        selected.hasComponent<TagComponent>()
+            ? selected.getComponent<TagComponent>().name
+            : std::string{"(sin tag)"};
+
+    // Filtra tiles del mapa de prueba (Tile_X_Y) — esos vienen de
+    // `m_map` y reaparecen al rebuild; eliminarlos solo confunde. Para
+    // tiles, el flujo correcto es editarlos en el GridMap (futuro:
+    // panel del mapa).
+    const bool isTile = tagName.size() >= 5
+        && tagName.compare(0, 5, "Tile_") == 0;
+    if (isTile) {
+        Log::editor()->info(
+            "Delete: '{}' es un tile del mapa, no se elimina "
+            "(usar editor de mapa para limpiar tiles).",
+            tagName);
+        return;
+    }
+
+    // Cleanup de side-effects antes del destroy: el body de Jolt
+    // (si aplica). Si no se destruye aca, queda huerfano en el world.
+    if (selected.hasComponent<RigidBodyComponent>() && m_physicsWorld) {
+        auto& rb = selected.getComponent<RigidBodyComponent>();
+        if (rb.bodyId != 0) {
+            m_physicsWorld->destroyBody(rb.bodyId);
+            rb.bodyId = 0;
+        }
+    }
+    m_scene->destroyEntity(selected);
+    m_ui.setSelectedEntity(Entity{});
+    Log::editor()->info("Eliminada entidad '{}' del mapa.", tagName);
+    markDirty();
+}
+
 void EditorApplication::updateTileEntity(u32 tileX, u32 tileY, TextureAssetId texture) {
     if (!m_scene) return;
     const std::string name = "Tile_" + std::to_string(tileX) + "_" + std::to_string(tileY);

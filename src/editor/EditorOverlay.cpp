@@ -1,10 +1,8 @@
 #include "editor/EditorApplication.h"
 
-#include "core/Log.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
-#include "engine/physics/PhysicsWorld.h"
 
 #include <imgui.h>
 
@@ -15,7 +13,6 @@
 #include <glm/matrix.hpp>
 
 #include <cmath>
-#include <string>
 
 namespace Mood {
 
@@ -180,45 +177,10 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                 : 1.0f;
             m_editorCamera.focusOn(tf.position, std::max(r, 0.3f));
         }
-        // Tecla Delete / Backspace: elimina la entidad seleccionada.
-        // Filtra tiles del mapa de prueba (Tile_X_Y) — esos vienen
-        // de `m_map` y reaparecen al rebuild; eliminarlos solo
-        // confunde. Para tiles, el flujo correcto es editarlos en
-        // el GridMap (futuro: panel del mapa).
-        const bool delPressed =
-            ImGui::IsKeyPressed(ImGuiKey_Delete, false) ||
-            ImGui::IsKeyPressed(ImGuiKey_Backspace, false);
-        if (delPressed && selected && m_scene) {
-            const std::string tagName =
-                selected.hasComponent<TagComponent>()
-                    ? selected.getComponent<TagComponent>().name
-                    : std::string{"(sin tag)"};
-            const bool isTile = tagName.size() >= 5
-                && tagName.compare(0, 5, "Tile_") == 0;
-            if (isTile) {
-                Log::editor()->info(
-                    "Delete: '{}' es un tile del mapa, no se elimina "
-                    "(usar editor de mapa para limpiar tiles).",
-                    tagName);
-            } else {
-                // Cleanup de side-effects antes del destroy:
-                // - Jolt body (si era rigid body).
-                if (selected.hasComponent<RigidBodyComponent>()
-                    && m_physicsWorld) {
-                    auto& rb = selected.getComponent<RigidBodyComponent>();
-                    if (rb.bodyId != 0) {
-                        m_physicsWorld->destroyBody(rb.bodyId);
-                        rb.bodyId = 0;
-                    }
-                }
-                m_scene->destroyEntity(selected);
-                m_ui.setSelectedEntity(Entity{});
-                Log::editor()->info(
-                    "Eliminada entidad '{}' del mapa.", tagName);
-                markDirty();
-            }
-        }
     }
+    // La tecla Delete/Backspace se procesa via evento SDL en
+    // `processEvents` (mas robusto que ImGui::IsKeyPressed porque
+    // no depende del foco de teclado del panel actual).
 
     if (!selected || !selected.hasComponent<TransformComponent>()) return;
 

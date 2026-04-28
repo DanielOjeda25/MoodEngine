@@ -22,6 +22,7 @@
 #include "engine/serialization/ProjectSerializer.h"
 #include "engine/serialization/SceneSerializer.h"
 #include "engine/audio/AudioDevice.h"
+#include "engine/game/GameState.h"
 #include "engine/physics/PhysicsWorld.h"
 #include "systems/AnimationSystem.h"
 #include "systems/AudioSystem.h"
@@ -406,14 +407,11 @@ void EditorApplication::processEvents() {
         } else if (ev.type == SDL_KEYDOWN &&
                    ev.key.keysym.sym == SDLK_ESCAPE &&
                    m_mode == EditorMode::Play) {
-            // Hito 20: Esc togglea menu de pausa. Sin pausa -> mostrar
-            // menu + cursor visible. Con pausa -> cerrar menu + cursor
-            // relativo (gameplay).
-            m_paused = !m_paused;
-            SDL_SetRelativeMouseMode(m_paused ? SDL_FALSE : SDL_TRUE);
-            if (!m_paused) {
-                SDL_GetRelativeMouseState(nullptr, nullptr); // descartar delta acumulado
-            }
+            // Hito 20: Esc togglea menu de pausa. La sincronizacion del
+            // cursor con SDL la hace `updateCameras` detectando la
+            // transicion del flag (asi tambien funciona si lo cambia un
+            // script Lua via `hud.setPaused`).
+            GameState::paused() = !GameState::paused();
         } else if (ev.type == SDL_KEYDOWN &&
                    ev.key.keysym.sym == SDLK_F1 &&
                    ev.key.repeat == 0) {
@@ -427,6 +425,17 @@ void EditorApplication::processEvents() {
             // Ctrl+S: atajo de Guardar. Emitimos la misma solicitud que el menu
             // para reusar el dispatcher unico.
             m_ui.requestProjectAction(ProjectAction::Save);
+        } else if (ev.type == SDL_KEYDOWN &&
+                   (ev.key.keysym.sym == SDLK_DELETE ||
+                    ev.key.keysym.sym == SDLK_BACKSPACE) &&
+                   ev.key.repeat == 0 &&
+                   m_mode == EditorMode::Editor &&
+                   !ImGui::GetIO().WantTextInput) {
+            // Hito 13/20: Delete/Backspace borra la entidad seleccionada.
+            // Via evento SDL en lugar de ImGui::IsKeyPressed para evitar
+            // problemas de foco entre paneles. El filtro WantTextInput
+            // evita borrar la entidad mientras el usuario edita un campo.
+            deleteSelectedEntity();
         }
     }
 }
@@ -541,6 +550,7 @@ int EditorApplication::run() {
         // implementaciones movidas a `DemoSpawners.cpp` para mantener `run()`
         // legible.
         processSpawnRotatorRequest();
+        processSpawnHudDemoRequest();
         processSpawnPhysicsBoxRequest();
         processSpawnEnvironmentRequest();
         processSpawnShadowDemoRequest();

@@ -45,6 +45,22 @@ void EditorApplication::processSpawnRotatorRequest() {
     Log::editor()->info("Spawned rotador demo en (0, 4, 0)");
 }
 
+void EditorApplication::processSpawnHudDemoRequest() {
+    if (!(m_ui.consumeSpawnHudDemoRequest() && m_scene)) return;
+    // No tiene mesh visible — la entidad existe solo para hostear el
+    // ScriptComponent. En Editor Mode aparece como icono Audio/Light? No
+    // tiene componente especial, asi que no aparece en el overlay; queda
+    // solo en el Hierarchy. En Play Mode el script ejercita la tabla
+    // `hud` y los efectos se ven en el HUD/menu de pausa del juego.
+    Entity e = m_scene->createEntity("HudDemo");
+    auto& t = e.getComponent<TransformComponent>();
+    t.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    e.addComponent<ScriptComponent>(std::string{"assets/scripts/hud_demo.lua"});
+    Log::editor()->info(
+        "Spawned HudDemo. Entrar en Play Mode para ver el HUD reaccionar "
+        "(HP drena 1/s; HP=0 -> pausa forzada).");
+}
+
 void EditorApplication::processSpawnPhysicsBoxRequest() {
     if (!(m_ui.consumeSpawnPhysicsBoxRequest() && m_scene && m_assetManager)) return;
     Entity box = m_scene->createEntity("CajaFisica");

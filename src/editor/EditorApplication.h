@@ -149,6 +149,7 @@ private:
     // crea/edita la entidad correspondiente. No-op si la condicion no
     // se cumple (sin scene, etc.).
     void processSpawnRotatorRequest();
+    void processSpawnHudDemoRequest(); // Hito 20 Bloque 5
     void processSpawnAudioSourceRequest();
     void processSpawnPointLightRequest();
     void processSpawnPhysicsBoxRequest();
@@ -201,15 +202,17 @@ private:
 
     // Hito 20: HUD del juego (HP / Ammo / crosshair) y menu de pausa.
     // Implementado via el OverlayDraw del ViewportPanel — drawlist de
-    // ImGui. Visible solo en `EditorMode::Play`. `m_paused` togglea el
-    // menu modal con Esc; mientras esta activo el FpsCamera no procesa
-    // input (gameplay congelado).
-    struct HudState {
-        int hp   = 100;
-        int ammo = 30;
-    };
-    HudState m_hud;
-    bool     m_paused = false;
+    // ImGui. Visible solo en `EditorMode::Play`. El estado vive en
+    // `engine/game/GameState` (singleton) para que los scripts Lua
+    // puedan leerlo/mutarlo via la tabla `hud`. Esc togglea
+    // `GameState::paused()`; mientras esta activo el FpsCamera no
+    // procesa input (gameplay congelado).
+    // `m_pausedLastFrame` permite detectar transiciones de
+    // `GameState::paused()` y sincronizar `SDL_SetRelativeMouseMode`
+    // (cursor visible cuando pausado, atrapado durante gameplay). Es
+    // unica fuente de verdad para el cursor en Play Mode — los
+    // handlers de Esc y "Continuar" solo tocan el flag.
+    bool m_pausedLastFrame = false;
 
     /// @brief Dibuja el HUD del juego + menu de pausa (cuando aplica)
     ///        sobre el panel Viewport via drawlist de ImGui. Llamado
@@ -227,6 +230,14 @@ private:
     ///        en Editor Mode. Implementado en `EditorOverlay.cpp`.
     void drawEditorOverlay(struct ImDrawList* dl,
                            float x0, float y0, float w, float h);
+
+    /// @brief Elimina la entidad actualmente seleccionada del scene.
+    ///        No-op si no hay seleccion o si la entidad es un tile del
+    ///        mapa (`Tile_X_Y`, vienen del GridMap y reaparecen al
+    ///        rebuild). Limpia side-effects (Jolt body) antes del
+    ///        destroy. Llamado desde el handler de tecla Delete/Backspace
+    ///        en `processEvents`.
+    void deleteSelectedEntity();
     std::unique_ptr<PhysicsWorld> m_physicsWorld;
     std::unique_ptr<SkyboxRenderer> m_skyboxRenderer;
     std::unique_ptr<ShadowPass> m_shadowPass; // Hito 16

@@ -76,6 +76,16 @@ public:
         return r;
     }
 
+    /// @brief Demo del Hito 20 Bloque 5: request para crear una entidad
+    ///        con ScriptComponent apuntando a `scripts/hud_demo.lua`,
+    ///        que ejercita la tabla `hud` (setHp/setAmmo/setPaused).
+    void requestSpawnHudDemo() { m_spawnHudDemoRequested = true; }
+    bool consumeSpawnHudDemoRequest() {
+        const bool r = m_spawnHudDemoRequested;
+        m_spawnHudDemoRequested = false;
+        return r;
+    }
+
     /// @brief Demo del Hito 9: request para crear una entidad con
     ///        AudioSourceComponent (beep.wav loop + 3D) en una esquina del
     ///        mapa. `EditorApplication` la consume despues de `draw()`.
@@ -260,6 +270,7 @@ private:
     ProjectAction m_projectAction = ProjectAction::None;
     bool m_hasProject = false;
     bool m_spawnRotatorRequested = false;
+    bool m_spawnHudDemoRequested = false;
     bool m_spawnAudioSourceRequested = false;
     bool m_spawnPointLightRequested = false;
     bool m_spawnPhysicsBoxRequested = false;

@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "core/math/AABB.h"
+#include "engine/game/GameState.h"
 #include "engine/scene/ViewportPick.h"
 #include "engine/world/GridMap.h"
 #include "platform/Window.h"
@@ -24,6 +25,9 @@ void EditorApplication::enterPlayMode() {
     SDL_SetRelativeMouseMode(SDL_TRUE);
     // Descartar cualquier delta acumulado para evitar un salto inicial de la vista.
     SDL_GetRelativeMouseState(nullptr, nullptr);
+    // Reset del tracker de pausa: arrancamos sin pausa, asi que la
+    // primera transicion seria paused=true y el sync mostrara el cursor.
+    m_pausedLastFrame = false;
     Log::editor()->info("Play Mode activo (WASD + mouse. Esc para pausar)");
 }
 
@@ -31,7 +35,9 @@ void EditorApplication::exitPlayMode() {
     m_mode = EditorMode::Editor;
     m_ui.setMode(EditorMode::Editor);
     SDL_SetRelativeMouseMode(SDL_FALSE);
-    m_paused = false; // limpiar estado de pausa al volver al editor
+    // Resetea HUD + pause al baseline para que el proximo Play Mode
+    // arranque limpio.
+    GameState::reset();
     Log::editor()->info("Editor Mode activo");
 }
 
@@ -46,10 +52,26 @@ void EditorApplication::updateCameras(f32 dt) {
         if (panDx != 0.0f || panDy != 0.0f) m_editorCamera.applyPan(panDx, panDy);
         if (wheel != 0.0f) m_editorCamera.applyWheel(wheel);
     } else {
+        // Sync cursor con paused. Detectamos la transicion (no llamamos
+        // SDL cada frame) para soportar todos los caminos que cambian la
+        // pausa: tecla Esc, click en "Continuar", o un script Lua via
+        // `hud.setPaused`. SDL_SetRelativeMouseMode(FALSE) muestra el
+        // cursor; (TRUE) lo atrapa para gameplay.
+        const bool nowPaused = GameState::paused();
+        if (nowPaused != m_pausedLastFrame) {
+            if (nowPaused) {
+                SDL_SetRelativeMouseMode(SDL_FALSE);
+            } else {
+                SDL_SetRelativeMouseMode(SDL_TRUE);
+                SDL_GetRelativeMouseState(nullptr, nullptr); // descartar delta
+            }
+            m_pausedLastFrame = nowPaused;
+        }
+
         // Hito 20: con el menu de pausa visible el gameplay se
         // congela — no leemos input ni actualizamos posicion del
         // jugador. El cursor esta libre para clickear botones.
-        if (m_paused) return;
+        if (nowPaused) return;
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
         glm::vec3 dir(0.0f);
         if (keys[SDL_SCANCODE_W]) dir.z += 1.0f;
@@ -125,12 +147,13 @@ void EditorApplication::drawGameOverlay(ImDrawList* dl,
                      valCol, buf);
     };
 
+    const HudState& hud = GameState::hud();
     constexpr float pad = 24.0f;
-    drawHudBlock(x0 + pad,             y0 + h - 70.0f - pad, "HP",   m_hud.hp);
-    drawHudBlock(x0 + w - 140.0f - pad, y0 + h - 70.0f - pad, "AMMO", m_hud.ammo);
+    drawHudBlock(x0 + pad,             y0 + h - 70.0f - pad, "HP",   hud.hp);
+    drawHudBlock(x0 + w - 140.0f - pad, y0 + h - 70.0f - pad, "AMMO", hud.ammo);
 
     // --- Menu de pausa ---
-    if (m_paused) {
+    if (GameState::paused()) {
         // Overlay oscuro cubre todo el panel Viewport.
         dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x0 + w, y0 + h),
                            IM_COL32(0, 0, 0, 180));
@@ -192,9 +215,9 @@ void EditorApplication::drawGameOverlay(ImDrawList* dl,
                 Log::editor()->info("PauseMenu click: {}", buttons[i].label);
                 switch (buttons[i].action) {
                     case 0: // Resume
-                        m_paused = false;
-                        SDL_SetRelativeMouseMode(SDL_TRUE);
-                        SDL_GetRelativeMouseState(nullptr, nullptr);
+                        // Sync de cursor lo hace updateCameras al detectar
+                        // la transicion paused=true -> false.
+                        GameState::paused() = false;
                         break;
                     case 1: // Options
                         Log::editor()->info("Pause: 'Opciones' aun no implementado.");

@@ -72,6 +72,12 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar rotador demo", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnRotator();
             }
+            // Demo Hito 20 Bloque 5: spawnea una entidad invisible con
+            // ScriptComponent apuntando a hud_demo.lua. En Play Mode el
+            // script setea HP=75/Ammo=12 y dren a HP=0 -> auto-pausa.
+            if (ImGui::MenuItem("Agregar HUD demo", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnHudDemo();
+            }
             // Demo Hito 9: spawnea una entidad con AudioSourceComponent
             // (beep.wav loop 3D) en una esquina del mapa. En Play Mode,
             // acercarse debería subir el volumen por atenuacion 3D.
