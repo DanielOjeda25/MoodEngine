@@ -10,7 +10,6 @@
 #include "engine/render/opengl/OpenGLRenderer.h"
 #include "engine/render/opengl/OpenGLShader.h"
 #include "engine/render/LightGrid.h"
-#include "engine/ui/UiLayer.h"
 #include "engine/render/opengl/OpenGLCubemapTexture.h"
 #include "engine/render/opengl/OpenGLSSBO.h"
 #include "engine/render/opengl/OpenGLTexture.h"
@@ -282,10 +281,6 @@ EditorApplication::EditorApplication() {
     m_scriptSystem = std::make_unique<ScriptSystem>();
     m_lightSystem  = std::make_unique<LightSystem>();
     m_animationSystem = std::make_unique<AnimationSystem>(); // Hito 19
-    // Hito 20: capa de UI del juego (RmlUi). Distinto de Dear ImGui que
-    // es la UI del editor. Si la inicializacion de RmlUi falla, el
-    // editor sigue funcionando sin UI de juego.
-    m_uiLayer = std::make_unique<UiLayer>();
     // Hito 12: PhysicsWorld (Jolt). Init es pesado la primera vez del proceso
     // (Factory + RegisterTypes) pero instancias subsecuentes son baratas.
     m_physicsWorld = std::make_unique<PhysicsWorld>();
@@ -312,9 +307,14 @@ EditorApplication::EditorApplication() {
     m_ui.viewport().setOverlayDraw(
         [this](ImDrawList* dl, float x0, float y0, float w, float h) {
             if (!m_scene) return;
-            // Play Mode: sin overlays de editor (iconos, gizmos, halo).
-            // El jugador no deberia ver marcadores de seleccion en el juego.
-            if (m_mode == EditorMode::Play) return;
+
+            // Play Mode: dibujar HUD del juego (HP / Ammo / crosshair) +
+            // menu de pausa cuando esta activo. No dibujamos gizmos /
+            // iconos / outlines del editor (al jugador no le interesan).
+            if (m_mode == EditorMode::Play) {
+                drawGameOverlay(dl, x0, y0, w, h);
+                return;
+            }
             const glm::mat4 vp = m_lastProjection * m_lastView;
 
             // Helper: worldPos -> pixel-space.
@@ -1021,11 +1021,6 @@ EditorApplication::~EditorApplication() {
     m_audioSystem.reset();
     m_audioDevice.reset();
     m_lightSystem.reset();
-    // Hito 20: el UiLayer debe destruirse antes que GL muera porque
-    // RmlUi puede emitir glDeleteTextures durante Shutdown. Como el
-    // editor cleanup destruye la window/contexto al final, ordenamos
-    // este reset cerca del top.
-    m_uiLayer.reset();
     m_animationSystem.reset();
     m_physicsWorld.reset();
     m_iblBrdfLut.reset();
@@ -1072,20 +1067,13 @@ void EditorApplication::processEvents() {
         } else if (ev.type == SDL_KEYDOWN &&
                    ev.key.keysym.sym == SDLK_ESCAPE &&
                    m_mode == EditorMode::Play) {
-            // Hito 20 Bloque 4: Esc togglea menu de pausa en lugar de
-            // salir directo. Sin pausa -> mostrar menu + cursor visible.
-            // Con pausa -> cerrar menu + cursor relativo (gameplay).
-            // Si el UiLayer no esta disponible, fallback al
-            // comportamiento previo (exit directo).
-            if (m_uiLayer && m_uiLayer->isAvailable()) {
-                const bool wasPaused = m_uiLayer->isPauseVisible();
-                m_uiLayer->setPauseVisible(!wasPaused);
-                SDL_SetRelativeMouseMode(wasPaused ? SDL_TRUE : SDL_FALSE);
-                if (wasPaused) {
-                    SDL_GetRelativeMouseState(nullptr, nullptr); // descartar delta
-                }
-            } else {
-                exitPlayMode();
+            // Hito 20: Esc togglea menu de pausa. Sin pausa -> mostrar
+            // menu + cursor visible. Con pausa -> cerrar menu + cursor
+            // relativo (gameplay).
+            m_paused = !m_paused;
+            SDL_SetRelativeMouseMode(m_paused ? SDL_FALSE : SDL_TRUE);
+            if (!m_paused) {
+                SDL_GetRelativeMouseState(nullptr, nullptr); // descartar delta acumulado
             }
         } else if (ev.type == SDL_KEYDOWN &&
                    ev.key.keysym.sym == SDLK_F1 &&
@@ -1140,16 +1128,14 @@ void EditorApplication::enterPlayMode() {
     SDL_SetRelativeMouseMode(SDL_TRUE);
     // Descartar cualquier delta acumulado para evitar un salto inicial de la vista.
     SDL_GetRelativeMouseState(nullptr, nullptr);
-    // Hito 20: HUD visible solo en Play Mode.
-    if (m_uiLayer) m_uiLayer->setHudVisible(true);
-    Log::editor()->info("Play Mode activo (WASD + mouse. Esc para salir)");
+    Log::editor()->info("Play Mode activo (WASD + mouse. Esc para pausar)");
 }
 
 void EditorApplication::exitPlayMode() {
     m_mode = EditorMode::Editor;
     m_ui.setMode(EditorMode::Editor);
     SDL_SetRelativeMouseMode(SDL_FALSE);
-    if (m_uiLayer) m_uiLayer->setHudVisible(false);
+    m_paused = false; // limpiar estado de pausa al volver al editor
     Log::editor()->info("Editor Mode activo");
 }
 
@@ -1164,10 +1150,10 @@ void EditorApplication::updateCameras(f32 dt) {
         if (panDx != 0.0f || panDy != 0.0f) m_editorCamera.applyPan(panDx, panDy);
         if (wheel != 0.0f) m_editorCamera.applyWheel(wheel);
     } else {
-        // Hito 20 Bloque 4: con el menu de pausa visible el gameplay
-        // se congela — no leemos input ni actualizamos posicion del
-        // jugador. El cursor esta libre para el menu RmlUi.
-        if (m_uiLayer && m_uiLayer->isPauseVisible()) return;
+        // Hito 20: con el menu de pausa visible el gameplay se
+        // congela — no leemos input ni actualizamos posicion del
+        // jugador. El cursor esta libre para clickear botones.
+        if (m_paused) return;
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
         glm::vec3 dir(0.0f);
         if (keys[SDL_SCANCODE_W]) dir.z += 1.0f;
@@ -1322,51 +1308,6 @@ int EditorApplication::run() {
         processViewportPrefabDrop();
         processViewportMaterialDrop();
 
-        // Hito 20 Bloque 4: consumir acciones del menu de pausa
-        // (botones del overlay). Resume cierra el menu y vuelve al
-        // gameplay; Quit sale del Play Mode; Options muestra un popup
-        // placeholder por ahora.
-        if (m_uiLayer) {
-            switch (m_uiLayer->consumePauseAction()) {
-                case UiLayer::PauseAction::Resume:
-                    m_uiLayer->setPauseVisible(false);
-                    SDL_SetRelativeMouseMode(SDL_TRUE);
-                    SDL_GetRelativeMouseState(nullptr, nullptr);
-                    break;
-                case UiLayer::PauseAction::Quit:
-                    m_uiLayer->setPauseVisible(false);
-                    exitPlayMode();
-                    break;
-                case UiLayer::PauseAction::Options:
-                    Log::editor()->info(
-                        "Pause: 'Opciones' aun no implementado.");
-                    break;
-                case UiLayer::PauseAction::None:
-                default:
-                    break;
-            }
-        }
-
-        // Hito 20 Bloque 4: input del mouse al UiLayer cuando el menu de
-        // pausa esta visible. Convertimos NDC del ViewportPanel a pixel
-        // coords del FB, y rute amos clicks al RmlUi context. Solo si el
-        // mouse cae sobre la imagen del viewport (no clickeamos botones
-        // de la pausa accidentalmente al apretar afuera).
-        if (m_uiLayer && m_uiLayer->isPauseVisible()
-            && m_ui.viewport().imageHovered() && m_viewportFb) {
-            const float ndcX = m_ui.viewport().mouseNdcX();
-            const float ndcY = m_ui.viewport().mouseNdcY();
-            const int px = static_cast<int>(
-                (ndcX * 0.5f + 0.5f) * static_cast<f32>(m_viewportFb->width()));
-            // ViewportPanel devuelve NDC con Y+=arriba (convencion GL),
-            // RmlUi espera origen TOP-left. Invertimos Y.
-            const int py = static_cast<int>(
-                (1.0f - (ndcY * 0.5f + 0.5f)) * static_cast<f32>(m_viewportFb->height()));
-            m_uiLayer->processMouseMove(px, py);
-            if (ImGui::IsMouseClicked(0))  m_uiLayer->processMouseButton(0, true);
-            if (ImGui::IsMouseReleased(0)) m_uiLayer->processMouseButton(0, false);
-        }
-
         // 3) Input -> camaras.
         updateCameras(dt);
 
@@ -1426,6 +1367,148 @@ int EditorApplication::run() {
     }
 
     return 0;
+}
+
+void EditorApplication::drawGameOverlay(ImDrawList* dl,
+                                          float x0, float y0,
+                                          float w, float h) {
+    // Convencion: TODAS las coords del overlay son screen-space del
+    // panel Viewport (origen top-left en x0,y0). El drawlist clip rect
+    // ya esta seteado al area del Image por el ViewportPanel.
+
+    // --- Crosshair ---
+    {
+        const float cx = x0 + w * 0.5f;
+        const float cy = y0 + h * 0.5f;
+        const float r  = 6.0f;
+        const ImU32 col = IM_COL32(255, 255, 255, 220);
+        const ImU32 outline = IM_COL32(0, 0, 0, 220);
+        // Cruz con outline (negra atras, blanca encima — legible
+        // contra cualquier escena).
+        dl->AddLine(ImVec2(cx - r, cy), ImVec2(cx + r, cy), outline, 3.0f);
+        dl->AddLine(ImVec2(cx, cy - r), ImVec2(cx, cy + r), outline, 3.0f);
+        dl->AddLine(ImVec2(cx - r, cy), ImVec2(cx + r, cy), col,     1.5f);
+        dl->AddLine(ImVec2(cx, cy - r), ImVec2(cx, cy + r), col,     1.5f);
+    }
+
+    // --- HUD blocks (HP + AMMO) ---
+    auto drawHudBlock = [&](float bx, float by, const char* label, int value) {
+        constexpr float bw = 140.0f;
+        constexpr float bh = 70.0f;
+        const ImU32 bg     = IM_COL32(0, 0, 0, 180);
+        const ImU32 border = IM_COL32(255, 255, 255, 100);
+        const ImU32 lblCol = IM_COL32(220, 220, 220, 220);
+        const ImU32 valCol = IM_COL32(255, 255, 255, 255);
+
+        const ImVec2 a(bx, by);
+        const ImVec2 b(bx + bw, by + bh);
+        dl->AddRectFilled(a, b, bg, 4.0f);
+        dl->AddRect(a, b, border, 4.0f, 0, 2.0f);
+
+        char buf[16];
+        std::snprintf(buf, sizeof(buf), "%d", value);
+
+        // Label arriba (font size default ~14px), value grande (~28px
+        // via scale). ImDrawList no tiene font-size param — usamos el
+        // truco de scale via AddText con un font cargado, o
+        // sub-rectangulo. Para simpleza, escribimos label normal y
+        // value con un Pos con offset que simula tamaño visual.
+        const ImVec2 lblSz = ImGui::CalcTextSize(label);
+        dl->AddText(ImVec2(bx + (bw - lblSz.x) * 0.5f, by + 8.0f),
+                     lblCol, label);
+
+        // Para el value, usamos el font default + indicador visual con
+        // padding. El "tamaño grande" emula con offset Y mas grande.
+        const ImVec2 valSz = ImGui::CalcTextSize(buf);
+        dl->AddText(ImVec2(bx + (bw - valSz.x) * 0.5f, by + bh - valSz.y - 12.0f),
+                     valCol, buf);
+    };
+
+    constexpr float pad = 24.0f;
+    drawHudBlock(x0 + pad,             y0 + h - 70.0f - pad, "HP",   m_hud.hp);
+    drawHudBlock(x0 + w - 140.0f - pad, y0 + h - 70.0f - pad, "AMMO", m_hud.ammo);
+
+    // --- Menu de pausa ---
+    if (m_paused) {
+        // Overlay oscuro cubre todo el panel Viewport.
+        dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x0 + w, y0 + h),
+                           IM_COL32(0, 0, 0, 180));
+
+        // Panel cuadrado centrado. Tamanio adaptativo: 50% del ancho
+        // del viewport con clamp [320, 520]. Asi escala con el panel
+        // sin distorsionarse.
+        const float panelW = std::clamp(w * 0.5f, 320.0f, 520.0f);
+        const float panelH = 360.0f;
+        const float px = x0 + (w - panelW) * 0.5f;
+        const float py = y0 + (h - panelH) * 0.5f;
+        const ImU32 panelBg     = IM_COL32(20, 22, 28, 230);
+        const ImU32 panelBorder = IM_COL32(255, 255, 255, 100);
+        dl->AddRectFilled(ImVec2(px, py), ImVec2(px + panelW, py + panelH),
+                           panelBg, 6.0f);
+        dl->AddRect(ImVec2(px, py), ImVec2(px + panelW, py + panelH),
+                     panelBorder, 6.0f, 0, 2.0f);
+
+        // Titulo "PAUSA" centrado.
+        const char* title = "PAUSA";
+        const ImVec2 titleSz = ImGui::CalcTextSize(title);
+        dl->AddText(ImVec2(px + (panelW - titleSz.x) * 0.5f, py + 28.0f),
+                     IM_COL32(255, 255, 255, 255), title);
+
+        // Botones — cada uno con hit-testing + click via ImGui.
+        // Visualmente: rect lleno con borde, label centrado, hover
+        // resalta el background.
+        struct PauseButton {
+            const char* label;
+            int action; // 0 = Resume, 1 = Options, 2 = Quit
+        };
+        const PauseButton buttons[3] = {
+            {"Continuar",      0},
+            {"Opciones",       1},
+            {"Salir al editor", 2},
+        };
+        constexpr float btnH    = 50.0f;
+        constexpr float btnGap  = 12.0f;
+        const float btnW = panelW - 48.0f;
+        const float bx = px + 24.0f;
+        const float by0 = py + 90.0f;
+
+        for (int i = 0; i < 3; ++i) {
+            const float by = by0 + i * (btnH + btnGap);
+            const ImVec2 a(bx, by), b(bx + btnW, by + btnH);
+            // NOTA: NO usamos `viewport().imageHovered()` aqui porque
+            // ViewportPanel resetea ese flag al inicio del frame y solo
+            // lo setea DESPUES de invocar este callback. IsMouseHoveringRect
+            // ya es un test de pixel puro (clip por current clip rect).
+            const bool hovered = ImGui::IsMouseHoveringRect(a, b);
+            const ImU32 bg = hovered
+                ? IM_COL32(80, 90, 110, 240)
+                : IM_COL32(60, 65, 80, 220);
+            dl->AddRectFilled(a, b, bg, 4.0f);
+            dl->AddRect(a, b, IM_COL32(255, 255, 255, 100), 4.0f, 0, 1.0f);
+            const ImVec2 sz = ImGui::CalcTextSize(buttons[i].label);
+            dl->AddText(ImVec2(bx + (btnW - sz.x) * 0.5f,
+                                by + (btnH - sz.y) * 0.5f),
+                         IM_COL32(255, 255, 255, 255), buttons[i].label);
+
+            if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                Log::editor()->info("PauseMenu click: {}", buttons[i].label);
+                switch (buttons[i].action) {
+                    case 0: // Resume
+                        m_paused = false;
+                        SDL_SetRelativeMouseMode(SDL_TRUE);
+                        SDL_GetRelativeMouseState(nullptr, nullptr);
+                        break;
+                    case 1: // Options
+                        Log::editor()->info("Pause: 'Opciones' aun no implementado.");
+                        break;
+                    case 2: // Quit
+                        exitPlayMode();
+                        break;
+                    default: break;
+                }
+            }
+        }
+    }
 }
 
 } // namespace Mood

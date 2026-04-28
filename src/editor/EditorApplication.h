@@ -45,7 +45,6 @@ class PhysicsWorld;
 class SkyboxRenderer;
 class ShadowPass;
 class AnimationSystem;
-class UiLayer;
 
 class EditorApplication {
 public:
@@ -199,7 +198,25 @@ private:
     std::unique_ptr<AudioSystem> m_audioSystem;
     std::unique_ptr<LightSystem> m_lightSystem;
     std::unique_ptr<AnimationSystem> m_animationSystem; // Hito 19
-    std::unique_ptr<UiLayer> m_uiLayer; // Hito 20: RmlUi (UI del juego)
+
+    // Hito 20: HUD del juego (HP / Ammo / crosshair) y menu de pausa.
+    // Implementado via el OverlayDraw del ViewportPanel — drawlist de
+    // ImGui. Visible solo en `EditorMode::Play`. `m_paused` togglea el
+    // menu modal con Esc; mientras esta activo el FpsCamera no procesa
+    // input (gameplay congelado).
+    struct HudState {
+        int hp   = 100;
+        int ammo = 30;
+    };
+    HudState m_hud;
+    bool     m_paused = false;
+
+    /// @brief Dibuja el HUD del juego + menu de pausa (cuando aplica)
+    ///        sobre el panel Viewport via drawlist de ImGui. Llamado
+    ///        desde el `OverlayDraw` registrado en el ctor cuando el
+    ///        editor esta en Play Mode.
+    void drawGameOverlay(struct ImDrawList* dl,
+                         float x0, float y0, float w, float h);
     std::unique_ptr<PhysicsWorld> m_physicsWorld;
     std::unique_ptr<SkyboxRenderer> m_skyboxRenderer;
     std::unique_ptr<ShadowPass> m_shadowPass; // Hito 16

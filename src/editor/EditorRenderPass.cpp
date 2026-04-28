@@ -28,7 +28,6 @@
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/render/opengl/OpenGLSSBO.h"
 #include "engine/render/opengl/OpenGLShader.h"
-#include "engine/ui/UiLayer.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
@@ -596,21 +595,10 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                               m_exposure, m_tonemap);
         m_viewportFb->unbind();
     }
-
-    // Hito 20: UI del juego (RmlUi) por encima de la escena. Bindeamos
-    // el m_viewportFb LDR y dibujamos los Documents activos. Sin
-    // composite separado: la UI del juego pinta directo sobre el
-    // viewport final que ImGui muestra.
-    if (m_uiLayer && m_uiLayer->isAvailable() && m_viewportFb) {
-        m_uiLayer->resize(m_viewportFb->width(), m_viewportFb->height());
-        m_viewportFb->bind();
-        glViewport(0, 0,
-                   static_cast<GLsizei>(m_viewportFb->width()),
-                   static_cast<GLsizei>(m_viewportFb->height()));
-        m_uiLayer->update();
-        m_uiLayer->render();
-        m_viewportFb->unbind();
-    }
+    // Hito 20: la UI del juego (HUD + menu de pausa) la dibuja el
+    // OverlayDraw del ViewportPanel con drawlist de ImGui — ver
+    // EditorApplication ctor donde se registra el callback. No usa
+    // FB propio: ImGui pinta encima del Image del FB final.
 }
 
 } // namespace Mood
