@@ -214,9 +214,19 @@ private:
     /// @brief Dibuja el HUD del juego + menu de pausa (cuando aplica)
     ///        sobre el panel Viewport via drawlist de ImGui. Llamado
     ///        desde el `OverlayDraw` registrado en el ctor cuando el
-    ///        editor esta en Play Mode.
+    ///        editor esta en Play Mode. Implementado en
+    ///        `EditorPlayMode.cpp`.
     void drawGameOverlay(struct ImDrawList* dl,
                          float x0, float y0, float w, float h);
+
+    /// @brief Dibuja iconos de entidades (Light/Audio), halo de seleccion
+    ///        y gizmo (translate/rotate/scale) sobre el viewport via
+    ///        drawlist de ImGui. Tambien atiende hotkeys W/E/R/Period y
+    ///        Delete/Backspace para borrar entidad. Llamado desde el
+    ///        `OverlayDraw` registrado en el ctor cuando el editor esta
+    ///        en Editor Mode. Implementado en `EditorOverlay.cpp`.
+    void drawEditorOverlay(struct ImDrawList* dl,
+                           float x0, float y0, float w, float h);
     std::unique_ptr<PhysicsWorld> m_physicsWorld;
     std::unique_ptr<SkyboxRenderer> m_skyboxRenderer;
     std::unique_ptr<ShadowPass> m_shadowPass; // Hito 16

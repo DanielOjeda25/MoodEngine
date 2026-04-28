@@ -295,8 +295,11 @@ add_executable(MoodEditor
 
     src/editor/DemoSpawners.cpp
     src/editor/EditorApplication.cpp
+    src/editor/EditorOverlay.cpp
+    src/editor/EditorPlayMode.cpp
     src/editor/EditorProjectActions.cpp
     src/editor/EditorRenderPass.cpp
+    src/editor/EditorScene.cpp
     src/editor/EditorUI.cpp
     src/editor/MenuBar.cpp
     src/editor/StatusBar.cpp
