@@ -1,89 +1,118 @@
-# Plan — Hito 23: TBD (candidatos por priorizar)
+# Plan — Hito 23: AI / pathfinding básico
 
 > **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 22 cerrado).
 >
-> **Estado:** **TBD**. El Hito 22 cerró en `v0.22.0-hito22` con el workflow de scripting (Asset Browser tab + drop + Nuevo Script + LuaApiPanel) + bonus fix del Fox al recargar. Antes de empezar el Hito 23, conversar con el dev qué línea continúa.
+> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
 
 ---
 
-## Candidato A (arrastrado): Mini editor de scripts in-place
+## Objetivo
 
-**Por qué importa:** fue el Bloque 5 stretch del Hito 22 que se difirió. Hoy el dev edita los `.lua` en VS Code y el hot-reload del ScriptSystem levanta los cambios — aceptable pero rompe el flow ("alt-tab al editor de código, escribir, guardar, alt-tab al editor del motor para ver el efecto").
+Primer eslabón de "el motor puede sostener un juego". Hasta el Hito 22 había un editor funcional + scripting + render + física + packaging — pero nada que el jugador pueda enfrentar. Este hito agrega:
 
-**Bloques tentativos:**
-- **A1 — Evaluación de `ImGuiColorTextEdit`** (https://github.com/BalazsJako/ImGuiColorTextEdit): license MIT compatible, ~3000 LOC, header + cpp. Pasa por CPM. Smoke test de integración.
-- **A2 — `ScriptEditorPanel`**: nuevo panel registrado en `EditorUI`. Click en un script del Asset Browser (selección, no drag) lo abre acá.
-- **A3 — Save con Ctrl+S**: escribe al disco el contenido del editor. El hot-reload del `ScriptSystem` (mtime check) lo levanta automáticamente.
-- **A4 — Error highlighting**: la línea del último `lastError` del ScriptComponent se pinta en rojo en el editor. Si la entidad seleccionada tiene script con error, mostrarlo.
+- **A\* sobre GridMap** como función pura.
+- **`NavAgentComponent`** y **`NavSystem`** que mueven entidades hacia un target world-space.
+- **Demo enemigo** spawneable desde menú: una entidad que persigue al `FpsCamera` activo en Play Mode (editor o player).
+- **F1 debug** dibuja el path activo de cada NavAgent como línea cyan.
+- Tests headless del A\* + del integrador de NavAgent.
 
-**Riesgos:** ImGuiColorTextEdit es lib externa que afecta el tamaño del paquete. Verificar antes de abrazarla — si pesa mucho y solo el editor la usa, mantener PRIVATE en `mood_engine_lib` o solo en MoodEditor.
-
----
-
-## Candidato B: Exposed properties Lua
-
-**Por qué importa:** estilo Unity. Hoy los scripts tienen constantes hardcoded (`local DEG_PER_SEC = 45.0`). Un dev quiere setearlas desde el Inspector sin tocar el `.lua`. Esto es la diferencia entre "scripts genéricos" y "scripts reusables como componentes".
-
-**Bloques tentativos:**
-- **B1 — Sintaxis declarativa**: el script declara `--[[exposed]] local speed = 5.0` y un pre-pass del ScriptSystem (parser de comentarios mágicos) detecta esos al cargar.
-- **B2 — Schema en `.moodmap`**: el `ScriptComponent` serializado guarda los overrides del usuario por entidad.
-- **B3 — Inspector dinámico**: al seleccionar una entidad con script, el Inspector lista las exposed properties con widgets según tipo (DragFloat para number, ColorEdit para vec3 RGB, InputText para string).
-- **B4 — Reload sin perder valores**: hot-reload no pisa los overrides del Inspector.
-
-**Riesgos:** schema upgrade del `.moodmap` con tipos arbitrarios. Decidir cómo persistir: number/string/bool/vec3 son fáciles; entity refs y arbitrary tables son tema.
+No-goals: state machines de comportamiento (idle/patrol/attack), behavior trees, navmeshes off-grid, line-of-sight checks, attack damage. Todo eso queda para hitos posteriores. Este hito entrega "una entidad se mueve hacia el jugador respetando muros" — la base mínima sobre la que se construye el resto.
 
 ---
 
-## Candidato C: AI / pathfinding básico
+## Criterios de aceptación
 
-**Por qué importa:** un shooter "Wolfenstein-like" necesita enemigos que se muevan. Hoy hay física pero no decisión. Pathfinding sobre el GridMap es la base.
+### Automáticos
 
-**Bloques tentativos:**
-- **C1 — A\* sobre GridMap**: función pura `findPath(map, start, end) -> vector<TileCoord>`. Tests headless directos.
-- **C2 — `NavAgentComponent`**: target + speed + path cache.
-- **C3 — Demo enemigo**: una entidad que persigue al player en Play Mode. Steering simple (dirección del próximo tile).
-- **C4 — Visualización del path**: en F1 debug, dibujar el path activo de cada NavAgent como línea cyan.
+- [ ] Compila sin warnings nuevos.
+- [ ] Tests A\* (sala vacía, con muros, sin path posible, start==goal, fuera del grid).
+- [ ] Tests NavSystem (agente avanza hacia target, llega y se queda quieto, recomputa al moverse el target).
+- [ ] Suite total ≥ 182 (sin regresiones).
 
-**Riesgos:** A\* sobre grid es directo. Off-grid (mallas con assimp con geometría arbitraria) requiere navmesh — V1 grid-only.
+### Visuales
 
----
-
-## Candidato D: Save / load de gameplay
-
-**Por qué importa:** el player carga un proyecto pero no puede "guardar partida". Si el HUD baja a HP=0, no hay forma de continuar después. Separa demo de juego real.
-
-**Bloques tentativos:**
-- **D1 — Schema `.moodsave`**: estado serializable del runtime (player position, HUD, scripts state, entity overrides). Distinto del `.moodmap` (snapshot vs definición).
-- **D2 — Quick save / Quick load**: hotkeys F5/F9 estilo Half-Life que persisten/restauran.
-- **D3 — Lua API**: `save.write(slot)` / `save.load(slot)` desde scripts.
-
-**Riesgos:** decidir qué se persiste y qué no. Texturas/meshes: NO. Transforms y scripts: SÍ. Rigid bodies de Jolt mantienen estado interno (velocidades) que sería ideal preservar.
+- [ ] `Ayuda > Agregar enemigo demo` spawnea una entidad en una esquina del mapa con `NavAgentComponent` apuntando al jugador.
+- [ ] En Play Mode, el enemigo se mueve hacia el jugador siguiendo el path por tiles libres; no atraviesa muros.
+- [ ] F1 (debug draw) dibuja el path activo de cada NavAgent como línea cyan + waypoint actual destacado.
+- [ ] Editor + MoodPlayer ejecutan el sistema igual (NavSystem vive en `mood_engine_lib`).
 
 ---
 
-## Candidato E: Networking básico
+## Bloque 1 — A\* sobre GridMap
 
-**No arrancar todavía.** Multiplayer es una bestia gigante (autoritativo vs P2P, lag compensation, sync de scripts...). Esperar hasta tener un juego concreto que lo pida.
+- [ ] `engine/world/Pathfinding.{h,cpp}`: función pura `findPath(map, start, goal, options) -> vector<TileCoord>`.
+  - Heurística Manhattan (L1) o octile (Chebyshev). V1: Manhattan, 4-connected sin diagonales (sin corner-cutting drama).
+  - Open set: `std::priority_queue<NodeF>`; closed set: `std::vector<bool>` (tamaño WxH).
+  - Retorna path vacío si no hay camino. Retorna `[start]` si start == goal.
+  - Tile sólido = obstáculo; tile vacío = walkable.
+- [ ] `tests/test_pathfinding.cpp`: 6 casos.
+  - Sala 8x8 vacía: path directo.
+  - Sala con muro al medio: path bordea.
+  - Sin camino (rodeado): path vacío.
+  - start == goal: `[start]`.
+  - start fuera del grid: vacío.
+  - Goal sólido: vacío (no se puede caminar adentro de un muro).
+
+## Bloque 2 — NavAgentComponent + NavSystem
+
+- [ ] `Components.h`: `NavAgentComponent { target, speed, active, path, pathIndex, repathAccumulator }`.
+- [ ] `systems/NavSystem.{h,cpp}`:
+  - `update(scene, map, mapWorldOrigin, dt)`.
+  - Throttle de pathfinding: cada 0.5s o si `||target - lastPathTarget|| > tileSize` recompute.
+  - Steering: toward `path[pathIndex]` en world XZ. `transform.position += dir * speed * dt`. Y queda fija (no salta paredes ni vuela).
+  - Colisión: usa `moveAndSlide` igual que el player.
+  - Avanza `pathIndex` cuando `||pos - waypoint|| < tileSize/2`.
+  - Cuando `pathIndex >= path.size()`, agente queda quieto (no recomputa).
+- [ ] EditorApplication + PlayerApplication invocan `m_navSystem->update(...)` cada frame entre Animation y Audio.
+- [ ] EditorApplication actualiza el `target` de cada NavAgent al `playCamera.position()` en Play Mode (helper `updateNavAgentTargets()` o lambda inline).
+
+## Bloque 3 — Demo enemigo
+
+- [ ] `Ayuda > Agregar enemigo demo`: spawnea una entidad "Enemigo" en una esquina del mapa con:
+  - Mesh: Fox.glb por simplicidad (ya está en assets, anima walk).
+  - Animator: clip "Walk".
+  - NavAgentComponent (target=0,0,0 inicial; el editor lo updatea al jugador).
+  - Sin RigidBody dynamic — el NavSystem ya hace moveAndSlide contra el grid; agregar Jolt dynamic causaría doble-handler.
+- [ ] `EditorUI::requestSpawnEnemyDemo` + `consumeSpawnEnemyDemoRequest`.
+- [ ] `EditorApplication::processSpawnEnemyDemoRequest()` en `DemoSpawners.cpp`.
+
+## Bloque 4 — F1 debug del path
+
+- [ ] En `EditorApplication::drawEditorScene3DOverlay` (o equivalente del player) cuando `m_debugDraw == true`:
+  - Iterar entidades con `NavAgentComponent`.
+  - Dibujar líneas cyan entre cada par consecutivo de waypoints en world space.
+  - Destacar el waypoint actual (`path[pathIndex]`) como cubo cyan brillante.
+
+## Bloque 5 — Integración con MoodPlayer
+
+- [ ] `PlayerApplication::run()` también invoca `m_navSystem->update(...)`.
+- [ ] PlayerApplication también actualiza el `target` del NavAgent — el `m_playCamera` es la "presa".
+- [ ] Smoke test: empaquetar un proyecto con un enemigo persistido. Doble-click → el enemigo persigue.
+
+## Bloque 6 — Tests + cierre
+
+- [ ] `tests/test_pathfinding.cpp` (6 casos del Bloque 1).
+- [ ] `tests/test_nav_system.cpp` (3-4 casos): agente avanza al target, se queda quieto al llegar, recomputa cuando target se mueve, no atraviesa muros.
+- [ ] Persistencia opcional del NavAgent en `.moodmap`: V1 NO se persiste (es runtime). El demo se vuelve a spawnear cada sesión. Si se reporta como bug, agregar al schema.
+- [ ] Smoke manual: editor + Play Mode + enemigo persigue + cierra. Doble-click en MoodPlayer empaquetado: ídem.
+- [ ] Commits atómicos: `feat(world)`, `feat(systems)`, `feat(editor)`, `test(world)`.
+- [ ] Tag `v0.23.0-hito23`.
+- [ ] Crear `docs/PLAN_HITO24.md`.
+- [ ] Actualizar `ESTADO_ACTUAL.md`, `HITOS.md`, `DECISIONS.md`.
 
 ---
 
-## Decisión recomendada
+## Decisiones a tomar
 
-Sin más contexto del dev:
-
-1. **Candidato A** (mini editor) si el dev valora cerrar la línea de scripting y tener un workflow pulido antes de avanzar. Es la continuidad natural del Hito 22.
-2. **Candidato C** (AI/pathfinding) si el dev quiere ver gameplay loop antes que polish UX. Sin enemigos no hay shooter.
-3. **Candidato B** (exposed properties) si el dev empieza a sentir que sus scripts son demasiado rígidos. Va bien después de A o C.
-
-Mi sugerencia: **Candidato C (AI/pathfinding)** porque es el feature más alto de la pirámide para un shooter. Sin enemigos AI todo lo anterior es plumbing — con el primer enemigo persiguiendo al player, el motor recién muestra que puede hacer un juego de verdad.
+- [ ] **¿4-connected o 8-connected?** V1: 4-connected sin diagonales — simple, sin riesgo de "corner cutting" (atravesar diagonalmente entre dos muros adyacentes). Diagonales se agregan en Hito futuro si se nota que los enemigos hacen movimientos visiblemente boxy.
+- [ ] **¿Persistir NavAgent en `.moodmap`?** V1 NO. Es runtime + scope tactical (target cambia cada frame). Si en el futuro el dev quiere "este enemigo arranca patrullando esta ruta", se agrega.
+- [ ] **¿Mesh del enemigo demo?** Fox.glb por reuso. En el futuro se puede crear un asset "Enemy.glb" propio o pedir uno CC0 de glTF Sample Assets.
 
 ---
 
-## Antes de arrancar
+## Riesgos identificados
 
-Cuando se elija el candidato:
-1. Borrar las secciones que no apliquen y dejar solo el plan del candidato elegido.
-2. Desglosar cada bloque con criterios de aceptación medibles.
-3. Identificar dependencias externas nuevas.
-4. Estimar bloques en sesiones (~2-4 hs cada uno).
-5. Listar pendientes arrastrados de Hitos 21/22 que se podrían atacar de paso (ver `HITOS.md` secciones "Pendientes menores detectados").
+- **Re-path cada 0.5s puede quedar visiblemente atrás del jugador** si éste corre rápido. Si pasa, bajar a 0.2s o re-pathear cuando el target se aleja > 2 tiles. Empezar con 0.5s y medir.
+- **moveAndSlide del NavSystem peleando con el player que también lo usa**: cada uno tiene su propio AABB independiente — el moveAndSlide es función pura, no hay state compartido. Sin conflicto.
+- **Path vacío en cada frame**: si el agente queda en un tile y el goal es inalcanzable, A\* corre 50fps gastando ciclos. El throttle de 0.5s lo limita pero igual. Mitigación: cache "last failed path" + back-off exponencial. Polish post-V1.
+- **Performance**: A\* sobre 8x8 = 64 nodos, trivial. Si en el futuro el GridMap escala a 64x64 (4096 nodos), el priority_queue empieza a notarse. V1 ignora.
