@@ -234,11 +234,13 @@ target_link_libraries(imgui PUBLIC
 )
 
 # ---------------------------------------------------------------------------
-# Ejecutable principal: MoodEditor
+# Libreria estatica del motor: compartida por MoodEditor + MoodPlayer
+# (Hito 21 Bloque 3). Contiene todo `core/`, `platform/`, `engine/`,
+# `systems/`. Lo unico que NO esta aca es `src/editor/` (paneles +
+# herramientas de edicion) y `src/player/` (loop standalone). Ambos
+# ejecutables linkean contra esta lib y agregan solo sus propios .cpp.
 # ---------------------------------------------------------------------------
-add_executable(MoodEditor
-    src/main.cpp
-
+add_library(mood_engine_lib STATIC
     src/core/Log.cpp
     src/core/LogRingSink.cpp
     src/core/Time.cpp
@@ -295,6 +297,39 @@ add_executable(MoodEditor
 
     src/engine/render/LightGrid.cpp
     src/engine/render/SceneRenderer.cpp
+)
+
+target_include_directories(mood_engine_lib PUBLIC
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+# PUBLIC: los consumidores (MoodEditor / MoodPlayer / mood_tests) heredan
+# todas estas dependencias sin tener que repetirlas. SDL2/glm/spdlog
+# aparecen en headers publicos del motor, asi que tienen que ser PUBLIC.
+target_link_libraries(mood_engine_lib PUBLIC
+    SDL2::SDL2
+    glm::glm
+    spdlog::spdlog
+    imgui
+    glad
+    stb
+    nlohmann_json::nlohmann_json
+    EnTT::EnTT
+    lua_static
+    sol2::sol2
+    miniaudio
+    assimp::assimp
+    Jolt
+    OpenGL::GL
+)
+
+mood_set_compiler_warnings(mood_engine_lib)
+
+# ---------------------------------------------------------------------------
+# Ejecutable principal: MoodEditor
+# ---------------------------------------------------------------------------
+add_executable(MoodEditor
+    src/main.cpp
 
     src/editor/DemoSpawners.cpp
     src/editor/EditorApplication.cpp
@@ -314,26 +349,9 @@ add_executable(MoodEditor
     src/editor/panels/HierarchyPanel.cpp
 )
 
-target_include_directories(MoodEditor PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-)
-
 target_link_libraries(MoodEditor PRIVATE
-    SDL2::SDL2
-    glm::glm
-    spdlog::spdlog
-    imgui
-    glad
-    stb
-    nlohmann_json::nlohmann_json
-    pfd
-    EnTT::EnTT
-    lua_static
-    sol2::sol2
-    miniaudio
-    assimp::assimp
-    Jolt
-    OpenGL::GL
+    mood_engine_lib
+    pfd # solo el editor usa portable-file-dialogs
 )
 
 mood_set_compiler_warnings(MoodEditor)
@@ -386,25 +404,10 @@ set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT MoodEdito
 add_executable(MoodPlayer
     src/player/main.cpp
     src/player/PlayerApplication.cpp
-
-    src/core/Log.cpp
-    src/core/LogRingSink.cpp
-    src/core/Time.cpp
-
-    src/platform/Window.cpp
-)
-
-target_include_directories(MoodPlayer PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
 )
 
 target_link_libraries(MoodPlayer PRIVATE
-    SDL2::SDL2
-    glm::glm
-    spdlog::spdlog
-    imgui
-    glad
-    OpenGL::GL
+    mood_engine_lib
 )
 
 mood_set_compiler_warnings(MoodPlayer)
@@ -417,6 +420,26 @@ if(WIN32)
         COMMENT "Copiando SDL2.dll junto a MoodPlayer"
     )
 endif()
+
+# Mismo deploy de shaders + assets que MoodEditor — para que el player
+# arranque desde build/debug/Debug/MoodPlayer.exe sin tener que copiar
+# nada a mano. Bloque 5 (PackageBuilder) usara estos mismos paths.
+add_custom_command(TARGET MoodPlayer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/shaders
+        $<TARGET_FILE_DIR:MoodPlayer>/shaders
+    COMMENT "Copiando shaders junto a MoodPlayer"
+)
+add_custom_command(TARGET MoodPlayer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:MoodPlayer>/assets
+    COMMENT "Copiando assets junto a MoodPlayer"
+)
+
+set_target_properties(MoodPlayer PROPERTIES
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
 
 # ---------------------------------------------------------------------------
 # Tests (doctest + CTest)
