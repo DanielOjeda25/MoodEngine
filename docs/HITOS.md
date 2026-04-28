@@ -666,3 +666,48 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Botón "Opciones" del menú de pausa**: arrastra del Hito 20. Sin un sistema de settings persistido el botón loguea "no implementado".
 - **Test E2E del flujo completo**: hoy `test_package_builder` cubre la lógica del packager pura, pero no se prueba el ciclo "editor → empaquetar → ejecutar player → cargar proyecto". **Trigger:** primer regression del flujo end-to-end (ej. game.json schema cambia y el player no lo lee).
 - **CI build**: el smoke test corre solo localmente. Un GitHub Action que compile editor + player + corra mood_tests sería el sello automático antes de mergear. **Trigger:** primera vez que un PR rompe `main`.
+
+---
+
+## Hito 22 — Workflow de scripting Lua (UX en el editor)
+
+**Objetivo:** cerrar el gap UX que tenía el motor entre "Lua corre" (Hito 8) y "el dev escribe scripts cómodo". La infra estaba: `ScriptComponent`, hot-reload por mtime, bindings, Inspector con InputText. Lo que faltaba: scripts en el Asset Browser, drop a entidades, "Nuevo Script" desde menú, doc panel.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — Scripts en Asset Browser:*
+- `AssetBrowserPanel` escanea `assets/scripts/*.lua` con metadata de line count. Sección colapsable nueva entre Materiales y Audio. Drag source con payload `MOOD_SCRIPT_ASSET` (string buffer 256 bytes con el path lógico — los scripts no pasan por AssetManager, los carga ScriptSystem on-demand).
+
+*Bloque 2 — Drop al viewport:*
+- `ViewportPanel::AssetDragKind::Script` + `consumeScriptDrop()` con NDC del cursor + path del script. `BeginDragDropTarget` acepta el nuevo payload.
+- `EditorApplication::processViewportScriptDrop`: pickEntity → si la entidad ya tiene `ScriptComponent` reemplaza el path + fuerza `loaded=false` (recarga vía mtime); si no, `addComponent`. Path persistido como `assets/<path_logico>` para mantener consistencia con los demos manualmente spawneados.
+- Highlight visual: extiende el flow de Material drop — `dragKind == Script` también activa el OBB amarillo sobre la entidad bajo el cursor.
+
+*Bloque 3 — "Nuevo Script..." en menú:*
+- `Archivo > Nuevo Script...` abre `pfd::save_file` con default name + filtro `*.lua`. Si el usuario elige un path fuera de `assets/scripts/`, redirige el archivo a esa carpeta (sino el AssetManager no lo encuentra).
+- Prompt para sobreescribir si existe.
+- Template mínimo: comentario con bindings disponibles + `function onUpdate(self, dt) end`.
+- `assetBrowser().rescan()` post-create — el script aparece sin reabrir editor.
+
+*Bloque 4 — Panel "Lua API":*
+- Nuevo `LuaApiPanel` registrado en `EditorUI::m_panels`. Tabs `self`/`hud`/`log`/`Lifecycle` con signature en color cian + descripción + snippet de uso en gris. Lista hardcoded — sumar manual al agregar bindings nuevos.
+
+*Bloque 5 (stretch) — Mini editor in-place:*
+- **Deferido al Hito 23.** Los 4 bloques anteriores ya entregan el grueso del workflow; el dev sigue editando en VS Code y el hot-reload del ScriptSystem levanta los cambios al guardar. `ImGuiColorTextEdit` como nueva dep CPM se evalúa cuando se retome.
+
+*Bonus fix arrastrado del Hito 19:*
+- `SceneLoader::applyEntitiesToScene` detecta meshes con esqueleto + clips y auto-agrega `AnimatorComponent` + `SkeletonComponent` con defaults razonables (clipName="" → primer clip, playing=true, loop=true). Sin esto, un Fox.glb guardado en `.moodmap` reaparecía en bind pose porque esos componentes no están en el schema del `SavedEntity`. Editor + MoodPlayer (que reusa `SceneLoader`) heredan el fix.
+
+*Bloque 6 — tests:*
+- `tests/test_scene_loader.cpp`: 3 casos headless. Mesh con skeleton gana Animator/Skeleton; mesh sin skeleton no; back-compat de paths v6 (texturas en lugar de `.material`) los envuelve en wrapper sin caer al missing.
+- Suite total **182/5234** (antes Hito 21 cerrado: 179/5221).
+
+**Siguiente paso tras completarlo:** Hito 23 (TBD). Plan en `docs/PLAN_HITO23.md` con candidatos. Si se sigue scripting, retomar el mini editor in-place.
+
+### Pendientes menores detectados en Hito 22
+
+- **Mini editor de código in-place**: deferido como Bloque 5 stretch. Punto de arranque natural si el Hito 23 sigue scripting. Necesita evaluar `ImGuiColorTextEdit` (license, tamaño de la dep CPM).
+- **Lista del LuaApiPanel hardcoded**: sumar manualmente al agregar bindings nuevos. Si llegan a 50+, vale la pena introspección automática vía sol2 (no trivial — sol2 no expone metadata estructurada). **Trigger:** primer dev que reporta "el panel quedó desactualizado".
+- **Drop a Hierarchy items**: hoy solo Viewport. Si el usuario quiere asignar script a una Light/Audio sin mesh visible, hoy tiene que clickearla y editarla en el Inspector. **Trigger:** primer pedido específico.
+- **Persistencia opcional del Animator (clipName / time)**: el auto-add usa defaults. Si el dev necesita clipName="Walk" guardado por entidad, hay que extender `SavedEntity` con un campo opcional `animator: { clipName, playing, loop }`.
+- **"Nuevo Script" abre el editor externo del usuario**: hoy crea el archivo y deja al dev hacer alt-tab. Una mejora UX sería invocar `start <path>` (Windows) tras crear, para que el editor default lo abra automáticamente. **Trigger:** primer usuario que diga "tuve que ir a buscar el archivo".

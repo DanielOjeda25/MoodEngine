@@ -6,7 +6,23 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 21 cerrado.**
+**Hito 22 cerrado.**
+Tag: `v0.22.0-hito22`.
+Verificado automático: suite doctest **182/5234** (+3 de `test_scene_loader` para el fix arrastrado del Fox). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo (smoke test): scripts dropeables desde el Asset Browser sobre entidades del viewport (`Drop script 'scripts/rotator.lua' -> entidad 'X'` en log), nuevo script via `Archivo > Nuevo Script...`, panel "Lua API" en el dockspace, Fox persistido en `.moodmap` se anima al cargar.
+
+**Bloques cerrados:**
+1. Sección "Scripts" en Asset Browser (scan `assets/scripts/*.lua` + drag source con payload `MOOD_SCRIPT_ASSET`).
+2. Drop al viewport (highlight OBB amarillo + `processViewportScriptDrop` que addOrReplace `ScriptComponent`).
+3. `Archivo > Nuevo Script...` (file dialog + template + force a `assets/scripts/` + rescan del browser).
+4. Panel "Lua API" con tabs `self`/`hud`/`log`/`Lifecycle` y snippets de uso.
+5. Mini editor in-place con `ImGuiColorTextEdit` — **deferido al Hito 23** (stretch del plan; los 4 bloques anteriores ya entregan el workflow base, el dev sigue editando en VS Code y el hot-reload del ScriptSystem levanta los cambios automáticamente).
+6. Tests headless + cierre.
+
+**Bonus fix arrastrado del Hito 19:** meshes con esqueleto + clips persistidos en `.moodmap` reaparecían en bind pose porque `AnimatorComponent` y `SkeletonComponent` no están en el schema del `SavedEntity`. `SceneLoader::applyEntitiesToScene` ahora detecta el caso (mismo check que `processViewportMeshDrop`) y los auto-agrega con defaults razonables (clipName="" → primer clip, playing=true, loop=true). Si el dev necesita un setup específico, el Inspector lo deja editar tras la carga.
+
+**Próximo paso:** Hito 23 (TBD). Plan en `docs/PLAN_HITO23.md` con candidatos. Nota arrastrada: el mini editor de scripts in-place quedó pendiente como punto de arranque natural si se elige seguir el workflow de scripting.
+
+### Hito 21 (anterior, ya cerrado)
 Tag: `v0.21.0-hito21`.
 Verificado automático: suite doctest **179/5221** (+8 de `test_package_builder`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo (smoke test): `Archivo > Empaquetar proyecto...` produce un paquete autocontenido (88 archivos en el smoke test) en la carpeta destino. Doble-click en el `MoodPlayer.exe` empaquetado abre la sala del proyecto con sus entidades persistidas (Fox + pyramid en el smoke test), corre Play Mode, Esc abre el menú de pausa, "Salir del juego" cierra limpio.
 
@@ -337,16 +353,16 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: definir y abrir el Hito 22
+### Tarea inmediata: definir y abrir el Hito 23
 
-El Hito 21 está cerrado (tag `v0.21.0-hito21` en origin). El próximo hito está **TBD**: hay candidatos esbozados en `docs/PLAN_HITO22.md` pero no se eligió aún. Antes de empezar a codear, conversar con el dev qué prioridad le da: workflow de scripting (Asset Browser tab + editor de código in-place), AI/pathfinding, networking, save/load de gameplay, o algo completamente nuevo que aparezca.
+El Hito 22 está cerrado (tag `v0.22.0-hito22` en origin). El próximo hito está **TBD**. Candidatos en `docs/PLAN_HITO23.md`. El más natural si se sigue scripting es retomar el mini editor in-place (Bloque 5 deferido), pero hay otras líneas perfectamente válidas: AI/pathfinding, save/load, exposed properties Lua, networking. Conversar con el dev antes de codear.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO22.md` (candidatos) y discutir con el dev qué se prioriza.
+1. Leer `docs/PLAN_HITO23.md` (candidatos) y discutir con el dev qué se prioriza.
 2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
 3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.22.0-hito22`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO23.md`.
+4. Al final: commits atómicos en español, merge a main, tag `v0.23.0-hito23`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO24.md`.
 
 ---
 

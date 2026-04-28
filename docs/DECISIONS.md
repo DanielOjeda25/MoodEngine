@@ -1848,3 +1848,30 @@ El player resuelve `<exe_dir>/game.json` con `SDL_GetBasePath()` (NO `current_pa
 - Se gana: cero ambigüedad sobre qué se incluye, packager simple y testeable headless.
 
 **Revisar si:** el primer dev reporta que el paquete pesa más de lo aceptable (criterio: el ratio de uso real / total < 30% Y el peso total > 50 MB). En ese caso, escribir el walker selectivo como mejora del Bloque 5.
+
+
+## 2026-04-28: Animator/Skeleton derivados del MeshAsset al cargar (Hito 22)
+
+**Contexto:** un mesh con esqueleto + animaciones (ej. `Fox.glb`) que se persiste en un `.moodmap` y luego se recarga, reaparece en bind pose sin animarse. El `SavedEntity` del schema actual guarda Mesh / Light / RigidBody / Environment / PrefabLink — pero NO `AnimatorComponent` ni `SkeletonComponent`. Cuando `SceneLoader::applyEntitiesToScene` levanta la entidad, el `MeshRendererComponent` queda intacto pero el `AnimationSystem` no la procesa porque le faltan los dos componentes que justamente activan el flow.
+
+Las opciones eran:
+1. **Migrar el schema**: extender `SavedEntity` con `animator: { clipName, time, playing, loop }` y `skeleton` (vacío o serializado). Bumpear `k_MoodmapFormatVersion`. Mantener back-compat con archivos sin esos campos (defaults razonables).
+2. **Derivar de la metadata del mesh**: cuando `applyEntitiesToScene` ve un MeshRenderer cuyo `MeshAsset` tiene `hasSkeleton() && !animations.empty()`, auto-agregar `AnimatorComponent` (defaults) + `SkeletonComponent` (vacío, lo llena el AnimationSystem). Sin tocar el schema.
+
+**Decisión:** opción 2. Mismo helper que ya usa `processViewportMeshDrop` (Hito 19 polish) — replicado en `SceneLoader`.
+
+**Razones:**
+- **Sin migración de schema**: el mismo `.moodmap` que escribió el editor se recarga sin necesidad de upgraders ni bumps de versión.
+- **El motor reproduce 1 sola animación por entidad**: hoy no hay state machine, ni transiciones, ni blending. El estado real del Animator que vale la pena persistir (clipName, time, playing) es muy chico — y si solo se persiste para 1 caso (`Fox.glb`) la complejidad de la migración no se justifica.
+- **Defaults predecibles**: clipName="" → primer clip; playing=true; loop=true. Suficiente para que un Fox dropeado al editor + guardado + recargado se vea EXACTAMENTE igual que cuando se dropeó.
+- **Editor sigue funcionando como antes**: si el dev quiere clipName específico ("Walk") o playing=false, el Inspector lo deja editar tras la carga. Solo se pierde el override si el dev cierra y reabre — aceptable en un V1.
+
+**Alternativas consideradas:**
+- **Schema migration**: correcto a largo plazo. Cuando aparezca un caso que necesite persistir clipName="Walk" o time=2.5s específicos, se hace y se mantiene back-compat con archivos viejos vía el upgrader (que detectaría la falta de campos `animator` y aplicaría defaults — exactamente el mismo resultado que la opción 2). Es decir: la opción 2 es estrictamente más simple y semánticamente equivalente al caso default.
+- **Forzar el dev a re-spawnear el Fox cada vez**: rotundo no — el flow sería frustrante.
+
+**Trade-offs:**
+- Se pierde: persistencia explícita de overrides del Animator en el .moodmap.
+- Se gana: simplicidad, sin migración, comportamiento "just works" para el caso 99%.
+
+**Revisar si:** aparece un dev que necesite persistir clipName / playing / time específicos por entidad — extender `SavedEntity` con `animator?` opcional + leer en `SceneLoader` si está presente, sino caer al auto-add actual.

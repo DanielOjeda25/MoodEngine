@@ -1,4 +1,6 @@
-# Plan — Hito 22: Workflow de scripting Lua
+# Plan — Hito 22: Workflow de scripting Lua — **CERRADO**
+
+> **Estado:** cerrado en tag `v0.22.0-hito22`. Bloques 1-4 + 6 completados; Bloque 5 (mini editor in-place con ImGuiColorTextEdit) deferido como pendiente al Hito 23 — los 4 bloques anteriores ya entregan el workflow base. Bonus fix arrastrado del Hito 19: meshes con esqueleto persistidos auto-ganan Animator/Skeleton al cargar (sin migracion de schema). Resumen final en `HITOS.md`.
 
 > **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 21 cerrado).
 >
