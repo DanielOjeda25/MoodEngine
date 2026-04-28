@@ -257,6 +257,7 @@ add_library(mood_engine_lib STATIC
     src/engine/audio/AudioDevice.cpp
     src/engine/audio/miniaudio_impl.cpp
 
+    src/engine/game/GameOverlay.cpp
     src/engine/game/GameState.cpp
 
     src/engine/physics/PhysicsWorld.cpp

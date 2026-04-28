@@ -3,6 +3,10 @@
 #include "core/Log.h"
 #include "core/math/AABB.h"
 #include "engine/assets/AssetManager.h"
+#include "engine/audio/AudioDevice.h"
+#include "engine/game/GameOverlay.h"
+#include "engine/game/GameState.h"
+#include "engine/physics/PhysicsWorld.h"
 #include "engine/render/IMesh.h"
 #include "engine/render/ITexture.h"
 #include "engine/render/SceneRenderer.h"
@@ -13,7 +17,10 @@
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
 #include "platform/Window.h"
+#include "systems/AnimationSystem.h"
+#include "systems/AudioSystem.h"
 #include "systems/PhysicsSystem.h"
+#include "systems/ScriptSystem.h"
 
 // glad/gl.h debe ir antes que cualquier otro header que pueda incluir GL.
 #include <glad/gl.h>
@@ -53,8 +60,6 @@ PlayerApplication::PlayerApplication() {
     Log::render()->info("OpenGL iniciado: {}",
         reinterpret_cast<const char*>(glGetString(GL_VERSION)));
 
-    // ImGui: igual que en el editor pero sin layout persistente. El HUD
-    // del juego (Bloque 3 Fase B) usa ImDrawList, no panels.
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
@@ -71,8 +76,6 @@ PlayerApplication::PlayerApplication() {
 
     m_sceneRenderer = std::make_unique<SceneRenderer>();
 
-    // AssetManager: misma factoria GL que el editor. En Bloque 4 esto
-    // pasara a vivir en una funcion compartida con EditorApplication.
     m_assetManager = std::make_unique<AssetManager>(
         "assets",
         [](const std::string& fsPath) -> std::unique_ptr<ITexture> {
@@ -86,18 +89,34 @@ PlayerApplication::PlayerApplication() {
 
     m_scene = std::make_unique<Scene>();
 
-    // Capturar el mouse para FPS camera (relative mode = sin cursor visible
-    // y deltas relativos en eventos de motion).
+    // Sistemas runtime: mismos que el editor usa en Play Mode.
+    m_scriptSystem    = std::make_unique<ScriptSystem>();
+    m_audioDevice     = std::make_unique<AudioDevice>();
+    m_audioSystem     = std::make_unique<AudioSystem>(*m_audioDevice, *m_assetManager);
+    m_animationSystem = std::make_unique<AnimationSystem>();
+    m_physicsWorld    = std::make_unique<PhysicsWorld>();
+
+    // Player arranca en Play Mode directo: cursor capturado por SDL,
+    // sin pausa.
+    GameState::reset();
     SDL_SetRelativeMouseMode(SDL_TRUE);
     SDL_GetRelativeMouseState(nullptr, nullptr);
 
     buildTestMap();
     rebuildSceneFromMap();
 
-    MOOD_LOG_INFO("MoodPlayer listo");
+    MOOD_LOG_INFO("MoodPlayer listo (gameplay activo: WASD + mouse, Esc para pausar)");
 }
 
 PlayerApplication::~PlayerApplication() {
+    // Orden inverso al ctor. Sistemas primero (algunos dependen de
+    // m_scene / m_assetManager / m_audioDevice), luego el scene, luego
+    // los recursos GL via SceneRenderer, luego el contexto GL.
+    m_scriptSystem.reset();
+    m_audioSystem.reset();
+    m_audioDevice.reset();
+    m_animationSystem.reset();
+    m_physicsWorld.reset();
     m_scene.reset();
     m_assetManager.reset();
     m_sceneRenderer.reset();
@@ -124,9 +143,6 @@ glm::vec3 PlayerApplication::mapWorldOrigin() const {
 }
 
 void PlayerApplication::buildTestMap() {
-    // Mismo placeholder que arranca el editor: sala 8x8 perimetral con
-    // grid.png + columna central con brick.png. Bloque 4 reemplaza esto
-    // por la carga del `.moodmap` indicado en game.json.
     m_map = GridMap(8u, 8u, 3.0f);
     const TextureAssetId grid  = m_assetManager->loadTexture("textures/grid.png");
     const TextureAssetId brick = m_assetManager->loadTexture("textures/brick.png");
@@ -170,6 +186,15 @@ void PlayerApplication::rebuildSceneFromMap() {
                     m_map.tileTextureAt(x, y));
             e.addComponent<MeshRendererComponent>(
                 m_assetManager->missingMeshId(), tileMat);
+
+            // RigidBody static para los tiles (mismo flow que el editor):
+            // permite que entidades dinamicas (cajas spawnedas via script)
+            // colisionen contra las paredes.
+            e.addComponent<RigidBodyComponent>(
+                RigidBodyComponent::Type::Static,
+                RigidBodyComponent::Shape::Box,
+                glm::vec3(tileSize * 0.5f),
+                0.0f);
         }
     }
 }
@@ -186,9 +211,10 @@ void PlayerApplication::processEvents() {
             m_running = false;
         } else if (ev.type == SDL_KEYDOWN &&
                    ev.key.keysym.sym == SDLK_ESCAPE) {
-            // Bloque 3 Fase A: Esc cierra. Fase B lo conectara al menu
-            // de pausa (toggle de GameState::paused).
-            m_running = false;
+            // Esc: togglea pausa. El sync de cursor con SDL lo hace
+            // updateCamera al detectar la transicion del flag (igual que
+            // en EditorApplication).
+            GameState::paused() = !GameState::paused();
         }
     }
 }
@@ -200,10 +226,6 @@ void PlayerApplication::beginFrame() {
 }
 
 void PlayerApplication::endFrame() {
-    // Mostramos el viewport FB del SceneRenderer cubriendo toda la
-    // ventana antes de Render() — `Image` es un widget mas y necesita
-    // estar dentro del ImGui frame en curso. UV invertido vertical por
-    // la convencion GL (origen bottom-left) vs ImGui (top-left).
     if (m_sceneRenderer) {
         ImGuiViewport* vp = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(vp->Pos);
@@ -216,9 +238,18 @@ void PlayerApplication::endFrame() {
             ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse |
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
             ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground);
-        const ImVec2 size = ImGui::GetContentRegionAvail();
+        const ImVec2 imgPos  = ImGui::GetCursorScreenPos();
+        const ImVec2 imgSize = ImGui::GetContentRegionAvail();
         ImGui::Image(m_sceneRenderer->viewportFb().colorAttachmentHandle(),
-                      size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+                      imgSize, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+
+        // HUD + menu de pausa por encima del Image, en el mismo
+        // drawlist de la ventana. "Salir del juego" cierra la app.
+        GameOverlay::draw(ImGui::GetWindowDrawList(),
+                           imgPos.x, imgPos.y, imgSize.x, imgSize.y,
+                           "Salir del juego",
+                           [this]() { m_running = false; });
+
         ImGui::End();
         ImGui::PopStyleVar(2);
     }
@@ -238,6 +269,19 @@ void PlayerApplication::endFrame() {
 }
 
 void PlayerApplication::updateCamera(f32 dt) {
+    // Sync cursor con paused, igual que en EditorApplication.
+    const bool nowPaused = GameState::paused();
+    if (nowPaused != m_pausedLastFrame) {
+        if (nowPaused) {
+            SDL_SetRelativeMouseMode(SDL_FALSE);
+        } else {
+            SDL_SetRelativeMouseMode(SDL_TRUE);
+            SDL_GetRelativeMouseState(nullptr, nullptr);
+        }
+        m_pausedLastFrame = nowPaused;
+    }
+    if (nowPaused) return;
+
     const Uint8* keys = SDL_GetKeyboardState(nullptr);
     glm::vec3 dir(0.0f);
     if (keys[SDL_SCANCODE_W]) dir.z += 1.0f;
@@ -263,6 +307,41 @@ void PlayerApplication::updateCamera(f32 dt) {
     }
 }
 
+void PlayerApplication::updateRigidBodies(f32 dt) {
+    if (!m_scene || !m_physicsWorld) return;
+
+    // Materializar bodies nuevos.
+    m_scene->forEach<TransformComponent, RigidBodyComponent>(
+        [&](Entity, TransformComponent& t, RigidBodyComponent& rb) {
+            if (rb.bodyId != 0) return;
+            CollisionShape shape = CollisionShape::Box;
+            switch (rb.shape) {
+                case RigidBodyComponent::Shape::Box:     shape = CollisionShape::Box; break;
+                case RigidBodyComponent::Shape::Sphere:  shape = CollisionShape::Sphere; break;
+                case RigidBodyComponent::Shape::Capsule: shape = CollisionShape::Capsule; break;
+            }
+            BodyType type = BodyType::Static;
+            switch (rb.type) {
+                case RigidBodyComponent::Type::Static:    type = BodyType::Static; break;
+                case RigidBodyComponent::Type::Kinematic: type = BodyType::Kinematic; break;
+                case RigidBodyComponent::Type::Dynamic:   type = BodyType::Dynamic; break;
+            }
+            rb.bodyId = m_physicsWorld->createBody(t.position, shape,
+                                                    rb.halfExtents, type, rb.mass);
+        });
+
+    // Stepear simulacion + sync body -> Transform para dinamicos.
+    if (!GameState::paused()) {
+        m_physicsWorld->step(dt);
+        m_scene->forEach<TransformComponent, RigidBodyComponent>(
+            [&](Entity, TransformComponent& t, RigidBodyComponent& rb) {
+                if (rb.type == RigidBodyComponent::Type::Static) return;
+                if (rb.bodyId == 0) return;
+                t.position = m_physicsWorld->bodyPosition(rb.bodyId);
+            });
+    }
+}
+
 int PlayerApplication::run() {
     m_deltaTimer.reset();
 
@@ -275,6 +354,27 @@ int PlayerApplication::run() {
         beginFrame();
 
         updateCamera(dt);
+        updateRigidBodies(dt);
+
+        // Scripts + animation + audio: igual orden que el editor.
+        // Cuando paused, scripts y animation siguen corriendo (para
+        // que un script pueda mostrar UI o ejecutar logica de menu),
+        // pero el audio sigue su flow normal — TBD si se quiere mute
+        // global en pausa.
+        if (m_scene && m_scriptSystem) {
+            m_scriptSystem->update(*m_scene, dt);
+        }
+        if (m_scene && m_animationSystem && m_assetManager) {
+            m_animationSystem->update(*m_scene, *m_assetManager, dt);
+        }
+        if (m_scene && m_audioSystem) {
+            m_audioSystem->update(*m_scene, dt);
+            // Listener = camara FPS del player. World-up fijo (0,1,0).
+            m_audioSystem->setListener(
+                m_playCamera.position(),
+                m_playCamera.forward(),
+                glm::vec3(0.0f, 1.0f, 0.0f));
+        }
 
         if (m_scene && m_assetManager && m_sceneRenderer) {
             int fbWidth = 0;
