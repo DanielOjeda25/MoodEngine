@@ -610,3 +610,59 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Persistencia de HUD entre sesiones**: hoy `GameState::reset()` al `exitPlayMode` lo lleva a defaults; los scripts setean valores cada vez. **Trigger:** primera vez que un dev quiera "save game" con HP/Ammo persistidos.
 - **HUD escalable a más de HP/Ammo**: hoy 2 bloques fijos. Si crece a 5+ stats vale la pena hacer el HUD data-driven (lista de bloques desde Lua). **Trigger:** primer juego que necesite +3 stats simultáneos.
 - **Tests del flujo Esc → menú → click "Continuar"**: hoy verificado solo con smoke test manual. ImGui no es trivialmente testable en headless, pero `GameState::paused()` y `deleteSelectedEntity` (extraído justo para esto) sí podrían tener tests headless. **Trigger:** primer regression bug del menú.
+
+---
+
+## Hito 21 — Empaquetado standalone (MoodPlayer + PackageBuilder)
+
+**Objetivo:** producir un build distribuible del juego (binario + assets) ejecutable por un usuario final sin Visual Studio. Hasta este hito todo vivía como `MoodEditor.exe`; ahora el editor puede generar un paquete autocontenido con un `MoodPlayer.exe` separado que carga el proyecto indicado en un `game.json`.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — scaffold MoodPlayer:*
+- Nuevo target `MoodPlayer.exe` con `src/player/PlayerApplication.{h,cpp}` + `src/player/main.cpp`. Esqueleto mínimo: ventana SDL 1280x720 + GL 4.5 + ImGui inicializado (sin paneles, `io.IniFilename = nullptr`), Esc cierra. Sin escena todavía.
+- Listas de fuentes duplicadas en CMake; preparó la base para el refactor del Bloque 3.
+
+*Bloque 2 — `SceneRenderer` extraído:*
+- Pipeline de render (FBs HDR/LDR, shaders PBR estático + skinneado, skybox, shadow pass, post-process, IBL, light grid + 3 SSBOs, debug renderer, environment cache, last view/projection) movido de `EditorApplication` a `engine/render/SceneRenderer`. Editor pasó de ~25 miembros de render a uno solo (`unique_ptr<SceneRenderer>`).
+- API por frame: caller pasa scene + assets + view + projection + aspect + cameraPos + tamaño del panel a `renderScene(...)`. SceneRenderer pinta sky + escena + lit al scene FB pero deja el FB bindeado para que el caller agregue debug 3D propio via `debugRenderer()`. Cuando llama a `endFrame()`, flushea el debug y aplica post-process al viewport FB.
+- `EditorRenderPass.cpp` queda como orquestador thin (camera dispatch + overlay 3D editor-side). Helper `viewportAspect()` unifica los 5 callsites con la fórmula `m_viewportFb->w/h`.
+- Cleanup incidental: `m_defaultShader` eliminado (dead code desde Hito 17).
+
+*Bonus fix arrastrado del Hito 19:* drop de mesh al viewport ahora aterriza al ras del piso (y=0) calculando `yFloorOffset = -autoScale * aabbMin.y`. Antes con autoScale del Hito 19 el zorro flotaba 1.5m sobre el piso (la celda center y).
+
+*Bloque 3 — PlayerApplication completo:*
+- Fase A: PlayerApplication carga un mapa de prueba placeholder (sala 8x8 con grid+brick) y lo renderiza con SceneRenderer + FpsCamera. WASD + mouse para moverse; las paredes bloquean por moveAndSlide. Esc cierra.
+- Fase B: agregados ScriptSystem + AudioDevice + AudioSystem + AnimationSystem + PhysicsWorld al loop. Tiles del placeholder ganan RigidBodyComponent::Static.
+- HUD del juego + menú de pausa extraídos a `engine/game/GameOverlay::draw(...)` como free function compartida entre editor y player. Parametrizada por `exitButtonLabel` + `onExitRequested` callback (editor → `exitPlayMode()`, player → `m_running = false`).
+- Esc togglea `GameState::paused()`. Sync de cursor con `SDL_SetRelativeMouseMode` centralizado en `updateCamera` detectando la transición del flag.
+- Refactor de CMake: extraída `mood_engine_lib` (static lib) con todo `core/`/`platform/`/`engine/`/`systems/`. Editor y player linkean contra ella y agregan solo sus `.cpp` específicos. Dependencias del motor (SDL2, glm, EnTT, Lua, Jolt, etc.) son `PUBLIC` — los consumidores las heredan.
+
+*Bloque 4 — `game.json` + carga del proyecto:*
+- `engine/game/GameManifest`: schema v1 (`version`, `name`, `project`, `default_map`).
+- `PlayerApplication::tryLoadGameManifest`: lee `<exe_dir>/game.json` (vía `SDL_GetBasePath()`, no working dir), resuelve el `.moodproj` relativo al manifest, llama `ProjectSerializer::load` + `SceneSerializer::load`, aplica al scene via `SceneLoader::applyEntitiesToScene`. Si cualquier paso falla, fallback al mapa de prueba.
+- `engine/serialization/SceneLoader::applyEntitiesToScene` (nuevo): extracción de las ~85 líneas que aplican mesh/material upgrader v6/v7 + light + rigidbody + environment + prefab link de un `SavedMap` a una Scene. Editor (`tryOpenProjectPath`) y player la comparten.
+- Tras cargar, ctor pide a SceneRenderer `applyEnvironmentFromScene(*scene)` para que la primera frame ya muestre fog/exposure/tonemap correctos.
+
+*Bloque 5 — `PackageBuilder` + acción "Empaquetar proyecto":*
+- `engine/packaging/PackageBuilder::build`: dado un Project + destDir + engineExeDir, copia MoodPlayer.exe + SDL2*.dll + `assets/` + `shaders/` + el directorio del proyecto a `<destDir>/<projectName>/project/` y genera `game.json`.
+- V1 simple: copia `assets/` y `shaders/` enteras (sin filtrar por refs). Más grande de lo necesario pero predecible.
+- Safety check: refuse si `destDir` está adentro del project root (o viceversa) — sin esto, elegir como destino la carpeta del proyecto provoca recursión infinita en `std::filesystem::copy`. Comparación con `weakly_canonical` + prefix match con separador.
+- Item nuevo en `Archivo > Empaquetar proyecto...`. Si hay cambios sin guardar ofrece guardar primero. Abre `pfd::select_folder`, llama al packager, muestra MessageBox con resultado. `SDL_GetBasePath()` resuelve dónde vive `MoodPlayer.exe`. `#ifdef NDEBUG` distingue Debug (`SDL2d.dll`) de Release (`SDL2.dll`).
+- Smoke test: paquete con 88 archivos + game.json válido. Doble-click en `MoodPlayer.exe` empaquetado abre la sala con Fox + pyramid persistidos, Esc abre el menú de pausa, "Salir del juego" cierra limpio.
+
+*Bloque 6 — tests:*
+- `tests/test_package_builder.cpp`: 8 casos headless. Arman engineExeDir + project mock en directorios temporales y verifican el output. Cubren build feliz (layout completo + game.json válido), recursión bloqueada (dest dentro del project, dest = project root), engineExeDir inexistente, shaders/ faltante (error fatal), assets/ faltante (warning, no error), project name vacío, isDebug=false copia SDL2.dll en lugar de SDL2d.dll.
+- Suite total **179/5221** (antes Hito 20 cerrado: 171/5188).
+
+**Siguiente paso tras completarlo:** Hito 22 (TBD). Plan en `docs/PLAN_HITO22.md` con candidatos.
+
+### Pendientes menores detectados en Hito 21
+
+- **Filtrado de assets en el packager**: hoy V1 copia `assets/` entero (~5-10 MB de overhead típico). Para juegos con muchas texturas/mallas/audios sin usar, walker que indexe refs reales de scripts + serializadores ahorraría peso. **Trigger:** primer dev que reporte "el paquete pesa X MB y solo uso Y%".
+- **Build Release del player**: el packager soporta `isDebug=false` y copia `SDL2.dll`, pero el flujo actual del editor solo compila Debug. Falta agregar un preset `windows-msvc-release` y que `Empaquetar proyecto...` ofrezca elegir Debug/Release. **Trigger:** primer paquete que vaya a manos de usuarios finales.
+- **`mood_engine_lib` como lib compartida**: hoy es `STATIC`. Si dos targets (editor + player) crecen mucho, podría tener sentido `SHARED` para dedup en disco. **Trigger:** tamaño de binarios que moleste.
+- **Persistencia del Animator (clip activo + time)**: pendiente arrastrado del Hito 19. Empaquetar un proyecto con un Fox.glb funciona — pero el clip activo y el time se resetean al abrir el player. Sin esto, no se puede congelar una pose o un punto específico de animación al cargar. **Trigger:** primer juego donde el setup inicial de animación importa al cargar.
+- **Botón "Opciones" del menú de pausa**: arrastra del Hito 20. Sin un sistema de settings persistido el botón loguea "no implementado".
+- **Test E2E del flujo completo**: hoy `test_package_builder` cubre la lógica del packager pura, pero no se prueba el ciclo "editor → empaquetar → ejecutar player → cargar proyecto". **Trigger:** primer regression del flujo end-to-end (ej. game.json schema cambia y el player no lo lee).
+- **CI build**: el smoke test corre solo localmente. Un GitHub Action que compile editor + player + corra mood_tests sería el sello automático antes de mergear. **Trigger:** primera vez que un PR rompe `main`.

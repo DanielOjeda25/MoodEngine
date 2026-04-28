@@ -1,4 +1,8 @@
-# Plan — Hito 21: Empaquetado standalone
+# Plan — Hito 21: Empaquetado standalone — **CERRADO**
+
+> **Estado:** cerrado en tag `v0.21.0-hito21`. Todos los bloques completados según el plan original (sin cambios de scope). Resumen final en `HITOS.md` (sección Hito 21). Decisiones nuevas en `DECISIONS.md` (entradas 2026-04-28: `mood_engine_lib`, layout del paquete, V1 copia assets enteros).
+>
+> El cuerpo del plan abajo se conserva como histórico.
 
 > **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 20 cerrado).
 >

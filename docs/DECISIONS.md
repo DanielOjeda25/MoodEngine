@@ -1766,3 +1766,85 @@ de Play.
 scenas en simultáneo (multiplayer split-screen, A/B testing).
 En ese caso, GameState pasaría a ser un objeto pasado como
 contexto en lugar de un singleton.
+
+
+## 2026-04-28: `mood_engine_lib` como static library compartida (Hito 21)
+
+**Contexto:** hasta el Hito 21 el repo tenía un solo `add_executable(MoodEditor ...)` con ~70 archivos de código. Al introducir `MoodPlayer.exe` (Bloque 1), las opciones eran:
+1. Duplicar la lista de fuentes en CMake (cada vez que aparece un `.cpp` nuevo, agregarlo a dos lugares).
+2. Extraer una static library con todo lo compartido y linkear ambos targets contra ella.
+
+**Decisión:** opción 2 — `add_library(mood_engine_lib STATIC ...)` con todo `core/`/`platform/`/`engine/`/`systems/`. `MoodEditor` y `MoodPlayer` linkean contra ella y solo agregan sus propios `.cpp` (`editor/` y `player/`).
+
+**Razones:**
+- Una sola lista de fuentes — agregar un archivo nuevo no requiere editar dos targets.
+- Build incremental más rápido: la lib se compila una vez y se linkea dos veces; antes cada target recompilaba todo desde cero.
+- Las dependencias de motor (SDL2, glm, EnTT, Lua, Jolt, etc.) son `target_link_libraries(... PUBLIC ...)` — los consumidores las heredan sin repetirlas. Solo `pfd` (portable-file-dialogs) queda en el target del editor porque el player no lo usa.
+- mood_tests también podría linkear contra la lib en lugar de listar archivos individualmente. Hoy todavía no lo hace; queda como cleanup de bajo impacto.
+
+**Alternativas consideradas:**
+- **Duplicar listas**: más simple pero rompe constantemente — el dev olvida agregar el .cpp al segundo target y el build falla.
+- **`SHARED` en lugar de `STATIC`**: dedup en disco si los dos binarios viven en el mismo paquete. Por ahora el packager copia el .exe del player + sus DLLs sin pasar por mood_engine_lib (que está linkeada estáticamente al .exe), así que `SHARED` no aporta. Si en el futuro el packager también copia el editor (improbable) puede tener sentido.
+
+**Revisar si:** aparece un tercer ejecutable (un test runner que reusa todo el motor, un benchmark, un editor de prefabs separado) — la lib ya está lista para que otro target la consuma.
+
+## 2026-04-28: layout del paquete y resolución de paths (Hito 21)
+
+**Contexto:** `MoodPlayer.exe` necesita encontrar `assets/` y `shaders/` (engine defaults: skybox, IBL, primitivas, scripts default), un `.moodproj` con sus `.moodmap`s (project del usuario), y un manifest que indique qué proyecto cargar. La pregunta era cómo organizarlos en disco.
+
+**Decisión:** layout fijo:
+
+```
+<destDir>/<projectName>/
+  MoodPlayer.exe
+  SDL2d.dll  (o SDL2.dll si NDEBUG)
+  game.json
+  assets/    ← engine
+  shaders/   ← engine
+  project/<name>.moodproj
+  project/maps/*.moodmap
+```
+
+`game.json`:
+```json
+{
+  "version": 1,
+  "name": "...",
+  "project": "project/<name>.moodproj",
+  "default_map": "maps/<name>.moodmap"
+}
+```
+
+El player resuelve `<exe_dir>/game.json` con `SDL_GetBasePath()` (NO `current_path()`, que cambia según desde dónde se invoque el .exe). `project` es relativo al manifest dir; `default_map` es relativo al `.moodproj` (consistente con el schema interno del `.moodproj` que ya tenía `defaultMap` relativo a su root).
+
+**Razones:**
+- Engine assets junto al .exe → matchea exactamente lo que el editor hace post-build (copia `assets/` y `shaders/` al `build/<config>/`). El AssetManager ya está hardcoded para buscar `"assets/..."` relativo al working dir; con `<exe_dir>` como cwd no cambia nada.
+- `project/` como subcarpeta clarifica qué es engine vs qué es del juego. Un usuario puede inspeccionar `project/maps/*.moodmap` sin pelear con el resto del paquete.
+- `game.json` en la raíz del paquete (no dentro de `project/`) porque es metadata del PAQUETE, no del proyecto — es lo que el player lee primero.
+- `SDL_GetBasePath()` da el path del exe en todas las plataformas que SDL soporta. Si el player se distribuye a alguien que lanza desde un acceso directo o desde un path con espacios, sigue funcionando.
+
+**Alternativas consideradas:**
+- **`game.json` adentro de `project/`**: rompe la separación engine vs juego. El usuario también querría poner cosas adyacentes al `.moodproj` que no son del paquete (notas, README), y el packager terminaría copiándolas como "manifest".
+- **Resolver paths relativos al `current_path()` (working dir)**: rompe en doble-click si el shortcut tiene "Iniciar en" mal seteado. Probado en el smoke test del Bloque 4 — falla sutilmente.
+- **Schema sin `default_map`** y dejar que el `.moodproj` decida solo: válido, pero hace más difícil shippear DLC / mapas adicionales donde el packager elija qué mapa queremos en el primer arranque.
+
+**Revisar si:** aparece la necesidad de múltiples mapas seleccionables al arranque (menú principal con "Cargar nivel 1/2/3") — el manifest podría tener una `maps[]` lista y `default_map` se vuelve solo el inicial.
+
+## 2026-04-28: V1 del PackageBuilder copia `assets/` enteros (Hito 21)
+
+**Contexto:** al empaquetar un proyecto, el packager tiene que decidir qué assets copiar al paquete. Las dos opciones extremas:
+1. **Copiar solo lo referenciado**: walker que recorre `.moodmap`s + `.moodprefab`s + `.material`s + `.lua` para indexar paths usados, y copia solo esos archivos.
+2. **Copiar `assets/` entero**: include todo, sin distinguir.
+
+**Decisión V1:** opción 2 — copiar `assets/` y `shaders/` enteros.
+
+**Razones:**
+- Simple: un `copy_directory` por dir, cuenta archivos, listo. El walker selectivo requeriría parsear scripts Lua para encontrar `loadTexture("...")` y mantener consistencia con cualquier nuevo punto de carga (drag-drops, prefabs, materials, hot-reload).
+- Predecible: si el dev pone un asset que el .moodmap no referencia hoy pero un script Lua lo carga al arranque, el packager lo incluye igual. Sin sorpresas de "el juego empaquetado no encuentra X".
+- El overhead actual son ~5-10 MB de assets de demo (skyboxes, IBL pre-baked, Fox.glb, pyramid.obj, los 5 materiales de demo). Trivial al lado del MoodPlayer.exe Debug que pesa ~18 MB.
+
+**Trade-offs:**
+- Se pierde: paquetes más chicos y "limpios" sin el Fox.glb si el juego no usa zorros.
+- Se gana: cero ambigüedad sobre qué se incluye, packager simple y testeable headless.
+
+**Revisar si:** el primer dev reporta que el paquete pesa más de lo aceptable (criterio: el ratio de uso real / total < 30% Y el peso total > 50 MB). En ese caso, escribir el walker selectivo como mejora del Bloque 5.

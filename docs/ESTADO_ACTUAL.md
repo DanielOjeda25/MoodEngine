@@ -6,17 +6,32 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 20 cerrado.**
+**Hito 21 cerrado.**
+Tag: `v0.21.0-hito21`.
+Verificado automático: suite doctest **179/5221** (+8 de `test_package_builder`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo (smoke test): `Archivo > Empaquetar proyecto...` produce un paquete autocontenido (88 archivos en el smoke test) en la carpeta destino. Doble-click en el `MoodPlayer.exe` empaquetado abre la sala del proyecto con sus entidades persistidas (Fox + pyramid en el smoke test), corre Play Mode, Esc abre el menú de pausa, "Salir del juego" cierra limpio.
+
+**Layout del paquete:**
+```
+<destDir>/<projectName>/
+├── MoodPlayer.exe
+├── SDL2d.dll  (o SDL2.dll si NDEBUG)
+├── game.json     ← {version, name, project, default_map}
+├── assets/       ← copia del engine (skybox, IBL, primitivas, scripts default)
+├── shaders/      ← copia del engine
+└── project/<name>.moodproj + maps/
+```
+
+**Refactor estructural del hito:** se extrajo `mood_engine_lib` (static lib) con todo `core/`/`platform/`/`engine/`/`systems/`. MoodEditor y MoodPlayer linkean contra ella y solo agregan sus propios `.cpp` (`editor/` y `player/` respectivamente). El render pipeline vivía en `EditorApplication`; ahora lo encapsula `engine/render/SceneRenderer` y los dos binarios lo comparten. El HUD del juego (HP/Ammo/crosshair) y el menú de pausa también se compartieron via `engine/game/GameOverlay::draw(...)` parametrizado por el label del botón "Salir" + un callback `onExitRequested`.
+
+**Próximo paso:** Hito 22 (TBD por confirmar). Candidatos en `docs/PLAN_HITO22.md`: workflow de scripting (Asset Browser tab + mini editor de código), exposed properties Lua, AI/pathfinding, networking, save/load de gameplay.
+
+### Hito 20 (anterior, ya cerrado)
 Tag: `v0.20.0-hito20`.
 Verificado automático: suite doctest **171/5188** (+6 de `test_game_state` para GameState singleton + hud Lua bindings). Editor arranca limpio. Verificado por el dev a ojo (smoke test): Play Mode muestra HUD con HP=100/AMMO=30 + crosshair central; Esc togglea menú de pausa con 3 botones (Continuar/Opciones/Salir al editor). "Ayuda > Agregar HUD demo" spawnea entidad invisible con `hud_demo.lua` que en Play setea HP=75/Ammo=12, drena 1 HP/s, y al llegar a 0 fuerza pausa via `hud.setPaused(true)` — el cursor aparece automáticamente para clickear botones.
 
 Cambio de plan a mitad del hito: el plan original era **RmlUi**; tras 3 bloques funcionando, los bugs persistentes de layout responsive llevaron a abandonarlo y reescribir HUD + pausa con **drawlist de Dear ImGui** sobre el callback `OverlayDraw` que ya tenía `ViewportPanel`. Ver `DECISIONS.md`.
 
 `EditorApplication.cpp` se partió de 1514 → 652 líneas + 3 archivos parciales nuevos (`EditorOverlay.cpp`, `EditorPlayMode.cpp`, `EditorScene.cpp`) que comparten el header. Soft target ~500 líneas/`.cpp`, hard cap ~800.
-
-Bonus fix: la tecla Delete/Backspace para borrar entidad seleccionada migró de `ImGui::IsKeyPressed` (con problemas de foco) a evento SDL en `processEvents`. La lógica se extrajo al método `deleteSelectedEntity` en `EditorScene.cpp`.
-
-**Próximo paso:** Hito 21 — Empaquetado standalone (build distribuible del juego sin editor). Plan en `docs/PLAN_HITO21.md`.
 
 ### Hito 19 (anterior, ya cerrado)
 Tag: `v0.19.0-hito19`.
@@ -322,18 +337,16 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: implementar el Hito 21
+### Tarea inmediata: definir y abrir el Hito 22
 
-El Hito 20 está cerrado (tag `v0.20.0-hito20` en origin). El foco ahora es el **Hito 21 — Empaquetado standalone**: build distribuible del juego (binario + assets) sin editor, ejecutable por usuarios finales sin Visual Studio.
-
-El plan desglosado por tareas está en `docs/PLAN_HITO21.md`.
+El Hito 21 está cerrado (tag `v0.21.0-hito21` en origin). El próximo hito está **TBD**: hay candidatos esbozados en `docs/PLAN_HITO22.md` pero no se eligió aún. Antes de empezar a codear, conversar con el dev qué prioridad le da: workflow de scripting (Asset Browser tab + editor de código in-place), AI/pathfinding, networking, save/load de gameplay, o algo completamente nuevo que aparezca.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO21.md`.
-2. Trabajar bloque por bloque, marcando en el plan al cerrar cada uno.
+1. Leer `docs/PLAN_HITO22.md` (candidatos) y discutir con el dev qué se prioriza.
+2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
 3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.21.0-hito21`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO22.md`.
+4. Al final: commits atómicos en español, merge a main, tag `v0.22.0-hito22`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO23.md`.
 
 ---
 
