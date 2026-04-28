@@ -374,6 +374,50 @@ set_target_properties(MoodEditor PROPERTIES
 set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT MoodEditor)
 
 # ---------------------------------------------------------------------------
+# Ejecutable secundario: MoodPlayer (Hito 21)
+#
+# Runtime standalone del juego. Comparte casi todo el codigo del motor
+# con MoodEditor; lo unico que difiere es `src/player/` + ausencia de
+# paneles ImGui. En Hito 21 Bloque 1 es un scaffolding (solo abre una
+# ventana y cierra con Esc); los Bloques 2-4 le agregan render de
+# escena, scripts, audio y carga de `game.json`.
+# ---------------------------------------------------------------------------
+add_executable(MoodPlayer
+    src/player/main.cpp
+    src/player/PlayerApplication.cpp
+
+    src/core/Log.cpp
+    src/core/LogRingSink.cpp
+    src/core/Time.cpp
+
+    src/platform/Window.cpp
+)
+
+target_include_directories(MoodPlayer PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(MoodPlayer PRIVATE
+    SDL2::SDL2
+    glm::glm
+    spdlog::spdlog
+    imgui
+    glad
+    OpenGL::GL
+)
+
+mood_set_compiler_warnings(MoodPlayer)
+
+if(WIN32)
+    add_custom_command(TARGET MoodPlayer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:SDL2::SDL2>
+            $<TARGET_FILE_DIR:MoodPlayer>
+        COMMENT "Copiando SDL2.dll junto a MoodPlayer"
+    )
+endif()
+
+# ---------------------------------------------------------------------------
 # Tests (doctest + CTest)
 # ---------------------------------------------------------------------------
 enable_testing()
