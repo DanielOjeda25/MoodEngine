@@ -72,12 +72,22 @@ private:
         MaterialAssetId id = 0;
     };
 
+    // Hito 22 Bloque 1: scripts Lua. No tienen un AssetId en AssetManager
+    // (se cargan on-demand por ScriptSystem desde el path). Guardamos el
+    // line count como metadata para el browser.
+    struct ScriptEntry {
+        std::string logicalPath; // "scripts/foo.lua"
+        std::string displayName; // "foo.lua"
+        u32 lineCount = 0;
+    };
+
     AssetManager* m_assetManager = nullptr;
     std::vector<Entry> m_entries;
     std::vector<AudioEntry> m_audioEntries;
     std::vector<MeshEntry> m_meshEntries;
     std::vector<PrefabEntry> m_prefabEntries;
     std::vector<MaterialEntry> m_materialEntries;
+    std::vector<ScriptEntry> m_scriptEntries;
     std::optional<std::string> m_selected;
     bool m_scanned = false;
     bool m_reloadRequested = false;

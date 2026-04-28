@@ -8,7 +8,10 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <string>
 
 namespace Mood {
 
@@ -21,12 +24,14 @@ constexpr const char* k_audioDir    = "assets/audio";
 constexpr const char* k_meshDir     = "assets/meshes";
 constexpr const char* k_prefabDir   = "assets/prefabs";
 constexpr const char* k_materialDir = "assets/materials";
+constexpr const char* k_scriptDir   = "assets/scripts";
 constexpr float k_thumbSize = 64.0f;
 constexpr const char* k_logicalPrefix         = "textures/";
 constexpr const char* k_audioLogicalPrefix    = "audio/";
 constexpr const char* k_meshLogicalPrefix     = "meshes/";
 constexpr const char* k_prefabLogicalPrefix   = "prefabs/";
 constexpr const char* k_materialLogicalPrefix = "materials/";
+constexpr const char* k_scriptLogicalPrefix   = "scripts/";
 
 bool isPng(const std::filesystem::path& p) {
     auto ext = p.extension().string();
@@ -61,6 +66,25 @@ bool isMaterial(const std::filesystem::path& p) {
     std::transform(ext.begin(), ext.end(), ext.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return ext == ".material";
+}
+
+bool isLuaScript(const std::filesystem::path& p) {
+    auto ext = p.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return ext == ".lua";
+}
+
+// Cuenta lineas de un archivo de texto sin cargar todo a memoria. Devuelve
+// 0 si el archivo no existe o no se puede abrir — el browser solo lo usa
+// como metadata informativa.
+u32 countLines(const std::filesystem::path& p) {
+    std::ifstream f(p);
+    if (!f.is_open()) return 0;
+    u32 n = 0;
+    std::string line;
+    while (std::getline(f, line)) ++n;
+    return n;
 }
 
 } // namespace
@@ -170,12 +194,34 @@ void AssetBrowserPanel::rescan() {
                   });
     }
 
+    // Scripts Lua: busca en assets/scripts/ por *.lua (Hito 22 Bloque 1).
+    // No pasa por AssetManager — los scripts los carga ScriptSystem on
+    // demand desde el path. Solo guardamos line count como metadata.
+    m_scriptEntries.clear();
+    std::error_code script_ec;
+    auto script_it = std::filesystem::directory_iterator(k_scriptDir, script_ec);
+    if (!script_ec) {
+        for (const auto& entry : script_it) {
+            if (!entry.is_regular_file() || !isLuaScript(entry.path())) continue;
+            ScriptEntry se;
+            se.displayName = entry.path().filename().string();
+            se.logicalPath = std::string(k_scriptLogicalPrefix) + se.displayName;
+            se.lineCount   = countLines(entry.path());
+            m_scriptEntries.push_back(std::move(se));
+        }
+        std::sort(m_scriptEntries.begin(), m_scriptEntries.end(),
+                  [](const ScriptEntry& a, const ScriptEntry& b) {
+                      return a.displayName < b.displayName;
+                  });
+    }
+
     m_scanned = true;
     Log::assets()->info(
         "AssetBrowserPanel: {} texturas, {} audios, {} meshes, {} prefabs, "
-        "{} materiales listados",
+        "{} materiales, {} scripts listados",
         m_entries.size(), m_audioEntries.size(), m_meshEntries.size(),
-        m_prefabEntries.size(), m_materialEntries.size());
+        m_prefabEntries.size(), m_materialEntries.size(),
+        m_scriptEntries.size());
 }
 
 void AssetBrowserPanel::onImGuiRender() {
@@ -349,6 +395,38 @@ void AssetBrowserPanel::onImGuiRender() {
                 }
                 ImGui::SameLine();
                 ImGui::TextDisabled("(material)");
+                ImGui::PopID();
+            }
+        }
+    }
+
+    // --- Seccion Scripts (Hito 22 Bloque 1) ---
+    // Lista los `.lua` de assets/scripts/. Drag payload `MOOD_SCRIPT_ASSET`
+    // contiene el path logico como string fijo (k_payloadBufSize bytes).
+    // Drop sobre una entidad asigna ScriptComponent con ese path
+    // (handler en EditorApplication).
+    if (!m_scriptEntries.empty()) {
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Scripts", ImGuiTreeNodeFlags_DefaultOpen)) {
+            for (const auto& se : m_scriptEntries) {
+                ImGui::PushID(se.logicalPath.c_str());
+                ImGui::Selectable(se.displayName.c_str(), false);
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                    // Payload: path logico como buffer fijo. Lo recibe
+                    // ViewportPanel y lo pasa a EditorApplication.
+                    constexpr int kPayloadBufSize = 256;
+                    char buf[kPayloadBufSize] = {0};
+                    const auto n = std::min(se.logicalPath.size(),
+                                              static_cast<size_t>(kPayloadBufSize - 1));
+                    std::memcpy(buf, se.logicalPath.data(), n);
+                    ImGui::SetDragDropPayload("MOOD_SCRIPT_ASSET",
+                                               buf, kPayloadBufSize);
+                    ImGui::TextUnformatted(se.displayName.c_str());
+                    ImGui::EndDragDropSource();
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("(%u lineas)", se.lineCount);
                 ImGui::PopID();
             }
         }
