@@ -30,6 +30,7 @@ add_executable(mood_tests
     test_animation.cpp
     test_game_state.cpp
     test_package_builder.cpp
+    test_scene_loader.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -44,6 +45,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/LuaBindings.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/game/GameState.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/packaging/PackageBuilder.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/serialization/SceneLoader.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/VFS.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/AssetManager.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/MeshLoader.cpp
