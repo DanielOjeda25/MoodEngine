@@ -4,6 +4,7 @@
 #include "core/math/AABB.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/audio/AudioDevice.h"
+#include "engine/game/GameManifest.h"
 #include "engine/game/GameOverlay.h"
 #include "engine/game/GameState.h"
 #include "engine/physics/PhysicsWorld.h"
@@ -16,6 +17,9 @@
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
+#include "engine/serialization/ProjectSerializer.h"
+#include "engine/serialization/SceneLoader.h"
+#include "engine/serialization/SceneSerializer.h"
 #include "platform/Window.h"
 #include "systems/AnimationSystem.h"
 #include "systems/AudioSystem.h"
@@ -102,10 +106,78 @@ PlayerApplication::PlayerApplication() {
     SDL_SetRelativeMouseMode(SDL_TRUE);
     SDL_GetRelativeMouseState(nullptr, nullptr);
 
-    buildTestMap();
-    rebuildSceneFromMap();
+    // Intentamos cargar `game.json` adyacente al .exe. Si no existe o
+    // hay cualquier problema, caemos al mapa de prueba — util mientras
+    // el Bloque 5 (PackageBuilder) no produzca paquetes reales.
+    if (!tryLoadGameManifest()) {
+        Log::engine()->info(
+            "MoodPlayer: sin game.json valido, cargando mapa de prueba placeholder");
+        buildTestMap();
+        rebuildSceneFromMap();
+    }
+
+    if (m_sceneRenderer && m_scene) {
+        // Aplicar Environment del proyecto YA, en lugar de esperar al
+        // primer renderScene. Asi la primera frame muestra fog/exposure/
+        // tonemap correctos sin un flash a defaults.
+        m_sceneRenderer->applyEnvironmentFromScene(*m_scene);
+    }
 
     MOOD_LOG_INFO("MoodPlayer listo (gameplay activo: WASD + mouse, Esc para pausar)");
+}
+
+bool PlayerApplication::tryLoadGameManifest() {
+    // Buscamos `game.json` junto al .exe (NO al working dir — que puede
+    // variar entre VS, cmd, o doble-click). SDL_GetBasePath devuelve el
+    // dir absoluto del .exe con trailing slash; el caller debe liberar
+    // la memoria con SDL_free.
+    char* base = SDL_GetBasePath();
+    const std::filesystem::path exeDir = base
+        ? std::filesystem::path(base)
+        : std::filesystem::current_path();
+    if (base) SDL_free(base);
+    const auto manifestPath = exeDir / "game.json";
+    auto manifest = GameManifest::loadFromFile(manifestPath);
+    if (!manifest) return false;
+
+    Log::engine()->info("GameManifest: '{}' (proyecto='{}')",
+                         manifest->name.empty() ? "<sin nombre>" : manifest->name,
+                         manifest->projectRelative.generic_string());
+
+    // Resolver paths: project relativo al manifest dir, mapa relativo
+    // al directorio del .moodproj.
+    const auto manifestDir = manifestPath.parent_path();
+    const auto moodprojPath = manifestDir / manifest->projectRelative;
+
+    auto loaded = ProjectSerializer::load(moodprojPath);
+    if (!loaded.has_value() || loaded->maps.empty()) {
+        Log::engine()->warn(
+            "GameManifest: proyecto invalido o sin mapas en '{}'",
+            moodprojPath.generic_string());
+        return false;
+    }
+
+    const auto mapRel = manifest->defaultMapRelative.empty()
+        ? loaded->defaultMap
+        : manifest->defaultMapRelative;
+    const auto mapPath = loaded->root / mapRel;
+
+    auto savedMap = SceneSerializer::load(mapPath, *m_assetManager);
+    if (!savedMap.has_value()) {
+        Log::engine()->warn(
+            "GameManifest: no se pudo cargar mapa default '{}'",
+            mapPath.generic_string());
+        return false;
+    }
+
+    m_map = std::move(savedMap->map);
+    rebuildSceneFromMap();
+    SceneLoader::applyEntitiesToScene(*savedMap, *m_scene, *m_assetManager);
+
+    Log::engine()->info(
+        "MoodPlayer: proyecto '{}' cargado ({} entidades persistidas)",
+        loaded->name, savedMap->entities.size());
+    return true;
 }
 
 PlayerApplication::~PlayerApplication() {

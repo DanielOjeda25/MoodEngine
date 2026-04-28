@@ -58,10 +58,17 @@ private:
     ///        editor en Play Mode).
     void updateRigidBodies(f32 dt);
 
+    /// @brief Intenta cargar `<exe_dir>/game.json`. Si existe + valida +
+    ///        el proyecto + mapa default cargan: aplica todo al scene
+    ///        y retorna true. Si falla en cualquier paso retorna false
+    ///        (caller cae al `buildTestMap` placeholder).
+    bool tryLoadGameManifest();
+
     /// @brief Construye el mapa de prueba (sala 8x8 perimetral) y
-    ///        materializa una entidad por tile solido. Placeholder
-    ///        hasta que Bloque 4 cargue el `.moodmap` real desde
-    ///        `game.json`.
+    ///        materializa una entidad por tile solido. Fallback usado
+    ///        cuando no hay `game.json` valido — util al correr
+    ///        `MoodPlayer.exe` directo desde `build/debug/Debug/` sin
+    ///        empaquetar.
     void buildTestMap();
     void rebuildSceneFromMap();
 
