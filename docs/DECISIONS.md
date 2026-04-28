@@ -1659,3 +1659,110 @@ personajes.
 **Revisar si:** algun clip muestra artifacts claros (twisting,
 candy-wrapper effect en hombros). En ese caso evaluar SLERP
 antes de DQS.
+
+
+## 2026-04-28: Abandono de RmlUi en favor de drawlist de Dear ImGui (Hito 20)
+
+**Contexto:** el plan original del Hito 20 era integrar **RmlUi**
+(librería de UI declarativa con HTML/CSS-like) para HUDs y menús
+in-game, distinguible de la UI del editor (Dear ImGui). Tras
+Bloques 1-3 (integración, render interface, fuentes vía FreeType,
+HUD básico funcionando), apareció un bug persistente: el panel
+del menú de pausa no escalaba consistentemente con el viewport en
+distintas resoluciones. Se intentaron `vw`/`vh`, `dp`, percentage
+clamps con varias combinaciones — ninguna producía un cuadrado
+centrado predecible bajo redimensionamiento de panel ImGui.
+
+**Decisión:** abandonar RmlUi y reescribir HUD + menú de pausa
+con `ImDrawList` de Dear ImGui sobre el callback `OverlayDraw`
+que ya tenía `ViewportPanel` para iconos y gizmos del editor.
+
+**Razones:**
+- Single source of truth para UI: solo Dear ImGui. Menos código,
+  menos shaders dedicados, una sola librería que mantener.
+- El `ImDrawList` ya estaba siendo usado para iconos + gizmos del
+  editor; el HUD del juego es conceptualmente similar (overlay
+  2D sobre el viewport).
+- La librería FreeType + RmlUi sumaba ~6 archivos de runtime
+  (`RmlRenderer`, `RmlSystem`, `UiLayer`, shaders `ui.{vert,frag}`,
+  `.rml`/`.rcss`) — borrarlos achicó el código en ~1000 líneas.
+- El layout absoluto del menú de pausa via cálculo C++
+  (`std::clamp(w * 0.5f, 320.0f, 520.0f)`) es trivial,
+  determinístico, y debugeable con un breakpoint.
+- Hit-testing nativo con `ImGui::IsMouseHoveringRect` +
+  `IsMouseClicked` resuelve clicks sin un ciclo de eventos
+  separado.
+
+**Alternativas consideradas:**
+- **Seguir con RmlUi y forzar vmin/vmax/min-content**: ya
+  intentado durante 3 sesiones sin resultado consistente.
+- **Migrar a otra lib declarativa (FlexUI, NoesisGUI)**: añade
+  otra dependencia con la misma clase de problemas. NoesisGUI
+  además es comercial.
+- **Construir un mini layout engine custom**: scope creep —
+  no es lo que aporta valor en este hito.
+
+**Trade-offs:**
+- Se pierde: lenguaje declarativo HTML/CSS, hot-reload de
+  estilos, animaciones de transición tipo CSS.
+- Se gana: simplicidad, integración nativa con el resto del
+  motor, debug trivial (todo es C++), 1 librería menos.
+
+**Revisar si:** aparece un menú in-game que justifique
+realmente HTML/CSS (settings con cientos de filas, animaciones
+complejas de pantalla principal). En ese caso, RmlUi puede
+reintroducirse como una capa adicional sin tocar el HUD/pausa
+actual — los dos sistemas pueden coexistir sobre el mismo
+framebuffer.
+
+## 2026-04-28: GameState como singleton-namespace para puente C++ ↔ Lua (Hito 20)
+
+**Contexto:** los scripts Lua deben poder mutar el HUD del
+juego (`hp`, `ammo`) y togglear la pausa. El estado vivía
+inicialmente como miembros de `EditorApplication` (`m_hud`,
+`m_paused`), pero `LuaBindings::setupLuaBindings` no tiene
+acceso al `EditorApplication` (firma `(sol::state&, Entity)`).
+
+**Decisión:** mover el estado a un singleton-namespace
+`engine/game/GameState`:
+
+```cpp
+namespace Mood::GameState {
+  HudState& hud();      // static HudState dentro
+  bool& paused();       // static bool dentro
+  void reset();
+}
+```
+
+`EditorApplication` lee/escribe `GameState::hud()` y
+`GameState::paused()`. La tabla `hud` registrada en
+`LuaBindings` accede a la misma instancia. `exitPlayMode`
+llama `GameState::reset()` para volver a defaults al salir
+de Play.
+
+**Razones:**
+- Mismo patrón que ya usa el proyecto para `Log::editor()`,
+  `Log::script()`, etc. (singleton vía función estática).
+- Cero refactor de signaturas: `setupLuaBindings` no cambia
+  su firma; solo agrega un `#include` y registra la tabla.
+- El estado es semánticamente proceso-global (un solo HUD por
+  juego, una sola pausa) — el singleton refleja la realidad.
+- Sin necesidad de pasar punteros / `std::function` /
+  callbacks que complicarían el hot-reload de scripts.
+
+**Alternativas consideradas:**
+- **Inyectar `EditorApplication*` a `setupLuaBindings`**:
+  acopla las dos clases en un sentido innecesario;
+  `LuaBindings` debería poder existir en builds standalone
+  sin editor.
+- **Pasar un struct de callbacks**: más complejo para
+  resolver el mismo problema. Útil cuando hay variantes,
+  no cuando hay una única implementación.
+- **Hacer `HudState` un componente de una entidad
+  singleton ECS**: forza a buscar la entidad cada llamada
+  al binding. Más lookup y menos legible.
+
+**Revisar si:** el motor evoluciona hacia múltiples mundos /
+scenas en simultáneo (multiplayer split-screen, A/B testing).
+En ese caso, GameState pasaría a ser un objeto pasado como
+contexto en lugar de un singleton.

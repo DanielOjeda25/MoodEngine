@@ -1,4 +1,8 @@
-# Plan — Hito 20: UI del juego con RmlUi
+# Plan — Hito 20: UI del juego (HUD + menú de pausa) — **CERRADO**
+
+> **Estado:** cerrado en tag `v0.20.0-hito20`. El plan original era integrar **RmlUi** y los Bloques 1-3 lo siguieron — tras descubrir bugs persistentes de layout responsive de RmlUi, se abandonó esa lib y los Bloques 4-6 reescribieron HUD + pausa con **drawlist de Dear ImGui** sobre el callback `OverlayDraw` que ya tenía `ViewportPanel`. Ver resumen final en `HITOS.md` (sección Hito 20) y la decisión en `DECISIONS.md` (entrada 2026-04-28).
+>
+> El cuerpo del plan abajo se conserva como histórico — sus checkboxes Bloques 1-3 quedaron solo parcialmente válidos (RmlUi integrada y borrada), y los Bloques 4-6 se reescribieron en `HITOS.md`.
 
 > **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, sección 10 (Hito 20) de `MOODENGINE_CONTEXTO_TECNICO.md`.
 >

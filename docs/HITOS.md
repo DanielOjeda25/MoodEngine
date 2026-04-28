@@ -559,3 +559,54 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Vertex Animation Textures** (alternativa a skinning para crowds): si aparece la necesidad de cientos de personajes animados. **Trigger:** RPG con NPCs masivos.
 - **AnimationEvent** (callbacks por timeline — "footstep en t=0.3"): permitiría disparar audio / partículas en frames específicos. **Trigger:** primer feature de gameplay que lo necesite.
 - **Persistencia del path del `.glb` con esqueleto en `.moodmap`**: hoy `MeshRendererComponent` solo guarda el path del mesh; el esqueleto y los clips se reconstruyen al cargar el MeshAsset. Aceptable mientras un mesh tenga UN esqueleto canónico.
+
+---
+
+## Hito 20 — UI del juego (HUD + menú de pausa)
+
+**Objetivo:** una capa de UI in-game distinguible de la UI del editor (Dear ImGui). HUD con HP/Ammo/crosshair visibles solo en Play Mode, menú de pausa con Esc, y bindings desde Lua para que los scripts puedan mutar el HUD.
+
+**Cambio de plan a mitad del hito:** el plan original era integrar **RmlUi** (HTML/CSS-like) como librería separada. Tras Bloques 1-3 funcionando, el layout responsive de RmlUi mostró bugs persistentes (vw/vh, dp, percentage clamps — el panel no escalaba consistentemente con el viewport). Se decidió abandonar RmlUi y reemplazarlo con **drawlist de Dear ImGui** sobre el callback `OverlayDraw` que ya tenía `ViewportPanel` para el editor. Trade-off: perder el lenguaje declarativo HTML/CSS, ganar simplicidad y un solo motor de UI. Documentado en `DECISIONS.md`. Para casos donde un día se quiera HTML/CSS (menús complejos con animaciones de transición), se puede reintroducir como un layer adicional sin romper el actual.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 4 — HUD + pausa via ImGui drawlist:*
+- HUD en Play Mode: bloques HP / AMMO + crosshair (cruz con outline) — `EditorApplication::drawGameOverlay`. Posición adaptativa al tamaño del viewport (esquinas con padding fijo de 24 px).
+- Menú de pausa: overlay oscuro 50% + panel centrado 50% del ancho con clamp [320, 520] px + 3 botones (Continuar / Opciones / Salir al editor). Hit-testing con `ImGui::IsMouseHoveringRect` + `IsMouseClicked`.
+- Esc togglea pausa; `updateCameras` early-return cuando `paused=true` para congelar gameplay.
+- Borrado completo de `RmlUi::Core` + FreeType + assets `.rml`/`.rcss` + shaders `ui.{vert,frag}` + `src/engine/ui/{RmlRenderer,RmlSystem,UiLayer}.{h,cpp}` (~1000 líneas).
+- Bug fix encontrado en el smoke test: `ViewportPanel` resetea `m_imageHovered=false` al inicio del frame y solo lo setea DESPUÉS de invocar el overlay callback. El check de hover de los botones que combinaba `IsMouseHoveringRect && imageHovered()` daba siempre false. Removido el `&& imageHovered()` — `IsMouseHoveringRect` solo es suficiente porque el clip rect del viewport ya limita el área.
+
+*Refactor: partición de `EditorApplication.cpp`:*
+- `EditorApplication.cpp` había crecido a 1514 líneas (lifecycle + ctor con lambda gigante + scene methods + play mode methods + overlay del juego). Repartido en 4 archivos parciales (~500 líneas/cada uno) que comparten el mismo header — convención ya usada en este módulo (`DemoSpawners.cpp`, `EditorProjectActions.cpp`, `EditorRenderPass.cpp`):
+  - `EditorApplication.cpp` (652 líneas): ctor + dtor + `processEvents` + `run()` + `beginFrame/endFrame` + `mapWorldOrigin` + `markDirty` + `updateWindowTitle`.
+  - `EditorOverlay.cpp` (516 líneas, nuevo): `drawEditorOverlay` con iconos (Light/Audio), halo de selección, gizmo translate/rotate/scale, hotkeys W/E/R/Period.
+  - `EditorPlayMode.cpp` (212 líneas, nuevo): `enterPlayMode/exitPlayMode/updateCameras/drawGameOverlay`.
+  - `EditorScene.cpp` (192 líneas, nuevo): `buildInitialTestMap`, `rebuildSceneFromMap`, `updateRigidBodies`, `updateTileEntity`, `deleteSelectedEntity`.
+- Soft target: ~500 líneas/`.cpp`, hard cap ~800.
+
+*Bloque 5 — bindings Lua + GameState:*
+- `engine/game/GameState.{h,cpp}` (nuevo): singleton-namespace con `HudState& hud()`, `bool& paused()`, `reset()`. Estado proceso-global accesible desde C++ y desde Lua.
+- Tabla `hud` registrada en `LuaBindings.cpp` con setters `setHp/setAmmo/setPaused` + getters `getHp/getAmmo/getPaused`. Cualquier script con `ScriptComponent` puede mutar el HUD del juego.
+- `EditorApplication` migrado a leer/escribir `GameState::hud()` y `GameState::paused()` (eliminados los miembros propios `m_hud`/`m_paused`).
+- `exitPlayMode` llama `GameState::reset()` para volver a defaults al salir de Play.
+- `assets/scripts/hud_demo.lua` (nuevo): script demo que setea HP=75/Ammo=12 al entrar a Play, drena 1 HP/s y al llegar a 0 fuerza pausa via `hud.setPaused(true)`. Spawneable desde "Ayuda > Agregar HUD demo".
+- Bug fix detectado en smoke test: cuando un script Lua flippeaba `paused=true`, el menú aparecía pero el cursor seguía oculto (relative mouse mode). Fix centralizado en `updateCameras`: detecta la transición del flag y llama a `SDL_SetRelativeMouseMode` en un único lugar — así Lua, Esc y el botón "Continuar" pasan por el mismo camino. El handler de Esc y el botón "Continuar" pasan a solo flippear el flag.
+
+*Bonus fix — Delete vía SDL:*
+- La tecla `Delete/Backspace` para borrar entidad seleccionada se procesaba con `ImGui::IsKeyPressed` dentro del overlay callback. Dependía del foco del panel y a veces no disparaba. Migrado a evento SDL en `processEvents` (igual que Esc / F1 / Ctrl+S). La lógica de borrado (filtro de tiles + cleanup de Jolt body + destroy + log + markDirty) se extrajo al método público `deleteSelectedEntity` en `EditorScene.cpp`.
+
+*Bloque 6 — tests:*
+- `tests/test_game_state.cpp`: 6 casos cubriendo defaults, mutación C++, reset, hud.setHp/setAmmo/setPaused desde Lua, hud.getHp/getAmmo/getPaused desde Lua, dos scripts compartiendo el mismo singleton.
+- Fix incidental en `tests/test_lighting.cpp`: el mock `RecordingShader` no overrideaba `setVec2` (agregado a `IShader` en Bloque 4 al integrar lo que iba a ser RmlUi y quedó). Sin esto `mood_tests` no compilaba.
+- Suite total **171 / 5188** (antes Hito 19 cerrado: 165 / 5172).
+
+**Siguiente paso tras completarlo:** Hito 21 — Empaquetado standalone (build distribuible del juego sin editor). Plan en `docs/PLAN_HITO21.md`.
+
+### Pendientes menores detectados en Hito 20
+
+- **Botón "Opciones" del menú de pausa**: hoy solo loguea `aún no implementado`. **Trigger:** cuando haya un sistema de settings persistido (volumen, resolución, control mapping).
+- **Animaciones de transición del menú de pausa** (fade, slide): hoy aparece/desaparece instantáneo. **Trigger:** primera versión "vendible" donde la presentación importe; o cuando se quiera reintroducir RmlUi para ese caso específico.
+- **Persistencia de HUD entre sesiones**: hoy `GameState::reset()` al `exitPlayMode` lo lleva a defaults; los scripts setean valores cada vez. **Trigger:** primera vez que un dev quiera "save game" con HP/Ammo persistidos.
+- **HUD escalable a más de HP/Ammo**: hoy 2 bloques fijos. Si crece a 5+ stats vale la pena hacer el HUD data-driven (lista de bloques desde Lua). **Trigger:** primer juego que necesite +3 stats simultáneos.
+- **Tests del flujo Esc → menú → click "Continuar"**: hoy verificado solo con smoke test manual. ImGui no es trivialmente testable en headless, pero `GameState::paused()` y `deleteSelectedEntity` (extraído justo para esto) sí podrían tener tests headless. **Trigger:** primer regression bug del menú.
