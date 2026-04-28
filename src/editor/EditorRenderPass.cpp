@@ -123,7 +123,13 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
         const AABB world{worldOrigin + local.min, worldOrigin + local.max};
         dbg.drawAabb(world, hoverColor);
     }
-    if (dragKind == DragKind::Material && m_scene
+    // Script drop tambien apunta a una entidad — mismo highlight OBB
+    // amarillo que Material para mantener consistencia visual (Hito 22
+    // Bloque 2). Para entidades sin mesh (Light/Audio) el OBB no se
+    // dibuja porque el branch interno verifica `MeshRendererComponent`.
+    const bool dragTargetsEntity =
+        dragKind == DragKind::Material || dragKind == DragKind::Script;
+    if (dragTargetsEntity && m_scene
         && m_mode == EditorMode::Editor
         && m_ui.viewport().imageHovered()) {
         const glm::vec2 ndc(m_ui.viewport().mouseNdcX(),

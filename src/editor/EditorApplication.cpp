@@ -484,6 +484,7 @@ int EditorApplication::run() {
         processViewportMeshDrop();
         processViewportPrefabDrop();
         processViewportMaterialDrop();
+        processViewportScriptDrop();
 
         // 3) Input -> camaras.
         updateCameras(dt);

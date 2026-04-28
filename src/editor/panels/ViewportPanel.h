@@ -49,7 +49,7 @@ public:
     ///        - Material apunta a UNA ENTIDAD -> outline OBB sobre el
     ///          mesh bajo el cursor.
     ///        `None` significa que no hay drag activo (no se dibuja nada).
-    enum class AssetDragKind { None, Texture, Mesh, Prefab, Material };
+    enum class AssetDragKind { None, Texture, Mesh, Prefab, Material, Script };
     AssetDragKind assetDragKind() const { return m_assetDragKind; }
 
     /// @brief Helper booleano para callsites que solo necesitan saber si
@@ -131,6 +131,22 @@ public:
         return r;
     }
 
+    /// @brief Drop de un script Lua sobre el viewport (Hito 22 Bloque 2).
+    ///        Asigna ScriptComponent a la entidad bajo el cursor con el
+    ///        path logico del script (ej. "scripts/rotator.lua").
+    struct ScriptDrop {
+        bool pending = false;
+        float ndcX = 0.0f;
+        float ndcY = 0.0f;
+        std::string scriptPath; // path logico, ej. "scripts/foo.lua"
+    };
+
+    ScriptDrop consumeScriptDrop() {
+        ScriptDrop r = std::move(m_pendingScriptDrop);
+        m_pendingScriptDrop = ScriptDrop{};
+        return r;
+    }
+
     /// @brief Click izquierdo sobre la imagen del viewport (Hito 13).
     ///        Distingue click puro de drag: dispara solo si el mouse bajó
     ///        y subió sin desplazarse más de 4 pixeles.
@@ -179,6 +195,7 @@ private:
     MeshDrop m_pendingMeshDrop{};
     PrefabDrop m_pendingPrefabDrop{};
     MaterialDrop m_pendingMaterialDrop{};
+    ScriptDrop m_pendingScriptDrop{};
     ClickSelect m_pendingClick{};
     OverlayDraw m_overlayDraw{};
 

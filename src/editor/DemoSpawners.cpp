@@ -692,4 +692,43 @@ void EditorApplication::processViewportMaterialDrop() {
     markDirty();
 }
 
+void EditorApplication::processViewportScriptDrop() {
+    ViewportPanel::ScriptDrop drop = m_ui.viewport().consumeScriptDrop();
+    if (!(drop.pending && m_mode == EditorMode::Editor && m_scene)) return;
+
+    const float aspect = viewportAspect();
+    const glm::mat4 view = m_editorCamera.viewMatrix();
+    const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
+
+    ScenePickResult hit = pickEntity(*m_scene, view, projection,
+        glm::vec2(drop.ndcX, drop.ndcY),
+        m_assetManager.get());
+    if (!hit) {
+        Log::editor()->info("Drop script: no hay entidad bajo el cursor");
+        return;
+    }
+
+    // Asignar ScriptComponent. Si la entidad ya tenia uno, lo
+    // sobreescribimos (replace path). entt permite get-or-emplace via
+    // emplace_or_replace, pero la API de Entity no lo expone — usamos
+    // hasComponent + addComponent / get.
+    const std::string fullPath = std::string("assets/") + drop.scriptPath;
+    if (hit.entity.hasComponent<ScriptComponent>()) {
+        auto& sc = hit.entity.getComponent<ScriptComponent>();
+        sc.path      = fullPath;
+        sc.loaded    = false; // forzar recarga via mtime check
+        sc.lastError.clear();
+    } else {
+        hit.entity.addComponent<ScriptComponent>(fullPath);
+    }
+    m_ui.setSelectedEntity(hit.entity);
+
+    const std::string tagName = hit.entity.hasComponent<TagComponent>()
+        ? hit.entity.getComponent<TagComponent>().name
+        : std::string{"(sin tag)"};
+    Log::editor()->info("Drop script '{}' -> entidad '{}'",
+                         drop.scriptPath, tagName);
+    markDirty();
+}
+
 } // namespace Mood

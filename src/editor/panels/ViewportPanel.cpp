@@ -30,6 +30,7 @@ void ViewportPanel::onImGuiRender() {
         else if (p->IsDataType("MOOD_MESH_ASSET"))     m_assetDragKind = AssetDragKind::Mesh;
         else if (p->IsDataType("MOOD_PREFAB_ASSET"))   m_assetDragKind = AssetDragKind::Prefab;
         else if (p->IsDataType("MOOD_MATERIAL_ASSET")) m_assetDragKind = AssetDragKind::Material;
+        else if (p->IsDataType("MOOD_SCRIPT_ASSET"))   m_assetDragKind = AssetDragKind::Script;
     }
 
     if (!visible) return;
@@ -126,6 +127,19 @@ void ViewportPanel::onImGuiRender() {
                         mousePosToNdc(ImGui::GetMousePos(), ndcX, ndcY);
                         m_pendingMaterialDrop =
                             MaterialDrop{true, ndcX, ndcY, id};
+                    }
+                }
+                if (const ImGuiPayload* payload =
+                        ImGui::AcceptDragDropPayload("MOOD_SCRIPT_ASSET")) {
+                    // Payload es un buffer fijo (256 bytes) con el path
+                    // logico null-terminated. AssetBrowserPanel lo arma asi.
+                    if (payload->DataSize > 0) {
+                        const char* str = static_cast<const char*>(payload->Data);
+                        float ndcX = 0.0f;
+                        float ndcY = 0.0f;
+                        mousePosToNdc(ImGui::GetMousePos(), ndcX, ndcY);
+                        m_pendingScriptDrop = ScriptDrop{
+                            true, ndcX, ndcY, std::string{str}};
                     }
                 }
                 ImGui::EndDragDropTarget();
