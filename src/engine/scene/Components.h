@@ -19,6 +19,7 @@
 #include <glm/trigonometric.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #include <string>
 #include <unordered_map>
@@ -281,6 +282,48 @@ struct NavAgentComponent {
     /// Target world-space del ultimo path computado — para detectar
     /// si el target real se movio mas que un tile y forzar repath.
     glm::vec3 lastPathTarget{1e9f};
+};
+
+/// @brief Hito 29: emisor de particulas CPU. Sistema de struct-of-arrays
+///        per-emisor; `ParticleSystem` lo procesa en update. El render
+///        (billboards) corre en el SceneRenderer despues de la geometria
+///        opaca y antes del post-process. V1 sin sorting por depth — los
+///        emisores con varias instancias superpuestas pueden mostrar
+///        artifacts.
+struct ParticleEmitterComponent {
+    // --- Configuracion editable ---
+    f32 emitRate     = 60.0f;          // particles/sec
+    f32 lifetimeMin  = 1.0f;           // segundos
+    f32 lifetimeMax  = 1.5f;
+    glm::vec3 velocityMin{-0.4f, 1.0f, -0.4f}; // m/s, world-space
+    glm::vec3 velocityMax{ 0.4f, 2.0f,  0.4f};
+    f32 sizeStart    = 0.30f;          // metros (ancho del billboard)
+    f32 sizeEnd      = 0.05f;
+    glm::vec4 colorStart{1.0f, 0.75f, 0.2f, 1.0f}; // naranja
+    glm::vec4 colorEnd  {1.0f, 0.10f, 0.0f, 0.0f}; // rojo transparente
+    /// 0 = sin gravedad. 1 = gravedad real (-9.81 m/s^2 en Y). Negativo
+    /// lo invierte (humo subiendo se modela mejor con gravityFactor>0
+    /// y velocityMin/Max apuntando hacia +Y).
+    f32 gravityFactor = 0.0f;
+    TextureAssetId texture = 0;        // 0 = missing.png; el shader hace billboard
+    u32 maxParticles  = 256;           // cap de la pool
+    bool emitting     = true;          // false = pausa spawn, vivas siguen avanzando
+    bool additive     = false;         // true = blend aditivo (fuego/sparks); false = alpha (humo)
+
+    // --- Estado runtime (NO serializar) ---
+    f32 emitAccumulator = 0.0f;        // particulas pendientes (fraccional)
+    u64 rngState        = 0xC0FFEEu;   // xorshift64 — se inicializa al primer update si vale 0
+
+    // Struct-of-arrays. Tamano = maxParticles. `alive[i]==0` indica slot libre
+    // — el spawn nuevo recicla el primero que encuentre. Reservados al primer
+    // update para no inflar el componente cuando el dev solo lo lista en el
+    // Inspector sin entrar Play.
+    std::vector<glm::vec3> positions;   // world-space
+    std::vector<glm::vec3> velocities;  // m/s
+    std::vector<f32>       ages;        // segundos desde spawn
+    std::vector<f32>       lifetimes;   // total por particula (lerp uniforme entre min/max)
+    std::vector<u8>        alive;       // 0/1
+    u32 aliveCount = 0;
 };
 
 } // namespace Mood

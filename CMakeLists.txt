@@ -284,6 +284,7 @@ add_library(mood_engine_lib STATIC
     src/systems/AudioSystem.cpp
     src/systems/LightSystem.cpp
     src/systems/NavSystem.cpp
+    src/systems/ParticleSystem.cpp
     src/systems/PhysicsSystem.cpp
     src/systems/PostProcessPass.cpp
     src/systems/ScriptSystem.cpp

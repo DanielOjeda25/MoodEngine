@@ -38,6 +38,7 @@ add_executable(mood_tests
     test_edit_transform_command.cpp
     test_delete_entity_command.cpp
     test_create_entity_command.cpp
+    test_particle_system.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -49,6 +50,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/world/GridMap.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/Pathfinding.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/NavSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/ParticleSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/PhysicsSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/ScriptSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/ExposedProperty.cpp
