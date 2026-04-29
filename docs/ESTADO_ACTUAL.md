@@ -6,15 +6,19 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 27 cerrado.**
+**Hito 28 cerrado.**
+Tag: `v0.28.0-hito28`.
+Verificado automático: suite doctest **246/5431** (+8 de `test_create_entity_command` para CreateEntityCommand). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: spawnear cualquier entidad desde "Ayuda > Agregar X" o drop de mesh/prefab al viewport → Ctrl+Z destruye lo recién creado, Ctrl+Y lo recrea con sus componentes intactos. Drop de barril Kenney 0.27m: aparece a su escala nativa (no inflado a 1.5m). Drop de Fox.glb (130 unidades = 13m): downscale a 1.5m. Editor in-place de scripts via `ScriptEditorPanel` (sin nueva dep — `ImGui::InputTextMultiline` + autosave on Lose Focus).
+
+**Cambio importante:** después de 4 hitos consecutivos de polish editor (25 hot-reload, 26 asset pipeline, 27 undo/redo gizmo+delete, 28 spawn undoables + autoscale + script editor), el roadmap vuelve a features de gameplay. **Hito 29 = Particle system** (era Hito 24 en el roadmap original). Editor polish remanente — InspectorEditCommand para sliders, commands para drops modificadores, handle remap del HistoryStack — quedan como pendientes menores con trigger explícito.
+
+**Próximo paso:** Hito 29 — Particle system. Plan en `docs/PLAN_HITO29.md`.
+
+### Hito 27 (anterior, ya cerrado)
 Tag: `v0.27.0-hito27`.
-Verificado automático: suite doctest **238/5409** (+26 entre `test_history_stack` (10), `test_edit_transform_command` (8), `test_delete_entity_command` (7) y otros). Editor compila limpio. Verificado por el dev a ojo: drag de gizmo (W/E/R) sobre cualquier entidad → soltar → Ctrl+Z revierte el drag completo en una sola operación (no 60 micro-edits por frame). Delete sobre Fox.glb (animator + skeleton) → Ctrl+Z lo recrea con animación intacta. Delete sobre CajaFisica (Jolt rigidbody dynamic) → Ctrl+Z la recrea con `bodyId=0` que se rematerializa al siguiente frame. Cambio de proyecto: el history se vacía.
+Verificado automático: suite doctest **238/5409**. Drag de gizmo (W/E/R) sobre cualquier entidad → soltar → Ctrl+Z revierte el drag completo en una sola operación (no 60 micro-edits por frame). Delete sobre Fox.glb → Ctrl+Z lo recrea con animación intacta. Delete sobre CajaFisica → Ctrl+Z la recrea con `bodyId=0` que se rematerializa.
 
-**Cambio importante en el editor:** `EditorApplication::deleteSelectedEntity` ahora pushea un `DeleteEntityCommand` al `m_history` en lugar de borrar directo. El comando captura un `SavedEntity` snapshot via `EntitySerializer` para que el undo recree la entidad completa. Los edits del Inspector (albedoTint, metallic, etc.) y los spawns (`processSpawnX` + drops del viewport) AÚN no son undoables — quedaron como pendientes del Hito 28.
-
-**Decoupling de Jolt:** `DeleteEntityCommand` recibe un callback `BodyCleanup = std::function<void(u32)>` en lugar de un `PhysicsWorld*` directo. Permite que los tests pasen `{}` y queda no-op, sin arrastrar Jolt al test target. Editor pasa una lambda que llama `PhysicsWorld::destroyBody`.
-
-**Próximo paso:** Hito 28 (TBD). Plan en `docs/PLAN_HITO28.md`. Candidatos top: completar `CreateEntityCommand` (spawn + drops undoables), comandos para el Inspector (edits de material), corrección del autoscale agresivo de Kenney (TODO ya anotado en `DemoSpawners.cpp`).
+**Cambio importante:** `EditorApplication::deleteSelectedEntity` ahora pushea un `DeleteEntityCommand` al `m_history`. El comando captura un `SavedEntity` snapshot via `EntitySerializer` para que el undo recree la entidad completa. **Decoupling de Jolt:** `DeleteEntityCommand` recibe un callback `BodyCleanup = std::function<void(u32)>` en lugar de un `PhysicsWorld*` directo, permitiendo tests headless con `{}` no-op.
 
 ### Hito 26 (anterior, ya cerrado)
 Tag: `v0.26.0-hito26`.
@@ -398,16 +402,16 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: definir y abrir el Hito 28
+### Tarea inmediata: arrancar Hito 29 — Particle system
 
-El Hito 27 está cerrado (tag `v0.27.0-hito27`). El próximo hito está **TBD**. Candidatos en `docs/PLAN_HITO28.md`. Top candidatos heredados del Hito 27 como pendientes: `CreateEntityCommand` (spawn/drops undoables), comandos para edits del Inspector, fix del autoscale agresivo de Kenney. Diferidos del Hito 26 que siguen disponibles: NavAgent polish, PackageBuilder smart-pack, Inspector con drop de textura.
+El Hito 28 está cerrado (tag `v0.28.0-hito28`). Tras 4 hitos consecutivos de polish editor, el roadmap vuelve a features de gameplay. **Hito 29 = Particle system** (estaba como Hito 24 en el roadmap original; lo recuperamos). Plan en `docs/PLAN_HITO29.md`.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO28.md` (candidatos) y discutir con el dev qué se prioriza.
-2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
+1. Leer `docs/PLAN_HITO29.md` y arrancar Bloque 1.
+2. Trabajar bloque por bloque marcando en el plan al cerrar cada uno.
 3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.28.0-hito28`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO29.md`.
+4. Al final: commits atómicos en español, merge a main, tag `v0.29.0-hito29`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO30.md`.
 
 ---
 

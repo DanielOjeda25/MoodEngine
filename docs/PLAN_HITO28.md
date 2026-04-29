@@ -1,18 +1,30 @@
-# Plan — Hito 28: TBD
+# Plan — Hito 28: Editor polish (cerrado)
 
-> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 27 cerrado).
->
-> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
+> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 28 cerrado).
 
 ---
 
 ## Estado
 
-**Hito 27 cerrado** (`v0.27.0-hito27`, suite **238/5409**). Bloques: HistoryStack + ICommand, EditTransformCommand (gizmo), DeleteEntityCommand (snapshot via EntitySerializer), hotkeys Ctrl+Z/Y, menú Editar reactivo, 26 tests nuevos.
+**Hito 28 cerrado** (`v0.28.0-hito28`, suite **246/5431**). Tras 4 hitos consecutivos de polish editor (25 hot-reload, 26 asset pipeline, 27 undo/redo gizmo+delete, 28 spawn undoables + autoscale + script editor), el roadmap vuelve a features de gameplay.
 
-El Hito 28 está **TBD**: acordar con el dev el alcance antes de abrir bloques.
+## Bloques cerrados
 
-**Recordatorio importante:** networking / multijugador está **EXPLÍCITAMENTE fuera de alcance** desde el doc técnico (`MOODENGINE_CONTEXTO_TECNICO.md` sección "Fuera de alcance"). NO proponerlo como candidato.
+- [x] **Bloque G — Autoscale al drop respeta escala nativa** (commit `6931146`): regla bidireccional 3-rangos en `processViewportMeshDrop`. Kenney barriles 0.27m ya no inflan a 1.5m.
+- [x] **Bloque F — Mini editor de scripts in-place** (commit `45a99d0`): `ScriptEditorPanel` con `ImGui::InputTextMultiline` (sin nueva dep). Autosave on Lose Focus + hot-reload.
+- [x] **Bloque A (parcial) — `CreateEntityCommand`** (commit `9045b5a`): simétrico a `DeleteEntityCommand`. 11 spawn paths + 2 drops cableados via `pushCreatedEntities`. 8 tests nuevos.
+
+## Lo que NO se cubrió (re-asignado a "pendientes menores" del Hito 28)
+
+- **InspectorEditCommand**: 51 widgets en 511 líneas requieren un patrón templado (`PropertyEditCommand<T>` con `IsItemActivated`/`IsItemDeactivatedAfterEdit`). Coste medio + tail por widget. Sale del scope del Hito 28 sin un diseño nuevo. **Trigger:** dev pide undo de sliders del Inspector.
+- **Commands para drops modificadores** (texture/material/script): patrón "snapshot del componente entero antes y reemplazo". **Trigger:** combo con el anterior.
+- **Handle remap en HistoryStack** (arrastrado del Hito 27): edit→delete→undo→undo deja el segundo undo no-op silencioso. **Trigger:** dev nota el comportamiento.
+
+---
+
+## Recordatorio importante
+
+Networking / multijugador está **EXPLÍCITAMENTE fuera de alcance** desde el doc técnico (`MOODENGINE_CONTEXTO_TECNICO.md` sección "Fuera de alcance"). NO proponerlo como candidato.
 
 ---
 

@@ -2091,3 +2091,37 @@ Las opciones eran:
 - Se gana: un editor que se siente "real" — Ctrl+Z restaura confianza para experimentar.
 
 **Revisar si:** se necesitan comandos compactables (ej. mover el slider de roughness 30 frames produce 30 entradas), o si la fricción del handle remap se vuelve visible. Para ambos hay refactores incrementales documentados en pendientes del Hito 27.
+
+## 2026-04-29: `CreateEntityCommand` discriminador "vivo vs muerto" en lugar de flag (Hito 28)
+
+**Problema:** simétrico a `DeleteEntityCommand` pero invertido — el callsite ya creó la(s) entidad(es) antes de instanciar el comando, así que el primer `execute()` del `HistoryStack::push` es no-op. Después de un `undo()` (que destruye), un siguiente `execute()` (redo) debe recrear desde el snapshot.
+
+**Diseño descartado:** un flag `bool m_firstExecute = true` que se voltea tras la primera invocación. Falla en tests headless donde se llama `cmd.undo()` directamente sin el push previo: el flag sigue en `true`, el `execute()` post-undo se interpreta como "primer push" y queda no-op cuando debería recrear.
+
+**Decisión:** el discriminador es el ESTADO real, no un flag. `execute()` chequea si CUALQUIERA de los handles `m_alive` sigue válido en el registry; si sí, asume "primer push" y deja todo como está; si no, asume "post-undo" y recrea desde snapshots. Robusto frente a cualquier orden de invocación (incluyendo tests que llaman undo→execute→undo→execute en ciclo).
+
+**Razones:**
+- **Sin estado oculto**: el comportamiento depende sólo de lo que el código puede observar (validez de los handles).
+- **Test-friendly**: los tests pueden invocar el comando en cualquier orden sin depender de la convención `push() → execute()` del `HistoryStack`.
+
+**Trade-offs:**
+- Se pierde: el chequeo de validez tiene costo O(n) por execute (linear scan del vector m_alive). Aceptable porque n suele ser pequeño (1 para spawns single, 64 para stress de luces).
+- Se gana: simplicidad mental — no hay un flag "fantasma" que deba resetearse en algún lugar.
+
+## 2026-04-29: Cierre del Hito 28 con A parcial — vuelta a features de gameplay (Hito 28)
+
+**Problema:** después de los Hitos 25 (hot-reload), 26 (asset pipeline), 27 (undo/redo) y 28 (más undo/redo + autoscale + script editor), llevamos 4 hitos consecutivos de **polish del editor**. El `InspectorEditCommand` (cubre los 51 widgets editables del Inspector) requiere un patrón templado nuevo que sumaría ~3-4 horas más de trabajo en este hito sin entregar valor de gameplay.
+
+**Decisión:** cerrar Hito 28 ya con lo hecho (Bloque A parcial — spawns/drops undoables —, F mini-editor, G autoscale). Mover `InspectorEditCommand`, `commands para drops modificadores` y `handle remap` a "pendientes menores" con trigger explícito. Hito 29 vuelve a una feature de gameplay: **Particle system** (estaba como Hito 24 en el roadmap original — lo recuperamos).
+
+**Razones:**
+- **Disciplina de roadmap** (memoria del dev: "seguir el roadmap estricto; pendings futuros esperan su hito"): el Inspector edit-as-command es exactamente un "pendiente futuro" que NO debería extender el alcance del hito actual.
+- **Riesgo de drift**: 4 hitos seguidos de polish editor distancian al motor de su identidad como engine de FPS. El gameplay loop necesita features visuales/dinámicos.
+- **Cobertura suficiente**: gizmo + delete + create cubren el 80% del Ctrl+Z útil. Inspector es el long tail (sliders, ColorEdit, etc.) que el dev usa menos frecuentemente.
+
+**Trade-offs:**
+- Se pierde: undo de edits de Material (albedoTint, metallic, roughness, ao) — el dev que arrastra un slider y se arrepiente debe revertirlo a mano.
+- Se gana: el Hito 29 es 100% gameplay. El motor se ve "vivo" con partículas (fuego, humo, sparks) que el Forward+ del Hito 18 + el hot-reload del Hito 25 hacen ergonómico de iterar.
+
+**Revisar si:** el dev pide explícitamente Ctrl+Z de un edit del Inspector (ahí el trigger se cumple y se hace en un Hito posterior).
+

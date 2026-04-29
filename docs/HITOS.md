@@ -32,7 +32,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 25 — Hot-reload de shaders + polish del sistema de materiales (completado, tag `v0.25.0-hito25`).
 - [x] Hito 26 — Asset pipeline: extracción de texturas + asset pack Kenney + IBL bakeado desde equirect (completado, tag `v0.26.0-hito26`).
 - [x] Hito 27 — Undo/Redo en el editor (HistoryStack + comandos para gizmo y delete) (completado, tag `v0.27.0-hito27`).
-- [ ] Hito 28 — TBD.
+- [x] Hito 28 — Editor polish: undo/redo de spawns, autoscale al drop, mini editor de scripts (completado, tag `v0.28.0-hito28`).
+- [ ] Hito 29 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -934,3 +935,32 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Comandos para edits del Inspector**: hoy `albedoTint`/`metallic`/`roughness`/`ao` en el Inspector mutan el Material directo, sin pasar por el history. Ctrl+Z no los deshace. **Trigger:** dev pide undo de edits de material.
 - **Comandos para drops de textura/material/script**: similar — `processViewportTextureDrop` muta `MeshRendererComponent.materials` sin command. **Trigger:** combo con el anterior.
 - **Tests de integración del finalizeGizmoDrag**: el helper de drag-end no tiene cobertura headless porque depende de SDL events. Smoke test manual cubrió los 3 casos (translate/rotate/scale). **Trigger:** infra de mock SDL.
+
+## Hito 28 — Editor polish: undo/redo de spawns, autoscale al drop, mini editor de scripts
+
+**Objetivo:** cerrar pendientes acumulados del workflow del editor que aparecieron al usar los hitos 26 y 27. NO es un salto de feature de gameplay — es polish puro de editor. Tras este hito el roadmap vuelve a features de gameplay (particle system, character controller, raycasts/triggers).
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque G — Autoscale al drop respeta escala nativa:*
+- `DemoSpawners.cpp`: nueva lógica bidireccional (commit `6931146`). Si el AABB rotado tiene altura > 3m → downscale a 1.5m (Fox.glb cm-units). Si < 0.1m → upscale a 1.5m. Entre 0.1m y 3m: SIN autoscale (Kenney barriles 0.27m, props normales, cubos respetan authoring).
+
+*Bloque F — Mini editor de scripts in-place (sin nueva dep):*
+- `ScriptEditorPanel` (commit `45a99d0`): editor in-place con `ImGui::InputTextMultiline`. Sin `ImGuiColorTextEdit` (evitamos la dep). Autosave on Lose Focus. Hot-reload del `ScriptSystem` levanta los cambios automáticamente.
+
+*Bloque A (parcial) — `CreateEntityCommand` para spawns + drops:*
+- `CreateEntityCommand`: simétrico a `DeleteEntityCommand` (snapshot vía `EntitySerializer` + recreate vía `SceneLoader::applyOneEntity`). Discriminador "primer push vs redo" basado en validez de los handles `m_alive` (en lugar de un flag, robusto frente a ciclos de tests). 11 spawn paths + 2 viewport drops cableados a través del helper `pushCreatedEntities`.
+- 8 tests nuevos (`test_create_entity_command.cpp`): noop primer push, undo/redo con transform preservado, multi-entidad (5 entidades en un comando), ciclo iterativo, BodyCleanup invocado, lista vacía no-op, integración con HistoryStack, name() devuelve label.
+- Suite total **246/5431** (antes Hito 27 cerrado: 238/5409).
+
+**Bonus fix arrastrado:** `processSpawnRotatorRequest` no llamaba `markDirty()`. El nuevo helper `pushCreatedEntities` lo arregla automáticamente porque siempre marca dirty al pushear.
+
+**Lo que NO se cubrió (re-asignado a "pendientes menores"):** `InspectorEditCommand` (51 widgets en 511 líneas — implementarlos uno-a-uno saldría del scope sin un patrón genérico nuevo) y los drops modificadores (texture/material/script).
+
+**Siguiente paso tras completarlo:** Hito 29 — Particle system. Plan en `docs/PLAN_HITO29.md`. Vuelta a features de gameplay tras 4 hitos consecutivos de polish editor (25 hot-reload, 26 asset pipeline, 27 undo/redo gizmo+delete, 28 spawn undoables + autoscale + script editor).
+
+### Pendientes menores detectados en Hito 28
+
+- **InspectorEditCommand** (genérico): 51 widgets en 511 líneas requieren un patrón templado (ej. `PropertyEditCommand<T>` con setter/getter + `IsItemActivated`/`IsItemDeactivatedAfterEdit`). Coste medio por el patrón base + bajo por widget. **Trigger:** dev se queja de que Ctrl+Z después de mover un slider del Inspector no funciona.
+- **Commands para drops modificadores**: `processViewportTextureDrop`/`MaterialDrop`/`ScriptDrop` mutan componentes sin pasar por history. Patrón: capturar el componente entero antes y reemplazarlo. **Trigger:** combo con el anterior.
+- **Handle remap en HistoryStack** (arrastrado del Hito 27): edit→delete→undo→undo deja el segundo undo no-op silencioso. **Trigger:** dev nota el comportamiento.
