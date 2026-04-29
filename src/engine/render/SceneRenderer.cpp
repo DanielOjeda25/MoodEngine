@@ -79,8 +79,12 @@ SceneRenderer::SceneRenderer()
     }
 
     // IBL (Hito 17 Bloque 3). Si alguno falta, el shader cae a uAmbient.
+    // Hito 26 G: bakeado desde el equirect kloofendal (mismo cielo que
+    // muestra el SkyboxRenderer en modo Equirect), asi las esferas PBR
+    // reflejan lo que el dev ve. Antes apuntaba a `sky_day` cubemap, lo
+    // cual produciá mismatch visual.
     try {
-        const std::string base = "assets/ibl/sky_day";
+        const std::string base = "assets/ibl/sky_kloofendal";
         std::array<std::string, 6> irrPaths{
             base + "/irradiance/px.png", base + "/irradiance/nx.png",
             base + "/irradiance/py.png", base + "/irradiance/ny.png",

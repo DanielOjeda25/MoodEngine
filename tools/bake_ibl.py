@@ -1,6 +1,6 @@
-"""Bake IBL (irradiance + prefilter) desde un cubemap PNG (Hito 17 Bloque 3).
+"""Bake IBL (irradiance + prefilter) desde cubemap PNG o equirect PNG (Hito 17 Bloque 3, extendido en Hito 26).
 
-Para cada cubemap del repo (default: assets/skyboxes/sky_day) genera:
+Para la fuente provista genera:
 
 1. Irradiance map (32x32 por cara, 6 PNGs) — convolucion difusa de la
    esfera completa, integrada con cosine weighting. Sample en el shader
@@ -13,11 +13,17 @@ Para cada cubemap del repo (default: assets/skyboxes/sky_day) genera:
    y `lod = roughness * (N-1)` da el termino specular IBL (mitad del
    split-sum; la otra mitad es la BRDF LUT).
 
-Salida en `assets/ibl/<skybox_name>/`:
+Salida en `assets/ibl/<source_stem>/`:
     irradiance/{px,nx,py,ny,pz,nz}.png   (32x32 RGBA8)
     prefilter/mip_<N>/{px,nx,py,ny,pz,nz}.png  (decreciente de 128 a 8)
 
-Uso: `python tools/bake_ibl.py [skybox_dir]`. Default: sky_day.
+Uso:
+    # Cubemap (legacy): directorio con 6 PNGs
+    python tools/bake_ibl.py assets/skyboxes/sky_day
+
+    # Equirectangular: PNG unico (mapping atan2/asin, mismo del shader skybox_equirect.frag)
+    python tools/bake_ibl.py assets/skyboxes/sky_kloofendal.png
+
 Requiere numpy + Pillow.
 
 Notas:
@@ -63,6 +69,19 @@ def load_cubemap(skybox_dir: Path) -> np.ndarray:
     if len(sizes) != 1:
         raise ValueError(f"Cubemap caras con sizes distintos: {sizes}")
     return np.stack(faces, axis=0)
+
+
+def load_equirect(png_path: Path) -> np.ndarray:
+    """Devuelve array (H, W, 3) en [0, 1] linear. La fila 0 es el zenith.
+
+    Nota: el shader skybox_equirect.frag usa `v = 0.5 + lat/PI`, que con
+    el flip vertical de stbi (`stbi_set_flip_vertically_on_load(true)`)
+    en `OpenGLTexture` mapea el zenith (lat=+pi/2) a la fila 0 del PNG.
+    Aca cargamos con PIL sin flip, asi que `arr[0]` ES el zenith — el
+    sampler hace `fy = (1 - v) * (h - 1)` para invertir.
+    """
+    img = Image.open(png_path).convert("RGB")
+    return np.asarray(img, dtype=np.float32) / 255.0
 
 
 def sample_cubemap(cubemap: np.ndarray, dirs: np.ndarray) -> np.ndarray:
@@ -129,6 +148,49 @@ def sample_cubemap(cubemap: np.ndarray, dirs: np.ndarray) -> np.ndarray:
     return out.reshape(dirs.shape[:-1] + (3,))
 
 
+def sample_equirect(equirect: np.ndarray, dirs: np.ndarray) -> np.ndarray:
+    """Sample bilineal de un equirect (H, W, 3) dado un array de direcciones (..., 3).
+
+    Mapping identico a `shaders/skybox_equirect.frag`:
+        lon = atan2(z, x) in [-pi, pi]
+        lat = asin(clamp(y, -1, 1)) in [-pi/2, pi/2]
+        u   = lon / (2*PI) + 0.5
+        v   = 0.5 + lat / PI
+
+    `u` se wrappea (longitud cierra el ciclo); `v` se clampea (latitud
+    se satura en los polos). Devuelve un array con shape `dirs.shape[:-1] + (3,)`.
+    """
+    flat = dirs.reshape(-1, 3)
+    norm = np.linalg.norm(flat, axis=-1, keepdims=True)
+    d = flat / np.maximum(norm, 1e-7)
+
+    lon = np.arctan2(d[:, 2], d[:, 0])                    # [-pi, pi]
+    lat = np.arcsin(np.clip(d[:, 1], -1.0, 1.0))           # [-pi/2, pi/2]
+    u = lon / (2.0 * np.pi) + 0.5                          # [0, 1]
+    v = 0.5 + lat / np.pi                                  # [0, 1]
+
+    h, w = equirect.shape[:2]
+    # u con wrap (longitud cicla); v con clamp (latitud se satura).
+    fx = u * w           # rango [0, w], texel discreto via mod
+    fy = (1.0 - v) * (h - 1)  # invierto: v=1 (zenith) -> fila 0
+
+    x0 = np.mod(np.floor(fx).astype(np.int32), w)
+    x1 = np.mod(x0 + 1, w)
+    y0 = np.clip(np.floor(fy).astype(np.int32), 0, h - 1)
+    y1 = np.clip(y0 + 1, 0, h - 1)
+    tx = (fx - np.floor(fx))[:, None]
+    ty = (fy - np.floor(fy))[:, None]
+
+    c00 = equirect[y0, x0]
+    c10 = equirect[y0, x1]
+    c01 = equirect[y1, x0]
+    c11 = equirect[y1, x1]
+    top = c00 * (1.0 - tx) + c10 * tx
+    bot = c01 * (1.0 - tx) + c11 * tx
+    out = top * (1.0 - ty) + bot * ty
+    return out.reshape(dirs.shape[:-1] + (3,))
+
+
 def face_uv_to_dir(face: int, u: np.ndarray, v: np.ndarray) -> np.ndarray:
     """uv en [0, 1]^2 -> direccion 3D normalizada para la cara `face`."""
     s = u * 2.0 - 1.0
@@ -179,7 +241,10 @@ def basis_from_normal(n: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return t, b
 
 
-def bake_irradiance(cubemap: np.ndarray, out_dir: Path) -> None:
+Sampler = "callable that takes dirs (..., 3) -> rgb (..., 3) in [0, 1]"
+
+
+def bake_irradiance(sampler, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     s = IRRADIANCE_SIZE
     print(f"Irradiance {s}x{s} ({IRRADIANCE_SAMPLES_PHI}*{IRRADIANCE_SAMPLES_THETA} samples)")
@@ -213,7 +278,7 @@ def bake_irradiance(cubemap: np.ndarray, out_dir: Path) -> None:
                 + sample_t[:, 1:2] * b[None, :]
                 + sample_t[:, 2:3] * n[None, :]
             )
-            colors = sample_cubemap(cubemap, world_dirs)  # (N, 3)
+            colors = sampler(world_dirs)  # (N, 3)
             irr = (colors * weights[:, None]).sum(axis=0) / weight_sum
             out_rgb[i] = irr * np.pi
         out_rgb = out_rgb.reshape(s, s, 3)
@@ -225,7 +290,7 @@ def bake_irradiance(cubemap: np.ndarray, out_dir: Path) -> None:
 
 
 def bake_prefilter_mip(
-    cubemap: np.ndarray, mip_size: int, roughness: float, out_dir: Path
+    sampler, mip_size: int, roughness: float, out_dir: Path
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     samples = hammersley(PREFILTER_SAMPLES)
@@ -256,7 +321,7 @@ def bake_prefilter_mip(
             mask = n_dot_l > 0.0
             if not np.any(mask):
                 continue
-            colors = sample_cubemap(cubemap, l_world[mask])
+            colors = sampler(l_world[mask])
             weights = n_dot_l[mask]
             num = (colors * weights[:, None]).sum(axis=0)
             den = float(np.sum(weights))
@@ -269,7 +334,7 @@ def bake_prefilter_mip(
         print(f"  cara {FACE_NAMES[face]} OK")
 
 
-def bake_prefilter(cubemap: np.ndarray, out_root: Path) -> None:
+def bake_prefilter(sampler, out_root: Path) -> None:
     print(f"Prefilter (mip chain {PREFILTER_NUM_MIPS} niveles, base {PREFILTER_BASE_SIZE}px)")
     for mip in range(PREFILTER_NUM_MIPS):
         size = max(PREFILTER_BASE_SIZE >> mip, 1)
@@ -277,26 +342,34 @@ def bake_prefilter(cubemap: np.ndarray, out_root: Path) -> None:
         roughness = max(roughness, 0.04)  # mip 0 = mirror puro
         mip_dir = out_root / f"mip_{mip}"
         print(f"  mip {mip}: {size}x{size} roughness={roughness:.3f}")
-        bake_prefilter_mip(cubemap, size, roughness, mip_dir)
+        bake_prefilter_mip(sampler, size, roughness, mip_dir)
 
 
 def main() -> None:
-    skybox_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("assets/skyboxes/sky_day")
-    if not skybox_dir.exists():
-        print(f"ERROR: cubemap dir no existe: {skybox_dir}")
+    src = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("assets/skyboxes/sky_day")
+    if not src.exists():
+        print(f"ERROR: fuente no existe: {src}")
         sys.exit(1)
 
-    name = skybox_dir.name
-    out_root = Path("assets/ibl") / name
-    print(f"Bakeando IBL para '{name}' -> {out_root}")
+    # Autodeteccion: archivo .png/.jpg/.jpeg => equirect; directorio => cubemap.
+    if src.is_file():
+        name = src.stem  # sin extension
+        out_root = Path("assets/ibl") / name
+        print(f"Bakeando IBL desde equirect '{name}' -> {out_root}")
+        equirect = load_equirect(src)
+        print(f"Equirect cargado: shape={equirect.shape}")
+        sampler = lambda dirs: sample_equirect(equirect, dirs)
+    else:
+        name = src.name
+        out_root = Path("assets/ibl") / name
+        print(f"Bakeando IBL desde cubemap '{name}' -> {out_root}")
+        cubemap = load_cubemap(src)
+        print(f"Cubemap fuente cargado: shape={cubemap.shape}")
+        sampler = lambda dirs: sample_cubemap(cubemap, dirs)
 
     t0 = time.time()
-    cubemap = load_cubemap(skybox_dir)
-    print(f"Cubemap fuente cargado: shape={cubemap.shape}")
-
-    bake_irradiance(cubemap, out_root / "irradiance")
-    bake_prefilter(cubemap, out_root / "prefilter")
-
+    bake_irradiance(sampler, out_root / "irradiance")
+    bake_prefilter(sampler, out_root / "prefilter")
     print(f"OK en {time.time() - t0:.1f}s")
 
 
