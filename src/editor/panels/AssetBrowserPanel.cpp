@@ -132,17 +132,22 @@ void AssetBrowserPanel::rescan() {
                   });
     }
 
-    // Meshes: busca en assets/meshes/ por obj/gltf/glb/fbx. El AssetManager
-    // carga con assimp; si algun import falla cae a `missingMeshId()` (cubo)
-    // y el log del canal `assets` avisa.
+    // Meshes: busca recursivamente en assets/meshes/ por obj/gltf/glb/fbx.
+    // El AssetManager carga con assimp; si algun import falla cae a
+    // `missingMeshId()` (cubo) y el log del canal `assets` avisa.
+    // Hito 26: cambio a recursive_directory_iterator para que paquetes
+    // como Kenney Survival Kit (assets/meshes/kenney_survival/*.glb)
+    // aparezcan en la lista. El displayName usa el path relativo
+    // ("kenney_survival/barrel.glb") para distinguir entre packs.
     m_meshEntries.clear();
     std::error_code mesh_ec;
-    auto mesh_it = std::filesystem::directory_iterator(k_meshDir, mesh_ec);
+    auto mesh_it = std::filesystem::recursive_directory_iterator(k_meshDir, mesh_ec);
     if (!mesh_ec) {
         for (const auto& entry : mesh_it) {
             if (!entry.is_regular_file() || !isMesh(entry.path())) continue;
             MeshEntry me;
-            me.displayName = entry.path().filename().string();
+            const auto rel = std::filesystem::relative(entry.path(), k_meshDir);
+            me.displayName = rel.generic_string();
             me.logicalPath = std::string(k_meshLogicalPrefix) + me.displayName;
             me.id = m_assetManager->loadMesh(me.logicalPath);
             m_meshEntries.push_back(std::move(me));
