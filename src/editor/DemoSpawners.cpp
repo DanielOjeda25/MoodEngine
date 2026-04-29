@@ -74,8 +74,11 @@ void EditorApplication::processSpawnRotatorRequest() {
     t.position = glm::vec3(0.0f, 4.0f, 0.0f);
     t.scale = glm::vec3(1.0f);
     // Usa el cubo fallback del AssetManager (slot 0) como mesh del rotador.
+    // Material instance unico (createMaterialFromTexture, no loadMaterialFromTexture):
+    // si reusaramos el material cacheado, editar el tint de UN rotador
+    // pintaria a TODOS los rotadores spawneados.
     const MaterialAssetId rotMat =
-        m_assetManager->loadMaterialFromTexture(m_wallTextureId);
+        m_assetManager->createMaterialFromTexture(m_wallTextureId);
     r.addComponent<MeshRendererComponent>(m_assetManager->missingMeshId(), rotMat);
     r.addComponent<ScriptComponent>(std::string{"assets/scripts/rotator.lua"});
     Log::editor()->info("Spawned rotador demo en (0, 4, 0)");
@@ -171,8 +174,9 @@ void EditorApplication::processSpawnPhysicsBoxRequest() {
     auto& t = box.getComponent<TransformComponent>();
     t.position = glm::vec3(0.0f, 6.0f, 0.0f);
     t.scale    = glm::vec3(1.0f);
+    // Material instance unico por caja (ver nota en processSpawnRotatorRequest).
     const MaterialAssetId boxMat =
-        m_assetManager->loadMaterialFromTexture(m_wallTextureId);
+        m_assetManager->createMaterialFromTexture(m_wallTextureId);
     box.addComponent<MeshRendererComponent>(
         m_assetManager->missingMeshId(), boxMat);
     box.addComponent<RigidBodyComponent>(
@@ -212,10 +216,13 @@ void EditorApplication::processSpawnShadowDemoRequest() {
     // loadTexture deberia ser un cache hit.
     const TextureAssetId gridTex  = m_assetManager->loadTexture("textures/grid.png");
     const TextureAssetId brickTex = m_assetManager->loadTexture("textures/brick.png");
+    // Materiales unicos por entidad del demo: si el dev quiere editar el
+    // tint de la columna sin afectar al piso, debe ser asi (ver nota en
+    // processSpawnRotatorRequest).
     const MaterialAssetId gridMat  =
-        m_assetManager->loadMaterialFromTexture(gridTex);
+        m_assetManager->createMaterialFromTexture(gridTex);
     const MaterialAssetId brickMat =
-        m_assetManager->loadMaterialFromTexture(brickTex);
+        m_assetManager->createMaterialFromTexture(brickTex);
     const MeshAssetId    cube     = m_assetManager->missingMeshId(); // cubo primitivo
 
     // 1) Piso plano grande (cubo escalado y=0.1). Centrado en el origen, se

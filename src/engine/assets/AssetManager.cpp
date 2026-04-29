@@ -190,6 +190,10 @@ AssetManager::AssetManager(std::string rootDir,
         def->metallicMult  = 0.0f;
         def->roughnessMult = 0.5f;
         def->aoMult = 1.0f;
+        // El default es tambien el "material missing": si una entidad lo
+        // usa por no tener material asignado, queremos que el patron magenta
+        // de missing.png salga visible (no blanco puro disfrazado de feature).
+        def->useAlbedoMap = true;
         m_materials.emplace_back(std::move(def));
         m_materialPaths.emplace_back(k_defaultMaterialPath);
         m_materialCache.emplace(k_defaultMaterialPath, missingMaterialId());
@@ -490,6 +494,12 @@ MaterialAssetId AssetManager::loadMaterial(std::string_view logicalPath) {
     mat->metallicRoughness = loadTexField("metallic_roughness");
     mat->normal            = loadTexField("normal");
     mat->ao                = loadTexField("ao");
+    // Inferimos useAlbedoMap de la presencia del campo en el JSON (no del
+    // id resuelto): "albedo": "textures/missing.png" -> id 0 pero el
+    // usuario pidio explicitamente textura -> useAlbedoMap=true.
+    mat->useAlbedoMap = j.contains("albedo")
+                     && j.at("albedo").is_string()
+                     && !j.at("albedo").get<std::string>().empty();
 
     // Multiplicadores escalares con defaults razonables.
     if (j.contains("albedo_tint") && j.at("albedo_tint").is_array()
@@ -523,6 +533,7 @@ MaterialAssetId AssetManager::loadMaterialFromTexture(TextureAssetId textureId) 
     auto mat = std::make_unique<MaterialAsset>();
     mat->logicalPath = key;
     mat->albedo = textureId;
+    mat->useAlbedoMap = true;
     // Mate completo: aproxima el shading Blinn-Phong del Hito 11 con un
     // PBR dieléctrico de roughness alta (los archivos v6 fueron creados
     // con texturas mate, asi se preserva la apariencia).
@@ -535,6 +546,30 @@ MaterialAssetId AssetManager::loadMaterialFromTexture(TextureAssetId textureId) 
     m_materials.push_back(std::move(mat));
     m_materialPaths.push_back(key);
     m_materialCache.emplace(key, id);
+    return id;
+}
+
+MaterialAssetId AssetManager::createMaterialFromTexture(TextureAssetId textureId) {
+    // Mismos defaults que loadMaterialFromTexture (mate completo, tint
+    // blanco) pero SIN cache: dos llamadas con el mismo texId devuelven
+    // ids distintos. Asi cada entidad spawneada/dropeada tiene material
+    // propio editable desde el Inspector sin contagiar a otras.
+    const std::string sentinel = "__runtime_tex#" + std::to_string(textureId);
+    auto mat = std::make_unique<MaterialAsset>();
+    mat->logicalPath   = sentinel;
+    mat->albedo        = textureId;
+    mat->useAlbedoMap  = true;
+    mat->albedoTint    = glm::vec3(1.0f);
+    mat->metallicMult  = 0.0f;
+    mat->roughnessMult = 1.0f;
+    mat->aoMult        = 1.0f;
+
+    const MaterialAssetId id = static_cast<MaterialAssetId>(m_materials.size());
+    m_materials.push_back(std::move(mat));
+    // El sentinel va a m_materialPaths (NO empty) para que materialPathOf
+    // lo devuelva al serializer, que lo reconoce y persiste el path de
+    // la textura subyacente. NO se cachea (no entra a m_materialCache).
+    m_materialPaths.push_back(sentinel);
     return id;
 }
 

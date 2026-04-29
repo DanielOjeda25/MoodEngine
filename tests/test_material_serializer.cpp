@@ -163,6 +163,99 @@ TEST_CASE("loadMaterial: paths de textura se resuelven via loadTexture") {
     std::filesystem::remove(std::filesystem::path("assets") / "materials" / name);
 }
 
+TEST_CASE("useAlbedoMap: true cuando el JSON tiene campo 'albedo'") {
+    const std::string name = uniqueName("uam_true");
+    const std::string logical = writeMaterial(name, R"({
+        "albedo": "textures/missing.png",
+        "metallic": 0.0
+    })");
+
+    AssetManager am("assets", nullFactory());
+    MaterialAsset* mat = am.getMaterial(am.loadMaterial(logical));
+    REQUIRE(mat != nullptr);
+    // Aunque missing.png se resuelve a id 0, el JSON pidio explicitamente
+    // textura -> el shader debe samplear (no caer al tint).
+    CHECK(mat->useAlbedoMap == true);
+
+    std::filesystem::remove(std::filesystem::path("assets") / "materials" / name);
+}
+
+TEST_CASE("useAlbedoMap: false cuando el JSON no tiene campo 'albedo' (tint puro)") {
+    // Caso oro_pulido / plastico_azul: solo tint + multiplicadores escalares.
+    const std::string name = uniqueName("uam_false");
+    const std::string logical = writeMaterial(name, R"({
+        "albedo_tint": [1.0, 0.84, 0.41],
+        "metallic": 1.0,
+        "roughness": 0.1
+    })");
+
+    AssetManager am("assets", nullFactory());
+    MaterialAsset* mat = am.getMaterial(am.loadMaterial(logical));
+    REQUIRE(mat != nullptr);
+    CHECK(mat->useAlbedoMap == false);
+    CHECK(mat->albedo == 0);
+
+    std::filesystem::remove(std::filesystem::path("assets") / "materials" / name);
+}
+
+TEST_CASE("default material: useAlbedoMap=true para mostrar missing como warning") {
+    AssetManager am("assets", nullFactory());
+    MaterialAsset* def = am.getMaterial(am.missingMaterialId());
+    REQUIRE(def != nullptr);
+    // Una entidad que cae al default sin material asignado debe ver el
+    // patron magenta de missing.png (no blanco puro disfrazado de feature).
+    CHECK(def->useAlbedoMap == true);
+    CHECK(def->albedo == 0);
+}
+
+TEST_CASE("loadMaterialFromTexture: useAlbedoMap=true (auto-wrapper)") {
+    AssetManager am("assets", nullFactory());
+    const TextureAssetId tex = am.loadTexture("textures/missing.png");
+    const MaterialAssetId mid = am.loadMaterialFromTexture(tex);
+    MaterialAsset* mat = am.getMaterial(mid);
+    REQUIRE(mat != nullptr);
+    CHECK(mat->useAlbedoMap == true);
+    CHECK(mat->albedo == tex);
+}
+
+TEST_CASE("createMaterialFromTexture: materialPathOf devuelve el sentinel '__runtime_tex#'") {
+    // Garantia para el serializer: el path debe permitir reconocer el
+    // wrapper y persistir la textura subyacente. Si fuera vacio, la
+    // entidad cargada cae al default y se rompe la persistencia.
+    AssetManager am("assets", nullFactory());
+    const TextureAssetId tex = am.loadTexture("textures/missing.png");
+    const MaterialAssetId mid = am.createMaterialFromTexture(tex);
+    CHECK(am.materialPathOf(mid) == "__runtime_tex#" + std::to_string(tex));
+}
+
+TEST_CASE("createMaterialFromTexture: cada llamada con la misma textura devuelve id distinto") {
+    // Diferencia clave con loadMaterialFromTexture (cacheado): asi cada
+    // entidad spawneada/dropeada tiene su propio material editable sin
+    // contagiar a otras que usan la misma textura.
+    AssetManager am("assets", nullFactory());
+    const TextureAssetId tex = am.loadTexture("textures/missing.png");
+
+    const MaterialAssetId id1 = am.createMaterialFromTexture(tex);
+    const MaterialAssetId id2 = am.createMaterialFromTexture(tex);
+    CHECK(id1 != id2);
+
+    // Editar uno NO debe mutar el otro.
+    MaterialAsset* m1 = am.getMaterial(id1);
+    MaterialAsset* m2 = am.getMaterial(id2);
+    REQUIRE(m1 != nullptr);
+    REQUIRE(m2 != nullptr);
+    m1->albedoTint = glm::vec3(1.0f, 0.0f, 0.0f);
+    CHECK(m2->albedoTint.x == doctest::Approx(1.0f));
+    CHECK(m2->albedoTint.y == doctest::Approx(1.0f));
+    CHECK(m2->albedoTint.z == doctest::Approx(1.0f));
+
+    // Defaults igual que loadMaterialFromTexture (mate completo).
+    CHECK(m1->useAlbedoMap == true);
+    CHECK(m1->albedo == tex);
+    CHECK(m1->roughnessMult == doctest::Approx(1.0f));
+    CHECK(m1->metallicMult == doctest::Approx(0.0f));
+}
+
 TEST_CASE("createMaterial: cada llamada genera un slot distinto") {
     AssetManager am("assets", nullFactory());
 

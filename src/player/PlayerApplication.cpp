@@ -250,8 +250,9 @@ void PlayerApplication::rebuildSceneFromMap() {
             origin.y - 0.05f,
             origin.z + mapH * 0.5f);
         tf.scale = glm::vec3(mapW, 0.1f, mapH);
+        // Material instance unico (paridad con EditorScene::rebuildSceneFromMap).
         const MaterialAssetId floorMat =
-            m_assetManager->loadMaterialFromTexture(floorTex);
+            m_assetManager->createMaterialFromTexture(floorTex);
         floor.addComponent<MeshRendererComponent>(
             m_assetManager->missingMeshId(), floorMat);
         floor.addComponent<RigidBodyComponent>(
@@ -275,8 +276,10 @@ void PlayerApplication::rebuildSceneFromMap() {
                 origin.z + (static_cast<f32>(y) + 0.5f) * tileSize);
             t.scale = glm::vec3(tileSize);
 
+            // Cada tile recibe su propio material instance (paridad con
+            // EditorScene::rebuildSceneFromMap).
             const MaterialAssetId tileMat =
-                m_assetManager->loadMaterialFromTexture(
+                m_assetManager->createMaterialFromTexture(
                     m_map.tileTextureAt(x, y));
             e.addComponent<MeshRendererComponent>(
                 m_assetManager->missingMeshId(), tileMat);

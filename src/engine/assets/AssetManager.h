@@ -225,6 +225,14 @@ public:
     ///         conflicto con paths logicos reales que terminan en .material).
     MaterialAssetId loadMaterialFromTexture(TextureAssetId textureId);
 
+    /// @brief Igual que `loadMaterialFromTexture` pero NUNCA cachea: cada
+    ///        llamada produce un slot nuevo. Para entidades runtime (cubos
+    ///        spawneados, drops, demos) que necesitan material editable
+    ///        sin afectar a otras entidades que usan la misma textura.
+    /// @param textureId Id de la textura albedo (puede ser 0 = missing).
+    /// @return Id estable del material recien creado.
+    MaterialAssetId createMaterialFromTexture(TextureAssetId textureId);
+
     /// @brief Crea un material nuevo con los parametros del prototype.
     ///        Sin cache: cada llamada genera un slot distinto. La cache
     ///        key sintetica (`__runtime#<id>`) evita colisiones con

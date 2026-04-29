@@ -385,7 +385,11 @@ void SceneRenderer::renderScene(Scene& scene,
                 mr.materialOrMissing(sub.materialIndex);
             const MaterialAsset* mat = assets.getMaterial(matId);
 
-            const bool hasAlbedo = (mat != nullptr && mat->albedo != 0);
+            // useAlbedoMap distingue "tint puro" (gold/plastic, false) de
+            // "samplear textura" (true). El default material tiene
+            // useAlbedoMap=true con albedo=0 => muestra missing.png como
+            // warning visible.
+            const bool hasAlbedo = (mat != nullptr && mat->useAlbedoMap);
             glActiveTexture(GL_TEXTURE0);
             assets.getTexture(hasAlbedo ? mat->albedo : 0)->bind(0);
             sh.setInt("uHasAlbedoMap", hasAlbedo ? 1 : 0);

@@ -78,8 +78,11 @@ void EditorApplication::rebuildSceneFromMap() {
             origin.y - 0.05f,
             origin.z + mapH * 0.5f);
         tf.scale = glm::vec3(mapW, 0.1f, mapH);
+        // Material instance unico por entidad: editar el albedoTint del
+        // piso desde el Inspector NO debe contagiar a los tiles ni a otras
+        // entidades que usen la misma textura.
         const MaterialAssetId floorMat =
-            m_assetManager->loadMaterialFromTexture(m_wallTextureId);
+            m_assetManager->createMaterialFromTexture(m_wallTextureId);
         floor.addComponent<MeshRendererComponent>(
             m_assetManager->missingMeshId(), floorMat);
         // Static body para que dynamics caigan sobre el piso (Jolt).
@@ -109,8 +112,13 @@ void EditorApplication::rebuildSceneFromMap() {
             // partir de la textura del tile (envuelve la textura en un
             // MaterialAsset mate dieléctrico para que el shader PBR la
             // muestre similar al lit Phong anterior).
+            // Cada tile recibe su PROPIO material instance
+            // (createMaterialFromTexture, no loadMaterialFromTexture
+            // cacheado): asi editar el color de un tile no contagia a los
+            // demas. La memoria extra es despreciable (un MaterialAsset
+            // pesa ~80 bytes; un mapa con 256 tiles serian ~20 KB).
             const MaterialAssetId tileMat =
-                m_assetManager->loadMaterialFromTexture(
+                m_assetManager->createMaterialFromTexture(
                     m_map.tileTextureAt(x, y));
             e.addComponent<MeshRendererComponent>(
                 m_assetManager->missingMeshId(), tileMat);
@@ -217,9 +225,11 @@ void EditorApplication::updateTileEntity(u32 tileX, u32 tileY, TextureAssetId te
     });
 
     // Hito 17: el slot por submesh es ahora un MaterialAssetId. Para drops
-    // de textura, generamos un material wrapper auto.
+    // de textura, generamos un material wrapper auto unico
+    // (createMaterialFromTexture): drop de la misma textura sobre 2 tiles
+    // distintos NO los hace compartir material.
     const MaterialAssetId matId =
-        m_assetManager->loadMaterialFromTexture(texture);
+        m_assetManager->createMaterialFromTexture(texture);
     if (static_cast<bool>(found)) {
         if (found.hasComponent<MeshRendererComponent>()) {
             auto& mr = found.getComponent<MeshRendererComponent>();

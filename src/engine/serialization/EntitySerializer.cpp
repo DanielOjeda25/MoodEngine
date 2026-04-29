@@ -71,7 +71,13 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
             std::string matPath = assets.materialPathOf(matId);
             // Auto-generated material wrapper: persist the underlying
             // texture path en su lugar (back-compat con escenas pre-PBR).
-            if (matPath.rfind("__tex#", 0) == 0) {
+            // Cubre tanto el cacheado `__tex#` como el instance-unico
+            // `__runtime_tex#` (este ultimo introducido para no compartir
+            // material entre cubos spawneados con la misma textura).
+            const bool isTexWrapper =
+                matPath.rfind("__tex#", 0) == 0 ||
+                matPath.rfind("__runtime_tex#", 0) == 0;
+            if (isTexWrapper) {
                 const MaterialAsset* m = assets.getMaterial(matId);
                 matPath = (m != nullptr)
                     ? assets.pathOf(m->albedo)

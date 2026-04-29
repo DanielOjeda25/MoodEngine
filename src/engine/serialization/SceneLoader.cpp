@@ -41,8 +41,13 @@ void applyEntitiesToScene(const SavedMap& saved,
                 if (isMaterial) {
                     mats.push_back(assets.loadMaterial(path));
                 } else {
+                    // Cada entidad persistida con texture-path obtiene su
+                    // PROPIO material instance (createMaterialFromTexture,
+                    // no loadMaterialFromTexture cacheado). Asi editar el
+                    // tint de un cubo cargado del .moodmap no contagia a
+                    // los demas cubos que tenian la misma textura.
                     const TextureAssetId tex = assets.loadTexture(path);
-                    mats.push_back(assets.loadMaterialFromTexture(tex));
+                    mats.push_back(assets.createMaterialFromTexture(tex));
                 }
             }
             e.addComponent<MeshRendererComponent>(meshId, std::move(mats));

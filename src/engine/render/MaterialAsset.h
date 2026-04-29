@@ -51,6 +51,13 @@ struct MaterialAsset {
     f32 roughnessMult = 0.5f;
     /// Multiplicador del canal AO (1.0 = sin oclusion).
     f32 aoMult = 1.0f;
+
+    /// Indica al renderer si debe samplear `albedo`. Distingue "material
+    /// quiere tint puro" (false, ej. oro_pulido sin textura) de "material
+    /// pide warning visual" (true sobre `albedo=0` => muestra el patron
+    /// magenta de missing.png en el material default cuando una entidad
+    /// no tiene material asignado).
+    bool useAlbedoMap = false;
 };
 
 } // namespace Mood
