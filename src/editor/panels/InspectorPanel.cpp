@@ -505,6 +505,69 @@ void InspectorPanel::onImGuiRender() {
         ImGui::Separator();
     }
 
+    // --- ParticleEmitterComponent (Hito 29) ---
+    // Editar campos en vivo afecta la simulacion del frame siguiente.
+    // El render del proximo frame ya muestra los nuevos parametros.
+    if (e.hasComponent<ParticleEmitterComponent>()) {
+        auto& em = e.getComponent<ParticleEmitterComponent>();
+        ImGui::TextDisabled("Particle Emitter");
+
+        if (ImGui::Checkbox("emitting##pe", &em.emitting)) m_editedThisFrame = true;
+        ImGui::SameLine();
+        if (ImGui::Checkbox("additive##pe", &em.additive)) m_editedThisFrame = true;
+
+        if (ImGui::DragFloat("rate (1/s)##pe", &em.emitRate, 1.0f, 0.0f, 10000.0f)) {
+            m_editedThisFrame = true;
+        }
+        if (ImGui::DragFloatRange2("lifetime (s)##pe",
+                                     &em.lifetimeMin, &em.lifetimeMax,
+                                     0.05f, 0.05f, 60.0f)) {
+            m_editedThisFrame = true;
+        }
+        if (ImGui::DragFloat3("velMin (m/s)##pe", &em.velocityMin.x, 0.05f)) {
+            m_editedThisFrame = true;
+        }
+        if (ImGui::DragFloat3("velMax (m/s)##pe", &em.velocityMax.x, 0.05f)) {
+            m_editedThisFrame = true;
+        }
+        if (ImGui::DragFloatRange2("size (m)##pe",
+                                     &em.sizeStart, &em.sizeEnd,
+                                     0.005f, 0.0f, 5.0f)) {
+            m_editedThisFrame = true;
+        }
+        if (ImGui::ColorEdit4("colorStart##pe", &em.colorStart.x)) {
+            m_editedThisFrame = true;
+        }
+        if (ImGui::ColorEdit4("colorEnd##pe", &em.colorEnd.x)) {
+            m_editedThisFrame = true;
+        }
+        if (ImGui::DragFloat("gravityFactor##pe", &em.gravityFactor, 0.01f,
+                              -2.0f, 2.0f)) {
+            m_editedThisFrame = true;
+        }
+        if (ImGui::DragInt("maxParticles##pe",
+                             reinterpret_cast<int*>(&em.maxParticles),
+                             1.0f, 1, 4096)) {
+            // Resize lazy en el proximo update; vaciamos pool ahora para
+            // que no haya particulas vivas con indices fuera de rango.
+            em.alive.clear();
+            em.positions.clear();
+            em.velocities.clear();
+            em.ages.clear();
+            em.lifetimes.clear();
+            em.aliveCount = 0;
+            m_editedThisFrame = true;
+        }
+        ImGui::TextDisabled("vivas: %u / %u",
+                             em.aliveCount, em.maxParticles);
+
+        if (m_assets != nullptr) {
+            const std::string texPath = m_assets->pathOf(em.texture);
+            ImGui::TextDisabled("textura: %s", texPath.c_str());
+        }
+        ImGui::Separator();
+    }
+
     ImGui::End();
 }
 

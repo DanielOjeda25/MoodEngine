@@ -853,6 +853,39 @@ void EditorApplication::processViewportScriptDrop() {
     markDirty();
 }
 
+void EditorApplication::processSpawnFireParticlesRequest() {
+    if (!(m_ui.consumeSpawnFireParticlesRequest() && m_scene
+          && m_assetManager)) return;
+
+    Entity e = m_scene->createEntity("Fuego");
+    auto& tf = e.getComponent<TransformComponent>();
+    tf.position = glm::vec3(0.0f, 0.5f, 0.0f);
+
+    ParticleEmitterComponent em{};
+    em.emitRate     = 60.0f;
+    em.lifetimeMin  = 1.0f;
+    em.lifetimeMax  = 1.5f;
+    em.velocityMin  = glm::vec3(-0.4f, 1.2f, -0.4f);
+    em.velocityMax  = glm::vec3( 0.4f, 2.0f,  0.4f);
+    em.sizeStart    = 0.30f;
+    em.sizeEnd      = 0.05f;
+    em.colorStart   = glm::vec4(1.0f, 0.75f, 0.20f, 1.0f);
+    em.colorEnd     = glm::vec4(1.0f, 0.10f, 0.0f, 0.0f);
+    em.gravityFactor = -0.05f;     // negativo = sube ligeramente
+    em.maxParticles = 256;
+    em.emitting     = true;
+    em.additive     = true;
+    em.texture = m_assetManager->loadTexture("textures/particle_fire.png");
+
+    e.addComponent<ParticleEmitterComponent>(em);
+
+    Log::editor()->info(
+        "Spawned demo de particulas (fuego) en (0, 0.5, 0): rate={}, "
+        "lifetime={:.1f}-{:.1f}s, additive blend",
+        em.emitRate, em.lifetimeMin, em.lifetimeMax);
+    pushCreatedEntities({e}, "Spawn particulas demo");
+}
+
 void EditorApplication::pushCreatedEntities(std::vector<Entity> created,
                                               std::string label) {
     if (created.empty()) return;

@@ -487,6 +487,7 @@ int EditorApplication::run() {
         processSpawnPbrSpheresRequest();
         processSpawnLightStressRequest();
         processSpawnAnimatedCharacterRequest();
+        processSpawnFireParticlesRequest();
         processSpawnPointLightRequest();
         processSpawnAudioSourceRequest();
         processSavePrefabRequest();

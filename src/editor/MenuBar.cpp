@@ -162,6 +162,11 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar personaje animado", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnAnimatedCharacter();
             }
+            // Demo Hito 29: spawnea un emisor de particulas preset
+            // "fuego" en (0, 0.5, 0). Visible en Editor y Play.
+            if (ImGui::MenuItem("Agregar particulas de fuego demo", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnFireParticles();
+            }
             ImGui::EndMenu();
         }
 

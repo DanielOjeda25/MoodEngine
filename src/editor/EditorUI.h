@@ -201,6 +201,17 @@ public:
         return r;
     }
 
+    /// @brief Hito 29 Bloque 3: request para spawnear un emisor de
+    ///        partículas preset "fuego" (rate=60, lifetime=1-1.5s, color
+    ///        naranja->rojo transparente, blend aditivo, textura
+    ///        `particle_fire.png`). Se ve en Editor y Play Mode.
+    void requestSpawnFireParticles() { m_spawnFireParticlesRequested = true; }
+    bool consumeSpawnFireParticlesRequest() {
+        const bool r = m_spawnFireParticlesRequested;
+        m_spawnFireParticlesRequested = false;
+        return r;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -306,6 +317,7 @@ private:
     bool m_spawnPbrSpheresRequested = false; // Hito 17
     bool m_spawnLightStressRequested = false; // Hito 18
     bool m_spawnAnimatedCharacterRequested = false; // Hito 19
+    bool m_spawnFireParticlesRequested = false;     // Hito 29
     bool m_recentsDirty = false; // Hito 15 polish: edicion manual de la lista de recientes
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;
