@@ -76,6 +76,14 @@ Lista en orden de coste/riesgo creciente. Cualquiera de estos es un hito válido
 
 **Trigger ideal:** combo con E (asset pack) o F (particles) para un hito de polish visual.
 
+### H. PackageBuilder smart-pack (solo assets referenciados)
+
+**Por qué:** identificado durante el Hito 26 al sumar el Kenney Survival Kit (1.5 MB con 80 props). Hoy `PackageBuilder` copia `assets/` entero al package final del juego — si el `.moodmap` solo usa 3 de los 80 props, los 77 restantes igual viajan. Para juegos chicos no importa; para uno con varios asset packs (Polyhaven, Quaternius, etc.) el package se infla rápido.
+
+**Coste:** medio. Escanear el `.moodmap` activo + el árbol de prefabs + scripts referenciados, recolectar el set de paths efectivamente usados, copiar solo esos al package destino. Cuidado con dependencias indirectas (un material referencia una textura, una textura referencia un .png, etc.).
+
+**Trigger ideal:** primer juego con > 5 MB de assets sin usar; o cuando se publique algún demo y el package final pese > 50 MB.
+
 ---
 
 ## Decisiones a tomar (cuando el hito se concrete)
