@@ -20,6 +20,7 @@
 #include "engine/render/opengl/OpenGLCubemapTexture.h"
 #include "engine/render/opengl/OpenGLDebugRenderer.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
+#include "engine/render/opengl/OpenGLParticleRenderer.h"
 #include "engine/render/opengl/OpenGLRenderer.h"
 #include "engine/render/opengl/OpenGLSSBO.h"
 #include "engine/render/opengl/OpenGLShader.h"
@@ -132,12 +133,24 @@ SceneRenderer::SceneRenderer()
     m_lightIndicesSsbo = std::make_unique<OpenGLSSBO>();
 
     m_lightSystem = std::make_unique<LightSystem>();
+
+    // Particle system renderer (Hito 29 Bloque 2). Tolera fallo de
+    // shader como el resto: log + null, escena sigue rindiendose sin
+    // particulas.
+    try {
+        m_particleRenderer = std::make_unique<OpenGLParticleRenderer>();
+    } catch (const std::exception& e) {
+        Log::render()->warn("ParticleRenderer no disponible: {}. Particulas desactivadas.",
+                             e.what());
+        m_particleRenderer.reset();
+    }
 }
 
 SceneRenderer::~SceneRenderer() {
     // Mismo orden inverso de destruccion que tenia EditorApplication antes
     // del refactor: recursos GL se tiran ANTES del contexto (que mata el
     // caller).
+    m_particleRenderer.reset();
     m_lightSystem.reset();
     m_iblBrdfLut.reset();
     m_iblPrefilter.reset();
@@ -465,6 +478,16 @@ void SceneRenderer::renderScene(Scene& scene,
                 }
                 drawMeshRenderer(*m_pbrSkinnedShader, mr);
             });
+    }
+
+    // Hito 29 Bloque 2: pase de particulas. Va DESPUES de la geometria
+    // opaca (PBR estatico + skinneado) para que las particulas semi-
+    // transparentes se ocluyan por el mundo, pero ANTES del debug
+    // renderer (que dibuja con depth test pero sin blend, asi queda
+    // arriba de todo). Depth write OFF dentro del renderer para que las
+    // particulas no se descarten entre si.
+    if (m_particleRenderer) {
+        m_particleRenderer->render(scene, assets, view, projection);
     }
 
     // Aqui retornamos con el scene FB todavia bindeado y el RHI dentro

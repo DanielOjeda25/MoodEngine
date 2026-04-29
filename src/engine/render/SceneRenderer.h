@@ -37,6 +37,7 @@ class LightSystem;
 class OpenGLCubemapTexture;
 class OpenGLDebugRenderer;
 class OpenGLFramebuffer;
+class OpenGLParticleRenderer;
 class OpenGLSSBO;
 class PostProcessPass;
 class Scene;
@@ -118,6 +119,7 @@ private:
     std::unique_ptr<SkyboxRenderer>       m_skyboxRenderer;
     std::unique_ptr<ShadowPass>           m_shadowPass;
     std::unique_ptr<LightSystem>          m_lightSystem;
+    std::unique_ptr<OpenGLParticleRenderer> m_particleRenderer;  // Hito 29 Bloque 2
 
     // Forward+ light grid (Hito 18). 3 SSBOs: point lights, tile data,
     // light indices. Bindings 2/3/4.

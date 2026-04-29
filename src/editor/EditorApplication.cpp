@@ -23,6 +23,7 @@
 #include "systems/AudioSystem.h"
 #include "systems/LightSystem.h"
 #include "systems/NavSystem.h"
+#include "systems/ParticleSystem.h"
 #include "systems/PostProcessPass.h"
 #include "systems/ShadowPass.h"
 #include "systems/SkyboxRenderer.h"
@@ -185,6 +186,7 @@ EditorApplication::EditorApplication() {
     m_scriptSystem = std::make_unique<ScriptSystem>();
     m_animationSystem = std::make_unique<AnimationSystem>(); // Hito 19
     m_navSystem       = std::make_unique<NavSystem>();       // Hito 23
+    m_particleSystem  = std::make_unique<ParticleSystem>();  // Hito 29
     // Hito 12: PhysicsWorld (Jolt). Init es pesado la primera vez del proceso
     // (Factory + RegisterTypes) pero instancias subsecuentes son baratas.
     m_physicsWorld = std::make_unique<PhysicsWorld>();
@@ -265,6 +267,7 @@ EditorApplication::~EditorApplication() {
     m_audioDevice.reset();
     m_animationSystem.reset();
     m_navSystem.reset();
+    m_particleSystem.reset();
     m_physicsWorld.reset();
     m_assetManager.reset(); // dueño de texturas y meshes (incluido el cubo fallback)
     // SceneRenderer destruye en orden inverso al ctor todos sus recursos
@@ -561,6 +564,14 @@ int EditorApplication::run() {
                     nav.target = playerPos;
                 });
             m_navSystem->update(*m_scene, m_map, mapWorldOrigin(), dt);
+        }
+
+        // 3.58) Particulas (Hito 29): corren en TODOS los modos (incluido
+        //       Editor) para que el dev vea en vivo lo que esta editando.
+        //       Sin pausa especifica — si el dev quiere congelarlas, baja
+        //       el emitRate a 0 desde el Inspector.
+        if (m_scene && m_particleSystem) {
+            m_particleSystem->update(*m_scene, dt);
         }
 
         // 3.6) Audio: arranca playOnStart, sincroniza posicion 3D, y setea

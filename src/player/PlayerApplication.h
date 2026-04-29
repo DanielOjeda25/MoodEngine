@@ -24,6 +24,7 @@ namespace Mood {
 
 class AnimationSystem;
 class NavSystem;
+class ParticleSystem;
 class AssetManager;
 class AudioDevice;
 class AudioSystem;
@@ -88,6 +89,7 @@ private:
     std::unique_ptr<AudioSystem>      m_audioSystem;
     std::unique_ptr<AnimationSystem>  m_animationSystem;
     std::unique_ptr<NavSystem>        m_navSystem;
+    std::unique_ptr<ParticleSystem>   m_particleSystem;  // Hito 29
     std::unique_ptr<PhysicsWorld>     m_physicsWorld;
 
     GridMap m_map{8u, 8u, 3.0f};

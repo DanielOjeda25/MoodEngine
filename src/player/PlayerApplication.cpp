@@ -24,6 +24,7 @@
 #include "systems/AnimationSystem.h"
 #include "systems/AudioSystem.h"
 #include "systems/NavSystem.h"
+#include "systems/ParticleSystem.h"
 #include "systems/PhysicsSystem.h"
 #include "systems/ScriptSystem.h"
 
@@ -105,6 +106,7 @@ PlayerApplication::PlayerApplication() {
     m_audioSystem     = std::make_unique<AudioSystem>(*m_audioDevice, *m_assetManager);
     m_animationSystem = std::make_unique<AnimationSystem>();
     m_navSystem       = std::make_unique<NavSystem>();
+    m_particleSystem  = std::make_unique<ParticleSystem>();
     m_physicsWorld    = std::make_unique<PhysicsWorld>();
 
     // Player arranca en Play Mode directo: cursor capturado por SDL,
@@ -196,6 +198,7 @@ PlayerApplication::~PlayerApplication() {
     m_audioDevice.reset();
     m_animationSystem.reset();
     m_navSystem.reset();
+    m_particleSystem.reset();
     m_physicsWorld.reset();
     m_scene.reset();
     m_assetManager.reset();
@@ -480,6 +483,12 @@ int PlayerApplication::run() {
                     nav.target = playerPos;
                 });
             m_navSystem->update(*m_scene, m_map, mapWorldOrigin(), dt);
+        }
+
+        // Particulas (Hito 29). Pause-aware: si el menu esta abierto, no
+        // avanzan (consistente con fisica + nav).
+        if (m_scene && m_particleSystem && !GameState::paused()) {
+            m_particleSystem->update(*m_scene, dt);
         }
         if (m_scene && m_audioSystem) {
             m_audioSystem->update(*m_scene, dt);
