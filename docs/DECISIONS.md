@@ -2125,3 +2125,24 @@ Las opciones eran:
 
 **Revisar si:** el dev pide explícitamente Ctrl+Z de un edit del Inspector (ahí el trigger se cumple y se hace en un Hito posterior).
 
+## 2026-04-29: Particle system CPU con SoA + billboards instanciados (Hito 29)
+
+**Problema:** los efectos visuales típicos de FPS (fuego, humo, sparks, polvo) no existían en el motor. El Forward+ del Hito 18 y el hot-reload del Hito 25 dejaban el render listo para sumar partículas, pero faltaba la infra.
+
+**Decisión arquitectural:** simulación CPU con struct of arrays per-emisor + render por instanced billboards. Sin GPU compute, sin sorting por depth, sin local space.
+
+**Razones:**
+- **Simplicidad**: SoA en C++ + `glDrawArraysInstanced` cabe en ~150 líneas. GPU compute requeriría un compute shader pass + buffers persistent-mapped — fuera de scope para V1.
+- **Iteración rápida**: editar `particle.{vert,frag}` con el hot-reload del Hito 25 prueba cambios al instante.
+- **Determinismo**: `xorshift64*` per-emisor con `rngState` propio. Sin `<random>` (que tiene resultados distintos entre stdlibs en Windows/Linux). Útil para tests headless.
+- **Billboards sin VBO de quad**: vertex shader genera el quad procedural via `gl_VertexID 0..5` + tablas de offsets/UVs. Right/up del view matrix arman el alineamiento — sin uniforme extra para basis de cámara.
+
+**Estado runtime no se persiste:** `positions`, `ages`, `velocities`, `rngState` viven solo en memoria. `.moodmap` v9 guarda solo configuración (rate, lifetime, color, etc.). Razón: la simulación es eyecandy reproducible — pretender congelar 256 partículas en disco para restaurarlas exactamente al reabrir es overkill (y fallaría visualmente igual porque el dt entre frames varía).
+
+**Trade-offs:**
+- Se pierde: artifacts de blending si dos emisores semitransparentes se solapan (sin sort por depth). Mitigable agregando sort back-to-front antes del upload — documentado como pendiente con trigger explícito.
+- Se pierde: partículas attached al emisor en local space (las posiciones quedan en world). Si el emisor se mueve, las partículas viejas siguen donde se spawnearon — para humo de un personaje en movimiento se nota. Pendiente con flag `localSpace` futuro.
+- Se gana: ~150 líneas que cubren el 90% de los casos de uso visuales típicos.
+
+**Revisar si:** aparece un demo con 10k+ partículas/frame (perf de upload), o si el dev nota artifacts de orden con varios emisores apilados (sort), o si pide humo following a un NPC (local space).
+

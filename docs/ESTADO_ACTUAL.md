@@ -6,13 +6,19 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 28 cerrado.**
+**Hito 29 cerrado.**
+Tag: `v0.29.0-hito29`.
+Verificado automático: suite doctest **257/5476** (+9 de `test_particle_system` lógica + 2 round-trip en `.moodmap`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: "Ayuda > Agregar particulas de fuego demo" spawnea un emisor en (0, 0.5, 0). Las chispas suben (gravityFactor=-0.05), pasan de naranja a rojo transparente, blend aditivo. Editar parámetros en el Inspector cambia la simulación en vivo. Save/cerrar/reabrir el proyecto preserva la configuración del emisor (schema v9).
+
+**Cambio importante en render:** nuevo pase de partículas en `SceneRenderer` entre el PBR pass (estático + skinneado) y el debug renderer. Depth test ON pero depth write OFF — las partículas se ocluyen por geometría opaca pero se mezclan correctamente entre sí. Blend per-emisor (additive vs alpha). Sin nueva dep — todo sobre `glDrawArraysInstanced` + `glm`.
+
+**Próximo paso:** Hito 30 (TBD). Plan en `docs/PLAN_HITO30.md`.
+
+### Hito 28 (anterior, ya cerrado)
 Tag: `v0.28.0-hito28`.
-Verificado automático: suite doctest **246/5431** (+8 de `test_create_entity_command` para CreateEntityCommand). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: spawnear cualquier entidad desde "Ayuda > Agregar X" o drop de mesh/prefab al viewport → Ctrl+Z destruye lo recién creado, Ctrl+Y lo recrea con sus componentes intactos. Drop de barril Kenney 0.27m: aparece a su escala nativa (no inflado a 1.5m). Drop de Fox.glb (130 unidades = 13m): downscale a 1.5m. Editor in-place de scripts via `ScriptEditorPanel` (sin nueva dep — `ImGui::InputTextMultiline` + autosave on Lose Focus).
+Verificado automático: suite doctest **246/5431** (+8 de `test_create_entity_command`). Spawnear cualquier entidad desde "Ayuda > Agregar X" o drop de mesh/prefab al viewport → Ctrl+Z destruye lo recién creado, Ctrl+Y lo recrea con componentes intactos. Drop de barril Kenney 0.27m a escala nativa (no inflado a 1.5m). Editor in-place de scripts via `ScriptEditorPanel` (sin nueva dep — `ImGui::InputTextMultiline` + autosave on Lose Focus).
 
-**Cambio importante:** después de 4 hitos consecutivos de polish editor (25 hot-reload, 26 asset pipeline, 27 undo/redo gizmo+delete, 28 spawn undoables + autoscale + script editor), el roadmap vuelve a features de gameplay. **Hito 29 = Particle system** (era Hito 24 en el roadmap original). Editor polish remanente — InspectorEditCommand para sliders, commands para drops modificadores, handle remap del HistoryStack — quedan como pendientes menores con trigger explícito.
-
-**Próximo paso:** Hito 29 — Particle system. Plan en `docs/PLAN_HITO29.md`.
+**Decisión clave:** después de 4 hitos consecutivos de polish editor, cerramos Hito 28 con A parcial (CreateEntityCommand) + F (script editor) + G (autoscale fix). InspectorEditCommand y commands para drops modificadores quedan como pendientes menores con trigger explícito.
 
 ### Hito 27 (anterior, ya cerrado)
 Tag: `v0.27.0-hito27`.
@@ -402,16 +408,16 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: arrancar Hito 29 — Particle system
+### Tarea inmediata: definir y abrir el Hito 30
 
-El Hito 28 está cerrado (tag `v0.28.0-hito28`). Tras 4 hitos consecutivos de polish editor, el roadmap vuelve a features de gameplay. **Hito 29 = Particle system** (estaba como Hito 24 en el roadmap original; lo recuperamos). Plan en `docs/PLAN_HITO29.md`.
+El Hito 29 está cerrado (tag `v0.29.0-hito29`). Particle system entregado. **Hito 30 está TBD** — candidatos en `docs/PLAN_HITO30.md`. Top: Player Character Controller con Jolt (capsule + step-up + jump), raycasts/triggers expuestos a Lua, save/load de gameplay, polish del NavAgent diferido.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO29.md` y arrancar Bloque 1.
-2. Trabajar bloque por bloque marcando en el plan al cerrar cada uno.
+1. Leer `docs/PLAN_HITO30.md` (candidatos) y discutir con el dev qué se prioriza.
+2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
 3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.29.0-hito29`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO30.md`.
+4. Al final: commits atómicos en español, merge a main, tag `v0.30.0-hito30`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO31.md`.
 
 ---
 

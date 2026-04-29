@@ -33,7 +33,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 26 — Asset pipeline: extracción de texturas + asset pack Kenney + IBL bakeado desde equirect (completado, tag `v0.26.0-hito26`).
 - [x] Hito 27 — Undo/Redo en el editor (HistoryStack + comandos para gizmo y delete) (completado, tag `v0.27.0-hito27`).
 - [x] Hito 28 — Editor polish: undo/redo de spawns, autoscale al drop, mini editor de scripts (completado, tag `v0.28.0-hito28`).
-- [ ] Hito 29 — TBD.
+- [x] Hito 29 — Particle system (completado, tag `v0.29.0-hito29`).
+- [ ] Hito 30 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -964,3 +965,45 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **InspectorEditCommand** (genérico): 51 widgets en 511 líneas requieren un patrón templado (ej. `PropertyEditCommand<T>` con setter/getter + `IsItemActivated`/`IsItemDeactivatedAfterEdit`). Coste medio por el patrón base + bajo por widget. **Trigger:** dev se queja de que Ctrl+Z después de mover un slider del Inspector no funciona.
 - **Commands para drops modificadores**: `processViewportTextureDrop`/`MaterialDrop`/`ScriptDrop` mutan componentes sin pasar por history. Patrón: capturar el componente entero antes y reemplazarlo. **Trigger:** combo con el anterior.
 - **Handle remap en HistoryStack** (arrastrado del Hito 27): edit→delete→undo→undo deja el segundo undo no-op silencioso. **Trigger:** dev nota el comportamiento.
+
+## Hito 29 — Particle system
+
+**Objetivo:** sistema de partículas CPU usable desde el editor + persistible. Cubre los efectos visuales más comunes (fuego, humo, sparks, polvo). Vuelve a features de gameplay tras 4 hitos de polish editor; estaba como Hito 24 en el roadmap macro original.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — `ParticleSystem` headless:*
+- `ParticleEmitterComponent` (POD) con SoA per-emisor: positions / velocities / ages / lifetimes / alive (`u8`). Lazy alloc al primer update; `rngState` per-emisor (xorshift64*) para spawn random determinista.
+- `systems/ParticleSystem::update(scene, dt)`: avanza vivas (age, pos += vel*dt, vel.y += -9.81*gravityFactor*dt), mata las que cumplen lifetime, spawnea floor(rate*dt) reciclando slots libres con accumulator fraccional.
+- 9 tests headless: tasa de emisión, expiry por lifetime, gravedad calculada con dt=1, pool full sin crash, pause via emitting=false, spawn position = transform, lazy alloc, dt<=0 noop, reciclaje de slots.
+
+*Bloque 2 — Render con billboards instanciados:*
+- `OpenGLParticleRenderer`: draw call instanced sin VBO de quad (`gl_VertexID 0..5` forma 2 triangles). VBO dinámico per-instance (divisor=1) con center/size/color, orphan + glBufferSubData con growth 2x.
+- `shaders/particle.{vert,frag}`: vertex calcula billboard alineado a la cámara via `right`/`up` extraídos del view matrix. Fragment muestrea texture, modula por color, descarta alpha < 0.01.
+- Por emisor: bind textura (o missing), set blend per-emisor (additive=true → SRC_ALPHA,ONE; default SRC_ALPHA,ONE_MINUS_SRC_ALPHA), draw `n*6` vertices instanciados. Depth write OFF dentro del scope, restaurado al volver.
+- `SceneRenderer` integra el renderer entre el PBR pass (estático + skinneado) y el debug renderer; partículas se ocluyen por geometría opaca pero se mezclan entre sí. ParticleSystem cableado al loop del Editor (siempre activo) y MoodPlayer (pause-aware).
+
+*Bloque 3 — UI Inspector + spawner demo + textura:*
+- `assets/textures/particle_fire.png` (64×64 RGBA, falloff radial blanco en alpha) generado por `tools/gen_particle_textures.py` (Pillow). El color final lo controla colorStart/colorEnd; la textura aporta solo la forma.
+- `processSpawnFireParticlesRequest`: spawnea entidad "Fuego" en (0, 0.5, 0) con preset (rate=60, lifetime=1–1.5s, vel +Y, color naranja→rojo transparente, additive blend, gravityFactor=-0.05 para chispas que suben). Cableado a `pushCreatedEntities` para que sea undoable (Hito 28 A).
+- Menu item "Ayuda > Agregar particulas de fuego demo".
+- Inspector: nueva sección "Particle Emitter" con DragFloat / DragFloat3 / DragFloatRange2 / ColorEdit4 / Checkbox / DragInt. Cambiar maxParticles vacía la pool (re-aloca lazy en el próximo update). Display de count vivas / cap.
+
+*Bloque 4 — Persistencia en `.moodmap`:*
+- `SavedParticleEmitter` con la configuración editable; estado runtime (positions/ages/rngState) NO se persiste — la simulación arranca limpia al cargar. Texture path lógico (no el id volátil).
+- `EntitySerializer` serializa/deserializa el bloque `particle_emitter`; `SceneLoader::applyOneEntity` re-resuelve la textura via `loadTexture(texturePath)`.
+- `k_MoodmapFormatVersion` 8 → 9. Archivos v8 sin `particle_emitter` cargan igual.
+
+*Bloque 5 — tests + cierre:*
+- `tests/test_particle_system.cpp` extendido con 2 tests de round-trip en `.moodmap` (con textura + sin textura).
+- Suite total **257/5476** (antes Hito 28 cerrado: 246/5431).
+
+**Siguiente paso tras completarlo:** Hito 30 (TBD). Plan en `docs/PLAN_HITO30.md`.
+
+### Pendientes menores detectados en Hito 29
+
+- **Sorting de partículas por depth**: V1 NO sortea, lo que produce artifacts si dos emisores semitransparentes se superponen. Mitigación: sort back-to-front antes del upload. **Trigger:** dev nota el problema en una escena con varios emisores.
+- **Partículas attached al emisor (local space)**: hoy las partículas se quedan donde se spawnearon (world). Para humo que sigue una entidad en movimiento, agregar flag `localSpace` al componente que multiplique las posiciones por `tf.worldMatrix()` en el render. **Trigger:** dev quiere humo siguiendo un personaje.
+- **GPU compute para emisores grandes**: `glBufferSubData` con > 10k partículas/frame puede saturar. Si aparece un demo demandante, evaluar `glMapBufferRange` con buffers persistent-mapped o un compute shader para la simulación. **Trigger:** profile con frame drops por particle upload.
+- **Curva de color/size con ramp**: V1 = lerp lineal entre start y end. Para efectos no-monótonos (chispa que crece y achica) hace falta un gradient/curva. **Trigger:** dev pide control más fino.
+- **Emisión por shape**: hoy las partículas spawnean exactamente en `tf.position` con velocidad random en un cubo. Cono / esfera / disco como shape de emisión amplía la expresividad. **Trigger:** dev pide formas.
