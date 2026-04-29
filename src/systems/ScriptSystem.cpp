@@ -27,7 +27,11 @@ void ScriptSystem::update(Scene& scene, f32 dt) {
         // `loaded` se pone a false en errores o por "Recargar" del Inspector.
         if (!sc.loaded) {
             auto state = std::make_unique<sol::state>();
-            setupLuaBindings(*state, e);
+            // Hito 24: clear de exposedProps antes de cargar — el binding
+            // las redescubre. Asi un script que removio un `engine.exposed`
+            // entre reloads no deja la prop fantasma en el Inspector.
+            sc.exposedProps.clear();
+            setupLuaBindings(*state, e, &sc);
 
             sol::protected_function_result r = state->safe_script_file(
                 sc.path, sol::script_pass_on_error);
@@ -61,6 +65,10 @@ void ScriptSystem::update(Scene& scene, f32 dt) {
                     auto sit = m_states.find(e.handle());
                     if (sit != m_states.end()) {
                         sol::state& lua = *sit->second;
+                        // Hito 24: re-clear de exposedProps en hot-reload.
+                        // El chunk top-level corre de nuevo y los engine.exposed
+                        // los re-registran.
+                        sc.exposedProps.clear();
                         sol::protected_function_result r = lua.safe_script_file(
                             sc.path, sol::script_pass_on_error);
                         if (!r.valid()) {

@@ -46,6 +46,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/systems/NavSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/PhysicsSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/ScriptSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scripting/ExposedProperty.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/LuaBindings.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/game/GameState.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/packaging/PackageBuilder.cpp

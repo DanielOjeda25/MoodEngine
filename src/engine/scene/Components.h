@@ -12,6 +12,7 @@
 #include "core/Types.h"
 #include "engine/assets/AssetManager.h" // TextureAssetId, AudioAssetId, MeshAssetId
 #include "engine/audio/AudioDevice.h"    // SoundHandle
+#include "engine/scripting/ExposedProperty.h" // Hito 24
 
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
@@ -20,6 +21,7 @@
 #include <glm/vec3.hpp>
 
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -123,6 +125,16 @@ struct ScriptComponent {
     std::string path;
     bool loaded = false;
     std::string lastError;
+
+    /// Hito 24: exposed properties.
+    /// `exposedProps` se rellena al cargar el script (engine.exposed
+    /// llamadas registran (name, type, default) aca). NO se serializa
+    /// — se redescubre cada carga.
+    /// `overrides` es editable desde el Inspector y persistido en
+    /// `.moodmap`. Cuando engine.exposed("name", default) lo encuentra,
+    /// devuelve el override en vez del default.
+    std::vector<ExposedProperty> exposedProps;
+    std::unordered_map<std::string, ExposedValue> overrides;
 
     ScriptComponent() = default;
     ScriptComponent(std::string p) : path(std::move(p)) {}

@@ -1,26 +1,26 @@
 #pragma once
 
-// Bindings C++ -> Lua (Hito 8 Bloque 3, scope minimo confirmado).
-// API expuesta a los scripts:
+// Bindings C++ -> Lua. API expuesta a los scripts:
 //   - self.tag          (string, read-only)
 //   - self.transform    -> TransformComponent (mutable)
-//       .position.x/y/z
-//       .rotationEuler.x/y/z
-//       .scale.x/y/z
-//   - log.info(str)
-//   - log.warn(str)
-//
-// Input y scene:create/destroy NO estan expuestos en Hito 8. Ver PLAN_HITO8.
+//   - log.info(str) / log.warn(str)
+//   - hud.setHp/setAmmo/setPaused + getters
+//   - engine.exposed(name, default)  (Hito 24)
 
 #include <sol/sol.hpp>
 
 namespace Mood {
 
 class Entity;
+struct ScriptComponent;
 
 /// @brief Registra los usertypes y tablas en `lua` y setea la global
-///        `self` al entity dado. Llamar una vez por `sol::state` antes
-///        de cargar el script.
-void setupLuaBindings(sol::state& lua, Entity self);
+///        `self` al entity dado. `scriptComponent` se usa para soportar
+///        `engine.exposed(...)` — leer `overrides` y registrar
+///        `exposedProps` al cargar el script. Si es nullptr, el binding
+///        de `engine.exposed` siempre devuelve el default sin registrar
+///        (util para tests headless sin ECS).
+void setupLuaBindings(sol::state& lua, Entity self,
+                       ScriptComponent* scriptComponent = nullptr);
 
 } // namespace Mood

@@ -4,14 +4,17 @@
 #include "engine/game/GameState.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
+#include "engine/scripting/ExposedProperty.h"
 
 #include <glm/vec3.hpp>
 
+#include <algorithm>
 #include <string>
 
 namespace Mood {
 
-void setupLuaBindings(sol::state& lua, Entity self) {
+void setupLuaBindings(sol::state& lua, Entity self,
+                       ScriptComponent* scriptComponent) {
     // Libs basicas. `io`/`os` quedan fuera: los scripts no deberian hacer
     // I/O al FS ni ejecutar procesos. `package` tampoco (sin require).
     lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string);
@@ -61,6 +64,89 @@ void setupLuaBindings(sol::state& lua, Entity self) {
     hudTable.set_function("getHp",     []() { return GameState::hud().hp; });
     hudTable.set_function("getAmmo",   []() { return GameState::hud().ammo; });
     hudTable.set_function("getPaused", []() { return GameState::paused(); });
+
+    // --- engine.exposed (Hito 24) ---
+    // Registra una exposed property + devuelve el override de la
+    // entidad (si existe) o el default. Inferencia de tipo del default:
+    // number/bool/string/table-de-3-numbers (=> vec3). Otros tipos
+    // (function, userdata, table generica) se ignoran con warning.
+    sol::table engineTable = lua.create_named_table("engine");
+    engineTable.set_function("exposed",
+        [scriptComponent, &lua](const std::string& name,
+                                  sol::object defaultVal) -> sol::object {
+        // Sin ScriptComponent (tests / scope reducido) devolvemos el
+        // default sin registrar nada.
+        if (scriptComponent == nullptr) return defaultVal;
+
+        // Inferir tipo del default + envolverlo en ExposedValue.
+        ExposedValue defVar;
+        ExposedType type = ExposedType::Number;
+        bool ok = true;
+        if (defaultVal.is<bool>()) {
+            defVar = defaultVal.as<bool>();
+            type = ExposedType::Bool;
+        } else if (defaultVal.is<f32>() || defaultVal.is<int>()) {
+            defVar = static_cast<f32>(defaultVal.as<double>());
+            type = ExposedType::Number;
+        } else if (defaultVal.is<std::string>()) {
+            defVar = defaultVal.as<std::string>();
+            type = ExposedType::String;
+        } else if (defaultVal.is<sol::table>()) {
+            sol::table t = defaultVal.as<sol::table>();
+            if (t.size() == 3) {
+                glm::vec3 v(static_cast<f32>(t.get_or(1, 0.0)),
+                            static_cast<f32>(t.get_or(2, 0.0)),
+                            static_cast<f32>(t.get_or(3, 0.0)));
+                defVar = v;
+                type = ExposedType::Vec3;
+            } else {
+                ok = false;
+            }
+        } else {
+            ok = false;
+        }
+
+        if (!ok) {
+            Log::script()->warn(
+                "engine.exposed('{}'): tipo de default no soportado, ignorado",
+                name);
+            return defaultVal;
+        }
+
+        // Registrar metadata en exposedProps (deduplicado por nombre).
+        auto& props = scriptComponent->exposedProps;
+        auto it = std::find_if(props.begin(), props.end(),
+            [&name](const ExposedProperty& p) { return p.name == name; });
+        if (it == props.end()) {
+            props.push_back(ExposedProperty{name, type, defVar});
+        } else {
+            it->type = type;
+            it->defaultValue = defVar;
+        }
+
+        // Si hay override, devolverlo. Sino, el default original.
+        auto& over = scriptComponent->overrides;
+        auto ov = over.find(name);
+        if (ov == over.end()) return defaultVal;
+
+        // Convertir el ExposedValue del override a sol::object para
+        // devolver al script. std::visit en el variant.
+        return std::visit([&lua](auto&& arg) -> sol::object {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, f32>) {
+                return sol::make_object(lua, static_cast<double>(arg));
+            } else if constexpr (std::is_same_v<T, bool>) {
+                return sol::make_object(lua, arg);
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                return sol::make_object(lua, arg);
+            } else if constexpr (std::is_same_v<T, glm::vec3>) {
+                sol::table t = lua.create_table();
+                t[1] = arg.x; t[2] = arg.y; t[3] = arg.z;
+                return sol::make_object(lua, t);
+            }
+            return sol::nil;
+        }, ov->second);
+    });
 
     // self como global.
     lua["self"] = self;

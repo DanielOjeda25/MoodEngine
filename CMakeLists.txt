@@ -290,6 +290,7 @@ add_library(mood_engine_lib STATIC
     src/systems/ShadowPass.cpp
     src/systems/SkyboxRenderer.cpp
 
+    src/engine/scripting/ExposedProperty.cpp
     src/engine/scripting/LuaBindings.cpp
 
     src/engine/render/opengl/OpenGLMesh.cpp

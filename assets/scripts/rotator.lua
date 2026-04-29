@@ -1,9 +1,10 @@
 -- Script demo del Hito 8: rota la entidad sobre el eje Y.
--- Expuesto por LuaBindings: self.transform.rotationEuler.{x,y,z}
--- onUpdate es llamado cada frame por ScriptSystem con (self, dt).
+-- Hito 24: usa engine.exposed para que la velocidad sea editable
+-- desde el Inspector + persistible en `.moodmap` per-entity.
 
-local DEG_PER_SEC = 45.0
+local speed = engine.exposed("speed", 45.0)  -- grados por segundo
 
 function onUpdate(self, dt)
-    self.transform.rotationEuler.y = self.transform.rotationEuler.y + DEG_PER_SEC * dt
+    self.transform.rotationEuler.y =
+        self.transform.rotationEuler.y + speed * dt
 end
