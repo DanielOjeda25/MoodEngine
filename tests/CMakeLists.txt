@@ -33,6 +33,7 @@ add_executable(mood_tests
     test_nav_system.cpp
     test_pathfinding.cpp
     test_scene_loader.cpp
+    test_exposed_properties.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
