@@ -20,27 +20,32 @@
 #include "engine/scene/Entity.h"
 #include "engine/serialization/SceneSerializer.h"  // SavedEntity
 
+#include <functional>
 #include <string>
 
 namespace Mood {
 
 class AssetManager;
-class PhysicsWorld;
 class Scene;
 
 class DeleteEntityCommand : public ICommand {
 public:
+    /// Callback opcional: invocado al ejecutar el delete con el bodyId de
+    /// Jolt si la entidad tenia RigidBodyComponent. Permite cleanup
+    /// (ej. PhysicsWorld::destroyBody) sin acoplar el comando al backend
+    /// de fisica — los tests pasan {} y queda no-op.
+    using BodyCleanup = std::function<void(u32 bodyId)>;
+
     /// @param entity Entidad viva a borrar. La capturamos en snapshot
     ///        ANTES del primer execute().
     /// @param scene Scene dueño (necesario para destroyEntity + recreate).
     /// @param assets Para resolver mesh/textura paths al recrear.
-    /// @param physics Opcional; si la entidad tiene RigidBodyComponent,
-    ///        este wrapper destruye el body de Jolt al delete y deja
-    ///        bodyId=0 en la nueva entidad para que se rematerialize.
+    /// @param bodyCleanup Callback opcional para cleanup del body de Jolt.
+    ///        EditorApplication pasa una lambda que llama PhysicsWorld::destroyBody.
     DeleteEntityCommand(Entity entity,
                          Scene* scene,
                          AssetManager* assets,
-                         PhysicsWorld* physics);
+                         BodyCleanup bodyCleanup = {});
 
     void execute() override;
     void undo() override;
@@ -51,7 +56,7 @@ private:
 
     Scene*        m_scene;
     AssetManager* m_assets;
-    PhysicsWorld* m_physics;
+    BodyCleanup   m_bodyCleanup;
     SavedEntity   m_snapshot;
     Entity        m_alive;   // valida tras ctor; vaciada tras execute(); rellenada por undo().
 };

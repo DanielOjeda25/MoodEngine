@@ -206,8 +206,13 @@ void EditorApplication::deleteSelectedEntity() {
     // snapshot pre-delete para permitir Ctrl+Z. El destroy + cleanup
     // del body de Jolt los hace `DeleteEntityCommand::execute()`.
     m_ui.setSelectedEntity(Entity{}); // limpiar seleccion antes del destroy
+    DeleteEntityCommand::BodyCleanup cleanup;
+    if (m_physicsWorld) {
+        PhysicsWorld* pw = m_physicsWorld.get();
+        cleanup = [pw](u32 bodyId) { pw->destroyBody(bodyId); };
+    }
     auto cmd = std::make_unique<DeleteEntityCommand>(
-        selected, m_scene.get(), m_assetManager.get(), m_physicsWorld.get());
+        selected, m_scene.get(), m_assetManager.get(), std::move(cleanup));
     m_history.push(std::move(cmd));
     markDirty();
 }

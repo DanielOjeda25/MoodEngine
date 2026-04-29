@@ -2,7 +2,6 @@
 
 #include "core/Log.h"
 #include "engine/assets/AssetManager.h"
-#include "engine/physics/PhysicsWorld.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Scene.h"
 #include "engine/serialization/EntitySerializer.h"
@@ -13,8 +12,9 @@ namespace Mood {
 DeleteEntityCommand::DeleteEntityCommand(Entity entity,
                                           Scene* scene,
                                           AssetManager* assets,
-                                          PhysicsWorld* physics)
-    : m_scene(scene), m_assets(assets), m_physics(physics), m_alive(entity) {
+                                          BodyCleanup bodyCleanup)
+    : m_scene(scene), m_assets(assets),
+      m_bodyCleanup(std::move(bodyCleanup)), m_alive(entity) {
     // Capturamos el snapshot AHORA, mientras la entity todavia existe.
     // serializeEntityToJson + parseEntityFromJson nos da una SavedEntity
     // independiente del handle vivo.
@@ -51,11 +51,12 @@ void DeleteEntityCommand::destroyAlive() {
     }
 
     // Cleanup del body de Jolt antes del destroyEntity (mismo flujo que
-    // EditorApplication::deleteSelectedEntity).
-    if (m_physics != nullptr && m_alive.hasComponent<RigidBodyComponent>()) {
+    // EditorApplication::deleteSelectedEntity). Via callback inyectado
+    // para no acoplar el comando con PhysicsWorld (tests pasan {}).
+    if (m_bodyCleanup && m_alive.hasComponent<RigidBodyComponent>()) {
         auto& rb = m_alive.getComponent<RigidBodyComponent>();
         if (rb.bodyId != 0) {
-            m_physics->destroyBody(rb.bodyId);
+            m_bodyCleanup(rb.bodyId);
             rb.bodyId = 0;
         }
     }

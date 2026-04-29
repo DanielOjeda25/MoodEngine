@@ -35,6 +35,8 @@ add_executable(mood_tests
     test_scene_loader.cpp
     test_exposed_properties.cpp
     test_history_stack.cpp
+    test_edit_transform_command.cpp
+    test_delete_entity_command.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -70,6 +72,8 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/core/Log.cpp
     ${CMAKE_SOURCE_DIR}/src/core/LogRingSink.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/HistoryStack.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/commands/EditTransformCommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/commands/DeleteEntityCommand.cpp
 )
 
 # AssetManager.cpp usa spdlog (via core/Log). JsonHelpers requiere nlohmann_json.
