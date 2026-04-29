@@ -70,13 +70,15 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             if (isTileTag(tag.name)) return;
             // Persistimos cualquier entidad con al menos un componente
             // serializable: MeshRenderer (Hito 10), Light (Hito 11),
-            // RigidBody (Hito 12) o Environment (Hito 15). Script/Audio
-            // fuera de scope hasta Scene authoritative.
+            // RigidBody (Hito 12), Environment (Hito 15) o Script con
+            // path no-vacio (Hito 24). Audio sigue fuera de scope.
             const bool hasMr  = e.hasComponent<MeshRendererComponent>();
             const bool hasLi  = e.hasComponent<LightComponent>();
             const bool hasRb  = e.hasComponent<RigidBodyComponent>();
             const bool hasEnv = e.hasComponent<EnvironmentComponent>();
-            if (!hasMr && !hasLi && !hasRb && !hasEnv) return;
+            const bool hasScript = e.hasComponent<ScriptComponent>()
+                && !e.getComponent<ScriptComponent>().path.empty();
+            if (!hasMr && !hasLi && !hasRb && !hasEnv && !hasScript) return;
             j["entities"].push_back(serializeEntity(e, assets));
         });
     }
