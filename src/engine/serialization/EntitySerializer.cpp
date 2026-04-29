@@ -148,6 +148,32 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         je["environment"] = je2;
     }
 
+    // Hito 29: ParticleEmitterComponent. Solo configuracion editable;
+    // estado runtime (positions/ages/rngState) NO se persiste — la
+    // simulacion arranca limpia al cargar.
+    if (entity.hasComponent<ParticleEmitterComponent>()) {
+        const auto& em = entity.getComponent<ParticleEmitterComponent>();
+        json jpe;
+        jpe["emit_rate"]      = em.emitRate;
+        jpe["lifetime_min"]   = em.lifetimeMin;
+        jpe["lifetime_max"]   = em.lifetimeMax;
+        jpe["velocity_min"]   = em.velocityMin;
+        jpe["velocity_max"]   = em.velocityMax;
+        jpe["size_start"]     = em.sizeStart;
+        jpe["size_end"]       = em.sizeEnd;
+        jpe["color_start"]    = em.colorStart;
+        jpe["color_end"]      = em.colorEnd;
+        jpe["gravity_factor"] = em.gravityFactor;
+        jpe["max_particles"]  = em.maxParticles;
+        jpe["emitting"]       = em.emitting;
+        jpe["additive"]       = em.additive;
+        // Texture path logico (no el id volátil). Vacio si no hay.
+        if (em.texture != 0) {
+            jpe["texture_path"] = assets.pathOf(em.texture);
+        }
+        je["particle_emitter"] = jpe;
+    }
+
     // Hito 24: ScriptComponent (path + overrides de exposed properties).
     // Solo persistimos si el path es no-vacio (un script vacio en la
     // entidad sin nada cargado no aporta nada al round-trip). Los
@@ -237,6 +263,26 @@ SavedEntity parseEntityFromJson(const json& j) {
         se2.iblIntensity   = je.value("ibl_intensity",   1.0f); // Hito 18
         se.environment = std::move(se2);
     }
+    if (j.contains("particle_emitter")) {
+        const auto& jpe = j.at("particle_emitter");
+        SavedParticleEmitter pe;
+        pe.emitRate     = jpe.value("emit_rate",      pe.emitRate);
+        pe.lifetimeMin  = jpe.value("lifetime_min",   pe.lifetimeMin);
+        pe.lifetimeMax  = jpe.value("lifetime_max",   pe.lifetimeMax);
+        pe.velocityMin  = jpe.value("velocity_min",   pe.velocityMin);
+        pe.velocityMax  = jpe.value("velocity_max",   pe.velocityMax);
+        pe.sizeStart    = jpe.value("size_start",     pe.sizeStart);
+        pe.sizeEnd      = jpe.value("size_end",       pe.sizeEnd);
+        pe.colorStart   = jpe.value("color_start",    pe.colorStart);
+        pe.colorEnd     = jpe.value("color_end",      pe.colorEnd);
+        pe.gravityFactor = jpe.value("gravity_factor", pe.gravityFactor);
+        pe.maxParticles = jpe.value("max_particles",  pe.maxParticles);
+        pe.emitting     = jpe.value("emitting",       pe.emitting);
+        pe.additive     = jpe.value("additive",       pe.additive);
+        pe.texturePath  = jpe.value("texture_path",   std::string{});
+        se.particleEmitter = std::move(pe);
+    }
+
     if (j.contains("script")) {
         const auto& js = j.at("script");
         SavedScript ss;

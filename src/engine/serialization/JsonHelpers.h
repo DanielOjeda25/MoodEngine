@@ -56,7 +56,13 @@ namespace Mood {
 // + sus exposed property overrides. Tipos: number, bool, string, vec3.
 // Archivos v7 sin `script` se leen igual (la entidad queda sin
 // ScriptComponent, como antes).
-constexpr int k_MoodmapFormatVersion = 8;
+// v9 (Hito 29): SavedEntity gana campo opcional `particle_emitter`
+// con la configuracion del emisor (rate, lifetime range, velocity
+// range, sizes, colorStart/colorEnd, gravityFactor, texturePath,
+// maxParticles, emitting, additive). Estado runtime (positions, ages,
+// rngState) NO se persiste — la simulacion arranca de cero al cargar.
+// Archivos v8 sin `particle_emitter` se leen igual.
+constexpr int k_MoodmapFormatVersion = 9;
 constexpr int k_MoodprojFormatVersion = 1;
 
 /// @brief Verifica que la version declarada en un archivo sea legible.

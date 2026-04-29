@@ -118,6 +118,30 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<EnvironmentComponent>(env);
         }
 
+        // Hito 29: ParticleEmitterComponent. Re-resolvemos el id de
+        // textura via path logico (los ids son volatiles entre sesiones).
+        if (se.particleEmitter.has_value()) {
+            const auto& s = *se.particleEmitter;
+            ParticleEmitterComponent em{};
+            em.emitRate     = s.emitRate;
+            em.lifetimeMin  = s.lifetimeMin;
+            em.lifetimeMax  = s.lifetimeMax;
+            em.velocityMin  = s.velocityMin;
+            em.velocityMax  = s.velocityMax;
+            em.sizeStart    = s.sizeStart;
+            em.sizeEnd      = s.sizeEnd;
+            em.colorStart   = s.colorStart;
+            em.colorEnd     = s.colorEnd;
+            em.gravityFactor = s.gravityFactor;
+            em.maxParticles = s.maxParticles;
+            em.emitting     = s.emitting;
+            em.additive     = s.additive;
+            em.texture = s.texturePath.empty()
+                ? assets.missingTextureId()
+                : assets.loadTexture(s.texturePath);
+            e.addComponent<ParticleEmitterComponent>(em);
+        }
+
         // Hito 24: ScriptComponent + overrides. El script se carga
         // perezosamente desde `ScriptSystem` (mtime-based), aca solo
         // adjuntamos el path + overrides; `engine.exposed` los lee en

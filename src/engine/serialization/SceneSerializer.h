@@ -42,6 +42,7 @@
 #include "engine/world/GridMap.h"
 
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #include <filesystem>
 #include <optional>
@@ -113,6 +114,27 @@ struct SavedScript {
     std::unordered_map<std::string, ExposedValue> overrides;
 };
 
+/// @brief Copia persistida de un ParticleEmitterComponent (Hito 29).
+///        Solo la configuracion editable; el estado runtime (positions,
+///        ages, rngState, etc.) no se persiste — la simulacion arranca
+///        de cero al cargar.
+struct SavedParticleEmitter {
+    f32 emitRate    = 60.0f;
+    f32 lifetimeMin = 1.0f;
+    f32 lifetimeMax = 1.5f;
+    glm::vec3 velocityMin{-0.4f, 1.0f, -0.4f};
+    glm::vec3 velocityMax{ 0.4f, 2.0f,  0.4f};
+    f32 sizeStart = 0.30f;
+    f32 sizeEnd   = 0.05f;
+    glm::vec4 colorStart{1.0f, 0.75f, 0.2f, 1.0f};
+    glm::vec4 colorEnd  {1.0f, 0.10f, 0.0f, 0.0f};
+    f32 gravityFactor = 0.0f;
+    std::string texturePath;             // vacio = sin textura (cae a missing)
+    u32 maxParticles = 256;
+    bool emitting = true;
+    bool additive = false;
+};
+
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh
 ///        renderer; Hito 11 agrega light; Hito 12 agrega rigid body;
 ///        Hito 14 agrega prefabPath (link suave al asset del que se
@@ -129,6 +151,7 @@ struct SavedEntity {
     std::optional<SavedRigidBody> rigidBody;
     std::optional<SavedEnvironment> environment; // Hito 15
     std::optional<SavedScript> script;            // Hito 24
+    std::optional<SavedParticleEmitter> particleEmitter; // Hito 29
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
 };
 
