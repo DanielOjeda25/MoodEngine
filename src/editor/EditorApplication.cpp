@@ -6,6 +6,7 @@
 #include "engine/render/SceneRenderer.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/render/opengl/OpenGLMesh.h"
+#include "engine/render/opengl/OpenGLShader.h"
 #include "engine/render/opengl/OpenGLTexture.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
@@ -383,6 +384,12 @@ int EditorApplication::run() {
 
         const f32 fps = m_fpsCounter.tick(dtD);
         m_ui.setFps(fps);
+
+        // Hot-reload de shaders (Hito 25 G): chequeo throttle 500ms de
+        // mtime y recompila los .vert/.frag que cambiaron en disco.
+        // Iterativo y atomico — un error de compilacion mantiene el
+        // shader anterior funcionando.
+        OpenGLShader::tickHotReload(dt);
 
         processEvents();
         beginFrame();
