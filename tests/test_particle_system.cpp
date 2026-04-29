@@ -4,12 +4,20 @@
 
 #include <doctest/doctest.h>
 
+#include "engine/assets/AssetManager.h"
+#include "engine/render/ITexture.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
+#include "engine/serialization/SceneSerializer.h"
+#include "engine/world/GridMap.h"
 #include "systems/ParticleSystem.h"
 
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
+
+#include <filesystem>
+#include <memory>
 
 using namespace Mood;
 
@@ -20,6 +28,24 @@ u32 countAlive(const ParticleEmitterComponent& em) {
     u32 c = 0;
     for (u8 a : em.alive) if (a != 0) ++c;
     return c;
+}
+
+class StubTextureParticles : public ITexture {
+public:
+    void bind(u32 = 0) const override {}
+    void unbind() const override {}
+    u32 width() const override { return 1; }
+    u32 height() const override { return 1; }
+    TextureHandle handle() const override { return nullptr; }
+};
+
+AssetManager::TextureFactory stubFactoryParticles() {
+    return [](const std::string&) { return std::make_unique<StubTextureParticles>(); };
+}
+
+std::filesystem::path tempPathParticles(const char* suffix) {
+    return std::filesystem::temp_directory_path() /
+        (std::string("moodengine_test_particles_") + suffix);
 }
 
 } // namespace
@@ -188,4 +214,78 @@ TEST_CASE("ParticleSystem: emisor recicla slots de particulas muertas") {
     CHECK(cnt1 == 4u);
     sys.update(scene, 1.0f);   // expira las primeras + spawnea hasta lim
     CHECK(countAlive(em) == 4u);
+}
+
+TEST_CASE("SceneSerializer: round-trip de ParticleEmitterComponent en .moodmap") {
+    AssetManager assets("assets", stubFactoryParticles());
+
+    GridMap map(2u, 2u, 1.0f);
+    Scene scene;
+    Entity e = scene.createEntity("FuegoTest");
+    e.getComponent<TransformComponent>().position = glm::vec3(1, 2, 3);
+
+    ParticleEmitterComponent em{};
+    em.emitRate     = 42.0f;
+    em.lifetimeMin  = 0.5f;
+    em.lifetimeMax  = 2.5f;
+    em.velocityMin  = glm::vec3(-0.7f, 1.2f, -0.7f);
+    em.velocityMax  = glm::vec3( 0.7f, 3.5f,  0.7f);
+    em.sizeStart    = 0.42f;
+    em.sizeEnd      = 0.07f;
+    em.colorStart   = glm::vec4(1.0f, 0.5f, 0.25f, 1.0f);
+    em.colorEnd     = glm::vec4(0.2f, 0.0f, 0.0f, 0.0f);
+    em.gravityFactor = -0.3f;
+    em.maxParticles = 128;
+    em.emitting     = true;
+    em.additive     = true;
+    em.texture = assets.loadTexture("textures/particle_fire.png");
+    e.addComponent<ParticleEmitterComponent>(em);
+
+    const auto path = tempPathParticles("emitter_roundtrip.moodmap");
+    SceneSerializer::save(map, "particles", &scene, assets, path);
+    REQUIRE(std::filesystem::exists(path));
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1);
+
+    const SavedEntity& se = loaded->entities[0];
+    REQUIRE(se.particleEmitter.has_value());
+    const auto& pe = *se.particleEmitter;
+    CHECK(pe.emitRate     == doctest::Approx(42.0f));
+    CHECK(pe.lifetimeMin  == doctest::Approx(0.5f));
+    CHECK(pe.lifetimeMax  == doctest::Approx(2.5f));
+    CHECK(pe.velocityMin.y == doctest::Approx(1.2f));
+    CHECK(pe.velocityMax.y == doctest::Approx(3.5f));
+    CHECK(pe.sizeStart    == doctest::Approx(0.42f));
+    CHECK(pe.sizeEnd      == doctest::Approx(0.07f));
+    CHECK(pe.colorStart.r == doctest::Approx(1.0f));
+    CHECK(pe.colorEnd.a   == doctest::Approx(0.0f));
+    CHECK(pe.gravityFactor == doctest::Approx(-0.3f));
+    CHECK(pe.maxParticles == 128u);
+    CHECK(pe.emitting     == true);
+    CHECK(pe.additive     == true);
+    CHECK(pe.texturePath  == "textures/particle_fire.png");
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: emitter sin textura persiste con texturePath vacio") {
+    AssetManager assets("assets", stubFactoryParticles());
+
+    GridMap map(1u, 1u, 1.0f);
+    Scene scene;
+    Entity e = scene.createEntity("SinTex");
+    e.addComponent<ParticleEmitterComponent>(); // defaults — texture = 0
+
+    const auto path = tempPathParticles("no_texture.moodmap");
+    SceneSerializer::save(map, "no_texture", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1);
+    REQUIRE(loaded->entities[0].particleEmitter.has_value());
+    CHECK(loaded->entities[0].particleEmitter->texturePath.empty());
+
+    std::filesystem::remove(path);
 }
