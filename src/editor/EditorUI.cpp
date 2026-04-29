@@ -35,7 +35,8 @@ void EditorUI::pruneMissingRecents() {
 
 EditorUI::EditorUI() {
     m_panels = {&m_viewport, &m_hierarchy, &m_inspector, &m_assetBrowser,
-                &m_console, &m_luaApi};
+                &m_console, &m_luaApi, &m_scriptEditor};
+    m_scriptEditor.visible = false; // por defecto oculto; togglear en menu Ver
 }
 
 void EditorUI::draw(bool& requestQuit) {
@@ -49,6 +50,12 @@ void EditorUI::draw(bool& requestQuit) {
         m_menuBar.draw(*this, requestQuit);
     }
     m_dockspace.end();
+
+    // Hito 28 F: el ScriptEditorPanel necesita saber la entidad seleccionada
+    // cada frame para detectar cambios y reload del .lua. La inyectamos aca
+    // antes del render del panel (mismo flujo que InspectorPanel pero por
+    // setter en lugar de pointer-back al EditorUI).
+    m_scriptEditor.setSelectedEntity(m_selectedEntity);
 
     for (IPanel* panel : m_panels) {
         if (panel->visible) {

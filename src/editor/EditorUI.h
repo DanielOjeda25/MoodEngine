@@ -14,6 +14,7 @@
 #include "editor/panels/HierarchyPanel.h"
 #include "editor/panels/LuaApiPanel.h"
 #include "editor/panels/InspectorPanel.h"
+#include "editor/panels/ScriptEditorPanel.h"
 #include "editor/panels/ViewportPanel.h"
 #include "engine/scene/Entity.h"
 
@@ -279,6 +280,7 @@ private:
     AssetBrowserPanel m_assetBrowser;
     ConsolePanel m_console;
     LuaApiPanel m_luaApi;
+    ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     Entity m_selectedEntity;
 
     // Hito 27: punter inyectado por EditorApplication para que MenuBar

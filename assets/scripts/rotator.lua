@@ -2,7 +2,7 @@
 -- Hito 24: usa engine.exposed para que la velocidad sea editable
 -- desde el Inspector + persistible en `.moodmap` per-entity.
 
-local speed = engine.exposed("speed", 45.0)  -- grados por segundo
+local speed = engine.exposed("speed", 85.0)  -- grados por segundo
 
 function onUpdate(self, dt)
     self.transform.rotationEuler.y =

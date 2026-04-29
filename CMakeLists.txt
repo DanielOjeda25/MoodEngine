@@ -359,6 +359,7 @@ add_executable(MoodEditor
     src/editor/panels/ConsolePanel.cpp
     src/editor/panels/HierarchyPanel.cpp
     src/editor/panels/LuaApiPanel.cpp
+    src/editor/panels/ScriptEditorPanel.cpp
 )
 
 target_link_libraries(MoodEditor PRIVATE
