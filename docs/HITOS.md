@@ -30,7 +30,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 23 — AI / pathfinding básico (completado, tag `v0.23.0-hito23`).
 - [x] Hito 24 — Exposed properties Lua (completado, tag `v0.24.0-hito24`).
 - [x] Hito 25 — Hot-reload de shaders + polish del sistema de materiales (completado, tag `v0.25.0-hito25`).
-- [ ] Hito 26 — TBD.
+- [x] Hito 26 — Asset pipeline: extracción de texturas + asset pack Kenney + IBL bakeado desde equirect (completado, tag `v0.26.0-hito26`).
+- [ ] Hito 27 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -833,3 +834,50 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Encoding del log de error de GL**: `glGetShaderInfoLog` en NVIDIA devuelve a veces caracteres no-UTF-8 que spdlog imprime como `???` y similares. Es pre-existente (también en compile inicial); el hot-reload sólo lo expone más seguido. **Trigger:** dev quiere errores de shader legibles → forzar conversión a UTF-8 o filtrar.
 - **Tests del recompile real (sin GL)**: `tryReloadIfChanged` no se cubre con tests automáticos porque requiere contexto OpenGL. Smoke test programático del manual quedó documentado arriba. **Trigger:** infra de tests con GL headless (poco probable a corto plazo).
 - **Polish del NavAgent (rotación + persistencia)**: deferido por el dev — "es problema para más adelante cuando ya tenga personajes de verdad". Sigue siendo candidato A del próximo hito.
+
+## Hito 26 — Asset pipeline: extracción de texturas + asset pack Kenney + IBL bakeable
+
+**Objetivo:** cerrar el ciclo "drop un .glb al editor → se ve con su textura". Hasta ahora `MeshLoader` solo extraía geometría, así que cualquier modelo importado salía con el material default (chequer magenta tras el polish del Hito 25). Además, sumar un asset pack real (Kenney Survival Kit, ~80 props) para que el dev pueda armar escenas tipo Source sin tener que modelar a mano. Bonus: cerrar el pendiente del Hito 24 sobre IBL desincronizado del nuevo skybox equirect.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — IBL bakeable desde equirect (candidato G):*
+- `tools/bake_ibl.py` extiende su entrada para aceptar PNG equirectangular además del cubemap directorio. Si arg es archivo `.png/.jpg`, lo carga con el mapping `atan2/asin` del shader `skybox_equirect.frag` (mismo `v=0.5+lat/PI`). Las funciones de bake (irradiance + 5 mips de prefilter) ahora reciben un `sampler` callable en vez del cubemap directo, así el resto del flujo es agnóstico a la fuente.
+- `assets/ibl/sky_kloofendal/` regenerado desde `sky_kloofendal.png` (~41s sobre 32×32 irradiance + 5 mips prefilter, 184 KB de salida). `SceneRenderer` apunta al nuevo path: las esferas PBR ahora reflejan el mismo cielo que el `SkyboxRenderer` muestra.
+
+*Bloque 2 — Asset Browser recursivo:*
+- `AssetBrowserPanel` cambia de `directory_iterator` a `recursive_directory_iterator` para `assets/meshes/`. Display name usa el path relativo (`"kenney_survival/barrel.glb"`) para distinguir entre packs. Logical paths siguen siendo `meshes/<rel>` resueltos por VFS sin cambios.
+
+*Bloque 3 — Extracción de texturas embedded + external (candidato E):*
+- `MeshAsset` gana `materialAlbedoTextures` (size = `scene->mNumMaterials`). El `MeshLoader` extrae el albedo de cada material referenciado: paths `*N` (embedded en glTF) van por `aiScene::GetEmbeddedTexture` + `loadEmbeddedTexture`; paths externos se resuelven contra la carpeta del archivo (`meshes/kenney_survival/Textures/colormap.png` para un .glb en `meshes/kenney_survival/`).
+- `OpenGLTexture` gana ctor desde memoria (`stbi_load_from_memory`). Los dos ctors comparten el helper `uploadDecoded`. Mismo flip vertical que el ctor por path para consistencia.
+- `AssetManager` gana `TextureMemoryFactory` + `loadEmbeddedTexture(cacheKey, bytes)` — cacheado por key (típicamente `<glb_path>#<embeddedName>`). Wire-up de la factory real (con `OpenGLTexture` from-memory) en `EditorApplication` y `PlayerApplication`.
+- Helper `AssetManager::createMaterialsForMesh(meshId)` arma el vector de `MaterialAssetId` para un `MeshRendererComponent`: cada submesh recibe un material instance con la textura del archivo (`createMaterialFromTexture`), o cae al default-clone si no se pudo extraer (warning visible). Migrados spawn paths de Fox, CesiumMan, y drop genérico al viewport.
+
+*Bloque 4 — Fix del UV flip + autoscale bidireccional:*
+- **Removido `aiProcess_FlipUVs`**: el `OpenGLTexture` ya hace `stbi_set_flip_vertically_on_load(true)`. El doble flip cancelaba en texturas simétricas (grid, brick) pero rompía palette swatches como el `colormap.png` de Kenney (cada UV terminaba en pixel ~negro). Tras el fix, los Kenney props se ven con sus colores reales (madera, metal, tela).
+- **Autoscale bidireccional al drop**: además de bajar meshes >3m a ~1.5m (Fox importado en cm), ahora subimos meshes <1m a ~1.5m. Sin esto los Kenney barriles (~30 cm) quedaban invisibles en un mundo con tiles de 3m.
+
+*Bloque 5 — Asset pack Kenney Survival Kit:*
+- `assets/meshes/kenney_survival/` con 80 GLBs CC0 + License.txt + `Textures/colormap.png` (palette 512×512 compartido). 1.5 MB total. Categorías: barrels/boxes/chests, structures (floor/wall/roof/fence), vegetation (trees/grass/rocks), tools (axe/hammer/pickaxe/shovel), crafting (workbench/campfire/signpost/bedroll), resources (planks/stone/wood). Kenney es CC0 — el editor + MoodPlayer pueden redistribuirlos sin restricciones.
+
+*Bloque 6 — Tests + cierre:*
+- 6 tests nuevos en `test_asset_manager.cpp`: `loadEmbeddedTexture` sin factory cae a missing, con factory mock cachea por key + devuelve ids distintos, buffer vacío cae a missing, `createMaterialsForMesh` para missing-mesh devuelve clone único del default, dos llamadas devuelven materiales distintos (clave anti-contagio del Hito 25), id inválido cae al missing-mesh seguro.
+- Suite total **212/5326** (antes Hito 25 cerrado: 206/5309).
+- `.gitignore` extendido con `__pycache__/` + `*.pyc` (cache de Python que se generaba al importar `tools/bake_ibl.py` y se commiteaba accidentalmente).
+
+**Verificación visual:**
+- `Ayuda > Agregar personaje animado` (Fox.glb): ahora aparece naranja/blanco con su textura embedded real (antes chequer magenta tras Hito 25).
+- `Ayuda > Agregar enemigo demo` (CesiumMan.glb): idem, skin real.
+- Drag de `kenney_survival/barrel.glb` al viewport: aparece a ~1.5m de altura (autoscale up), color madera del colormap (no negro). Idem para los 80 props.
+- Drop de la misma textura sobre 2 entidades: cada una recibe instance único — editar el albedoTint de una NO contagia (heredado del Hito 25, validado en este hito por los nuevos tests).
+
+**Siguiente paso tras completarlo:** Hito 27 (TBD). Plan en `docs/PLAN_HITO27.md`.
+
+### Pendientes menores detectados en Hito 26
+
+- **PackageBuilder smart-pack**: identificado en este hito al sumar 1.5 MB de Kenney. Hoy `PackageBuilder` copia `assets/` entero al package final del juego — si el `.moodmap` solo usa 3 de los 80 props, los 77 restantes igual viajan. Anotado como candidato H del Hito 27. **Trigger:** primer juego con > 5 MB de assets sin usar; o cuando algún demo packageado pese > 50 MB.
+- **Texturas embedded raw (mHeight > 0)**: `extractAlbedo` solo soporta texturas embedded comprimidas (PNG/JPG con `mHeight=0`). Las raw RGBA inline en glTF se loguean como warning y caen al missing. No vimos un caso real todavía. **Trigger:** modelo CC0 que use embedded raw.
+- **Encoding del log de error de mesh loader**: similar al de shaders, assimp puede devolver mensajes con caracteres no-UTF-8 que spdlog imprime mal. Pre-existente. **Trigger:** modelo .glb con error de import + dev necesita leer el mensaje.
+- **Inspector no permite cambiar la textura de un material**: hoy el albedo se setea solo al spawn (vía `createMaterialsForMesh`). Si el dev quiere cambiar la textura de un cubo dropeado, no hay UI — tiene que reasignar el material. **Trigger:** dev pide "drop texture sobre material slot del Inspector".
+- **Modelos .obj con .mtl**: el path resolution funciona para .glb (carpeta del archivo). Para .obj con .mtl, assimp parsea el .mtl que puede referenciar texturas con paths relativos también. No probado. **Trigger:** primer .obj importado que tenga textura referenciada por .mtl.

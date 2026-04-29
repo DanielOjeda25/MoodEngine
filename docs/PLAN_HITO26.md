@@ -1,16 +1,23 @@
-# Plan — Hito 26: TBD
+# Plan — Hito 26: Asset pipeline (extracción de texturas + Kenney pack + IBL bakeable)
 
-> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 25 cerrado).
+> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 26 cerrado).
 >
-> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
+> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`.
 
 ---
 
 ## Estado
 
-**Hito 25 cerrado** (`v0.25.0-hito25`, suite **206/5309**). Bloques: hot-reload de shaders + polish del sistema de materiales (default visible como warning, instance único por entidad, costura del skybox).
+**Hito 26 cerrado** (`v0.26.0-hito26`, suite **212/5326**). Scope acordado con el dev: candidatos E (asset pack) + G (sync IBL al equirect). El asset pack vino en forma de Kenney Survival Kit (CC0, 80 props, 1.5 MB), tras pivot desde "Cargo Kit" (que no existe en kenney.nl). Los modelos ya importados (Fox, CesiumMan) se beneficiaron del nuevo pipeline de extracción y muestran sus texturas embedded reales.
 
-El Hito 26 está **TBD**: acordar con el dev el alcance antes de abrir bloques.
+## Bloques cerrados
+
+- [x] **Bloque 1 — IBL bakeable desde equirect (G)**: `bake_ibl.py` acepta PNG equirect + cubemap dir. Bake del kloofendal a 184 KB. SceneRenderer apunta al nuevo IBL.
+- [x] **Bloque 2 — AssetBrowser recursivo**: `recursive_directory_iterator` + display name relativo. Packs en subdirectorios aparecen automático.
+- [x] **Bloque 3 — Extracción de texturas (E)**: `MeshLoader::extractAlbedo` cubre embedded `*N` (via `aiScene::GetEmbeddedTexture`) + external (relativo a la carpeta del .glb). Nuevo `OpenGLTexture(bytes)`. Nuevo `AssetManager::loadEmbeddedTexture` + `createMaterialsForMesh`. Spawn paths migrados.
+- [x] **Bloque 4 — Fix UV flip + autoscale bidireccional**: removido `aiProcess_FlipUVs` (doble flip rompía palette). Autoscale up para meshes < 1m (Kenney barriles).
+- [x] **Bloque 5 — Asset pack Kenney Survival Kit**: 80 .glb CC0 + colormap palette en `assets/meshes/kenney_survival/`.
+- [x] **Bloque 6 — Tests + docs + tag**: 6 tests nuevos en `test_asset_manager`, smoke visual del dev, update de `HITOS.md` + `DECISIONS.md` + `ESTADO_ACTUAL.md`, tag `v0.26.0-hito26`, creación de `PLAN_HITO27.md`. `.gitignore` extendido con `__pycache__/`.
 
 ---
 
@@ -52,7 +59,7 @@ Lista en orden de coste/riesgo creciente. Cualquiera de estos es un hito válido
 
 **Trigger ideal:** se descarta hasta tener al menos save/load + UI de menú principal.
 
-### E. Asset pack realista (Quaternius / Polyhaven / Mixamo)
+### E. Asset pack realista (Quaternius / Polyhaven / Mixamo) ✅ ELEGIDO
 
 **Por qué:** mencionado por el dev en Hito 23. Hoy los demos usan primitivas + pyramid/Fox/CesiumMan. Tener 3-5 props (cajas, barriles, mobiliario CC0) y 1-2 personajes humanoides amplía qué se puede mostrar.
 
@@ -68,7 +75,7 @@ Lista en orden de coste/riesgo creciente. Cualquiera de estos es un hito válido
 
 **Trigger ideal:** hito de polish visual cuando el sistema base esté estable.
 
-### G. Sync de IBL al skybox equirect
+### G. Sync de IBL al skybox equirect ✅ ELEGIDO
 
 **Por qué:** pendiente menor del Hito 24. Hoy `SceneRenderer` usa el equirect kloofendal pero el IBL bake (`tools/bake_ibl.py`) sigue usando `assets/skyboxes/sky_day/` cubemap — la iluminación PBR no refleja el cielo visible. Visualmente confuso en escenas con esferas metálicas.
 

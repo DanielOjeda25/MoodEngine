@@ -6,7 +6,19 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 25 cerrado.**
+**Hito 26 cerrado.**
+Tag: `v0.26.0-hito26`.
+Verificado automático: suite doctest **212/5326** (+6 de `test_asset_manager` para `loadEmbeddedTexture` + `createMaterialsForMesh`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: drag de `kenney_survival/barrel.glb` al viewport spawnea un barril de madera (~1.5 m, autoscale up) con la textura colormap real (NO chequer magenta). Fox.glb y CesiumMan.glb spawnean con sus texturas embedded reales. Las esferas PBR reflejan el cielo kloofendal del SkyboxRenderer (antes mismatch con el cubemap sky_day).
+
+**Cambio importante en assets:** `MeshLoader` extrae el albedo de cada material referenciado por el archivo (embedded `*N` via `aiScene::GetEmbeddedTexture` + external relativo a la carpeta del .glb). `MeshAsset.materialAlbedoTextures` se popula con los `TextureAssetId` resueltos. Spawn paths usan el nuevo helper `AssetManager::createMaterialsForMesh(meshId)` para armar el vector de materiales con esas texturas (instance único por entidad, hereda invariante anti-contagio del Hito 25).
+
+**Asset pack agregado:** `assets/meshes/kenney_survival/` con 80 GLBs CC0 de Kenney Survival Kit (barrels, boxes, structures, vegetation, tools, crafting) compartiendo `Textures/colormap.png` 512×512. 1.5 MB total.
+
+**Fix bonus:** removido `aiProcess_FlipUVs`. `OpenGLTexture` ya hace `stbi_set_flip_vertically_on_load(true)`; el doble flip cancelaba en texturas simétricas (grid, brick) pero rompía palette swatches como el `colormap.png` de Kenney. Documentado en `DECISIONS.md`.
+
+**Próximo paso:** Hito 27 (TBD). Plan en `docs/PLAN_HITO27.md` con candidatos. Trasladados desde Hito 26: A (NavAgent polish), H (PackageBuilder smart-pack — solo assets referenciados — identificado al sumar Kenney). El dev mencionó que NavAgent A se abre "cuando aparezca el primer personaje real" (ya tenemos Kenney + Fox + CesiumMan, así que está cerca).
+
+### Hito 25 (anterior, ya cerrado)
 Tag: `v0.25.0-hito25`.
 Verificado automático: suite doctest **206/5309** (+6 de `test_material_serializer`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo y por smoke test programático: editar `shaders/skybox_equirect.frag` con el editor abierto produce `[render] [info] Hot-reload OK: shaders/skybox.vert + shaders/skybox_equirect.frag` en el log a los ~6 s; inyectar un syntax error produce `[render] [warning] Hot-reload fallo en ... (se mantiene el shader previo)` y el editor sigue corriendo sin romper render; restaurar el shader recovery sin reinicio.
 
@@ -14,8 +26,6 @@ Verificado automático: suite doctest **206/5309** (+6 de `test_material_seriali
 - **Costura del skybox equirect**: `texture()` → `textureLod(..., 0.0)`. En la costura las derivadas saltan y el sampler elegía un mip 1×1 produciendo línea vertical borrosa.
 - **Default material visible como warning**: nuevo flag `MaterialAsset::useAlbedoMap`. El default lo tiene en `true` con `albedo=0` para que sample `missing.png`. Antes, una entidad sin material quedaba blanco puro disfrazado de feature.
 - **Material instance único por entidad**: nuevo `AssetManager::createMaterialFromTexture()` (sin cache). Migrados tiles + floor del Editor y Player, los 3 spawners de `DemoSpawners`, `updateTileEntity`, y `SceneLoader`. Editar el albedoTint de un cubo no contagia jamás. Sentinel `__runtime_tex#<N>` se persiste como el path de la textura subyacente.
-
-**Próximo paso:** Hito 26 (TBD). Plan en `docs/PLAN_HITO26.md` con candidatos. Notar que el polish del NavAgent (rotación + persistencia) quedó como candidato A — el dev lo difirió a "cuando ya tenga personajes de verdad".
 
 ### Hito 24 (anterior, ya cerrado)
 Tag: `v0.24.0-hito24`.
@@ -380,16 +390,16 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: definir y abrir el Hito 26
+### Tarea inmediata: definir y abrir el Hito 27
 
-El Hito 25 está cerrado (tag `v0.25.0-hito25`). El próximo hito está **TBD**. Candidatos en `docs/PLAN_HITO26.md`: polish del NavAgent (deferido desde Hito 25, "cuando haya personajes de verdad"), mini editor de scripts in-place, networking, save/load de gameplay state, asset pack realista, particle system.
+El Hito 26 está cerrado (tag `v0.26.0-hito26`). El próximo hito está **TBD**. Candidatos en `docs/PLAN_HITO27.md`: polish del NavAgent (ahora con personajes reales disponibles via Kenney + CesiumMan + Fox), PackageBuilder smart-pack (solo assets referenciados, identificado en el Hito 26), mini editor de scripts in-place, save/load de gameplay state, particle system.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO26.md` (candidatos) y discutir con el dev qué se prioriza.
+1. Leer `docs/PLAN_HITO27.md` (candidatos) y discutir con el dev qué se prioriza.
 2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
 3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.26.0-hito26`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO27.md`.
+4. Al final: commits atómicos en español, merge a main, tag `v0.27.0-hito27`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO28.md`.
 
 ---
 

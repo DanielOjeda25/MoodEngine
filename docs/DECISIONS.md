@@ -2019,3 +2019,45 @@ Las opciones eran:
 - Se gana: el dev nota inmediatamente cuándo una entidad no tiene material configurado correctamente.
 
 **Revisar si:** aparece un caso legítimo donde "tint blanco puro sin textura" sea el resultado deseado en el default — improbable.
+
+## 2026-04-29: Removido `aiProcess_FlipUVs` — el doble-flip rompía palette swatches
+
+**Contexto:** Hito 26. Al sumar el Kenney Survival Kit todos los props se renderearon dark/black aunque la textura `colormap.png` sí se cargaba (confirmado por log). Diagnóstico: doble flip vertical entre `OpenGLTexture` (que llama `stbi_set_flip_vertically_on_load(true)`) y `MeshLoader` (que pasaba `aiProcess_FlipUVs` a assimp). Cancelaba en texturas simétricas (grid, brick, Fox single-color) pero rompía palette swatches donde la posición exacta del UV importa: cada UV terminaba en un pixel ~negro.
+
+**Decisión:** removido `aiProcess_FlipUVs` del set de flags de `Importer::ReadFile`. La convención queda: `OpenGLTexture` carga el PNG flip-vertically (sube a GL en orientación correcta para UVs con origen bottom-left), y los UVs del mesh se respetan tal como vienen del archivo (glTF nativo top-left → al samplear con texture flip-vertically da el resultado correcto).
+
+**Razones:**
+- **El bug se ocultó por casualidad** durante 16 hitos porque las texturas previas eran tile-symmetric (grid/brick) o single-color (Fox). El primer caso con UV-precision (palette swatch) lo expuso.
+- **Sin el flag, el wireup queda más simple**: una sola fuente de verdad (el flip de stbi). Antes había dos lugares que tenían que estar consistentes entre sí.
+- **`aiProcess_FlipUVs` era el flag legacy** para devs que no flipeaban la imagen. Desde que tenemos image-flip (Hito 3), el UV-flip era doblemente incorrecto.
+
+**Alternativas consideradas:**
+- **Quitar el image-flip y dejar el UV-flip**: equivalente matemáticamente. Pero entonces el `OpenGLCubemapTexture` (que tiene su propio convention de orientación) y otros sistemas tendrían que cambiar. Más invasivo.
+- **Hardcodear el comportamiento por extensión** (`.glb` sin flip, `.obj` con flip): frágil y arbitrario.
+
+**Trade-offs:**
+- Se pierde: nada importante. Las texturas que dependían del doble-flip eran simétricas y siguen viéndose igual.
+- Se gana: Kenney pack se ve correcto, futuros assets con UV-precision (palette atlases, lightmaps, UDIM) van a funcionar bien.
+
+**Revisar si:** aparece un .obj/.fbx con UVs en convención bottom-left (raro) que ahora se vea flippeado. La fix sería un flag opcional en `loadMeshWithAssimp` para casos puntuales.
+
+## 2026-04-29: Material instances por entidad spawneada vía `createMaterialsForMesh`
+
+**Contexto:** Hito 26. Tras agregar `materialAlbedoTextures` al `MeshAsset`, los spawn paths necesitaban traducir esa info a `MaterialAssetId` por submesh. Antes cada spawn hacía `createMaterial(default_clone)` lo cual ignoraba las texturas extraídas; mover ese código a cada call site iba a ser repetitivo y propenso a olvidos.
+
+**Decisión:** helper `AssetManager::createMaterialsForMesh(meshId)` que arma el vector completo de `MaterialAssetId` para un `MeshRendererComponent`. Para cada submesh: si hay textura extraída del archivo, usa `createMaterialFromTexture` (instance único); sino clona el default (instance único, mostrará missing como warning del Hito 25). Llamado por todos los spawn paths (Fox, CesiumMan, drop genérico).
+
+**Razones:**
+- **Una sola regla**: "para cada entidad nueva, esto es cómo se construyen sus materiales". Cualquier nuevo spawner usa el helper sin pensar.
+- **Preserva instance-uniqueness del Hito 25**: cada entidad sigue teniendo material editable sin contagiar.
+- **Funciona para ambos casos** (texture extraída o no) sin que el callsite tenga que distinguir.
+
+**Alternativas consideradas:**
+- **Hacer que `MeshRendererComponent` resuelva los materials lazy en el render loop**: viola el principio de "materiales son data del componente". Mezcla preocupaciones del render pipeline con el ECS.
+- **Pasar `meshAsset->materialAlbedoTextures` como parámetro al `addComponent<MeshRendererComponent>(...)`**: igual de feo, mismo código duplicado en 3+ sitios.
+
+**Trade-offs:**
+- Se pierde: nada material (es un helper).
+- Se gana: simplicidad en spawn paths + invariante centralizada.
+
+**Revisar si:** aparece un caso donde el caller necesite controlar exactamente qué materials se crean (ej. spawner que reutilice un material editable previamente armado). Hoy no existe.
