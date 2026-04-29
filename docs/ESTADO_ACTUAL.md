@@ -6,7 +6,18 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 24 cerrado.**
+**Hito 25 cerrado.**
+Tag: `v0.25.0-hito25`.
+Verificado automático: suite doctest **206/5309** (+6 de `test_material_serializer`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo y por smoke test programático: editar `shaders/skybox_equirect.frag` con el editor abierto produce `[render] [info] Hot-reload OK: shaders/skybox.vert + shaders/skybox_equirect.frag` en el log a los ~6 s; inyectar un syntax error produce `[render] [warning] Hot-reload fallo en ... (se mantiene el shader previo)` y el editor sigue corriendo sin romper render; restaurar el shader recovery sin reinicio.
+
+**Polish reactivo del Hito 24 cerrado en el mismo tag:**
+- **Costura del skybox equirect**: `texture()` → `textureLod(..., 0.0)`. En la costura las derivadas saltan y el sampler elegía un mip 1×1 produciendo línea vertical borrosa.
+- **Default material visible como warning**: nuevo flag `MaterialAsset::useAlbedoMap`. El default lo tiene en `true` con `albedo=0` para que sample `missing.png`. Antes, una entidad sin material quedaba blanco puro disfrazado de feature.
+- **Material instance único por entidad**: nuevo `AssetManager::createMaterialFromTexture()` (sin cache). Migrados tiles + floor del Editor y Player, los 3 spawners de `DemoSpawners`, `updateTileEntity`, y `SceneLoader`. Editar el albedoTint de un cubo no contagia jamás. Sentinel `__runtime_tex#<N>` se persiste como el path de la textura subyacente.
+
+**Próximo paso:** Hito 26 (TBD). Plan en `docs/PLAN_HITO26.md` con candidatos. Notar que el polish del NavAgent (rotación + persistencia) quedó como candidato A — el dev lo difirió a "cuando ya tenga personajes de verdad".
+
+### Hito 24 (anterior, ya cerrado)
 Tag: `v0.24.0-hito24`.
 Verificado automático: suite doctest **200/5287** (+8 de `test_exposed_properties`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo (smoke test): scripts Lua declaran parámetros con `local x = engine.exposed("name", default)`; el Inspector muestra cada prop como widget tipado (DragFloat / Checkbox / InputText / DragFloat3 / ColorEdit3). Editar el valor cambia el comportamiento del script en vivo (un rotator a 30°/s vs otro a 90°/s usando el mismo `rotator.lua`). Guardar / cerrar / reabrir el proyecto preserva los overrides via el bloque `script: {path, overrides}` del `.moodmap` (schema v8).
 
@@ -15,8 +26,6 @@ Verificado automático: suite doctest **200/5287** (+8 de `test_exposed_properti
 **Polish reactivo cerrado en el mismo tag:**
 - **Mapa de prueba 16x16 con suelo plano + columna central** (antes había cubos perimetrales con backface-culling visualmente molestos).
 - **Skybox equirectangular** (sampler2D con mapping spherical) además del cubemap original — evita seams en los polos. Asset: `assets/skyboxes/sky_kloofendal.png` (kloofendal_43d_clear de Polyhaven CC0, tonemapeado a LDR via `tools/hdr_to_equirect_png.py`).
-
-**Próximo paso:** Hito 25 (TBD). Plan en `docs/PLAN_HITO25.md` con candidatos.
 
 ### Hito 23 (anterior, ya cerrado)
 Tag: `v0.23.0-hito23`.
@@ -371,16 +380,16 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: definir y abrir el Hito 25
+### Tarea inmediata: definir y abrir el Hito 26
 
-El Hito 24 está cerrado (tag `v0.24.0-hito24`). El próximo hito está **TBD**. Candidatos en `docs/PLAN_HITO25.md`: mini editor de scripts in-place (deferido desde Hito 22), polish del NavAgent (rotación hacia movimiento, persistencia en `.moodmap`), networking, save/load de gameplay state, asset pack realista (Quaternius/Sketchfab) para físicas, particle system, hot-reload de shaders.
+El Hito 25 está cerrado (tag `v0.25.0-hito25`). El próximo hito está **TBD**. Candidatos en `docs/PLAN_HITO26.md`: polish del NavAgent (deferido desde Hito 25, "cuando haya personajes de verdad"), mini editor de scripts in-place, networking, save/load de gameplay state, asset pack realista, particle system.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO25.md` (candidatos) y discutir con el dev qué se prioriza.
+1. Leer `docs/PLAN_HITO26.md` (candidatos) y discutir con el dev qué se prioriza.
 2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
 3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.25.0-hito25`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO26.md`.
+4. Al final: commits atómicos en español, merge a main, tag `v0.26.0-hito26`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO27.md`.
 
 ---
 

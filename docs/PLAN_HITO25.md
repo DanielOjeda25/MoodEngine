@@ -1,16 +1,23 @@
-# Plan — Hito 25: TBD
+# Plan — Hito 25: Hot-reload de shaders + polish del sistema de materiales
 
-> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 24 cerrado).
+> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 25 cerrado).
 >
-> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
+> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`.
 
 ---
 
 ## Estado
 
-**Hito 24 cerrado** (`v0.24.0-hito24`, suite **200/5287**). Bloques: engine.exposed binding, Inspector dinámico, runtime apply, persistencia v8 en `.moodmap`, tests + cierre. Polish reactivo cerrado en el mismo tag: mapa de prueba 16x16 con suelo plano, skybox equirectangular vía Polyhaven kloofendal.
+**Hito 25 cerrado** (`v0.25.0-hito25`, suite **206/5309**). Scope acordado con el dev: candidato G (hot-reload de shaders) + polish reactivo del sistema de materiales que aparecieron al testear el render. El candidato B (polish NavAgent) quedó deferido — el dev lo retomará "cuando ya tenga personajes de verdad".
 
-El Hito 25 está **TBD**: acordar con el dev el alcance antes de abrir bloques.
+## Bloques cerrados
+
+- [x] **Bloque 1 — Hot-reload de shaders (G)**: `OpenGLShader` con mtime + registry estático + tick global. Recompile atómico con preserve-on-error. Wire-up en `EditorApplication::run()`.
+- [x] **Bloque 2 — Polish reactivo de materiales** (cerrado en el mismo tag):
+   - Costura del skybox equirect: `texture()` → `textureLod(..., 0.0)`.
+   - `MaterialAsset::useAlbedoMap` para distinguir tint puro vs warning visible.
+   - `AssetManager::createMaterialFromTexture()` (sin cache) y migración de tiles + spawners + loader. Sentinel `__runtime_tex#<N>` con round-trip por path de textura.
+- [x] **Bloque 3 — Tests + docs + tag**: 6 tests nuevos en `test_material_serializer`, smoke test programático del hot-reload, update de `HITOS.md` + `DECISIONS.md` + `ESTADO_ACTUAL.md`, tag `v0.25.0-hito25`, creación de `PLAN_HITO26.md`.
 
 ---
 
@@ -68,7 +75,7 @@ Lista en orden de coste/riesgo creciente. Cualquiera de estos es un hito válido
 
 **Trigger ideal:** hito de polish visual cuando el sistema base esté estable.
 
-### G. Hot-reload de shaders
+### G. Hot-reload de shaders ✅ ELEGIDO
 
 **Por qué:** durante el Hito 24 perdimos varias iteraciones cuando un shader cambiado no surtía efecto al relanzar el editor (CMake los copia sólo en build). Detectar mtime + recompilar en vivo es estándar.
 

@@ -1953,3 +1953,69 @@ Las opciones eran:
 - Se gana: `.moodmap` describe la entidad completa, incluyendo su lógica.
 
 **Revisar si:** aparece un sistema de scripts inline (sin archivo, ej. node graph compilado a Lua) o si el path se vuelve un detalle que el dev no debería ver.
+
+## 2026-04-29: Hot-reload de shaders con registry estático global
+
+**Contexto:** Hito 25. Editar `shaders/*.{vert,frag}` requería reiniciar el editor — sufrido durante el polish del Hito 24 (costura del skybox). Faltaba un mecanismo para detectar cambios y recompilar en vivo.
+
+**Decisión:** `OpenGLShader` mantiene `static std::vector<OpenGLShader*> s_allShaders` con auto-registro RAII en el ctor / auto-baja en el dtor. Una llamada `OpenGLShader::tickHotReload(dt)` desde el main loop del editor itera el registry cada 500 ms (throttle por dt acumulado) y le pide a cada shader que chequee el mtime de sus archivos.
+
+**Razones:**
+- **Sin pasar referencias por todos lados**: el editor hoy crea shaders en `SceneRenderer`, `SkyboxRenderer`, `OpenGLDebugRenderer`, `OpenGLShadowMap`. Pasar un `ShaderRegistry*` a cada constructor sería ruido.
+- **Single-threaded por diseño del editor**: el contexto OpenGL vive en el render thread y los shaders sólo se manipulan ahí. Sin mutex.
+- **El throttle 500 ms** matchea el patrón ya usado para hot-reload de Lua en `ScriptSystem` — coherencia mental.
+- **Failure isolation**: si el recompile lanza `runtime_error` (syntax error en GLSL), el program previo se mantiene y se actualiza el mtime para no re-spamear el mismo error en cada tick. El render no se rompe.
+
+**Alternativas consideradas:**
+- **Pasar un `IHotReloadRegistry&` al ctor de cada shader**: más limpio en aislamiento pero contagia 4-5 sitios sin valor real (no hay multi-thread).
+- **Polling en cada `bind()`**: una llamada `last_write_time` por draw call sería caro y no aporta — la latencia 500 ms es aceptable.
+- **`inotify`/`ReadDirectoryChangesW`**: API plataforma-específica, complejidad alta para un beneficio marginal sobre polling barato.
+
+**Trade-offs:**
+- Se pierde: visibility/testabilidad — el registry global no se puede mockear sin link tricks. Hito 25 documenta que `tryReloadIfChanged` no tiene unit tests por requerir contexto GL.
+- Se gana: cero fricción al iterar shaders. Editar `.frag`, guardar en VS Code, ver el cambio en el editor en <500 ms.
+
+**Revisar si:** se necesita hot-reload sandboxado por entorno (ej. correr 2 editores en paralelo con shaders distintos), o si aparece multi-thread en la pipeline de render.
+
+## 2026-04-29: Material instance único por entidad spawneada
+
+**Contexto:** Hito 25 polish reactivo. Editar el `albedoTint` de un cubo en el Inspector contagiaba a todos los demás cubos de la escena que compartían el mismo material auto-generado. La causa: `AssetManager::loadMaterialFromTexture(texId)` cachea por `__tex#<N>` y devuelve el mismo `MaterialAssetId` para todas las llamadas con la misma textura — eficiente para tiles de un mapa, catastrófico para entidades runtime.
+
+**Decisión:** nuevo helper `AssetManager::createMaterialFromTexture(texId)` (sin cache, sentinel `__runtime_tex#<N>`). Cada entidad runtime (tiles, floor, spawners de demos, drops del Asset Browser, entidades cargadas del `.moodmap`) usa este path. El cacheado `loadMaterialFromTexture` queda disponible pero sin call sites en producción.
+
+**Razones:**
+- **Coincide con la expectativa intuitiva del dev**: editar el color de un cubo afecta sólo a ese cubo. Es lo que hacen Unity y Unreal con sus "instance materials".
+- **Memoria despreciable**: un `MaterialAsset` pesa ~80 bytes. 256 tiles + 100 entidades = ~30 KB total. No es problema.
+- **Persistencia preservada**: el sentinel `__runtime_tex#<N>` se serializa como el path de la textura subyacente (la rama `isTexWrapper` en `EntitySerializer` lo reconoce). En load → `createMaterialFromTexture` → cada entidad obtiene su instance único de nuevo.
+
+**Alternativas consideradas:**
+- **Copy-on-write en el Inspector**: clonar el material recién al primer edit. Más complejo, requiere rastrear "shared vs instance" + cambiar el `MaterialAssetId` del `MeshRendererComponent` al clonar (invalida selecciones, etc.).
+- **Mantener cache + ofrecer botón "Romper instancia" en el Inspector**: estilo Unity. Más engineering, no resuelve el bug por defecto.
+- **Eliminar `loadMaterialFromTexture` cacheado**: cambio de API. Lo dejé por compatibilidad con tests + uso futuro hipotético (ej. tiles de mapa que sí quieran compartir).
+
+**Trade-offs:**
+- Se pierde: la propiedad "editar el material brick repinta todas las paredes" del demo. En la práctica el demo tiene 1 sola pared, así que no se nota.
+- Se gana: comportamiento previsible, match con engines mainstream.
+
+**Revisar si:** un dev pide explícitamente "compartir material entre entidades de un grupo" — entonces hace falta exponer la decisión por entidad (ej. checkbox en el Inspector "Share material") en lugar de hardcodear el comportamiento.
+
+## 2026-04-29: `MaterialAsset.useAlbedoMap` para distinguir "tint puro" de "warning visible"
+
+**Contexto:** Hito 25 polish reactivo. Una entidad sin material asignado renderea blanco puro en lugar del patrón magenta/negro de `missing.png`. El check del renderer era `mat->albedo != 0`, pero `0` es el id de `missing.png` Y también el valor de "sin textura" — significados conflictivos. Resultado: el material default cae al `else` branch del shader (sólo `uAlbedoTint`, blanco puro), y la salvaguarda visual se pierde justo cuando más sirve.
+
+**Decisión:** nuevo flag `MaterialAsset::useAlbedoMap` (default `false`). El renderer chequea ese flag; el material default lo tiene en `true` con `albedo=0` para que sample explícitamente `missing.png`. Materiales tint-puro de archivo (`oro_pulido.material`, `plastico_azul.material`) inferieren `useAlbedoMap = j.contains("albedo")` al cargar — siguen funcionando.
+
+**Razones:**
+- **Separa intención de implementación**: "este material quiere samplear textura" no es lo mismo que "albedo apunta a una textura concreta". El flag captura la intención; el id es el dato.
+- **Backwards compatible**: archivos `.material` viejos no necesitan migración — el flag se infiere de la presencia del campo en el JSON.
+- **Default es ruidoso a propósito**: una entidad sin material salta a la vista en magenta/negro como cualquier engine moderno (Source, Unity, Unreal). El blanco puro silencioso es peor UX porque parece intencional.
+
+**Alternativas consideradas:**
+- **Reservar otro id (ej. `255`) para "no asignado"**: invasivo, requiere cambiar todas las constructoras + serializadores.
+- **Cambiar `albedoTint` del default a magenta**: no muestra el patrón chequer, sólo color sólido. Menos diagnóstico (no se distingue de un material custom magenta).
+
+**Trade-offs:**
+- Se pierde: una entidad cuyo material auto-wrapper no encuentra la textura va a mostrar el chequer en lugar de blanco. Es el efecto deseado.
+- Se gana: el dev nota inmediatamente cuándo una entidad no tiene material configurado correctamente.
+
+**Revisar si:** aparece un caso legítimo donde "tint blanco puro sin textura" sea el resultado deseado en el default — improbable.

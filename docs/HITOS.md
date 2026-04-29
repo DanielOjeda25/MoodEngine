@@ -29,7 +29,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 22 — Workflow de scripting Lua (completado, tag `v0.22.0-hito22`).
 - [x] Hito 23 — AI / pathfinding básico (completado, tag `v0.23.0-hito23`).
 - [x] Hito 24 — Exposed properties Lua (completado, tag `v0.24.0-hito24`).
-- [ ] Hito 25 — TBD.
+- [x] Hito 25 — Hot-reload de shaders + polish del sistema de materiales (completado, tag `v0.25.0-hito25`).
+- [ ] Hito 26 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -791,11 +792,44 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Mapa de prueba 16x16 con suelo plano + columna central**: antes el demo arena tenía cubos perimetrales con backface-culling visualmente molestos. Ahora el editor + MoodPlayer usan un mapa 16x16 con sólo la columna brick central + un quad escalado como suelo.
 - **Skybox equirectangular**: `SkyboxRenderer` gana modo equirect (sampler2D con atan2/asin spherical mapping) además del cubemap original. Evita seams en los polos del cubemap. Asset nuevo: `assets/skyboxes/sky_kloofendal.png` (1.1 MB, kloofendal_43d_clear de Polyhaven CC0, tonemapeado a LDR via `tools/hdr_to_equirect_png.py` con `--exposure 0.4` para preservar detalle de nubes). Shader nuevo `shaders/skybox_equirect.frag` (con la fórmula `v = 0.5 + lat/PI` para compensar el flip-Y de stbi en `OpenGLTexture`).
 
-**Siguiente paso tras completarlo:** Hito 25 (TBD). Plan en `docs/PLAN_HITO25.md`.
+**Siguiente paso tras completarlo:** Hito 25 — Hot-reload de shaders. Plan en `docs/PLAN_HITO25.md`.
 
 ### Pendientes menores detectados en Hito 24
 
 - **Reload spam durante edición del Inspector**: cada frame de DragFloat dispara `sc.loaded = false` → re-ejecuta el chunk top-level → log "Cargado '...'" se imprime ~10 veces por drag. Mitigación: throttle del flag (set sólo al soltar el drag con `IsItemDeactivatedAfterEdit`) o suprimir el log de reload cuando es triggered por override. **Trigger:** dev se queja del spam, o el reload tiene side effects que impactan rendimiento.
 - **Inferencia de tipo para `nil` default**: `engine.exposed("foo", nil)` no tiene tipo. Hoy se loguea warning y devuelve nil; la prop no se registra. Si el dev quiere "valor opcional", la API necesitaría un tercer arg explícito de tipo: `engine.exposed("foo", nil, "string")`.
-- **Sync manual de shaders al iterar**: editar `shaders/*.{vert,frag}` no surte efecto al relanzar el editor — CMake los copia a `build/debug/Debug/shaders/` sólo en build time. Workaround: `cp shaders/<file> build/debug/Debug/shaders/<file>`. **Mitigación apropiada:** symlink al copy step, o un hot-reload de shaders. **Trigger:** próxima sesión con iteraciones intensas de shader.
+- ~~**Sync manual de shaders al iterar**: editar `shaders/*.{vert,frag}` no surte efecto al relanzar el editor — CMake los copia a `build/debug/Debug/shaders/` sólo en build time. Workaround: `cp shaders/<file> build/debug/Debug/shaders/<file>`. **Mitigación apropiada:** symlink al copy step, o un hot-reload de shaders. **Trigger:** próxima sesión con iteraciones intensas de shader.~~ **Resuelto en Hito 25** con `OpenGLShader::tickHotReload` (mtime + recompile en vivo).
 - **Sync de IBL a equirect**: `SceneRenderer.cpp` usa `SkyboxRenderer::Equirect` para el sky pero el IBL bake (`tools/bake_ibl.py`) sigue usando `assets/skyboxes/sky_day/` cubemap. La iluminación PBR no refleja el kloofendal nuevo. **Trigger:** dev nota que las esferas PBR reflejan un cielo distinto al visible.
+
+## Hito 25 — Hot-reload de shaders + polish del sistema de materiales
+
+**Objetivo:** cerrar el ciclo de iteración de shaders sin tener que reiniciar el editor (sufrido durante el polish del Hito 24 con la costura del skybox), y completar el polish del sistema de materiales que reveló dos bugs UX al revisar el render: (1) entidades sin material renderean blanco puro en lugar del patrón missing visible; (2) editar el albedoTint de un cubo contagia a todos los demás que comparten material cacheado.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — Hot-reload de shaders (G):*
+- `OpenGLShader` guarda `m_vertexPath` + `m_fragmentPath` + `mtime` de la última compilación exitosa. Auto-registro en `s_allShaders` (vector estático) en el ctor; auto-baja en el dtor. Single-thread, sin mutex.
+- `OpenGLShader::tryReloadIfChanged()`: si algún archivo cambió en disco, llama al builder helper `buildProgram()` (extraído del ctor para reuso); en éxito tira el `glDeleteProgram` viejo, swapea, invalida la cache de uniforms (las locations pueden diferir si el set de uniforms activos cambió). En fallo loguea el GL error y mantiene el program previo — el render no se rompe.
+- `OpenGLShader::tickHotReload(dt)`: throttle 500 ms acumulando dt; cada vez que se vacía itera todos los shaders vivos. Llamado una vez por frame desde `EditorApplication::run()`.
+- Para `mtime` desaparecido (file_time_type epoch): se trata como "sin cambios" y no spamea errores — cubre el caso de editores de texto que borran y reescriben el archivo en dos pasos.
+
+*Polish del sistema de materiales (cerrado en el mismo tag):*
+- **Costura del skybox equirect**: `shaders/skybox_equirect.frag` cambia `texture()` por `textureLod(..., 0.0)`. En la costura (u salta de 1 a 0) las derivadas `dFdx(u)` son enormes y el sampler elegía un mip bajísimo (1×1 px), produciendo una línea vertical borrosa visible en el cielo. Forzar mip 0 elimina el problema; el skybox no se beneficia de mipmaps porque su cobertura angular por píxel es ~constante.
+- **Default material visible como warning**: `MaterialAsset` gana flag `useAlbedoMap` (antes el renderer chequeaba `mat->albedo != 0`, lo cual confundía "sin textura" con "este es el material default"). El default lo tiene en `true` con `albedo=0` para que sample explícitamente `missing.png` (patrón magenta/negro). Materiales tint-puro de archivo (oro_pulido, plastico_azul) inferieren `useAlbedoMap = j.contains("albedo")` — siguen funcionando como antes.
+- **Material instance único por entidad**: nuevo `AssetManager::createMaterialFromTexture(texId)` (sin cache, idéntico body al `loadMaterialFromTexture` cacheado pero cada call genera un slot nuevo). Migrados a este path: tiles + floor de `EditorScene::rebuildSceneFromMap` y `PlayerApplication::rebuildSceneFromMap`, los 3 spawners de `DemoSpawners` (rotador, caja física, demo-sombras), `updateTileEntity` (drop de textura), y `SceneLoader` (cada entidad persistida con texture-path obtiene su propio instance). El sentinel `__runtime_tex#<N>` se persiste como el path de la textura subyacente (mismo round-trip que `__tex#<N>` del cacheado). Editar el albedoTint de un cubo no contagia jamás.
+
+**Suite total:** 206/5309 (antes Hito 24 cerrado: 200/5287). Tests nuevos en `test_material_serializer`: 6 cases del flag `useAlbedoMap` y del helper `createMaterialFromTexture` (ids distintos por llamada, edición no muta al hermano, sentinel correcto).
+
+**Verificación funcional del hot-reload (smoke test programático):**
+- Editor lanzado en background, modificación de comentario en `shaders/skybox_equirect.frag` → `[render] [info] Hot-reload OK: shaders/skybox.vert + shaders/skybox_equirect.frag` aparece en el log a los ~6 s.
+- Inyección de syntax error → `[render] [warning] Hot-reload fallo en ... (se mantiene el shader previo)` — el editor sigue corriendo sin romper render.
+- Restauración del shader original → `Hot-reload OK` recovery sin tener que reiniciar.
+
+**Siguiente paso tras completarlo:** Hito 26 (TBD). Plan en `docs/PLAN_HITO26.md` con candidatos.
+
+### Pendientes menores detectados en Hito 25
+
+- **Hot-reload no incluye al MoodPlayer**: el wire-up `tickHotReload` está sólo en `EditorApplication::run`. El Player ships con shaders bundleados al paquete; tiene poco sentido hot-reloadear ahí. **Trigger:** dev quiere debuggear shaders dentro del Player corriendo (poco probable).
+- **Encoding del log de error de GL**: `glGetShaderInfoLog` en NVIDIA devuelve a veces caracteres no-UTF-8 que spdlog imprime como `???` y similares. Es pre-existente (también en compile inicial); el hot-reload sólo lo expone más seguido. **Trigger:** dev quiere errores de shader legibles → forzar conversión a UTF-8 o filtrar.
+- **Tests del recompile real (sin GL)**: `tryReloadIfChanged` no se cubre con tests automáticos porque requiere contexto OpenGL. Smoke test programático del manual quedó documentado arriba. **Trigger:** infra de tests con GL headless (poco probable a corto plazo).
+- **Polish del NavAgent (rotación + persistencia)**: deferido por el dev — "es problema para más adelante cuando ya tenga personajes de verdad". Sigue siendo candidato A del próximo hito.
