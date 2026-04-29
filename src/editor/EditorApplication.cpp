@@ -170,6 +170,11 @@ EditorApplication::EditorApplication() {
         [](const std::vector<f32>& verts,
            const std::vector<VertexAttribute>& attrs) -> std::unique_ptr<IMesh> {
             return std::make_unique<OpenGLMesh>(verts, attrs);
+        },
+        /*textureMemoryFactory (Hito 26)*/
+        [](const std::vector<u8>& bytes, const std::string& nameForLog)
+            -> std::unique_ptr<ITexture> {
+            return std::make_unique<OpenGLTexture>(bytes, nameForLog);
         });
     m_ui.assetBrowser().setAssetManager(m_assetManager.get());
 

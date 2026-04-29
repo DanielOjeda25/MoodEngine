@@ -66,6 +66,15 @@ public:
     using TextureFactory =
         std::function<std::unique_ptr<ITexture>(const std::string& filesystemPath)>;
 
+    /// @brief Factoria de texturas desde memoria (Hito 26): recibe un buffer
+    ///        de bytes (PNG/JPG/etc comprimido) + nombre para logs y devuelve
+    ///        un ITexture decodificado. Para texturas embedded en .glb que
+    ///        no existen como archivo en disco. Si null, `loadEmbeddedTexture`
+    ///        falla con missing.
+    using TextureMemoryFactory =
+        std::function<std::unique_ptr<ITexture>(const std::vector<u8>& bytes,
+                                                  const std::string& nameForLog)>;
+
     /// @brief Factoria de audio clips. Recibe path logico + filesystem y
     ///        devuelve un AudioClip con la metadata poblada. Inyectable para
     ///        testear sin hardware (mocks que devuelven clip con duracion=0).
@@ -96,7 +105,8 @@ public:
     AssetManager(std::string rootDir,
                  TextureFactory textureFactory,
                  AudioClipFactory audioFactory = {},
-                 MeshFactory meshFactory = {});
+                 MeshFactory meshFactory = {},
+                 TextureMemoryFactory textureMemoryFactory = {});
     ~AssetManager();
 
     AssetManager(const AssetManager&) = delete;
@@ -106,6 +116,17 @@ public:
     ///        o devuelve el id cacheado si ya estaba cargada. En fallo,
     ///        devuelve `missingTextureId()` y loguea en `assets`.
     TextureAssetId loadTexture(std::string_view logicalPath);
+
+    /// @brief Registra una textura cargada desde un buffer en memoria
+    ///        (Hito 26). Para texturas embedded en .glb extraidas via
+    ///        assimp `aiScene::GetEmbeddedTexture`. La cacheKey debe ser
+    ///        unica (ej. "<glb_path>#<embeddedName>"). Llamadas repetidas
+    ///        con la misma key devuelven el id cacheado. En fallo (memoria
+    ///        invalida o sin TextureMemoryFactory) devuelve `missingTextureId()`.
+    /// @param cacheKey Identificador unico para la cache.
+    /// @param bytes Buffer con el archivo de imagen (PNG/JPG/etc) comprimido.
+    TextureAssetId loadEmbeddedTexture(const std::string& cacheKey,
+                                         const std::vector<u8>& bytes);
 
     /// @brief Devuelve el ITexture para el id dado. Nunca es null:
     ///        ids invalidos (fuera de rango) caen al fallback missing.
@@ -259,9 +280,20 @@ public:
     /// @brief Cantidad de materiales cacheados (incluye slot 0).
     usize materialCount() const { return m_materials.size(); }
 
+    /// @brief Hito 26: arma el vector de MaterialAssetIds para un mesh
+    ///        recien spawneado/dropeado, una entrada por submesh. Si el
+    ///        material referenciado por el submesh tiene una textura
+    ///        albedo extraida del archivo (`mesh->materialAlbedoTextures`),
+    ///        crea un `createMaterialFromTexture` (instance unico). Si no,
+    ///        clona el default material (mostrara missing como warning).
+    ///        Llamarlo SIEMPRE que se construye un `MeshRendererComponent`
+    ///        para una entidad nueva.
+    std::vector<MaterialAssetId> createMaterialsForMesh(MeshAssetId meshId);
+
 private:
     VFS m_vfs;
     TextureFactory m_textureFactory;
+    TextureMemoryFactory m_textureMemoryFactory;
     AudioClipFactory m_audioFactory;
     MeshFactory m_meshFactory;
 

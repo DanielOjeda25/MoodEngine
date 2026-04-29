@@ -120,15 +120,11 @@ void EditorApplication::processSpawnEnemyDemoRequest() {
         origin.y + (-wy.minY),
         origin.z + 1.5f * tileSize);
 
-    // Material instance unico (clone del default).
-    MaterialAsset proto{};
-    if (const MaterialAsset* def =
-            m_assetManager->getMaterial(m_assetManager->missingMaterialId());
-        def != nullptr) {
-        proto = *def;
-    }
-    const MaterialAssetId enemyMat = m_assetManager->createMaterial(proto);
-    enemy.addComponent<MeshRendererComponent>(enemyMesh, enemyMat);
+    // Hito 26: usa las texturas extraidas del .glb si las hay (CesiumMan
+    // trae diffuse embedded). Si la extraccion fallo, cae al default
+    // material clone (chequer magenta = warning visible).
+    auto enemyMats = m_assetManager->createMaterialsForMesh(enemyMesh);
+    enemy.addComponent<MeshRendererComponent>(enemyMesh, std::move(enemyMats));
 
     // Animator con clipName vacio = primer clip del MeshAsset.
     // CesiumMan tiene un solo clip de caminata.
@@ -414,16 +410,10 @@ void EditorApplication::processSpawnAnimatedCharacterRequest() {
     t.position = glm::vec3(0.0f, 0.0f, -3.0f);
     t.scale    = glm::vec3(0.01f);
 
-    // Material instance unico (clone del default). Asi varios "Agregar
-    // personaje animado" no comparten material editable.
-    MaterialAsset proto{};
-    if (const MaterialAsset* def =
-            m_assetManager->getMaterial(m_assetManager->missingMaterialId());
-        def != nullptr) {
-        proto = *def;
-    }
-    const MaterialAssetId foxMat = m_assetManager->createMaterial(proto);
-    fox.addComponent<MeshRendererComponent>(foxMesh, foxMat);
+    // Hito 26: usa las texturas extraidas del .glb si las hay (Fox trae
+    // diffuse embedded). Cada spawn tiene su propio material instance.
+    auto foxMats = m_assetManager->createMaterialsForMesh(foxMesh);
+    fox.addComponent<MeshRendererComponent>(foxMesh, std::move(foxMats));
 
     AnimatorComponent anim{};
     anim.clipName = "";   // primer clip del MeshAsset
@@ -626,16 +616,21 @@ void EditorApplication::processViewportMeshDrop() {
         ? asset->importRotationEuler : glm::vec3(0.0f);
     t.rotationEuler = importEuler;
 
-    // Auto-escala: meshes glTF/FBX en unidades originales (cm/in) caen
-    // en escala >>1 al importar. Si la altura post-rotacion excede 3m,
-    // escalamos para que la entidad mida ~1.5m. Los meshes ya razonables
-    // (cubos, primitivas, modelos en metros) pasan con scale=1.
+    // Auto-escala bidireccional:
+    //  - Meshes grandes (Fox.glb importado en cm a ~150 unidades): si la
+    //    altura post-rotacion excede 3m, escalamos a ~1.5m.
+    //  - Meshes chicos (Kenney Survival Kit ~0.3-1.7m, mundo con tiles
+    //    de 3m): si la altura es < 1m, escalamos para llevarlos a ~1.5m
+    //    (aproximadamente la altura de un personaje, encaja con el tile).
+    //  - Meshes ya razonables (1m..3m: cubos, props grandes) pasan con scale=1.
     f32 autoScale = 1.0f;
     WorldYBounds wy{};
     if (asset != nullptr) {
         wy = rotatedAabbWorldY(asset->aabbMin, asset->aabbMax, importEuler);
         const f32 height = wy.maxY - wy.minY;
         if (height > 3.0f) {
+            autoScale = 1.5f / height;
+        } else if (height > 0.001f && height < 1.0f) {
             autoScale = 1.5f / height;
         }
     }
@@ -649,19 +644,11 @@ void EditorApplication::processViewportMeshDrop() {
         origin.y + yFloorOffset,
         origin.z + (static_cast<f32>(hit.tileY) + 0.5f) * tileSize);
 
-    // Material instance unico por drop. Si reusaramos `MaterialAssetId{0}`
-    // (default compartido), editar sliders del Inspector mutaria el
-    // material global y todas las entidades cambiarian color juntas.
-    // Cloning del default via createMaterial garantiza que cada instancia
-    // tenga su propio material editable.
-    MaterialAsset prototype{};
-    if (const MaterialAsset* def =
-            m_assetManager->getMaterial(m_assetManager->missingMaterialId());
-        def != nullptr) {
-        prototype = *def;
-    }
-    const MaterialAssetId matId = m_assetManager->createMaterial(prototype);
-    e.addComponent<MeshRendererComponent>(meshId, matId);
+    // Hito 26: usa las texturas extraidas del archivo si las hay
+    // (Kenney Survival Kit, Fox.glb, etc). Cada drop tiene materiales
+    // instance unicos para no contagiar edits.
+    auto mats = m_assetManager->createMaterialsForMesh(meshId);
+    e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
 
     // Hito 19: si el mesh tiene esqueleto + animaciones, auto-agregar
     // Animator + Skeleton para que se anime al instante. Sin esto el

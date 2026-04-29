@@ -3,6 +3,7 @@
 #include "core/Log.h"
 #include "engine/animation/AnimationClip.h"
 #include "engine/animation/Skeleton.h"
+#include "engine/assets/AssetManager.h"
 #include "engine/render/IMesh.h"
 #include "engine/render/MeshAsset.h"
 
@@ -19,6 +20,7 @@
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
 #include <limits>
 #include <optional>
 #include <string>
@@ -381,9 +383,72 @@ void parseAnimations(const aiScene& scene,
 
 } // namespace
 
+namespace {
+
+/// Extrae el TextureAssetId del slot diffuse / albedo de un aiMaterial.
+/// Cubre dos casos:
+///   - Embedded ("*0", "*1", ...): assimp guarda los bytes en
+///     scene->mTextures[N]. Usamos `loadEmbeddedTexture` con clave
+///     "<glb>#<embeddedName>".
+///   - External ("Textures/colormap.png"): path relativo a la carpeta
+///     del archivo del mesh. Resolvemos contra el path logico del mesh
+///     (ej. "meshes/kenney_survival/barrel.glb" -> base "meshes/kenney_survival/").
+/// Retorna 0 si el material no tiene diffuse o si la extraccion falla.
+TextureAssetId extractAlbedo(const aiScene& scene,
+                              const aiMaterial& mat,
+                              const std::string& meshLogicalPath,
+                              AssetManager& am) {
+    aiString aiPath;
+    // Probamos primero BASE_COLOR (PBR/glTF), despues DIFFUSE (legacy/OBJ).
+    aiReturn ok = mat.GetTexture(aiTextureType_BASE_COLOR, 0, &aiPath);
+    if (ok != AI_SUCCESS) {
+        ok = mat.GetTexture(aiTextureType_DIFFUSE, 0, &aiPath);
+    }
+    if (ok != AI_SUCCESS || aiPath.length == 0) return 0;
+
+    const std::string path = aiPath.C_Str();
+
+    // Caso embedded: assimp marca con prefijo "*<idx>". También cubre
+    // glb donde la textura embedded tiene un nombre tipo "*0".
+    if (!path.empty() && path[0] == '*') {
+        const aiTexture* embedded = scene.GetEmbeddedTexture(path.c_str());
+        if (embedded == nullptr) {
+            Log::assets()->warn(
+                "MeshLoader: ref embedded '{}' no encontrada en '{}'",
+                path, meshLogicalPath);
+            return 0;
+        }
+        // mHeight==0 => textura comprimida (PNG/JPG), pcData de tamano mWidth.
+        // mHeight>0 => raw RGBA pixels (no soportado por simplicidad).
+        if (embedded->mHeight != 0) {
+            Log::assets()->warn(
+                "MeshLoader: textura embedded '{}' en '{}' es raw (mHeight={}); "
+                "solo soportamos comprimidas (PNG/JPG).",
+                path, meshLogicalPath, embedded->mHeight);
+            return 0;
+        }
+        std::vector<u8> bytes(
+            reinterpret_cast<const u8*>(embedded->pcData),
+            reinterpret_cast<const u8*>(embedded->pcData) + embedded->mWidth);
+        const std::string cacheKey = meshLogicalPath + "#" + path;
+        return am.loadEmbeddedTexture(cacheKey, bytes);
+    }
+
+    // Caso external: resolver relativo a la carpeta del mesh.
+    // meshLogicalPath ej "meshes/kenney_survival/barrel.glb"
+    // path ej "Textures/colormap.png"
+    // -> "meshes/kenney_survival/Textures/colormap.png"
+    const auto baseDir = std::filesystem::path(meshLogicalPath).parent_path();
+    const auto resolved = (baseDir / path).generic_string();
+    return am.loadTexture(resolved);
+}
+
+} // namespace
+
 std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
                                                 const std::string& filesystemPath,
-                                                const MeshFactory& meshFactory) {
+                                                const MeshFactory& meshFactory,
+                                                AssetManager* assetManager) {
     if (!meshFactory) {
         Log::assets()->warn("MeshLoader: no se paso MeshFactory para '{}'", logicalPath);
         return nullptr;
@@ -393,15 +458,19 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
     // Flags:
     // - Triangulate: garantiza 3 indices por cara (convierte quads/n-gons).
     // - GenNormals: genera normales planas si el modelo no las trae.
-    // - FlipUVs: assimp usa origin arriba-izq (como DirectX); OpenGL + stb
-    //   esperan origin abajo-izq.
     // - CalcTangentSpace: tangentes para normal mapping (Hito 17+).
     // - LimitBoneWeights: assimp recorta a 4 huesos por vertice (matchea
     //   nuestro k_maxInfluencesPerVertex). Igual mantenemos nuestro
     //   trim+normalize defensivo arriba.
+    //
+    // Hito 26: REMOVIDO `aiProcess_FlipUVs`. Antes lo usabamos para
+    // compensar el origin top-left de glTF/DirectX vs el bottom-left de
+    // OpenGL. Pero `OpenGLTexture` YA hace `stbi_set_flip_vertically_on_load(true)`
+    // al cargar el PNG: el image flip + el UV flip cancelaban en texturas
+    // simetricas (grid, brick) pero rompian palette swatches como el
+    // `colormap.png` de Kenney (cada UV apuntaba a un pixel ~negro).
     const u32 flags = aiProcess_Triangulate
                     | aiProcess_GenNormals
-                    | aiProcess_FlipUVs
                     | aiProcess_CalcTangentSpace
                     | aiProcess_LimitBoneWeights;
 
@@ -478,6 +547,19 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
     if (skeleton.has_value()) {
         asset->skeleton = std::move(skeleton);
         parseAnimations(*scene, indexByName, asset->animations);
+    }
+
+    // Hito 26 E: extrae albedo de cada material referenciado. Si el caller
+    // no paso AssetManager (tests headless sin GL), saltamos — los meshes
+    // quedan sin texturas y los spawn caen al material default.
+    if (assetManager != nullptr) {
+        asset->materialAlbedoTextures.resize(scene->mNumMaterials, 0);
+        for (u32 mi = 0; mi < scene->mNumMaterials; ++mi) {
+            const aiMaterial* mat = scene->mMaterials[mi];
+            if (mat == nullptr) continue;
+            asset->materialAlbedoTextures[mi] =
+                extractAlbedo(*scene, *mat, logicalPath, *assetManager);
+        }
     }
 
     // Hito 23: rotacion del rootNode de assimp como Euler XYZ (en

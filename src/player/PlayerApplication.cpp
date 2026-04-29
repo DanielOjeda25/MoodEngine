@@ -90,6 +90,11 @@ PlayerApplication::PlayerApplication() {
         [](const std::vector<f32>& verts,
            const std::vector<VertexAttribute>& attrs) -> std::unique_ptr<IMesh> {
             return std::make_unique<OpenGLMesh>(verts, attrs);
+        },
+        // Hito 26: TextureMemoryFactory para texturas embedded en .glb.
+        [](const std::vector<u8>& bytes, const std::string& nameForLog)
+            -> std::unique_ptr<ITexture> {
+            return std::make_unique<OpenGLTexture>(bytes, nameForLog);
         });
 
     m_scene = std::make_unique<Scene>();

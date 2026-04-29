@@ -27,6 +27,7 @@
 namespace Mood {
 
 class IMesh;
+class AssetManager;
 struct MeshAsset;
 
 /// @brief Factoria que produce un IMesh a partir de datos interleaved +
@@ -43,10 +44,17 @@ using MeshFactory =
 ///        "meshes/suzanne.obj"). Lo usa el serializer.
 /// @param filesystemPath Path real del archivo (ya resuelto por VFS).
 /// @param meshFactory Produce IMesh por submesh. Obligatorio.
+/// @param assetManager Opcional (puede ser null para tests sin GL): si esta
+///        presente, el loader extrae las texturas albedo de cada material
+///        del archivo y las registra en el AssetManager (embedded via
+///        `loadEmbeddedTexture`, external via `loadTexture`). Sin esto el
+///        mesh carga geometria pero las texturas quedan en 0 -> el spawn
+///        cae al material default (chequer magenta del missing).
 /// @return MeshAsset pobkado o nullptr si assimp fallo (archivo no existe,
 ///         formato no soportado, etc.). Loguea al canal `assets`.
 std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
                                                 const std::string& filesystemPath,
-                                                const MeshFactory& meshFactory);
+                                                const MeshFactory& meshFactory,
+                                                AssetManager* assetManager = nullptr);
 
 } // namespace Mood

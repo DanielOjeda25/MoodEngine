@@ -75,6 +75,15 @@ struct MeshAsset {
     /// no especifica uno.
     std::vector<AnimationClip> animations;
 
+    /// Hito 26 E: TextureAssetId por cada material referenciado en el archivo
+    /// (size = scene->mNumMaterials). 0 = no se pudo extraer (material sin
+    /// diffuse, o textura corrupta). Los spawn paths leen
+    /// `materialAlbedoTextures[sub.materialIndex]` para crear materiales con
+    /// la textura correcta del archivo. Cubre embedded (`*0` en glb) y
+    /// external (path relativo a la carpeta del archivo).
+    using TextureAssetId = u32;
+    std::vector<TextureAssetId> materialAlbedoTextures;
+
     /// Suma de vertices de todos los submeshes. Uso: logs, Inspector.
     u32 totalVertexCount() const {
         u32 n = 0;

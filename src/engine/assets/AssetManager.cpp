@@ -51,9 +51,11 @@ private:
 AssetManager::AssetManager(std::string rootDir,
                             TextureFactory textureFactory,
                             AudioClipFactory audioFactory,
-                            MeshFactory meshFactory)
+                            MeshFactory meshFactory,
+                            TextureMemoryFactory textureMemoryFactory)
     : m_vfs(std::filesystem::path(std::move(rootDir))),
       m_textureFactory(std::move(textureFactory)),
+      m_textureMemoryFactory(std::move(textureMemoryFactory)),
       m_audioFactory(std::move(audioFactory)),
       m_meshFactory(std::move(meshFactory)) {
     if (!m_textureFactory) {
@@ -239,6 +241,45 @@ TextureAssetId AssetManager::loadTexture(std::string_view logicalPath) {
     }
 }
 
+TextureAssetId AssetManager::loadEmbeddedTexture(const std::string& cacheKey,
+                                                    const std::vector<u8>& bytes) {
+    if (auto it = m_textureCache.find(cacheKey); it != m_textureCache.end()) {
+        return it->second;
+    }
+    if (!m_textureMemoryFactory) {
+        Log::assets()->warn(
+            "AssetManager: loadEmbeddedTexture('{}') sin TextureMemoryFactory. "
+            "Fallback a missing.", cacheKey);
+        m_textureCache.emplace(cacheKey, missingTextureId());
+        return missingTextureId();
+    }
+    if (bytes.empty()) {
+        Log::assets()->warn(
+            "AssetManager: loadEmbeddedTexture('{}') con buffer vacio. "
+            "Fallback a missing.", cacheKey);
+        m_textureCache.emplace(cacheKey, missingTextureId());
+        return missingTextureId();
+    }
+    try {
+        auto tex = m_textureMemoryFactory(bytes, cacheKey);
+        const TextureAssetId id = static_cast<TextureAssetId>(m_textures.size());
+        m_textures.push_back(std::move(tex));
+        m_texturePaths.push_back(cacheKey);
+        // No mtime: la textura no vive en disco como archivo independiente.
+        m_textureMtimes.push_back(std::filesystem::file_time_type{});
+        m_textureCache.emplace(cacheKey, id);
+        Log::assets()->info(
+            "AssetManager: cargada textura embedded '{}' -> id {}", cacheKey, id);
+        return id;
+    } catch (const std::exception& e) {
+        Log::assets()->warn(
+            "AssetManager: fallo decodificando textura embedded '{}': {}. "
+            "Fallback a missing.", cacheKey, e.what());
+        m_textureCache.emplace(cacheKey, missingTextureId());
+        return missingTextureId();
+    }
+}
+
 ITexture* AssetManager::getTexture(TextureAssetId id) const {
     if (id >= m_textures.size()) {
         return m_textures[missingTextureId()].get();
@@ -325,7 +366,7 @@ MeshAssetId AssetManager::loadMesh(std::string_view logicalPath) {
         return missingMeshId();
     }
 
-    auto asset = loadMeshWithAssimp(key, fs.generic_string(), m_meshFactory);
+    auto asset = loadMeshWithAssimp(key, fs.generic_string(), m_meshFactory, this);
     if (asset == nullptr) {
         // Loggeo ya emitido por loadMeshWithAssimp. Cacheamos el fallback
         // para no reintentar cada frame.
@@ -571,6 +612,34 @@ MaterialAssetId AssetManager::createMaterialFromTexture(TextureAssetId textureId
     // la textura subyacente. NO se cachea (no entra a m_materialCache).
     m_materialPaths.push_back(sentinel);
     return id;
+}
+
+std::vector<MaterialAssetId> AssetManager::createMaterialsForMesh(MeshAssetId meshId) {
+    std::vector<MaterialAssetId> out;
+    MeshAsset* mesh = getMesh(meshId);
+    if (mesh == nullptr) return out;
+
+    out.reserve(mesh->submeshes.size());
+    for (const auto& sm : mesh->submeshes) {
+        TextureAssetId tex = 0;
+        if (sm.materialIndex < mesh->materialAlbedoTextures.size()) {
+            tex = mesh->materialAlbedoTextures[sm.materialIndex];
+        }
+        if (tex != 0) {
+            // Material instance unico envolviendo la textura extraida del archivo.
+            out.push_back(createMaterialFromTexture(tex));
+        } else {
+            // Sin textura -> clone del default; mostrara missing.png como
+            // warning visible (Hito 25).
+            MaterialAsset proto{};
+            if (const MaterialAsset* def = getMaterial(missingMaterialId());
+                def != nullptr) {
+                proto = *def;
+            }
+            out.push_back(createMaterial(proto));
+        }
+    }
+    return out;
 }
 
 MaterialAssetId AssetManager::createMaterial(const MaterialAsset& prototype) {

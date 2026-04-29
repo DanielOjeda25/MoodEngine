@@ -8,21 +8,8 @@
 
 namespace Mood {
 
-OpenGLTexture::OpenGLTexture(const std::string& path) {
-    // stb_image carga con origen arriba-izquierda; OpenGL espera abajo-izquierda
-    // para samplear con V=0 en el borde inferior. Pedimos el flip al cargar.
-    stbi_set_flip_vertically_on_load(true);
-
-    int w = 0;
-    int h = 0;
-    int channels = 0;
-    stbi_uc* pixels = stbi_load(path.c_str(), &w, &h, &channels, 0);
-    if (pixels == nullptr) {
-        const char* reason = stbi_failure_reason();
-        throw std::runtime_error("stbi_load fallo para '" + path + "': " +
-                                 (reason != nullptr ? reason : "desconocido"));
-    }
-
+void OpenGLTexture::uploadDecoded(unsigned char* pixels, int w, int h, int channels,
+                                     const std::string& sourceForLog) {
     // Mapear canales a formato GL. Soportamos 1 (R), 3 (RGB), 4 (RGBA).
     GLenum dataFormat = 0;
     GLint internalFormat = 0;
@@ -40,9 +27,8 @@ OpenGLTexture::OpenGLTexture(const std::string& path) {
             internalFormat = GL_RGBA8;
             break;
         default:
-            stbi_image_free(pixels);
             throw std::runtime_error("OpenGLTexture: cantidad de canales no soportada (" +
-                                     std::to_string(channels) + ") en " + path);
+                                     std::to_string(channels) + ") en " + sourceForLog);
     }
 
     m_width = static_cast<u32>(w);
@@ -67,9 +53,57 @@ OpenGLTexture::OpenGLTexture(const std::string& path) {
     glGenerateMipmap(GL_TEXTURE_2D);
 
     glBindTexture(GL_TEXTURE_2D, 0);
-    stbi_image_free(pixels);
 
-    Log::render()->info("Textura cargada: {} ({}x{}, {} canales)", path, m_width, m_height, channels);
+    Log::render()->info("Textura cargada: {} ({}x{}, {} canales)",
+                         sourceForLog, m_width, m_height, channels);
+}
+
+OpenGLTexture::OpenGLTexture(const std::string& path) {
+    // stb_image carga con origen arriba-izquierda; OpenGL espera abajo-izquierda
+    // para samplear con V=0 en el borde inferior. Pedimos el flip al cargar.
+    stbi_set_flip_vertically_on_load(true);
+
+    int w = 0;
+    int h = 0;
+    int channels = 0;
+    stbi_uc* pixels = stbi_load(path.c_str(), &w, &h, &channels, 0);
+    if (pixels == nullptr) {
+        const char* reason = stbi_failure_reason();
+        throw std::runtime_error("stbi_load fallo para '" + path + "': " +
+                                 (reason != nullptr ? reason : "desconocido"));
+    }
+    try {
+        uploadDecoded(pixels, w, h, channels, path);
+    } catch (...) {
+        stbi_image_free(pixels);
+        throw;
+    }
+    stbi_image_free(pixels);
+}
+
+OpenGLTexture::OpenGLTexture(const std::vector<u8>& bytes, const std::string& nameForLog) {
+    // Mismo flip que la carga desde disco (consistencia con todas las
+    // texturas que pasan por OpenGLTexture).
+    stbi_set_flip_vertically_on_load(true);
+
+    int w = 0;
+    int h = 0;
+    int channels = 0;
+    stbi_uc* pixels = stbi_load_from_memory(bytes.data(),
+                                              static_cast<int>(bytes.size()),
+                                              &w, &h, &channels, 0);
+    if (pixels == nullptr) {
+        const char* reason = stbi_failure_reason();
+        throw std::runtime_error("stbi_load_from_memory fallo para '" + nameForLog + "': " +
+                                 (reason != nullptr ? reason : "desconocido"));
+    }
+    try {
+        uploadDecoded(pixels, w, h, channels, nameForLog);
+    } catch (...) {
+        stbi_image_free(pixels);
+        throw;
+    }
+    stbi_image_free(pixels);
 }
 
 OpenGLTexture::~OpenGLTexture() {
