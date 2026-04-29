@@ -58,52 +58,54 @@ No-goals: tipos complejos (entity refs, listas anidadas, structs). V1 soporta nu
 
 ## Bloque 1 — `engine.exposed` binding + descubrimiento
 
-- [ ] Tipos C++: `engine/scripting/ExposedProperty.{h,cpp}` con `enum class Type { Number, Bool, String, Vec3 }` + `struct Property { name, type, defaultValue (variant), currentValue (variant) }`.
-- [ ] `ScriptComponent` gana `std::vector<ExposedProperty> exposedProps` (descubierto al cargar) + `std::unordered_map<std::string, ExposedValue> overrides` (editable).
-- [ ] `LuaBindings`: registrar `engine` table con `engine.exposed(name, default)`. Implementación:
+- [x] Tipos C++: `engine/scripting/ExposedProperty.{h,cpp}` con `enum class Type { Number, Bool, String, Vec3 }` + `struct Property { name, type, defaultValue (variant), currentValue (variant) }`.
+- [x] `ScriptComponent` gana `std::vector<ExposedProperty> exposedProps` (descubierto al cargar) + `std::unordered_map<std::string, ExposedValue> overrides` (editable).
+- [x] `LuaBindings`: registrar `engine` table con `engine.exposed(name, default)`. Implementación:
   - Si el `name` ya está en `sc.overrides`, devolver el override (convertido a sol::object).
   - Si no, guardar `(name, type, default)` en `sc.exposedProps` (deduplicado por nombre) y devolver el `default`.
   - Tipo se infiere del tipo del `default` Lua: `number/bool/string/table` (table de 3 numbers = vec3).
-- [ ] Tests headless: script con `engine.exposed("speed", 5.0)` registra la prop al correr; devuelve 5.0 sin override; devuelve override si está seteado.
+- [x] Tests headless: script con `engine.exposed("speed", 5.0)` registra la prop al correr; devuelve 5.0 sin override; devuelve override si está seteado.
 
 ## Bloque 2 — Inspector dinámico
 
-- [ ] `InspectorPanel`: en la sección Script, debajo del path + botón Recargar, listar `exposedProps`. Por cada prop:
+- [x] `InspectorPanel`: en la sección Script, debajo del path + botón Recargar, listar `exposedProps`. Por cada prop:
   - `Type::Number` → `DragFloat`.
   - `Type::Bool` → `Checkbox`.
   - `Type::String` → `InputText`.
   - `Type::Vec3` → `DragFloat3` (o ColorEdit si el nombre contiene "color").
-- [ ] Editar un campo escribe en `sc.overrides[name]` y dispara `sc.loaded = false` para forzar reload del script en el próximo frame con el nuevo valor.
-- [ ] Botón "Reset" por prop que borra el override (vuelve al default del script).
+- [x] Editar un campo escribe en `sc.overrides[name]` y dispara `sc.loaded = false` para forzar reload del script en el próximo frame con el nuevo valor.
+- [x] Botón "Reset" por prop que borra el override (vuelve al default del script).
 
 ## Bloque 3 — Aplicar overrides en runtime
 
-- [ ] `ScriptSystem`: al cargar el script, antes de `safe_script_file`, NO settear nada — los overrides los lee `engine.exposed` desde `sc.overrides`.
-- [ ] El valor que `engine.exposed` devuelve depende del estado de `sc.overrides[name]` en el momento de la llamada. Como la llamada está en el chunk top-level (afuera de `onUpdate`), corre cada vez que el script se re-carga.
-- [ ] Hot-reload por mtime sigue funcionando — los overrides persisten porque viven en el ScriptComponent, no en el sol::state.
+- [x] `ScriptSystem`: al cargar el script, antes de `safe_script_file`, NO settear nada — los overrides los lee `engine.exposed` desde `sc.overrides`.
+- [x] El valor que `engine.exposed` devuelve depende del estado de `sc.overrides[name]` en el momento de la llamada. Como la llamada está en el chunk top-level (afuera de `onUpdate`), corre cada vez que el script se re-carga.
+- [x] Hot-reload por mtime sigue funcionando — los overrides persisten porque viven en el ScriptComponent, no en el sol::state.
 
 ## Bloque 4 — Persistencia en `.moodmap`
 
-- [ ] `SavedEntity` extendido con `script_overrides: { name: value }` opcional.
-- [ ] `EntitySerializer`/`SceneLoader`: lee/escribe el map. Tipos serializables: number, bool, string, vec3. Cualquier otro se ignora con warning.
-- [ ] `k_MoodmapFormatVersion` bump a 8 (o lo que toque). Back-compat: archivos viejos sin `script_overrides` cargan con `overrides` vacío (defaults).
+- [x] `SavedEntity` extendido con `SavedScript` opcional ({path + overrides}). Ver `EntitySerializer.h` schema.
+- [x] `EntitySerializer`/`SceneLoader`: lee/escribe el map. Tipos serializables: number, bool, string, vec3. Cualquier otro se loguea con warning y se skipea.
+- [x] `k_MoodmapFormatVersion` bump a 8. Back-compat: archivos viejos sin `script` cargan sin ScriptComponent (igual que antes).
+- [x] **Fix arrastrado:** `SceneSerializer::save` filtraba entidades por componente (MeshRenderer/Light/RigidBody/Environment); ahora también incluye Script con path no-vacío. Sin esto, una entidad cuya razón de ser es llevar un script (rotator demo, etc.) se descartaba al guardar.
 
 ## Bloque 5 — Tests + cierre
 
-- [ ] `tests/test_exposed_properties.cpp`: round-trip de overrides + binding semantics + inferencia de tipos.
-- [ ] Smoke manual: `rotator.lua` modificado para usar `engine.exposed("speed", 45.0)`. Spawnear 3 rotadores, editar el speed de cada uno desde el Inspector, ver 3 velocidades distintas. Guardar, cerrar, reabrir → valores persistidos.
-- [ ] Commits atómicos: `feat(scripts)`, `feat(editor)`, `test(scripts)`.
-- [ ] Tag `v0.24.0-hito24`.
-- [ ] Crear `docs/PLAN_HITO25.md`.
-- [ ] Actualizar `ESTADO_ACTUAL.md`, `HITOS.md`, `DECISIONS.md`.
+- [x] `tests/test_exposed_properties.cpp`: round-trip de overrides + binding semantics + inferencia de tipos. 8 casos nuevos, suite total **200/5287**.
+- [x] Smoke manual: rotator demo + Inspector edita el speed; el cambio se ve en vivo; guardar/cerrar/reabrir preserva valores.
+- [x] Commits atómicos: ver historia (`feat(scripts)` Bloques 1-3 — `eb61844` previo a este hito; `feat(serialization)` Bloque 4 — `0dede43`; `fix(serialization)` filtro — `5c26d17`; `test(scripts)` — `b50da2a`). Polish del mapa/skybox como fix reactivo aparte (`61cc6e8`).
+- [x] Tag `v0.24.0-hito24`.
+- [x] Crear `docs/PLAN_HITO25.md`.
+- [x] Actualizar `ESTADO_ACTUAL.md`, `HITOS.md`, `DECISIONS.md`.
 
 ---
 
-## Decisiones a tomar
+## Decisiones tomadas
 
-- [ ] **Inferencia de tipos**: en V1 inferir del Lua `type()` del default. Si más adelante se quiere forzar (ej. integer vs float), agregar `engine.exposed("name", default, "int")` con tipo explícito como tercer arg.
-- [ ] **Vec3 como tabla `{x, y, z}` o como `Vec3.new(x, y, z)`?** V1: tabla simple `{1.0, 0.5, 0.2}` (acceso por índice) — más rápido de escribir y assimilable a JSON. Si el script lo necesita como `glm::vec3`, el binding lo convierte.
-- [ ] **¿Qué pasa si el script CAMBIA el set de exposed props entre reloads?** (dev edita el `.lua`, agrega `engine.exposed("new_prop", 0)`). El override anterior se mantiene si el nombre coincide; props que ya no aparecen se borran del Inspector pero NO del overrides map (tal vez vuelven más tarde). Aceptable para V1.
+- [x] **Inferencia de tipos**: V1 infiere del Lua `type()` del default (number → Number, bool → Bool, string → String, table de 3 numbers → Vec3). Si más adelante se quiere forzar tipos (integer vs float, etc.) se agregaría `engine.exposed("name", default, "int")` con tipo explícito.
+- [x] **Vec3 como tabla `{x, y, z}`**: V1 usa tabla simple `{1.0, 0.5, 0.2}` (acceso por índice) — más rápido de escribir y assimilable a JSON. Si el script lo necesita como `glm::vec3`, el binding lo convierte (los overrides en C++ usan `glm::vec3` directamente via `ExposedValue` variant).
+- [x] **Set de exposed props variable entre reloads**: se redescubren cada carga (clear de `sc.exposedProps` antes del re-run del top-level). Overrides persisten en `sc.overrides` con el mismo nombre — props que ya no aparecen se ocultan del Inspector pero NO se borran (vuelven si el dev re-agrega el `engine.exposed` con el mismo nombre).
+- [x] **Persistencia incluye el path del script**: el plan inicial decía sólo `script_overrides`, pero sin el path no hay a quién atarle los overrides. Decidido `script: { path, overrides }` como bloque atómico — alinea con el patrón de `mesh_renderer`/`light`/etc.
 
 ---
 

@@ -6,13 +6,23 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 23 cerrado.**
+**Hito 24 cerrado.**
+Tag: `v0.24.0-hito24`.
+Verificado automático: suite doctest **200/5287** (+8 de `test_exposed_properties`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo (smoke test): scripts Lua declaran parámetros con `local x = engine.exposed("name", default)`; el Inspector muestra cada prop como widget tipado (DragFloat / Checkbox / InputText / DragFloat3 / ColorEdit3). Editar el valor cambia el comportamiento del script en vivo (un rotator a 30°/s vs otro a 90°/s usando el mismo `rotator.lua`). Guardar / cerrar / reabrir el proyecto preserva los overrides via el bloque `script: {path, overrides}` del `.moodmap` (schema v8).
+
+**Cambio importante en serialización:** `SceneSerializer::save` filtraba entidades a persistir por componente (MeshRenderer/Light/RigidBody/Environment). Ahora también incluye Script con path no-vacío. Sin esto, una entidad cuya razón de ser es llevar un script (rotator demo, controlador puro Lua) se descartaba al guardar.
+
+**Polish reactivo cerrado en el mismo tag:**
+- **Mapa de prueba 16x16 con suelo plano + columna central** (antes había cubos perimetrales con backface-culling visualmente molestos).
+- **Skybox equirectangular** (sampler2D con mapping spherical) además del cubemap original — evita seams en los polos. Asset: `assets/skyboxes/sky_kloofendal.png` (kloofendal_43d_clear de Polyhaven CC0, tonemapeado a LDR via `tools/hdr_to_equirect_png.py`).
+
+**Próximo paso:** Hito 25 (TBD). Plan en `docs/PLAN_HITO25.md` con candidatos.
+
+### Hito 23 (anterior, ya cerrado)
 Tag: `v0.23.0-hito23`.
 Verificado automático: suite doctest **192/5283** (+10 de `test_pathfinding` + `test_nav_system`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo (smoke test): "Ayuda > Agregar enemigo demo" spawnea un CesiumMan (CC0 humanoide bipédo) parado al ras del piso. En Play Mode el enemigo camina hacia el jugador siguiendo paths A* sobre el GridMap, respetando muros via moveAndSlide. F1 dibuja el path activo como polyline cyan + waypoint actual brillante.
 
-**Cambio importante en assets:** `MeshAsset::importRotationEuler` extraído del `mTransformation` del rootNode de assimp. Glb autoreados Z-up (CesiumMan, BrainStem, etc.) reciben automáticamente -90° X de rotación al spawnearse; Y-up nativos (Fox, pyramid) reciben 0. Sin esto, cualquier `.glb` Z-up dropeado al viewport quedaba acostado. Fix general — no hardcodeado por modelo. Acompaña helper `rotatedAabbWorldY` para que el autoscale + floor offset usen la altura post-rotación.
-
-**Próximo paso:** Hito 24 (TBD). Plan en `docs/PLAN_HITO24.md` con candidatos (mini editor de scripts, exposed properties Lua, save/load, networking, asset pack realista de Quaternius/Sketchfab para tests físicos).
+**Cambio importante en assets:** `MeshAsset::importRotationEuler` extraído del `mTransformation` del rootNode de assimp. Glb autoreados Z-up (CesiumMan, BrainStem, etc.) reciben automáticamente -90° X de rotación al spawnearse; Y-up nativos (Fox, pyramid) reciben 0. Sin esto, cualquier `.glb` Z-up dropeado al viewport quedaba acostado.
 
 ### Hito 22 (anterior, ya cerrado)
 Tag: `v0.22.0-hito22`.
@@ -361,16 +371,16 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: definir y abrir el Hito 24
+### Tarea inmediata: definir y abrir el Hito 25
 
-El Hito 23 está cerrado (tag `v0.23.0-hito23` en origin). El próximo hito está **TBD**. Candidatos en `docs/PLAN_HITO24.md`: mini editor de scripts in-place (deferido del Hito 22), exposed properties Lua, save/load de gameplay, networking, asset pack realista (Quaternius/Sketchfab) para probar físicas con props variados, polish del NavAgent (rotación hacia movimiento), persistencia de NavAgent en `.moodmap`.
+El Hito 24 está cerrado (tag `v0.24.0-hito24`). El próximo hito está **TBD**. Candidatos en `docs/PLAN_HITO25.md`: mini editor de scripts in-place (deferido desde Hito 22), polish del NavAgent (rotación hacia movimiento, persistencia en `.moodmap`), networking, save/load de gameplay state, asset pack realista (Quaternius/Sketchfab) para físicas, particle system, hot-reload de shaders.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO24.md` (candidatos) y discutir con el dev qué se prioriza.
+1. Leer `docs/PLAN_HITO25.md` (candidatos) y discutir con el dev qué se prioriza.
 2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
 3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.24.0-hito24`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO25.md`.
+4. Al final: commits atómicos en español, merge a main, tag `v0.25.0-hito25`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO26.md`.
 
 ---
 

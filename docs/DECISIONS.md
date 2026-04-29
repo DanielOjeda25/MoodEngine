@@ -1908,3 +1908,48 @@ Las opciones eran:
 - Se gana: cualquier modelo Z-up futuro funciona sin cambios de código. Editor y player heredan el fix por igual.
 
 **Revisar si:** aparece un dev que necesite "rotación 0 absoluta sin compensación" (caso raro — implica vértices ya pre-transformados en Y-up). Solución alternativa: flag `MeshAsset::skipImportRotation` que el spawn paths consulten. Hoy no aplica.
+
+## 2026-04-28: Exposed properties con tipo dinámico inferido (Hito 24)
+
+**Problema:** los scripts Lua tenían constantes hardcoded (`local DEG_PER_SEC = 45.0`). Para tener 3 entidades con velocidades distintas necesitabas 3 archivos `.lua` o duplicar la lógica. Faltaba el equivalente a "campos serializados" de Unity / "exported vars" de Godot.
+
+**Decisión:** API minimalista `local x = engine.exposed("name", default)` que (1) infiere el tipo del Lua `type()` del default (number → Number, bool → Bool, string → String, table de 3 numbers → Vec3), (2) registra metadata en `ScriptComponent::exposedProps`, (3) devuelve el override de `ScriptComponent::overrides[name]` si existe, sino el default.
+
+`ExposedValue` es `std::variant<f32, bool, std::string, glm::vec3>`. El Inspector renderiza widgets per-tipo (DragFloat / Checkbox / InputText / DragFloat3 / ColorEdit3 si el nombre contiene "color"). Editar un campo escribe el override + setea `sc.loaded = false` para forzar reload del top-level del script.
+
+**Razones:**
+- **API Lua-idiomática**: no hace falta un schema separado o una macro. `local x = engine.exposed("speed", 45)` es self-documenting.
+- **Tipo dinámico**: V1 evita generics/templates. Con `std::variant` el binding es directo (`std::visit` para serializar).
+- **Inspector unificado**: la sección "Exposed properties" reusa el patrón visual del Inspector (sliders + reset por prop).
+
+**Alternativas consideradas:**
+- **Schema JSON al lado del .lua** (`rotator.lua` + `rotator.lua.meta`): rechazado — duplica la verdad.
+- **Macros Lua tipo `@expose("speed", 45)`**: rechazado, no es Lua estándar; requiere un parser.
+- **Tipos explícitos** (`engine.exposed("speed", 45, "number")`): rechazado para V1 — la inferencia cubre el 90% de los casos. Si aparece la necesidad de forzar un tipo (int vs float), se agrega como tercer arg opcional.
+
+**Trade-offs:**
+- Se pierde: validación de tipo runtime (si el dev cambia un default de `45` a `"45"`, el override anterior queda como `f32` y el Inspector muestra un widget que no calza). Aceptable por baja frecuencia; mitigación posible: `Inspector` valida el variant tag del override contra el tipo descubierto y oculta los que no coinciden.
+- Se gana: cero ceremonia. El dev escribe la línea y ya ve un widget.
+
+**Revisar si:** los scripts crecen a tener docenas de exposed props y el Inspector se vuelve ruidoso, o si aparecen tipos no soportados (entity refs, listas, structs anidados).
+
+## 2026-04-28: Persistencia de scripts incluye el path, no sólo overrides (Hito 24)
+
+**Problema:** el plan inicial del Hito 24 decía "SavedEntity gana `script_overrides: { name: value }`". Sin el path del script, los overrides quedan huérfanos: al cargar el `.moodmap` no hay a qué entidad atarle el ScriptComponent.
+
+**Decisión:** persistir un bloque atómico `script: { path, overrides }`. `SavedScript { path, overrides }` modela el ScriptComponent persistido.
+
+**Side effect importante:** hasta el Hito 23, ScriptComponent NO se persistía (estaba en la lista de "no-goals" porque la `Scene` no era authoritative). Esta decisión cambia el contrato: un `.moodmap` con script lo restaura al cargar. Implicaciones:
+1. `SceneSerializer::save` filtraba entidades por componente — sólo persistía si tenía MeshRenderer/Light/RigidBody/Environment. Se extendió para incluir Script con path no-vacío. Sin esto, un rotator (mesh + script) se persistía por el mesh; un controlador puro Lua sin mesh quedaba descartado.
+2. El script se carga perezosamente desde `ScriptSystem` en el primer update — `SceneLoader` sólo adjunta el componente con path + overrides. Evita acoplar `applyEntitiesToScene` a sol2.
+
+**Razones:**
+- **Round-trip correcto**: sin path, los overrides son inútiles.
+- **Patrón consistente**: alinea con cómo se persisten los demás componentes (sub-objeto: `mesh_renderer`, `light`, `rigid_body`, `environment`).
+- **Lazy load**: `SceneLoader` no sabe nada de Lua/sol2.
+
+**Trade-offs:**
+- Se pierde: scripts creados programáticamente sin path no se persisten (escenarios hipotéticos).
+- Se gana: `.moodmap` describe la entidad completa, incluyendo su lógica.
+
+**Revisar si:** aparece un sistema de scripts inline (sin archivo, ej. node graph compilado a Lua) o si el path se vuelve un detalle que el dev no debería ver.

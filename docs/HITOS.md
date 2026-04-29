@@ -24,12 +24,12 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] **Hito 17** — PBR (completado, tag `v0.17.0-hito17`).
 - [x] **Hito 18** — Forward+ (completado, tag `v0.18.0-hito18`).
 - [x] **Hito 19** — Animación esquelética (completado, tag `v0.19.0-hito19`).
-- [ ] Hito 20 — UI del juego con RmlUi.
-- [ ] Hito 21 — Empaquetado standalone.
-- [ ] Hito 22 — Undo/Redo.
-- [ ] Hito 23 — Editor de materiales.
-- [ ] Hito 24 — Particle system.
-- [ ] Hito 25 — Linux.
+- [x] Hito 20 — UI del juego (HUD + menú de pausa) (completado, tag `v0.20.0-hito20`).
+- [x] Hito 21 — Empaquetado standalone (MoodPlayer + PackageBuilder) (completado, tag `v0.21.0-hito21`).
+- [x] Hito 22 — Workflow de scripting Lua (completado, tag `v0.22.0-hito22`).
+- [x] Hito 23 — AI / pathfinding básico (completado, tag `v0.23.0-hito23`).
+- [x] Hito 24 — Exposed properties Lua (completado, tag `v0.24.0-hito24`).
+- [ ] Hito 25 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -756,3 +756,46 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Asset pack realista para tests físicos**: el dev mencionó querer modelos/mapas más realistas (al estilo Source) para probar físicas en escenarios variados. Se descartó Source por legales + formatos turbios. Alternativas viables: Quaternius (CC0), Sketchfab (CC0/CC-BY), Polyhaven (CC0), Mixamo. Plan: en algún hito posterior, descargar 3-5 props (cajas, barriles, mobiliario) + 1-2 personajes humanoides para enriquecer los demos.
 - **Diagonales (8-connected)**: V1 4-conn produce paths visiblemente "boxy". 8-conn con check de corner-cutting daría rutas más naturales. **Trigger:** primera escena donde se note el zigzag.
 - **Performance del A\***: 64 nodos (mapa 8x8) es trivial. Si el GridMap escala a 64x64 (4096 nodos), priority_queue empieza a notarse. Mitigaciones: pool de nodos, jump point search. **Trigger:** profile con frame drops por NavSystem.
+
+## Hito 24 — Exposed properties Lua
+
+**Objetivo:** hacer scripts Lua **reusables como componentes**. Hasta el Hito 23 un script tenía constantes hardcoded (`local DEG_PER_SEC = 45.0`); para 3 entidades rotando a velocidades distintas se necesitaban 3 archivos `.lua` o un parámetro editable per-entity. Este hito agrega la segunda opción: el script declara `local speed = engine.exposed("speed", 45.0)` y el Inspector renderiza un campo "speed" por entidad, persistido en `.moodmap`.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — `engine.exposed` binding + descubrimiento:*
+- `engine/scripting/ExposedProperty.{h,cpp}`: `enum ExposedType { Number, Bool, String, Vec3 }` + `using ExposedValue = std::variant<f32, bool, std::string, glm::vec3>` + `struct ExposedProperty { name, type, defaultValue }`.
+- `ScriptComponent` extendido con `std::vector<ExposedProperty> exposedProps` (descubierto al cargar) + `std::unordered_map<std::string, ExposedValue> overrides` (editable). `exposedProps` NO se persiste; se redescubre cada carga.
+- `LuaBindings::setupLuaBindings(state, entity, &sc)` — la firma gana un `ScriptComponent*` opcional (nullptr en tests headless). `engine.exposed(name, default)` infiere tipo del Lua default, registra metadata + devuelve el override si existe, sino el default.
+
+*Bloque 2 — Inspector dinámico:*
+- `InspectorPanel`: sub-sección "Exposed properties" en el ScriptComponent. Por cada prop renderiza el widget según tipo (DragFloat / Checkbox / InputText / DragFloat3 / ColorEdit3 si el nombre contiene "color"). Botón "Reset" por prop borra el override y vuelve al default del script.
+- Edits disparan `sc.loaded = false` para forzar reload del chunk top-level con el nuevo override.
+
+*Bloque 3 — Aplicar overrides en runtime:*
+- `ScriptSystem` clear de `exposedProps` antes de cada (re)load — un script que removió un `engine.exposed` entre reloads no deja la prop fantasma en el Inspector. Hot-reload por mtime sigue funcionando: los overrides viven en `ScriptComponent`, no en `sol::state`.
+- `assets/scripts/rotator.lua` reescrito: `local speed = engine.exposed("speed", 45.0)`.
+
+*Bloque 4 — Persistencia en `.moodmap`:*
+- `SavedEntity` gana `SavedScript` opcional con `{path + overrides}`. Schema: `"script": { "path": "...", "overrides": { name: value, ... } }`.
+- `EntitySerializer` serializa/deserializa con tipos number/bool/string/vec3 (vec3 como array `[x,y,z]`). Tipos no soportados (objetos, etc.) loguean warning y se skipean.
+- `SceneLoader::applyEntitiesToScene` adjunta el ScriptComponent + overrides; el script se carga perezosamente cuando `ScriptSystem` corre.
+- `k_MoodmapFormatVersion` 7 → 8. Archivos v7 sin `script` se leen igual.
+- **Fix arrastrado**: el filtro de `SceneSerializer::save` solo persistía entidades con MeshRenderer/Light/RigidBody/Environment; ahora también con Script (path no-vacío). Sin esto el round-trip de un rotator quedaba incompleto.
+
+*Bloque 5 — tests + cierre:*
+- `tests/test_exposed_properties.cpp` (8 casos): registro de metadata, override gana sobre default, dedupe por nombre, inferencia de tipos por bool/string/vec3, tipo no soportado se skipea, override de vec3 llega como tabla {x,y,z}, round-trip completo en `.moodmap`, ScriptComponent sin path no se serializa.
+- Suite total **200/5287** (antes Hito 23 cerrado: 192/5283).
+
+**Polish reactivo cerrado en el mismo tag:**
+- **Mapa de prueba 16x16 con suelo plano + columna central**: antes el demo arena tenía cubos perimetrales con backface-culling visualmente molestos. Ahora el editor + MoodPlayer usan un mapa 16x16 con sólo la columna brick central + un quad escalado como suelo.
+- **Skybox equirectangular**: `SkyboxRenderer` gana modo equirect (sampler2D con atan2/asin spherical mapping) además del cubemap original. Evita seams en los polos del cubemap. Asset nuevo: `assets/skyboxes/sky_kloofendal.png` (1.1 MB, kloofendal_43d_clear de Polyhaven CC0, tonemapeado a LDR via `tools/hdr_to_equirect_png.py` con `--exposure 0.4` para preservar detalle de nubes). Shader nuevo `shaders/skybox_equirect.frag` (con la fórmula `v = 0.5 + lat/PI` para compensar el flip-Y de stbi en `OpenGLTexture`).
+
+**Siguiente paso tras completarlo:** Hito 25 (TBD). Plan en `docs/PLAN_HITO25.md`.
+
+### Pendientes menores detectados en Hito 24
+
+- **Reload spam durante edición del Inspector**: cada frame de DragFloat dispara `sc.loaded = false` → re-ejecuta el chunk top-level → log "Cargado '...'" se imprime ~10 veces por drag. Mitigación: throttle del flag (set sólo al soltar el drag con `IsItemDeactivatedAfterEdit`) o suprimir el log de reload cuando es triggered por override. **Trigger:** dev se queja del spam, o el reload tiene side effects que impactan rendimiento.
+- **Inferencia de tipo para `nil` default**: `engine.exposed("foo", nil)` no tiene tipo. Hoy se loguea warning y devuelve nil; la prop no se registra. Si el dev quiere "valor opcional", la API necesitaría un tercer arg explícito de tipo: `engine.exposed("foo", nil, "string")`.
+- **Sync manual de shaders al iterar**: editar `shaders/*.{vert,frag}` no surte efecto al relanzar el editor — CMake los copia a `build/debug/Debug/shaders/` sólo en build time. Workaround: `cp shaders/<file> build/debug/Debug/shaders/<file>`. **Mitigación apropiada:** symlink al copy step, o un hot-reload de shaders. **Trigger:** próxima sesión con iteraciones intensas de shader.
+- **Sync de IBL a equirect**: `SceneRenderer.cpp` usa `SkyboxRenderer::Equirect` para el sky pero el IBL bake (`tools/bake_ibl.py`) sigue usando `assets/skyboxes/sky_day/` cubemap. La iluminación PBR no refleja el kloofendal nuevo. **Trigger:** dev nota que las esferas PBR reflejan un cielo distinto al visible.
