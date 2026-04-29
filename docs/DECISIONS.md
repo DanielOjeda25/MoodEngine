@@ -2061,3 +2061,33 @@ Las opciones eran:
 - Se gana: simplicidad en spawn paths + invariante centralizada.
 
 **Revisar si:** aparece un caso donde el caller necesite controlar exactamente qué materials se crean (ej. spawner que reutilice un material editable previamente armado). Hoy no existe.
+
+## 2026-04-29: Comandos undo/redo del editor con HistoryStack y push-revierte-then-execute
+
+**Contexto:** Hito 27. El editor no tenía Ctrl+Z. Cualquier acción (mover gizmo, borrar entidad) era irreversible — el dev sufría cada accidente desde Hito 1. Recuperando deuda del Hito 22 original.
+
+**Decisión:** patrón Command estándar:
+- `ICommand` virtual con `execute()` / `undo()` / `name()`.
+- `HistoryStack` con dos deques (`m_undo`, `m_redo`); `push` ejecuta + agrega + LIMPIA `m_redo` (convención mainstream — un nuevo branch invalida el "futuro alternativo").
+- Cap de tamaño (`k_maxSize = 100`) con eviction del más viejo: el editor no consume RAM ilimitada, y nadie hace Ctrl+Z 100 veces para recuperar trabajo de hace una hora.
+- `clear()` invocado al cambiar/cerrar proyecto (los handles EnTT en los commands quedan inválidos).
+
+**Decisión específica del wire-up del gizmo:** cada frame del drag muta el Transform; pushear un comando por frame produciría 60 entradas en el undo stack por gesto. Solución: `EditorApplication::finalizeGizmoDrag()` se llama al SOLTAR, no durante. Captura el final value, REVIERTE al `before` antes del push, y deja que `HistoryStack::push` aplique el `after` via `execute()`. Así un drag completo = un solo comando en el history.
+
+**Razones:**
+- **Patrón Command es estándar** y comprensible para cualquier dev futuro.
+- **Push-revierte-then-execute** mantiene una sola fuente de verdad para "cómo se aplica el cambio": el `execute()` del command. Sin esa revertida, el historial guardaría el cambio pero `push` no lo re-aplicaría — divergencia entre lo que está en pantalla y lo que el stack representa.
+- **Resiliencia ante destruction**: cada command verifica `registry.valid(handle)` antes de mutar. Si la entidad fue destruida (ej. por `DeleteEntityCommand` posterior), el undo es no-op silencioso con warning. NUNCA crashea.
+- **`std::function<void(u32)>` para body cleanup en `DeleteEntityCommand`** (en lugar de un `PhysicsWorld*` directo): desacopla el comando del backend de física. Tests pasan `{}` y queda no-op, sin arrastrar Jolt al test target. Editor pasa una lambda que llama `PhysicsWorld::destroyBody`.
+
+**Alternativas consideradas:**
+- **Memento Pattern (snapshot completo de la Scene en cada acción)**: trivialmente correcto pero gasta mucho. Una scene con 100 entidades + componentes serializa fácil ~100 KB; 100 snapshots = 10 MB. Innecesario.
+- **CRDT-style operational transformation**: overkill, pensado para colaboración multi-usuario.
+- **Push del gizmo cada N frames**: arbitrario, ensucia el history.
+
+**Trade-offs:**
+- Se pierde: comandos no compactan (no hay merge de "5 ediciones de tint en sucesión sobre el mismo material" a uno). Acceptable por ahora — los 100 slots alcanzan.
+- Se pierde: handles EnTT estaño (versionado) cambia al recrear; comandos previos quedan no-op. Documentado como pendiente con remap propuesto.
+- Se gana: un editor que se siente "real" — Ctrl+Z restaura confianza para experimentar.
+
+**Revisar si:** se necesitan comandos compactables (ej. mover el slider de roughness 30 frames produce 30 entradas), o si la fricción del handle remap se vuelve visible. Para ambos hay refactores incrementales documentados en pendientes del Hito 27.

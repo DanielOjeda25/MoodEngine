@@ -1,18 +1,20 @@
-# Plan — Hito 27: TBD
+# Plan — Hito 27: Undo/Redo en el editor
 
-> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 26 cerrado).
->
-> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
+> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 27 cerrado).
 
 ---
 
 ## Estado
 
-**Hito 26 cerrado** (`v0.26.0-hito26`, suite **212/5326**). Bloques: extracción de texturas embedded/external, Kenney Survival Kit (80 props CC0), IBL bakeable desde equirect, AssetBrowser recursivo, fix UV flip + autoscale bidireccional.
+**Hito 27 cerrado** (`v0.27.0-hito27`, suite **238/5409**). Scope acordado con el dev: recuperar la deuda más grande del roadmap original (Hito 22 que se postergó). Cubrimos las 2 mutaciones de mayor impacto: gizmo edits + delete. Spawn/create commands quedan diferidos al Hito 28.
 
-El Hito 27 está **TBD**: acordar con el dev el alcance antes de abrir bloques. Por decisión del dev al cerrar el Hito 26, los candidatos NavAgent polish, PackageBuilder smart-pack, e Inspector con drop de textura quedaron fuera del menu — anotados en la sección "Diferidos" abajo para revisión futura.
+## Bloques cerrados
 
-**Recordatorio importante:** networking / multijugador está **EXPLÍCITAMENTE fuera de alcance** desde el doc técnico (`MOODENGINE_CONTEXTO_TECNICO.md` sección "Fuera de alcance"). NO proponerlo como candidato en este ni futuros hitos.
+- [x] **Bloque 1 — Infra HistoryStack**: `ICommand` interface + `HistoryStack` con cap 100 + 10 tests headless.
+- [x] **Bloque 2 — EditTransformCommand**: gizmo drag con captura `(field, before, after)`, `finalizeGizmoDrag` en drag-end, 8 tests.
+- [x] **Bloque 3 — Hotkeys + menú Editar**: Ctrl+Z/Y/Shift+Z + menú reactivo con name del comando + clear al cambiar proyecto.
+- [x] **Bloque 4 — DeleteEntityCommand**: snapshot via `EntitySerializer`, `BodyCleanup` callback (decoupling de Jolt), `SceneLoader::applyOneEntity` extraído, 7 tests.
+- [x] **Bloque 5 — Tests + cierre**: suite total 238/5409, docs actualizadas, tag `v0.27.0-hito27`, `PLAN_HITO28.md` abierto.
 
 ---
 

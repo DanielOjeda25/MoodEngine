@@ -6,7 +6,17 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 26 cerrado.**
+**Hito 27 cerrado.**
+Tag: `v0.27.0-hito27`.
+Verificado automático: suite doctest **238/5409** (+26 entre `test_history_stack` (10), `test_edit_transform_command` (8), `test_delete_entity_command` (7) y otros). Editor compila limpio. Verificado por el dev a ojo: drag de gizmo (W/E/R) sobre cualquier entidad → soltar → Ctrl+Z revierte el drag completo en una sola operación (no 60 micro-edits por frame). Delete sobre Fox.glb (animator + skeleton) → Ctrl+Z lo recrea con animación intacta. Delete sobre CajaFisica (Jolt rigidbody dynamic) → Ctrl+Z la recrea con `bodyId=0` que se rematerializa al siguiente frame. Cambio de proyecto: el history se vacía.
+
+**Cambio importante en el editor:** `EditorApplication::deleteSelectedEntity` ahora pushea un `DeleteEntityCommand` al `m_history` en lugar de borrar directo. El comando captura un `SavedEntity` snapshot via `EntitySerializer` para que el undo recree la entidad completa. Los edits del Inspector (albedoTint, metallic, etc.) y los spawns (`processSpawnX` + drops del viewport) AÚN no son undoables — quedaron como pendientes del Hito 28.
+
+**Decoupling de Jolt:** `DeleteEntityCommand` recibe un callback `BodyCleanup = std::function<void(u32)>` en lugar de un `PhysicsWorld*` directo. Permite que los tests pasen `{}` y queda no-op, sin arrastrar Jolt al test target. Editor pasa una lambda que llama `PhysicsWorld::destroyBody`.
+
+**Próximo paso:** Hito 28 (TBD). Plan en `docs/PLAN_HITO28.md`. Candidatos top: completar `CreateEntityCommand` (spawn + drops undoables), comandos para el Inspector (edits de material), corrección del autoscale agresivo de Kenney (TODO ya anotado en `DemoSpawners.cpp`).
+
+### Hito 26 (anterior, ya cerrado)
 Tag: `v0.26.0-hito26`.
 Verificado automático: suite doctest **212/5326** (+6 de `test_asset_manager` para `loadEmbeddedTexture` + `createMaterialsForMesh`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: drag de `kenney_survival/barrel.glb` al viewport spawnea un barril de madera (~1.5 m, autoscale up) con la textura colormap real (NO chequer magenta). Fox.glb y CesiumMan.glb spawnean con sus texturas embedded reales. Las esferas PBR reflejan el cielo kloofendal del SkyboxRenderer (antes mismatch con el cubemap sky_day).
 
@@ -15,8 +25,6 @@ Verificado automático: suite doctest **212/5326** (+6 de `test_asset_manager` p
 **Asset pack agregado:** `assets/meshes/kenney_survival/` con 80 GLBs CC0 de Kenney Survival Kit (barrels, boxes, structures, vegetation, tools, crafting) compartiendo `Textures/colormap.png` 512×512. 1.5 MB total.
 
 **Fix bonus:** removido `aiProcess_FlipUVs`. `OpenGLTexture` ya hace `stbi_set_flip_vertically_on_load(true)`; el doble flip cancelaba en texturas simétricas (grid, brick) pero rompía palette swatches como el `colormap.png` de Kenney. Documentado en `DECISIONS.md`.
-
-**Próximo paso:** Hito 27 (TBD). Plan en `docs/PLAN_HITO27.md` con candidatos. Trasladados desde Hito 26: A (NavAgent polish), H (PackageBuilder smart-pack — solo assets referenciados — identificado al sumar Kenney). El dev mencionó que NavAgent A se abre "cuando aparezca el primer personaje real" (ya tenemos Kenney + Fox + CesiumMan, así que está cerca).
 
 ### Hito 25 (anterior, ya cerrado)
 Tag: `v0.25.0-hito25`.
@@ -390,16 +398,16 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: definir y abrir el Hito 27
+### Tarea inmediata: definir y abrir el Hito 28
 
-El Hito 26 está cerrado (tag `v0.26.0-hito26`). El próximo hito está **TBD**. Candidatos en `docs/PLAN_HITO27.md`: polish del NavAgent (ahora con personajes reales disponibles via Kenney + CesiumMan + Fox), PackageBuilder smart-pack (solo assets referenciados, identificado en el Hito 26), mini editor de scripts in-place, save/load de gameplay state, particle system.
+El Hito 27 está cerrado (tag `v0.27.0-hito27`). El próximo hito está **TBD**. Candidatos en `docs/PLAN_HITO28.md`. Top candidatos heredados del Hito 27 como pendientes: `CreateEntityCommand` (spawn/drops undoables), comandos para edits del Inspector, fix del autoscale agresivo de Kenney. Diferidos del Hito 26 que siguen disponibles: NavAgent polish, PackageBuilder smart-pack, Inspector con drop de textura.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO27.md` (candidatos) y discutir con el dev qué se prioriza.
+1. Leer `docs/PLAN_HITO28.md` (candidatos) y discutir con el dev qué se prioriza.
 2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
 3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.27.0-hito27`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO28.md`.
+4. Al final: commits atómicos en español, merge a main, tag `v0.28.0-hito28`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO29.md`.
 
 ---
 

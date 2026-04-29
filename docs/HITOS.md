@@ -31,7 +31,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 24 — Exposed properties Lua (completado, tag `v0.24.0-hito24`).
 - [x] Hito 25 — Hot-reload de shaders + polish del sistema de materiales (completado, tag `v0.25.0-hito25`).
 - [x] Hito 26 — Asset pipeline: extracción de texturas + asset pack Kenney + IBL bakeado desde equirect (completado, tag `v0.26.0-hito26`).
-- [ ] Hito 27 — TBD.
+- [x] Hito 27 — Undo/Redo en el editor (HistoryStack + comandos para gizmo y delete) (completado, tag `v0.27.0-hito27`).
+- [ ] Hito 28 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -881,3 +882,55 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Encoding del log de error de mesh loader**: similar al de shaders, assimp puede devolver mensajes con caracteres no-UTF-8 que spdlog imprime mal. Pre-existente. **Trigger:** modelo .glb con error de import + dev necesita leer el mensaje.
 - **Inspector no permite cambiar la textura de un material**: hoy el albedo se setea solo al spawn (vía `createMaterialsForMesh`). Si el dev quiere cambiar la textura de un cubo dropeado, no hay UI — tiene que reasignar el material. **Trigger:** dev pide "drop texture sobre material slot del Inspector".
 - **Modelos .obj con .mtl**: el path resolution funciona para .glb (carpeta del archivo). Para .obj con .mtl, assimp parsea el .mtl que puede referenciar texturas con paths relativos también. No probado. **Trigger:** primer .obj importado que tenga textura referenciada por .mtl.
+
+## Hito 27 — Undo/Redo en el editor
+
+**Objetivo:** recuperar la deuda más grande del roadmap original (Hito 22 que se postergó). Hasta este hito, cualquier acción del editor — mover el gizmo, borrar una entidad — era irreversible. Sin Ctrl+Z el editor no era una herramienta seria. Cubrimos las dos mutaciones de mayor impacto: edits de Transform via gizmo y delete de entidades. Spawn/create commands quedan diferidos al próximo hito.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — Infra HistoryStack:*
+- `ICommand` (interfaz pura `execute()` / `undo()` / `name()`) en `src/editor/commands/Command.h`.
+- `HistoryStack` con deque `m_undo` + `m_redo`. `push(cmd)` ejecuta + agrega + LIMPIA `m_redo` (convención estándar). Cap `k_maxSize=100` con eviction del más viejo. `clear()` para vaciado al cambiar/cerrar proyecto. Logs al canal `editor` en cada `push`/`undo`/`redo`.
+- 10 tests headless (`test_history_stack.cpp`): estado inicial vacío, push ejecuta + guarda, undo revierte + mueve a redo, redo re-ejecuta, no-op cuando vacío, push tras undo limpia redo, cap eviction tira el más viejo, null push es no-op, clear vacía ambos, ciclo execute/undo varias veces preserva estado.
+
+*Bloque 2 — EditTransformCommand (gizmo drag):*
+- Captura `(entity, field, before, after)`. `Field` enum cubre Position / Rotation / Scale.
+- `execute()` aplica `after`, `undo()` aplica `before`. `isNoOp()` detecta `before == after` para no spamear el history con clicks-sin-drag.
+- Resiliente: si la entidad fue destruida entre push y undo (`registry.valid(handle) == false`), no-op silencioso con warning. No crashea jamás.
+- Wire-up en `EditorOverlay`: `GizmoDragState` gana `field` (u8) + `entity`, set en drag-start de los 3 modos (translate/rotate/scale). Helper `EditorApplication::finalizeGizmoDrag()` llamado en drag-end: captura el final, revierte al `before`, push (que reaplica via `execute()`) — así un solo comando cubre el drag completo en lugar de 60 micro-edits por frame.
+- 8 tests (`test_edit_transform_command.cpp`): cada Field aplica al campo correcto sin tocar otros, undo revierte, isNoOp, entidad destruida es no-op, ciclo via HistoryStack, name() incluye tag.
+
+*Bloque 3 — Hotkeys + menú Editar:*
+- `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z` bound en el SDL event loop, sólo en Editor Mode + sin `WantTextInput` activo (no piso edits del Inspector).
+- `MenuBar > Editar > Deshacer / Rehacer` ahora reactivo: muestra `"Deshacer 'Mover Cubo'"` / `"Rehacer 'Eliminar Fox'"` con el name del comando activo. Deshabilitado cuando `canUndo`/`canRedo` es `false`.
+- `EditorUI` gana `setHistoryStack()` + `historyStack()`. `EditorApplication` inyecta `&m_history` al setup. `m_history.clear()` en `rebuildSceneFromMap` (handles invalidados al cambiar proyecto).
+
+*Bloque 4 — DeleteEntityCommand:*
+- Captura `SavedEntity` snapshot via `EntitySerializer::serializeEntityToJson` + `parseEntityFromJson` ANTES del primer `execute()`. Así el undo recrea la entidad completa con todos sus componentes (mesh, material, light, rigidbody, animator, script, prefab link).
+- `execute()` destruye la entidad e invoca callback opcional `BodyCleanup` para limpieza del Jolt body. Diseño desacoplado: `BodyCleanup = std::function<void(u32)>` (vs un `PhysicsWorld*` directo) — los tests pasan `{}` y queda no-op, sin arrastrar Jolt al test target.
+- `undo()` recrea la entidad via `SceneLoader::applyOneEntity` (split nuevo del `applyEntitiesToScene` de loop) y guarda el nuevo handle para que un siguiente redo destruya el correcto.
+- Caveat documentado: el handle EnTT cambia al recrear (versionado). Comandos previos del history que apuntaban al handle viejo quedan no-op silenciosos. Aceptable v1.
+- Refactor `EditorApplication::deleteSelectedEntity` para empujar el comando en lugar de borrar directo.
+- `Entity` gana `scene()` getter público (necesario para los commands).
+- 7 tests (`test_delete_entity_command.cpp`): execute destruye, undo recrea con tag/transform correctos, ciclo execute/undo/redo, BodyCleanup se invoca con bodyId si hay RigidBody (y NO se invoca si no hay), default `BodyCleanup` vacío no crashea con RigidBody, integración via HistoryStack, name() incluye tag.
+
+*Bloque 5 — Cierre:*
+- Suite total **238/5409** (antes Hito 26 cerrado: 212/5326 → +26 tests del Hito 27 entre HistoryStack + EditTransform + DeleteEntity).
+
+**Verificación visual:**
+- Drag de gizmo (W/E/R) sobre una entidad → soltar → Ctrl+Z revierte el drag completo (no 60 micro-edits). El menú `Editar` muestra `"Deshacer 'Mover MiEntidad'"`.
+- Delete sobre Fox.glb (con animator + skeleton) → Ctrl+Z lo recrea con animación intacta.
+- Delete sobre CajaFisica (Jolt rigidbody dynamic) → Ctrl+Z la recrea con `bodyId=0` que se rematerializa al siguiente frame de `updateRigidBodies`. Cae correctamente.
+- Cambio de proyecto: el history se vacía (`Ctrl+Z` no trae entidades de la sesión anterior).
+
+**Siguiente paso tras completarlo:** Hito 28 (TBD). Plan en `docs/PLAN_HITO28.md`.
+
+### Pendientes menores detectados en Hito 27
+
+- **`CreateEntityCommand` (spawns + drops undoables)**: hoy un Ctrl+Z DESPUÉS de spawnear desde el menú "Ayuda" o de un drop al viewport NO destruye la entidad recién creada. Falta wrappear los ~10 spawn paths (`processSpawnRotator`, `processSpawnEnemyDemo`, `processViewportMeshDrop`, etc.) para que pusheen un comando. Diseño: análogo a `DeleteEntityCommand` pero invertido — `execute()` ejecuta el spawn original (vía thunk callback) y captura el snapshot resultante; `undo()` destruye; `redo()` recrea desde snapshot. **Trigger:** próximo hito de polish editor.
+- **Autoscale agresivo en drop**: meshes chicos (Kenney barriles ~0.27m) reciben scale ~5.4x para llegar a ~1.5m. Visualmente se ven "gruesos" comparados al world. TODO ya anotado en `DemoSpawners.cpp`. **Mitigación apropiada:** metadata por asset pack (cm/m/inch), o un slider "scale al drop" en el viewport en lugar de autoscale agresivo. **Trigger:** dev se queja del look de los Kenney.
+- **Handle remap en HistoryStack tras delete-undo**: el `entt::entity` cambia al recrear (versionado). Comandos previos del history que apuntaban al handle viejo quedan no-op. UX se siente raro si el dev hace: edit transform → delete → undo (recrea) → undo (intenta revertir el edit pero el handle está stale → no-op silencioso). **Mitigación:** un mapa "old handle → new handle" en `HistoryStack` actualizado por `DeleteEntityCommand::undo`. **Trigger:** dev nota el comportamiento.
+- **Comandos para edits del Inspector**: hoy `albedoTint`/`metallic`/`roughness`/`ao` en el Inspector mutan el Material directo, sin pasar por el history. Ctrl+Z no los deshace. **Trigger:** dev pide undo de edits de material.
+- **Comandos para drops de textura/material/script**: similar — `processViewportTextureDrop` muta `MeshRendererComponent.materials` sin command. **Trigger:** combo con el anterior.
+- **Tests de integración del finalizeGizmoDrag**: el helper de drag-end no tiene cobertura headless porque depende de SDL events. Smoke test manual cubrió los 3 casos (translate/rotate/scale). **Trigger:** infra de mock SDL.
