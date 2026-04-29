@@ -353,6 +353,7 @@ add_executable(MoodEditor
     src/editor/commands/HistoryStack.cpp
     src/editor/commands/EditTransformCommand.cpp
     src/editor/commands/DeleteEntityCommand.cpp
+    src/editor/commands/CreateEntityCommand.cpp
     src/editor/panels/ViewportPanel.cpp
     src/editor/panels/InspectorPanel.cpp
     src/editor/panels/AssetBrowserPanel.cpp

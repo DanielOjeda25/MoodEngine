@@ -156,6 +156,13 @@ private:
     void processSpawnPbrSpheresRequest();
     void processSpawnLightStressRequest();
     void processSpawnAnimatedCharacterRequest(); // Hito 19
+
+    /// @brief Hito 28: empaqueta una creacion (spawn / drop) como
+    ///        `CreateEntityCommand` y la empuja al `m_history`. El
+    ///        callsite ya creo las entidades; este helper captura el
+    ///        snapshot para que Ctrl+Z las destruya. `markDirty()` se
+    ///        invoca aca tambien para no duplicarlo en cada path.
+    void pushCreatedEntities(std::vector<Entity> created, std::string label);
     void processSavePrefabRequest();
     void processViewportTextureDrop();
     void processViewportMeshDrop();

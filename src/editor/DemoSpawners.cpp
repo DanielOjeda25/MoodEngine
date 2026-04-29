@@ -11,7 +11,9 @@
 #include "editor/EditorApplication.h"
 
 #include "core/Log.h"
+#include "editor/commands/CreateEntityCommand.h"
 #include "engine/assets/AssetManager.h"
+#include "engine/physics/PhysicsWorld.h"
 #include "engine/render/MaterialAsset.h"
 #include "engine/render/MeshAsset.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
@@ -82,6 +84,7 @@ void EditorApplication::processSpawnRotatorRequest() {
     r.addComponent<MeshRendererComponent>(m_assetManager->missingMeshId(), rotMat);
     r.addComponent<ScriptComponent>(std::string{"assets/scripts/rotator.lua"});
     Log::editor()->info("Spawned rotador demo en (0, 4, 0)");
+    pushCreatedEntities({r}, "Spawn rotador demo");
 }
 
 void EditorApplication::processSpawnEnemyDemoRequest() {
@@ -145,7 +148,7 @@ void EditorApplication::processSpawnEnemyDemoRequest() {
     Log::editor()->info(
         "Spawned enemigo demo en (1.5, 1.5) tiles. Entrar en Play Mode "
         "para que persiga al jugador.");
-    markDirty();
+    pushCreatedEntities({enemy}, "Spawn enemigo demo");
 }
 
 void EditorApplication::processSpawnHudDemoRequest() {
@@ -162,6 +165,7 @@ void EditorApplication::processSpawnHudDemoRequest() {
     Log::editor()->info(
         "Spawned HudDemo. Entrar en Play Mode para ver el HUD reaccionar "
         "(HP drena 1/s; HP=0 -> pausa forzada).");
+    pushCreatedEntities({e}, "Spawn HUD demo");
 }
 
 void EditorApplication::processSpawnPhysicsBoxRequest() {
@@ -181,7 +185,7 @@ void EditorApplication::processSpawnPhysicsBoxRequest() {
         glm::vec3(0.5f, 0.5f, 0.5f),
         5.0f);
     Log::physics()->info("Spawned caja fisica en (0, 6, 0) con mass=5kg");
-    markDirty();
+    pushCreatedEntities({box}, "Spawn caja fisica");
 }
 
 void EditorApplication::processSpawnEnvironmentRequest() {
@@ -200,7 +204,7 @@ void EditorApplication::processSpawnEnvironmentRequest() {
         env.addComponent<EnvironmentComponent>();
         m_ui.setSelectedEntity(env);
         Log::editor()->info("Spawned entidad Environment con defaults");
-        markDirty();
+        pushCreatedEntities({env}, "Spawn Environment");
     }
 }
 
@@ -221,6 +225,9 @@ void EditorApplication::processSpawnShadowDemoRequest() {
         m_assetManager->createMaterialFromTexture(brickTex);
     const MeshAssetId    cube     = m_assetManager->missingMeshId(); // cubo primitivo
 
+    std::vector<Entity> created;
+    created.reserve(3);
+
     // 1) Piso plano grande (cubo escalado y=0.1). Centrado en el origen, se
     //    apoya con su cara superior en y=0.1 — un poco encima del suelo de
     //    tiles (y=0.0) para evitar z-fighting si conviven.
@@ -230,6 +237,7 @@ void EditorApplication::processSpawnShadowDemoRequest() {
         t.position = glm::vec3(0.0f, 0.05f, 0.0f);
         t.scale    = glm::vec3(20.0f, 0.1f, 20.0f);
         floor.addComponent<MeshRendererComponent>(cube, gridMat);
+        created.push_back(floor);
     }
 
     // 2) Columna alta (cubo 1x4x1) que proyecta una sombra alargada bien
@@ -240,6 +248,7 @@ void EditorApplication::processSpawnShadowDemoRequest() {
         t.position = glm::vec3(2.0f, 2.0f, 0.0f);
         t.scale    = glm::vec3(1.0f, 4.0f, 1.0f);
         col.addComponent<MeshRendererComponent>(cube, brickMat);
+        created.push_back(col);
     }
 
     // 3) Sol direccional con castShadows. Direccion oblicua (no vertical) para
@@ -256,12 +265,13 @@ void EditorApplication::processSpawnShadowDemoRequest() {
         lc.castShadows = true;
         sun.addComponent<LightComponent>(lc);
         m_ui.setSelectedEntity(sun);
+        created.push_back(sun);
     }
 
     Log::editor()->info(
         "Spawned demo de sombras: piso 20x20, columna 1x4x1 en (2, 2, 0), "
         "sol direccional con castShadows=true");
-    markDirty();
+    pushCreatedEntities(std::move(created), "Spawn demo sombras");
 }
 
 void EditorApplication::processSpawnPbrSpheresRequest() {
@@ -287,7 +297,8 @@ void EditorApplication::processSpawnPbrSpheresRequest() {
     const f32 metVals[3]   = {0.0f, 0.5f, 1.0f};
     const f32 rouVals[3]   = {0.05f, 0.5f, 1.0f}; // 0.05 evita NaN en GGX
 
-    int spawned = 0;
+    std::vector<Entity> created;
+    created.reserve(9);
     for (int my = 0; my < 3; ++my) {            // filas (roughness)
         for (int mx = 0; mx < 3; ++mx) {         // columnas (metallic)
             MaterialAsset prototype{};
@@ -308,13 +319,13 @@ void EditorApplication::processSpawnPbrSpheresRequest() {
                 baseZ);
             t.scale = glm::vec3(1.0f);
             sph.addComponent<MeshRendererComponent>(sphere, matId);
-            ++spawned;
+            created.push_back(sph);
         }
     }
     Log::editor()->info(
         "Spawned showcase PBR grid 3x3 ({} esferas): metallic en X "
-        "(0/0.5/1), roughness en Y (0.05/0.5/1)", spawned);
-    markDirty();
+        "(0/0.5/1), roughness en Y (0.05/0.5/1)", created.size());
+    pushCreatedEntities(std::move(created), "Spawn esferas PBR");
 }
 
 void EditorApplication::processSpawnLightStressRequest() {
@@ -352,10 +363,11 @@ void EditorApplication::processSpawnLightStressRequest() {
     const f32 baseX = -static_cast<f32>(kCols - 1) * 0.5f * kSpacing;
     const f32 baseZ = -static_cast<f32>(kRows - 1) * 0.5f * kSpacing;
 
-    int spawned = 0;
+    std::vector<Entity> created;
+    created.reserve(static_cast<size_t>(kRows * kCols));
     for (int r = 0; r < kRows; ++r) {
         for (int c = 0; c < kCols; ++c) {
-            const f32 hue = static_cast<f32>(spawned) / 64.0f;
+            const f32 hue = static_cast<f32>(created.size()) / 64.0f;
             const glm::vec3 color = hsvToRgb(hue, 0.85f, 1.0f);
 
             char name[64];
@@ -373,13 +385,13 @@ void EditorApplication::processSpawnLightStressRequest() {
             lc.radius    = kRadius;
             lc.enabled   = true;
             light.addComponent<LightComponent>(lc);
-            ++spawned;
+            created.push_back(light);
         }
     }
     Log::editor()->info(
         "Spawned stress test {} point lights ({}x{} grid, radius={}m)",
-        spawned, kCols, kRows, kRadius);
-    markDirty();
+        created.size(), kCols, kRows, kRadius);
+    pushCreatedEntities(std::move(created), "Spawn stress test 64 luces");
 }
 
 void EditorApplication::processSpawnAnimatedCharacterRequest() {
@@ -430,7 +442,7 @@ void EditorApplication::processSpawnAnimatedCharacterRequest() {
         "Editar 'clipName' del Animator desde el Inspector para cambiar "
         "entre Survey/Walk/Run.",
         asset->skeleton->bones.size(), asset->animations.size());
-    markDirty();
+    pushCreatedEntities({fox}, "Spawn personaje animado");
 }
 
 void EditorApplication::processSpawnPointLightRequest() {
@@ -446,7 +458,7 @@ void EditorApplication::processSpawnPointLightRequest() {
     lc.enabled   = true;
     light.addComponent<LightComponent>(lc);
     Log::editor()->info("Spawned luz puntual en (0, 4, 0) con radius=12");
-    markDirty();
+    pushCreatedEntities({light}, "Spawn luz puntual");
 }
 
 void EditorApplication::processSpawnAudioSourceRequest() {
@@ -463,6 +475,7 @@ void EditorApplication::processSpawnAudioSourceRequest() {
     asrc.volume = 0.8f;
     src.addComponent<AudioSourceComponent>(asrc);
     Log::editor()->info("Spawned audio source demo en (-10, 1.5, -10)");
+    pushCreatedEntities({src}, "Spawn audio source");
 }
 
 void EditorApplication::processSavePrefabRequest() {
@@ -671,7 +684,7 @@ void EditorApplication::processViewportMeshDrop() {
         "Drop mesh '{}' -> tile ({}, {}), autoscale={:.4f}{}",
         meshName, hit.tileX, hit.tileY, autoScale,
         (asset && asset->hasSkeleton()) ? " (skinned + animator)" : "");
-    markDirty();
+    pushCreatedEntities({e}, "Drop mesh '" + meshName + "'");
 }
 
 void EditorApplication::processViewportPrefabDrop() {
@@ -760,7 +773,7 @@ void EditorApplication::processViewportPrefabDrop() {
     m_ui.setSelectedEntity(e);
     Log::editor()->info("Drop prefab '{}' -> tile ({}, {})",
                          prefabPath, hit.tileX, hit.tileY);
-    markDirty();
+    pushCreatedEntities({e}, "Drop prefab '" + prefabPath + "'");
 }
 
 void EditorApplication::processViewportMaterialDrop() {
@@ -837,6 +850,22 @@ void EditorApplication::processViewportScriptDrop() {
         : std::string{"(sin tag)"};
     Log::editor()->info("Drop script '{}' -> entidad '{}'",
                          drop.scriptPath, tagName);
+    markDirty();
+}
+
+void EditorApplication::pushCreatedEntities(std::vector<Entity> created,
+                                              std::string label) {
+    if (created.empty()) return;
+
+    CreateEntityCommand::BodyCleanup cleanup;
+    if (m_physicsWorld) {
+        PhysicsWorld* pw = m_physicsWorld.get();
+        cleanup = [pw](u32 bodyId) { pw->destroyBody(bodyId); };
+    }
+    auto cmd = std::make_unique<CreateEntityCommand>(
+        std::move(created), m_scene.get(), m_assetManager.get(),
+        std::move(cleanup), std::move(label));
+    m_history.push(std::move(cmd));
     markDirty();
 }
 
