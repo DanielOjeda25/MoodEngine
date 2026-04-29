@@ -616,19 +616,17 @@ void EditorApplication::processViewportMeshDrop() {
         ? asset->importRotationEuler : glm::vec3(0.0f);
     t.rotationEuler = importEuler;
 
-    // Auto-escala bidireccional:
-    //  - Meshes grandes (Fox.glb importado en cm a ~150 unidades): si la
-    //    altura post-rotacion excede 3m, escalamos a ~1.5m.
-    //  - Meshes chicos (Kenney Survival Kit ~0.3-1.7m, mundo con tiles
-    //    de 3m): si la altura es < 1m, escalamos para llevarlos a ~1.5m
-    //    (aproximadamente la altura de un personaje, encaja con el tile).
-    //  - Meshes ya razonables (1m..3m: cubos, props grandes) pasan con scale=1.
-    //
-    // TODO Hito 27 pendiente: el upscale de meshes chicos da scale ~5x para
-    // un Kenney barril (height=0.27 -> scale=5.4). Visualmente el prop se
-    // ve "grueso" comparado al world. Mejor approach: que cada asset pack
-    // declare su unidad nativa (cm/m/in) en metadata, o que el editor
-    // tenga un slider "scale al drop" en lugar de autoscale agresivo.
+    // Auto-escala bidireccional (Hito 28 G):
+    //  - Meshes en cm-units (Fox.glb bind pose ~150 unidades, height >3m
+    //    en metros): downscale a ~1.5m de altura.
+    //  - Meshes ultra-chicos (height <0.1m, probablemente cm-units que
+    //    quedaron sub-metro tras un import): upscale a ~1.5m.
+    //  - Meshes en su escala nativa razonable (0.1m..3m: Kenney barriles
+    //    de 0.27m, props normales, cubos): SIN autoscale. Antes un
+    //    Kenney barril recibia scale 5.4x (1.5/0.276) y se veia grueso
+    //    contra los tiles del mundo. Ahora se respeta el authoring.
+    //  Si el dev quiere ajustar la escala despues del drop, usa el
+    //  gizmo de scale (Ctrl+R) — y desde Hito 27 es undoable.
     f32 autoScale = 1.0f;
     WorldYBounds wy{};
     if (asset != nullptr) {
@@ -636,7 +634,7 @@ void EditorApplication::processViewportMeshDrop() {
         const f32 height = wy.maxY - wy.minY;
         if (height > 3.0f) {
             autoScale = 1.5f / height;
-        } else if (height > 0.001f && height < 1.0f) {
+        } else if (height > 0.001f && height < 0.1f) {
             autoScale = 1.5f / height;
         }
     }
