@@ -43,5 +43,9 @@ Thumbs.db
 imgui.ini
 .mood/
 
+# Python (bytecode generado al importar tools/*.py)
+__pycache__/
+*.pyc
+
 # Herramientas de agentes de codigo
 .claude/

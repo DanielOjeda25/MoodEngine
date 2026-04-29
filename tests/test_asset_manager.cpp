@@ -178,3 +178,92 @@ TEST_CASE("AssetManager: getMaterial con id invalido cae al default") {
     REQUIRE(mat != nullptr);
     CHECK(mat == am.getMaterial(am.missingMaterialId()));
 }
+
+// ---------------------------------------------------------------------------
+// Hito 26: extraccion de texturas embedded + helper createMaterialsForMesh
+// ---------------------------------------------------------------------------
+
+TEST_CASE("loadEmbeddedTexture: sin TextureMemoryFactory cae a missing") {
+    SpyFactory spy;
+    AssetManager am("assets", wrap(spy));
+    // Constructor no recibio memory factory => debe fallar con warning a
+    // missing, sin throw (los tests no pueden depender de tener una mock).
+    const std::vector<u8> bytes(64, 0xFF);
+    const TextureAssetId id = am.loadEmbeddedTexture("test#0", bytes);
+    CHECK(id == am.missingTextureId());
+}
+
+TEST_CASE("loadEmbeddedTexture: con factory mock cachea por key y devuelve id distinto") {
+    SpyFactory spy;
+    int memoryCalls = 0;
+    AssetManager::TextureMemoryFactory memFactory =
+        [&](const std::vector<u8>&, const std::string& name) {
+            ++memoryCalls;
+            return std::make_unique<MockTexture>(name);
+        };
+    AssetManager am("assets", wrap(spy), {}, {}, std::move(memFactory));
+
+    const std::vector<u8> bytes(64, 0xFF);
+    const TextureAssetId id1 = am.loadEmbeddedTexture("foo.glb#0", bytes);
+    CHECK(id1 != am.missingTextureId());
+    CHECK(memoryCalls == 1);
+
+    // Cache hit: misma key -> mismo id, factory no se llama de nuevo.
+    const TextureAssetId id2 = am.loadEmbeddedTexture("foo.glb#0", bytes);
+    CHECK(id1 == id2);
+    CHECK(memoryCalls == 1);
+
+    // Key distinta -> id distinto, factory llamada de nuevo.
+    const TextureAssetId id3 = am.loadEmbeddedTexture("bar.glb#0", bytes);
+    CHECK(id3 != id1);
+    CHECK(memoryCalls == 2);
+}
+
+TEST_CASE("loadEmbeddedTexture: buffer vacio cae a missing") {
+    SpyFactory spy;
+    AssetManager::TextureMemoryFactory memFactory =
+        [](const std::vector<u8>&, const std::string& name) {
+            return std::make_unique<MockTexture>(name);
+        };
+    AssetManager am("assets", wrap(spy), {}, {}, std::move(memFactory));
+    const TextureAssetId id = am.loadEmbeddedTexture("empty", {});
+    CHECK(id == am.missingTextureId());
+}
+
+TEST_CASE("createMaterialsForMesh: missing mesh -> 1 default-clone (warning chequer)") {
+    SpyFactory spy;
+    AssetManager am("assets", wrap(spy));
+    // El missing mesh (cubo primitivo, slot 0) tiene 1 submesh con
+    // materialIndex=0 y materialAlbedoTextures vacio. createMaterialsForMesh
+    // debe devolver 1 MaterialAssetId clonado del default (NO compartido).
+    auto mats = am.createMaterialsForMesh(am.missingMeshId());
+    REQUIRE(mats.size() == 1);
+    CHECK(mats[0] != am.missingMaterialId()); // clone, no el slot 0 compartido
+
+    MaterialAsset* m = am.getMaterial(mats[0]);
+    REQUIRE(m != nullptr);
+    // Hereda useAlbedoMap del default (Hito 25) => muestra missing.png.
+    CHECK(m->useAlbedoMap == true);
+    CHECK(m->albedoTint.x == doctest::Approx(1.0f));
+}
+
+TEST_CASE("createMaterialsForMesh: dos llamadas devuelven materiales unicos (no compartidos)") {
+    // Garantia clave del Hito 25: editar albedoTint de un cubo no contagia.
+    SpyFactory spy;
+    AssetManager am("assets", wrap(spy));
+    auto a = am.createMaterialsForMesh(am.missingMeshId());
+    auto b = am.createMaterialsForMesh(am.missingMeshId());
+    REQUIRE(a.size() == 1);
+    REQUIRE(b.size() == 1);
+    CHECK(a[0] != b[0]);
+}
+
+TEST_CASE("createMaterialsForMesh: id de mesh invalido devuelve vacio") {
+    SpyFactory spy;
+    AssetManager am("assets", wrap(spy));
+    // Mesh fuera de rango cae al missing mesh (cubo) en getMesh, pero ese
+    // tambien tiene submeshes — asi que el contrato es "lo que sea que
+    // getMesh devuelva". getMesh nunca es null, asi que el vector no es vacio.
+    auto mats = am.createMaterialsForMesh(9999u);
+    CHECK(mats.size() == 1); // missing mesh tiene 1 submesh
+}
