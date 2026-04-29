@@ -28,5 +28,8 @@ void main() {
     float lat = asin(clamp(d.y, -1.0, 1.0));
     float u = lon / (2.0 * PI) + 0.5;
     float v = 0.5 + lat / PI;
-    fragColor = texture(uSkybox, vec2(u, v));
+    // Forzamos mip 0: en la costura (u salta de 1 a 0) las derivadas
+    // dFdx(u) son enormes y el sampler elegiria un mip bajisimo (1x1),
+    // produciendo una linea vertical borrosa visible en el cielo.
+    fragColor = textureLod(uSkybox, vec2(u, v), 0.0);
 }
