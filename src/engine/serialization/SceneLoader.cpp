@@ -12,16 +12,16 @@
 
 namespace Mood::SceneLoader {
 
-void applyEntitiesToScene(const SavedMap& saved,
-                          Scene& scene,
-                          AssetManager& assets) {
-    for (const auto& se : saved.entities) {
-        Entity e = scene.createEntity(se.tag);
-        auto& t = e.getComponent<TransformComponent>();
-        t.position      = se.position;
-        t.rotationEuler = se.rotationEuler;
-        t.scale         = se.scale;
+Entity applyOneEntity(const SavedEntity& se,
+                       Scene& scene,
+                       AssetManager& assets) {
+    Entity e = scene.createEntity(se.tag);
+    auto& t = e.getComponent<TransformComponent>();
+    t.position      = se.position;
+    t.rotationEuler = se.rotationEuler;
+    t.scale         = se.scale;
 
+    {
         if (se.meshRenderer.has_value()) {
             const auto& mr = *se.meshRenderer;
             const MeshAssetId meshId = assets.loadMesh(mr.meshPath);
@@ -132,6 +132,15 @@ void applyEntitiesToScene(const SavedMap& saved,
         if (!se.prefabPath.empty()) {
             e.addComponent<PrefabLinkComponent>(se.prefabPath);
         }
+    }
+    return e;
+}
+
+void applyEntitiesToScene(const SavedMap& saved,
+                          Scene& scene,
+                          AssetManager& assets) {
+    for (const auto& se : saved.entities) {
+        applyOneEntity(se, scene, assets);
     }
 }
 

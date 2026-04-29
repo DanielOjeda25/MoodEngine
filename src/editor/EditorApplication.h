@@ -8,6 +8,7 @@
 #include "core/Types.h"
 #include "editor/EditorMode.h"
 #include "editor/EditorUI.h"
+#include "editor/commands/HistoryStack.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/render/Fog.h"
 #include "engine/scene/EditorCamera.h"
@@ -281,8 +282,28 @@ private:
         int axis = -1;
         glm::vec3 startValue{0.0f};
         f32 startParam = 0.0f;
+        // Hito 27: Field cual transform se esta editando (Position /
+        // Rotation / Scale). Se setea al iniciar el drag y se usa al
+        // soltar para construir el EditTransformCommand correcto.
+        // 0 = Position, 1 = Rotation, 2 = Scale (matchea
+        // EditTransformCommand::Field).
+        u8 field = 0;
+        // Entidad activa en el drag. Stack para que el undo funcione
+        // aunque la seleccion cambie post-drag.
+        Entity entity;
     };
     GizmoDragState m_gizmo;
+
+    /// @brief Hito 27: al soltar el drag de un gizmo, captura el valor
+    ///        final del Transform y empuja un EditTransformCommand al
+    ///        history (si el delta no es trivial). Llamado desde el
+    ///        overlay justo antes de resetear m_gizmo.active = false.
+    void finalizeGizmoDrag();
+
+    // Hito 27 Bloque 1: pila undo/redo de comandos del editor. Se vacia
+    // en handleNewProject/handleOpenProject/handleCloseProject porque
+    // los entity handles a los que apuntan los commands quedan invalidos.
+    HistoryStack m_history;
     // True si el click del frame fue consumido por el gizmo; el loop
     // principal lo consulta para descartar el ClickSelect fantasma que
     // ViewportPanel emite si el gesto fue un micro-click.

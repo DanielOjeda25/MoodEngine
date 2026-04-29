@@ -623,6 +623,12 @@ void EditorApplication::processViewportMeshDrop() {
     //    de 3m): si la altura es < 1m, escalamos para llevarlos a ~1.5m
     //    (aproximadamente la altura de un personaje, encaja con el tile).
     //  - Meshes ya razonables (1m..3m: cubos, props grandes) pasan con scale=1.
+    //
+    // TODO Hito 27 pendiente: el upscale de meshes chicos da scale ~5x para
+    // un Kenney barril (height=0.27 -> scale=5.4). Visualmente el prop se
+    // ve "grueso" comparado al world. Mejor approach: que cada asset pack
+    // declare su unidad nativa (cm/m/in) en metadata, o que el editor
+    // tenga un slider "scale al drop" en lugar de autoscale agresivo.
     f32 autoScale = 1.0f;
     WorldYBounds wy{};
     if (asset != nullptr) {

@@ -1,6 +1,7 @@
 #include "editor/EditorApplication.h"
 
 #include "core/Log.h"
+#include "editor/commands/DeleteEntityCommand.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/physics/PhysicsWorld.h"
 #include "engine/scene/Components.h"
@@ -53,6 +54,9 @@ void EditorApplication::rebuildSceneFromMap() {
     m_scene->registry().clear();
     m_ui.setSelectedEntity(Entity{}); // la seleccion apuntaba a un handle ya
                                        // destruido; invalidarla.
+    // Hito 27: los Entity handles dentro de comandos del history apuntan
+    // a entidades destruidas; vaciar el stack es la unica opcion segura.
+    m_history.clear();
     // Los sol::state mapeados por entt::entity del ScriptSystem quedan
     // huerfanos: hay que tirarlos antes de recrear entidades con los
     // mismos handles numericos.
@@ -198,18 +202,13 @@ void EditorApplication::deleteSelectedEntity() {
         return;
     }
 
-    // Cleanup de side-effects antes del destroy: el body de Jolt
-    // (si aplica). Si no se destruye aca, queda huerfano en el world.
-    if (selected.hasComponent<RigidBodyComponent>() && m_physicsWorld) {
-        auto& rb = selected.getComponent<RigidBodyComponent>();
-        if (rb.bodyId != 0) {
-            m_physicsWorld->destroyBody(rb.bodyId);
-            rb.bodyId = 0;
-        }
-    }
-    m_scene->destroyEntity(selected);
-    m_ui.setSelectedEntity(Entity{});
-    Log::editor()->info("Eliminada entidad '{}' del mapa.", tagName);
+    // Hito 27: ahora va por el HistoryStack — el comando captura un
+    // snapshot pre-delete para permitir Ctrl+Z. El destroy + cleanup
+    // del body de Jolt los hace `DeleteEntityCommand::execute()`.
+    m_ui.setSelectedEntity(Entity{}); // limpiar seleccion antes del destroy
+    auto cmd = std::make_unique<DeleteEntityCommand>(
+        selected, m_scene.get(), m_assetManager.get(), m_physicsWorld.get());
+    m_history.push(std::move(cmd));
     markDirty();
 }
 

@@ -350,6 +350,9 @@ add_executable(MoodEditor
     src/editor/MenuBar.cpp
     src/editor/StatusBar.cpp
     src/editor/Dockspace.cpp
+    src/editor/commands/HistoryStack.cpp
+    src/editor/commands/EditTransformCommand.cpp
+    src/editor/commands/DeleteEntityCommand.cpp
     src/editor/panels/ViewportPanel.cpp
     src/editor/panels/InspectorPanel.cpp
     src/editor/panels/AssetBrowserPanel.cpp

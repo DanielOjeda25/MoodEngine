@@ -49,6 +49,11 @@ public:
     /// @brief Handle raw de EnTT. Evitar filtrarlo fuera del engine/scene/.
     entt::entity handle() const { return m_handle; }
 
+    /// @brief Puntero al Scene dueño. Util para callers que necesitan
+    ///        verificar `scene()->registry().valid(handle())` sin tener
+    ///        otro path al Scene (ej. comandos undo/redo del Hito 27).
+    Scene* scene() const { return m_scene; }
+
     /// @brief Valida que la entidad apunte a un handle + scene no-nulos.
     ///        Las entidades default-constructed son falsy.
     explicit operator bool() const {

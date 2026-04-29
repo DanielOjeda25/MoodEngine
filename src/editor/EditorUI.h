@@ -8,6 +8,7 @@
 #include "editor/EditorMode.h"
 #include "editor/MenuBar.h"
 #include "editor/StatusBar.h"
+#include "editor/commands/HistoryStack.h"
 #include "editor/panels/AssetBrowserPanel.h"
 #include "editor/panels/ConsolePanel.h"
 #include "editor/panels/HierarchyPanel.h"
@@ -61,6 +62,13 @@ public:
     /// @brief Acceso al panel Inspector (se le inyecta el Scene para
     ///        conocer la entidad seleccionada y editar sus componentes).
     InspectorPanel& inspector() { return m_inspector; }
+
+    /// @brief Hito 27: HistoryStack del editor inyectado desde
+    ///        EditorApplication. La MenuBar lo usa para los items
+    ///        "Editar > Deshacer / Rehacer" (canUndo/canRedo + name del
+    ///        comando activo). nullptr antes de la inicializacion.
+    void setHistoryStack(HistoryStack* h) { m_history = h; }
+    HistoryStack* historyStack() const { return m_history; }
 
     /// @brief Entidad seleccionada por el panel Hierarchy (compartida con
     ///        el Inspector). Entity default-constructed = sin seleccion.
@@ -272,6 +280,10 @@ private:
     ConsolePanel m_console;
     LuaApiPanel m_luaApi;
     Entity m_selectedEntity;
+
+    // Hito 27: punter inyectado por EditorApplication para que MenuBar
+    // pueda dibujar los items Deshacer/Rehacer con el estado correcto.
+    HistoryStack* m_history = nullptr;
 
     std::vector<IPanel*> m_panels;
 

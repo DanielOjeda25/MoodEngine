@@ -59,8 +59,22 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
         }
 
         if (ImGui::BeginMenu("Editar")) {
-            if (ImGui::MenuItem("Deshacer", "Ctrl+Z", false, false)) {}
-            if (ImGui::MenuItem("Rehacer", "Ctrl+Y", false, false)) {}
+            // Hito 27: cableado a HistoryStack inyectado por EditorApplication.
+            // Hasta que el ctor termine, m_history puede ser nullptr — evitamos
+            // crash deshabilitando los items.
+            HistoryStack* h = ui.historyStack();
+            const bool canUndo = (h != nullptr && h->canUndo());
+            const bool canRedo = (h != nullptr && h->canRedo());
+            const std::string undoLabel = canUndo
+                ? ("Deshacer '" + h->undoName() + "'") : std::string("Deshacer");
+            const std::string redoLabel = canRedo
+                ? ("Rehacer '" + h->redoName() + "'") : std::string("Rehacer");
+            if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, canUndo)) {
+                h->undo();
+            }
+            if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, canRedo)) {
+                h->redo();
+            }
             ImGui::EndMenu();
         }
 

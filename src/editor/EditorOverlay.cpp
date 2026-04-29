@@ -1,5 +1,6 @@
 #include "editor/EditorApplication.h"
 
+#include "editor/commands/EditTransformCommand.h"
 #include "engine/render/SceneRenderer.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
@@ -14,8 +15,46 @@
 #include <glm/matrix.hpp>
 
 #include <cmath>
+#include <memory>
 
 namespace Mood {
+
+void EditorApplication::finalizeGizmoDrag() {
+    if (!m_gizmo.entity) return;
+    if (!m_scene || !m_scene->registry().valid(m_gizmo.entity.handle())) return;
+    if (!m_gizmo.entity.hasComponent<TransformComponent>()) return;
+
+    const auto& tf = m_gizmo.entity.getComponent<TransformComponent>();
+    const auto field = static_cast<EditTransformCommand::Field>(m_gizmo.field);
+    glm::vec3 finalValue;
+    switch (field) {
+        case EditTransformCommand::Field::Position: finalValue = tf.position; break;
+        case EditTransformCommand::Field::Rotation: finalValue = tf.rotationEuler; break;
+        case EditTransformCommand::Field::Scale:    finalValue = tf.scale; break;
+    }
+
+    // Push solo si hubo movimiento real. Click sin drag (param tocado pero
+    // sin desplazar el cursor) caeria como no-op.
+    auto cmd = std::make_unique<EditTransformCommand>(
+        m_gizmo.entity, field, m_gizmo.startValue, finalValue);
+    if (cmd->isNoOp()) return;
+
+    // Importante: el HistoryStack::push llama a execute() — pero el valor
+    // ya esta aplicado en el Transform por el drag. Eso causaria una
+    // doble-aplicacion (re-asigna el mismo finalValue, no-op visualmente
+    // pero conceptualmente raro). Para evitarlo: revertimos al before
+    // antes de pushear, asi push() ejecuta y deja el estado correcto.
+    switch (field) {
+        case EditTransformCommand::Field::Position:
+            m_gizmo.entity.getComponent<TransformComponent>().position = m_gizmo.startValue; break;
+        case EditTransformCommand::Field::Rotation:
+            m_gizmo.entity.getComponent<TransformComponent>().rotationEuler = m_gizmo.startValue; break;
+        case EditTransformCommand::Field::Scale:
+            m_gizmo.entity.getComponent<TransformComponent>().scale = m_gizmo.startValue; break;
+    }
+    m_history.push(std::move(cmd));
+    m_gizmo.entity = Entity{};
+}
 
 void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                                           float x0, float y0,
@@ -279,6 +318,8 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                 const f32 dx = mousePos.x - osx;
                 const f32 dy = mousePos.y - osy;
                 m_gizmo.startParam = std::sqrt(dx * dx + dy * dy);
+                m_gizmo.field = static_cast<u8>(EditTransformCommand::Field::Scale);
+                m_gizmo.entity = selected;
                 m_gizmoConsumedClick = true;
             } else {
                 glm::vec3 rayOrigin, rayDir;
@@ -289,6 +330,11 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                         ? tform.position : tform.scale;
                     m_gizmo.startParam = closestParam(worldOrigin, axes[hoverAxis],
                                                        rayOrigin, rayDir);
+                    m_gizmo.field = static_cast<u8>(
+                        (effectiveMode == GizmoMode::Translate)
+                            ? EditTransformCommand::Field::Position
+                            : EditTransformCommand::Field::Scale);
+                    m_gizmo.entity = selected;
                     m_gizmoConsumedClick = true;
                 }
             }
@@ -326,7 +372,12 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
             }
         }
 
-        if (m_gizmo.active && !mouseDown) m_gizmo.active = false;
+        if (m_gizmo.active && !mouseDown) {
+            // Hito 27: empuja EditTransformCommand antes de resetear, asi
+            // Ctrl+Z deshace el drag completo (no cada frame del drag).
+            finalizeGizmoDrag();
+            m_gizmo.active = false;
+        }
 
         // Draw.
         // Handle central de uniform scale (cuadrado en el origen).
@@ -432,6 +483,8 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
             m_gizmo.axis = hoverAxis;
             m_gizmo.startValue = tform.rotationEuler;
             m_gizmo.startParam = startAng;
+            m_gizmo.field = static_cast<u8>(EditTransformCommand::Field::Rotation);
+            m_gizmo.entity = selected;
             m_gizmoConsumedClick = true;
         }
 
@@ -456,7 +509,12 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
             if (m_project) markDirty();
         }
 
-        if (m_gizmo.active && !mouseDown) m_gizmo.active = false;
+        if (m_gizmo.active && !mouseDown) {
+            // Hito 27: empuja EditTransformCommand antes de resetear, asi
+            // Ctrl+Z deshace el drag completo (no cada frame del drag).
+            finalizeGizmoDrag();
+            m_gizmo.active = false;
+        }
 
         // Draw rings as polylines.
         for (int i = 0; i < 3; ++i) {

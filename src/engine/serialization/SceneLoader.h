@@ -14,12 +14,16 @@
 // Antes el (3) vivia inline en EditorProjectActions; ahora lo expone
 // `applyEntitiesToScene` para que el player tambien lo use.
 
+#include "engine/scene/Entity.h"
+
 #include <filesystem>
 
 namespace Mood {
 
 class AssetManager;
+class Entity;
 class Scene;
+struct SavedEntity;
 struct SavedMap;
 
 namespace SceneLoader {
@@ -35,6 +39,13 @@ namespace SceneLoader {
 void applyEntitiesToScene(const SavedMap& saved,
                           Scene& scene,
                           AssetManager& assets);
+
+/// @brief Aplica UNA `SavedEntity` al scene. Devuelve la Entity creada.
+///        Util para Hito 27 DeleteEntityCommand::undo: recrear una
+///        entidad borrada desde su snapshot pre-delete.
+Entity applyOneEntity(const SavedEntity& saved,
+                      Scene& scene,
+                      AssetManager& assets);
 
 } // namespace SceneLoader
 

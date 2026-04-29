@@ -177,6 +177,7 @@ EditorApplication::EditorApplication() {
             return std::make_unique<OpenGLTexture>(bytes, nameForLog);
         });
     m_ui.assetBrowser().setAssetManager(m_assetManager.get());
+    m_ui.setHistoryStack(&m_history); // Hito 27: para items Editar > Deshacer/Rehacer
 
     m_ui.viewport().setFramebuffer(&m_sceneRenderer->viewportFb());
 
@@ -325,6 +326,26 @@ void EditorApplication::processEvents() {
             // problemas de foco entre paneles. El filtro WantTextInput
             // evita borrar la entidad mientras el usuario edita un campo.
             deleteSelectedEntity();
+        } else if (ev.type == SDL_KEYDOWN &&
+                   ev.key.keysym.sym == SDLK_z &&
+                   (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
+                   (ev.key.keysym.mod & KMOD_SHIFT) == 0 &&
+                   ev.key.repeat == 0 &&
+                   m_mode == EditorMode::Editor &&
+                   !ImGui::GetIO().WantTextInput) {
+            // Hito 27: Ctrl+Z deshace el ultimo comando del history.
+            m_history.undo();
+        } else if (ev.type == SDL_KEYDOWN &&
+                   ((ev.key.keysym.sym == SDLK_y &&
+                     (ev.key.keysym.mod & KMOD_CTRL) != 0) ||
+                    (ev.key.keysym.sym == SDLK_z &&
+                     (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
+                     (ev.key.keysym.mod & KMOD_SHIFT) != 0)) &&
+                   ev.key.repeat == 0 &&
+                   m_mode == EditorMode::Editor &&
+                   !ImGui::GetIO().WantTextInput) {
+            // Hito 27: Ctrl+Y o Ctrl+Shift+Z rehace.
+            m_history.redo();
         }
     }
 }
