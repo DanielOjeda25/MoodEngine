@@ -2,8 +2,10 @@
 
 #include "core/Log.h"
 #include "engine/render/IShader.h"
+#include "engine/render/ITexture.h"
 #include "engine/render/opengl/OpenGLCubemapTexture.h"
 #include "engine/render/opengl/OpenGLShader.h"
+#include "engine/render/opengl/OpenGLTexture.h"
 
 #include <glm/mat3x3.hpp>
 
@@ -62,6 +64,24 @@ SkyboxRenderer::SkyboxRenderer(const std::string& cubemapDirFs) {
     m_shader = std::make_unique<OpenGLShader>(
         "shaders/skybox.vert", "shaders/skybox.frag");
 
+    initCubeBuffers();
+    Log::render()->info("SkyboxRenderer inicializado (cubemap='{}', {} verts)",
+                         cubemapDirFs, m_vertexCount);
+}
+
+SkyboxRenderer::SkyboxRenderer(Equirect, const std::string& equirectPngFs) {
+    m_isEquirect = true;
+    m_equirect = std::make_unique<OpenGLTexture>(equirectPngFs);
+
+    m_shader = std::make_unique<OpenGLShader>(
+        "shaders/skybox.vert", "shaders/skybox_equirect.frag");
+
+    initCubeBuffers();
+    Log::render()->info("SkyboxRenderer inicializado (equirectangular='{}', {} verts)",
+                         equirectPngFs, m_vertexCount);
+}
+
+void SkyboxRenderer::initCubeBuffers() {
     glGenVertexArrays(1, &m_vao);
     glGenBuffers(1, &m_vbo);
     glBindVertexArray(m_vao);
@@ -72,9 +92,6 @@ SkyboxRenderer::SkyboxRenderer(const std::string& cubemapDirFs) {
     glBindVertexArray(0);
 
     m_vertexCount = static_cast<u32>(sizeof(k_cubeVerts) / (3 * sizeof(float)));
-
-    Log::render()->info("SkyboxRenderer inicializado (cubemap='{}', {} verts)",
-                         cubemapDirFs, m_vertexCount);
 }
 
 SkyboxRenderer::~SkyboxRenderer() {
@@ -91,7 +108,11 @@ void SkyboxRenderer::draw(const glm::mat4& view, const glm::mat4& projection) {
     m_shader->setMat4("uViewNoTranslation", viewNoTrans);
     m_shader->setMat4("uProjection",         projection);
     m_shader->setInt("uSkybox", 0);
-    m_cubemap->bind(0);
+    if (m_isEquirect) {
+        m_equirect->bind(0);
+    } else {
+        m_cubemap->bind(0);
+    }
 
     // Depth test debe estar LEQUAL (no LESS) para que el sky con depth=1
     // no se descarte vs el clear de depth=1. El render pipeline del

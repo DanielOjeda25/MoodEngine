@@ -218,21 +218,16 @@ glm::vec3 PlayerApplication::mapWorldOrigin() const {
 }
 
 void PlayerApplication::buildTestMap() {
-    m_map = GridMap(8u, 8u, 3.0f);
+    // Sala abierta 16x16 (mismo placeholder que el editor: piso + 1
+    // columna brick). Sin muros perimetrales.
+    m_map = GridMap(16u, 16u, 3.0f);
     const TextureAssetId grid  = m_assetManager->loadTexture("textures/grid.png");
     const TextureAssetId brick = m_assetManager->loadTexture("textures/brick.png");
+    (void)grid;
 
-    for (u32 i = 0; i < m_map.width(); ++i) {
-        m_map.setTile(i, 0u,                  TileType::SolidWall, grid);
-        m_map.setTile(i, m_map.height() - 1u, TileType::SolidWall, grid);
-    }
-    for (u32 j = 0; j < m_map.height(); ++j) {
-        m_map.setTile(0u,                 j, TileType::SolidWall, grid);
-        m_map.setTile(m_map.width() - 1u, j, TileType::SolidWall, grid);
-    }
     m_map.setTile(m_map.width() / 2u, m_map.height() / 2u,
                   TileType::SolidWall, brick);
-    Log::world()->info("MoodPlayer: mapa de prueba 8x8 ({} tiles solidos)",
+    Log::world()->info("MoodPlayer: arena 16x16 ({} tiles solidos)",
                         m_map.solidCount());
 }
 
@@ -241,6 +236,30 @@ void PlayerApplication::rebuildSceneFromMap() {
 
     const glm::vec3 origin = mapWorldOrigin();
     const f32 tileSize = m_map.tileSize();
+
+    // Piso plano (mismo patron que EditorApplication::rebuildSceneFromMap).
+    {
+        const f32 mapW = static_cast<f32>(m_map.width())  * tileSize;
+        const f32 mapH = static_cast<f32>(m_map.height()) * tileSize;
+        const TextureAssetId floorTex =
+            m_assetManager->loadTexture("textures/grid.png");
+        Entity floor = m_scene->createEntity("Floor");
+        auto& tf = floor.getComponent<TransformComponent>();
+        tf.position = glm::vec3(
+            origin.x + mapW * 0.5f,
+            origin.y - 0.05f,
+            origin.z + mapH * 0.5f);
+        tf.scale = glm::vec3(mapW, 0.1f, mapH);
+        const MaterialAssetId floorMat =
+            m_assetManager->loadMaterialFromTexture(floorTex);
+        floor.addComponent<MeshRendererComponent>(
+            m_assetManager->missingMeshId(), floorMat);
+        floor.addComponent<RigidBodyComponent>(
+            RigidBodyComponent::Type::Static,
+            RigidBodyComponent::Shape::Box,
+            glm::vec3(mapW * 0.5f, 0.05f, mapH * 0.5f),
+            0.0f);
+    }
 
     for (u32 y = 0; y < m_map.height(); ++y) {
         for (u32 x = 0; x < m_map.width(); ++x) {

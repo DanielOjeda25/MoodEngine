@@ -69,7 +69,9 @@ SceneRenderer::SceneRenderer()
     // Skybox (Hito 15). Tolera fallo de carga.
     try {
         m_skyboxRenderer =
-            std::make_unique<SkyboxRenderer>("assets/skyboxes/sky_day");
+            std::make_unique<SkyboxRenderer>(
+                SkyboxRenderer::Equirect{},
+                "assets/skyboxes/sky_kloofendal.png");
     } catch (const std::exception& e) {
         Log::render()->warn("SkyboxRenderer no disponible: {}. Sky fallback al clear color.",
                              e.what());

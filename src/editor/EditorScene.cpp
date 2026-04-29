@@ -17,26 +17,19 @@
 namespace Mood {
 
 void EditorApplication::buildInitialTestMap() {
-    // 8x8 con bordes sólidos (grid.png) y columna central (brick.png) para
-    // validar texturas por tile. Mismo estado que arrancaba el editor desde
-    // el Hito 5; se reusa al cerrar un proyecto para volver a un baseline
-    // conocido.
-    m_map = GridMap(8u, 8u, 3.0f);
+    // Sala abierta 16x16 con piso plano + UNA columna brick central
+    // como obstaculo de prueba para pathfinding y selecciones. Sin
+    // muros perimetrales — esos quedaban como una hilera de cubos
+    // dentados que se veian feo. El skybox cubre el horizonte.
+    // El piso es una entidad agregada en rebuildSceneFromMap.
+    m_map = GridMap(16u, 16u, 3.0f);
     const TextureAssetId grid  = m_assetManager->loadTexture("textures/grid.png");
     const TextureAssetId brick = m_assetManager->loadTexture("textures/brick.png");
     m_wallTextureId = grid;
 
-    for (u32 i = 0; i < m_map.width(); ++i) {
-        m_map.setTile(i, 0u,                   TileType::SolidWall, grid);
-        m_map.setTile(i, m_map.height() - 1u,  TileType::SolidWall, grid);
-    }
-    for (u32 j = 0; j < m_map.height(); ++j) {
-        m_map.setTile(0u,                  j, TileType::SolidWall, grid);
-        m_map.setTile(m_map.width() - 1u,  j, TileType::SolidWall, grid);
-    }
     m_map.setTile(m_map.width() / 2u, m_map.height() / 2u,
                   TileType::SolidWall, brick);
-    Log::world()->info("Mapa de prueba cargado: prueba_8x8 ({} tiles solidos)",
+    Log::world()->info("Mapa de prueba cargado: arena_16x16 ({} tiles solidos)",
                        m_map.solidCount());
 }
 
@@ -70,6 +63,32 @@ void EditorApplication::rebuildSceneFromMap() {
 
     const glm::vec3 origin = mapWorldOrigin();
     const f32 tileSize = m_map.tileSize();
+
+    // Piso plano que cubre toda el area del mapa. Es un cubo escalado
+    // muy fino — alto 0.1m, posicion Y = -0.05 para que la cara
+    // superior quede al ras del piso (y=0). Sin este piso el player
+    // camina sobre el plano implicito y los demos se sienten flotando.
+    {
+        const f32 mapW = static_cast<f32>(m_map.width())  * tileSize;
+        const f32 mapH = static_cast<f32>(m_map.height()) * tileSize;
+        Entity floor = m_scene->createEntity("Floor");
+        auto& tf = floor.getComponent<TransformComponent>();
+        tf.position = glm::vec3(
+            origin.x + mapW * 0.5f,
+            origin.y - 0.05f,
+            origin.z + mapH * 0.5f);
+        tf.scale = glm::vec3(mapW, 0.1f, mapH);
+        const MaterialAssetId floorMat =
+            m_assetManager->loadMaterialFromTexture(m_wallTextureId);
+        floor.addComponent<MeshRendererComponent>(
+            m_assetManager->missingMeshId(), floorMat);
+        // Static body para que dynamics caigan sobre el piso (Jolt).
+        floor.addComponent<RigidBodyComponent>(
+            RigidBodyComponent::Type::Static,
+            RigidBodyComponent::Shape::Box,
+            glm::vec3(mapW * 0.5f, 0.05f, mapH * 0.5f),
+            0.0f);
+    }
 
     for (u32 y = 0; y < m_map.height(); ++y) {
         for (u32 x = 0; x < m_map.width(); ++x) {

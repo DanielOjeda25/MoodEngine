@@ -22,10 +22,14 @@
 namespace Mood {
 
 class IShader;
+class ITexture;
 class OpenGLCubemapTexture;
 
 class SkyboxRenderer {
 public:
+    /// @brief Tag para el constructor equirectangular (ver factory).
+    struct Equirect {};
+
     /// @brief Construye el renderer cargando el cubemap (6 PNGs en orden
     ///        +X, -X, +Y, -Y, +Z, -Z) + compilando el shader.
     /// @param cubemapDirFs Path del filesystem a la carpeta del skybox
@@ -34,6 +38,13 @@ public:
     /// @throws std::runtime_error si falla la carga del cubemap o la
     ///        compilacion del shader.
     explicit SkyboxRenderer(const std::string& cubemapDirFs);
+
+    /// @brief Modo equirectangular: una unica textura 2D panoramica
+    ///        (proporcion 2:1) se samplea con (atan2,asin) en el
+    ///        fragment shader. Sin seams en los polos del cubemap.
+    /// @param equirectPngFs Path al archivo PNG (ej.
+    ///        `"assets/skyboxes/sky_kloofendal.png"`).
+    SkyboxRenderer(Equirect, const std::string& equirectPngFs);
 
     ~SkyboxRenderer();
 
@@ -47,11 +58,15 @@ public:
     void draw(const glm::mat4& view, const glm::mat4& projection);
 
 private:
-    std::unique_ptr<OpenGLCubemapTexture> m_cubemap;
+    void initCubeBuffers();
+
+    std::unique_ptr<OpenGLCubemapTexture> m_cubemap;       // modo cubemap
+    std::unique_ptr<ITexture> m_equirect;                  // modo equirectangular
     std::unique_ptr<IShader> m_shader;
     GLuint m_vao = 0;
     GLuint m_vbo = 0;
     u32 m_vertexCount = 0;
+    bool m_isEquirect = false;
 };
 
 } // namespace Mood
