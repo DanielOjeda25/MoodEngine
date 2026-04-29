@@ -38,6 +38,7 @@
 // leen igual (entities queda vacio).
 
 #include "core/Types.h"
+#include "engine/scripting/ExposedProperty.h"
 #include "engine/world/GridMap.h"
 
 #include <glm/vec3.hpp>
@@ -45,6 +46,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Mood {
@@ -101,12 +103,22 @@ struct SavedEnvironment {
     f32 iblIntensity = 1.0f;               // Hito 18, opcional en JSON
 };
 
+/// @brief Copia persistida de un ScriptComponent (Hito 24). Persiste el
+///        path logico del `.lua` + el map de overrides de exposed
+///        properties (name → value). Tipos serializables: number, bool,
+///        string, vec3 (los del `ExposedValue` variant). Estado runtime
+///        (loaded, lastError, exposedProps descubiertas) no se persiste.
+struct SavedScript {
+    std::string path;
+    std::unordered_map<std::string, ExposedValue> overrides;
+};
+
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh
 ///        renderer; Hito 11 agrega light; Hito 12 agrega rigid body;
 ///        Hito 14 agrega prefabPath (link suave al asset del que se
-///        instancio, vacio si no vino de prefab).
-///        Otros componentes (Script, Audio) siguen sin persistirse (ver
-///        no-goals de cada hito).
+///        instancio, vacio si no vino de prefab); Hito 24 agrega script
+///        (path + overrides de exposed properties).
+///        Otros componentes (Audio) siguen sin persistirse.
 struct SavedEntity {
     std::string tag;
     glm::vec3 position{0.0f};
@@ -116,6 +128,7 @@ struct SavedEntity {
     std::optional<SavedLight> light;
     std::optional<SavedRigidBody> rigidBody;
     std::optional<SavedEnvironment> environment; // Hito 15
+    std::optional<SavedScript> script;            // Hito 24
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
 };
 

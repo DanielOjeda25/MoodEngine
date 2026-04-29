@@ -113,6 +113,17 @@ void applyEntitiesToScene(const SavedMap& saved,
             e.addComponent<EnvironmentComponent>(env);
         }
 
+        // Hito 24: ScriptComponent + overrides. El script se carga
+        // perezosamente desde `ScriptSystem` (mtime-based), aca solo
+        // adjuntamos el path + overrides; `engine.exposed` los lee en
+        // el chunk top-level cuando el sistema haga el primer load.
+        if (se.script.has_value()) {
+            const auto& s = *se.script;
+            e.addComponent<ScriptComponent>(s.path);
+            auto& sc = e.getComponent<ScriptComponent>();
+            sc.overrides = s.overrides;
+        }
+
         if (!se.prefabPath.empty()) {
             e.addComponent<PrefabLinkComponent>(se.prefabPath);
         }

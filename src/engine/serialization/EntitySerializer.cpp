@@ -1,14 +1,48 @@
 #include "engine/serialization/EntitySerializer.h"
 
+#include "core/Log.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/render/MaterialAsset.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/serialization/JsonHelpers.h" // adapters glm::vec3 <-> json
 
+#include <variant>
+
 namespace Mood {
 
 using json = nlohmann::json;
+
+namespace {
+
+// Hito 24: serializa un `ExposedValue` (variant) al primitivo JSON que le
+// corresponde. vec3 se escribe como array de 3 floats (mismo formato que
+// glm::vec3 via el adl_serializer de JsonHelpers).
+json exposedValueToJson(const ExposedValue& v) {
+    return std::visit([](auto&& val) -> json {
+        using T = std::decay_t<decltype(val)>;
+        if constexpr (std::is_same_v<T, glm::vec3>) {
+            return json(val); // adl_serializer<glm::vec3> -> [x, y, z]
+        } else {
+            return json(val);
+        }
+    }, v);
+}
+
+// Lee un primitivo JSON y lo devuelve como `ExposedValue`. Tipos no
+// soportados (objetos, arrays != size 3, null) devuelven nullopt — el
+// caller loggea warning + skip.
+std::optional<ExposedValue> jsonToExposedValue(const json& jv) {
+    if (jv.is_boolean()) return ExposedValue{jv.get<bool>()};
+    if (jv.is_number()) return ExposedValue{jv.get<f32>()};
+    if (jv.is_string()) return ExposedValue{jv.get<std::string>()};
+    if (jv.is_array() && jv.size() == 3) {
+        return ExposedValue{jv.get<glm::vec3>()};
+    }
+    return std::nullopt;
+}
+
+} // namespace
 
 json serializeEntityToJson(Entity entity, const AssetManager& assets) {
     json je;
@@ -108,6 +142,27 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         je["environment"] = je2;
     }
 
+    // Hito 24: ScriptComponent (path + overrides de exposed properties).
+    // Solo persistimos si el path es no-vacio (un script vacio en la
+    // entidad sin nada cargado no aporta nada al round-trip). Los
+    // exposedProps descubiertos NO se serializan; se redescubren al
+    // cargar el script.
+    if (entity.hasComponent<ScriptComponent>()) {
+        const auto& sc = entity.getComponent<ScriptComponent>();
+        if (!sc.path.empty()) {
+            json js;
+            js["path"] = sc.path;
+            if (!sc.overrides.empty()) {
+                json jov = json::object();
+                for (const auto& [name, val] : sc.overrides) {
+                    jov[name] = exposedValueToJson(val);
+                }
+                js["overrides"] = jov;
+            }
+            je["script"] = js;
+        }
+    }
+
     // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la
     // entidad tiene un `PrefabLinkComponent`. Sin propagacion bidireccional
     // por ahora; es solo un breadcrumb para futuras features ("revertir a
@@ -176,6 +231,28 @@ SavedEntity parseEntityFromJson(const json& j) {
         se2.iblIntensity   = je.value("ibl_intensity",   1.0f); // Hito 18
         se.environment = std::move(se2);
     }
+    if (j.contains("script")) {
+        const auto& js = j.at("script");
+        SavedScript ss;
+        ss.path = js.value("path", std::string{});
+        if (js.contains("overrides") && js.at("overrides").is_object()) {
+            for (const auto& item : js.at("overrides").items()) {
+                const auto& name = item.key();
+                const auto& jv   = item.value();
+                if (auto opt = jsonToExposedValue(jv); opt.has_value()) {
+                    ss.overrides[name] = std::move(*opt);
+                } else {
+                    Log::script()->warn(
+                        "EntitySerializer: override '{}' tiene tipo no soportado, skipeando",
+                        name);
+                }
+            }
+        }
+        if (!ss.path.empty() || !ss.overrides.empty()) {
+            se.script = std::move(ss);
+        }
+    }
+
     se.prefabPath = j.value("prefab_path", std::string{});
     return se;
 }

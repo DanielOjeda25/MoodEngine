@@ -12,6 +12,12 @@
 //     "mesh_renderer": { ... }   // opcional
 //     "light": { ... }           // opcional
 //     "rigid_body": { ... }      // opcional
+//     "environment": { ... }     // opcional, Hito 15
+//     "script": {                // opcional, Hito 24
+//        "path": "assets/scripts/foo.lua",
+//        "overrides": { "speed": 60.0, "active": true,
+//                       "color": [1.0, 0.5, 0.2], "name": "boss" }
+//     }
 //     "prefab_path": "..."       // opcional, link al prefab del que se
 //                                //   instancio (Hito 14 Bloque 6).
 //   }

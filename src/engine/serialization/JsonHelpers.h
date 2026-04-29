@@ -51,7 +51,12 @@ namespace Mood {
 // de imagen conocida (.png/.jpg/...) y envolviendo cada textura en un
 // material auto-generado al cargar (no se reescribe el archivo). El
 // upgrader vive en `EntitySerializer::parseEntityFromJson`.
-constexpr int k_MoodmapFormatVersion = 7;
+// v8 (Hito 24): SavedEntity gana campo opcional `script` con
+// {path, overrides: {name: value}} para persistir el ScriptComponent
+// + sus exposed property overrides. Tipos: number, bool, string, vec3.
+// Archivos v7 sin `script` se leen igual (la entidad queda sin
+// ScriptComponent, como antes).
+constexpr int k_MoodmapFormatVersion = 8;
 constexpr int k_MoodprojFormatVersion = 1;
 
 /// @brief Verifica que la version declarada en un archivo sea legible.
