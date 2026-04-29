@@ -12,6 +12,8 @@
 
 El Hito 27 está **TBD**: acordar con el dev el alcance antes de abrir bloques. Por decisión del dev al cerrar el Hito 26, los candidatos NavAgent polish, PackageBuilder smart-pack, e Inspector con drop de textura quedaron fuera del menu — anotados en la sección "Diferidos" abajo para revisión futura.
 
+**Recordatorio importante:** networking / multijugador está **EXPLÍCITAMENTE fuera de alcance** desde el doc técnico (`MOODENGINE_CONTEXTO_TECNICO.md` sección "Fuera de alcance"). NO proponerlo como candidato en este ni futuros hitos.
+
 ---
 
 ## Candidatos activos
@@ -41,14 +43,6 @@ Lista en orden de coste/riesgo creciente. Cualquiera de estos es un hito válido
 **Coste:** medio-alto. Diseño del sistema (CPU vs GPU, struct of arrays, shading), shader con billboards + soft particles, editor curve para params, persistencia.
 
 **Trigger ideal:** hito de polish visual cuando el sistema base esté estable.
-
-### D. Networking básico (cliente-servidor)
-
-**Por qué:** salto cualitativo grande — habilita multiplayer. Costo grande también.
-
-**Coste:** alto. Capa de transporte (probablemente ENet o yojimbo), serialización de snapshots, predicción/reconciliación, lobby básico.
-
-**Trigger ideal:** se descarta hasta tener al menos save/load + UI de menú principal.
 
 ---
 
