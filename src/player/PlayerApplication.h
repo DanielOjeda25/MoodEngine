@@ -94,6 +94,8 @@ private:
 
     // Hito 30: character controller del jugador. 0 = no creado todavia.
     u32 m_playerCharId = 0;
+    f32 m_jumpCooldown = 0.0f;   // segundos hasta el proximo salto permitido
+    bool m_crouching = false;
 
     GridMap m_map{8u, 8u, 3.0f};
 

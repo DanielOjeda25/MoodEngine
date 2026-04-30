@@ -177,10 +177,12 @@ void EditorApplication::updateRigidBodies(f32 dt) {
             });
 
         // Hito 30: sync de la camara Play con la pos del character post-step.
+        // eyeOffset cambia con crouch (halfHeight 0.1 vs standing 0.5).
         if (m_playerCharId != 0) {
-            constexpr f32 k_eyeOffset = 0.5f + 0.4f - 0.2f;
+            const f32 halfH = m_crouching ? 0.1f : 0.5f;
+            const f32 eye   = halfH + 0.4f - 0.2f;
             const glm::vec3 charPos = m_physicsWorld->characterPosition(m_playerCharId);
-            m_playCamera.setPosition(charPos + glm::vec3(0.0f, k_eyeOffset, 0.0f));
+            m_playCamera.setPosition(charPos + glm::vec3(0.0f, eye, 0.0f));
         }
     }
 }

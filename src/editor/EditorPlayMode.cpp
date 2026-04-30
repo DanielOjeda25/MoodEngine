@@ -37,11 +37,15 @@ void EditorApplication::exitPlayMode() {
     // arranque limpio.
     GameState::reset();
     // Hito 30: destruir el character al salir de Play Mode. La proxima
-    // entrada lo recrea en la pos de spawn de la camara.
+    // entrada lo recrea en la pos de spawn de la camara. Reseteamos
+    // tambien jumpCooldown + crouching para que un futuro Play arranque
+    // standing.
     if (m_physicsWorld && m_playerCharId != 0) {
         m_physicsWorld->destroyCharacter(m_playerCharId);
         m_playerCharId = 0;
     }
+    m_jumpCooldown = 0.0f;
+    m_crouching    = false;
     Log::editor()->info("Editor Mode activo");
 }
 
@@ -78,17 +82,20 @@ void EditorApplication::updateCameras(f32 dt) {
         if (nowPaused) return;
         if (!m_physicsWorld) return;
 
-        // Hito 30: capsule + lazy create al entrar a Play Mode. Si el
-        // dev sale a Editor Mode y vuelve, recreamos en la nueva pos
-        // de la camara (manejado por on-Play-enter en otra rama).
-        constexpr f32 k_charHalfHeight = 0.5f;
-        constexpr f32 k_charRadius     = 0.4f;
-        constexpr f32 k_eyeOffset      = k_charHalfHeight + k_charRadius - 0.2f;
+        // Hito 30: shape standing/crouching + lazy create.
+        constexpr f32 k_charHalfHeightStand  = 0.5f;
+        constexpr f32 k_charHalfHeightCrouch = 0.1f;
+        constexpr f32 k_charRadius           = 0.4f;
+        constexpr f32 k_jumpVel              = 5.5f;
+        constexpr f32 k_jumpCooldown         = 0.2f;
+        constexpr f32 k_walkSpeed            = 4.0f;
+        constexpr f32 k_crouchSpeed          = 2.0f;
         if (m_playerCharId == 0) {
+            const f32 eyeStand = k_charHalfHeightStand + k_charRadius - 0.2f;
             const glm::vec3 camPos = m_playCamera.position();
             m_playerCharId = m_physicsWorld->createCharacter(
-                camPos - glm::vec3(0.0f, k_eyeOffset, 0.0f),
-                k_charHalfHeight, k_charRadius);
+                camPos - glm::vec3(0.0f, eyeStand, 0.0f),
+                k_charHalfHeightStand, k_charRadius);
         }
 
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
@@ -98,6 +105,34 @@ void EditorApplication::updateCameras(f32 dt) {
         if (keys[SDL_SCANCODE_D]) inputDir.x += 1.0f;
         if (keys[SDL_SCANCODE_A]) inputDir.x -= 1.0f;
 
+        // Crouch toggle. SetShape NO mueve el centro del char — ajusta
+        // pos manual para mantener base al ras (mismo patron que en
+        // PlayerApplication).
+        const bool wantCrouch = keys[SDL_SCANCODE_LCTRL] != 0;
+        constexpr f32 k_centerDelta = k_charHalfHeightStand - k_charHalfHeightCrouch;
+        if (wantCrouch && !m_crouching) {
+            if (m_physicsWorld->setCharacterShape(m_playerCharId,
+                                                    k_charHalfHeightCrouch,
+                                                    k_charRadius)) {
+                const glm::vec3 p = m_physicsWorld->characterPosition(m_playerCharId);
+                m_physicsWorld->setCharacterPosition(m_playerCharId,
+                    p - glm::vec3(0.0f, k_centerDelta, 0.0f));
+                m_crouching = true;
+            }
+        } else if (!wantCrouch && m_crouching) {
+            const glm::vec3 p = m_physicsWorld->characterPosition(m_playerCharId);
+            m_physicsWorld->setCharacterPosition(m_playerCharId,
+                p + glm::vec3(0.0f, k_centerDelta, 0.0f));
+            if (m_physicsWorld->setCharacterShape(m_playerCharId,
+                                                    k_charHalfHeightStand,
+                                                    k_charRadius)) {
+                m_crouching = false;
+            } else {
+                m_physicsWorld->setCharacterPosition(m_playerCharId, p);
+            }
+        }
+
+        const f32 speed = m_crouching ? k_crouchSpeed : k_walkSpeed;
         glm::vec3 horizVel(0.0f);
         if (glm::length(inputDir) > 1e-4f) {
             const glm::vec3 fwd = m_playCamera.forward();
@@ -106,14 +141,22 @@ void EditorApplication::updateCameras(f32 dt) {
             glm::vec3 dir = right * inputDir.x + fwdFlat * inputDir.z;
             if (glm::length(dir) > 1e-4f) {
                 dir = glm::normalize(dir);
-                constexpr f32 k_walkSpeed = 4.0f;
-                horizVel = dir * k_walkSpeed;
+                horizVel = dir * speed;
             }
         }
 
+        m_jumpCooldown = (m_jumpCooldown > dt) ? (m_jumpCooldown - dt) : 0.0f;
+        f32 jumpImpulse = 0.0f;
+        if (keys[SDL_SCANCODE_SPACE]
+            && m_jumpCooldown <= 0.0f
+            && !m_crouching
+            && m_physicsWorld->isCharacterOnGround(m_playerCharId)) {
+            jumpImpulse = k_jumpVel;
+            m_jumpCooldown = k_jumpCooldown;
+        }
+
         m_physicsWorld->setCharacterMovement(m_playerCharId,
-            glm::vec3(horizVel.x, 0.0f, horizVel.z));
-        (void)dt;
+            glm::vec3(horizVel.x, jumpImpulse, horizVel.z));
 
         int mx = 0;
         int my = 0;

@@ -133,6 +133,17 @@ public:
     ///        Util para gating de salto y reset de gravedad acumulada.
     bool isCharacterOnGround(u32 charId) const;
 
+    /// @brief Cambia la shape del character (capsule). Util para crouch:
+    ///        del default (cylinderHalfHeight 0.5, radius 0.4) a
+    ///        crouching (e.g. 0.1, 0.4 -> total ~1.0m). Devuelve `true`
+    ///        si Jolt acepto el cambio sin penetracion (no hay techo
+    ///        bloqueando). Si falla (techo bajo), el character mantiene
+    ///        su shape anterior y el caller debe seguir crouched hasta
+    ///        que se libere espacio.
+    bool setCharacterShape(u32 charId,
+                            f32 cylinderHalfHeight,
+                            f32 radius);
+
     /// @brief Cantidad de characters activos.
     u32 characterCount() const;
 

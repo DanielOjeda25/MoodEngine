@@ -275,6 +275,8 @@ private:
     // Hito 30: character controller del player en Play Mode. 0 = no creado.
     // Se crea lazy en EditorPlayMode al entrar y se destruye al salir.
     u32 m_playerCharId = 0;
+    f32 m_jumpCooldown = 0.0f;
+    bool m_crouching = false;
 
     // Mapa jugable (Hito 4). Se renderiza centrado en el origen del mundo;
     // tileSize=3m (escala SI realista, Hito 5 Bloque 0). Se reemplaza al

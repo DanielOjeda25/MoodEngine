@@ -388,24 +388,27 @@ void PlayerApplication::updateCamera(f32 dt) {
     if (nowPaused) return;
     if (!m_physicsWorld) return;
 
-    // Hito 30: capsule del jugador. Total height = 2*(0.5+0.4) = 1.8m.
-    // eyeOffset = halfHeight + radius - 0.2 (ojos un poco abajo del top).
-    constexpr f32 k_charHalfHeight = 0.5f;
-    constexpr f32 k_charRadius     = 0.4f;
-    constexpr f32 k_eyeOffset      = k_charHalfHeight + k_charRadius - 0.2f;
+    // Hito 30: capsule del jugador. Standing total height = 1.8m;
+    // crouching = 1.0m. eyeOffset (ojos respecto al CENTRO de capsule)
+    // depende del shape activo.
+    constexpr f32 k_charHalfHeightStand    = 0.5f;
+    constexpr f32 k_charHalfHeightCrouch   = 0.1f;
+    constexpr f32 k_charRadius             = 0.4f;
+    constexpr f32 k_jumpVel                = 5.5f; // ~1.5m de altura
+    constexpr f32 k_jumpCooldown           = 0.2f; // anti-hold
+    constexpr f32 k_walkSpeed              = 4.0f;
+    constexpr f32 k_crouchSpeed            = 2.0f;
 
-    // Lazy create del character en la pos actual de la camara. Se hace
-    // tras el primer load del mapa cuando m_playCamera ya tiene la pose
-    // de spawn correcta.
+    // Lazy create del character en la pos actual de la camara.
     if (m_playerCharId == 0) {
+        const f32 eyeStand = k_charHalfHeightStand + k_charRadius - 0.2f;
         const glm::vec3 camPos = m_playCamera.position();
         m_playerCharId = m_physicsWorld->createCharacter(
-            camPos - glm::vec3(0.0f, k_eyeOffset, 0.0f),
-            k_charHalfHeight, k_charRadius);
+            camPos - glm::vec3(0.0f, eyeStand, 0.0f),
+            k_charHalfHeightStand, k_charRadius);
     }
 
-    // Input WASD → velocidad horizontal en m/s. Y queda en 0 (V1 sin
-    // jump — el Bloque 3 lo agrega via desired.y como impulse).
+    // Input WASD → velocidad horizontal m/s; LCtrl = crouch; Space = jump.
     const Uint8* keys = SDL_GetKeyboardState(nullptr);
     glm::vec3 inputDir(0.0f);
     if (keys[SDL_SCANCODE_W]) inputDir.z += 1.0f;
@@ -413,6 +416,40 @@ void PlayerApplication::updateCamera(f32 dt) {
     if (keys[SDL_SCANCODE_D]) inputDir.x += 1.0f;
     if (keys[SDL_SCANCODE_A]) inputDir.x -= 1.0f;
 
+    // Crouch toggle por hold. SetShape NO mueve el centro del char —
+    // hay que ajustar manualmente para mantener la base al ras del
+    // piso. El delta del centro = standHalf - crouchHalf = 0.4.
+    const bool wantCrouch = keys[SDL_SCANCODE_LCTRL] != 0;
+    constexpr f32 k_centerDelta = k_charHalfHeightStand - k_charHalfHeightCrouch;
+    if (wantCrouch && !m_crouching) {
+        // Crouch: shape primero, luego bajar el centro (la capsule
+        // chiquita queda con su base al ras de donde estaba antes).
+        if (m_physicsWorld->setCharacterShape(m_playerCharId,
+                                                k_charHalfHeightCrouch,
+                                                k_charRadius)) {
+            const glm::vec3 p = m_physicsWorld->characterPosition(m_playerCharId);
+            m_physicsWorld->setCharacterPosition(m_playerCharId,
+                p - glm::vec3(0.0f, k_centerDelta, 0.0f));
+            m_crouching = true;
+        }
+    } else if (!wantCrouch && m_crouching) {
+        // Stand up: subir el centro PRIMERO (preparar espacio para el
+        // shape grande). Despues intentar setShape; si techo bloquea,
+        // revertir el centro y seguir crouched.
+        const glm::vec3 p = m_physicsWorld->characterPosition(m_playerCharId);
+        m_physicsWorld->setCharacterPosition(m_playerCharId,
+            p + glm::vec3(0.0f, k_centerDelta, 0.0f));
+        if (m_physicsWorld->setCharacterShape(m_playerCharId,
+                                                k_charHalfHeightStand,
+                                                k_charRadius)) {
+            m_crouching = false;
+        } else {
+            // Techo encima — revertir y seguir crouched.
+            m_physicsWorld->setCharacterPosition(m_playerCharId, p);
+        }
+    }
+
+    const f32 speed = m_crouching ? k_crouchSpeed : k_walkSpeed;
     glm::vec3 horizVel(0.0f);
     if (glm::length(inputDir) > 1e-4f) {
         const glm::vec3 fwd = m_playCamera.forward();
@@ -421,13 +458,24 @@ void PlayerApplication::updateCamera(f32 dt) {
         glm::vec3 dir = right * inputDir.x + fwdFlat * inputDir.z;
         if (glm::length(dir) > 1e-4f) {
             dir = glm::normalize(dir);
-            constexpr f32 k_walkSpeed = 4.0f;  // m/s
-            horizVel = dir * k_walkSpeed;
+            horizVel = dir * speed;
         }
     }
 
+    // Jump: si SPACE + onGround + cooldown OK, usamos desired.y como
+    // impulse. El step interno suma desired.y a la velocidad acumulada.
+    m_jumpCooldown = (m_jumpCooldown > dt) ? (m_jumpCooldown - dt) : 0.0f;
+    f32 jumpImpulse = 0.0f;
+    if (keys[SDL_SCANCODE_SPACE]
+        && m_jumpCooldown <= 0.0f
+        && !m_crouching
+        && m_physicsWorld->isCharacterOnGround(m_playerCharId)) {
+        jumpImpulse = k_jumpVel;
+        m_jumpCooldown = k_jumpCooldown;
+    }
+
     m_physicsWorld->setCharacterMovement(m_playerCharId,
-        glm::vec3(horizVel.x, 0.0f, horizVel.z));
+        glm::vec3(horizVel.x, jumpImpulse, horizVel.z));
 
     // Mouse aim (independiente del char).
     int mx = 0;
@@ -436,11 +484,6 @@ void PlayerApplication::updateCamera(f32 dt) {
     if (mx != 0 || my != 0) {
         m_playCamera.applyMouseMove(static_cast<float>(mx), static_cast<float>(my));
     }
-
-    // dt no se usa en V1; queda como parametro por consistencia con el
-    // resto de los update*. El movimiento real lo aplica `step(dt)` en
-    // updateRigidBodies.
-    (void)dt;
 }
 
 void PlayerApplication::updateRigidBodies(f32 dt) {
@@ -477,12 +520,12 @@ void PlayerApplication::updateRigidBodies(f32 dt) {
             });
 
         // Hito 30: sync cámara con la pos del character post-step.
-        // eyeOffset igual al de updateCamera (constante local repetida —
-        // si crece, factorizar a un static const).
+        // eyeOffset depende de si el char esta crouching o standing.
         if (m_playerCharId != 0) {
-            constexpr f32 k_eyeOffset = 0.5f + 0.4f - 0.2f; // halfHeight + radius - 0.2
+            const f32 halfH = m_crouching ? 0.1f : 0.5f;
+            const f32 eye   = halfH + 0.4f - 0.2f;  // halfHeight + radius - 0.2
             const glm::vec3 charPos = m_physicsWorld->characterPosition(m_playerCharId);
-            m_playCamera.setPosition(charPos + glm::vec3(0.0f, k_eyeOffset, 0.0f));
+            m_playCamera.setPosition(charPos + glm::vec3(0.0f, eye, 0.0f));
         }
     }
 }

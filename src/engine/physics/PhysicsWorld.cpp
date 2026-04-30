@@ -434,4 +434,31 @@ u32 PhysicsWorld::characterCount() const {
     return static_cast<u32>(m_impl->characters.size());
 }
 
+bool PhysicsWorld::setCharacterShape(u32 charId,
+                                      f32 cylinderHalfHeight,
+                                      f32 radius) {
+    if (!m_impl) return false;
+    auto it = m_impl->characters.find(charId);
+    if (it == m_impl->characters.end() || it->second.character == nullptr) {
+        return false;
+    }
+    JPH::RefConst<JPH::Shape> newShape =
+        new JPH::CapsuleShape(cylinderHalfHeight, radius);
+
+    // Filtros para el penetration check: Jolt nos dice si el shape
+    // nuevo se solapa con la geometria; si si, rechazamos el cambio.
+    const JPH::DefaultBroadPhaseLayerFilter bpFilter(
+        m_impl->objectVsBpFilter, toJPHLayer(ObjectLayer::Moving));
+    const JPH::DefaultObjectLayerFilter objFilter(
+        m_impl->objectLayerPairFilter, toJPHLayer(ObjectLayer::Moving));
+    const JPH::BodyFilter   bodyFilter;
+    const JPH::ShapeFilter  shapeFilter;
+
+    return it->second.character->SetShape(
+        newShape,
+        /*maxPenetrationDepth*/ 0.01f,
+        bpFilter, objFilter, bodyFilter, shapeFilter,
+        *m_impl->tempAllocator);
+}
+
 } // namespace Mood
