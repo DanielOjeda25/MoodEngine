@@ -92,6 +92,9 @@ private:
     std::unique_ptr<ParticleSystem>   m_particleSystem;  // Hito 29
     std::unique_ptr<PhysicsWorld>     m_physicsWorld;
 
+    // Hito 30: character controller del jugador. 0 = no creado todavia.
+    u32 m_playerCharId = 0;
+
     GridMap m_map{8u, 8u, 3.0f};
 
     FpsCamera m_playCamera{glm::vec3(-4.5f, 1.6f, 7.5f), -90.0f, 0.0f};

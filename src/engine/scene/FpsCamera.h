@@ -33,6 +33,10 @@ public:
     ///        resuelto contra colisiones por el caller.
     void translate(const glm::vec3& delta);
 
+    /// @brief Hito 30: teleport a `pos`. La usa `PlayerApplication` para
+    ///        sincronizar la camara con el `JPH::CharacterVirtual` post-step.
+    void setPosition(const glm::vec3& pos) { m_position = pos; }
+
     glm::vec3 position() const { return m_position; }
     glm::vec3 forward() const;
     glm::mat4 viewMatrix() const;

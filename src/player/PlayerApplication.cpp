@@ -386,30 +386,61 @@ void PlayerApplication::updateCamera(f32 dt) {
         m_pausedLastFrame = nowPaused;
     }
     if (nowPaused) return;
+    if (!m_physicsWorld) return;
 
-    const Uint8* keys = SDL_GetKeyboardState(nullptr);
-    glm::vec3 dir(0.0f);
-    if (keys[SDL_SCANCODE_W]) dir.z += 1.0f;
-    if (keys[SDL_SCANCODE_S]) dir.z -= 1.0f;
-    if (keys[SDL_SCANCODE_D]) dir.x += 1.0f;
-    if (keys[SDL_SCANCODE_A]) dir.x -= 1.0f;
-    if (keys[SDL_SCANCODE_SPACE])  dir.y += 1.0f;
-    if (keys[SDL_SCANCODE_LSHIFT]) dir.y -= 1.0f;
+    // Hito 30: capsule del jugador. Total height = 2*(0.5+0.4) = 1.8m.
+    // eyeOffset = halfHeight + radius - 0.2 (ojos un poco abajo del top).
+    constexpr f32 k_charHalfHeight = 0.5f;
+    constexpr f32 k_charRadius     = 0.4f;
+    constexpr f32 k_eyeOffset      = k_charHalfHeight + k_charRadius - 0.2f;
 
-    const glm::vec3 desired = m_playCamera.computeMoveDelta(dir, dt);
-    if (desired.x != 0.0f || desired.y != 0.0f || desired.z != 0.0f) {
+    // Lazy create del character en la pos actual de la camara. Se hace
+    // tras el primer load del mapa cuando m_playCamera ya tiene la pose
+    // de spawn correcta.
+    if (m_playerCharId == 0) {
         const glm::vec3 camPos = m_playCamera.position();
-        AABB playerBox{camPos - k_playerHalfExtents, camPos + k_playerHalfExtents};
-        const glm::vec3 actual = moveAndSlide(m_map, mapWorldOrigin(), playerBox, desired);
-        m_playCamera.translate(actual);
+        m_playerCharId = m_physicsWorld->createCharacter(
+            camPos - glm::vec3(0.0f, k_eyeOffset, 0.0f),
+            k_charHalfHeight, k_charRadius);
     }
 
+    // Input WASD → velocidad horizontal en m/s. Y queda en 0 (V1 sin
+    // jump — el Bloque 3 lo agrega via desired.y como impulse).
+    const Uint8* keys = SDL_GetKeyboardState(nullptr);
+    glm::vec3 inputDir(0.0f);
+    if (keys[SDL_SCANCODE_W]) inputDir.z += 1.0f;
+    if (keys[SDL_SCANCODE_S]) inputDir.z -= 1.0f;
+    if (keys[SDL_SCANCODE_D]) inputDir.x += 1.0f;
+    if (keys[SDL_SCANCODE_A]) inputDir.x -= 1.0f;
+
+    glm::vec3 horizVel(0.0f);
+    if (glm::length(inputDir) > 1e-4f) {
+        const glm::vec3 fwd = m_playCamera.forward();
+        const glm::vec3 fwdFlat = glm::normalize(glm::vec3(fwd.x, 0.0f, fwd.z));
+        const glm::vec3 right = glm::normalize(glm::cross(fwdFlat, glm::vec3(0, 1, 0)));
+        glm::vec3 dir = right * inputDir.x + fwdFlat * inputDir.z;
+        if (glm::length(dir) > 1e-4f) {
+            dir = glm::normalize(dir);
+            constexpr f32 k_walkSpeed = 4.0f;  // m/s
+            horizVel = dir * k_walkSpeed;
+        }
+    }
+
+    m_physicsWorld->setCharacterMovement(m_playerCharId,
+        glm::vec3(horizVel.x, 0.0f, horizVel.z));
+
+    // Mouse aim (independiente del char).
     int mx = 0;
     int my = 0;
     SDL_GetRelativeMouseState(&mx, &my);
     if (mx != 0 || my != 0) {
         m_playCamera.applyMouseMove(static_cast<float>(mx), static_cast<float>(my));
     }
+
+    // dt no se usa en V1; queda como parametro por consistencia con el
+    // resto de los update*. El movimiento real lo aplica `step(dt)` en
+    // updateRigidBodies.
+    (void)dt;
 }
 
 void PlayerApplication::updateRigidBodies(f32 dt) {
@@ -444,6 +475,15 @@ void PlayerApplication::updateRigidBodies(f32 dt) {
                 if (rb.bodyId == 0) return;
                 t.position = m_physicsWorld->bodyPosition(rb.bodyId);
             });
+
+        // Hito 30: sync cámara con la pos del character post-step.
+        // eyeOffset igual al de updateCamera (constante local repetida —
+        // si crece, factorizar a un static const).
+        if (m_playerCharId != 0) {
+            constexpr f32 k_eyeOffset = 0.5f + 0.4f - 0.2f; // halfHeight + radius - 0.2
+            const glm::vec3 charPos = m_physicsWorld->characterPosition(m_playerCharId);
+            m_playCamera.setPosition(charPos + glm::vec3(0.0f, k_eyeOffset, 0.0f));
+        }
     }
 }
 

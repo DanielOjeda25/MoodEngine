@@ -272,6 +272,10 @@ private:
     // `renderSceneToViewport` (en archivos separados) lo compartan.
     static constexpr glm::vec3 k_playerHalfExtents{0.3f, 0.9f, 0.3f};
 
+    // Hito 30: character controller del player en Play Mode. 0 = no creado.
+    // Se crea lazy en EditorPlayMode al entrar y se destruye al salir.
+    u32 m_playerCharId = 0;
+
     // Mapa jugable (Hito 4). Se renderiza centrado en el origen del mundo;
     // tileSize=3m (escala SI realista, Hito 5 Bloque 0). Se reemplaza al
     // abrir proyectos y se resetea al mapa de prueba al cerrar.
