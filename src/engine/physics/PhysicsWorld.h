@@ -104,6 +104,38 @@ public:
     /// @brief Cantidad de bodies activos. Util para tests / debug.
     u32 bodyCount() const;
 
+    // --- Hito 30: Character Controller (CharacterVirtual) ---
+
+    /// @brief Crea un character controller (capsule kinematic-style) en
+    ///        `initialPos`. La capsule se compone de un cilindro central
+    ///        de altura `2 * cylinderHalfHeight` mas dos hemiesferas de
+    ///        `radius`. Altura total visual ≈ 2*(cylinderHalfHeight + radius).
+    ///        Devuelve un handle estable; 0 si fallo.
+    u32 createCharacter(const glm::vec3& initialPos,
+                         f32 cylinderHalfHeight,
+                         f32 radius);
+
+    /// @brief Destruye y limpia el character. Idempotente (handle invalido no-op).
+    void destroyCharacter(u32 charId);
+
+    /// @brief Setea la velocidad lineal deseada (m/s) que el character
+    ///        intenta aplicar en el proximo `step(dt)`. El propio character
+    ///        resuelve slide contra la geometria estatica + dynamic.
+    void setCharacterMovement(u32 charId, const glm::vec3& desiredVelocity);
+
+    /// @brief Posicion world-space del centro de la capsule (no de la base).
+    glm::vec3 characterPosition(u32 charId) const;
+
+    /// @brief Teleport (resetea la velocidad interna).
+    void setCharacterPosition(u32 charId, const glm::vec3& position);
+
+    /// @brief True si el character esta sobre suelo (slope < max_slope).
+    ///        Util para gating de salto y reset de gravedad acumulada.
+    bool isCharacterOnGround(u32 charId) const;
+
+    /// @brief Cantidad de characters activos.
+    u32 characterCount() const;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;

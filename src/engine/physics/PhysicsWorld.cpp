@@ -16,10 +16,15 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
+#include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
+#include <Jolt/Physics/Collision/ObjectLayer.h>
 
 #include <cstdarg>
 #include <cstdio>
 #include <stdexcept>
+#include <unordered_map>
 
 // Jolt requiere un trace callback global. Lo atamos al canal `physics` de
 // spdlog. Variadic via sprintf porque Jolt pasa un format string estilo C.
@@ -115,6 +120,11 @@ public:
 
 } // namespace
 
+struct CharacterEntry {
+    JPH::Ref<JPH::CharacterVirtual> character;
+    glm::vec3 desiredVelocity{0.0f};
+};
+
 struct PhysicsWorld::Impl {
     BPLayerInterface       bpLayerInterface{};
     ObjectVsBPFilter       objectVsBpFilter{};
@@ -122,6 +132,10 @@ struct PhysicsWorld::Impl {
     std::unique_ptr<JPH::TempAllocator> tempAllocator;
     std::unique_ptr<JPH::JobSystem> jobSystem;
     std::unique_ptr<JPH::PhysicsSystem> physicsSystem;
+
+    // Hito 30: characters CharacterVirtual indexados por handle estable.
+    std::unordered_map<u32, CharacterEntry> characters;
+    u32 nextCharId = 1;
 };
 
 PhysicsWorld::PhysicsWorld() : m_impl(std::make_unique<Impl>()) {
@@ -177,6 +191,55 @@ PhysicsWorld::~PhysicsWorld() {
 
 void PhysicsWorld::step(f32 dt, int collisionSteps) {
     if (!m_impl || !m_impl->physicsSystem) return;
+
+    // Hito 30: characters van ANTES de Update — la nueva pose entra a
+    // la simulacion fisica como Kinematic, asi los rigidbodies que el
+    // character toca reciben colision este frame.
+    //
+    // Composicion de velocidad: el caller setea desired = (vx, vy_impulse, vz)
+    // con desired.y NORMALMENTE 0 (excepto en frames de salto). Aca:
+    //   - X/Z = directo del desired (input controla horizontal).
+    //   - Y   = acumula gravedad si NO esta OnGround; si si, se resetea
+    //           a max(0, current.y) para no penetrar el piso. Sumamos
+    //           desired.y como impulse instantaneo (jump).
+    if (!m_impl->characters.empty()) {
+        const JPH::Vec3 gravity = m_impl->physicsSystem->GetGravity();
+        const JPH::DefaultBroadPhaseLayerFilter bpFilter(
+            m_impl->objectVsBpFilter, toJPHLayer(ObjectLayer::Moving));
+        const JPH::DefaultObjectLayerFilter objFilter(
+            m_impl->objectLayerPairFilter, toJPHLayer(ObjectLayer::Moving));
+        const JPH::BodyFilter   bodyFilter;
+        const JPH::ShapeFilter  shapeFilter;
+        for (auto& [id, entry] : m_impl->characters) {
+            if (entry.character == nullptr) continue;
+
+            const bool onGround = entry.character->GetGroundState()
+                == JPH::CharacterVirtual::EGroundState::OnGround;
+            const JPH::Vec3 currentVel = entry.character->GetLinearVelocity();
+            float vy = currentVel.GetY();
+            if (onGround) {
+                vy = (vy < 0.0f) ? 0.0f : vy;  // no atravesar el piso
+            } else {
+                vy += gravity.GetY() * dt;     // gravedad acumula en aire
+            }
+            // Sumar el impulse vertical del caller (jump) sobre la base.
+            vy += entry.desiredVelocity.y;
+
+            entry.character->SetLinearVelocity(JPH::Vec3(
+                entry.desiredVelocity.x,
+                vy,
+                entry.desiredVelocity.z));
+
+            // ExtendedUpdate con gravity=0: ya la integramos manualmente.
+            JPH::CharacterVirtual::ExtendedUpdateSettings extSettings{};
+            entry.character->ExtendedUpdate(dt, JPH::Vec3::sZero(),
+                                              extSettings,
+                                              bpFilter, objFilter,
+                                              bodyFilter, shapeFilter,
+                                              *m_impl->tempAllocator);
+        }
+    }
+
     m_impl->physicsSystem->Update(dt, collisionSteps,
                                     m_impl->tempAllocator.get(),
                                     m_impl->jobSystem.get());
@@ -291,6 +354,84 @@ void PhysicsWorld::addImpulse(u32 bodyId, const glm::vec3& impulse) {
 u32 PhysicsWorld::bodyCount() const {
     if (!m_impl || !m_impl->physicsSystem) return 0;
     return m_impl->physicsSystem->GetNumBodies();
+}
+
+// --- Hito 30: Character Controller ---
+
+u32 PhysicsWorld::createCharacter(const glm::vec3& initialPos,
+                                    f32 cylinderHalfHeight,
+                                    f32 radius) {
+    if (!m_impl || !m_impl->physicsSystem) return 0;
+
+    JPH::RefConst<JPH::Shape> capsule =
+        new JPH::CapsuleShape(cylinderHalfHeight, radius);
+
+    JPH::Ref<JPH::CharacterVirtualSettings> settings =
+        new JPH::CharacterVirtualSettings();
+    settings->mShape = capsule;
+    // Plano de soporte: aceptamos contactos cuyo normal Y >= cos(50°).
+    // Da estabilidad en escalones sin que el char se "pegue" a paredes.
+    settings->mSupportingVolume = JPH::Plane(
+        JPH::Vec3::sAxisY(), -radius);
+    settings->mMaxSlopeAngle = JPH::DegreesToRadians(50.0f);
+
+    JPH::Ref<JPH::CharacterVirtual> ch = new JPH::CharacterVirtual(
+        settings,
+        JPH::RVec3(initialPos.x, initialPos.y, initialPos.z),
+        JPH::Quat::sIdentity(),
+        /*userData*/ 0,
+        m_impl->physicsSystem.get());
+
+    const u32 id = m_impl->nextCharId++;
+    m_impl->characters[id] = CharacterEntry{ch, glm::vec3(0.0f)};
+    return id;
+}
+
+void PhysicsWorld::destroyCharacter(u32 charId) {
+    if (!m_impl || charId == 0) return;
+    m_impl->characters.erase(charId);
+}
+
+void PhysicsWorld::setCharacterMovement(u32 charId,
+                                         const glm::vec3& desiredVelocity) {
+    if (!m_impl) return;
+    auto it = m_impl->characters.find(charId);
+    if (it == m_impl->characters.end()) return;
+    it->second.desiredVelocity = desiredVelocity;
+}
+
+glm::vec3 PhysicsWorld::characterPosition(u32 charId) const {
+    if (!m_impl) return glm::vec3(0.0f);
+    auto it = m_impl->characters.find(charId);
+    if (it == m_impl->characters.end() || it->second.character == nullptr) {
+        return glm::vec3(0.0f);
+    }
+    JPH::RVec3 p = it->second.character->GetPosition();
+    return glm::vec3(p.GetX(), p.GetY(), p.GetZ());
+}
+
+void PhysicsWorld::setCharacterPosition(u32 charId, const glm::vec3& position) {
+    if (!m_impl) return;
+    auto it = m_impl->characters.find(charId);
+    if (it == m_impl->characters.end() || it->second.character == nullptr) return;
+    it->second.character->SetPosition(JPH::RVec3(position.x, position.y, position.z));
+    it->second.character->SetLinearVelocity(JPH::Vec3::sZero());
+    it->second.desiredVelocity = glm::vec3(0.0f);
+}
+
+bool PhysicsWorld::isCharacterOnGround(u32 charId) const {
+    if (!m_impl) return false;
+    auto it = m_impl->characters.find(charId);
+    if (it == m_impl->characters.end() || it->second.character == nullptr) {
+        return false;
+    }
+    return it->second.character->GetGroundState()
+           == JPH::CharacterVirtual::EGroundState::OnGround;
+}
+
+u32 PhysicsWorld::characterCount() const {
+    if (!m_impl) return 0;
+    return static_cast<u32>(m_impl->characters.size());
 }
 
 } // namespace Mood

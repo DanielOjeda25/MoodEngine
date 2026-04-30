@@ -39,6 +39,7 @@ add_executable(mood_tests
     test_delete_entity_command.cpp
     test_create_entity_command.cpp
     test_particle_system.cpp
+    test_character_controller.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
@@ -78,6 +79,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/editor/commands/EditTransformCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/DeleteEntityCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/CreateEntityCommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/PhysicsWorld.cpp
 )
 
 # AssetManager.cpp usa spdlog (via core/Log). JsonHelpers requiere nlohmann_json.
@@ -89,6 +91,7 @@ target_link_libraries(mood_tests PRIVATE
     sol2::sol2
     miniaudio
     assimp::assimp
+    Jolt
 )
 
 target_include_directories(mood_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
