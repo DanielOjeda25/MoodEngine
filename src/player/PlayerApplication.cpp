@@ -36,9 +36,13 @@
 #include <backends/imgui_impl_sdl2.h>
 #include <imgui.h>
 
+#include <algorithm>  // std::min/max para crouch lerp clamp
+#include <cmath>      // std::sin para headbob
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+#include <glm/common.hpp>  // glm::mix
 
 namespace Mood {
 
@@ -477,6 +481,22 @@ void PlayerApplication::updateCamera(f32 dt) {
     m_physicsWorld->setCharacterMovement(m_playerCharId,
         glm::vec3(horizVel.x, jumpImpulse, horizVel.z));
 
+    // Hito 31 D: crouch lerp visual + headbob (paridad con
+    // EditorApplication::updatePlayMode). El sync de la camara con
+    // la pos del char vive en updateRigidBodies; aca solo avanzamos
+    // los acumuladores que esa sync consume.
+    const f32 crouchTarget = m_crouching ? 1.0f : 0.0f;
+    const f32 lerpRate = 5.0f * dt;
+    if (m_crouchVisualT < crouchTarget) {
+        m_crouchVisualT = std::min(crouchTarget, m_crouchVisualT + lerpRate);
+    } else if (m_crouchVisualT > crouchTarget) {
+        m_crouchVisualT = std::max(crouchTarget, m_crouchVisualT - lerpRate);
+    }
+    const f32 horizSpeedSq = horizVel.x * horizVel.x + horizVel.z * horizVel.z;
+    const bool walking = horizSpeedSq > 0.01f
+                      && m_physicsWorld->isCharacterOnGround(m_playerCharId);
+    if (walking) m_headbobTime += dt;
+
     // Mouse aim (independiente del char).
     int mx = 0;
     int my = 0;
@@ -520,12 +540,16 @@ void PlayerApplication::updateRigidBodies(f32 dt) {
             });
 
         // Hito 30: sync cámara con la pos del character post-step.
-        // eyeOffset depende de si el char esta crouching o standing.
+        // Hito 31 D: eye Y interpola con m_crouchVisualT + headbob.
         if (m_playerCharId != 0) {
-            const f32 halfH = m_crouching ? 0.1f : 0.5f;
-            const f32 eye   = halfH + 0.4f - 0.2f;  // halfHeight + radius - 0.2
+            constexpr f32 k_eyeStanding = 0.5f + 0.4f - 0.2f;  // 0.7
+            constexpr f32 k_eyeCrouched = 0.1f + 0.4f - 0.2f;  // 0.3
+            const f32 eye = glm::mix(k_eyeStanding, k_eyeCrouched, m_crouchVisualT);
+            constexpr f32 k_bobFreq = 5.0f * 6.2831853f;
+            constexpr f32 k_bobAmp  = 0.04f;
+            const f32 bobY = std::sin(m_headbobTime * k_bobFreq) * k_bobAmp;
             const glm::vec3 charPos = m_physicsWorld->characterPosition(m_playerCharId);
-            m_playCamera.setPosition(charPos + glm::vec3(0.0f, eye, 0.0f));
+            m_playCamera.setPosition(charPos + glm::vec3(0.0f, eye + bobY, 0.0f));
         }
     }
 }

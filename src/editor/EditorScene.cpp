@@ -12,7 +12,9 @@
 #include "systems/ScriptSystem.h"
 
 #include <glm/vec3.hpp>
+#include <glm/common.hpp>  // glm::mix
 
+#include <cmath>            // std::sin
 #include <string>
 
 namespace Mood {
@@ -178,11 +180,19 @@ void EditorApplication::updateRigidBodies(f32 dt) {
 
         // Hito 30: sync de la camara Play con la pos del character post-step.
         // eyeOffset cambia con crouch (halfHeight 0.1 vs standing 0.5).
+        // Hito 31 D: el eye Y interpola con m_crouchVisualT (smooth) +
+        // suma headbob (sin() del time accumulator que avanza al caminar).
         if (m_playerCharId != 0) {
-            const f32 halfH = m_crouching ? 0.1f : 0.5f;
-            const f32 eye   = halfH + 0.4f - 0.2f;
+            constexpr f32 k_eyeStanding = 0.5f + 0.4f - 0.2f;  // 0.7
+            constexpr f32 k_eyeCrouched = 0.1f + 0.4f - 0.2f;  // 0.3
+            const f32 eye = glm::mix(k_eyeStanding, k_eyeCrouched, m_crouchVisualT);
+            // Headbob suave: 5 Hz, amplitud 4 cm. Empieza desde 0 y
+            // mantiene sin spike al recomenzar el movimiento.
+            constexpr f32 k_bobFreq = 5.0f * 6.2831853f; // 5 Hz a rad/s
+            constexpr f32 k_bobAmp  = 0.04f;
+            const f32 bobY = std::sin(m_headbobTime * k_bobFreq) * k_bobAmp;
             const glm::vec3 charPos = m_physicsWorld->characterPosition(m_playerCharId);
-            m_playCamera.setPosition(charPos + glm::vec3(0.0f, eye, 0.0f));
+            m_playCamera.setPosition(charPos + glm::vec3(0.0f, eye + bobY, 0.0f));
         }
     }
 }

@@ -12,6 +12,8 @@
 
 #include <SDL.h>
 
+#include <algorithm>  // std::min / std::max para crouch lerp clamp
+
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -157,6 +159,24 @@ void EditorApplication::updateCameras(f32 dt) {
 
         m_physicsWorld->setCharacterMovement(m_playerCharId,
             glm::vec3(horizVel.x, jumpImpulse, horizVel.z));
+
+        // Hito 31 D: crouch lerp visual hacia el target del shape ya
+        // aplicado en Jolt. Velocidad 5/s ~ 200 ms para llegar al 100%.
+        const f32 crouchTarget = m_crouching ? 1.0f : 0.0f;
+        const f32 lerpRate = 5.0f * dt;
+        if (m_crouchVisualT < crouchTarget) {
+            m_crouchVisualT = std::min(crouchTarget, m_crouchVisualT + lerpRate);
+        } else if (m_crouchVisualT > crouchTarget) {
+            m_crouchVisualT = std::max(crouchTarget, m_crouchVisualT - lerpRate);
+        }
+
+        // Headbob: avanza el tiempo solo si el player camina horizontal
+        // y esta on-ground. Cuando se detiene, el bob "se queda" hasta
+        // que vuelva a moverse — el sync de camara aplica la sin().
+        const f32 horizSpeedSq = horizVel.x * horizVel.x + horizVel.z * horizVel.z;
+        const bool walking = horizSpeedSq > 0.01f
+                          && m_physicsWorld->isCharacterOnGround(m_playerCharId);
+        if (walking) m_headbobTime += dt;
 
         int mx = 0;
         int my = 0;

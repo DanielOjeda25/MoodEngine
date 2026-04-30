@@ -277,6 +277,13 @@ private:
     u32 m_playerCharId = 0;
     f32 m_jumpCooldown = 0.0f;
     bool m_crouching = false;
+    // Hito 31 D: crouch lerp visual (1 = crouched, 0 = standing). El
+    // shape de Jolt sigue siendo binario — solo la altura del eye se
+    // interpola para que la transicion no salte de golpe.
+    f32 m_crouchVisualT = 0.0f;
+    // Headbob: time accumulator que avanza solo cuando el player se
+    // mueve horizontalmente y esta on-ground. Se usa para sin(t*freq).
+    f32 m_headbobTime = 0.0f;
 
     // Mapa jugable (Hito 4). Se renderiza centrado en el origen del mundo;
     // tileSize=3m (escala SI realista, Hito 5 Bloque 0). Se reemplaza al

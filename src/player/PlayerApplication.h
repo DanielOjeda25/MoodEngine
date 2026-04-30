@@ -96,6 +96,9 @@ private:
     u32 m_playerCharId = 0;
     f32 m_jumpCooldown = 0.0f;   // segundos hasta el proximo salto permitido
     bool m_crouching = false;
+    // Hito 31 D: crouch lerp visual + headbob (paridad con EditorApplication).
+    f32 m_crouchVisualT = 0.0f;
+    f32 m_headbobTime   = 0.0f;
 
     GridMap m_map{8u, 8u, 3.0f};
 

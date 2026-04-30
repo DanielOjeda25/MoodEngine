@@ -300,6 +300,12 @@ u32 PhysicsWorld::createBody(const glm::vec3& position,
             JPH::EOverrideMassProperties::CalculateInertia;
         settings.mMassPropertiesOverride.mMass = mass;
     }
+    // Hito 31 D: Jolt default mFriction=0.2 hace que las cajas resbalen
+    // demasiado al ser empujadas por el char controller. 0.5 es un
+    // realista para superficies tipo madera-sobre-madera y se siente
+    // mejor en el FPS demo. Aplica a static y dynamic — en static no
+    // afecta al body en si pero si al contacto contra otros bodies.
+    settings.mFriction = 0.5f;
 
     JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
     JPH::BodyID id = bi.CreateAndAddBody(settings,
