@@ -167,6 +167,7 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         jpe["max_particles"]  = em.maxParticles;
         jpe["emitting"]       = em.emitting;
         jpe["additive"]       = em.additive;
+        jpe["local_space"]    = em.localSpace;
         // Texture path logico (no el id volátil). Vacio si no hay.
         if (em.texture != 0) {
             jpe["texture_path"] = assets.pathOf(em.texture);
@@ -279,6 +280,7 @@ SavedEntity parseEntityFromJson(const json& j) {
         pe.maxParticles = jpe.value("max_particles",  pe.maxParticles);
         pe.emitting     = jpe.value("emitting",       pe.emitting);
         pe.additive     = jpe.value("additive",       pe.additive);
+        pe.localSpace   = jpe.value("local_space",    pe.localSpace);
         pe.texturePath  = jpe.value("texture_path",   std::string{});
         se.particleEmitter = std::move(pe);
     }

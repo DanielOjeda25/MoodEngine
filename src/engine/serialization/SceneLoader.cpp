@@ -136,6 +136,7 @@ Entity applyOneEntity(const SavedEntity& se,
             em.maxParticles = s.maxParticles;
             em.emitting     = s.emitting;
             em.additive     = s.additive;
+            em.localSpace   = s.localSpace;
             em.texture = s.texturePath.empty()
                 ? assets.missingTextureId()
                 : assets.loadTexture(s.texturePath);

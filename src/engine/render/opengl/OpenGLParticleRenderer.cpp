@@ -144,9 +144,17 @@ void OpenGLParticleRenderer::render(Scene& scene,
     glBindVertexArray(m_vao);
 
     scene.forEach<TransformComponent, ParticleEmitterComponent>(
-        [&](Entity, TransformComponent&, ParticleEmitterComponent& em) {
+        [&](Entity, TransformComponent& tf, ParticleEmitterComponent& em) {
         if (em.aliveCount == 0) return;
         if (em.alive.empty())   return; // pool no inicializada
+
+        // Hito 31 F: localSpace => particulas almacenadas en el espacio
+        // local del emisor; multiplicamos por la traslacion del entity
+        // antes de upload. Solo translation porque billboards igual
+        // siempre miran a la camara — rotation/scale del entity no
+        // tienen efecto visual sobre el sprite. Si en el futuro se
+        // quieren sparks rotando con la entidad, sumar quat aqui.
+        const glm::vec3 emitterTranslation = em.localSpace ? tf.position : glm::vec3(0.0f);
 
         // Compactar particulas vivas en m_cpu con size/color interpolados.
         m_cpu.clear();
@@ -158,10 +166,11 @@ void OpenGLParticleRenderer::render(Scene& scene,
             const f32 t = std::clamp(em.ages[i] / lifetime, 0.0f, 1.0f);
             const f32 size = em.sizeStart + t * (em.sizeEnd - em.sizeStart);
             const glm::vec4 color = em.colorStart + t * (em.colorEnd - em.colorStart);
+            const glm::vec3 worldCenter = em.positions[i] + emitterTranslation;
             Instance ins{};
-            ins.center[0] = em.positions[i].x;
-            ins.center[1] = em.positions[i].y;
-            ins.center[2] = em.positions[i].z;
+            ins.center[0] = worldCenter.x;
+            ins.center[1] = worldCenter.y;
+            ins.center[2] = worldCenter.z;
             ins.size      = size;
             ins.color[0]  = color.r;
             ins.color[1]  = color.g;
@@ -170,6 +179,21 @@ void OpenGLParticleRenderer::render(Scene& scene,
             m_cpu.push_back(ins);
         }
         if (m_cpu.empty()) return;
+
+        // Hito 31 F: sort back-to-front para alpha blend correcto. Skip
+        // para additive (commutativo: el orden no cambia el resultado).
+        // Sort por view-space Z ascendente — mas negativo = mas lejos,
+        // se dibuja primero.
+        if (!em.additive && m_cpu.size() > 1) {
+            std::sort(m_cpu.begin(), m_cpu.end(),
+                [&view](const Instance& a, const Instance& b) {
+                    const f32 za = (view * glm::vec4(
+                        a.center[0], a.center[1], a.center[2], 1.0f)).z;
+                    const f32 zb = (view * glm::vec4(
+                        b.center[0], b.center[1], b.center[2], 1.0f)).z;
+                    return za < zb;
+                });
+        }
 
         // Upload con orphan (BufferData null + SubData).
         glBindBuffer(GL_ARRAY_BUFFER, m_vbo);

@@ -515,6 +515,8 @@ void InspectorPanel::onImGuiRender() {
         if (ImGui::Checkbox("emitting##pe", &em.emitting)) m_editedThisFrame = true;
         ImGui::SameLine();
         if (ImGui::Checkbox("additive##pe", &em.additive)) m_editedThisFrame = true;
+        ImGui::SameLine();
+        if (ImGui::Checkbox("localSpace##pe", &em.localSpace)) m_editedThisFrame = true;
 
         if (ImGui::DragFloat("rate (1/s)##pe", &em.emitRate, 1.0f, 0.0f, 10000.0f)) {
             m_editedThisFrame = true;

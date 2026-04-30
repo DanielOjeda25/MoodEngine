@@ -309,6 +309,12 @@ struct ParticleEmitterComponent {
     u32 maxParticles  = 256;           // cap de la pool
     bool emitting     = true;          // false = pausa spawn, vivas siguen avanzando
     bool additive     = false;         // true = blend aditivo (fuego/sparks); false = alpha (humo)
+    /// Hito 31 F: localSpace=true => positions/velocities almacenadas en
+    /// el espacio local de la entidad. Cuando la entidad se mueve, las
+    /// particulas la siguen (humo en una chimenea que viaja, sparks
+    /// pegadas a un personaje). Default false = world-space (las
+    /// particulas se desprenden del emisor).
+    bool localSpace   = false;
 
     // --- Estado runtime (NO serializar) ---
     f32 emitAccumulator = 0.0f;        // particulas pendientes (fraccional)

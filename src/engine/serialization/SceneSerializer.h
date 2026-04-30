@@ -133,6 +133,7 @@ struct SavedParticleEmitter {
     u32 maxParticles = 256;
     bool emitting = true;
     bool additive = false;
+    bool localSpace = false;             // Hito 31 F
 };
 
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh

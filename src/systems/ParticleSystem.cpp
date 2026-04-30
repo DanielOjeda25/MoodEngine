@@ -97,8 +97,14 @@ void ParticleSystem::update(Scene& scene, f32 dt) {
             // proximo frame.
             const i32 toSpawn = static_cast<i32>(std::floor(em.emitAccumulator));
             em.emitAccumulator -= static_cast<f32>(toSpawn);
+            // Hito 31 F: localSpace=true => spawn en (0,0,0) local; el
+            // renderer multiplica por el worldMatrix del emisor. Asi las
+            // particulas siguen al emisor cuando este se mueve.
+            const glm::vec3 spawnOrigin = em.localSpace
+                ? glm::vec3(0.0f)
+                : tf.position;
             for (i32 k = 0; k < toSpawn; ++k) {
-                if (!spawnOne(em, tf.position)) {
+                if (!spawnOne(em, spawnOrigin)) {
                     // Pool llena — descartamos sin warning (es esperado
                     // cuando rate*lifetime > maxParticles).
                     em.emitAccumulator = 0.0f;
