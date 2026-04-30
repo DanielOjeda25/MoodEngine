@@ -2146,3 +2146,31 @@ Las opciones eran:
 
 **Revisar si:** aparece un demo con 10k+ partículas/frame (perf de upload), o si el dev nota artifacts de orden con varios emisores apilados (sort), o si pide humo following a un NPC (local space).
 
+## 2026-04-30: `JPH::CharacterVirtual` para el player + composición manual de gravedad (Hito 30)
+
+**Problema:** el player usaba `moveAndSlide` AABB del Hito 4. Sin gravedad, sin slope sliding, sin step-up, sin interacción con `RigidBody::Dynamic`. La física del jugador corría desconectada de Jolt aunque el motor lo tuviera integrado desde el Hito 12.
+
+**Decisión:** `JPH::CharacterVirtual` (kinematic-style con resolución manual de slide), no `JPH::Character` (que es un rigid body). Razones:
+- **Control fino del slide**: `CharacterVirtual::ExtendedUpdate` resuelve colisiones con max-slope angle configurable. `Character` deja todo a la sim, lo que produce comportamiento errático en escalones.
+- **Estabilidad**: `Character` puede acumular fuerzas raras al mantenerlo apoyado contra una pared. `CharacterVirtual` no tiene ese problema porque cada frame es from-scratch.
+
+**Composición de velocidad (decisión clave):** la API `setCharacterMovement(id, desired)` espera `desired = (vx, vy_impulse, vz)`. El step interno del PhysicsWorld:
+1. Lee `currentVel.y` del char (pose anterior).
+2. Si OnGround → `vy = max(0, currentVel.y)` (no penetrar piso).
+3. Si !OnGround → `vy = currentVel.y + gravity.y * dt` (gravedad acumula).
+4. `vy += desired.y` (suma del impulse del caller, normalmente 0 excepto en frame de salto).
+5. `SetLinearVelocity(desired.x, vy, desired.z)` + `ExtendedUpdate(dt, gravity=Zero)` (gravity ya integrada manualmente).
+
+**Razones del diseño:**
+- **Caller no se preocupa de Y**: setea solo X/Z (input WASD); el sistema hace gravedad solo. Excepción: salto = un frame de `desired.y = 5.5`.
+- **Reacción al ground state automática**: al aterrizar, vy se resetea a 0 sin que el caller tenga que detectarlo.
+- **ExtendedUpdate con gravity=Zero**: si pasáramos la gravedad real a Jolt y a la vez la integráramos manualmente, doble aplicación → el char caería al doble.
+
+**Trade-offs:**
+- Se pierde: el `desired.y` significa cosas distintas según on-ground vs in-air (impulse vs additive). Documentado en el header pero un poco mágico.
+- Se gana: API minimalista del lado del caller. WASD + Space + LCtrl en 50 líneas.
+
+**Crouch + setCharacterShape:** Jolt no mueve el centro de la capsule al cambiar shape. El caller tiene que ajustar `position.y ± 0.4m` (delta entre standHalf y crouchHalf) para mantener la base al ras del piso. Stand up sube primero el centro, intenta SetShape, revierte si Jolt rechaza con techo bajo. Sin este orden el char penetraría el piso por 0.4m al hacer stand y `SetShape` falla con maxPenetrationDepth=0.01.
+
+**Revisar si:** aparece un demo con velocidades altas (>10 m/s) donde la integración manual de gravedad sea inestable, o si se necesita doble jump / coyote time (extender la lógica de `m_jumpCooldown` con un `m_coyoteTimer` que permita saltar 0.1s después de salir del piso).
+

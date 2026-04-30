@@ -34,7 +34,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 27 — Undo/Redo en el editor (HistoryStack + comandos para gizmo y delete) (completado, tag `v0.27.0-hito27`).
 - [x] Hito 28 — Editor polish: undo/redo de spawns, autoscale al drop, mini editor de scripts (completado, tag `v0.28.0-hito28`).
 - [x] Hito 29 — Particle system (completado, tag `v0.29.0-hito29`).
-- [ ] Hito 30 — TBD.
+- [x] Hito 30 — Player Character Controller con Jolt (completado, tag `v0.30.0-hito30`).
+- [ ] Hito 31 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -1007,3 +1008,48 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **GPU compute para emisores grandes**: `glBufferSubData` con > 10k partículas/frame puede saturar. Si aparece un demo demandante, evaluar `glMapBufferRange` con buffers persistent-mapped o un compute shader para la simulación. **Trigger:** profile con frame drops por particle upload.
 - **Curva de color/size con ramp**: V1 = lerp lineal entre start y end. Para efectos no-monótonos (chispa que crece y achica) hace falta un gradient/curva. **Trigger:** dev pide control más fino.
 - **Emisión por shape**: hoy las partículas spawnean exactamente en `tf.position` con velocidad random en un cubo. Cono / esfera / disco como shape de emisión amplía la expresividad. **Trigger:** dev pide formas.
+
+## Hito 30 — Player Character Controller con Jolt
+
+**Objetivo:** reemplazar el `moveAndSlide` AABB del Hito 4 (que usaba el player en Play Mode) por `JPH::CharacterVirtual` de Jolt. Es el último gran agujero entre el motor actual y "puede ser un FPS de verdad" — sin esto el jugador no salta, no hace crouch, y la física del player corría desconectada de los `RigidBody` del Hito 12.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — API en `PhysicsWorld` para `CharacterVirtual`:*
+- `createCharacter(initialPos, halfHeight, radius)` → handle u32 estable. Devuelve 0 si falla.
+- `setCharacterMovement(id, desired)` — el caller setea desired = (vx, vy_impulse, vz). Step interno acumula gravedad en Y si NOT OnGround; suma desired.y como impulse.
+- `characterPosition(id)` / `setCharacterPosition(id, pos)` — lectura/teleport (resetea velocity).
+- `isCharacterOnGround(id)` — gating de salto y reset de gravedad acumulada.
+- `setCharacterShape(id, halfHeight, radius)` → bool. Penetration check; rechaza con techo bajo. Para crouch.
+- `destroyCharacter(id)` idempotente.
+- 7 tests headless en `test_character_controller.cpp`: create/destroy, count, position pre-step, mover X 30 frames, gravity sin floor, OnGround sobre static body, teleport.
+
+*Bloque 2 — Cablear al Player + Editor (Play branch):*
+- `PlayerApplication` y `EditorPlayMode` reemplazan `moveAndSlide` por character. Lazy create al primer frame de Play / arranque del player en la pos de la cámara − eyeOffset.
+- WASD → velocidad horizontal m/s relativa a `fwdFlat` de la cámara (sin afectar el pitch). Speed = 4 m/s walking.
+- Post-step: `m_playCamera.setPosition(charPos + eyeOffset)`. eyeOffset = halfHeight + radius − 0.2.
+- `exitPlayMode` destruye el char y resetea state.
+- `FpsCamera::setPosition` para teleport limpio (lo usa el sync).
+
+*Bloque 3 — Salto + crouch:*
+- **SPACE** = salto (vy = 5.5 m/s, ~1.5m de altura). Gated por `isCharacterOnGround` + cooldown 0.2s anti-hold + no-crouching. Implementado pasando `desired.y` como impulse.
+- **LCtrl** mantenido = crouch (capsule total 1.0m vs 1.8m). Walk speed reduce a 2 m/s.
+- Soltar LCtrl restaura standing si no hay techo. Si Jolt rechaza el SetShape (penetration con techo), el caller revierte la pos y mantiene crouched hasta liberar espacio.
+- `setCharacterShape` NO mueve el centro de la capsule — el caller ajusta pos manualmente ±0.4m (k_centerDelta = standHalf − crouchHalf) para mantener la base al ras del piso. Stand up sube primero el centro, intenta SetShape, revierte si falla.
+
+*Bloque 4 — tests + cierre:*
+- Tests del Bloque 1 cubren la API headless.
+- Suite total **264/5494** (antes Hito 29: 257/5476).
+- Smoke confirmado por dev: WASD funciona como antes, paredes bloquean, caja física se empuja (slide alto por fricción default baja — pendiente menor), salto alcanza ~1.5m, crouch baja la cámara sin caer abruptamente, soltar LCtrl restaura.
+
+**Cambios visibles en gameplay:** primer hito post-Hito 4 que cambia cómo el player se siente. La capsule física empuja `RigidBody::Dynamic`, así que cajas físicas reaccionan al jugador (antes el player era "fantasma" para Jolt). Lo opuesto también: el char respeta steep slopes (max 50°) y se desliza en pendientes vs el AABB que ignoraba slopes.
+
+**Siguiente paso tras completarlo:** Hito 31 (TBD). Plan en `docs/PLAN_HITO31.md`.
+
+### Pendientes menores detectados en Hito 30
+
+- **Fricción del player vs Dynamic bodies**: la caja física se desliza demasiado al ser empujada por el char. Mitigación: subir `mFriction` del `BodyCreationSettings` cuando se cree un Dynamic, o aplicar damping. **Trigger:** dev quiere props que se queden quietos al ser tocados levemente.
+- **Animación del crouch (interpolación de altura)**: hoy el cambio es instantáneo (1 frame). Para feedback más natural, lerp la altura del centro y el eyeOffset durante ~0.2s. **Trigger:** polish visual.
+- **`moveAndSlide` AABB sigue compilado** en `PhysicsSystem.cpp` por los tests del Hito 4 (`test_collision.cpp`). Se podría eliminar si esos tests también migran a `CharacterVirtual`. **Trigger:** dev quiere remover dead code.
+- **Doble jump / coyote time**: V1 sin window de gracia ni jumps en aire. Se puede agregar un `m_coyoteTime` que permita saltar dentro de 0.1s de haber dejado el piso. **Trigger:** feedback de gameplay.
+- **Headbob + camera shake**: el sync `setPosition` directo se ve "rígido" sin animación de paso. Agregar offset sinusoidal pequeño al eyeOffset cuando hay velocidad horizontal. **Trigger:** polish visual.

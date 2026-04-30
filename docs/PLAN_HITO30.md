@@ -1,8 +1,6 @@
-# Plan — Hito 30: Player Character Controller con Jolt
+# Plan — Hito 30: Player Character Controller con Jolt (cerrado)
 
-> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 29 cerrado).
->
-> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
+> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 30 cerrado).
 
 ---
 
@@ -24,59 +22,59 @@ API esperable post-hito:
 
 ### Automáticos
 
-- [ ] Compila sin warnings nuevos.
-- [ ] Tests headless de la API de `PhysicsWorld::createCharacter` / `setCharacterMovement` / `characterPosition` / `isCharacterOnGround` (al menos 4 casos).
-- [ ] Suite total ≥ 261.
+- [x] Compila sin warnings nuevos.
+- [x] Tests headless de la API de `PhysicsWorld::createCharacter` / `setCharacterMovement` / `characterPosition` / `isCharacterOnGround` (al menos 4 casos).
+- [x] Suite total ≥ 261.
 
 ### Visuales
 
-- [ ] Editor + Player: WASD mueve sin atravesar paredes (mismo comportamiento que Hito 4 en plano).
-- [ ] Espacio salta y cae por gravedad.
-- [ ] LCtrl encoge la capsule visualmente (cámara baja).
-- [ ] Spawnear caja física + caminar contra ella → la caja se mueve (player la empuja).
-- [ ] Spawnear demo de sombras (escalón 0.1m) → player sube sin saltar.
+- [x] Editor + Player: WASD mueve sin atravesar paredes (mismo comportamiento que Hito 4 en plano).
+- [x] Espacio salta y cae por gravedad.
+- [x] LCtrl encoge la capsule visualmente (cámara baja).
+- [x] Spawnear caja física + caminar contra ella → la caja se mueve (player la empuja).
+- [x] Spawnear demo de sombras (escalón 0.1m) → player sube sin saltar.
 
 ---
 
 ## Bloque 1 — API en `PhysicsWorld` para `JPH::CharacterVirtual`
 
-- [ ] `PhysicsWorld::createCharacter(initialPos, capsuleHalfHeight, capsuleRadius)` → devuelve `u32` (handle estable). Internamente construye `JPH::CharacterVirtualSettings` + `CharacterVirtual`.
-- [ ] `setCharacterMovement(id, desiredVelocity)` — el caller calcula la velocidad horizontal+vertical deseada (post-input + gravedad acumulada).
-- [ ] `characterPosition(id)` / `setCharacterPosition(id, pos)` — lectura/teleport.
-- [ ] `isCharacterOnGround(id)` → bool. Lo usa el caller para resetear vertical velocity al aterrizar y permitir un nuevo salto.
-- [ ] `destroyCharacter(id)` — cleanup, idempotente.
-- [ ] El `step(dt)` existente sigue stepeando la sim de bodies; los characters se actualizan dentro del mismo `step` via `CharacterVirtual::ExtendedUpdate`.
-- [ ] Tests headless: crear character + step → no crash. Setear movement (1, 0, 0) por 1s → posición avanza ~1m. Crear character sobre static body → isOnGround=true tras 1 step.
+- [x] `PhysicsWorld::createCharacter(initialPos, capsuleHalfHeight, capsuleRadius)` → devuelve `u32` (handle estable). Internamente construye `JPH::CharacterVirtualSettings` + `CharacterVirtual`.
+- [x] `setCharacterMovement(id, desiredVelocity)` — el caller calcula la velocidad horizontal+vertical deseada (post-input + gravedad acumulada).
+- [x] `characterPosition(id)` / `setCharacterPosition(id, pos)` — lectura/teleport.
+- [x] `isCharacterOnGround(id)` → bool. Lo usa el caller para resetear vertical velocity al aterrizar y permitir un nuevo salto.
+- [x] `destroyCharacter(id)` — cleanup, idempotente.
+- [x] El `step(dt)` existente sigue stepeando la sim de bodies; los characters se actualizan dentro del mismo `step` via `CharacterVirtual::ExtendedUpdate`.
+- [x] Tests headless: crear character + step → no crash. Setear movement (1, 0, 0) por 1s → posición avanza ~1m. Crear character sobre static body → isOnGround=true tras 1 step.
 
 ## Bloque 2 — Cablear al `PlayerApplication` y `EditorApplication`
 
-- [ ] `PlayerApplication`: en el ctor, crear character en la posición de spawn de `m_playCamera`. En `updatePlayerInput`: calcular `desired` (input WASD * speed + verticalVel), llamar `setCharacterMovement`, leer `characterPosition` + setear `m_playCamera.setPosition`.
-- [ ] Acumular gravedad (`verticalVel += -9.81 * dt`) cada frame; al `isCharacterOnGround()` resetear a 0.
-- [ ] `EditorApplication::updateCameraInput` (Play branch): mismo wireado para que el editor en Play Mode también use el character.
-- [ ] Eliminar el `moveAndSlide` + `k_playerHalfExtents` del player (queda solo para tests si hace falta).
+- [x] `PlayerApplication`: en el ctor, crear character en la posición de spawn de `m_playCamera`. En `updatePlayerInput`: calcular `desired` (input WASD * speed + verticalVel), llamar `setCharacterMovement`, leer `characterPosition` + setear `m_playCamera.setPosition`.
+- [x] Acumular gravedad (`verticalVel += -9.81 * dt`) cada frame; al `isCharacterOnGround()` resetear a 0.
+- [x] `EditorApplication::updateCameraInput` (Play branch): mismo wireado para que el editor en Play Mode también use el character.
+- [x] Eliminar el `moveAndSlide` + `k_playerHalfExtents` del player (queda solo para tests si hace falta).
 
 ## Bloque 3 — Salto + crouch
 
-- [ ] Salto: tecla Space + on-ground → `verticalVel = 5.5 m/s` (≈1.5m de altura). Cooldown 0.2s anti-hold para evitar saltos repetidos al mantener apretado.
-- [ ] Crouch: LCtrl mantiene → recrear el character con halfHeight 0.5m (en lugar de 0.9m). Soltar restaura, salvo que haya techo encima (raycast hacia arriba; si hit, queda crouched).
-- [ ] Camera height sigue al character (eye = position + halfHeight - 0.1m).
+- [x] Salto: tecla Space + on-ground → `verticalVel = 5.5 m/s` (≈1.5m de altura). Cooldown 0.2s anti-hold para evitar saltos repetidos al mantener apretado.
+- [x] Crouch: LCtrl mantiene → recrear el character con halfHeight 0.5m (en lugar de 0.9m). Soltar restaura, salvo que haya techo encima (raycast hacia arriba; si hit, queda crouched).
+- [x] Camera height sigue al character (eye = position + halfHeight - 0.1m).
 
 ## Bloque 4 — Tests + cierre
 
-- [ ] `tests/test_character_controller.cpp`: 4–6 casos (create/destroy, mover sobre piso → posición avanza, gravedad sin piso → cae, isOnGround flags, salto en piso vs en aire).
-- [ ] Smoke manual: WASD, Space, LCtrl en el demo de sombras + caja física empujable.
-- [ ] Commits atómicos: `feat(physics)`, `feat(player)`, `feat(editor)`, `test(physics)`.
-- [ ] Tag `v0.30.0-hito30`.
-- [ ] Crear `docs/PLAN_HITO31.md`.
-- [ ] Actualizar `ESTADO_ACTUAL.md`, `HITOS.md`, `DECISIONS.md`.
+- [x] `tests/test_character_controller.cpp`: 4–6 casos (create/destroy, mover sobre piso → posición avanza, gravedad sin piso → cae, isOnGround flags, salto en piso vs en aire).
+- [x] Smoke manual: WASD, Space, LCtrl en el demo de sombras + caja física empujable.
+- [x] Commits atómicos: `feat(physics)`, `feat(player)`, `feat(editor)`, `test(physics)`.
+- [x] Tag `v0.30.0-hito30`.
+- [x] Crear `docs/PLAN_HITO31.md`.
+- [x] Actualizar `ESTADO_ACTUAL.md`, `HITOS.md`, `DECISIONS.md`.
 
 ---
 
 ## Decisiones a tomar
 
-- [ ] **Capsule shape vs Cilindro+Esfera**: `JPH::CharacterVirtual` soporta cualquier `JPH::Shape`. Default = capsule. **Decidido: capsule** (idiomático, suave en step-up).
-- [ ] **`CharacterVirtual` vs `Character`**: la primera ("virtual") es kinematic-style con resolución manual de slide; la segunda usa rigid body real. V1 = `CharacterVirtual` por estabilidad y control fino del slide.
-- [ ] **Mantener AABB `moveAndSlide` para tests**: `tests/test_collision.cpp` lo usa. Lo dejamos disponible (no lo deletear) hasta que el dev confirme que no se necesita.
+- [x] **Capsule shape vs Cilindro+Esfera**: `JPH::CharacterVirtual` soporta cualquier `JPH::Shape`. Default = capsule. **Decidido: capsule** (idiomático, suave en step-up).
+- [x] **`CharacterVirtual` vs `Character`**: la primera ("virtual") es kinematic-style con resolución manual de slide; la segunda usa rigid body real. V1 = `CharacterVirtual` por estabilidad y control fino del slide.
+- [x] **Mantener AABB `moveAndSlide` para tests**: `tests/test_collision.cpp` lo usa. Lo dejamos disponible (no lo deletear) hasta que el dev confirme que no se necesita.
 
 ---
 

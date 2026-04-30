@@ -6,7 +6,15 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 29 cerrado.**
+**Hito 30 cerrado.**
+Tag: `v0.30.0-hito30`.
+Verificado automático: suite doctest **264/5494** (+7 de `test_character_controller`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: WASD camina sin atravesar paredes, caja física se empuja al chocarla (slide alto por fricción default baja — pendiente menor), Space salta ~1.5m, LCtrl baja la cámara sin caer abruptamente y restaura standing al soltar.
+
+**Cambio importante:** primer hito post-Hito 4 que cambia cómo se siente el player. Capsule física via `JPH::CharacterVirtual` (no más AABB del Hito 4). El char respeta slopes < 50°, empuja `RigidBody::Dynamic`, no es "fantasma" para Jolt como antes.
+
+**Próximo paso:** Hito 31 (TBD). Plan en `docs/PLAN_HITO31.md`.
+
+### Hito 29 (anterior, ya cerrado)
 Tag: `v0.29.0-hito29`.
 Verificado automático: suite doctest **257/5476** (+9 de `test_particle_system` lógica + 2 round-trip en `.moodmap`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: "Ayuda > Agregar particulas de fuego demo" spawnea un emisor en (0, 0.5, 0). Las chispas suben (gravityFactor=-0.05), pasan de naranja a rojo transparente, blend aditivo. Editar parámetros en el Inspector cambia la simulación en vivo. Save/cerrar/reabrir el proyecto preserva la configuración del emisor (schema v9).
 
@@ -408,16 +416,16 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: definir y abrir el Hito 30
+### Tarea inmediata: definir y abrir el Hito 31
 
-El Hito 29 está cerrado (tag `v0.29.0-hito29`). Particle system entregado. **Hito 30 está TBD** — candidatos en `docs/PLAN_HITO30.md`. Top: Player Character Controller con Jolt (capsule + step-up + jump), raycasts/triggers expuestos a Lua, save/load de gameplay, polish del NavAgent diferido.
+El Hito 30 está cerrado (tag `v0.30.0-hito30`). Player Character Controller entregado — primer FPS-style movement real. **Hito 31 está TBD** — candidatos en `docs/PLAN_HITO31.md`. Top heredados: raycasts + triggers en Lua (combo natural con el char controller), save/load de gameplay, polish NavAgent diferido.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO30.md` (candidatos) y discutir con el dev qué se prioriza.
+1. Leer `docs/PLAN_HITO31.md` (candidatos) y discutir con el dev qué se prioriza.
 2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
 3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.30.0-hito30`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO31.md`.
+4. Al final: commits atómicos en español, merge a main, tag `v0.31.0-hito31`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO32.md`.
 
 ---
 
