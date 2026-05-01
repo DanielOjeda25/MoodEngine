@@ -2296,3 +2296,84 @@ Las opciones eran:
 
 **Revisar si:** aparece un comando que referencie MÚLTIPLES entidades (ej. un BatchTransformCommand) — entonces `onEntityRemap` debe iterar su lista interna. Patrón se extiende natural.
 
+## 2026-05-01: Raycast via `JPH::NarrowPhaseQuery::CastRay` + `BodyLockRead` para la normal
+
+**Contexto:** Hito 33 Bloque 1. Necesitábamos exponer raycasts a Lua para gameplay (line-of-sight, hitscan, picking físico). Jolt ofrece varias APIs: `BroadPhaseQuery` (solo bounding boxes, sin punto/normal precisos), `NarrowPhaseQuery` (intersección exacta contra shapes), o `ShapeCast` (sweep de un volumen).
+
+**Decisión:** `PhysicsWorld::raycast(origin, dir, maxDist) → RaycastHit { hit, point, normal, distance, bodyId }` implementado con:
+1. `JPH::RRayCast { Vec3(origin), Vec3(dir) * maxDistance }` — Jolt usa la magnitud del vector como límite, así que escalamos `direction` por `maxDistance` y dejamos que Jolt rechace la dirección no normalizada del caller.
+2. `physicsSystem->GetNarrowPhaseQuery().CastRay(rayCast, hitResult)` — devuelve el hit más cercano (no necesita filtros para v1).
+3. **Para la normal**: `JPH::BodyLockRead` sobre el body impactado + `body.GetWorldSpaceSurfaceNormal(subShapeID, hitPoint)`. Sin esto solo tenemos el `BodyID` y el ratio de fracción del rayo — no la normal de la superficie.
+
+**Razones:**
+- **NarrowPhase vs BroadPhase**: BroadPhase es el bvh de bounding boxes; resuelve "¿qué bodies están en el camino?" pero no la geometría exacta. Para hitscan necesitamos punto + normal exactos contra el shape (caja, esfera, capsule). NarrowPhase paga el extra de testear cada candidato pero es lo correcto.
+- **NarrowPhase vs ShapeCast**: ShapeCast sweepea un volumen (capsule/box). Innecesario para un rayo idealizado; agregaría un radio falso al ray.
+- **BodyLockRead para la normal**: la API `CastRay` solo expone `BodyID` + `mFraction` (ratio del rayo donde pegó) + `mSubShapeID2`. Para extraer la normal hay que reabrir el body con un lock + llamar `GetWorldSpaceSurfaceNormal`. Patrón estándar de Jolt — no hay shortcut que evite el lock.
+- **Direction no normalizada**: documentamos que se escala internamente. Más amigable para el caller (rayo desde A a B = `B - A`, no normalizar primero).
+
+**Alternativas consideradas:**
+- **Un wrapper sobre `BroadPhaseQuery::CastRay`** + recalcular la geometría exacta a mano: rehacer trabajo que Jolt ya hace.
+- **`AllHitCollisionCollector` para batch raycasts**: API distinta (devuelve N hits ordenados). No la necesitamos hoy. Si aparece (ej. shotgun spray con 8 rayos paralelos), agregar un método `raycastAll` separado.
+- **Filtros por layer / body**: Jolt expone `BroadPhaseLayerFilter`, `ObjectLayerFilter`, `BodyFilter`. No los enchufamos ahora — todos los hits cuentan. Cuando aparezca un demo con "ignore self" o "solo enemies", agregar parámetros opcionales.
+
+**Trade-offs:**
+- Se pierde: filtrado fino + batch hits. Aceptado para v1.
+- Se gana: API simple (4 floats + bodyID), un solo método público, sin fugas de tipos Jolt al caller.
+
+**Revisar si:** aparece overhead notorio en hot paths (raycast por frame por enemigo) — entonces benchmarkar `BroadPhase` first + narrow refinement, o cachear los hits.
+
+## 2026-05-01: `TriggerSystem` stateless con flank-detection sobre `playerInside`
+
+**Contexto:** Hito 33 Bloque 3. Para zonas detectoras (puertas automáticas, kill volumes, checkpoints) necesitábamos entradas/salidas del jugador con dispatch al script de la entidad trigger. Diseño espacial: ¿AABB axis-aligned simple, OBB, o reusar Jolt como sensor body? Diseño temporal: ¿event queue, callback inline, polling per-frame?
+
+**Decisión:** sistema stateless con AABB simple + polling per-frame:
+1. **`TriggerComponent { halfExtents, playerInside }`** — `halfExtents` definen un AABB axis-aligned centrado en `TransformComponent.position`. `playerInside` es un bool runtime (no serializado) que guarda el estado del frame anterior.
+2. **`TriggerSystem::update`** — sin estado entre frames. Cada frame:
+   - Si `playerCharId == 0`: forzar `playerInside=false` en todos los triggers (limpia tras swap de proyecto).
+   - Lee la posición del char del jugador via `physics.characterPosition(charId)`.
+   - Por cada entidad con TriggerComponent: AABB-test → `insideNow`. Si `insideNow != tr.playerInside`, hubo flank: actualiza el flag y dispatcha al script.
+3. **Sin event queue**: el dispatch es síncrono dentro del update. Si un script muta otro componente (ej. mata el enemigo), el siguiente sistema lo ve en el mismo frame.
+
+**Razones:**
+- **AABB axis-aligned vs OBB / Jolt sensor body**: AABB cubre el 90% de los casos (kill volumes, zonas, puertas) sin costo de física pesada. Jolt tiene "body sensors" pero requeriría un body extra por trigger + callbacks Jolt — más pesado que un test trivial.
+- **Stateless**: el sistema no guarda nada entre frames. Toda la info "antes/ahora" vive en `TriggerComponent::playerInside`. Esto evita un mapa interno entity→state que habría que invalidar al destruir entidades.
+- **Solo el char del jugador es "actor"**: para v1 alcanza con kill volumes / checkpoints / gatillos por área. Detectar dynamic bodies o NPCs es trivial extension (loop adicional sobre `RigidBodyComponent`), pero no scope hoy.
+- **Dispatch síncrono inline**: simplicidad. Sin queue significa que un script que muta el world ve los cambios al frame siguiente sin lag de un frame.
+
+**Alternativas consideradas:**
+- **Jolt body sensors** (`mIsSensor=true` en BodyCreationSettings): habilita callbacks vía `ContactListener::OnContactAdded/Removed`. Más pesado (un body por trigger en el mundo Jolt) y acopla `TriggerSystem` directo al `ContactListener`. Para v1 no agrega valor.
+- **Event queue** (`std::vector<TriggerEvent>` que se procesa después): permitiría procesar todos los enters antes de cualquier exit, o priorizar. No vimos necesidad — los flank-changes son locales por trigger.
+- **OBB (oriented bounding box)** que rote con el Transform: necesario solo si trigger rotado. Aceptado como pendiente menor (documentado).
+
+**Trade-offs:**
+- Se pierde: triggers rotados, detect múltiples actors, eventos batched. Aceptado.
+- Se gana: 50 LOC totales, cero estado interno, cero acoplamiento con la `ContactListener` de Jolt.
+
+**Revisar si:** aparece demo con NPC que tenga que entrar/salir de zonas (extender el loop) o trigger que necesite rotación (bumpear a OBB).
+
+## 2026-05-01: `ScriptSystem::dispatchEvent` via `sol::protected_function` con miss silencioso
+
+**Contexto:** Hito 33 Bloque 2. Para que `TriggerSystem` (y futuros sistemas: AnimationEvent, AudioEvent) llamen funciones Lua opcionales en el script de una entidad, hacía falta una API en `ScriptSystem` que expusiera el sol::state asociado.
+
+**Decisión:** método `dispatchEvent(entt::entity, const char* eventName)` que:
+1. Busca `m_states[entity]` — si no existe (script no cargado, error de parse), no-op silencioso.
+2. Lee `lua[eventName]` como `sol::protected_function` — si no es válida (función no definida en el script), no-op silencioso.
+3. Llama la función SIN argumentos. Errores van al canal `script` con el mismo formato que errores de `onUpdate`.
+
+**Razones:**
+- **Opcional por defecto**: scripts antiguos del repo (rotator, hud_demo) no definen `on_trigger_enter`. Con miss silencioso, no rompemos nada al agregar el dispatch.
+- **`protected_function` en lugar de `function`**: protected captura excepciones de Lua sin que se propaguen al runtime de C++. Sin esto, un `error()` dentro del script crashearía el editor.
+- **Sin argumentos por ahora**: para enter/exit no necesitamos pasar el "actor" (siempre es el player). Cuando aparezcan eventos con args (ej. `on_damage(amount)`), el método pasa a ser variádico vía templates de sol.
+- **Buscar en `m_states` no en componentes**: el sol::state vive en el ScriptSystem, no en `ScriptComponent` (decisión de Hito 8 — keep components data-only). El método encapsula la búsqueda.
+
+**Alternativas consideradas:**
+- **Exponer el sol::state al caller**: el caller tendría `physics.dispatchEvent(state, name)` y manejaría errores. Más acoplamiento, peor encapsulación.
+- **Event queue en ScriptSystem**: el caller pushea `(entity, name)` y ScriptSystem dispatcha. Innecesario — `dispatchEvent` se llama directo dentro del update del sistema que lo gatilla.
+- **Pasar `self` como arg como `onUpdate`**: el script ya capturó `self` via la entidad asociada al state. Para eventos que necesiten payload, pasarlos explícitamente.
+
+**Trade-offs:**
+- Se pierde: dispatch async, args genéricos. Aceptado.
+- Se gana: API mínima, no rompe scripts viejos, errores en Lua no crashean C++.
+
+**Revisar si:** aparece un evento que necesite múltiples args tipados — extender a `dispatchEvent<Args...>` con templates de sol.
+

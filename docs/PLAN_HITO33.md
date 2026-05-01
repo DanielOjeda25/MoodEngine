@@ -1,103 +1,51 @@
-# Plan — Hito 33: TBD
+# Plan — Hito 33: Raycasts + Triggers expuestos a Lua (cerrado)
 
-> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 32 cerrado).
->
-> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
+> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 33 cerrado).
 
 ---
 
 ## Estado
 
-**Hito 32 cerrado** (`v0.32.0-hito32`, suite **271/5512**). Deudas del editor cerradas: InspectorEditCommand templado + handle remap en HistoryStack.
+**Hito 33 cerrado** (`v0.33.0-hito33`, suite **281/5535**). Scope acordado con el dev: candidato A del plan original — habilitar gameplay scriptable con armas + zonas detectoras. Combo natural post Hito 30 (char controller) + 31 (polish).
 
-El Hito 33 está **TBD**: acordar con el dev el alcance antes de abrir bloques.
+## Bloques cerrados
 
-**Recordatorios importantes:**
-- Networking / multijugador está **EXPLÍCITAMENTE fuera de alcance** desde el doc técnico. NO proponerlo.
-- Polish del NavAgent **descartado permanentemente** por decisión del dev. NO proponerlo.
+- [x] **Bloque 1 — `PhysicsWorld::raycast`**: nuevo `RaycastHit { hit, point, normal, distance, bodyId }` + método `raycast(origin, direction, maxDistance)`. Implementado via `JPH::NarrowPhaseQuery::CastRay` + `BodyLockRead` para extraer la normal en el punto de impacto. Direction no necesita estar normalizada (se escala internamente). Characters virtuales son "ghost" para queries (consistente con Hito 30).
+- [x] **Bloque 2 — Lua bindings + `ScriptSystem::dispatchEvent`**: `physics.raycast(origin_table, dir_table, maxDist)` registrado en LuaBindings devolviendo tabla `{hit, point, normal, distance, bodyId}`. Origin/direction como tablas Lua 1-indexadas (convención Hito 24). `ScriptSystem::update` propaga `PhysicsWorld*` opcional → tests headless siguen pasando con `nullptr`. Nuevo `dispatchEvent(entity, eventName)` busca en `m_states[entity]` y llama la función global del sol::state via `sol::protected_function` (no-op silencioso si el script no la define).
+- [x] **Bloque 3 — `TriggerComponent` + `TriggerSystem`**: nuevo componente `{halfExtents, playerInside}` (último flag runtime, no serializado). `TriggerSystem` stateless, AABB-testea cada frame la posición del char del jugador contra cada trigger. En flank-changes false→true / true→false dispatcha `on_trigger_enter` / `on_trigger_exit` al script de la entidad. Wireado en `EditorApplication` (solo Play Mode) + `PlayerApplication` (siempre).
+- [x] **Bloque 4 — Persistencia + Inspector + spawner demo**: `SavedTrigger` opcional en `SavedEntity` (sin bump de schema mayor — campo nuevo opcional). `EntitySerializer` y `SceneLoader` cubren round-trip. Inspector UI: sección "Trigger" con `DragFloat3 halfExtents` undoable via `pushEditIfDone<glm::vec3>` (mismo patrón de Hito 32) + readout de `playerInside` runtime. Menú "Ayuda > Agregar trigger demo" spawnea entidad en (0, 1, 0) con `halfExtents=(1,1,1)` + script `assets/scripts/trigger_demo.lua` que loguea enter/exit.
+- [x] **Bloque 5 — Tests + cierre**: 10 tests nuevos (5 en `test_raycast.cpp`, 5 en `test_trigger_system.cpp`). Cubren: hit/miss/maxDistance/dirección no-normalizada/primer body en path para raycast; flank true/flank false/charId=0/dispatch via side-effect en `GameState::hud()`/no-double-dispatch para triggers. Tag `v0.33.0-hito33`.
 
----
+## Lo que NO se cubrió
 
-## Candidatos activos
-
-Lista en orden de prioridad/coste.
-
-### A. Raycasts + Triggers expuestos a Lua
-
-**Por qué:** combo natural post-Hitos 30/31/32. Char controller pulido + raycasts + triggers = FPS scriptable real. Habilita:
-1. **Raycast desde Lua**: armas (line-of-sight + hitscan), enemigos viendo al jugador, picking físico.
-2. **OnTriggerEnter/Exit**: zonas detectoras sin física sólida (puertas automáticas, kill volumes, checkpoints).
-
-**Coste:** medio. API en `PhysicsWorld` + bindings en `LuaBindings::physics` + nuevo `TriggerComponent` con dispatch al ScriptSystem.
-
-**Trigger ideal:** ahora — es el siguiente paso obvio para gameplay scriptable.
-
-### B. Save/Load de gameplay state
-
-**Por qué:** hoy `.moodmap` describe nivel pero NO estado de juego. Save & load = primer eslabón de "juego con progresión".
-
-**Coste:** medio. Definir state vs setup, serializar `GameState::hud()` + globals Lua relevantes, integrar con menú "Save/Load" en `MoodPlayer`.
-
-**Trigger ideal:** primer demo que dependa de progresión.
-
-### C. UI de juego mejorada (HUD + main menu)
-
-**Por qué:** falta menú principal del MoodPlayer (New Game / Load Game / Settings / Quit), settings persistidos, HUD parametrizable.
-
-**Coste:** medio.
-
-**Trigger ideal:** combo con B (sin save/load no hay "Load Game").
-
-### D. Wire-up del Inspector restante (42 widgets) — del Hito 32
-
-**Por qué:** Hito 32 cableó 9 de 51 widgets con InspectorEditCommand. Los otros 42 son mecánicos (mismo patrón `pushEditIfDone<T>`). Cubre Light, Camera, AudioSource, ParticleEmitter, Animator, NavAgent, Environment, RigidBody.
-
-**Coste:** bajo (mecánico) pero tedioso. Mejor hacer en bloque que widget-por-widget.
-
-**Trigger ideal:** sesión donde el dev quiere dejar el Inspector "completo" en undo.
-
-### E. PackageBuilder smart-pack — del Hito 26
-
-**Por qué:** hoy `PackageBuilder` copia `assets/` entero. Con Kenney pack (1.5 MB) + futuros packs, los packages se inflan rápido.
-
-**Coste:** medio. Escanear `.moodmap` + dependencias indirectas (material → textura).
-
-**Trigger ideal:** demo packageado > 50 MB.
-
-### F. Inspector drop de textura sobre material slot — del Hito 26
-
-**Por qué:** hoy el albedo se setea solo al spawn. Drop de textura sobre el slot del Inspector permitiría cambiar texturas sin reasignar el material entero.
-
-**Coste:** bajo. Reusar drag payload `MOOD_TEXTURE_ASSET`.
-
-**Trigger ideal:** combo con cualquier hito visual.
+- **Detectar dynamic bodies en triggers**: hoy solo el char del jugador es el "actor" detectable. Cajas físicas o NPCs entrando/saliendo del trigger no disparan callback. Patrón a extender: loop adicional sobre entidades con `RigidBodyComponent`. Documentado.
+- **Raycast filtrable por layer/tag**: hoy raycast pega contra cualquier body (Static + Dynamic + Kinematic). Sin filtro por layer (ej. "ignore self") ni por componente (ej. "solo enemies"). Si aparece en un demo, agregar parámetro opcional al método.
+- **Eventos extra del trigger**: `on_trigger_stay` (cada frame que el actor está dentro) no se implementó. Solo enter/exit. Si un script necesita "tick mientras dentro", puede consultar `playerInside` cada frame en su `onUpdate`.
+- **42 widgets restantes del Inspector**: igual que en Hito 32, el wire-up del resto de widgets sigue siendo mecánico y pendiente.
 
 ---
 
-## Diferidos (revisar más adelante)
+## Decisiones tomadas
 
-### Polish menores del Hito 31
-
-- Sort por bucket-Z (vs centro de partícula simple).
-- `localSpace` con rotation/scale del entity (sparks orientadas).
-- Headbob escalado con velocidad.
-- Friction per-body en `RigidBodyComponent`.
-
-### Polish menores del Hito 32
-
-- `std::variant` del tracker no incluye `int`/`u32` (necesario para `DragInt`).
-- Compactación cross-frame para sliders externos al Inspector.
+Las nuevas en `DECISIONS.md` (2026-05-01):
+- Raycast via `JPH::NarrowPhaseQuery::CastRay` + `BodyLockRead` para la normal (no `JPH::ShapeCast`).
+- `TriggerSystem` stateless con flank-detection sobre `TriggerComponent::playerInside` (no event queue).
+- `ScriptSystem::dispatchEvent` via `sol::protected_function` con miss silencioso.
 
 ---
 
-## Decisiones a tomar (cuando el hito se concrete)
+## Riesgos identificados — resolución
 
-- [ ] Cuál de los candidatos activos arriba se elige.
-- [ ] Si toca persistencia, definir si bumpea format version o usa campo opcional.
-- [ ] Si toca scripting, definir si los nuevos bindings respetan el sandbox (no `io`, no `os`, no `package`).
+- **Raycast performance en escenas grandes**: Jolt cobra O(log N) por broad phase + narrow phase test. Documentado en el header del método: mantener `maxDistance` acotado. No es problema con los demos del repo.
+- **Trigger AABB axis-aligned no respeta rotation**: aceptado. Si aparece un caso (ej. trigger rotado para una puerta), bumpea a OBB o composite shape. Documentado en el header de `TriggerSystem`.
+- **Schema bump del `.moodmap`**: evitado. Campo `trigger` es opcional, archivos viejos lo interpretan como ausente (defaults vacíos), nuevos lo escriben sólo cuando la entidad tiene el componente.
 
 ---
 
-## Riesgos identificados (genéricos, completar al concretar el hito)
+## Verificación visual del dev (criterios cumplidos)
 
-- Cada candidato tiene riesgos propios; documentarlos al elegir.
+- "Ayuda > Agregar trigger demo" spawnea entidad en (0, 1, 0) con halfExtents 1×1×1 (caja imaginaria 2×2×2m).
+- Inspector muestra sección "Trigger" con DragFloat3 + undo via Ctrl+Z + readout `playerInside`.
+- En Play Mode, caminar al centro del trigger imprime `[script] [info] [trigger] player entro` en la consola; al salir, `[trigger] player salio`.
+- Save/cerrar/reabrir el proyecto preserva `halfExtents` editado.
+- Suite 281/5535 sin regresiones.

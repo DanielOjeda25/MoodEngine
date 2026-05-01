@@ -6,13 +6,19 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 32 cerrado.**
+**Hito 33 cerrado.**
+Tag: `v0.33.0-hito33`.
+Verificado automático: suite doctest **281/5535** (+5 de `test_raycast` + 5 de `test_trigger_system`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: "Ayuda > Agregar trigger demo" spawnea entidad en (0, 1, 0) con `halfExtents=(1,1,1)`. En Play Mode, caminar al centro del trigger imprime `[script] [info] [trigger] player entro` en la consola; al salir, `[trigger] player salio`. Editar `halfExtents` desde el Inspector → Ctrl+Z revierte. Save/cerrar/reabrir preserva el componente.
+
+**Cambio importante:** primera API de queries físicas. `PhysicsWorld::raycast(origin, dir, maxDist)` via `JPH::NarrowPhaseQuery::CastRay` + `BodyLockRead` para la normal. Expuesta a Lua como `physics.raycast(...)` devolviendo tabla. Nuevo `TriggerComponent` (AABB sensor) + `TriggerSystem` stateless con flank-detection que dispatcha `on_trigger_enter`/`on_trigger_exit` al script via `ScriptSystem::dispatchEvent` (`sol::protected_function`, miss silencioso). Persistencia `.moodmap` con campo opcional (sin bump de schema mayor).
+
+**Próximo paso:** Hito 34 (TBD). Plan en `docs/PLAN_HITO34.md`.
+
+### Hito 32 (anterior, ya cerrado)
 Tag: `v0.32.0-hito32`.
 Verificado automático: suite doctest **271/5512** (+6 de `test_edit_property_command`). Editor compila limpio. Verificado por el dev a ojo: editar position/rotation/scale del Transform desde el Inspector → Ctrl+Z revierte el drag completo. Editar `albedoTint`/`metallic`/`roughness`/`ao` del material → Ctrl+Z restaura. Renombrar entidad por el Tag input → Ctrl+Z restaura el nombre. Flujo `edit → delete → undo → undo` ahora completa correctamente (antes el segundo undo era silencioso).
 
 **Cambio importante:** infra de undo del Inspector. Nuevo `EditPropertyCommand<T>` templado + helper `trackPropertyEdit<T>` con detección drag-end vía `IsItemActivated/IsItemDeactivatedAfterEdit`. Handle remap en HistoryStack vía `ICommand::onEntityRemap` virtual. 9 de 51 widgets del Inspector cableados (los más editados); los 42 restantes siguen el mismo patrón y quedan como pendiente menor.
-
-**Próximo paso:** Hito 33 (TBD). Plan en `docs/PLAN_HITO33.md`.
 
 ### Hito 31 (anterior, ya cerrado)
 Tag: `v0.31.0-hito31`.

@@ -41,6 +41,8 @@ add_executable(mood_tests
     test_edit_property_command.cpp
     test_particle_system.cpp
     test_character_controller.cpp
+    test_raycast.cpp
+    test_trigger_system.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para

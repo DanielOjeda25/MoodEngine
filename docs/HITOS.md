@@ -37,7 +37,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 30 — Player Character Controller con Jolt (completado, tag `v0.30.0-hito30`).
 - [x] Hito 31 — Polish del feel: char controller (friction + crouch lerp + headbob) + particles (localSpace + sort) (completado, tag `v0.31.0-hito31`).
 - [x] Hito 32 — Cerrar deudas del editor: InspectorEditCommand + handle remap en HistoryStack (completado, tag `v0.32.0-hito32`).
-- [ ] Hito 33 — TBD.
+- [x] Hito 33 — Raycasts + triggers expuestos a Lua (completado, tag `v0.33.0-hito33`).
+- [ ] Hito 34 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -1135,3 +1136,48 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Inspector drop de textura sobre material slot**: NO se hizo en este hito (era candidato pero quedó fuera por scope). Pendiente del Hito 26. **Trigger:** combo con cualquier hito visual.
 - **`std::variant` del tracker no incluye `int`/`u32`**: si en el futuro se agregan widgets `DragInt` (ej. maxParticles del ParticleEmitter), agregar al variant. Hoy ningún wire-up usa int. **Trigger:** wire-up de widgets numéricos enteros.
 - **Compactación cross-frame para sliders externos al Inspector**: si aparece un slider en otra parte del UI que mute estado per-frame sin `IsItemDeactivatedAfterEdit`, podría seguir spammeando el history. No vimos casos. **Trigger:** dev nota spike en undo stack durante un drag.
+
+## Hito 33 — Raycasts + triggers expuestos a Lua
+
+**Objetivo:** habilitar gameplay scriptable real (FPS con armas hitscan + zonas detectoras). Combo natural post Hito 30 (char controller) + 31 (polish): raycast desde Lua para line-of-sight + `TriggerComponent` con dispatch al ScriptSystem para kill volumes / checkpoints / puertas automáticas.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — `PhysicsWorld::raycast`:*
+- Nueva struct `RaycastHit { hit, point, normal, distance, bodyId }` + método `raycast(origin, direction, maxDistance)` en `PhysicsWorld`.
+- Implementación via `JPH::NarrowPhaseQuery::CastRay` + `BodyLockRead` para extraer la normal en el punto de impacto. Direction puede no estar normalizada (se escala internamente por `maxDistance`). Characters virtuales son ghost para queries (consistente con Hito 30).
+
+*Bloque 2 — Lua bindings + `ScriptSystem::dispatchEvent`:*
+- `physics.raycast(origin_table, dir_table, maxDist)` registrado en `LuaBindings`. Devuelve tabla Lua `{hit, point, normal, distance, bodyId}` (origin/dir como tablas 1-indexadas, convención Hito 24).
+- `ScriptSystem::update` propaga `PhysicsWorld*` opcional → tests headless siguen pasando con `nullptr`.
+- Nuevo `dispatchEvent(entity, eventName)` que busca el sol::state de la entidad y llama la función global por nombre via `sol::protected_function`. Miss silencioso si el script no la define; errores van al canal `script` (mismo flujo que `onUpdate`).
+
+*Bloque 3 — `TriggerComponent` + `TriggerSystem`:*
+- Nuevo componente `TriggerComponent { halfExtents, playerInside }` (último flag runtime, no persistido).
+- `TriggerSystem` stateless: cada frame lee `physics.characterPosition(playerCharId)` y AABB-testea contra cada trigger. En flank-changes false→true / true→false dispatcha `on_trigger_enter` / `on_trigger_exit` al script de la entidad.
+- Wireado en `EditorApplication` (solo `EditorMode::Play`) + `PlayerApplication` (siempre).
+
+*Bloque 4 — Persistencia + Inspector + spawner demo:*
+- `SavedTrigger { halfExtents }` opcional en `SavedEntity`. `EntitySerializer` y `SceneLoader` cubren round-trip. Sin bump de schema mayor — campo nuevo opcional (back-compat con archivos pre-Hito 33).
+- Inspector: sección "Trigger" con `DragFloat3 halfExtents` undoable via `pushEditIfDone<glm::vec3>` (patrón Hito 32) + readout `playerInside`.
+- Menú "Ayuda > Agregar trigger demo" spawnea entidad en (0, 1, 0) con `halfExtents=(1,1,1)` + script `assets/scripts/trigger_demo.lua` (loguea enter/exit a `log.info`).
+
+*Bloque 5 — Tests + cierre:*
+- 5 tests nuevos en `test_raycast.cpp` (hit/miss/maxDistance/dirección no-normalizada/primer body en path).
+- 5 tests nuevos en `test_trigger_system.cpp` (flank true / flank false / charId=0 / dispatch via side-effect en `GameState::hud()` / no-double-dispatch sin flank).
+- Suite total **281/5535** (antes Hito 32 cerrado: 271/5512).
+
+**Verificación visual del dev:**
+- "Ayuda > Agregar trigger demo" spawnea entidad en (0, 1, 0) con halfExtents 1×1×1.
+- Inspector muestra sección "Trigger" con DragFloat3 + undo via Ctrl+Z + readout `playerInside`.
+- En Play Mode, caminar al centro del trigger imprime `[script] [info] [trigger] player entro`; al salir, `[trigger] player salio`.
+- Save/cerrar/reabrir el proyecto preserva `halfExtents` editado.
+
+**Siguiente paso tras completarlo:** Hito 34 (TBD). Plan en `docs/PLAN_HITO34.md`.
+
+### Pendientes menores detectados en Hito 33
+
+- **Triggers no detectan dynamic bodies**: solo el char del jugador es el "actor" detectable. Cajas físicas o NPCs entrando/saliendo no disparan callback. Patrón a extender: loop adicional sobre `RigidBodyComponent`. **Trigger:** primer demo que requiera detectar otra cosa.
+- **Raycast sin filtro de layer/tag**: pega contra cualquier body. Sin "ignore self" ni "solo enemies". **Trigger:** demo necesita raycast desde el player que no se autodetecte.
+- **Trigger AABB axis-aligned no respeta rotation**: aceptado por simplicidad. Si aparece caso (puerta rotada), bumpea a OBB. **Trigger:** demo lo requiere.
+- **Sin `on_trigger_stay`**: solo enter/exit. Si un script necesita tick mientras dentro, consultar `playerInside` desde su `onUpdate`. **Trigger:** demo pide tick continuo.
