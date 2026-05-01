@@ -4,6 +4,11 @@
 // `TriggerComponent` y dispatcha `on_trigger_enter` / `on_trigger_exit`
 // al ScriptComponent de la entidad trigger (si tiene uno).
 //
+// Hito 36 C: cuando NO hay flank pero el player sigue dentro, dispatcha
+// `on_trigger_stay` cada frame (a partir del frame siguiente al enter).
+// Util para puzzles tipo "mantener apretado el switch durante 2s" o
+// damage-over-time en zonas hostiles.
+//
 // Diseño v1: solo el character controller del jugador es el "actor"
 // detectado — para v1 alcanza con kill volumes / checkpoints / gatillos
 // area-based. Detectar dynamic bodies (cajas físicas) o entidades NPC

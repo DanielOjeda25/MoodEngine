@@ -44,13 +44,21 @@ void TriggerSystem::update(Scene& scene,
         [&](Entity e, TransformComponent& tf, TriggerComponent& tr) {
             const bool insideNow =
                 aabbContainsPoint(tf.position, tr.halfExtents, playerPos);
-            if (insideNow == tr.playerInside) return;  // sin cambio
-
-            tr.playerInside = insideNow;
-            const char* event = insideNow
-                ? "on_trigger_enter"
-                : "on_trigger_exit";
-            scripts.dispatchEvent(e.handle(), event);
+            if (insideNow != tr.playerInside) {
+                tr.playerInside = insideNow;
+                const char* event = insideNow
+                    ? "on_trigger_enter"
+                    : "on_trigger_exit";
+                scripts.dispatchEvent(e.handle(), event);
+                return;
+            }
+            // Hito 36 C: on_trigger_stay cada frame que el player sigue
+            // dentro (sin flank). Solo dispatcha si insideNow == true para
+            // no spammear cuando esta fuera. El frame del enter ya
+            // dispatcho enter — stay arranca al siguiente.
+            if (insideNow) {
+                scripts.dispatchEvent(e.handle(), "on_trigger_stay");
+            }
         });
 }
 

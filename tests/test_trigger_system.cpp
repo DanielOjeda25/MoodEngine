@@ -134,7 +134,7 @@ TEST_CASE("TriggerSystem: dispatcha on_trigger_enter al script en flank true") {
     std::filesystem::remove(path);
 }
 
-TEST_CASE("TriggerSystem: no dispatch si no hay flank change") {
+TEST_CASE("TriggerSystem: no dispatch enter si no hay flank change") {
     const auto path = writeTempScript(R"(
         function on_trigger_enter()
             hud.setHp(hud.getHp() + 1)
@@ -161,6 +161,74 @@ TEST_CASE("TriggerSystem: no dispatch si no hay flank change") {
     triggers.update(scene, pw, scripts, charId);
     triggers.update(scene, pw, scripts, charId);
     CHECK(GameState::hud().hp == 1);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("TriggerSystem: dispatcha on_trigger_stay cada frame que el player sigue dentro (Hito 36 C)") {
+    // Script con stay que incrementa hud.hp. enter/exit los dejamos
+    // como no-op observable (no toca hp) para aislar el conteo de stays.
+    const auto path = writeTempScript(R"(
+        function on_trigger_stay()
+            hud.setHp(hud.getHp() + 1)
+        end
+    )");
+
+    Scene scene;
+    Entity trig = scene.createEntity("trigger");
+    trig.addComponent<TriggerComponent>(TriggerComponent{glm::vec3(1.0f)});
+    trig.addComponent<ScriptComponent>(path.generic_string());
+
+    PhysicsWorld pw;
+    const u32 charId = pw.createCharacter(glm::vec3(0.0f),
+                                            k_charHalfHeight, k_charRadius);
+    ScriptSystem scripts;
+    TriggerSystem triggers;
+
+    GameState::hud().hp = 0;
+    scripts.update(scene, 0.016f);
+
+    // Frame 1: char entra (false->true). Dispatch enter, NO stay.
+    triggers.update(scene, pw, scripts, charId);
+    CHECK(GameState::hud().hp == 0);  // enter no toca hp en este script
+
+    // Frame 2..4: insideNow == true sin flank -> dispatcha stay cada vez.
+    triggers.update(scene, pw, scripts, charId);
+    triggers.update(scene, pw, scripts, charId);
+    triggers.update(scene, pw, scripts, charId);
+    CHECK(GameState::hud().hp == 3);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("TriggerSystem: NO dispatcha stay cuando el player esta fuera (Hito 36 C)") {
+    const auto path = writeTempScript(R"(
+        function on_trigger_stay()
+            hud.setHp(hud.getHp() + 1)
+        end
+    )");
+
+    Scene scene;
+    Entity trig = scene.createEntity("trigger");
+    trig.addComponent<TriggerComponent>(TriggerComponent{glm::vec3(1.0f)});
+    trig.addComponent<ScriptComponent>(path.generic_string());
+
+    PhysicsWorld pw;
+    // Char bien afuera del AABB.
+    const u32 charId = pw.createCharacter(glm::vec3(10.0f),
+                                            k_charHalfHeight, k_charRadius);
+    ScriptSystem scripts;
+    TriggerSystem triggers;
+
+    GameState::hud().hp = 0;
+    scripts.update(scene, 0.016f);
+
+    // Tres updates con el char afuera: ningun dispatch (insideNow==false
+    // y playerInside==false desde el inicio = no flank, no stay).
+    triggers.update(scene, pw, scripts, charId);
+    triggers.update(scene, pw, scripts, charId);
+    triggers.update(scene, pw, scripts, charId);
+    CHECK(GameState::hud().hp == 0);
 
     std::filesystem::remove(path);
 }

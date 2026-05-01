@@ -206,9 +206,10 @@ void InspectorPanel::onImGuiRender() {
             // -> reemplaza el material entero por uno nuevo (instance
             // unico) con la textura como albedo. Anti-contagio: nunca
             // muta el material previo (otras entidades pueden compartirlo).
-            // Sin undo todavia — es un cambio estructural, no edit
-            // per-frame; meterlo en HistoryStack requeriria un comando
-            // dedicado.
+            // Hito 36 A: ahora undoable — push de EditPropertyCommand<u32>
+            // (MaterialAssetId == u32) con setter que indexa el slot via
+            // captura por valor. Si no hay history disponible, fallback
+            // a asignacion directa.
             ImGui::Button("Drop textura para reemplazar material",
                             ImVec2(-FLT_MIN, 0));
             if (ImGui::BeginDragDropTarget()) {
@@ -217,7 +218,25 @@ void InspectorPanel::onImGuiRender() {
                     if (m_assets != nullptr && p->DataSize == sizeof(TextureAssetId)) {
                         const TextureAssetId tex =
                             *static_cast<const TextureAssetId*>(p->Data);
-                        mr.materials[i] = m_assets->createMaterialFromTexture(tex);
+                        const MaterialAssetId oldMatId = mr.materials[i];
+                        const MaterialAssetId newMatId =
+                            m_assets->createMaterialFromTexture(tex);
+                        const usize slotIndex = i;
+                        HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
+                        if (h != nullptr) {
+                            auto cmd = std::make_unique<EditPropertyCommand<u32>>(
+                                e, oldMatId, newMatId,
+                                [slotIndex](Entity& en, const u32& v) {
+                                    auto& mrc = en.getComponent<MeshRendererComponent>();
+                                    if (slotIndex < mrc.materials.size()) {
+                                        mrc.materials[slotIndex] = v;
+                                    }
+                                },
+                                "Reemplazar textura material");
+                            h->push(std::move(cmd));  // execute() asigna newMatId
+                        } else {
+                            mr.materials[i] = newMatId;
+                        }
                         m_editedThisFrame = true;
                     }
                 }
@@ -811,6 +830,22 @@ void InspectorPanel::onImGuiRender() {
             em.aliveCount = 0;
             m_editedThisFrame = true;
         }
+        // Hito 36 B: undo del DragInt. El setter del comando reaplica el
+        // mismo cleanup de la pool runtime que el handler manual de arriba —
+        // sin esto, un undo dejaria particulas vivas con indices >= la
+        // nueva capacidad.
+        pushEditIfDone<u32>(m_editTracker, m_ui, e, em.maxParticles,
+            [](Entity& en, const u32& v) {
+                auto& emc = en.getComponent<ParticleEmitterComponent>();
+                emc.maxParticles = v;
+                emc.alive.clear();
+                emc.positions.clear();
+                emc.velocities.clear();
+                emc.ages.clear();
+                emc.lifetimes.clear();
+                emc.aliveCount = 0;
+            },
+            "Editar maxParticles");
         ImGui::TextDisabled("vivas: %u / %u",
                              em.aliveCount, em.maxParticles);
 

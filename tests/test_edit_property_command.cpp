@@ -119,3 +119,70 @@ TEST_CASE("HistoryStack::remapEntityInStack es no-op si oldH == newH") {
     REQUIRE(h.undo());
     CHECK(e.getComponent<TransformComponent>().position.x == doctest::Approx(0.0f));
 }
+
+TEST_CASE("EditPropertyCommand<u32>: setter con captura de slotIndex (Hito 36 A)") {
+    // Simula el patron del drop de textura sobre material slot del
+    // Inspector: el setter captura `slotIndex` por valor y muta
+    // mr.materials[slotIndex] al valor entrante.
+    Scene scene;
+    Entity e = scene.createEntity("ConMesh");
+    MeshRendererComponent mr{};
+    mr.materials = {10u, 20u, 30u};
+    e.addComponent<MeshRendererComponent>(std::move(mr));
+
+    const usize slotIndex = 1;  // mid slot
+    auto setter = [slotIndex](Entity& en, const u32& v) {
+        auto& mrc = en.getComponent<MeshRendererComponent>();
+        if (slotIndex < mrc.materials.size()) {
+            mrc.materials[slotIndex] = v;
+        }
+    };
+
+    EditPropertyCommand<u32> cmd(e, /*before*/ 20u, /*after*/ 99u,
+                                   setter, "Reemplazar textura material");
+    CHECK_FALSE(cmd.isNoOp());
+
+    cmd.execute();
+    CHECK(e.getComponent<MeshRendererComponent>().materials[1] == 99u);
+    CHECK(e.getComponent<MeshRendererComponent>().materials[0] == 10u); // intocado
+    CHECK(e.getComponent<MeshRendererComponent>().materials[2] == 30u); // intocado
+
+    cmd.undo();
+    CHECK(e.getComponent<MeshRendererComponent>().materials[1] == 20u);
+}
+
+TEST_CASE("EditPropertyCommand<u32>: setter complejo limpia pool runtime al revertir (Hito 36 B)") {
+    // Simula el patron de maxParticles del Inspector: el setter no solo
+    // muta el campo, tambien resetea la pool de particulas vivas — sin
+    // esto, undo dejaria indices >= la nueva capacidad.
+    Scene scene;
+    Entity e = scene.createEntity("Emitter");
+    ParticleEmitterComponent pe{};
+    pe.maxParticles = 1024;
+    pe.aliveCount = 50;
+    pe.alive.assign(50, true);
+    pe.positions.resize(50);
+    e.addComponent<ParticleEmitterComponent>(std::move(pe));
+
+    auto setter = [](Entity& en, const u32& v) {
+        auto& emc = en.getComponent<ParticleEmitterComponent>();
+        emc.maxParticles = v;
+        emc.alive.clear();
+        emc.positions.clear();
+        emc.velocities.clear();
+        emc.ages.clear();
+        emc.lifetimes.clear();
+        emc.aliveCount = 0;
+    };
+
+    EditPropertyCommand<u32> cmd(e, /*before*/ 1024u, /*after*/ 256u,
+                                   setter, "Editar maxParticles");
+    cmd.execute();
+    CHECK(e.getComponent<ParticleEmitterComponent>().maxParticles == 256u);
+    CHECK(e.getComponent<ParticleEmitterComponent>().aliveCount == 0u);
+    CHECK(e.getComponent<ParticleEmitterComponent>().alive.empty());
+
+    cmd.undo();  // revert tambien limpia la pool — fiel al patron del slider.
+    CHECK(e.getComponent<ParticleEmitterComponent>().maxParticles == 1024u);
+    CHECK(e.getComponent<ParticleEmitterComponent>().aliveCount == 0u);
+}

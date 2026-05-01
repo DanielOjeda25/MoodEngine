@@ -46,9 +46,11 @@ struct InspectorEditTracker {
     /// Id del widget que esta siendo editado. 0 = sin drag activo.
     ImGuiID activeId = 0;
     /// Valor pre-edit tipado. Variant cubre los tipos que el Inspector
-    /// realmente edita (f32 sliders, glm::vec3 transforms, glm::vec4
-    /// colors, bool checkboxes, std::string text inputs).
-    std::variant<f32, glm::vec3, glm::vec4, bool, std::string> before;
+    /// realmente edita: f32 sliders, glm::vec3 transforms, glm::vec4
+    /// colors, bool checkboxes, std::string text inputs, u32 DragInts +
+    /// asset ids (Hito 36 — habilita undo de maxParticles del particle
+    /// emitter y de drops de textura sobre material slot).
+    std::variant<f32, glm::vec3, glm::vec4, bool, std::string, u32> before;
 };
 
 /// Helper template: llamar INMEDIATAMENTE despues del widget ImGui que se
