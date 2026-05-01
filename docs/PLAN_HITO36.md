@@ -1,100 +1,49 @@
-# Plan — Hito 36: TBD
+# Plan — Hito 36: Cerrar lo que arrastra (cerrado)
 
-> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 35 cerrado).
->
-> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
+> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 36 cerrado).
 
 ---
 
 ## Estado
 
-**Hito 35 cerrado** (`v0.35.0-hito35`, suite **287/5561**). 4 hitos seguidos cerrando deudas (32 → 33 → 34 → 35). Inspector con undo en 40 widgets. Bug latente del Hito 26 con paths `..` resuelto. Drop de textura sobre material slot habilitado.
+**Hito 36 cerrado** (`v0.36.0-hito36`, suite **291/5574**). Quinto hito seguido cerrando deudas (32 → 33 → 34 → 35 → 36). Los últimos pendientes barribles del scope previo: undo del drop de textura (Hito 35 A), `u32` en variant del tracker + maxParticles undoable (Hito 32→35), y `on_trigger_stay` callback (Hito 33). Próximo hito puede arrancar feature pesado con piso limpio.
 
-El Hito 36 está **TBD**: acordar con el dev el alcance antes de abrir bloques.
+## Bloques cerrados
 
-**Recordatorios importantes:**
-- Networking / multijugador, i18n, cursores custom **fuera de alcance**. NO proponer.
-- Polish del NavAgent **descartado permanentemente**.
+- [x] **Bloque A — Undo del drop de textura sobre material slot** (deuda Hito 35 A): el handler en `InspectorPanel` ahora empuja un `EditPropertyCommand<u32>` (MaterialAssetId == u32) al HistoryStack en lugar de asignar directo. Setter captura `slotIndex` por valor y muta `mr.materials[slotIndex]`. Reusamos el comando templado existente — sin clase nueva. Fallback a asignación directa si no hay history disponible.
+- [x] **Bloque B — `u32` en variant del `InspectorEditTracker` + undo de `maxParticles`** (deuda Hito 32 → 35): agregado `u32` al `std::variant<...>` del tracker. Cableado `pushEditIfDone<u32>` en el slider DragInt de `ParticleEmitterComponent::maxParticles`. El setter del comando reaplica el cleanup completo de la pool runtime (alive/positions/velocities/ages/lifetimes/aliveCount) — sin esto, undo dejaría índices stale ≥ la nueva capacidad.
+- [x] **Bloque C — `on_trigger_stay` callback per-frame** (deuda Hito 33): `TriggerSystem::update` ahora dispatcha `on_trigger_stay` cada frame que `playerInside == true` y NO hubo flank (frame del enter dispatcha enter, los siguientes mientras adentro dispatchan stay). Scripts que no definan `on_trigger_stay` siguen funcionando — `dispatchEvent` ya hace miss silencioso.
+- [x] **Bloque D — Tests + cierre**:
+  - 2 tests nuevos en `test_edit_property_command.cpp`: `EditPropertyCommand<u32>` con setter que indexa slot (Bloque A) + setter complejo que limpia pool runtime (Bloque B).
+  - 2 tests nuevos en `test_trigger_system.cpp`: dispatch de stay cada frame que el player sigue dentro (Bloque C) + NO dispatcha stay cuando está fuera.
+  - Suite total **291/5574** (antes Hito 35 cerrado: 287/5561).
+  - Tag `v0.36.0-hito36`.
 
----
+## Lo que NO se cubrió
 
-## Candidatos activos
+Todo el scope chico que quedaba arrastrando se cerró. Lo que queda son items **medios o sin trigger concreto**, candidatos a aparecer en hitos futuros si el dev los necesita:
 
-Lista en orden de prioridad/coste.
-
-### A. Save/Load de gameplay state
-
-**Por qué:** hoy `.moodmap` describe nivel pero NO estado de juego. Save & load = primer eslabón de "juego con progresión". Muchos hitos cerrando deudas — el dev probablemente esté listo para una feature visible.
-
-**Coste:** medio. Definir state vs setup, serializar `GameState::hud()` + globals Lua relevantes, integrar con menú "Save/Load" en `MoodPlayer`.
-
-**Trigger ideal:** primer demo que dependa de progresión.
-
-### B. UI de juego mejorada (HUD + main menu)
-
-**Por qué:** falta menú principal del MoodPlayer (New Game / Load Game / Settings / Quit), settings persistidos, HUD parametrizable.
-
-**Coste:** medio.
-
-**Trigger ideal:** combo con A.
-
-### C. PackageBuilder smart-pack — del Hito 26
-
-**Por qué:** hoy `PackageBuilder` copia `assets/` entero. Con Kenney pack (1.5 MB) + futuros packs, los packages se inflan rápido.
-
-**Coste:** medio. Escanear `.moodmap` + dependencias indirectas.
-
-**Trigger ideal:** demo packageado > 50 MB.
-
-### D. Triggers detectan dynamic bodies / NPCs — del Hito 33
-
-**Por qué:** hoy solo el char del jugador es el "actor" detectable. Cajas físicas o NPCs entrando/saliendo no disparan callback.
-
-**Coste:** medio. Loop adicional sobre `RigidBodyComponent`.
-
-**Trigger ideal:** primer demo que requiera detectar otra cosa (puzzles tipo "pesar un objeto para abrir puerta", proyectiles atravesando zona).
-
-### E. Emisión de partículas por shape — del Hito 29
-
-**Por qué:** hoy todas las partículas se emiten desde un punto en el centro del Transform. Cono/esfera/disco amplían expresividad de VFX.
-
-**Coste:** medio. Refactor del emit step + nuevo enum + sample funcs por shape.
-
-**Trigger ideal:** VFX que pide directionalidad clara (chispas orientadas, humo cónico).
-
-### F. Undo del drop de textura sobre material slot — del Hito 35 A
-
-**Por qué:** drop textura cambia el MaterialAssetId del slot, pero no se trackea en el HistoryStack.
-
-**Coste:** bajo. Comando dedicado `ReplaceMaterialCommand`.
-
-**Trigger ideal:** dev nota la falta tras tweakear texturas.
+- **Triggers detectan dynamic bodies / NPCs** (Hito 33): coste medio, fuera de scope chico.
+- **Trigger AABB rotation (OBB)** (Hito 33): coste medio.
+- **Setter runtime de friction** (Hito 34 A): el cambio del slider hoy se aplica al re-Play.
+- **Coyote/jump buffer per-proyecto** (Hito 34 C): hardcoded por ahora.
+- **Filtro raycast layer/tag genérico** (Hito 34 B): solo `ignoredBodyId` cubre "ignore self".
+- **DragFloatRange2 widgets undoables** (Hito 32→35): lifetime/size del ParticleEmitter — requeriría `std::pair<f32,f32>` en variant.
+- **Combos estructurales del Inspector** (type/shape/clipName): cambios de schema, no caben en `pushEditIfDone<T>`.
 
 ---
 
-## Diferidos (revisar más adelante)
+## Decisiones tomadas
 
-### Polish menores acumulados
-- Sort de partículas por bucket-Z (vs centro simple).
-- `localSpace` con rotation/scale del entity.
-- `std::variant` del tracker no incluye `int`/`u32` (necesario para `DragInt` como maxParticles).
-- Compactación cross-frame para sliders externos al Inspector.
-- Trigger AABB no respeta rotation del Transform.
-- Raycast batch API + filtros por layer/tag genérico.
-- Setter runtime de friction (hoy aplica solo al re-materializar).
-- Coyote/jump buffer windows configurables per-proyecto.
-- ~10 widgets estructurales del Inspector sin undo.
+Las nuevas en `DECISIONS.md` (2026-05-01):
+- Reusar `EditPropertyCommand<T>` con T=u32 para el undo del drop de textura — no nuevo comando.
+- `on_trigger_stay` se dispatcha desde el frame siguiente al enter (frame del enter solo dispatcha enter).
 
 ---
 
-## Decisiones a tomar (cuando el hito se concrete)
+## Verificación visual del dev (criterios cumplidos)
 
-- [ ] Cuál de los candidatos activos arriba se elige.
-- [ ] Si toca persistencia, definir si bumpea format version o usa campo opcional.
-- [ ] Si toca scripting, definir si los nuevos bindings respetan el sandbox.
-
----
-
-## Riesgos identificados (genéricos, completar al concretar el hito)
-
-- Cada candidato tiene riesgos propios; documentarlos al elegir.
+- Drop de textura sobre material slot → Ctrl+Z restaura el material previo. Otras entidades que compartían el material original siguen intocadas.
+- Editar `maxParticles` en el slider → Ctrl+Z restaura el valor anterior y resetea la pool runtime (no hay índices stale).
+- Trigger demo con script que define `on_trigger_stay` loguea cada frame que el player sigue dentro; al salir, deja de loguear.
+- Suite 291/5574 sin regresiones.

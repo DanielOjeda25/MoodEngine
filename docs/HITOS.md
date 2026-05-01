@@ -40,7 +40,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 33 — Raycasts + triggers expuestos a Lua (completado, tag `v0.33.0-hito33`).
 - [x] Hito 34 — Cerrar deudas chicas: friction per-body + raycast filtrable + coyote/jump buffer + headbob velocity scale + 7 widgets undo (completado, tag `v0.34.0-hito34`).
 - [x] Hito 35 — Cerrar deudas viejas: drop textura sobre material slot + 23 widgets undo + validar .obj+.mtl (fix path normalize) (completado, tag `v0.35.0-hito35`).
-- [ ] Hito 36 — TBD.
+- [x] Hito 36 — Cerrar lo que arrastra: undo del drop de textura + maxParticles undoable (u32 en variant) + on_trigger_stay (completado, tag `v0.36.0-hito36`).
+- [ ] Hito 37 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -1278,6 +1279,48 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 
 ### Pendientes menores detectados en Hito 35
 
-- **Undo del drop de textura sobre material slot**: cambio estructural (asigna nuevo MaterialAssetId), no se trackea en HistoryStack hoy. Requeriría comando dedicado `ReplaceMaterialCommand`. **Trigger:** dev nota tras tweakear texturas.
-- **~10 widgets estructurales restantes del Inspector**: combos type/shape (cambian schema del body), paths de assets (re-resolvibles), DragFloatRange2 (toca dos floats), DragInt (variant del tracker no incluye int). Criterio: solo escalares/vectores puros van con `pushEditIfDone<T>`. **Trigger:** dev pide un widget específico undoable.
-- **`std::variant` del tracker no incluye `int`/`u32`**: heredado de Hito 32. Necesario para wire-up de `maxParticles` y similares. **Trigger:** wire-up explícito de algún DragInt.
+- ~~**Undo del drop de textura sobre material slot**: cambio estructural (asigna nuevo MaterialAssetId), no se trackea en HistoryStack hoy. Requeriría comando dedicado `ReplaceMaterialCommand`.~~ Resuelto en Hito 36 A reusando `EditPropertyCommand<u32>` (sin clase nueva).
+- **~10 widgets estructurales restantes del Inspector**: combos type/shape (cambian schema del body), paths de assets (re-resolvibles), DragFloatRange2 (toca dos floats). Criterio: solo escalares/vectores puros van con `pushEditIfDone<T>`. **Trigger:** dev pide un widget específico undoable.
+- ~~**`std::variant` del tracker no incluye `int`/`u32`**: heredado de Hito 32. Necesario para wire-up de `maxParticles` y similares.~~ Resuelto en Hito 36 B agregando `u32` al variant + cableando `maxParticles`.
+
+## Hito 36 — Cerrar lo que arrastra (undo drop textura + maxParticles undoable + on_trigger_stay)
+
+**Objetivo:** quinto hito seguido cerrando deudas. Los últimos pendientes barribles del scope previo, así el próximo hito empieza con piso limpio. 3 bloques de bajo coste.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Undo del drop de textura sobre material slot:*
+- El handler del drop en `InspectorPanel` ahora empuja un `EditPropertyCommand<u32>` (MaterialAssetId == u32) al HistoryStack.
+- Setter captura `slotIndex` por valor y muta `mr.materials[slotIndex]`.
+- Reusamos el comando templado existente — sin clase nueva (`ReplaceMaterialCommand` propuesto en plan, descartado por ser overengineering).
+- Fallback a asignación directa si no hay history disponible.
+
+*Bloque B — `u32` en variant del `InspectorEditTracker` + undo de `maxParticles`:*
+- Agregado `u32` al `std::variant<...>` del tracker. Cero impacto en call sites existentes.
+- Cableado `pushEditIfDone<u32>` en el slider DragInt de `ParticleEmitterComponent::maxParticles`.
+- El setter del comando reaplica el cleanup completo de la pool runtime (alive/positions/velocities/ages/lifetimes/aliveCount). Sin esto, undo dejaría índices stale ≥ la nueva capacidad.
+
+*Bloque C — `on_trigger_stay` callback per-frame:*
+- `TriggerSystem::update` dispatcha `on_trigger_stay` cada frame que `playerInside == true` y NO hubo flank.
+- Frame del enter: dispatcha solo enter. Frames siguientes mientras adentro: stay. Frame del exit: dispatcha solo exit.
+- Scripts que no definan `on_trigger_stay` siguen funcionando — `dispatchEvent` con miss silencioso (mismo patrón Hito 33).
+
+*Bloque D — Tests + cierre:*
+- 2 tests en `test_edit_property_command.cpp`: `EditPropertyCommand<u32>` con setter que indexa slot (Bloque A) + setter complejo que limpia pool runtime (Bloque B).
+- 2 tests en `test_trigger_system.cpp`: dispatch de stay cada frame que el player sigue dentro (Bloque C) + NO dispatcha stay cuando está fuera.
+- Suite total **291/5574** (antes Hito 35 cerrado: 287/5561).
+
+**Verificación visual del dev:**
+- Drop de textura sobre material slot → Ctrl+Z restaura el material previo. Otras entidades intocadas.
+- Editar `maxParticles` → Ctrl+Z restaura el valor anterior y resetea la pool runtime.
+- Trigger demo con script que define `on_trigger_stay` loguea cada frame que el player sigue dentro.
+
+**Siguiente paso tras completarlo:** Hito 37 (TBD). Plan en `docs/PLAN_HITO37.md`.
+
+### Pendientes menores detectados en Hito 36
+
+Scope chico arrastrando = limpio. Lo que queda es de coste medio o sin trigger concreto, candidato a hitos futuros si emerge necesidad:
+- **Triggers detectan dynamic bodies / NPCs** (Hito 33 origen): coste medio.
+- **Trigger AABB rotation (OBB)** (Hito 33): coste medio.
+- **DragFloatRange2 widgets undoables**: lifetime/size del ParticleEmitter — requeriría `std::pair<f32,f32>` en variant.
+- **Combos estructurales del Inspector** (type/shape/clipName): cambios de schema, no caben en `pushEditIfDone<T>`. Necesitarían comandos dedicados.

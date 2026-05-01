@@ -6,13 +6,19 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 35 cerrado.**
+**Hito 36 cerrado.**
+Tag: `v0.36.0-hito36`.
+Verificado automático: suite doctest **291/5574** (+2 de `test_edit_property_command` para `EditPropertyCommand<u32>` + 2 de `test_trigger_system` para `on_trigger_stay`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: drop de textura sobre material slot → Ctrl+Z restaura el material previo (anti-contagio del Hito 25 preservado). Editar `maxParticles` con DragInt → Ctrl+Z restaura el valor + resetea la pool runtime. Trigger con script que define `on_trigger_stay` loguea cada frame que el player sigue dentro.
+
+**Cambio importante:** quinto hito seguido cerrando deudas (32 → 33 → 34 → 35 → 36). El backlog "scope chico arrastrando" está limpio. 3 bloques: undo del drop de textura via reuso de `EditPropertyCommand<u32>` (sin clase nueva), `u32` en el variant del `InspectorEditTracker` + cableo del slider DragInt de `maxParticles` con cleanup de pool runtime al revertir, dispatch de `on_trigger_stay` per-frame en `TriggerSystem` (frame del enter solo enter, frames siguientes mientras adentro stay, frame del exit solo exit). Próximo hito puede arrancar feature pesado con piso limpio.
+
+**Próximo paso:** Hito 37 (TBD). Plan en `docs/PLAN_HITO37.md`.
+
+### Hito 35 (anterior, ya cerrado)
 Tag: `v0.35.0-hito35`.
 Verificado automático: suite doctest **287/5561** (+1 de `test_mesh_asset` `.obj`+`.mtl`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: drag de textura del AssetBrowser sobre el slot del Inspector reemplaza el material por uno nuevo (otras entidades que compartían el material original no se ven afectadas). Editar fov/near/far de Camera, fog/exposure/IBL, audio volume/loop/etc, animator speed/playing/loop, toggles + colores + velocities de partículas → Ctrl+Z revierte cada uno. Drop de un `.obj` con `.mtl` que referencia textura externa muestra la textura correcta (antes caía a missing por bug del path).
 
 **Cambio importante:** scope chico, mismo patrón que Hito 34 — cerrar deudas viejas no atacadas. 4 bloques: drop textura sobre material slot del Inspector, wire-up undo de 23 widgets más (total Inspector con undo: **40 widgets**, era 17), validación `.obj`+`.mtl` que destapó un bug latente del Hito 26 con paths que escapan su carpeta. Fix: `MeshLoader::extractAlbedo` ahora normaliza paths con `lexically_normal()` antes de pasarlos al VFS — antes texturas en `../paths` caían a missing silenciosamente.
-
-**Próximo paso:** Hito 36 (TBD). Plan en `docs/PLAN_HITO36.md`.
 
 ### Hito 34 (anterior, ya cerrado)
 Tag: `v0.34.0-hito34`.

@@ -2513,3 +2513,67 @@ Las opciones eran:
 
 **Revisar si:** aparece un caso donde sí queremos rechazar `..` colapsables (improbable — la normalización es estándar).
 
+## 2026-05-01: Reusar `EditPropertyCommand<T>` con T=u32 para el undo del drop de textura (no comando dedicado)
+
+**Contexto:** Hito 36 A. El plan inicial proponía un `ReplaceMaterialCommand` dedicado para trackear el drop de textura sobre material slot. Al implementar, vi que el patrón se reduce a "captura `slotIndex` + asigna `mr.materials[slot] = newMatId`" — exactamente lo que `EditPropertyCommand<T>` ya hace para cualquier campo escalable.
+
+**Decisión:** reusar `EditPropertyCommand<u32>` con setter que captura `slotIndex` por valor:
+```cpp
+const usize slotIndex = i;
+auto cmd = std::make_unique<EditPropertyCommand<u32>>(
+    e, oldMatId, newMatId,
+    [slotIndex](Entity& en, const u32& v) {
+        auto& mrc = en.getComponent<MeshRendererComponent>();
+        if (slotIndex < mrc.materials.size()) {
+            mrc.materials[slotIndex] = v;
+        }
+    },
+    "Reemplazar textura material");
+h->push(std::move(cmd));
+```
+
+`MaterialAssetId == u32`, el variant del tracker ya incluye `u32` (Hito 36 B). Sin código nuevo en `commands/`.
+
+**Razones:**
+- **Cero superficie nueva**: `EditPropertyCommand<T>` ya cubre el ciclo execute/undo/onEntityRemap/isNoOp. Reusarlo con T diferente es free.
+- **El "comando dedicado" no aporta nada**: `ReplaceMaterialCommand` haría exactamente lo mismo que la lambda inline. Solo agrega indirección.
+- **Captura por valor del slotIndex**: el comando vive más allá del scope donde se construye. Si el `mr&` referenciado al construir el comando se invalida (entity destruida + recreada), `EditPropertyCommand::isEntityValid()` ya cubre el caso. La lambda usa `slotIndex` capturado por valor, no `i&`.
+- **Bounds-check defensivo en el setter**: si entre push y undo cambia el tamaño del vector `materials` (ej. assigning un mesh con menos submeshes), el `if (slotIndex < ...)` evita out-of-bounds.
+
+**Alternativas consideradas:**
+- **`ReplaceMaterialCommand` dedicado**: rechazado por overengineering. El template ya cubre el caso.
+- **Mutar el material in-place**: rompería anti-contagio del Hito 25 (otras entidades que comparten verían el cambio).
+
+**Trade-offs:**
+- Se pierde: un nombre type-specific en el stack (`name()` retorna "Reemplazar textura material" como string, no como tipo).
+- Se gana: cero código nuevo, mismo invariante de execute/undo que el resto del Inspector.
+
+**Revisar si:** emerge un cambio estructural que NO se reduce a "asigna T a campo" (ej. cambiar el shape del RigidBody implica recrear el body físico — eso sí necesita comando dedicado).
+
+## 2026-05-01: `on_trigger_stay` arranca desde el frame siguiente al enter (no en el mismo frame)
+
+**Contexto:** Hito 36 C. Al agregar `on_trigger_stay` a `TriggerSystem`, hubo que decidir cuándo dispatcharlo en relación al enter: ¿mismo frame que el enter (enter + stay simultáneos), o solo desde el frame siguiente?
+
+**Decisión:** **solo desde el frame siguiente al enter**. La lógica del update es:
+1. Computar `insideNow`.
+2. Si `insideNow != tr.playerInside` → flank: dispatch enter o exit, return.
+3. Si `insideNow == true` (sin flank) → dispatch stay.
+
+El frame del enter cae en (2) — solo dispatcha enter. Los frames siguientes mientras inside caen en (3) — dispatchan stay. El frame del exit cae en (2) — solo dispatcha exit.
+
+**Razones:**
+- **Semántica clara**: enter = "el player acaba de entrar"; stay = "ya está dentro". Disparar ambos en el mismo frame difumina la distinción y obliga a los scripts a check internal state para no duplicar lógica.
+- **Patrón estándar**: Unity (`OnTriggerEnter` + `OnTriggerStay`) y Source 2 (`OnStartTouch` + `OnTouching`) tienen la misma separación temporal.
+- **Cero overhead extra**: el `return` después del flank ya está en el código del Hito 33; agregar el bloque de stay después no afecta performance.
+
+**Alternativas consideradas:**
+- **Stay también en el frame del enter**: rechazado por difuminar semántica.
+- **Stay solo en flank false→false (ya estaba dentro)**: degenerate — eso nunca dispatcharía después del primer frame inside.
+- **`exit + stay` simultáneo**: imposible — exit implica `insideNow == false`, stay requiere `insideNow == true`.
+
+**Trade-offs:**
+- Se pierde: scripts que necesiten "tick desde el primer frame inside" tienen que duplicar lógica en `on_trigger_enter` + `on_trigger_stay`. Aceptado — caso raro.
+- Se gana: semántica limpia, patrón compatible con motores estándar.
+
+**Revisar si:** un demo necesita explícitamente que stay se dispatche también en el frame del enter (improbable — el script ya tiene enter para ese frame).
+
