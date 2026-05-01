@@ -35,7 +35,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 28 — Editor polish: undo/redo de spawns, autoscale al drop, mini editor de scripts (completado, tag `v0.28.0-hito28`).
 - [x] Hito 29 — Particle system (completado, tag `v0.29.0-hito29`).
 - [x] Hito 30 — Player Character Controller con Jolt (completado, tag `v0.30.0-hito30`).
-- [ ] Hito 31 — TBD.
+- [x] Hito 31 — Polish del feel: char controller (friction + crouch lerp + headbob) + particles (localSpace + sort) (completado, tag `v0.31.0-hito31`).
+- [ ] Hito 32 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -1052,4 +1053,43 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Animación del crouch (interpolación de altura)**: hoy el cambio es instantáneo (1 frame). Para feedback más natural, lerp la altura del centro y el eyeOffset durante ~0.2s. **Trigger:** polish visual.
 - **`moveAndSlide` AABB sigue compilado** en `PhysicsSystem.cpp` por los tests del Hito 4 (`test_collision.cpp`). Se podría eliminar si esos tests también migran a `CharacterVirtual`. **Trigger:** dev quiere remover dead code.
 - **Doble jump / coyote time**: V1 sin window de gracia ni jumps en aire. Se puede agregar un `m_coyoteTime` que permita saltar dentro de 0.1s de haber dejado el piso. **Trigger:** feedback de gameplay.
-- **Headbob + camera shake**: el sync `setPosition` directo se ve "rígido" sin animación de paso. Agregar offset sinusoidal pequeño al eyeOffset cuando hay velocidad horizontal. **Trigger:** polish visual.
+- ~~**Headbob + camera shake**: el sync `setPosition` directo se ve "rígido" sin animación de paso. Agregar offset sinusoidal pequeño al eyeOffset cuando hay velocidad horizontal. **Trigger:** polish visual.~~ **Resuelto en Hito 31 D**.
+
+## Hito 31 — Polish del feel: char controller + particles
+
+**Objetivo:** scope chico — pulir el feel de los dos sistemas grandes recién terminados (char controller del Hito 30 + particles del Hito 29) ahora que están en uso real. Cinco fixes baratos pero visibles. NavAgent polish quedó descartado permanentemente por decisión del dev ("no me interesa").
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque D — Polish del char controller (Hito 30):*
+- **Friction**: `mFriction` default de Jolt (0.2) → 0.5 en `PhysicsWorld::createBody`. La caja física demo ya no resbala kilómetros al ser empujada por el char; se siente como madera-sobre-madera.
+- **Crouch lerp visual**: nuevo `m_crouchVisualT` que avanza hacia 0/1 (standing/crouched) a 5/s (~200ms transición). El shape de Jolt sigue cambiando instant (predictible para physics) pero el eye Y de la cámara interpola con `glm::mix` entre `k_eyeStanding=0.7` y `k_eyeCrouched=0.3`. Antes: snap brusco al pulsar Ctrl.
+- **Headbob**: `m_headbobTime` acumula `dt` SOLO cuando el player camina horizontal Y está on-ground. Eye Y suma `sin(t * 5*2π) * 0.04` (5 Hz, amplitud 4 cm). Da feel sutil de "pasos" sin exagerar; cuando el player se detiene, queda en el último offset hasta que vuelva a moverse.
+- Aplicado simétrico en `EditorApplication::updatePlayMode` + `EditorScene::syncCamera` y `PlayerApplication::updateInput` + `updateRigidBodies` para paridad de feel entre Editor Play Mode y MoodPlayer standalone.
+
+*Bloque F — Polish de particles (Hito 29):*
+- **`localSpace` flag** (default `false`): cuando `true`, posiciones/velocidades se almacenan en el espacio local del emisor. `ParticleSystem` spawnea en `(0,0,0)` en vez de `tf.position`; el renderer suma el `tf.position` antes del upload al VBO. Resultado: cuando la entidad emisora se mueve, las partículas la SIGUEN (humo en una chimenea que viaja, sparks pegadas a un personaje). Default `false` preserva comportamiento original. Solo tomamos translation del entity, no rotation/scale — los billboards igual siempre miran a la cámara.
+- **Sort back-to-front**: tras compactar las partículas vivas en `m_cpu`, si `!em.additive` AND `size>1`, sort por view-space Z ascendente (más negativo = más lejos = se dibuja primero). Así el blend `GL_SRC_ALPHA / GL_ONE_MINUS_SRC_ALPHA` produce el resultado correcto. Skipeamos el sort para `additive` porque el blend es commutativo.
+- Persistencia: `bool localSpace` en `SavedParticleEmitter`; serializer/loader lo leen/escriben como `"local_space"` en el JSON. Schema retro-compat — archivos viejos sin el campo lo leen como `false`.
+- Inspector: checkbox `localSpace##pe` al lado de `additive` en la sección ParticleEmitter.
+
+*Cierre:*
+- 1 test nuevo: `test_particle_system.cpp > "SceneSerializer: localSpace default false se preserva al round-trip"` (retro-compat) + bump del test existente para cubrir `localSpace=true` round-trip.
+- Suite total **265/5499** (antes Hito 30: 264/5494).
+
+**Verificación visual del dev:**
+- Caja física empujada por el char ya no se desliza interminablemente — se queda quieta a los 2-3m post-empuje.
+- Crouch al pulsar Ctrl baja la cámara con transición visible (no snap).
+- Caminar en modo Play se siente con "pasos" (sin marear; amplitud 4cm es discreta).
+- Emisor de fuego con `localSpace=true` movido por gizmo: las partículas siguen al emisor (antes "se quedaban atrás" como rastro).
+- Humo (alpha blend) se ve correctamente layered tras el sort — no más "halos cuadrados" donde dos partículas se intersecan.
+
+**Siguiente paso tras completarlo:** Hito 32 (TBD). Plan en `docs/PLAN_HITO32.md`.
+
+### Pendientes menores detectados en Hito 31
+
+- **Sort por view-Z usa solo el centro de la partícula**: para partículas grandes que ocluyen a múltiples más chicas, podría haber edge cases donde el sort por centro no representa bien la profundidad. Mitigación futura: bucket por Z + sort dentro del bucket. **Trigger:** dev nota artifacts visibles con partículas muy grandes y mezcladas.
+- **`localSpace` no propaga rotación/scale del emisor**: solo translation. Si el dev quiere sparks que roten con un personaje, falta multiplicar las posiciones por la rotación del transform. **Trigger:** dev pide sparks orientadas.
+- **Headbob no escala con velocidad**: amplitud fija al 100%. Cuando el char está en crouch (velocidad 2 m/s vs walk 4 m/s), el bob se siente "rápido" para la velocidad. Podría escalar `bobAmp *= speed/k_walkSpeed`. **Trigger:** dev nota disonancia.
+- **Crouch lerp no afecta al ground check**: durante la transición visual el char ya está en su shape final en Jolt. Si el dev espera "agacharse poco a poco para pasar bajo un obstáculo", el char puede colisionar instant. Aceptable v1 (la transición es 200ms). **Trigger:** dev intenta el caso de uso.
+- **Friction 0.5 hardcoded para todos los Dynamic**: cada body se beneficiaría de un valor distinto (madera 0.5, hielo 0.05, goma 0.8). Exponer `friction` en `RigidBodyComponent`. **Trigger:** dev pide control per-body.

@@ -6,13 +6,19 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 30 cerrado.**
+**Hito 31 cerrado.**
+Tag: `v0.31.0-hito31`.
+Verificado automático: suite doctest **265/5499** (+1 de `test_particle_system` round-trip de `localSpace`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: caja física empujada por el char no se desliza interminablemente (friction 0.2 → 0.5), crouch suave en 200ms (no snap), caminar con headbob sutil de 4cm a 5Hz. Emisor de partículas con `localSpace=true` movido por gizmo arrastra todas las partículas con el emisor; humo se ve correctamente layered post-sort.
+
+**Cambio importante:** scope chico — pulir el feel de Hito 29 (particles) + Hito 30 (char controller) ahora que están en uso real. Cinco fixes baratos pero visibles. NavAgent polish quedó descartado permanentemente por decisión del dev.
+
+**Próximo paso:** Hito 32 (TBD). Plan en `docs/PLAN_HITO32.md`.
+
+### Hito 30 (anterior, ya cerrado)
 Tag: `v0.30.0-hito30`.
 Verificado automático: suite doctest **264/5494** (+7 de `test_character_controller`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: WASD camina sin atravesar paredes, caja física se empuja al chocarla (slide alto por fricción default baja — pendiente menor), Space salta ~1.5m, LCtrl baja la cámara sin caer abruptamente y restaura standing al soltar.
 
 **Cambio importante:** primer hito post-Hito 4 que cambia cómo se siente el player. Capsule física via `JPH::CharacterVirtual` (no más AABB del Hito 4). El char respeta slopes < 50°, empuja `RigidBody::Dynamic`, no es "fantasma" para Jolt como antes.
-
-**Próximo paso:** Hito 31 (TBD). Plan en `docs/PLAN_HITO31.md`.
 
 ### Hito 29 (anterior, ya cerrado)
 Tag: `v0.29.0-hito29`.
@@ -416,16 +422,18 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: definir y abrir el Hito 31
+### Tarea inmediata: definir y abrir el Hito 32
 
-El Hito 30 está cerrado (tag `v0.30.0-hito30`). Player Character Controller entregado — primer FPS-style movement real. **Hito 31 está TBD** — candidatos en `docs/PLAN_HITO31.md`. Top heredados: raycasts + triggers en Lua (combo natural con el char controller), save/load de gameplay, polish NavAgent diferido.
+El Hito 31 está cerrado (tag `v0.31.0-hito31`). Polish del feel del player + particles entregado. **Hito 32 está TBD** — candidatos en `docs/PLAN_HITO32.md`. Top heredados del Hito 31: raycasts + triggers en Lua (combo natural con char controller, ahora que el feel está pulido), save/load de gameplay, UI menu del MoodPlayer, completar undo (InspectorEditCommand).
+
+NavAgent polish queda descartado permanentemente por decisión del dev — no proponerlo.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO31.md` (candidatos) y discutir con el dev qué se prioriza.
+1. Leer `docs/PLAN_HITO32.md` (candidatos) y discutir con el dev qué se prioriza.
 2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
 3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.31.0-hito31`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO32.md`.
+4. Al final: commits atómicos en español, merge a main, tag `v0.32.0-hito32`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO33.md`.
 
 ---
 

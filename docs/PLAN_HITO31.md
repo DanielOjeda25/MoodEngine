@@ -1,18 +1,20 @@
-# Plan — Hito 31: TBD
+# Plan — Hito 31: Polish del feel (char controller + particles)
 
-> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 30 cerrado).
->
-> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
+> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 31 cerrado).
 
 ---
 
 ## Estado
 
-**Hito 30 cerrado** (`v0.30.0-hito30`, suite **264/5494**). Player Character Controller con Jolt: capsule + WASD + jump + crouch. Primer FPS-movement real.
+**Hito 31 cerrado** (`v0.31.0-hito31`, suite **265/5499**). Scope chico — solo los pendientes bajo-coste de los Hitos 29 y 30 (D + F). NavAgent polish quedó descartado permanentemente por decisión del dev ("no me interesa").
 
-El Hito 31 está **TBD**: acordar con el dev el alcance antes de abrir bloques.
+## Bloques cerrados
 
-**Recordatorio importante:** networking / multijugador está **EXPLÍCITAMENTE fuera de alcance** desde el doc técnico (`MOODENGINE_CONTEXTO_TECNICO.md` sección "Fuera de alcance"). NO proponerlo como candidato.
+- [x] **Bloque D — Polish char controller** (commit `7dd1133`): friction 0.2→0.5 en createBody + crouch lerp visual de 200ms + headbob sutil 5Hz/4cm. Aplicado simétrico en Editor Play Mode y MoodPlayer.
+- [x] **Bloque F — Polish particles** (commit `d6aa6af`): flag `localSpace` (default false) + sort back-to-front en alpha blend. Persistencia retro-compat.
+- [x] **Cierre — tests + docs + tag**: 1 test nuevo (round-trip de localSpace), 2 entradas en DECISIONS.md (crouch lerp + localSpace), tag `v0.31.0-hito31`.
+
+NavAgent polish queda descartado permanentemente por decisión del dev — no proponerlo.
 
 ---
 

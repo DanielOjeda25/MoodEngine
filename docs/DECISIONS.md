@@ -2174,3 +2174,73 @@ Las opciones eran:
 
 **Revisar si:** aparece un demo con velocidades altas (>10 m/s) donde la integración manual de gravedad sea inestable, o si se necesita doble jump / coyote time (extender la lógica de `m_jumpCooldown` con un `m_coyoteTimer` que permita saltar 0.1s después de salir del piso).
 
+## 2026-04-29: Polish del feel — crouch lerp visual con shape physics-instant + headbob aditivo
+
+**Contexto:** Hito 31. El char controller del Hito 30 funcionaba mecánicamente bien, pero feel áspero: crouch instantáneo (1 frame) producía cámara que "saltaba" al pulsar Ctrl, y caminar se sentía rígido sin animación de paso.
+
+**Decisión:** dos mecanismos independientes que suman al eye Y de la cámara:
+- **`m_crouchVisualT` (0..1)**: avanza hacia el target del shape ya aplicado en Jolt a 5/s (~200ms). El SHAPE de Jolt sigue cambiando instant (predictible para physics — un techo bajo NO se puede pasar mid-transición); solo el VISUAL interpola con `glm::mix(eyeStanding=0.7, eyeCrouched=0.3, t)`.
+- **`m_headbobTime`**: acumula `dt` SOLO cuando hay velocidad horizontal Y on-ground. Eye Y suma `sin(t * 5*2π) * 0.04` (5 Hz, 4 cm). Cuando el player se detiene, queda en el último offset hasta volver a moverse — no hay "snap to zero".
+
+**Razones:**
+- **Separar physics de visual**: el patrón "physics primero, visual después con lerp" es estándar en motores AAA. La predictibilidad para gameplay (collision, jump windows) NO depende del visual.
+- **`sin()` simple sobre amplitud fija**: lo más barato. `cmath::sin` es 1 instrucción en hardware moderno. Sin tablas LUT, sin múltiples ejes (solo Y), sin scaling con velocidad. Si el feel resulta insuficiente se puede sumar pitch sutil (sin sobre rotation X) o escalar amplitud — documentado como pendiente.
+- **Mismo código simétrico en Editor Play Mode y MoodPlayer**: paridad de feel entre los dos contextos. El editor es donde se pulen los valores; el player debe sentirse idéntico.
+
+**Alternativas consideradas:**
+- **Animar también el shape (capsule altura interpolada)**: requiere un `SetShape` por frame, expensive. Y rompe el invariante "physics es predictible". Descartado.
+- **Spring-damper en lugar de lerp linear**: más natural pero requiere `m_crouchVel` extra. El `200ms` linear es suficientemente rápido para no sentirse "lento".
+- **Headbob multi-eje (X+Y) o pitch sinusoidal**: más intenso visualmente pero molesta a usuarios sensibles a motion sickness. El bob 4 cm vertical es el mínimo disruptive, ampliable después si el dev lo pide.
+
+**Trade-offs:**
+- Se pierde: feel ultra-realista (no lerp del shape ni inertia visible). Aceptable para FPS arcade-tipo Source.
+- Se gana: feel sutilmente más vivo sin esfuerzo de modelado de animación. Reusa los floats que ya teníamos (`m_crouching`, velocidad horizontal).
+
+**Revisar si:** dev quiere feel más AAA-like (animación de manos al caminar, lerp del shape, etc.) — entonces ramificar a un sistema de animation channel o blend tree separado.
+
+## 2026-04-29: `localSpace` en partículas — translate-only sobre billboards camera-facing
+
+**Contexto:** Hito 31. El particle system del Hito 29 spawneaba en world-space siempre. Cuando una entidad emisora se movía, las partículas viejas quedaban estáticas en el aire — feel de "trail" en lugar de "humo siguiendo a la chimenea".
+
+**Decisión:** flag `bool localSpace` en `ParticleEmitterComponent` (default `false`).
+- `false`: comportamiento original — spawn en world-space (`tf.position` + variación), positions absolutas. Las partículas se desprenden del emisor.
+- `true`: spawn en local-space (`(0,0,0)` + variación), positions relativas al emisor. El renderer suma `tf.position` (translate-only, NO rotation/scale del entity) antes del upload al VBO. Cuando el entity se mueve, las partículas lo SIGUEN.
+
+**Razones:**
+- **Default `false` preserva el comportamiento del Hito 29**: archivos `.moodmap` viejos sin el campo leen `localSpace=false` automáticamente. Cero migración.
+- **Translate-only en lugar de full worldMatrix**: las partículas son billboards que SIEMPRE miran a la cámara — el rotation/scale del entity no tiene efecto visual sobre el sprite. Sumar el quat sería trabajo sin beneficio. Si en el futuro alguien quiere "sparks que roten con el personaje" (ej. spark emitter en una espada que rota), entonces sí hay que multiplicar por el worldMatrix completo. Documentado como pendiente.
+- **El sumar tf en el RENDERER (no al spawn)**: las velocities también se aplican en local space. Si sumáramos al spawn, el flag perdería sentido (las partículas viejas seguirían en world). Sumar al render preserva el invariante "positions ARE local".
+
+**Alternativas consideradas:**
+- **Pre-transformar al spawn y mantener positions en world**: rompe la semántica esperada. Cuando el emisor se mueve, las partículas viejas siguen donde estaban — eso ES el caso `localSpace=false`.
+- **Pasar model uniform al vertex shader**: más limpio (la GPU multiplica) pero requiere bucle de uniforms por emitter. La CPU multiplica menos overhead total porque ya iteramos sobre `m_cpu` para construir el VBO.
+- **Bandera por partícula (no por emisor)**: overengineering. El uso real es "todas las partículas del emisor siguen al emisor o no".
+
+**Trade-offs:**
+- Se pierde: control fino para casos como "emisor estacionario pero spawn rotando con la cámara" (no hay caso de uso real hoy).
+- Se gana: humo que sigue, sparks que se pegan, feel más natural cuando el emisor se mueve.
+
+**Revisar si:** aparece un caso donde rotation del entity importe (sparks orientadas con la espada). Entonces sumar quat en el renderer en una segunda iteración.
+
+## 2026-04-29: Sort back-to-front solo en alpha blend; skip en additive
+
+**Contexto:** Hito 31. El particle renderer del Hito 29 dibujaba todas las partículas en el orden que el SoA las almacenaba (por slot). Para emitters con `additive=true` (fuego, sparks) eso está bien: el blend `GL_SRC_ALPHA, GL_ONE` es commutativo. Para `alpha blend` (humo, polvo) producía artifacts: dos partículas casi-coplanares mostraban "halos cuadrados" donde la cercana tapaba a la lejana antes de blend.
+
+**Decisión:** después de compactar las partículas vivas en `m_cpu`, si `!em.additive` AND `m_cpu.size() > 1`, hacer `std::sort` por view-space Z ascendente (más negativo = más lejos = primero). Skip explícito para `additive` (commutativo).
+
+**Razones:**
+- **Sort solo cuando importa**: `std::sort` de N elementos es O(N log N). Para emitter típico (256 partículas) son ~2000 comparaciones por frame. Skipear cuando es additive ahorra ese costo en fuego/sparks que es donde MÁS partículas hay.
+- **Centro de la partícula como key**: barato (1 mat-vec mult) y "suficientemente correcto". Para partículas grandes que ocluyen a varias chicas hay edge cases (documentado como pendiente).
+- **`std::sort` estable no es necesario**: orden entre partículas con misma profundidad es indistinguible visualmente.
+
+**Alternativas consideradas:**
+- **Sort por GPU compute shader**: requeriría infraestructura de SSBO + dispatch. Para 256 partículas la CPU lo hace en <0.1ms. Innecesario.
+- **Bucket sort por Z**: O(N) en lugar de O(N log N). Pero para N=256 la diferencia es nada y bucket requiere conocer el rango. Descartado.
+- **Order-independent transparency (OIT)**: técnica avanzada (peeling, Weighted Blended). Compleja, requiere render passes extra. Para FPS-tier visual no aporta sobre el sort simple.
+
+**Trade-offs:**
+- Se pierde: precisión perfecta cuando partículas grandes interactúan con muchas chicas. No vimos ese caso real todavía.
+- Se gana: humo se ve correctamente layered. Cero overhead en fuego (que es el caso más común).
+
+**Revisar si:** aparece artifact visible con partículas grandes mixtas. Entonces evaluar bucket Z + sort dentro del bucket, o pasar a OIT si el problema es general.
+

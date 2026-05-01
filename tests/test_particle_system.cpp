@@ -238,6 +238,7 @@ TEST_CASE("SceneSerializer: round-trip de ParticleEmitterComponent en .moodmap")
     em.maxParticles = 128;
     em.emitting     = true;
     em.additive     = true;
+    em.localSpace   = true;  // Hito 31 F
     em.texture = assets.loadTexture("textures/particle_fire.png");
     e.addComponent<ParticleEmitterComponent>(em);
 
@@ -265,7 +266,30 @@ TEST_CASE("SceneSerializer: round-trip de ParticleEmitterComponent en .moodmap")
     CHECK(pe.maxParticles == 128u);
     CHECK(pe.emitting     == true);
     CHECK(pe.additive     == true);
+    CHECK(pe.localSpace   == true);  // Hito 31 F
     CHECK(pe.texturePath  == "textures/particle_fire.png");
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: localSpace default false se preserva al round-trip (Hito 31 F)") {
+    // Garantia retro-compat: archivos viejos sin "local_space" leen
+    // localSpace=false (el default).
+    AssetManager assets("assets", stubFactoryParticles());
+
+    GridMap map(1u, 1u, 1.0f);
+    Scene scene;
+    Entity e = scene.createEntity("DefaultLocalSpace");
+    e.addComponent<ParticleEmitterComponent>(); // defaults — localSpace = false
+
+    const auto path = tempPathParticles("default_localspace.moodmap");
+    SceneSerializer::save(map, "default_localspace", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1);
+    REQUIRE(loaded->entities[0].particleEmitter.has_value());
+    CHECK(loaded->entities[0].particleEmitter->localSpace == false);
 
     std::filesystem::remove(path);
 }
