@@ -90,6 +90,8 @@ void EditorApplication::updateCameras(f32 dt) {
         constexpr f32 k_charRadius           = 0.4f;
         constexpr f32 k_jumpVel              = 5.5f;
         constexpr f32 k_jumpCooldown         = 0.2f;
+        constexpr f32 k_coyoteWindow         = 0.10f; // Hito 34 C
+        constexpr f32 k_jumpBufferWindow     = 0.15f; // Hito 34 C
         constexpr f32 k_walkSpeed            = 4.0f;
         constexpr f32 k_crouchSpeed          = 2.0f;
         if (m_playerCharId == 0) {
@@ -147,14 +149,35 @@ void EditorApplication::updateCameras(f32 dt) {
             }
         }
 
+        // Hito 34 C: coyote + jump buffer.
+        // - Coyote: refresh on-ground, decae fuera. Permite saltar hasta
+        //   k_coyoteWindow ms despues de dejar el suelo (caer de un borde
+        //   sigue dejando saltar un instante).
+        // - Buffer: el flanco up->down de SPACE resetea el timer; saltar
+        //   un instante ANTES de aterrizar igual gatilla cuando el char
+        //   toque el suelo.
+        const bool spacePressed = keys[SDL_SCANCODE_SPACE] != 0;
+        const bool spaceJustPressed = spacePressed && !m_spacePrevFrame;
+        m_spacePrevFrame = spacePressed;
+        if (spaceJustPressed) m_jumpBufferTimer = k_jumpBufferWindow;
+        m_jumpBufferTimer = std::max(0.0f, m_jumpBufferTimer - dt);
+
+        if (m_physicsWorld->isCharacterOnGround(m_playerCharId)) {
+            m_coyoteTimer = k_coyoteWindow;
+        } else {
+            m_coyoteTimer = std::max(0.0f, m_coyoteTimer - dt);
+        }
+
         m_jumpCooldown = (m_jumpCooldown > dt) ? (m_jumpCooldown - dt) : 0.0f;
         f32 jumpImpulse = 0.0f;
-        if (keys[SDL_SCANCODE_SPACE]
+        if (m_jumpBufferTimer > 0.0f
+            && m_coyoteTimer > 0.0f
             && m_jumpCooldown <= 0.0f
-            && !m_crouching
-            && m_physicsWorld->isCharacterOnGround(m_playerCharId)) {
+            && !m_crouching) {
             jumpImpulse = k_jumpVel;
             m_jumpCooldown = k_jumpCooldown;
+            m_jumpBufferTimer = 0.0f;  // consumir el buffer
+            m_coyoteTimer = 0.0f;       // consumir el coyote (no double-jump)
         }
 
         m_physicsWorld->setCharacterMovement(m_playerCharId,
@@ -177,6 +200,14 @@ void EditorApplication::updateCameras(f32 dt) {
         const bool walking = horizSpeedSq > 0.01f
                           && m_physicsWorld->isCharacterOnGround(m_playerCharId);
         if (walking) m_headbobTime += dt;
+        // Hito 34 D: velocidad horizontal normalizada [0..1] contra
+        // walkSpeed para escalar la amplitud del bob en el sync de la
+        // camara. Crouched sale ~0.5 (crouchSpeed/walkSpeed) -> bob mas
+        // sutil cuando se camina agachado.
+        const f32 horizSpeed = std::sqrt(horizSpeedSq);
+        m_horizSpeed01 = walking
+            ? std::min(1.0f, horizSpeed / k_walkSpeed)
+            : 0.0f;
 
         int mx = 0;
         int my = 0;

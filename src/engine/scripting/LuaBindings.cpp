@@ -153,11 +153,15 @@ void setupLuaBindings(sol::state& lua, Entity self,
     // --- physics (Hito 33) ---
     // Solo si el caller proveyo un PhysicsWorld (tests headless sin Jolt
     // pasan nullptr y no exponen la tabla). API:
-    //   local hit = physics.raycast({x,y,z}, {dx,dy,dz}, maxDist)
+    //   local hit = physics.raycast({x,y,z}, {dx,dy,dz}, maxDist [, ignoredBodyId])
     //   if hit.hit then
     //     log.info(string.format("at %f %f %f", hit.point[1],
     //                              hit.point[2], hit.point[3]))
     //   end
+    //
+    // Hito 34 B: el 4to argumento es opcional — si se pasa un bodyId !=0,
+    // ese body se descarta del cast (util para "ignore self" en armas FPS
+    // disparadas desde un body que no quiere autodetectarse).
     //
     // Convencion: origin/direction son tablas {x, y, z} (1-indexed por
     // Lua). El return tambien usa tablas para vec3 (point, normal) — en
@@ -165,7 +169,8 @@ void setupLuaBindings(sol::state& lua, Entity self,
     if (physics != nullptr) {
         sol::table physicsTable = lua.create_named_table("physics");
         physicsTable.set_function("raycast",
-            [&lua, physics](sol::table origin, sol::table dir, f32 maxDist) -> sol::object {
+            [&lua, physics](sol::table origin, sol::table dir, f32 maxDist,
+                             sol::optional<u32> ignoredBodyId) -> sol::object {
                 const glm::vec3 o(
                     static_cast<f32>(origin.get_or(1, 0.0)),
                     static_cast<f32>(origin.get_or(2, 0.0)),
@@ -174,7 +179,8 @@ void setupLuaBindings(sol::state& lua, Entity self,
                     static_cast<f32>(dir.get_or(1, 0.0)),
                     static_cast<f32>(dir.get_or(2, 0.0)),
                     static_cast<f32>(dir.get_or(3, 0.0)));
-                const auto h = physics->raycast(o, d, maxDist);
+                const u32 ignored = ignoredBodyId.value_or(0u);
+                const auto h = physics->raycast(o, d, maxDist, ignored);
                 sol::table result = lua.create_table();
                 result["hit"]      = h.hit;
                 result["distance"] = h.distance;

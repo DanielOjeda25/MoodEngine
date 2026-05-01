@@ -87,6 +87,7 @@ struct SavedRigidBody {
     std::string shape{"box"};        // "box" | "sphere" | "capsule"
     glm::vec3 halfExtents{0.5f};
     f32 mass = 1.0f;
+    f32 friction = 0.5f;             // Hito 34 A — opcional en JSON, default = 0.5
 };
 
 /// @brief Copia persistida de un EnvironmentComponent (Hito 15).

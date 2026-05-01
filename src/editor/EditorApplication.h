@@ -279,6 +279,15 @@ private:
     // Se crea lazy en EditorPlayMode al entrar y se destruye al salir.
     u32 m_playerCharId = 0;
     f32 m_jumpCooldown = 0.0f;
+    // Hito 34 C: coyote time + jump buffer. `m_coyoteTimer` cuenta hacia
+    // 0 desde k_coyoteWindow cada vez que el char esta on-ground; permite
+    // saltar hasta ~100ms despues de dejar el suelo. `m_jumpBufferTimer`
+    // arranca en k_jumpBufferWindow al apretar Space; permite que un input
+    // hecho hasta ~150ms ANTES de tocar el suelo igual gatille el salto.
+    // `m_spacePrevFrame` es para detectar flanco up->down (no hold).
+    f32 m_coyoteTimer = 0.0f;
+    f32 m_jumpBufferTimer = 0.0f;
+    bool m_spacePrevFrame = false;
     bool m_crouching = false;
     // Hito 31 D: crouch lerp visual (1 = crouched, 0 = standing). El
     // shape de Jolt sigue siendo binario — solo la altura del eye se
@@ -287,6 +296,10 @@ private:
     // Headbob: time accumulator que avanza solo cuando el player se
     // mueve horizontalmente y esta on-ground. Se usa para sin(t*freq).
     f32 m_headbobTime = 0.0f;
+    // Hito 34 D: velocidad horizontal del frame, normalizada a 0..1
+    // contra k_walkSpeed. La consume el sync de la camara en
+    // EditorScene::updateRigidBodies para escalar la amplitud del bob.
+    f32 m_horizSpeed01 = 0.0f;
 
     // Mapa jugable (Hito 4). Se renderiza centrado en el origen del mundo;
     // tileSize=3m (escala SI realista, Hito 5 Bloque 0). Se reemplaza al

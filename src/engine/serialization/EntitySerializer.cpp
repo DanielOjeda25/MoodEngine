@@ -123,6 +123,10 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         }
         jrb["halfExtents"] = rb.halfExtents;
         jrb["mass"]        = rb.mass;
+        // Hito 34 A: solo persistir friction si difiere del default (0.5)
+        // para no ensuciar mapas viejos con un campo nuevo. El loader
+        // interpreta ausente como 0.5 (default del SavedRigidBody).
+        if (rb.friction != 0.5f) jrb["friction"] = rb.friction;
         je["rigid_body"] = jrb;
     }
 
@@ -258,6 +262,7 @@ SavedEntity parseEntityFromJson(const json& j) {
         srb.shape       = jrb.value("shape",       std::string{"box"});
         srb.halfExtents = jrb.value("halfExtents", glm::vec3{0.5f});
         srb.mass        = jrb.value("mass",        1.0f);
+        srb.friction    = jrb.value("friction",    0.5f);   // Hito 34 A
         se.rigidBody = std::move(srb);
     }
     if (j.contains("environment")) {

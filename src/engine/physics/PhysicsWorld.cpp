@@ -24,6 +24,7 @@
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 #include <Jolt/Physics/Body/BodyLock.h>
+#include <Jolt/Physics/Body/BodyFilter.h>
 
 #include <cstdarg>
 #include <cstdio>
@@ -280,7 +281,8 @@ u32 PhysicsWorld::createBody(const glm::vec3& position,
                               CollisionShape shape,
                               const glm::vec3& halfExtents,
                               BodyType type,
-                              f32 mass) {
+                              f32 mass,
+                              f32 friction) {
     if (!m_impl) return 0;
 
     auto jphShape = createJPHShape(shape, halfExtents);
@@ -304,12 +306,11 @@ u32 PhysicsWorld::createBody(const glm::vec3& position,
             JPH::EOverrideMassProperties::CalculateInertia;
         settings.mMassPropertiesOverride.mMass = mass;
     }
-    // Hito 31 D: Jolt default mFriction=0.2 hace que las cajas resbalen
-    // demasiado al ser empujadas por el char controller. 0.5 es un
-    // realista para superficies tipo madera-sobre-madera y se siente
-    // mejor en el FPS demo. Aplica a static y dynamic — en static no
-    // afecta al body en si pero si al contacto contra otros bodies.
-    settings.mFriction = 0.5f;
+    // Hito 34 A: friction per-body. Antes (Hito 31 D) era 0.5 hardcoded
+    // para evitar el resbaloso default 0.2 de Jolt. Ahora viene del
+    // RigidBodyComponent — el caller decide. Aplica a Static + Dynamic
+    // (en Static no afecta al body, si al contacto contra otros bodies).
+    settings.mFriction = friction;
 
     JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
     JPH::BodyID id = bi.CreateAndAddBody(settings,
@@ -471,9 +472,25 @@ bool PhysicsWorld::setCharacterShape(u32 charId,
         *m_impl->tempAllocator);
 }
 
+// Hito 34 B: filtro que descarta un body especifico durante un cast.
+// Heredado de JPH::BodyFilter — el default `ShouldCollide` devuelve true,
+// nosotros lo overrideamos para excluir `m_ignored`. Acotado a archivo.
+namespace {
+class IgnoreOneBodyFilter : public JPH::BodyFilter {
+public:
+    explicit IgnoreOneBodyFilter(JPH::BodyID id) : m_ignored(id) {}
+    bool ShouldCollide(const JPH::BodyID& inBodyID) const override {
+        return inBodyID != m_ignored;
+    }
+private:
+    JPH::BodyID m_ignored;
+};
+} // namespace
+
 PhysicsWorld::RaycastHit PhysicsWorld::raycast(const glm::vec3& origin,
                                                 const glm::vec3& direction,
-                                                f32 maxDistance) const {
+                                                f32 maxDistance,
+                                                u32 ignoredBodyId) const {
     RaycastHit out{};
     if (!m_impl || maxDistance <= 0.0f) return out;
 
@@ -492,8 +509,20 @@ PhysicsWorld::RaycastHit PhysicsWorld::raycast(const glm::vec3& origin,
         scaled);
     JPH::RayCastResult result;
 
-    const bool hit =
-        m_impl->physicsSystem->GetNarrowPhaseQuery().CastRay(ray, result);
+    // Si el caller pidio ignorar un body, instanciamos un filtro custom.
+    // ignoredBodyId == 0 -> filtro default (no descarta nada); evita el
+    // overhead de la virtual ShouldCollide cuando no hace falta.
+    bool hit;
+    if (ignoredBodyId != 0) {
+        // Brace-init para evitar most-vexing-parse — sin {}, MSVC lee
+        // `const IgnoreOneBodyFilter filter(JPH::BodyID(ignoredBodyId))`
+        // como la declaracion de una funcion `filter`.
+        const IgnoreOneBodyFilter filter{JPH::BodyID(ignoredBodyId)};
+        hit = m_impl->physicsSystem->GetNarrowPhaseQuery().CastRay(
+            ray, result, {}, {}, filter);
+    } else {
+        hit = m_impl->physicsSystem->GetNarrowPhaseQuery().CastRay(ray, result);
+    }
     if (!hit) return out;
 
     out.hit = true;

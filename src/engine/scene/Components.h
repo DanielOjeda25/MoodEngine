@@ -154,6 +154,12 @@ struct RigidBodyComponent {
     Shape shape = Shape::Box;
     glm::vec3 halfExtents{0.5f}; // Box: (x,y,z). Sphere: (r,_,_). Capsule: (halfH, r, _).
     f32 mass = 1.0f;              // kg, solo Dynamic
+    // Hito 34 A: friction per-body. Default 0.5 (heredado del Hito 31 D —
+    // realista para madera-sobre-madera). Aplica al body Static y Dynamic;
+    // en Static no afecta al body en si pero si al contacto contra otros.
+    // Editar desde el Inspector se aplica al re-materializar (proximo
+    // entrar a Play Mode); no hay setter en runtime por ahora.
+    f32 friction = 0.5f;
 
     u32 bodyId = 0;               // llenado por PhysicsSystem (0 = no creado)
 

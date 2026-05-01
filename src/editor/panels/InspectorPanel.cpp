@@ -239,14 +239,29 @@ void InspectorPanel::onImGuiRender() {
             m_editedThisFrame = true;
         }
         if (ImGui::ColorEdit3("color##lt", &lt.color.x)) m_editedThisFrame = true;
+        pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, lt.color,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<LightComponent>().color = v;
+            },
+            "Editar light color");
         if (ImGui::DragFloat("intensity##lt", &lt.intensity, 0.01f, 0.0f, 100.0f)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<f32>(m_editTracker, m_ui, e, lt.intensity,
+            [](Entity& en, const f32& v) {
+                en.getComponent<LightComponent>().intensity = v;
+            },
+            "Editar light intensity");
 
         if (lt.type == LightComponent::Type::Point) {
             if (ImGui::DragFloat("radius (m)##lt", &lt.radius, 0.1f, 0.1f, 1000.0f)) {
                 m_editedThisFrame = true;
             }
+            pushEditIfDone<f32>(m_editTracker, m_ui, e, lt.radius,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<LightComponent>().radius = v;
+                },
+                "Editar light radius");
         } else {
             if (ImGui::DragFloat3("direction##lt", &lt.direction.x, 0.01f, -1.0f, 1.0f)) {
                 m_editedThisFrame = true;
@@ -445,12 +460,32 @@ void InspectorPanel::onImGuiRender() {
         if (ImGui::DragFloat3("halfExtents##rb", &rb.halfExtents.x, 0.05f, 0.01f, 100.0f)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, rb.halfExtents,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<RigidBodyComponent>().halfExtents = v;
+            },
+            "Editar rigid body halfExtents");
         if (rb.type == RigidBodyComponent::Type::Dynamic) {
             if (ImGui::DragFloat("mass (kg)##rb", &rb.mass, 0.1f, 0.001f, 10000.0f)) {
                 m_editedThisFrame = true;
             }
+            pushEditIfDone<f32>(m_editTracker, m_ui, e, rb.mass,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<RigidBodyComponent>().mass = v;
+                },
+                "Editar rigid body mass");
         }
-        ImGui::TextDisabled("body id: %u (0 = no materializado)", rb.bodyId);
+        // Hito 34 A: friction. Aplica a static + dynamic (el contacto en
+        // ambos lados afecta el comportamiento).
+        if (ImGui::DragFloat("friction##rb", &rb.friction, 0.01f, 0.0f, 2.0f)) {
+            m_editedThisFrame = true;
+        }
+        pushEditIfDone<f32>(m_editTracker, m_ui, e, rb.friction,
+            [](Entity& en, const f32& v) {
+                en.getComponent<RigidBodyComponent>().friction = v;
+            },
+            "Editar friction (RigidBody)");
+        ImGui::TextDisabled("body id: %u (0 = no materializado) — re-Play para aplicar friction", rb.bodyId);
         ImGui::Separator();
     }
 
@@ -591,6 +626,11 @@ void InspectorPanel::onImGuiRender() {
         if (ImGui::DragFloat("rate (1/s)##pe", &em.emitRate, 1.0f, 0.0f, 10000.0f)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<f32>(m_editTracker, m_ui, e, em.emitRate,
+            [](Entity& en, const f32& v) {
+                en.getComponent<ParticleEmitterComponent>().emitRate = v;
+            },
+            "Editar emit rate");
         if (ImGui::DragFloatRange2("lifetime (s)##pe",
                                      &em.lifetimeMin, &em.lifetimeMax,
                                      0.05f, 0.05f, 60.0f)) {
@@ -617,6 +657,11 @@ void InspectorPanel::onImGuiRender() {
                               -2.0f, 2.0f)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<f32>(m_editTracker, m_ui, e, em.gravityFactor,
+            [](Entity& en, const f32& v) {
+                en.getComponent<ParticleEmitterComponent>().gravityFactor = v;
+            },
+            "Editar gravity factor (particles)");
         if (ImGui::DragInt("maxParticles##pe",
                              reinterpret_cast<int*>(&em.maxParticles),
                              1.0f, 1, 4096)) {

@@ -95,6 +95,7 @@ Entity applyOneEntity(const SavedEntity& se,
             else                              rb.shape = RigidBodyComponent::Shape::Box;
             rb.halfExtents = srb.halfExtents;
             rb.mass        = srb.mass;
+            rb.friction    = srb.friction;   // Hito 34 A
             e.addComponent<RigidBodyComponent>(rb);
         }
 

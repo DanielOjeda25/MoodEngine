@@ -162,7 +162,8 @@ void EditorApplication::updateRigidBodies(f32 dt) {
                 case RigidBodyComponent::Type::Dynamic:   type = BodyType::Dynamic; break;
             }
             rb.bodyId = m_physicsWorld->createBody(t.position, shape,
-                                                    rb.halfExtents, type, rb.mass);
+                                                    rb.halfExtents, type, rb.mass,
+                                                    rb.friction);
         });
 
     // 2) Stepear la simulacion SOLO en Play Mode. En Editor Mode los bodies
@@ -188,9 +189,12 @@ void EditorApplication::updateRigidBodies(f32 dt) {
             const f32 eye = glm::mix(k_eyeStanding, k_eyeCrouched, m_crouchVisualT);
             // Headbob suave: 5 Hz, amplitud 4 cm. Empieza desde 0 y
             // mantiene sin spike al recomenzar el movimiento.
+            // Hito 34 D: amplitud escalada por velocity horizontal [0..1]
+            // — full bob caminando, ~50% crouched, 0 quieto.
             constexpr f32 k_bobFreq = 5.0f * 6.2831853f; // 5 Hz a rad/s
             constexpr f32 k_bobAmp  = 0.04f;
-            const f32 bobY = std::sin(m_headbobTime * k_bobFreq) * k_bobAmp;
+            const f32 bobY = std::sin(m_headbobTime * k_bobFreq) * k_bobAmp
+                              * m_horizSpeed01;
             const glm::vec3 charPos = m_physicsWorld->characterPosition(m_playerCharId);
             m_playCamera.setPosition(charPos + glm::vec3(0.0f, eye + bobY, 0.0f));
         }

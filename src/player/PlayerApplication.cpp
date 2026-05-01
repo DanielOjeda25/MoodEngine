@@ -401,6 +401,8 @@ void PlayerApplication::updateCamera(f32 dt) {
     constexpr f32 k_charRadius             = 0.4f;
     constexpr f32 k_jumpVel                = 5.5f; // ~1.5m de altura
     constexpr f32 k_jumpCooldown           = 0.2f; // anti-hold
+    constexpr f32 k_coyoteWindow           = 0.10f; // Hito 34 C
+    constexpr f32 k_jumpBufferWindow       = 0.15f; // Hito 34 C
     constexpr f32 k_walkSpeed              = 4.0f;
     constexpr f32 k_crouchSpeed            = 2.0f;
 
@@ -469,14 +471,29 @@ void PlayerApplication::updateCamera(f32 dt) {
 
     // Jump: si SPACE + onGround + cooldown OK, usamos desired.y como
     // impulse. El step interno suma desired.y a la velocidad acumulada.
+    // Hito 34 C: coyote + jump buffer (mismo patron que EditorPlayMode).
+    const bool spacePressed = keys[SDL_SCANCODE_SPACE] != 0;
+    const bool spaceJustPressed = spacePressed && !m_spacePrevFrame;
+    m_spacePrevFrame = spacePressed;
+    if (spaceJustPressed) m_jumpBufferTimer = k_jumpBufferWindow;
+    m_jumpBufferTimer = std::max(0.0f, m_jumpBufferTimer - dt);
+
+    if (m_physicsWorld->isCharacterOnGround(m_playerCharId)) {
+        m_coyoteTimer = k_coyoteWindow;
+    } else {
+        m_coyoteTimer = std::max(0.0f, m_coyoteTimer - dt);
+    }
+
     m_jumpCooldown = (m_jumpCooldown > dt) ? (m_jumpCooldown - dt) : 0.0f;
     f32 jumpImpulse = 0.0f;
-    if (keys[SDL_SCANCODE_SPACE]
+    if (m_jumpBufferTimer > 0.0f
+        && m_coyoteTimer > 0.0f
         && m_jumpCooldown <= 0.0f
-        && !m_crouching
-        && m_physicsWorld->isCharacterOnGround(m_playerCharId)) {
+        && !m_crouching) {
         jumpImpulse = k_jumpVel;
         m_jumpCooldown = k_jumpCooldown;
+        m_jumpBufferTimer = 0.0f;
+        m_coyoteTimer = 0.0f;
     }
 
     m_physicsWorld->setCharacterMovement(m_playerCharId,
@@ -497,6 +514,11 @@ void PlayerApplication::updateCamera(f32 dt) {
     const bool walking = horizSpeedSq > 0.01f
                       && m_physicsWorld->isCharacterOnGround(m_playerCharId);
     if (walking) m_headbobTime += dt;
+    // Hito 34 D: velocity-scaled bob amp.
+    const f32 horizSpeed = std::sqrt(horizSpeedSq);
+    m_horizSpeed01 = walking
+        ? std::min(1.0f, horizSpeed / k_walkSpeed)
+        : 0.0f;
 
     // Mouse aim (independiente del char).
     int mx = 0;
@@ -527,7 +549,8 @@ void PlayerApplication::updateRigidBodies(f32 dt) {
                 case RigidBodyComponent::Type::Dynamic:   type = BodyType::Dynamic; break;
             }
             rb.bodyId = m_physicsWorld->createBody(t.position, shape,
-                                                    rb.halfExtents, type, rb.mass);
+                                                    rb.halfExtents, type, rb.mass,
+                                                    rb.friction);
         });
 
     // Stepear simulacion + sync body -> Transform para dinamicos.
@@ -548,7 +571,11 @@ void PlayerApplication::updateRigidBodies(f32 dt) {
             const f32 eye = glm::mix(k_eyeStanding, k_eyeCrouched, m_crouchVisualT);
             constexpr f32 k_bobFreq = 5.0f * 6.2831853f;
             constexpr f32 k_bobAmp  = 0.04f;
-            const f32 bobY = std::sin(m_headbobTime * k_bobFreq) * k_bobAmp;
+            // Hito 34 D: la amplitud escala con la velocidad horizontal
+            // del frame [0..1]. Caminando full-speed = bob completo;
+            // crouched (~0.5) = bob sutil; quieto = sin bob.
+            const f32 bobY = std::sin(m_headbobTime * k_bobFreq) * k_bobAmp
+                              * m_horizSpeed01;
             const glm::vec3 charPos = m_physicsWorld->characterPosition(m_playerCharId);
             m_playCamera.setPosition(charPos + glm::vec3(0.0f, eye + bobY, 0.0f));
         }

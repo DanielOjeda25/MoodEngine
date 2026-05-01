@@ -78,11 +78,14 @@ public:
     ///                        Para Capsule: (halfHeight, radius, _).
     /// @param type            Static / Kinematic / Dynamic.
     /// @param mass            Solo para Dynamic. Static/Kinematic lo ignoran.
+    /// @param friction        Hito 34 A. Coef. friction Jolt [0, +inf]. Defaults a
+    ///                        0.5 (madera-sobre-madera). Aplica a Static + Dynamic.
     u32 createBody(const glm::vec3& position,
                    CollisionShape shape,
                    const glm::vec3& halfExtents,
                    BodyType type,
-                   f32 mass = 1.0f);
+                   f32 mass = 1.0f,
+                   f32 friction = 0.5f);
 
     /// @brief Destruye y remueve un body. Llamar cuando la entidad se borra
     ///        del Scene. Idempotente (id invalido = no-op).
@@ -169,9 +172,14 @@ public:
     /// @param maxDistance En metros. Mantener acotado (ej. 100m) por
     ///        rendimiento — Jolt cobra O(log N) por bvh pero igual paga el
     ///        narrow phase test contra cada body candidato.
+    /// @param ignoredBodyId Hito 34 B. Si != 0, ese body no se considera
+    ///        para el cast (ni cuenta como hit ni ocluye al body que esta
+    ///        detras). Util para "ignore self" en armas FPS desde un
+    ///        body que no quiere autodetectarse.
     RaycastHit raycast(const glm::vec3& origin,
                        const glm::vec3& direction,
-                       f32 maxDistance) const;
+                       f32 maxDistance,
+                       u32 ignoredBodyId = 0) const;
 
 private:
     struct Impl;
