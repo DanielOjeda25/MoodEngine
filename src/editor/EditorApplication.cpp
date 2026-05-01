@@ -29,6 +29,7 @@
 #include "systems/SkyboxRenderer.h"
 #include "systems/PhysicsSystem.h"
 #include "systems/ScriptSystem.h"
+#include "systems/TriggerSystem.h"
 
 #include <nlohmann/json.hpp>
 #include <portable-file-dialogs.h>
@@ -488,6 +489,7 @@ int EditorApplication::run() {
         processSpawnLightStressRequest();
         processSpawnAnimatedCharacterRequest();
         processSpawnFireParticlesRequest();
+        processSpawnTriggerRequest();
         processSpawnPointLightRequest();
         processSpawnAudioSourceRequest();
         processSavePrefabRequest();
@@ -540,7 +542,17 @@ int EditorApplication::run() {
         //      ScriptComponent. Antes del render para que los cambios en
         //      Transform se vean este mismo frame.
         if (m_scene && m_scriptSystem) {
-            m_scriptSystem->update(*m_scene, dt);
+            m_scriptSystem->update(*m_scene, dt, m_physicsWorld.get());
+        }
+
+        // Hito 33: triggers detectan al player char entrando/saliendo y
+        // dispatchan on_trigger_enter/_exit a los scripts. Solo en Play
+        // Mode (m_playerCharId != 0). Despues del scriptSystem para que
+        // los handlers ya esten registrados.
+        if (m_scene && m_scriptSystem && m_physicsWorld
+            && m_mode == EditorMode::Play) {
+            m_triggerSystem.update(*m_scene, *m_physicsWorld,
+                                    *m_scriptSystem, m_playerCharId);
         }
 
         // 3.55) Animacion (Hito 19): avanza time del Animator y rellena el

@@ -6,12 +6,14 @@
 //   - log.info(str) / log.warn(str)
 //   - hud.setHp/setAmmo/setPaused + getters
 //   - engine.exposed(name, default)  (Hito 24)
+//   - physics.raycast(origin, dir, maxDist) -> {hit, point, normal, distance, bodyId}  (Hito 33)
 
 #include <sol/sol.hpp>
 
 namespace Mood {
 
 class Entity;
+class PhysicsWorld;
 struct ScriptComponent;
 
 /// @brief Registra los usertypes y tablas en `lua` y setea la global
@@ -20,7 +22,12 @@ struct ScriptComponent;
 ///        `exposedProps` al cargar el script. Si es nullptr, el binding
 ///        de `engine.exposed` siempre devuelve el default sin registrar
 ///        (util para tests headless sin ECS).
+/// @param physics Hito 33: si presente, registra la tabla `physics` con
+///        `physics.raycast`. Si nullptr, la tabla no existe y los scripts
+///        que llaman `physics.raycast` van a fallar — los tests headless
+///        sin Jolt pasan nullptr.
 void setupLuaBindings(sol::state& lua, Entity self,
-                       ScriptComponent* scriptComponent = nullptr);
+                       ScriptComponent* scriptComponent = nullptr,
+                       PhysicsWorld* physics = nullptr);
 
 } // namespace Mood

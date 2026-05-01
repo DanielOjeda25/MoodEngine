@@ -196,6 +196,16 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         }
     }
 
+    // Hito 33: TriggerComponent. Solo halfExtents; el flag runtime
+    // playerInside no se persiste (lo redetecta el TriggerSystem al
+    // primer frame post-load).
+    if (entity.hasComponent<TriggerComponent>()) {
+        const auto& tc = entity.getComponent<TriggerComponent>();
+        json jtr;
+        jtr["halfExtents"] = tc.halfExtents;
+        je["trigger"] = jtr;
+    }
+
     // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la
     // entidad tiene un `PrefabLinkComponent`. Sin propagacion bidireccional
     // por ahora; es solo un breadcrumb para futuras features ("revertir a
@@ -283,6 +293,13 @@ SavedEntity parseEntityFromJson(const json& j) {
         pe.localSpace   = jpe.value("local_space",    pe.localSpace);
         pe.texturePath  = jpe.value("texture_path",   std::string{});
         se.particleEmitter = std::move(pe);
+    }
+
+    if (j.contains("trigger")) {
+        const auto& jtr = j.at("trigger");
+        SavedTrigger st;
+        st.halfExtents = jtr.value("halfExtents", glm::vec3{1.0f});
+        se.trigger = std::move(st);
     }
 
     if (j.contains("script")) {

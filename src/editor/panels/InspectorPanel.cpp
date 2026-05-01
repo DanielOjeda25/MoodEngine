@@ -640,6 +640,26 @@ void InspectorPanel::onImGuiRender() {
         ImGui::Separator();
     }
 
+    // --- TriggerComponent (Hito 33) ---
+    // AABB centrado en TransformComponent.position con tamaño halfExtents*2.
+    // halfExtents se persiste en el .moodmap; playerInside es runtime.
+    if (e.hasComponent<TriggerComponent>()) {
+        auto& tc = e.getComponent<TriggerComponent>();
+        ImGui::TextDisabled("Trigger");
+        if (ImGui::DragFloat3("halfExtents##trig", &tc.halfExtents.x,
+                                0.05f, 0.01f, 100.0f)) {
+            m_editedThisFrame = true;
+        }
+        pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, tc.halfExtents,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<TriggerComponent>().halfExtents = v;
+            },
+            "Editar trigger halfExtents");
+        ImGui::TextDisabled("playerInside: %s",
+                             tc.playerInside ? "si" : "no");
+        ImGui::Separator();
+    }
+
     ImGui::End();
 }
 

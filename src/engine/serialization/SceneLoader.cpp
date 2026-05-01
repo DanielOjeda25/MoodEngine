@@ -143,6 +143,16 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<ParticleEmitterComponent>(em);
         }
 
+        // Hito 33: TriggerComponent. Solo restauramos halfExtents; el flag
+        // runtime playerInside arranca en false (TriggerSystem lo redetecta
+        // al primer update si el char ya cae dentro del AABB).
+        if (se.trigger.has_value()) {
+            const auto& s = *se.trigger;
+            TriggerComponent tc{};
+            tc.halfExtents = s.halfExtents;
+            e.addComponent<TriggerComponent>(tc);
+        }
+
         // Hito 24: ScriptComponent + overrides. El script se carga
         // perezosamente desde `ScriptSystem` (mtime-based), aca solo
         // adjuntamos el path + overrides; `engine.exposed` los lee en

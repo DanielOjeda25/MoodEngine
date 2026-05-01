@@ -20,6 +20,10 @@
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
+#include <Jolt/Physics/Collision/RayCast.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
+#include <Jolt/Physics/Body/BodyLock.h>
 
 #include <cstdarg>
 #include <cstdio>
@@ -465,6 +469,51 @@ bool PhysicsWorld::setCharacterShape(u32 charId,
         /*maxPenetrationDepth*/ 0.01f,
         bpFilter, objFilter, bodyFilter, shapeFilter,
         *m_impl->tempAllocator);
+}
+
+PhysicsWorld::RaycastHit PhysicsWorld::raycast(const glm::vec3& origin,
+                                                const glm::vec3& direction,
+                                                f32 maxDistance) const {
+    RaycastHit out{};
+    if (!m_impl || maxDistance <= 0.0f) return out;
+
+    // Direction normalizada * maxDistance: convencion Jolt — la magnitud
+    // del segundo arg es el "alcance" del rayo. Si el caller pasa una
+    // direccion no-unitaria, normalizamos defensivamente para que
+    // maxDistance siga siendo la distancia maxima en metros.
+    const JPH::Vec3 jphDir(direction.x, direction.y, direction.z);
+    const f32 lenSq = jphDir.LengthSq();
+    if (lenSq < 1e-10f) return out;  // direccion nula -> miss
+    const JPH::Vec3 unit = jphDir / std::sqrt(lenSq);
+    const JPH::Vec3 scaled = unit * maxDistance;
+
+    const JPH::RRayCast ray(
+        JPH::RVec3(origin.x, origin.y, origin.z),
+        scaled);
+    JPH::RayCastResult result;
+
+    const bool hit =
+        m_impl->physicsSystem->GetNarrowPhaseQuery().CastRay(ray, result);
+    if (!hit) return out;
+
+    out.hit = true;
+    out.distance = maxDistance * result.mFraction;
+    const JPH::Vec3 hitPoint = ray.mOrigin + scaled * result.mFraction;
+    out.point = glm::vec3(hitPoint.GetX(), hitPoint.GetY(), hitPoint.GetZ());
+    out.bodyId = result.mBodyID.GetIndexAndSequenceNumber();
+
+    // Normal: Jolt la calcula a partir del body + sub-shape + punto.
+    // Lock para leer-only — barato comparado al CastRay (acabamos de hacer).
+    const JPH::BodyLockRead lock(
+        m_impl->physicsSystem->GetBodyLockInterface(), result.mBodyID);
+    if (lock.Succeeded()) {
+        const JPH::Body& body = lock.GetBody();
+        const JPH::Vec3 normal = body.GetWorldSpaceSurfaceNormal(
+            result.mSubShapeID2, hitPoint);
+        out.normal = glm::vec3(normal.GetX(), normal.GetY(), normal.GetZ());
+    }
+
+    return out;
 }
 
 } // namespace Mood

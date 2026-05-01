@@ -212,6 +212,17 @@ public:
         return r;
     }
 
+    /// @brief Hito 33 Bloque 4: request para spawnear una entidad demo con
+    ///        TriggerComponent (AABB 2x2x2m) y un script default que
+    ///        loguea on_trigger_enter / on_trigger_exit. Visible en
+    ///        Editor (sin colision solida) + activo en Play Mode.
+    void requestSpawnTrigger() { m_spawnTriggerRequested = true; }
+    bool consumeSpawnTriggerRequest() {
+        const bool r = m_spawnTriggerRequested;
+        m_spawnTriggerRequested = false;
+        return r;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -318,6 +329,7 @@ private:
     bool m_spawnLightStressRequested = false; // Hito 18
     bool m_spawnAnimatedCharacterRequested = false; // Hito 19
     bool m_spawnFireParticlesRequested = false;     // Hito 29
+    bool m_spawnTriggerRequested = false;           // Hito 33
     bool m_recentsDirty = false; // Hito 15 polish: edicion manual de la lista de recientes
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;

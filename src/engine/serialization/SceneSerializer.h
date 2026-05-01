@@ -114,6 +114,13 @@ struct SavedScript {
     std::unordered_map<std::string, ExposedValue> overrides;
 };
 
+/// @brief Copia persistida de un TriggerComponent (Hito 33).
+///        Solo `halfExtents`; el flag runtime `playerInside` se reinicia
+///        al cargar (la AABB-test del primer frame redetectara estado).
+struct SavedTrigger {
+    glm::vec3 halfExtents{1.0f, 1.0f, 1.0f};
+};
+
 /// @brief Copia persistida de un ParticleEmitterComponent (Hito 29).
 ///        Solo la configuracion editable; el estado runtime (positions,
 ///        ages, rngState, etc.) no se persiste — la simulacion arranca
@@ -153,6 +160,7 @@ struct SavedEntity {
     std::optional<SavedEnvironment> environment; // Hito 15
     std::optional<SavedScript> script;            // Hito 24
     std::optional<SavedParticleEmitter> particleEmitter; // Hito 29
+    std::optional<SavedTrigger> trigger;                  // Hito 33
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
 };
 

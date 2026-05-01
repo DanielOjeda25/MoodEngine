@@ -886,6 +886,27 @@ void EditorApplication::processSpawnFireParticlesRequest() {
     pushCreatedEntities({e}, "Spawn particulas demo");
 }
 
+void EditorApplication::processSpawnTriggerRequest() {
+    if (!(m_ui.consumeSpawnTriggerRequest() && m_scene)) return;
+
+    Entity e = m_scene->createEntity("Trigger demo");
+    auto& tf = e.getComponent<TransformComponent>();
+    tf.position = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    TriggerComponent tc{};
+    tc.halfExtents = glm::vec3(1.0f, 1.0f, 1.0f);  // 2x2x2m
+    e.addComponent<TriggerComponent>(tc);
+
+    // Adjuntamos el script demo (loguea enter/exit). El usuario puede
+    // sobreescribir el path desde el Inspector si quiere otro callback.
+    e.addComponent<ScriptComponent>(std::string{"assets/scripts/trigger_demo.lua"});
+
+    Log::editor()->info(
+        "Spawned trigger demo en (0, 1, 0) con halfExtents=(1,1,1) + "
+        "script trigger_demo.lua. Solo dispatcha en Play Mode.");
+    pushCreatedEntities({e}, "Spawn trigger demo");
+}
+
 void EditorApplication::pushCreatedEntities(std::vector<Entity> created,
                                               std::string label) {
     if (created.empty()) return;

@@ -167,6 +167,11 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar particulas de fuego demo", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnFireParticles();
             }
+            // Demo Hito 33: spawnea un trigger demo (AABB 2x2x2m) con
+            // script que loguea enter/exit. Activo solo en Play Mode.
+            if (ImGui::MenuItem("Agregar trigger demo", nullptr, false, ui.hasProject())) {
+                ui.requestSpawnTrigger();
+            }
             ImGui::EndMenu();
         }
 

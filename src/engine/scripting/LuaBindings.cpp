@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "engine/game/GameState.h"
+#include "engine/physics/PhysicsWorld.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scripting/ExposedProperty.h"
@@ -14,7 +15,8 @@
 namespace Mood {
 
 void setupLuaBindings(sol::state& lua, Entity self,
-                       ScriptComponent* scriptComponent) {
+                       ScriptComponent* scriptComponent,
+                       PhysicsWorld* physics) {
     // Libs basicas. `io`/`os` quedan fuera: los scripts no deberian hacer
     // I/O al FS ni ejecutar procesos. `package` tampoco (sin require).
     lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string);
@@ -147,6 +149,45 @@ void setupLuaBindings(sol::state& lua, Entity self,
             return sol::nil;
         }, ov->second);
     });
+
+    // --- physics (Hito 33) ---
+    // Solo si el caller proveyo un PhysicsWorld (tests headless sin Jolt
+    // pasan nullptr y no exponen la tabla). API:
+    //   local hit = physics.raycast({x,y,z}, {dx,dy,dz}, maxDist)
+    //   if hit.hit then
+    //     log.info(string.format("at %f %f %f", hit.point[1],
+    //                              hit.point[2], hit.point[3]))
+    //   end
+    //
+    // Convencion: origin/direction son tablas {x, y, z} (1-indexed por
+    // Lua). El return tambien usa tablas para vec3 (point, normal) — en
+    // Hito 24 ya establecimos esa convencion para vec3 cross-binding.
+    if (physics != nullptr) {
+        sol::table physicsTable = lua.create_named_table("physics");
+        physicsTable.set_function("raycast",
+            [&lua, physics](sol::table origin, sol::table dir, f32 maxDist) -> sol::object {
+                const glm::vec3 o(
+                    static_cast<f32>(origin.get_or(1, 0.0)),
+                    static_cast<f32>(origin.get_or(2, 0.0)),
+                    static_cast<f32>(origin.get_or(3, 0.0)));
+                const glm::vec3 d(
+                    static_cast<f32>(dir.get_or(1, 0.0)),
+                    static_cast<f32>(dir.get_or(2, 0.0)),
+                    static_cast<f32>(dir.get_or(3, 0.0)));
+                const auto h = physics->raycast(o, d, maxDist);
+                sol::table result = lua.create_table();
+                result["hit"]      = h.hit;
+                result["distance"] = h.distance;
+                result["bodyId"]   = h.bodyId;
+                sol::table p = lua.create_table();
+                p[1] = h.point.x; p[2] = h.point.y; p[3] = h.point.z;
+                result["point"]  = p;
+                sol::table n = lua.create_table();
+                n[1] = h.normal.x; n[2] = h.normal.y; n[3] = h.normal.z;
+                result["normal"] = n;
+                return sol::make_object(lua, result);
+            });
+    }
 
     // self como global.
     lua["self"] = self;

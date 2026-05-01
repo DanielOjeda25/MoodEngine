@@ -9,6 +9,7 @@
 #include "editor/EditorMode.h"
 #include "editor/EditorUI.h"
 #include "editor/commands/HistoryStack.h"
+#include "systems/TriggerSystem.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/render/Fog.h"
 #include "engine/scene/EditorCamera.h"
@@ -158,6 +159,7 @@ private:
     void processSpawnLightStressRequest();
     void processSpawnAnimatedCharacterRequest(); // Hito 19
     void processSpawnFireParticlesRequest();     // Hito 29
+    void processSpawnTriggerRequest();           // Hito 33
 
     /// @brief Hito 28: empaqueta una creacion (spawn / drop) como
     ///        `CreateEntityCommand` y la empuja al `m_history`. El
@@ -199,6 +201,7 @@ private:
     std::unique_ptr<AnimationSystem> m_animationSystem; // Hito 19
     std::unique_ptr<NavSystem>       m_navSystem;       // Hito 23
     std::unique_ptr<ParticleSystem>  m_particleSystem;  // Hito 29
+    TriggerSystem                    m_triggerSystem;   // Hito 33: stateless
 
     // Hito 20: HUD del juego (HP / Ammo / crosshair) y menu de pausa.
     // Implementado via el OverlayDraw del ViewportPanel — drawlist de

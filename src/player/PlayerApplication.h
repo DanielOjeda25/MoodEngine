@@ -15,6 +15,7 @@
 #include "core/Types.h"
 #include "engine/scene/FpsCamera.h"
 #include "engine/world/GridMap.h"
+#include "systems/TriggerSystem.h"
 
 #include <glm/vec3.hpp>
 
@@ -90,6 +91,7 @@ private:
     std::unique_ptr<AnimationSystem>  m_animationSystem;
     std::unique_ptr<NavSystem>        m_navSystem;
     std::unique_ptr<ParticleSystem>   m_particleSystem;  // Hito 29
+    TriggerSystem                     m_triggerSystem;   // Hito 33: stateless
     std::unique_ptr<PhysicsWorld>     m_physicsWorld;
 
     // Hito 30: character controller del jugador. 0 = no creado todavia.

@@ -147,6 +147,32 @@ public:
     /// @brief Cantidad de characters activos.
     u32 characterCount() const;
 
+    // --- Hito 33: Raycast (NarrowPhase de Jolt) ---
+
+    /// Resultado de un `raycast`. `hit==false` indica que el rayo no
+    /// intersectó nada en `[0, maxDistance]`.
+    struct RaycastHit {
+        bool      hit       = false;
+        glm::vec3 point     {0.0f};   // world-space del impacto
+        glm::vec3 normal    {0.0f};   // world-space, apunta hacia origin
+        f32       distance  = 0.0f;   // [0, maxDistance]
+        u32       bodyId    = 0;      // BodyID del cuerpo impactado (0 si miss)
+    };
+
+    /// @brief Lanza un rayo desde `origin` en direccion `direction` (no
+    ///        necesariamente normalizada — internamente lo escalamos por
+    ///        `maxDistance`). Devuelve el primer impacto contra cualquier
+    ///        body (Static, Dynamic, Kinematic). Characters virtuales NO
+    ///        son detectables por raycast (Jolt los considera "ghost" para
+    ///        narrow phase queries — mismo comportamiento que el motor del
+    ///        Hito 30).
+    /// @param maxDistance En metros. Mantener acotado (ej. 100m) por
+    ///        rendimiento — Jolt cobra O(log N) por bvh pero igual paga el
+    ///        narrow phase test contra cada body candidato.
+    RaycastHit raycast(const glm::vec3& origin,
+                       const glm::vec3& direction,
+                       f32 maxDistance) const;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;

@@ -332,4 +332,18 @@ struct ParticleEmitterComponent {
     u32 aliveCount = 0;
 };
 
+/// @brief Trigger volume (Hito 33). Detecta cuando el jugador entra/sale
+///        de su AABB y dispatcha `on_trigger_enter` / `on_trigger_exit`
+///        al script de la entidad (si tiene ScriptComponent).
+///        Sin colision solida — el char puede atravesarlo libremente.
+///
+/// AABB: centro = TransformComponent.position; tamaño = halfExtents * 2.
+/// halfExtents NO usa el scale del Transform; representan metros directos.
+struct TriggerComponent {
+    glm::vec3 halfExtents{1.0f, 1.0f, 1.0f}; // 2x2x2m por default
+    // Estado runtime (no serializado): true mientras el jugador este
+    // dentro. TriggerSystem detecta el flanco (false→true / true→false).
+    bool playerInside = false;
+};
+
 } // namespace Mood

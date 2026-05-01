@@ -25,13 +25,18 @@
 
 namespace Mood {
 
+class PhysicsWorld;
 class Scene;
 
 class ScriptSystem {
 public:
     /// @brief Corre `onUpdate(self, dt)` en cada entidad con
     ///        ScriptComponent cargado. Carga / recarga archivos al vuelo.
-    void update(Scene& scene, f32 dt);
+    /// @param physics Hito 33: opcional. Si presente se cablea a la tabla
+    ///        `physics` de Lua (raycast + futuros). Tests sin Jolt pasan
+    ///        nullptr y los scripts que no usen `physics.*` siguen
+    ///        funcionando.
+    void update(Scene& scene, f32 dt, PhysicsWorld* physics = nullptr);
 
     /// @brief Tira todos los sol::state. Se llama desde
     ///        `EditorApplication::rebuildSceneFromMap` porque al hacer
@@ -42,6 +47,13 @@ public:
         m_mtimes.clear();
         m_hotReloadAccumulator = 0.0f;
     }
+
+    /// @brief Hito 33: llama una funcion Lua opcional definida en el
+    ///        script de la entidad (ej. "on_trigger_enter"). Si la
+    ///        funcion no existe en el sol::state, no-op silencioso.
+    ///        Errores de Lua se loguean al canal `script` y se acumulan
+    ///        en `lastError` (mismo flujo que `onUpdate`).
+    void dispatchEvent(entt::entity entity, const char* eventName);
 
 private:
     // Mapa entidad -> su sol::state persistente. Usamos unordered_map para

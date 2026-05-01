@@ -27,6 +27,7 @@
 #include "systems/ParticleSystem.h"
 #include "systems/PhysicsSystem.h"
 #include "systems/ScriptSystem.h"
+#include "systems/TriggerSystem.h"
 
 // glad/gl.h debe ir antes que cualquier otro header que pueda incluir GL.
 #include <glad/gl.h>
@@ -574,7 +575,12 @@ int PlayerApplication::run() {
         // pero el audio sigue su flow normal — TBD si se quiere mute
         // global en pausa.
         if (m_scene && m_scriptSystem) {
-            m_scriptSystem->update(*m_scene, dt);
+            m_scriptSystem->update(*m_scene, dt, m_physicsWorld.get());
+        }
+        // Hito 33: triggers — solo cuando el char del player ya existe.
+        if (m_scene && m_scriptSystem && m_physicsWorld && m_playerCharId != 0) {
+            m_triggerSystem.update(*m_scene, *m_physicsWorld,
+                                    *m_scriptSystem, m_playerCharId);
         }
         if (m_scene && m_animationSystem && m_assetManager) {
             m_animationSystem->update(*m_scene, *m_assetManager, dt);

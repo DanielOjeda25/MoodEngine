@@ -10,7 +10,7 @@
 
 namespace Mood {
 
-void ScriptSystem::update(Scene& scene, f32 dt) {
+void ScriptSystem::update(Scene& scene, f32 dt, PhysicsWorld* physics) {
     // Throttle del check de mtime: una vez cada k_hotReloadInterval. El
     // flag se aplica al lookup dentro del forEach.
     m_hotReloadAccumulator += dt;
@@ -31,7 +31,7 @@ void ScriptSystem::update(Scene& scene, f32 dt) {
             // las redescubre. Asi un script que removio un `engine.exposed`
             // entre reloads no deja la prop fantasma en el Inspector.
             sc.exposedProps.clear();
-            setupLuaBindings(*state, e, &sc);
+            setupLuaBindings(*state, e, &sc, physics);
 
             sol::protected_function_result r = state->safe_script_file(
                 sc.path, sol::script_pass_on_error);
@@ -108,6 +108,21 @@ void ScriptSystem::update(Scene& scene, f32 dt) {
             // Preservar el state en el mapa es OK: lo re-creamos al reload.
         }
     });
+}
+
+void ScriptSystem::dispatchEvent(entt::entity entity, const char* eventName) {
+    auto it = m_states.find(entity);
+    if (it == m_states.end()) return;
+    sol::state& lua = *it->second;
+
+    sol::protected_function fn = lua[eventName];
+    if (!fn.valid()) return;  // script no define el evento — OK
+
+    sol::protected_function_result r = fn();
+    if (!r.valid()) {
+        sol::error err = r;
+        Log::script()->warn("Error en {}: {}", eventName, err.what());
+    }
 }
 
 } // namespace Mood
