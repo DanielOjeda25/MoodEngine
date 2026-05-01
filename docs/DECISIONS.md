@@ -2244,3 +2244,55 @@ Las opciones eran:
 
 **Revisar si:** aparece artifact visible con partículas grandes mixtas. Entonces evaluar bucket Z + sort dentro del bucket, o pasar a OIT si el problema es general.
 
+## 2026-04-29: `EditPropertyCommand<T>` templado + `InspectorEditTracker` para undo del Inspector
+
+**Contexto:** Hito 32. Los sliders del Inspector mutaban componentes in-place sin pasar por el HistoryStack. Ctrl+Z no los revertía. 51 widgets en 511 líneas — necesitábamos un patrón antes de wire-up masivo.
+
+**Decisión:** dos piezas de infra:
+1. **`EditPropertyCommand<T>` templado**: captura `(entity, before, after, setter, label)`. El `setter` es una `std::function<void(Entity&, const T&)>` — cada callsite del Inspector captura el path al campo via lambda (componente + miembro). Funciona para `f32`, `glm::vec3`, `glm::vec4`, `bool`, `std::string`.
+2. **`InspectorEditTracker` + helper `trackPropertyEdit<T>`**: detecta drag-end vía `ImGui::IsItemActivated()` (snapshot before) + `IsItemDeactivatedAfterEdit()` (capture after, revertir, push). Un `std::variant<...>` guarda el before tipado — solo un widget puede estar activo a la vez en ImGui, un buffer alcanza.
+
+**Razones:**
+- **Templado en lugar de class jerárquica**: cubre todos los tipos editables en el Inspector con una sola implementación. Comparison `==` se usa para `isNoOp` — todos los tipos del variant lo tienen built-in.
+- **Setter por lambda en lugar de pointer-to-member**: pointer-to-member fragiliza si la entidad se destruye entre push y undo (puntero a basura). La lambda captura el componente type + field name como código compilado; dentro re-fetcheamos el componente vía `entity.getComponent<T>()` cada vez.
+- **Helper post-widget en lugar de wrapper pre-widget**: el wrapper típico (`undoableSlider(label, &field, ...)`) requiere reescribir cada call site. El helper post-widget conserva la API ImGui original (DragFloat3, ColorEdit3, etc.) y solo agrega 4 líneas — wire-up gradual sin trauma.
+- **Detection con `IsItemDeactivatedAfterEdit`**: comportamiento ImGui canónico. Dispara UNA sola vez al soltar el drag SI el valor cambió. La compactación de comandos de la deuda Hito 27 viene gratis — no necesitamos merge logic.
+
+**Alternativas consideradas:**
+- **Memento con serialización JSON del componente entero**: gasta espacio (un transform es 36 bytes, JSON es ~200), y oscurece el name del comando ("Edit transform" vs "Mover entidad"). Templado es más leve y específico.
+- **Patrón command jerárquico `EditFloatCommand`, `EditVec3Command`, ...`**: explosión de clases. Templado es DRY.
+- **Capturar before como `std::any`**: type-erasure pierde la verificación de tipo en `std::get_if` (en variant, un `T*` malo es null en runtime). Variant es seguro.
+
+**Trade-offs:**
+- Se pierde: cada widget Inspector requiere 4 líneas extra (call al helper). Mecánico pero verboso. 9 de 51 widgets cableados; los otros 42 quedan documentados como pendiente para futuros hitos.
+- Se gana: undo coherente con el resto del editor, comandos compactos por gesto, sin nueva dependencia.
+
+**Revisar si:** aparecen tipos editables nuevos no cubiertos por el variant (ej. `i32` para sliders de cantidad), o si el costo de las 4 líneas extra por widget motiva un macro `MOOD_TRACKED(...)`.
+
+## 2026-04-29: Handle remap en HistoryStack — `onEntityRemap` virtual
+
+**Contexto:** Hito 32. EnTT versiona los handles: cada vez que se destroy + create, el handle nuevo difiere del viejo en su byte de versión. Cuando `DeleteEntityCommand::undo()` recreaba la entidad, los comandos previos del stack (EditTransform, EditProperty) que apuntaban al handle viejo quedaban "huérfanos" — `registry.valid(oldHandle)` fallaba y los siguientes undos eran no-op silenciosos. El flujo `edit → delete → undo → undo` no completaba.
+
+**Decisión:** patrón observer-style integrado al stack:
+1. **`ICommand` gana `virtual void onEntityRemap(entt::entity oldH, entt::entity newH)`** con default no-op. Comandos que NO referencian entidades específicas (futuros) no necesitan implementar.
+2. **`HistoryStack::remapEntityInStack(oldH, newH)`** itera AMBOS deques (undo + redo) y llama `onEntityRemap` en cada comando.
+3. **`DeleteEntityCommand`** recibe `HistoryStack*` opcional en el ctor (default `nullptr` para tests headless). `undo()` después de recrear la entidad llama `m_history->remapEntityInStack(m_originalHandle, m_alive.handle())`.
+4. **`EditTransformCommand`, `EditPropertyCommand`, `CreateEntityCommand`** overridan: si `m_entity.handle() == oldH`, reemplazan por `Entity(newH, scene())`.
+
+**Razones:**
+- **Visitor sobre el stack en lugar de mapa global "old → new"**: cada comando se autocontiene. Si un comando no le importa la entidad (Hito 33+ podría tener comandos sin entity), no necesita opt-in al sistema.
+- **Default no-op en ICommand**: cero overhead para comandos que no participan. Tests se mantienen.
+- **DeleteEntityCommand dispara el remap (no la HistoryStack auto-detecta)**: simplicidad. La stack no tiene que saber qué tipo de comando recrea entidades. El delete es el único caso hoy; si aparecen otros (ej. PrefabInstantiateCommand), también disparan explícitamente.
+- **Nullable `HistoryStack*` en DeleteEntityCommand**: tests no necesitan stack para verificar el comportamiento básico.
+
+**Alternativas consideradas:**
+- **Mapa `entt::entity → entt::entity` en HistoryStack como tabla de redirección**: los comandos consultarían el mapa antes de aplicar. Más complejo, requiere traversal en cada execute/undo. El patrón observer evita la indirección.
+- **EnTT handle versionado nativo (`entt::handle`)**: existe pero la fachada `Mood::Entity` ya está en uso ubicuo y no incluye versionado.
+- **Entity con generation counter propio**: refactor pesado a la fachada Mood. El observer sobre handles raw es local al sistema de undo.
+
+**Trade-offs:**
+- Se pierde: cada nuevo tipo de comando que tenga referencia a entidad debe acordarse de override `onEntityRemap`. Documentado.
+- Se gana: el undo system es coherente — `edit → delete → undo → undo` se siente "correcto", como el dev espera.
+
+**Revisar si:** aparece un comando que referencie MÚLTIPLES entidades (ej. un BatchTransformCommand) — entonces `onEntityRemap` debe iterar su lista interna. Patrón se extiende natural.
+

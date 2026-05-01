@@ -6,13 +6,19 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 31 cerrado.**
+**Hito 32 cerrado.**
+Tag: `v0.32.0-hito32`.
+Verificado automático: suite doctest **271/5512** (+6 de `test_edit_property_command`). Editor compila limpio. Verificado por el dev a ojo: editar position/rotation/scale del Transform desde el Inspector → Ctrl+Z revierte el drag completo. Editar `albedoTint`/`metallic`/`roughness`/`ao` del material → Ctrl+Z restaura. Renombrar entidad por el Tag input → Ctrl+Z restaura el nombre. Flujo `edit → delete → undo → undo` ahora completa correctamente (antes el segundo undo era silencioso).
+
+**Cambio importante:** infra de undo del Inspector. Nuevo `EditPropertyCommand<T>` templado + helper `trackPropertyEdit<T>` con detección drag-end vía `IsItemActivated/IsItemDeactivatedAfterEdit`. Handle remap en HistoryStack vía `ICommand::onEntityRemap` virtual. 9 de 51 widgets del Inspector cableados (los más editados); los 42 restantes siguen el mismo patrón y quedan como pendiente menor.
+
+**Próximo paso:** Hito 33 (TBD). Plan en `docs/PLAN_HITO33.md`.
+
+### Hito 31 (anterior, ya cerrado)
 Tag: `v0.31.0-hito31`.
 Verificado automático: suite doctest **265/5499** (+1 de `test_particle_system` round-trip de `localSpace`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: caja física empujada por el char no se desliza interminablemente (friction 0.2 → 0.5), crouch suave en 200ms (no snap), caminar con headbob sutil de 4cm a 5Hz. Emisor de partículas con `localSpace=true` movido por gizmo arrastra todas las partículas con el emisor; humo se ve correctamente layered post-sort.
 
 **Cambio importante:** scope chico — pulir el feel de Hito 29 (particles) + Hito 30 (char controller) ahora que están en uso real. Cinco fixes baratos pero visibles. NavAgent polish quedó descartado permanentemente por decisión del dev.
-
-**Próximo paso:** Hito 32 (TBD). Plan en `docs/PLAN_HITO32.md`.
 
 ### Hito 30 (anterior, ya cerrado)
 Tag: `v0.30.0-hito30`.
@@ -422,18 +428,18 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: definir y abrir el Hito 32
+### Tarea inmediata: definir y abrir el Hito 33
 
-El Hito 31 está cerrado (tag `v0.31.0-hito31`). Polish del feel del player + particles entregado. **Hito 32 está TBD** — candidatos en `docs/PLAN_HITO32.md`. Top heredados del Hito 31: raycasts + triggers en Lua (combo natural con char controller, ahora que el feel está pulido), save/load de gameplay, UI menu del MoodPlayer, completar undo (InspectorEditCommand).
+El Hito 32 está cerrado (tag `v0.32.0-hito32`). Deudas de undo del Inspector cerradas. **Hito 33 está TBD** — candidatos en `docs/PLAN_HITO33.md`. Top: raycasts + triggers en Lua (combo natural post-31/32), save/load gameplay, UI menu MoodPlayer, completar wire-up del Inspector restante (42 widgets), Inspector drop de textura.
 
 NavAgent polish queda descartado permanentemente por decisión del dev — no proponerlo.
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO32.md` (candidatos) y discutir con el dev qué se prioriza.
+1. Leer `docs/PLAN_HITO33.md` (candidatos) y discutir con el dev qué se prioriza.
 2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
 3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.32.0-hito32`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO33.md`.
+4. Al final: commits atómicos en español, merge a main, tag `v0.33.0-hito33`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO34.md`.
 
 ---
 

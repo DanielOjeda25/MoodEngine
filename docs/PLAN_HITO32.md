@@ -1,20 +1,24 @@
-# Plan — Hito 32: TBD
+# Plan — Hito 32: Cerrar deudas del editor (cerrado)
 
-> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 31 cerrado).
->
-> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
+> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 32 cerrado).
 
 ---
 
 ## Estado
 
-**Hito 31 cerrado** (`v0.31.0-hito31`, suite **265/5499**). Polish del feel: char controller (friction + crouch lerp + headbob) + particles (localSpace + sort).
+**Hito 32 cerrado** (`v0.32.0-hito32`, suite **271/5512**). Scope acordado con el dev: limpiar deudas del editor antes de abordar features pesados (raycasts, save/load, UI menu).
 
-El Hito 32 está **TBD**: acordar con el dev el alcance antes de abrir bloques.
+## Bloques cerrados
 
-**Recordatorios importantes:**
-- Networking / multijugador está **EXPLÍCITAMENTE fuera de alcance** desde el doc técnico (`MOODENGINE_CONTEXTO_TECNICO.md` sección "Fuera de alcance"). NO proponerlo como candidato.
-- Polish del NavAgent (rotación + persistencia) **descartado permanentemente** por decisión del dev en Hito 31. NO proponerlo.
+- [x] **Bloque D — InspectorEditCommand** (commit pendiente): templated `EditPropertyCommand<T>` + helper `trackPropertyEdit<T>` con detección drag-end. 9 widgets cableados (Tag, Transform pos/rot/scale, Material albedoTint/metallic/roughness/ao). Compactación automática vía `IsItemDeactivatedAfterEdit` (un drag = un comando).
+- [x] **Bloque "Handle remap"**: `ICommand::onEntityRemap` virtual + `HistoryStack::remapEntityInStack`. `DeleteEntityCommand` dispara post-undo. `EditTransform`, `EditProperty`, `CreateEntity` overridan. Flujo `edit→delete→undo→undo` completa correctamente.
+- [x] **Cierre — tests + docs + tag**: 6 tests nuevos en `test_edit_property_command`, 2 entradas en DECISIONS.md, tag `v0.32.0-hito32`.
+
+## Lo que NO se cubrió
+
+- **42 widgets restantes del Inspector** (Light, Camera, AudioSource, ParticleEmitter, Animator, NavAgent, Environment, RigidBody): patrón uniforme — wire-up mecánico siguiendo el `pushEditIfDone<T>` ya cableado. Se puede hacer per-widget según se necesite.
+- **Inspector drop de textura sobre material slot**: era candidato pero quedó fuera por scope.
+- **PackageBuilder smart-pack**: candidato medio que quedó para Hito 33+.
 
 ---
 

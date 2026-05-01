@@ -36,7 +36,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 29 — Particle system (completado, tag `v0.29.0-hito29`).
 - [x] Hito 30 — Player Character Controller con Jolt (completado, tag `v0.30.0-hito30`).
 - [x] Hito 31 — Polish del feel: char controller (friction + crouch lerp + headbob) + particles (localSpace + sort) (completado, tag `v0.31.0-hito31`).
-- [ ] Hito 32 — TBD.
+- [x] Hito 32 — Cerrar deudas del editor: InspectorEditCommand + handle remap en HistoryStack (completado, tag `v0.32.0-hito32`).
+- [ ] Hito 33 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -1093,3 +1094,44 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Headbob no escala con velocidad**: amplitud fija al 100%. Cuando el char está en crouch (velocidad 2 m/s vs walk 4 m/s), el bob se siente "rápido" para la velocidad. Podría escalar `bobAmp *= speed/k_walkSpeed`. **Trigger:** dev nota disonancia.
 - **Crouch lerp no afecta al ground check**: durante la transición visual el char ya está en su shape final en Jolt. Si el dev espera "agacharse poco a poco para pasar bajo un obstáculo", el char puede colisionar instant. Aceptable v1 (la transición es 200ms). **Trigger:** dev intenta el caso de uso.
 - **Friction 0.5 hardcoded para todos los Dynamic**: cada body se beneficiaría de un valor distinto (madera 0.5, hielo 0.05, goma 0.8). Exponer `friction` en `RigidBodyComponent`. **Trigger:** dev pide control per-body.
+
+## Hito 32 — Cerrar deudas del editor (InspectorEditCommand + handle remap)
+
+**Objetivo:** sacarse las deudas acumuladas en hitos previos antes de abordar features pesados (raycasts, save/load, UI menu). El dev pidió scope chico-medio cerrando lo más visible: undo/redo de los sliders del Inspector (deuda Hito 27/28) + handle remap del HistoryStack (deuda Hito 27).
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque D — InspectorEditCommand:*
+- Nuevo `EditPropertyCommand<T>` (templado en el tipo del valor) en `src/editor/commands/`. Constructor captura `(entity, before, after, setter, label)`. `setter` es una `std::function<void(Entity&, const T&)>` — cada callsite del Inspector captura el path al campo via lambda (componente + miembro), evitando fragilidad ante destruction de la entidad.
+- Helper `trackPropertyEdit<T>` en `editor/panels/InspectorEditTracker.h`: detecta drag-end con `ImGui::IsItemActivated()` (snapshot before) + `ImGui::IsItemDeactivatedAfterEdit()` (capture after, revertir, push command). Mismo patrón que `EditTransformCommand` para gizmo. Resultado: un drag de 60 frames produce UN solo comando, no 60 micro-edits.
+- `InspectorEditTracker` con `std::variant<f32, glm::vec3, glm::vec4, bool, std::string>` para el snapshot pre-edit. Solo un widget puede estar activo a la vez en ImGui — un buffer alcanza.
+- Wire-up de los widgets más editados (9 de los 51 del Inspector): Tag name (string), Transform position/rotation/scale (vec3), Material albedoTint (vec3) + metallic/roughness/ao (f32). El resto sigue el mismo patrón — documentado como pendiente para futuros hitos.
+
+*Bloque "Compactación de comandos" — automático:*
+- Sin trabajo extra. La detección con `IsItemDeactivatedAfterEdit` ya garantiza un comando por gesto. El "30 entradas por slider arrastrado" del Hito 27 desapareció por construcción.
+
+*Bloque "Handle remap en HistoryStack":*
+- `ICommand` gana virtual `onEntityRemap(entt::entity oldH, entt::entity newH)` con default no-op.
+- `HistoryStack::remapEntityInStack(oldH, newH)` itera ambos deques y notifica a cada comando.
+- `EditTransformCommand`, `EditPropertyCommand`, `CreateEntityCommand` overridan para patchear su `m_entity` interna.
+- `DeleteEntityCommand` recibe opcionalmente un `HistoryStack*` en el ctor; al hacer undo (recrear entidad), llama `m_history->remapEntityInStack(m_originalHandle, m_alive.handle())`. Sin esto, el flujo `edit→delete→undo→undo` dejaba el segundo undo silencioso porque `registry.valid(oldHandle)` fallaba.
+
+*Cierre:*
+- 6 tests nuevos en `test_edit_property_command.cpp`: execute/undo/isNoOp para `<f32>` y `<glm::vec3>`, `onEntityRemap` patchea handle, `HistoryStack::remapEntityInStack` propaga a EditTransformCommand, no-op cuando oldH==newH.
+- Suite total **271/5512** (antes Hito 31 cerrado: 265/5499).
+
+**Verificación visual del dev:**
+- Editar transform position en Inspector → Ctrl+Z revierte el drag completo.
+- Editar `albedoTint` con ColorEdit3 → Ctrl+Z restaura el color anterior.
+- Editar `metallic` slider → Ctrl+Z restaura el valor numérico previo.
+- Renombrar entidad en el Tag input → Ctrl+Z restaura el nombre.
+- Flujo `edit→delete→undo→undo` ahora funciona: el primer undo recrea, el segundo revierte el edit.
+
+**Siguiente paso tras completarlo:** Hito 33 (TBD). Plan en `docs/PLAN_HITO33.md`.
+
+### Pendientes menores detectados en Hito 32
+
+- **42 widgets restantes del Inspector sin wire-up de undo**: Light (color, intensity, radius, direction, castShadows, enabled), Camera (fov, near, far), AudioSource (volume, loop, etc.), ParticleEmitter (rate, lifetime, velocityMin/Max, sizes, colors, gravity, max, emitting, additive, localSpace), Animator (clipName, speed, playing, loop), NavAgent (speed, active), Environment (skybox, fog params, exposure, tonemap, IBL intensity), RigidBody (type, shape, mass, halfExtents). Patrón uniforme — wire-up mecánico siguiendo el `pushEditIfDone<T>` ya cableado. **Trigger:** dev se queja de que un widget específico no es undoable.
+- **Inspector drop de textura sobre material slot**: NO se hizo en este hito (era candidato pero quedó fuera por scope). Pendiente del Hito 26. **Trigger:** combo con cualquier hito visual.
+- **`std::variant` del tracker no incluye `int`/`u32`**: si en el futuro se agregan widgets `DragInt` (ej. maxParticles del ParticleEmitter), agregar al variant. Hoy ningún wire-up usa int. **Trigger:** wire-up de widgets numéricos enteros.
+- **Compactación cross-frame para sliders externos al Inspector**: si aparece un slider en otra parte del UI que mute estado per-frame sin `IsItemDeactivatedAfterEdit`, podría seguir spammeando el history. No vimos casos. **Trigger:** dev nota spike en undo stack durante un drag.
