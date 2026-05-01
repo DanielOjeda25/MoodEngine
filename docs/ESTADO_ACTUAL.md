@@ -6,13 +6,19 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 34 cerrado.**
+**Hito 35 cerrado.**
+Tag: `v0.35.0-hito35`.
+Verificado automático: suite doctest **287/5561** (+1 de `test_mesh_asset` `.obj`+`.mtl`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: drag de textura del AssetBrowser sobre el slot del Inspector reemplaza el material por uno nuevo (otras entidades que compartían el material original no se ven afectadas). Editar fov/near/far de Camera, fog/exposure/IBL, audio volume/loop/etc, animator speed/playing/loop, toggles + colores + velocities de partículas → Ctrl+Z revierte cada uno. Drop de un `.obj` con `.mtl` que referencia textura externa muestra la textura correcta (antes caía a missing por bug del path).
+
+**Cambio importante:** scope chico, mismo patrón que Hito 34 — cerrar deudas viejas no atacadas. 4 bloques: drop textura sobre material slot del Inspector, wire-up undo de 23 widgets más (total Inspector con undo: **40 widgets**, era 17), validación `.obj`+`.mtl` que destapó un bug latente del Hito 26 con paths que escapan su carpeta. Fix: `MeshLoader::extractAlbedo` ahora normaliza paths con `lexically_normal()` antes de pasarlos al VFS — antes texturas en `../paths` caían a missing silenciosamente.
+
+**Próximo paso:** Hito 36 (TBD). Plan en `docs/PLAN_HITO36.md`.
+
+### Hito 34 (anterior, ya cerrado)
 Tag: `v0.34.0-hito34`.
 Verificado automático: suite doctest **286/5555** (+2 de `test_scene_serializer` friction round-trip + 3 de `test_raycast` con `ignoredBodyId`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: caja física en piso de friction 0.05 resbala lejos vs 0.5 default frena en pocos metros. Saltar 50ms después de correr off platform aún gatilla el salto (coyote). Apretar SPACE 100ms antes de aterrizar igual hace saltar al touchdown (buffer). Headbob al correr full-speed se siente igual; crouched la amplitud baja; quieto = sin bob. Editar light color/intensity/radius o rigid body mass/halfExtents → Ctrl+Z revierte.
 
 **Cambio importante:** scope chico-medio, mismo patrón que Hito 32 — barrer deudas chicas acumuladas en hitos 30-33 antes de meternos en features pesados (save/load, main menu). 5 bloques: `friction` per-body en `RigidBodyComponent` con persistencia opcional, `physics.raycast` con `ignoredBodyId` opcional, coyote (100ms) + jump buffer (150ms) con detección de flanco de SPACE, headbob amp escalado linealmente con velocity horizontal, wire-up de 7 widgets más del Inspector con undo (Light, RigidBody, ParticleEmitter selectos).
-
-**Próximo paso:** Hito 35 (TBD). Plan en `docs/PLAN_HITO35.md`.
 
 ### Hito 33 (anterior, ya cerrado)
 Tag: `v0.33.0-hito33`.

@@ -2461,3 +2461,55 @@ Las opciones eran:
 
 **Revisar si:** el dev observa snap visible al chocar paredes (entonces agregar suavizado lerp de m_horizSpeed01), o hay sprint > walkSpeed sin clamp.
 
+## 2026-05-01: Drop textura sobre material slot crea instance único (anti-contagio del Hito 25), sin undo
+
+**Contexto:** Hito 35 A. Hasta ahora la única forma de cambiar la textura albedo de un material en el editor era reasignar el material entero al slot via drop de `.material` desde el AssetBrowser. Cambiar solo la textura requería editar el `.material` en disco — workflow tedioso.
+
+**Decisión:**
+1. **Botón "Drop textura para reemplazar material"** debajo de cada material slot del MeshRenderer en el Inspector. Acepta payload `MOOD_TEXTURE_ASSET` (existente desde Hito 26).
+2. **Genera material instance único** via `AssetManager::createMaterialFromTexture(texId)` (mismo método que `SceneLoader` cuando carga un material desde path de textura). El material previo del slot NO se muta — otras entidades que lo compartían siguen usando la versión original.
+3. **Sin undo del cambio**: trackearlo en HistoryStack requeriría un `ReplaceMaterialCommand` dedicado (cambio estructural, no edit per-frame). Documentado como pendiente menor.
+4. **Sin persistir referencia al material original**: el slot ahora apunta al material nuevo. Al guardar el `.moodmap`, se serializa el path del nuevo material (mismo flujo que cualquier otra asignación).
+
+**Razones:**
+- **Anti-contagio (mismo invariante del Hito 25)**: si el material previo se mutaba in-place, otras entidades que lo compartían cambiarían visualmente. El usuario rara vez quiere eso al hacer drop sobre UNA entidad.
+- **Reusar `createMaterialFromTexture`**: ya tiene el ciclo correcto (instance único, materializa texture id, registra path "__runtime_tex#N"). Cero código nuevo.
+- **Undo posterior**: agregarlo después no rompe schema. Por ahora el dev puede hacer drop de la textura original como "deshacer manual".
+
+**Alternativas consideradas:**
+- **Mutar el material existente in-place**: rechazado por contagio.
+- **Comando `ReplaceMaterialCommand` ya en este hito**: scope creep — lo dejamos como pendiente con trigger explícito (dev pide undo de drop).
+- **Drop también sobre el área del header del slot** (no solo el botón): viable, pero el botón es claramente "drop zone" (texto explícito) — más descubrible que un header text-only.
+
+**Trade-offs:**
+- Se pierde: undo del drop (por ahora).
+- Se gana: workflow rápido, anti-contagio, cero schema bump, cero código de comando nuevo.
+
+**Revisar si:** el dev pide explícitamente undo del drop, o emerge un caso donde mutar in-place sea preferible (probable: nunca).
+
+## 2026-05-01: MeshLoader normaliza paths de texturas externas con `lexically_normal()` antes del VFS
+
+**Contexto:** Hito 35 C. Al validar `.obj`+`.mtl` con un cubo cuyo `map_Kd ../textures/brick.png`, descubrí que la textura caía a missing silenciosamente. Causa: `MeshLoader::extractAlbedo` construía el path `(meshLogicalPath.parent_path() / mtlPath).generic_string()` que resolvía a `meshes/../textures/brick.png` con `..` literal. El VFS rechaza paths con `..` por anti-leak — devolvía missing sin crashear.
+
+**Decisión:**
+1. **`extractAlbedo` ahora normaliza con `lexically_normal()`** antes de pasar el path a `loadTexture`. `meshes/../textures/brick.png` colapsa a `textures/brick.png`.
+2. **Solo afecta el path de external textures** referenciadas por `.mtl` / `.glb` / `.fbx`. Embedded textures (prefijo `*`) no pasan por este path.
+3. **Bug latente del Hito 26**: el patrón "texturas en directorio paralelo al mesh" siempre fallaba silenciosamente — solo funcionaba cuando `.mtl` referenciaba paths que ya estaban DENTRO del directorio del mesh (caso de Kenney pack: `meshes/kenney_survival/Textures/colormap.png`). Convención común de OBJ assets externos (mesh en `meshes/`, texturas en `textures/`) no funcionaba.
+
+**Razones:**
+- **Cero impacto a callers existentes**: `lexically_normal()` no modifica paths sin `..` ni `.`. Kenney pack y otros assets bien-comportados se comportan idénticos.
+- **Path lógico vs filesystem**: el VFS opera en paths lógicos (relativos a `assets/`). Normalizar mantiene esa convención — un `..` ya colapsado equivale al path canónico.
+- **Anti-leak preservado**: si el `.mtl` apunta a `../../secret.png` (dos niveles arriba), `lexically_normal` produce `../secret.png` que el VFS sigue rechazando. La normalización solo absorbe `..` cuando hay path positivo que cancelar.
+- **Mejor que cambiar el VFS**: el VFS está bien — el bug está en MeshLoader que pasaba paths no-canónicos. Fix local, blast radius mínimo.
+
+**Alternativas consideradas:**
+- **Bumpear el VFS para aceptar paths con `..` colapsables**: rompería el invariante "input ya canónico". El path normalization es responsabilidad del caller.
+- **Rechazar `.mtl` con paths con `..`**: rompería convenciones estándar de OBJ. La normalización es la convención correcta.
+- **`weakly_canonical`**: requiere que el archivo exista en disco para resolver. `lexically_normal` opera puramente en strings — funciona sin tocar el filesystem.
+
+**Trade-offs:**
+- Se pierde: nada (es un fix puro).
+- Se gana: cualquier mesh con texturas externas en directorio paralelo carga correcto. Bug latente del Hito 26 cerrado.
+
+**Revisar si:** aparece un caso donde sí queremos rechazar `..` colapsables (improbable — la normalización es estándar).
+

@@ -39,7 +39,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 32 — Cerrar deudas del editor: InspectorEditCommand + handle remap en HistoryStack (completado, tag `v0.32.0-hito32`).
 - [x] Hito 33 — Raycasts + triggers expuestos a Lua (completado, tag `v0.33.0-hito33`).
 - [x] Hito 34 — Cerrar deudas chicas: friction per-body + raycast filtrable + coyote/jump buffer + headbob velocity scale + 7 widgets undo (completado, tag `v0.34.0-hito34`).
-- [ ] Hito 35 — TBD.
+- [x] Hito 35 — Cerrar deudas viejas: drop textura sobre material slot + 23 widgets undo + validar .obj+.mtl (fix path normalize) (completado, tag `v0.35.0-hito35`).
+- [ ] Hito 36 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -1237,4 +1238,46 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - **Coyote/jump buffer windows hardcoded**: 100ms y 150ms son constantes globales. No configurables per-proyecto ni per-character. **Trigger:** demo con varios personajes con feel distinto.
 - **Filtro de raycast por layer/tag genérico**: solo `ignoredBodyId`. Sin "solo enemies" o "ignore static". **Trigger:** demo lo necesita.
 - **Tests headless de coyote/jump buffer y headbob velocity**: requieren mockear input + multiples frames + Jolt physics activo, overhead alto sin valor proporcional. Verificación visual del dev por ahora.
-- **30 widgets restantes del Inspector sin undo**: heredado de Hito 32. Patrón uniforme. **Trigger:** dev se queja de un widget específico no undoable.
+- ~~**30 widgets restantes del Inspector sin undo**: heredado de Hito 32. Patrón uniforme.~~ Cubierto en gran parte por Hito 35 B (23 widgets más cableados). Quedan ~10 estructurales (combos, paths, ranges, DragInt) — criterio: solo escalares/vectores puros van con `pushEditIfDone<T>`.
+
+## Hito 35 — Cerrar deudas viejas (drop textura material + 23 widgets undo + obj+mtl fix path)
+
+**Objetivo:** seguir cerrando deudas antiguas no atacadas (Hito 26 + 32) tras barrer las chicas en Hito 34. Mismo patrón: scope chico, bloques de bajo coste. Bonus: validar `.obj`+`.mtl` descubrió un bug latente del Hito 26 que también se fixeó.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Drop textura sobre material slot del Inspector:*
+- Botón "Drop textura para reemplazar material" debajo de cada material slot del MeshRenderer en el Inspector.
+- Acepta payload `MOOD_TEXTURE_ASSET` (existente del AssetBrowser, Hito 26).
+- Drop genera material instance único via `AssetManager::createMaterialFromTexture(texId)` (anti-contagio del Hito 25) y lo asigna al slot correspondiente.
+- Sin undo del cambio estructural por ahora — pendiente menor.
+
+*Bloque B — Wire-up undo de 23 widgets restantes:*
+- Camera (3): fovDeg, nearPlane, farPlane.
+- Environment (6): fogColor, fogLinearStart, fogLinearEnd, fogDensity, exposure, iblIntensity.
+- AudioSource (4): volume, loop, playOnStart, is3D.
+- Animator (3): speed, playing, loop.
+- ParticleEmitter (7): emitting, additive, localSpace, velocityMin, velocityMax, colorStart, colorEnd.
+- Total acumulado Inspector con undo: 9 (Hito 32) + 8 (Hito 34) + 23 (Hito 35) = **40 widgets**.
+
+*Bloque C — Validar `.obj`+`.mtl`:*
+- Creados `assets/meshes/cube_mtl.obj` + `cube_mtl.mtl` con `map_Kd ../textures/brick.png` (textura externa al directorio del mesh).
+- Test headless `AssetManager::loadMesh carga .obj con .mtl y resuelve textura albedo`: verifica que al menos un material extrae albedo no-missing.
+- **Bug latente del Hito 26 fixeado**: `MeshLoader::extractAlbedo` construía paths con `..` segmentos sin normalizar — el VFS los rechazaba como leak silenciosamente. Fix: `lexically_normal()` antes de `loadTexture`. Aplica a CUALQUIER mesh con texturas en paths que escapen su carpeta.
+
+*Bloque D — Cierre:*
+- 1 test nuevo en `test_mesh_asset.cpp`. Suite total **287/5561** (antes Hito 34 cerrado: 286/5555).
+- Tag `v0.35.0-hito35`.
+
+**Verificación visual del dev:**
+- Drag de textura del AssetBrowser sobre el slot del Inspector reemplaza el material; otras entidades que compartían el material original NO se ven afectadas.
+- Editar fov/near/far, fog/exposure/IBL, audio volume/loop/etc, animator speed/playing/loop, todos los toggles + colores + velocities de partículas → Ctrl+Z revierte cada uno.
+- Drop de un `.obj` con `.mtl` muestra textura correcta (antes caía a missing).
+
+**Siguiente paso tras completarlo:** Hito 36 (TBD). Plan en `docs/PLAN_HITO36.md`.
+
+### Pendientes menores detectados en Hito 35
+
+- **Undo del drop de textura sobre material slot**: cambio estructural (asigna nuevo MaterialAssetId), no se trackea en HistoryStack hoy. Requeriría comando dedicado `ReplaceMaterialCommand`. **Trigger:** dev nota tras tweakear texturas.
+- **~10 widgets estructurales restantes del Inspector**: combos type/shape (cambian schema del body), paths de assets (re-resolvibles), DragFloatRange2 (toca dos floats), DragInt (variant del tracker no incluye int). Criterio: solo escalares/vectores puros van con `pushEditIfDone<T>`. **Trigger:** dev pide un widget específico undoable.
+- **`std::variant` del tracker no incluye `int`/`u32`**: heredado de Hito 32. Necesario para wire-up de `maxParticles` y similares. **Trigger:** wire-up explícito de algún DragInt.
