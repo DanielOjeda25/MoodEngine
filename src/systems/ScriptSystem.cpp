@@ -125,4 +125,19 @@ void ScriptSystem::dispatchEvent(entt::entity entity, const char* eventName) {
     }
 }
 
+void ScriptSystem::dispatchEvent(entt::entity entity, const char* eventName, u32 arg) {
+    auto it = m_states.find(entity);
+    if (it == m_states.end()) return;
+    sol::state& lua = *it->second;
+
+    sol::protected_function fn = lua[eventName];
+    if (!fn.valid()) return;
+
+    sol::protected_function_result r = fn(arg);
+    if (!r.valid()) {
+        sol::error err = r;
+        Log::script()->warn("Error en {}({}): {}", eventName, arg, err.what());
+    }
+}
+
 } // namespace Mood

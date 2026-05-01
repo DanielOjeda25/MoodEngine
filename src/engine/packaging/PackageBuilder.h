@@ -18,15 +18,19 @@
 // El usuario puede zippear esa carpeta y mandarla a alguien que la
 // abra con doble-click sin tener Visual Studio instalado.
 //
-// V1 (este hito): copia las carpetas `assets/` y `shaders/` enteras —
-// mas grande de lo necesario, pero simple. Filtrar por refs reales en
-// scripts/serializadores queda como polish reactivo si el tamano de
-// los paquetes molesta.
+// V1 (Hito 21): copia las carpetas `assets/` y `shaders/` enteras —
+// simple pero infla el paquete con assets no usados.
+// V2 (Hito 37 A — smart-pack): escanea los `.moodmap` del proyecto +
+// los `.material` referenciados, y copia solo los assets realmente
+// usados. Una whitelist defensiva (missing.png/missing.wav, skyboxes
+// completo) asegura que los fallbacks del runtime siempre estan
+// presentes. Default: smart-pack ON.
 
 #include "engine/serialization/ProjectSerializer.h"
 
 #include <filesystem>
 #include <string>
+#include <unordered_set>
 
 namespace Mood {
 
@@ -49,6 +53,10 @@ struct BuildConfig {
     /// @brief True cuando el editor se compilo en Debug — el packager
     ///        copia `SDL2d.dll` (variante debug). En Release: `SDL2.dll`.
     bool isDebugBuild = true;
+    /// @brief Hito 37 A. Si true (default), escanea `.moodmap` + `.material`
+    ///        y solo copia assets referenciados + whitelist defensiva. Si
+    ///        false, fallback al modo V1 (copy `assets/` entero).
+    bool smartPack = true;
 };
 
 struct BuildResult {
@@ -65,6 +73,20 @@ struct BuildResult {
 ///        archivos, escribe `game.json`. No requiere GL ni el motor
 ///        corriendo — pura I/O + JSON.
 BuildResult build(const BuildConfig& cfg);
+
+/// @brief Hito 37 A. Escanea cada `.moodmap` del proyecto + los
+///        `.material` referenciados, y devuelve el set de paths
+///        logicos (relativos a `assets/`) que el runtime va a leer.
+///        Util para smart-pack y para tests.
+///
+///        El set NO incluye la whitelist defensiva (missing.*,
+///        skyboxes/*) — esa la maneja `build()` aparte.
+///        `engineAssetsDir` se usa solo para abrir `.material`
+///        referenciados; si no se pasa, los `.material` quedan sin
+///        expandir (sus texturas no se incluyen).
+std::unordered_set<std::string> collectReferencedAssetPaths(
+    const Project& project,
+    const std::filesystem::path& engineAssetsDir = {});
 
 } // namespace PackageBuilder
 

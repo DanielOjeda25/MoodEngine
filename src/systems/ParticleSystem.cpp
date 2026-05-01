@@ -49,13 +49,62 @@ void ensurePoolSized(ParticleEmitterComponent& em, u32 cap) {
     em.aliveCount = 0;
 }
 
+// Hito 37 C: muestrea un offset del centro segun el shape del emisor.
+// Devuelve (0,0,0) para Point. Box: cubo +/- size en cada eje. Sphere:
+// rejection sampling sobre una esfera unitaria escalada por size. Disc:
+// punto random en plano XZ con radio <= size.
+glm::vec3 sampleEmissionOffset(const ParticleEmitterComponent& em, u64& s) {
+    using ES = ParticleEmitterComponent::EmissionShape;
+    switch (em.emissionShape) {
+        case ES::Point: return glm::vec3(0.0f);
+        case ES::Box: {
+            const f32 sz = em.emissionShapeSize;
+            return glm::vec3(
+                (randUnit(s) * 2.0f - 1.0f) * sz,
+                (randUnit(s) * 2.0f - 1.0f) * sz,
+                (randUnit(s) * 2.0f - 1.0f) * sz);
+        }
+        case ES::Sphere: {
+            // Rejection sampling: muestrea cubo [-1,1]^3, rechaza si fuera
+            // de la esfera. Tipicamente 1-2 iteraciones por particula
+            // (volumen esfera/cubo = pi/6 ≈ 0.52).
+            for (int it = 0; it < 8; ++it) {
+                const glm::vec3 p(
+                    randUnit(s) * 2.0f - 1.0f,
+                    randUnit(s) * 2.0f - 1.0f,
+                    randUnit(s) * 2.0f - 1.0f);
+                if (glm::dot(p, p) <= 1.0f) {
+                    return p * em.emissionShapeSize;
+                }
+            }
+            // Fallback raro (8 rejects seguidos): devolver un punto en
+            // el ecuador.
+            return glm::vec3(em.emissionShapeSize, 0.0f, 0.0f);
+        }
+        case ES::Disc: {
+            // Rejection sampling en cuadrado XZ.
+            for (int it = 0; it < 8; ++it) {
+                const f32 x = randUnit(s) * 2.0f - 1.0f;
+                const f32 z = randUnit(s) * 2.0f - 1.0f;
+                if (x * x + z * z <= 1.0f) {
+                    return glm::vec3(x, 0.0f, z) * em.emissionShapeSize;
+                }
+            }
+            return glm::vec3(em.emissionShapeSize, 0.0f, 0.0f);
+        }
+    }
+    return glm::vec3(0.0f);
+}
+
 // Spawna una particula en el primer slot libre. Devuelve true si ubico
 // hueco (false si la pool esta llena, descarta la solicitud).
-bool spawnOne(ParticleEmitterComponent& em, const glm::vec3& worldPos) {
+// `originPos` es el centro del shape (world o local segun localSpace);
+// el offset por shape se calcula y suma adentro.
+bool spawnOne(ParticleEmitterComponent& em, const glm::vec3& originPos) {
     const u32 cap = static_cast<u32>(em.alive.size());
     for (u32 i = 0; i < cap; ++i) {
         if (em.alive[i] != 0) continue;
-        em.positions[i]  = worldPos;
+        em.positions[i]  = originPos + sampleEmissionOffset(em, em.rngState);
         em.velocities[i] = randVec3(em.rngState, em.velocityMin, em.velocityMax);
         em.ages[i]       = 0.0f;
         em.lifetimes[i]  = em.lifetimeMin

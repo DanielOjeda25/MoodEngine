@@ -55,6 +55,14 @@ public:
     ///        en `lastError` (mismo flujo que `onUpdate`).
     void dispatchEvent(entt::entity entity, const char* eventName);
 
+    /// @brief Hito 37 B: variante con un argumento `u32` (typicamente
+    ///        el handle raw de un entt::entity). Util para callbacks
+    ///        que reportan "que body activo el trigger". El script
+    ///        recibe el id como numero Lua: `function on_xxx(bodyId)`.
+    ///        Miss silencioso + log de errores igual que la variante
+    ///        sin args.
+    void dispatchEvent(entt::entity entity, const char* eventName, u32 arg);
+
 private:
     // Mapa entidad -> su sol::state persistente. Usamos unordered_map para
     // que la direccion del sol::state no se invalide al agregar otros

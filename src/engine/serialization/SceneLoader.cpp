@@ -138,6 +138,13 @@ Entity applyOneEntity(const SavedEntity& se,
             em.emitting     = s.emitting;
             em.additive     = s.additive;
             em.localSpace   = s.localSpace;
+            // Hito 37 C: shape de emision (default Point).
+            using ES = ParticleEmitterComponent::EmissionShape;
+            if      (s.emissionShape == "box")    em.emissionShape = ES::Box;
+            else if (s.emissionShape == "sphere") em.emissionShape = ES::Sphere;
+            else if (s.emissionShape == "disc")   em.emissionShape = ES::Disc;
+            else                                   em.emissionShape = ES::Point;
+            em.emissionShapeSize = s.emissionShapeSize;
             em.texture = s.texturePath.empty()
                 ? assets.missingTextureId()
                 : assets.loadTexture(s.texturePath);

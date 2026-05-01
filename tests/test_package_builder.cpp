@@ -13,9 +13,13 @@
 
 #include <nlohmann/json.hpp>
 
+#include "core/Types.h"
+
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <string>
+#include <vector>
 
 using namespace Mood;
 
@@ -232,6 +236,97 @@ TEST_CASE("PackageBuilder: rechaza project name vacio") {
     cleanupTree(engineExe);
     cleanupTree(mock.root);
     cleanupTree(destDir);
+}
+
+TEST_CASE("PackageBuilder: collectReferencedAssetPaths walk de .moodmap (Hito 37 A)") {
+    // Mock project con un .moodmap que referencia un mesh + dos materiales
+    // (uno textura cruda, otro .material) + un script + un skybox.
+    auto m = makeMockProject("smartpack_walk");
+    const std::filesystem::path mapPath = m.root / "maps" / "smartpack_walk.moodmap";
+    nlohmann::json j;
+    j["version"] = 2;
+    j["name"]    = "smartpack_walk";
+    j["width"]   = 1;
+    j["height"]  = 1;
+    j["tileSize"] = 3.0f;
+    j["tiles"]   = nlohmann::json::array();
+    nlohmann::json ent;
+    ent["tag"] = "TestEntity";
+    ent["transform"]["position"]      = std::vector<f32>{0,0,0};
+    ent["transform"]["rotationEuler"] = std::vector<f32>{0,0,0};
+    ent["transform"]["scale"]         = std::vector<f32>{1,1,1};
+    ent["mesh_renderer"]["mesh_path"] = "meshes/test.glb";
+    ent["mesh_renderer"]["materials"] = std::vector<std::string>{
+        "textures/brick.png",
+        "materials/cobre.material"
+    };
+    ent["environment"]["skybox_path"]   = "skyboxes/sky_day";
+    ent["script"]["path"]               = "assets/scripts/test.lua";
+    ent["particle_emitter"]["texture_path"] = "textures/spark.png";
+    j["entities"] = nlohmann::json::array({ent});
+    {
+        std::ofstream f(mapPath);
+        f << j.dump();
+    }
+
+    // El walker sin engineAssetsDir no expande materials. Verifica los
+    // paths logicos extraidos directamente del .moodmap.
+    auto refs = PackageBuilder::collectReferencedAssetPaths(m.project);
+    CHECK(refs.count("meshes/test.glb") == 1);
+    CHECK(refs.count("textures/brick.png") == 1);
+    CHECK(refs.count("materials/cobre.material") == 1);
+    CHECK(refs.count("skyboxes/sky_day") == 1);
+    // El path del script tenia prefijo "assets/" — el walker lo normaliza.
+    CHECK(refs.count("scripts/test.lua") == 1);
+    CHECK(refs.count("textures/spark.png") == 1);
+
+    cleanupTree(m.root);
+}
+
+TEST_CASE("PackageBuilder: collectReferencedAssetPaths expande .material (Hito 37 A)") {
+    // Mock engineAssetsDir con un .material que tiene paths de albedo +
+    // metallic_roughness. El walker debe expandirlos al set.
+    auto engineAssets = makeTempDir("smartpack_assets");
+    nlohmann::json mat;
+    mat["albedo"]             = "textures/wood_albedo.png";
+    mat["metallic_roughness"] = "textures/wood_mr.png";
+    mat["normal"]             = "textures/wood_n.png";
+    writeFile(engineAssets / "materials" / "wood.material", mat.dump());
+
+    auto m = makeMockProject("smartpack_mat");
+    const std::filesystem::path mapPath = m.root / "maps" / "smartpack_mat.moodmap";
+    nlohmann::json j;
+    j["version"] = 2;
+    j["name"]    = "x";
+    j["width"]   = 1;
+    j["height"]  = 1;
+    j["tileSize"] = 3.0f;
+    j["tiles"]   = nlohmann::json::array();
+    nlohmann::json ent;
+    ent["tag"] = "Wooden";
+    ent["transform"]["position"]      = std::vector<f32>{0,0,0};
+    ent["transform"]["rotationEuler"] = std::vector<f32>{0,0,0};
+    ent["transform"]["scale"]         = std::vector<f32>{1,1,1};
+    ent["mesh_renderer"]["mesh_path"] = "meshes/box.glb";
+    ent["mesh_renderer"]["materials"] = std::vector<std::string>{
+        "materials/wood.material"
+    };
+    j["entities"] = nlohmann::json::array({ent});
+    {
+        std::ofstream f(mapPath);
+        f << j.dump();
+    }
+
+    auto refs = PackageBuilder::collectReferencedAssetPaths(m.project, engineAssets);
+    // Path del .material esta presente.
+    CHECK(refs.count("materials/wood.material") == 1);
+    // Y sus texturas tambien fueron expandidas.
+    CHECK(refs.count("textures/wood_albedo.png") == 1);
+    CHECK(refs.count("textures/wood_mr.png") == 1);
+    CHECK(refs.count("textures/wood_n.png") == 1);
+
+    cleanupTree(engineAssets);
+    cleanupTree(m.root);
 }
 
 TEST_CASE("PackageBuilder: isDebug=false copia SDL2.dll en lugar de SDL2d.dll") {

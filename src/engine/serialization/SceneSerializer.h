@@ -142,6 +142,11 @@ struct SavedParticleEmitter {
     bool emitting = true;
     bool additive = false;
     bool localSpace = false;             // Hito 31 F
+    // Hito 37 C: shape de emision. "point" | "box" | "sphere" | "disc".
+    // Default "point" = comportamiento Hito 29. Solo se persiste en JSON
+    // si != "point" (back-compat con mapas viejos).
+    std::string emissionShape{"point"};
+    f32         emissionShapeSize = 1.0f;
 };
 
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh

@@ -23,6 +23,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -297,6 +298,18 @@ struct NavAgentComponent {
 ///        emisores con varias instancias superpuestas pueden mostrar
 ///        artifacts.
 struct ParticleEmitterComponent {
+    // Hito 37 C: shape de emision. Las particulas se sampean en una
+    // region alrededor de la posicion del emisor segun este enum.
+    // Default Point = comportamiento del Hito 29 (todas spawnean en el
+    // centro). Box, Sphere, Disc dan volumetric emit. `emissionShapeSize`
+    // se interpreta segun el shape:
+    //   Box:    halfExtents iguales (cubo de lado 2*size).
+    //   Sphere: radio.
+    //   Disc:   radio del disco en el plano XZ local del emisor.
+    enum class EmissionShape : u8 { Point = 0, Box = 1, Sphere = 2, Disc = 3 };
+    EmissionShape emissionShape = EmissionShape::Point;
+    f32           emissionShapeSize = 1.0f;
+
     // --- Configuracion editable ---
     f32 emitRate     = 60.0f;          // particles/sec
     f32 lifetimeMin  = 1.0f;           // segundos
@@ -345,11 +358,23 @@ struct ParticleEmitterComponent {
 ///
 /// AABB: centro = TransformComponent.position; tamaño = halfExtents * 2.
 /// halfExtents NO usa el scale del Transform; representan metros directos.
+///
+/// Hito 36 C: agrega callback `on_trigger_stay` cada frame que el player
+/// sigue dentro (sin flank).
+/// Hito 37 B: tambien detecta entidades con `RigidBodyComponent` (Dynamic +
+/// Kinematic). Para esas dispatcha `on_trigger_body_enter(bodyEntId)` /
+/// `on_trigger_body_exit(bodyEntId)` / `on_trigger_body_stay(bodyEntId)`
+/// — el arg es el handle raw del entt::entity del body. `bodiesInside`
+/// guarda el set runtime de bodies actualmente dentro (no serializado).
 struct TriggerComponent {
     glm::vec3 halfExtents{1.0f, 1.0f, 1.0f}; // 2x2x2m por default
     // Estado runtime (no serializado): true mientras el jugador este
     // dentro. TriggerSystem detecta el flanco (false→true / true→false).
     bool playerInside = false;
+    // Hito 37 B: set runtime de bodies actualmente dentro del AABB.
+    // Forward decl-friendly: usamos entt::entity raw (typedef u32) en
+    // lugar de incluir <entt/entt.hpp> aca.
+    std::unordered_set<u32> bodiesInside;
 };
 
 } // namespace Mood

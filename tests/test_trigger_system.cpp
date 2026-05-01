@@ -201,6 +201,114 @@ TEST_CASE("TriggerSystem: dispatcha on_trigger_stay cada frame que el player sig
     std::filesystem::remove(path);
 }
 
+TEST_CASE("TriggerSystem: detecta dynamic body entrando al AABB (Hito 37 B)") {
+    // Body dentro del trigger desde el inicio. Verificamos que
+    // on_trigger_body_enter se dispatcha en el primer update.
+    const auto path = writeTempScript(R"(
+        function on_trigger_body_enter(bodyId)
+            hud.setHp(hud.getHp() + 100)
+        end
+    )");
+
+    Scene scene;
+    Entity trig = scene.createEntity("trigger");
+    trig.addComponent<TriggerComponent>(TriggerComponent{glm::vec3(2.0f)});
+    trig.addComponent<ScriptComponent>(path.generic_string());
+
+    Entity box = scene.createEntity("box");
+    auto& bt = box.getComponent<TransformComponent>();
+    bt.position = glm::vec3(0.0f);  // dentro del AABB del trigger
+    box.addComponent<RigidBodyComponent>(RigidBodyComponent{
+        RigidBodyComponent::Type::Dynamic, RigidBodyComponent::Shape::Box,
+        glm::vec3(0.5f), 1.0f});
+
+    PhysicsWorld pw;
+    ScriptSystem scripts;
+    TriggerSystem triggers;
+
+    GameState::hud().hp = 0;
+    scripts.update(scene, 0.016f);
+
+    triggers.update(scene, pw, scripts, /*playerCharId=*/0);
+    CHECK(GameState::hud().hp == 100);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("TriggerSystem: dispatcha body_exit al salir del AABB (Hito 37 B)") {
+    const auto path = writeTempScript(R"(
+        function on_trigger_body_enter(bodyId)
+            hud.setHp(hud.getHp() + 1)
+        end
+        function on_trigger_body_exit(bodyId)
+            hud.setHp(hud.getHp() + 1000)
+        end
+    )");
+
+    Scene scene;
+    Entity trig = scene.createEntity("trigger");
+    trig.addComponent<TriggerComponent>(TriggerComponent{glm::vec3(2.0f)});
+    trig.addComponent<ScriptComponent>(path.generic_string());
+
+    Entity box = scene.createEntity("box");
+    auto& bt = box.getComponent<TransformComponent>();
+    bt.position = glm::vec3(0.0f);  // adentro
+    box.addComponent<RigidBodyComponent>(RigidBodyComponent{
+        RigidBodyComponent::Type::Dynamic, RigidBodyComponent::Shape::Box,
+        glm::vec3(0.5f), 1.0f});
+
+    PhysicsWorld pw;
+    ScriptSystem scripts;
+    TriggerSystem triggers;
+
+    GameState::hud().hp = 0;
+    scripts.update(scene, 0.016f);
+
+    // Frame 1: enter
+    triggers.update(scene, pw, scripts, 0);
+    CHECK(GameState::hud().hp == 1);
+    // Frame 2: mover el body fuera del AABB.
+    bt.position = glm::vec3(10.0f, 10.0f, 10.0f);
+    triggers.update(scene, pw, scripts, 0);
+    CHECK(GameState::hud().hp == 1001);  // 1 (enter) + 1000 (exit)
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("TriggerSystem: bodies Static no se detectan (Hito 37 B)") {
+    const auto path = writeTempScript(R"(
+        function on_trigger_body_enter(bodyId)
+            hud.setHp(hud.getHp() + 1)
+        end
+    )");
+
+    Scene scene;
+    Entity trig = scene.createEntity("trigger");
+    trig.addComponent<TriggerComponent>(TriggerComponent{glm::vec3(2.0f)});
+    trig.addComponent<ScriptComponent>(path.generic_string());
+
+    // Body STATIC dentro del trigger — debe ser ignorado por el loop
+    // body-detection (Static no se mueve, no aporta valor, evita spam).
+    Entity wall = scene.createEntity("wall");
+    auto& wt = wall.getComponent<TransformComponent>();
+    wt.position = glm::vec3(0.0f);
+    wall.addComponent<RigidBodyComponent>(RigidBodyComponent{
+        RigidBodyComponent::Type::Static, RigidBodyComponent::Shape::Box,
+        glm::vec3(0.5f), 0.0f});
+
+    PhysicsWorld pw;
+    ScriptSystem scripts;
+    TriggerSystem triggers;
+
+    GameState::hud().hp = 0;
+    scripts.update(scene, 0.016f);
+
+    triggers.update(scene, pw, scripts, 0);
+    CHECK(GameState::hud().hp == 0);  // Static ignorado
+
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("TriggerSystem: NO dispatcha stay cuando el player esta fuera (Hito 36 C)") {
     const auto path = writeTempScript(R"(
         function on_trigger_stay()

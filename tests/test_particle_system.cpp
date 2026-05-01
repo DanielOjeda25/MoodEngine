@@ -16,7 +16,10 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include <nlohmann/json.hpp>
+
 #include <filesystem>
+#include <fstream>
 #include <memory>
 
 using namespace Mood;
@@ -290,6 +293,117 @@ TEST_CASE("SceneSerializer: localSpace default false se preserva al round-trip (
     REQUIRE(loaded->entities.size() == 1);
     REQUIRE(loaded->entities[0].particleEmitter.has_value());
     CHECK(loaded->entities[0].particleEmitter->localSpace == false);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ParticleSystem: emit shape Sphere spawnea dentro del radio (Hito 37 C)") {
+    Scene scene;
+    Entity e = scene.createEntity("SphereEmitter");
+    auto& tf = e.getComponent<TransformComponent>();
+    tf.position = glm::vec3(10.0f, 5.0f, -3.0f);  // origen no-cero
+    ParticleEmitterComponent em{};
+    em.emissionShape     = ParticleEmitterComponent::EmissionShape::Sphere;
+    em.emissionShapeSize = 2.5f;
+    em.emitRate     = 200.0f;   // 200/seg * 1seg = 200 spawns
+    em.maxParticles = 256;
+    em.lifetimeMin  = em.lifetimeMax = 100.0f; // no mueren durante el test
+    em.velocityMin  = em.velocityMax = glm::vec3(0.0f); // no se mueven
+    em.gravityFactor = 0.0f;
+    e.addComponent<ParticleEmitterComponent>(std::move(em));
+
+    ParticleSystem ps;
+    ps.update(scene, 1.0f);  // 1 segundo => spawnea ~maxParticles
+
+    auto& got = e.getComponent<ParticleEmitterComponent>();
+    REQUIRE(got.aliveCount > 0);
+    // Cada particula viva debe estar dentro de la esfera de radio 2.5
+    // centrada en tf.position (sin movimiento, posicion = spawn).
+    const f32 r2 = 2.5f * 2.5f;
+    for (u32 i = 0; i < got.alive.size(); ++i) {
+        if (got.alive[i] == 0) continue;
+        const glm::vec3 d = got.positions[i] - tf.position;
+        const f32 dist2 = d.x*d.x + d.y*d.y + d.z*d.z;
+        CHECK(dist2 <= r2 + 1e-3f);
+    }
+}
+
+TEST_CASE("ParticleSystem: emit shape Disc mantiene Y constante (Hito 37 C)") {
+    Scene scene;
+    Entity e = scene.createEntity("DiscEmitter");
+    auto& tf = e.getComponent<TransformComponent>();
+    tf.position = glm::vec3(0.0f, 4.0f, 0.0f);
+    ParticleEmitterComponent em{};
+    em.emissionShape     = ParticleEmitterComponent::EmissionShape::Disc;
+    em.emissionShapeSize = 1.0f;
+    em.emitRate     = 100.0f;
+    em.maxParticles = 64;
+    em.lifetimeMin  = em.lifetimeMax = 100.0f;
+    em.velocityMin  = em.velocityMax = glm::vec3(0.0f);
+    em.gravityFactor = 0.0f;
+    e.addComponent<ParticleEmitterComponent>(std::move(em));
+
+    ParticleSystem ps;
+    ps.update(scene, 1.0f);
+
+    auto& got = e.getComponent<ParticleEmitterComponent>();
+    REQUIRE(got.aliveCount > 0);
+    for (u32 i = 0; i < got.alive.size(); ++i) {
+        if (got.alive[i] == 0) continue;
+        // Y debe ser igual al Y del emisor (disc en plano XZ).
+        CHECK(got.positions[i].y == doctest::Approx(tf.position.y));
+        // X^2 + Z^2 <= radio^2.
+        const f32 dx = got.positions[i].x - tf.position.x;
+        const f32 dz = got.positions[i].z - tf.position.z;
+        CHECK(dx*dx + dz*dz <= 1.0f + 1e-3f);
+    }
+}
+
+TEST_CASE("SceneSerializer: emission shape custom round-trip (Hito 37 C)") {
+    AssetManager assets("assets", stubFactoryParticles());
+
+    GridMap map(1u, 1u, 1.0f);
+    Scene scene;
+    Entity e = scene.createEntity("ShapedEmitter");
+    ParticleEmitterComponent em{};
+    em.emissionShape     = ParticleEmitterComponent::EmissionShape::Sphere;
+    em.emissionShapeSize = 3.7f;
+    e.addComponent<ParticleEmitterComponent>(std::move(em));
+
+    const auto path = tempPathParticles("shape_sphere.moodmap");
+    SceneSerializer::save(map, "shape_sphere", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities[0].particleEmitter.has_value());
+    CHECK(loaded->entities[0].particleEmitter->emissionShape == "sphere");
+    CHECK(loaded->entities[0].particleEmitter->emissionShapeSize ==
+          doctest::Approx(3.7f));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: emission shape default (Point) NO se persiste en JSON (Hito 37 C)") {
+    AssetManager assets("assets", stubFactoryParticles());
+
+    GridMap map(1u, 1u, 1.0f);
+    Scene scene;
+    Entity e = scene.createEntity("DefaultEmitter");
+    e.addComponent<ParticleEmitterComponent>(); // shape default = Point
+
+    const auto path = tempPathParticles("shape_default.moodmap");
+    SceneSerializer::save(map, "shape_default", &scene, assets, path);
+
+    // Leer JSON crudo y verificar que NO contiene "emission_shape".
+    std::ifstream f(path);
+    REQUIRE(f.is_open());
+    nlohmann::json j = nlohmann::json::parse(f);
+    f.close();
+    REQUIRE(j.contains("entities"));
+    REQUIRE(j["entities"].size() >= 1u);
+    const auto& jent = j["entities"][0];
+    REQUIRE(jent.contains("particle_emitter"));
+    CHECK_FALSE(jent["particle_emitter"].contains("emission_shape"));
 
     std::filesystem::remove(path);
 }

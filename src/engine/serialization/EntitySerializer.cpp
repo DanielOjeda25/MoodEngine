@@ -172,6 +172,18 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         jpe["emitting"]       = em.emitting;
         jpe["additive"]       = em.additive;
         jpe["local_space"]    = em.localSpace;
+        // Hito 37 C: shape solo se persiste si != Point default.
+        if (em.emissionShape != ParticleEmitterComponent::EmissionShape::Point) {
+            const char* shapeStr = "point";
+            switch (em.emissionShape) {
+                case ParticleEmitterComponent::EmissionShape::Box:    shapeStr = "box";    break;
+                case ParticleEmitterComponent::EmissionShape::Sphere: shapeStr = "sphere"; break;
+                case ParticleEmitterComponent::EmissionShape::Disc:   shapeStr = "disc";   break;
+                default: break;
+            }
+            jpe["emission_shape"]      = shapeStr;
+            jpe["emission_shape_size"] = em.emissionShapeSize;
+        }
         // Texture path logico (no el id volátil). Vacio si no hay.
         if (em.texture != 0) {
             jpe["texture_path"] = assets.pathOf(em.texture);
@@ -296,6 +308,9 @@ SavedEntity parseEntityFromJson(const json& j) {
         pe.emitting     = jpe.value("emitting",       pe.emitting);
         pe.additive     = jpe.value("additive",       pe.additive);
         pe.localSpace   = jpe.value("local_space",    pe.localSpace);
+        // Hito 37 C: emission shape opcional, default "point".
+        pe.emissionShape     = jpe.value("emission_shape",      pe.emissionShape);
+        pe.emissionShapeSize = jpe.value("emission_shape_size", pe.emissionShapeSize);
         pe.texturePath  = jpe.value("texture_path",   std::string{});
         se.particleEmitter = std::move(pe);
     }
