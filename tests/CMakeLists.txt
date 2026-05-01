@@ -38,6 +38,7 @@ add_executable(mood_tests
     test_edit_transform_command.cpp
     test_delete_entity_command.cpp
     test_create_entity_command.cpp
+    test_edit_property_command.cpp
     test_particle_system.cpp
     test_character_controller.cpp
 

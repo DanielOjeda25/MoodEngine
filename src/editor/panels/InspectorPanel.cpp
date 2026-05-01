@@ -16,6 +16,24 @@
 
 namespace Mood {
 
+namespace {
+
+// Hito 32 D: helper para empujar un EditPropertyCommand cuando el dev
+// suelta un drag/edit en un widget del Inspector. Se llama
+// INMEDIATAMENTE despues del widget para que `IsItem*` se refiera a el.
+// Captura history desde el ui (puede ser null si todavia no inyectado).
+template<typename T>
+void pushEditIfDone(InspectorEditTracker& tracker, EditorUI* ui, Entity e,
+                     const T& current,
+                     typename EditPropertyCommand<T>::Setter setter,
+                     const std::string& label) {
+    HistoryStack* h = ui ? ui->historyStack() : nullptr;
+    if (h == nullptr) return;
+    trackPropertyEdit<T>(tracker, current, e, *h, std::move(setter), label);
+}
+
+} // namespace
+
 void InspectorPanel::onImGuiRender() {
     if (!visible) return;
 
@@ -48,6 +66,13 @@ void InspectorPanel::onImGuiRender() {
             tag.name = buf;
             m_editedThisFrame = true;
         }
+        // Hito 32 D: undo/redo del nombre. InputText reporta IsItemDeactivatedAfterEdit
+        // cuando el dev sale del campo (Tab, click fuera, Enter).
+        pushEditIfDone<std::string>(m_editTracker, m_ui, e, tag.name,
+            [](Entity& en, const std::string& v) {
+                en.getComponent<TagComponent>().name = v;
+            },
+            "Renombrar entidad");
         ImGui::Separator();
     }
 
@@ -61,14 +86,31 @@ void InspectorPanel::onImGuiRender() {
         if (ImGui::DragFloat3("position##tr", &t.position.x, 0.05f)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.position,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<TransformComponent>().position = v;
+            },
+            "Mover entidad (Inspector)");
+
         const bool hasMesh = e.hasComponent<MeshRendererComponent>();
         if (hasMesh) {
             if (ImGui::DragFloat3("rotation (deg)##tr", &t.rotationEuler.x, 0.5f)) {
                 m_editedThisFrame = true;
             }
+            pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.rotationEuler,
+                [](Entity& en, const glm::vec3& v) {
+                    en.getComponent<TransformComponent>().rotationEuler = v;
+                },
+                "Rotar entidad (Inspector)");
+
             if (ImGui::DragFloat3("scale##tr", &t.scale.x, 0.05f, 0.01f, 100.0f)) {
                 m_editedThisFrame = true;
             }
+            pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.scale,
+                [](Entity& en, const glm::vec3& v) {
+                    en.getComponent<TransformComponent>().scale = v;
+                },
+                "Escalar entidad (Inspector)");
         }
         ImGui::Separator();
     }
@@ -108,22 +150,50 @@ void InspectorPanel::onImGuiRender() {
                 // Sliders de los multiplicadores escalares. Editar muta el
                 // MaterialAsset in-place: el render del frame siguiente lo
                 // recoge automaticamente (no hay copia por entidad).
+                // Hito 32 D: cada slider/color empuja un EditPropertyCommand
+                // al soltar el drag. Setters capturan matId + AssetManager
+                // porque el material vive en AssetManager, no en la entidad.
+                AssetManager* assetsCap = m_assets;
+                const MaterialAssetId matIdCap = matId;
                 if (ImGui::ColorEdit3("albedoTint",
                         &mat->albedoTint.x, ImGuiColorEditFlags_NoInputs)) {
                     m_editedThisFrame = true;
                 }
+                pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, mat->albedoTint,
+                    [assetsCap, matIdCap](Entity&, const glm::vec3& v) {
+                        if (auto* m = assetsCap->getMaterial(matIdCap)) m->albedoTint = v;
+                    },
+                    "Editar albedoTint");
+
                 if (ImGui::SliderFloat("metallic",
                         &mat->metallicMult, 0.0f, 1.0f, "%.2f")) {
                     m_editedThisFrame = true;
                 }
+                pushEditIfDone<f32>(m_editTracker, m_ui, e, mat->metallicMult,
+                    [assetsCap, matIdCap](Entity&, const f32& v) {
+                        if (auto* m = assetsCap->getMaterial(matIdCap)) m->metallicMult = v;
+                    },
+                    "Editar metallic");
+
                 if (ImGui::SliderFloat("roughness",
                         &mat->roughnessMult, 0.04f, 1.0f, "%.2f")) {
                     m_editedThisFrame = true;
                 }
+                pushEditIfDone<f32>(m_editTracker, m_ui, e, mat->roughnessMult,
+                    [assetsCap, matIdCap](Entity&, const f32& v) {
+                        if (auto* m = assetsCap->getMaterial(matIdCap)) m->roughnessMult = v;
+                    },
+                    "Editar roughness");
+
                 if (ImGui::SliderFloat("ao",
                         &mat->aoMult, 0.0f, 1.0f, "%.2f")) {
                     m_editedThisFrame = true;
                 }
+                pushEditIfDone<f32>(m_editTracker, m_ui, e, mat->aoMult,
+                    [assetsCap, matIdCap](Entity&, const f32& v) {
+                        if (auto* m = assetsCap->getMaterial(matIdCap)) m->aoMult = v;
+                    },
+                    "Editar ao");
                 // Estado de las texturas — read-only por ahora; el drop
                 // de texturas / .material desde AssetBrowser se agregara
                 // en un commit posterior.
