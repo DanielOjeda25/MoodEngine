@@ -15,6 +15,8 @@
 // previo. Si tiene side-effects no-reversibles (ej. crear archivos en
 // disco), no es candidato a Command.
 
+#include <entt/entity/entity.hpp>
+
 #include <string>
 
 namespace Mood {
@@ -34,6 +36,14 @@ public:
     /// @brief Texto corto para el menu y logs ("Mover entidad",
     ///        "Eliminar Cubo", etc.).
     virtual std::string name() const = 0;
+
+    /// @brief Hito 32: cuando un comando del stack recrea una entidad
+    ///        destruida (ej. DeleteEntityCommand::undo), el handle EnTT
+    ///        viejo queda invalidado por versionado. Este hook permite
+    ///        a comandos previos del stack patchear su `Entity` interna
+    ///        para apuntar al nuevo handle. Default no-op para comandos
+    ///        que no referencian entidades especificas.
+    virtual void onEntityRemap(entt::entity /*oldH*/, entt::entity /*newH*/) {}
 };
 
 } // namespace Mood

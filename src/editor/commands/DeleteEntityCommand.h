@@ -8,12 +8,11 @@
 // entidad desde el snapshot via SceneLoader::applyOneEntity, y guarda
 // el nuevo handle para que un siguiente redo destruya el correcto.
 //
-// Caveat: el handle EnTT cambia al recrear (versionado). Otros comandos
-// del history que apuntaban al handle viejo (ej. EditTransformCommand
-// previo a este delete) no podran aplicarse — `m_registry.valid(handle)`
-// fallaria y son no-op silenciosos. Aceptable para v1; si se vuelve un
-// problema visible se puede sumar un mapa "old handle -> new handle"
-// en el HistoryStack.
+// Hito 32: handle remap. Cuando undo() recrea con un handle nuevo, el
+// comando notifica al HistoryStack para que patchee a TODOS los demas
+// comandos que apuntaban al handle viejo. Asi edit→delete→undo→undo
+// vuelve a aplicar el edit original (antes era no-op silencioso).
+// Requiere `HistoryStack*` en el ctor — opcional para tests headless.
 
 #include "core/Types.h"
 #include "editor/commands/Command.h"
@@ -26,6 +25,7 @@
 namespace Mood {
 
 class AssetManager;
+class HistoryStack;
 class Scene;
 
 class DeleteEntityCommand : public ICommand {
@@ -42,10 +42,13 @@ public:
     /// @param assets Para resolver mesh/textura paths al recrear.
     /// @param bodyCleanup Callback opcional para cleanup del body de Jolt.
     ///        EditorApplication pasa una lambda que llama PhysicsWorld::destroyBody.
+    /// @param history Opcional: si presente, el undo() llama
+    ///        `remapEntityInStack(originalHandle, nuevoHandle)` tras recrear.
     DeleteEntityCommand(Entity entity,
                          Scene* scene,
                          AssetManager* assets,
-                         BodyCleanup bodyCleanup = {});
+                         BodyCleanup bodyCleanup = {},
+                         HistoryStack* history = nullptr);
 
     void execute() override;
     void undo() override;
@@ -57,8 +60,10 @@ private:
     Scene*        m_scene;
     AssetManager* m_assets;
     BodyCleanup   m_bodyCleanup;
+    HistoryStack* m_history;       // Hito 32: para disparar remap post-undo
     SavedEntity   m_snapshot;
-    Entity        m_alive;   // valida tras ctor; vaciada tras execute(); rellenada por undo().
+    Entity        m_alive;          // valida tras ctor; vaciada tras execute(); rellenada por undo().
+    entt::entity  m_originalHandle; // handle pre-delete; usado para el remap
 };
 
 } // namespace Mood

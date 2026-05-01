@@ -60,6 +60,19 @@ std::string CreateEntityCommand::name() const {
     return m_label;
 }
 
+void CreateEntityCommand::onEntityRemap(entt::entity oldH, entt::entity newH) {
+    // Hito 32: si alguno de las entidades vivas referenciadas por este
+    // comando coincide con oldH, patcheamos su handle. Cubre el caso de
+    // que un DeleteEntityCommand anterior haya destruido + recreado una
+    // de "nuestras" entidades — un siguiente undo del create necesita
+    // apuntar al handle correcto para destruirlas.
+    for (auto& e : m_alive) {
+        if (e.handle() == oldH) {
+            e = Entity(newH, e.scene());
+        }
+    }
+}
+
 void CreateEntityCommand::destroyAllAlive() {
     if (m_scene == nullptr) return;
     for (Entity& e : m_alive) {

@@ -35,6 +35,12 @@ void EditTransformCommand::undo() {
     applyValue(m_before);
 }
 
+void EditTransformCommand::onEntityRemap(entt::entity oldH, entt::entity newH) {
+    if (m_entity.handle() == oldH) {
+        m_entity = Entity(newH, m_entity.scene());
+    }
+}
+
 std::string EditTransformCommand::name() const {
     const char* fieldName = "";
     switch (m_field) {

@@ -231,7 +231,9 @@ void EditorApplication::deleteSelectedEntity() {
         cleanup = [pw](u32 bodyId) { pw->destroyBody(bodyId); };
     }
     auto cmd = std::make_unique<DeleteEntityCommand>(
-        selected, m_scene.get(), m_assetManager.get(), std::move(cleanup));
+        selected, m_scene.get(), m_assetManager.get(),
+        std::move(cleanup),
+        &m_history);  // Hito 32: para remap de handles post-undo
     m_history.push(std::move(cmd));
     markDirty();
 }

@@ -35,6 +35,7 @@ public:
     void execute() override;
     void undo() override;
     std::string name() const override;
+    void onEntityRemap(entt::entity oldH, entt::entity newH) override;
 
     /// True si before == after (push no-op para evitar entradas vacias
     /// en el history al hacer click sin drag).

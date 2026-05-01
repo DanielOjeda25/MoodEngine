@@ -51,6 +51,7 @@ public:
     void execute() override;
     void undo() override;
     std::string name() const override;
+    void onEntityRemap(entt::entity oldH, entt::entity newH) override;
 
 private:
     void destroyAllAlive();

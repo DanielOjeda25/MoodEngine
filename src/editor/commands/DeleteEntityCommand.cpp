@@ -1,6 +1,7 @@
 #include "editor/commands/DeleteEntityCommand.h"
 
 #include "core/Log.h"
+#include "editor/commands/HistoryStack.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Scene.h"
@@ -12,9 +13,13 @@ namespace Mood {
 DeleteEntityCommand::DeleteEntityCommand(Entity entity,
                                           Scene* scene,
                                           AssetManager* assets,
-                                          BodyCleanup bodyCleanup)
+                                          BodyCleanup bodyCleanup,
+                                          HistoryStack* history)
     : m_scene(scene), m_assets(assets),
-      m_bodyCleanup(std::move(bodyCleanup)), m_alive(entity) {
+      m_bodyCleanup(std::move(bodyCleanup)),
+      m_history(history),
+      m_alive(entity),
+      m_originalHandle(entity.handle()) {
     // Capturamos el snapshot AHORA, mientras la entity todavia existe.
     // serializeEntityToJson + parseEntityFromJson nos da una SavedEntity
     // independiente del handle vivo.
@@ -37,6 +42,13 @@ void DeleteEntityCommand::undo() {
     // viejo — por eso m_alive se reasigna.
     m_alive = SceneLoader::applyOneEntity(m_snapshot, *m_scene, *m_assets);
     Log::editor()->info("Recreada entidad '{}' (undo de delete).", m_snapshot.tag);
+
+    // Hito 32: notificar al history stack del cambio de handle. Comandos
+    // previos (EditTransform, EditProperty, otros Create/Delete) que
+    // referenciaban la entidad por el handle viejo se patchean aca.
+    if (m_history != nullptr) {
+        m_history->remapEntityInStack(m_originalHandle, m_alive.handle());
+    }
 }
 
 std::string DeleteEntityCommand::name() const {

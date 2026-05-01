@@ -43,6 +43,16 @@ void HistoryStack::clear() {
     m_redo.clear();
 }
 
+void HistoryStack::remapEntityInStack(entt::entity oldH, entt::entity newH) {
+    if (oldH == newH) return;
+    for (auto& cmd : m_undo) {
+        if (cmd) cmd->onEntityRemap(oldH, newH);
+    }
+    for (auto& cmd : m_redo) {
+        if (cmd) cmd->onEntityRemap(oldH, newH);
+    }
+}
+
 std::string HistoryStack::undoName() const {
     return m_undo.empty() ? std::string{} : m_undo.back()->name();
 }

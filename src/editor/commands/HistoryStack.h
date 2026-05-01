@@ -48,6 +48,14 @@ public:
     ///        entities a las que apuntan los commands quedaron destruidas.
     void clear();
 
+    /// @brief Hito 32: tras recrear una entidad (DeleteEntityCommand::undo),
+    ///        notifica a TODOS los comandos del stack que el handle viejo
+    ///        ahora es `newH`. Asi un EditTransformCommand previo que
+    ///        apuntaba al handle pre-delete vuelve a ser aplicable post-
+    ///        recrearion. Sin esto, edit→delete→undo→undo dejaria el
+    ///        segundo undo silencioso.
+    void remapEntityInStack(entt::entity oldH, entt::entity newH);
+
     bool canUndo() const { return !m_undo.empty(); }
     bool canRedo() const { return !m_redo.empty(); }
 
