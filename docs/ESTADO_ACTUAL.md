@@ -6,13 +6,19 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 36 cerrado.**
+**Hito 37 cerrado.**
+Tag: `v0.37.0-hito37`.
+Verificado automático: suite doctest **300/5927** (+2 de `test_package_builder` smart-pack walk + 3 de `test_trigger_system` body detection + 4 de `test_particle_system` emission shapes). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: "Empaquetar proyecto" produce paquetes con solo los assets referenciados — el zip pesa fracciones de lo que pesaba con el copy entero. Caja física empujada al AABB de un trigger imprime `on_trigger_body_enter` con el body id; al sacarla `on_trigger_body_exit`. Particle emitter con shape `Sphere` distribuye partículas en un volumen real (no todas saliendo de un punto). Save/cerrar/reabrir preserva shape + size.
+
+**Cambio importante:** sexto hito seguido cerrando deudas (32 → 33 → 34 → 35 → 36 → 37). Las 3 medianas pendientes barridas (Hito 26 + 33 + 29). 3 bloques: smart-pack escanea `.moodmap` + `.material` y copia solo assets referenciados (whitelist defensiva: `textures/missing.png`, `audio/missing.wav`, `skyboxes/` recursivo); `TriggerSystem` con segundo loop sobre `RigidBodyComponent` Dynamic+Kinematic dispatcha `on_trigger_body_enter/exit/stay(bodyId)` (Static se ignora); `ParticleEmitterComponent::EmissionShape { Point, Box, Sphere, Disc }` con sampler funcs por shape (rejection sampling) y persistencia opcional. Backlog de scope chico-medio = limpio.
+
+**Próximo paso:** Hito 38 (TBD). Plan en `docs/PLAN_HITO38.md`.
+
+### Hito 36 (anterior, ya cerrado)
 Tag: `v0.36.0-hito36`.
 Verificado automático: suite doctest **291/5574** (+2 de `test_edit_property_command` para `EditPropertyCommand<u32>` + 2 de `test_trigger_system` para `on_trigger_stay`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: drop de textura sobre material slot → Ctrl+Z restaura el material previo (anti-contagio del Hito 25 preservado). Editar `maxParticles` con DragInt → Ctrl+Z restaura el valor + resetea la pool runtime. Trigger con script que define `on_trigger_stay` loguea cada frame que el player sigue dentro.
 
-**Cambio importante:** quinto hito seguido cerrando deudas (32 → 33 → 34 → 35 → 36). El backlog "scope chico arrastrando" está limpio. 3 bloques: undo del drop de textura via reuso de `EditPropertyCommand<u32>` (sin clase nueva), `u32` en el variant del `InspectorEditTracker` + cableo del slider DragInt de `maxParticles` con cleanup de pool runtime al revertir, dispatch de `on_trigger_stay` per-frame en `TriggerSystem` (frame del enter solo enter, frames siguientes mientras adentro stay, frame del exit solo exit). Próximo hito puede arrancar feature pesado con piso limpio.
-
-**Próximo paso:** Hito 37 (TBD). Plan en `docs/PLAN_HITO37.md`.
+**Cambio importante:** quinto hito seguido cerrando deudas (32 → 33 → 34 → 35 → 36). El backlog "scope chico arrastrando" está limpio. 3 bloques: undo del drop de textura via reuso de `EditPropertyCommand<u32>` (sin clase nueva), `u32` en el variant del `InspectorEditTracker` + cableo del slider DragInt de `maxParticles` con cleanup de pool runtime al revertir, dispatch de `on_trigger_stay` per-frame en `TriggerSystem` (frame del enter solo enter, frames siguientes mientras adentro stay, frame del exit solo exit).
 
 ### Hito 35 (anterior, ya cerrado)
 Tag: `v0.35.0-hito35`.

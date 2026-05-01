@@ -2577,3 +2577,95 @@ El frame del enter cae en (2) — solo dispatcha enter. Los frames siguientes mi
 
 **Revisar si:** un demo necesita explícitamente que stay se dispatche también en el frame del enter (improbable — el script ya tiene enter para ese frame).
 
+## 2026-05-01: PackageBuilder smart-pack con whitelist defensiva (skyboxes/ + missing.*) sin bumpear schema
+
+**Contexto:** Hito 37 A. Hasta el Hito 21, `PackageBuilder` copiaba `assets/` entero por simplicidad — pero con el Kenney pack del Hito 26 (1.5 MB) + futuras adiciones, los paquetes se inflan rápido. La deuda decía "filtrar por refs reales en scripts/serializadores queda como polish reactivo si el tamaño molesta". Implementación V2 ahora.
+
+**Decisión:** smart-pack como nuevo flag `BuildConfig::smartPack` (default `true`). Algoritmo:
+1. **Walk de `.moodmap`**: por cada mapa del proyecto, parsear JSON y recolectar paths lógicos referenciados en cada entidad: `mesh_path`, `materials[]`, `environment.skybox_path`, `particle_emitter.texture_path`, `script.path`, `prefab_path`.
+2. **Expansión de `.material`**: si un path recolectado termina en `.material`, abrir el archivo y agregar sus paths internos (`albedo`, `metallic_roughness`, `normal`, `ao`).
+3. **Whitelist defensiva** (siempre):
+   - `textures/missing.png` (fallback runtime cuando una textura falla).
+   - `audio/missing.wav` (fallback runtime para audio).
+   - Todo `skyboxes/` recursivo (los SkyboxRenderer / IBL los usan sin pasar por `.moodmap`).
+4. **Copy** solo los paths del set unión, manteniendo la jerarquía de directorios.
+5. **Fallback opcional**: `smartPack=false` mantiene el modo V1 (copy entero) para tests legacy o casos edge.
+
+Sin bumpear schema del package — es cambio del builder, el runtime que lee no se entera.
+
+**Razones:**
+- **Walk del JSON en lugar de recorrer cada Lua**: los scripts pueden cargar assets dinámicos via `engine.exposed`, pero esos paths son runtime-dependent (no conocemos hasta ejecutar). Aceptamos: si un script carga asset X que no aparece en `.moodmap`, X no va al package. Documentado.
+- **Whitelist `skyboxes/` entero**: el SkyboxRenderer carga el skybox default por path (`sky_day` o `sky_kloofendal`) sin que aparezca en `.moodmap` salvo que el mapa tenga un `EnvironmentComponent`. Más fácil incluir el dir entero (~5 archivos chicos) que rastrear cuál usa cada mapa.
+- **Whitelist `missing.png`/`missing.wav`**: ASsetManager los carga al ctor sin pasar por `.moodmap`. Sin ellos el binario fallaría al primer asset perdido.
+- **Default `true`**: tras 6 hitos cerrando deudas, queremos que el dev experimente smart-pack inmediatamente. Si rompe algún caso edge, `smartPack=false` lo evita sin redeploy.
+- **Bounds defensivos en el set unión**: `std::unordered_set<std::string>` deduplica naturalmente. Cero overhead si dos entities referencian el mismo asset.
+- **Cero bumpe de schema**: el `game.json` del paquete sigue idéntico. Solo cambia QUÉ archivos están bajo `assets/`.
+
+**Alternativas consideradas:**
+- **Tracker de paths en runtime** (cuando AssetManager carga algo, registrarlo): preciso pero requiere ejecutar el juego en el editor antes del package — fricción al workflow.
+- **Hardcoded whitelist de extensiones** (copy todo lo `.png`/`.glb`): demasiado permisivo. Un asset perdido en `assets/` se incluiría aunque nadie lo referencie.
+- **Bumpear schema y forzar ANY paquete a tener un manifest de assets**: overengineering. El smart-pack actual produce paquetes válidos sin manifest extra.
+
+**Trade-offs:**
+- Se pierde: assets cargados solo desde Lua dinámico no aparecen automáticamente. Documentado — el dev puede agregar `engine.exposed` defaults o forzar `smartPack=false`.
+- Se gana: paquetes en fracciones del tamaño previo, sin schema bump, fallback opcional preservado.
+
+**Revisar si:** un demo deja afuera assets cargados solo desde scripts. Entonces agregar un mecanismo para que `engine.exposed` registre paths en una whitelist runtime que el packager pueda leer.
+
+## 2026-05-01: Triggers detectan dynamic bodies dispatchando con `entt::entity` raw como `u32`
+
+**Contexto:** Hito 37 B. El `TriggerSystem` del Hito 33 solo testeaba contra el char del player. Para puzzles tipo "pesar un objeto para abrir puerta" o "objeto entrando a una zona de daño", necesitábamos detectar también entidades con `RigidBodyComponent`. Tres preguntas: (1) qué tipos detectar, (2) cómo pasar el body al script, (3) dónde guardar el estado per-trigger.
+
+**Decisión:**
+1. **Solo Dynamic + Kinematic**: Static no se mueve, no aporta flank-changes — incluirlo solo dispara spam si el wall ya está dentro del trigger desde el spawn. Filtramos en el loop.
+2. **Pass body como `u32` raw del entt::entity**: nueva sobrecarga `ScriptSystem::dispatchEvent(entity, eventName, u32 arg)`. El script firma `function on_trigger_body_enter(bodyId)` y recibe el id como número Lua. NO acoplamos TriggerSystem a sol2 (que tendría que construir un `sol::object` o `Entity` wrapper).
+3. **Estado per-trigger en `TriggerComponent::bodiesInside`**: `std::unordered_set<u32>` (no serializado). Mantiene el invariante "estado en el componente, sistema sin estado interno".
+4. **Cleanup automático de bodies destruidos**: si un body en el set previo no aparece en el body-list del frame actual (porque fue destruido), dispatcha exit + removemos del set. Sin necesidad de hooks de destrucción.
+
+**Razones:**
+- **Static excluido**: simpleza y performance. Si un dev quiere "wall hit" usa raycast, no triggers.
+- **`u32` raw en lugar de `Entity` wrapper**: el dispatcher no necesita Scene*. Simple. El script puede convertir a Entity con `engine.entity(id)` si el binding lo expone (ya existe el user_type). Para v1 ningún caso requiere convertir — los scripts solo loguean el id.
+- **Set per-componente**: agregar `unordered_set` al componente lo vuelve no-trivial-copyable. Aceptado — los call sites de copy (prefab clone, scene copy) son raros y se "auto-recuperan" en el primer update post-copy (set vacío → todos los bodies dentro re-disparan enter).
+- **Pre-recolección de body positions**: el loop interno snapshot las posiciones ANTES de iterar triggers. Amortiza si hay N triggers y M bodies (de N*M lookups a N + M).
+
+**Alternativas consideradas:**
+- **Pass `Entity` wrapper como sol::object**: requeriría que TriggerSystem capture el sol::state, acoplamiento que evitamos en Hito 33.
+- **Estado en TriggerSystem en lugar del componente**: `std::unordered_map<entity, set<entity>>` interno al sistema. Funciona pero acopla el sistema a la vida de las entidades — si una entidad-trigger se destruye, hay que limpiar su entry.
+- **Detectar Static**: descartado por spam y nulo valor.
+- **Compact representation con `bitset`**: prematuro. `unordered_set<u32>` es claro y suficiente.
+
+**Trade-offs:**
+- Se pierde: el script no recibe directamente el `Entity` wrapper. Aceptado — consultar via `engine.entity(id)` es un paso extra trivial.
+- Se gana: TriggerSystem queda desacoplado de sol2; estado per-trigger se autolimpia; performance lineal en (triggers + bodies).
+
+**Revisar si:** emerge un caso donde el script necesita más que el id (ej. la posición exacta del body en el frame). Entonces extender `dispatchEvent` para variantes con args múltiples (`Args...` templated).
+
+## 2026-05-01: Particle emission por shape con rejection sampling (Sphere/Disc) en lugar de polar coords
+
+**Contexto:** Hito 37 C. Para extender la emisión de partículas más allá del Point del Hito 29, había que decidir el método de sampling. Cuatro shapes target: Point, Box, Sphere, Disc. Box es trivial (random uniform en cubo). Sphere y Disc tienen dos métodos clásicos: polar/spherical coordinates (analitico) o rejection sampling (probabilistico).
+
+**Decisión:** **rejection sampling** para Sphere y Disc:
+1. **Sphere**: muestrear punto en cubo `[-1,1]^3`. Si `dot(p, p) <= 1`, aceptar como punto en esfera unit. Else reintentar (hasta 8 veces — fallback a punto en ecuador si raro). Escalar por `emissionShapeSize`.
+2. **Disc**: igual pero en cuadrado XZ `[-1,1]^2` con `x^2 + z^2 <= 1`. Y siempre 0. Escalar por size.
+3. **Point**: retorna `(0,0,0)`.
+4. **Box**: 3 randUnit independientes en `[-1, 1]` * size.
+
+**Razones:**
+- **Probabilidad de aceptación esférica = π/6 ≈ 0.52**: en promedio 1.9 iteraciones por sample. Aceptable para partículas (no GPU shader, no hot path crítico).
+- **Probabilidad de aceptación en disco = π/4 ≈ 0.78**: 1.27 iteraciones promedio. Aún mejor.
+- **Determinismo + reproducibilidad**: el RNG xorshift64 del Hito 29 es determinístico per-emisor — replays de demos producen las mismas partículas. Rejection sampling es determinista en este RNG (mismo seed → mismas decisiones de aceptar/rechazar).
+- **Polar coords requieren `sin/cos/sqrt`**: más caro que comparaciones + sumas. Para partículas spawneadas en lotes de cientos por frame, importa.
+- **Distribución uniforme garantizada**: polar coords en disco necesitan `sqrt(r)` para no concentrar puntos en el centro — rejection sampling no tiene ese sesgo.
+- **Cap de 8 iteraciones con fallback a punto en ecuador**: protege contra runaway si el RNG produjera secuencia patológica (1 en 4^8 ≈ 1 en 65000 para esfera, prácticamente nunca). Fallback determinista no rompe replays.
+
+**Alternativas consideradas:**
+- **Polar/spherical coords**: cleaner pero más caro y con riesgo de no-uniformidad si no se usa `sqrt(r)`/`acos(2*u-1)`.
+- **Lookup table de puntos pre-sampleados**: requeriría buffer fijo + indexing. Más memoria sin payoff claro.
+- **Half-Cone como shape**: descartado para v1 — necesita axis vector aparte. Si aparece (sparks orientadas), agregamos.
+
+**Trade-offs:**
+- Se pierde: ~30% más operaciones promedio que polar para Sphere. Aceptado — el RNG xorshift es trivial.
+- Se gana: distribución uniforme garantizada, código más simple, más rápido en cubo/disco que las trig variants.
+
+**Revisar si:** aparece un profile que muestra emit cost dominante. Improbable — particles spawnean ~60-200/sec, no 60000.
+

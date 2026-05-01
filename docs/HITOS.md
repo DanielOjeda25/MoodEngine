@@ -41,7 +41,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 34 — Cerrar deudas chicas: friction per-body + raycast filtrable + coyote/jump buffer + headbob velocity scale + 7 widgets undo (completado, tag `v0.34.0-hito34`).
 - [x] Hito 35 — Cerrar deudas viejas: drop textura sobre material slot + 23 widgets undo + validar .obj+.mtl (fix path normalize) (completado, tag `v0.35.0-hito35`).
 - [x] Hito 36 — Cerrar lo que arrastra: undo del drop de textura + maxParticles undoable (u32 en variant) + on_trigger_stay (completado, tag `v0.36.0-hito36`).
-- [ ] Hito 37 — TBD.
+- [x] Hito 37 — Cerrar 3 medianas: PackageBuilder smart-pack + triggers detectan dynamic bodies + particle emission por shape (completado, tag `v0.37.0-hito37`).
+- [ ] Hito 38 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -1320,7 +1321,56 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 ### Pendientes menores detectados en Hito 36
 
 Scope chico arrastrando = limpio. Lo que queda es de coste medio o sin trigger concreto, candidato a hitos futuros si emerge necesidad:
-- **Triggers detectan dynamic bodies / NPCs** (Hito 33 origen): coste medio.
+- ~~**Triggers detectan dynamic bodies / NPCs** (Hito 33 origen): coste medio.~~ Resuelto en Hito 37 B con segundo loop sobre RigidBody Dynamic+Kinematic + nuevos callbacks `on_trigger_body_*(bodyId)`.
 - **Trigger AABB rotation (OBB)** (Hito 33): coste medio.
 - **DragFloatRange2 widgets undoables**: lifetime/size del ParticleEmitter — requeriría `std::pair<f32,f32>` en variant.
 - **Combos estructurales del Inspector** (type/shape/clipName): cambios de schema, no caben en `pushEditIfDone<T>`. Necesitarían comandos dedicados.
+
+## Hito 37 — Cerrar 3 medianas pendientes (PackageBuilder smart-pack + triggers/bodies + particle shapes)
+
+**Objetivo:** sexto hito seguido cerrando deudas. Las 3 medianas pendientes que arrastrábamos (Hito 26 + 33 + 29). Tras este hito, el backlog de scope chico-medio queda completamente limpio — el próximo hito puede arrancar feature visible (save/load, main menu).
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — PackageBuilder smart-pack:*
+- Nuevo `BuildConfig::smartPack` (default `true`).
+- `collectReferencedAssetPaths(project, engineAssetsDir)` escanea cada `.moodmap` del proyecto + `.material` referenciados, recolecta paths lógicos: mesh, texturas, materiales, scripts (con prefix `assets/` normalizado), particle textures, prefabs, skybox.
+- Whitelist defensiva siempre incluida: `textures/missing.png`, `audio/missing.wav`, todo `skyboxes/` recursivo.
+- `smartPack=false` mantiene el modo V1 (copy `assets/` entero) como fallback.
+
+*Bloque B — Triggers detectan dynamic bodies:*
+- `TriggerSystem::update` ahora hace dos AABB-tests por trigger: player char (Hito 33+36) + cada entidad con `RigidBodyComponent` Dynamic + Kinematic.
+- Nuevos callbacks Lua: `on_trigger_body_enter(bodyId)` / `on_trigger_body_exit(bodyId)` / `on_trigger_body_stay(bodyId)`. Reciben el `entt::entity` raw del body como número.
+- Static bodies se ignoran (no aportan flank, evitan spam).
+- Estado per-trigger en `TriggerComponent::bodiesInside` (set, no serializado). Bodies destruidos entre frames se limpian automáticamente.
+- Nueva sobrecarga `ScriptSystem::dispatchEvent(entity, eventName, u32 arg)` para args primitivos sin acoplar TriggerSystem a sol2.
+
+*Bloque C — Particle emission por shape:*
+- Nuevo enum `ParticleEmitterComponent::EmissionShape { Point, Box, Sphere, Disc }` + campo `emissionShapeSize`.
+- Sphere / Disc usan rejection sampling para uniformidad (1-2 iteraciones promedio en Sphere; ≤ 8 con fallback determinista).
+- Point default = comportamiento Hito 29.
+- Persistencia en `.moodmap` opcional (campo solo se escribe si shape != Point).
+- Inspector con combo + DragFloat condicional + undo del slider.
+
+*Bloque D — Tests + cierre:*
+- 2 tests en `test_package_builder.cpp` (walk + expansión .material).
+- 3 tests en `test_trigger_system.cpp` (body enter/exit, Static ignorado).
+- 4 tests en `test_particle_system.cpp` (Sphere dentro radio, Disc plano XZ, round-trip shape, Point no se persiste).
+- Suite total **300/5927** (antes Hito 36 cerrado: 291/5574).
+
+**Verificación visual del dev:**
+- "Empaquetar proyecto" produce paquetes con SOLO los assets referenciados — fracciones del tamaño del copy entero.
+- Caja física empujada al AABB de un trigger → script imprime `on_trigger_body_enter` con el body id; al sacarla → `on_trigger_body_exit`.
+- Particle emitter con shape `Sphere`/radius 2.0 spawnea humo distribuido en una esfera de 4m de diámetro.
+- Save/cerrar/reabrir preserva shape + size del emisor.
+
+**Siguiente paso tras completarlo:** Hito 38 (TBD). Plan en `docs/PLAN_HITO38.md`.
+
+### Pendientes menores detectados en Hito 37
+
+Backlog scope chico-medio = limpio. Lo que queda son items con coste medio sin trigger inmediato:
+- **Trigger AABB con rotation (OBB)** (Hito 33): coste medio.
+- **Particle emission shape `Cone`** (Hito 37 C): bajo, pero sin trigger inmediato.
+- **Setter runtime de friction** (Hito 34 A): bajo-medio.
+- **Filtro raycast layer/tag genérico** (Hito 34 B): bajo.
+- **DragFloatRange2 widgets undoables** + combos estructurales (Hito 32-36): heredado.

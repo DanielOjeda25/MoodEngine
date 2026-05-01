@@ -1,92 +1,49 @@
-# Plan — Hito 37: TBD
+# Plan — Hito 37: Cerrar 3 medianas pendientes (cerrado)
 
-> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 36 cerrado).
->
-> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
+> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 37 cerrado).
 
 ---
 
 ## Estado
 
-**Hito 36 cerrado** (`v0.36.0-hito36`, suite **291/5574**). 5 hitos seguidos cerrando deudas (32 → 33 → 34 → 35 → 36). El backlog "scope chico arrastrando" está limpio. Inspector con undo en 41 widgets totales. Triggers con enter/exit/stay completos. Drop textura material undoable.
+**Hito 37 cerrado** (`v0.37.0-hito37`, suite **300/5927**). Sexto hito seguido cerrando deudas (32 → 33 → 34 → 35 → 36 → 37). Las 3 medianas pendientes barridas: PackageBuilder smart-pack (Hito 26), triggers que detectan dynamic bodies (Hito 33), emisión de partículas por shape (Hito 29). Próximo hito puede arrancar feature visible (save/load, main menu).
 
-El Hito 37 está **TBD**: acordar con el dev el alcance. Tras 5 hitos de cleanup, el dev probablemente esté listo para feature pesada visible.
+## Bloques cerrados
 
-**Recordatorios importantes:**
-- Networking / multijugador, i18n, cursores custom **fuera de alcance**. NO proponer.
-- Polish del NavAgent **descartado permanentemente**.
+- [x] **Bloque A — PackageBuilder smart-pack** (deuda Hito 26): nuevo `cfg.smartPack` (default `true`). El builder ahora escanea cada `.moodmap` del proyecto + `.material` referenciados, recolecta paths lógicos (mesh, texturas, materiales, scripts, particle textures, prefabs, skybox) y copia solo esos al package. Whitelist defensiva: `textures/missing.png`, `audio/missing.wav`, `skyboxes/` recursivo entero (los shaders ya iban aparte). El `assets/` entero se vuelve fallback opcional con `cfg.smartPack = false`. Nueva función pública `collectReferencedAssetPaths(project, engineAssetsDir)` reutilizable para tests.
+- [x] **Bloque B — Triggers detectan dynamic bodies** (deuda Hito 33): `TriggerSystem::update` ahora hace dos AABB-tests:
+  1. Player char (Hito 33+36): dispatch `on_trigger_enter` / `on_trigger_exit` / `on_trigger_stay`.
+  2. Cada entidad con `RigidBodyComponent` Dynamic + Kinematic (Static se ignora — no se mueve, no aporta valor): dispatch nuevos callbacks `on_trigger_body_enter(bodyId)` / `on_trigger_body_exit(bodyId)` / `on_trigger_body_stay(bodyId)` que reciben el `entt::entity` raw del body como número Lua.
+  - Estado per-trigger guardado en `TriggerComponent::bodiesInside` (set, no serializado). Bodies destruidos entre frames se limpian automáticamente porque no aparecen en el set del frame actual → flank false→true del set previo dispara exit.
+  - Nueva sobrecarga `ScriptSystem::dispatchEvent(entity, eventName, u32 arg)` para pasar args primitivos a Lua sin acoplar TriggerSystem a sol2.
+- [x] **Bloque C — Emisión de partículas por shape** (deuda Hito 29): nuevo `ParticleEmitterComponent::EmissionShape { Point, Box, Sphere, Disc }` + `emissionShapeSize` (radio para Sphere/Disc, halfExtents iguales para Box). Default Point = comportamiento del Hito 29 (cero impacto en mapas viejos). Sphere/Disc usan rejection sampling para uniformidad. Persistencia en `.moodmap` opcional (solo se escribe si shape != Point). Inspector con combo + DragFloat condicional + undo del slider.
+- [x] **Bloque D — Tests + cierre**:
+  - 2 tests en `test_package_builder.cpp`: walk de `.moodmap` recolecta paths esperados + expansión de `.material` agrega texturas internas.
+  - 3 tests en `test_trigger_system.cpp`: dynamic body entrando dispatcha `on_trigger_body_enter` + exit al salir + Static body es ignorado.
+  - 4 tests en `test_particle_system.cpp`: Sphere spawnea dentro del radio + Disc mantiene Y constante en plano XZ + emission shape custom round-trip + emission shape default Point NO se persiste en JSON.
+  - Suite total **300/5927** (antes Hito 36 cerrado: 291/5574).
+  - Tag `v0.37.0-hito37`.
 
----
+## Lo que NO se cubrió
 
-## Candidatos activos
-
-Lista en orden de prioridad/coste.
-
-### A. Save/Load de gameplay state
-
-**Por qué:** hoy `.moodmap` describe nivel pero NO estado de juego. Save & load = primer eslabón de "juego con progresión". Tras 5 hitos cerrando deudas, el dev probablemente está listo para una feature visible. Habilita pasar el primer demo "real" con progresión.
-
-**Coste:** medio. Definir state vs setup, serializar `GameState::hud()` + globals Lua relevantes, integrar con menú "Save/Load" en `MoodPlayer`.
-
-**Trigger ideal:** primer demo que dependa de progresión.
-
-### B. UI de juego mejorada (HUD + main menu)
-
-**Por qué:** falta menú principal del MoodPlayer (New Game / Load Game / Settings / Quit), settings persistidos, HUD parametrizable.
-
-**Coste:** medio.
-
-**Trigger ideal:** combo con A.
-
-### C. PackageBuilder smart-pack — del Hito 26
-
-**Por qué:** hoy `PackageBuilder` copia `assets/` entero. Con Kenney pack (1.5 MB) + futuros packs, los packages se inflan rápido.
-
-**Coste:** medio.
-
-**Trigger ideal:** demo packageado > 50 MB.
-
-### D. Triggers detectan dynamic bodies / NPCs — del Hito 33
-
-**Por qué:** hoy solo el char del jugador es el "actor" detectable. Cajas físicas o NPCs entrando/saliendo no disparan callback.
-
-**Coste:** medio.
-
-**Trigger ideal:** primer demo que requiera detectar otra cosa (puzzles tipo "pesar un objeto para abrir puerta").
-
-### E. Emisión de partículas por shape — del Hito 29
-
-**Por qué:** hoy todas las partículas se emiten desde un punto en el centro del Transform. Cono/esfera/disco amplían expresividad de VFX.
-
-**Coste:** medio.
-
-**Trigger ideal:** VFX que pide directionalidad clara.
+- Save/Load gameplay state, main menu, settings persistidos: candidatos PLAN_HITO38.
+- Polish menores acumulados (DragFloatRange2 widgets undoables, combos estructurales, etc.).
 
 ---
 
-## Diferidos (revisar más adelante)
+## Decisiones tomadas
 
-### Polish menores acumulados (sin trigger concreto hoy)
-- Sort de partículas por bucket-Z (vs centro simple).
-- `localSpace` con rotation/scale del entity.
-- Compactación cross-frame para sliders externos al Inspector.
-- Trigger AABB no respeta rotation del Transform.
-- Raycast batch API + filtros por layer/tag genérico.
-- Setter runtime de friction (hoy aplica solo al re-materializar).
-- Coyote/jump buffer windows configurables per-proyecto.
-- DragFloatRange2 widgets undoables (lifetime/size).
-- Combos estructurales del Inspector (type/shape/clipName).
+Las nuevas en `DECISIONS.md` (2026-05-01):
+- PackageBuilder smart-pack con whitelist defensiva (skyboxes/ + missing.*) sin bumpear schema.
+- Triggers detectan bodies dispatchando con `entt::entity` raw como `u32` (sin acoplar TriggerSystem a sol2).
+- Particle emission shapes con rejection sampling (Sphere/Disc) en vez de polar coords.
 
 ---
 
-## Decisiones a tomar (cuando el hito se concrete)
+## Verificación visual del dev (criterios cumplidos)
 
-- [ ] Cuál de los candidatos activos arriba se elige.
-- [ ] Si toca persistencia, definir si bumpea format version o usa campo opcional.
-- [ ] Si toca scripting, definir si los nuevos bindings respetan el sandbox.
-
----
-
-## Riesgos identificados (genéricos, completar al concretar el hito)
-
-- Cada candidato tiene riesgos propios; documentarlos al elegir.
+- "Empaquetar proyecto" produce un paquete que contiene SOLO los assets referenciados por los .moodmap del proyecto + missing.* + skyboxes/ + shaders/. El zip pesa fracciones de lo que pesaba con el copy entero.
+- Trigger demo + caja física empujada al AABB → script imprime `on_trigger_body_enter` con el id del body. Al sacar la caja → `on_trigger_body_exit`.
+- Particle emitter con shape `Sphere`/radius 2.0 spawnea humo distribuido en una esfera de 4m de diámetro (no más todas saliendo de un punto).
+- Save/cerrar/reabrir preserva shape + size del emisor.
+- Suite 300/5927 sin regresiones.
