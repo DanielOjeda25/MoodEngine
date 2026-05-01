@@ -84,6 +84,60 @@ TEST_CASE("PhysicsWorld::raycast: direccion no normalizada es respetada") {
     CHECK(hit.distance == doctest::Approx(4.5f).epsilon(0.01));
 }
 
+TEST_CASE("PhysicsWorld::raycast: ignoredBodyId saltea el body (Hito 34 B)") {
+    PhysicsWorld pw;
+    // Dos boxes alineados. Ignorar el cercano: deberia pegarle al de atras.
+    const u32 nearId = pw.createBody(glm::vec3(0.0f, 0.0f, -3.0f),
+                                       CollisionShape::Box,
+                                       glm::vec3(0.5f),
+                                       BodyType::Static);
+    const u32 farId  = pw.createBody(glm::vec3(0.0f, 0.0f, -8.0f),
+                                       CollisionShape::Box,
+                                       glm::vec3(0.5f),
+                                       BodyType::Static);
+
+    const auto hit = pw.raycast(glm::vec3(0.0f),
+                                  glm::vec3(0.0f, 0.0f, -1.0f),
+                                  20.0f,
+                                  /*ignoredBodyId=*/nearId);
+
+    CHECK(hit.hit);
+    CHECK(hit.bodyId == farId);
+    CHECK(hit.distance == doctest::Approx(7.5f).epsilon(0.01));
+}
+
+TEST_CASE("PhysicsWorld::raycast: ignoredBodyId del unico body devuelve miss (Hito 34 B)") {
+    PhysicsWorld pw;
+    const u32 only = pw.createBody(glm::vec3(0.0f, 0.0f, -3.0f),
+                                     CollisionShape::Box,
+                                     glm::vec3(0.5f),
+                                     BodyType::Static);
+
+    const auto hit = pw.raycast(glm::vec3(0.0f),
+                                  glm::vec3(0.0f, 0.0f, -1.0f),
+                                  20.0f,
+                                  /*ignoredBodyId=*/only);
+
+    CHECK_FALSE(hit.hit);
+    CHECK(hit.bodyId == 0u);
+}
+
+TEST_CASE("PhysicsWorld::raycast: ignoredBodyId == 0 (default) no filtra nada (Hito 34 B)") {
+    PhysicsWorld pw;
+    const u32 boxId = pw.createBody(glm::vec3(0.0f, 0.0f, -5.0f),
+                                      CollisionShape::Box,
+                                      glm::vec3(0.5f),
+                                      BodyType::Static);
+
+    // Sin filtro (default arg) — equivalente a no pasar nada.
+    const auto hit = pw.raycast(glm::vec3(0.0f),
+                                  glm::vec3(0.0f, 0.0f, -1.0f),
+                                  20.0f);
+
+    CHECK(hit.hit);
+    CHECK(hit.bodyId == boxId);
+}
+
 TEST_CASE("PhysicsWorld::raycast: detecta el primer body en el path") {
     PhysicsWorld pw;
     // Dos boxes alineados — el rayo debe pegar al mas cercano.

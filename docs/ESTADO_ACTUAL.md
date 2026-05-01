@@ -6,13 +6,19 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 33 cerrado.**
+**Hito 34 cerrado.**
+Tag: `v0.34.0-hito34`.
+Verificado automático: suite doctest **286/5555** (+2 de `test_scene_serializer` friction round-trip + 3 de `test_raycast` con `ignoredBodyId`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: caja física en piso de friction 0.05 resbala lejos vs 0.5 default frena en pocos metros. Saltar 50ms después de correr off platform aún gatilla el salto (coyote). Apretar SPACE 100ms antes de aterrizar igual hace saltar al touchdown (buffer). Headbob al correr full-speed se siente igual; crouched la amplitud baja; quieto = sin bob. Editar light color/intensity/radius o rigid body mass/halfExtents → Ctrl+Z revierte.
+
+**Cambio importante:** scope chico-medio, mismo patrón que Hito 32 — barrer deudas chicas acumuladas en hitos 30-33 antes de meternos en features pesados (save/load, main menu). 5 bloques: `friction` per-body en `RigidBodyComponent` con persistencia opcional, `physics.raycast` con `ignoredBodyId` opcional, coyote (100ms) + jump buffer (150ms) con detección de flanco de SPACE, headbob amp escalado linealmente con velocity horizontal, wire-up de 7 widgets más del Inspector con undo (Light, RigidBody, ParticleEmitter selectos).
+
+**Próximo paso:** Hito 35 (TBD). Plan en `docs/PLAN_HITO35.md`.
+
+### Hito 33 (anterior, ya cerrado)
 Tag: `v0.33.0-hito33`.
 Verificado automático: suite doctest **281/5535** (+5 de `test_raycast` + 5 de `test_trigger_system`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: "Ayuda > Agregar trigger demo" spawnea entidad en (0, 1, 0) con `halfExtents=(1,1,1)`. En Play Mode, caminar al centro del trigger imprime `[script] [info] [trigger] player entro` en la consola; al salir, `[trigger] player salio`. Editar `halfExtents` desde el Inspector → Ctrl+Z revierte. Save/cerrar/reabrir preserva el componente.
 
 **Cambio importante:** primera API de queries físicas. `PhysicsWorld::raycast(origin, dir, maxDist)` via `JPH::NarrowPhaseQuery::CastRay` + `BodyLockRead` para la normal. Expuesta a Lua como `physics.raycast(...)` devolviendo tabla. Nuevo `TriggerComponent` (AABB sensor) + `TriggerSystem` stateless con flank-detection que dispatcha `on_trigger_enter`/`on_trigger_exit` al script via `ScriptSystem::dispatchEvent` (`sol::protected_function`, miss silencioso). Persistencia `.moodmap` con campo opcional (sin bump de schema mayor).
-
-**Próximo paso:** Hito 34 (TBD). Plan en `docs/PLAN_HITO34.md`.
 
 ### Hito 32 (anterior, ya cerrado)
 Tag: `v0.32.0-hito32`.

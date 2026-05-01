@@ -1,104 +1,51 @@
-# Plan — Hito 34: TBD
+# Plan — Hito 34: Cerrar deudas chicas (cerrado)
 
-> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 33 cerrado).
->
-> **Formato:** cada tarea es un checkbox. Al completar, marcar `[x]`. Decisiones nuevas van acá y en `DECISIONS.md`.
+> **Leer primero:** `ESTADO_ACTUAL.md`, `DECISIONS.md`, `HITOS.md` (sección Hito 34 cerrado).
 
 ---
 
 ## Estado
 
-**Hito 33 cerrado** (`v0.33.0-hito33`, suite **281/5535**). Raycasts + triggers expuestos a Lua. FPS scriptable real con char controller pulido (Hito 30/31), undo del Inspector (Hito 32), y zonas/armas hitscan (Hito 33).
+**Hito 34 cerrado** (`v0.34.0-hito34`, suite **286/5555**). Scope acordado con el dev: tras cerrar deudas del editor en Hito 32, ahora las deudas chicas acumuladas en hitos previos. 5 bloques de bajo coste, todos visibles al usar el motor.
 
-El Hito 34 está **TBD**: acordar con el dev el alcance antes de abrir bloques.
+## Bloques cerrados
 
-**Recordatorios importantes:**
-- Networking / multijugador está **EXPLÍCITAMENTE fuera de alcance** desde el doc técnico. NO proponerlo.
-- Polish del NavAgent **descartado permanentemente** por decisión del dev. NO proponerlo.
+- [x] **Bloque A — Friction per-body en `RigidBodyComponent`** (deuda Hito 31): nuevo campo `friction = 0.5f` (default heredado del hardcode anterior). `PhysicsWorld::createBody` recibe `friction` como param opcional. Persistencia en `.moodmap` opcional — solo se escribe si difiere del default 0.5 (back-compat con archivos viejos). Inspector con slider undoable via `pushEditIfDone<f32>` (rango [0, 2]).
+- [x] **Bloque B — Raycast con filtro `ignoredBodyId`** (deuda Hito 33): `PhysicsWorld::raycast(..., ignoredBodyId=0)` con default 0 = sin filtro. Implementación con `JPH::BodyFilter` subclase local (`IgnoreOneBodyFilter`). Lua expone el 4to argumento como `sol::optional<u32>` — los scripts existentes (3 args) siguen funcionando. Cero impacto en callers existentes.
+- [x] **Bloque C — Coyote time + jump buffer** (deuda Hito 30): coyote window 100ms (saltar después de dejar el suelo), jump buffer 150ms (input ANTES de aterrizar igual gatilla). Detección de flanco `up→down` de SPACE (no hold). Lógica idéntica en `EditorPlayMode` y `PlayerApplication`. Cooldown de 0.2s del Hito 30 se mantiene como anti-double-jump.
+- [x] **Bloque D — Headbob amp escalado con velocity** (deuda Hito 31): nuevo `m_horizSpeed01` per-frame normalizado contra `k_walkSpeed`. La amplitud final = `k_bobAmp * m_horizSpeed01` — caminando full-speed = bob completo, crouched (~0.5) = bob sutil, quieto = sin bob. Paridad editor/player.
+- [x] **Bloque E — Wire-up undo de widgets selectos del Inspector** (deuda Hito 32): cableado `pushEditIfDone<T>` en 7 widgets más editados (LightComponent.color/intensity/radius, RigidBodyComponent.halfExtents/mass, ParticleEmitterComponent.emitRate/gravityFactor). Plus el friction del Bloque A = 8 widgets totales. Los 30+ restantes siguen como pendiente.
+- [x] **Bloque F — Tests + cierre**: 5 tests nuevos:
+  - 2 en `test_scene_serializer.cpp`: friction custom round-trip (0.05 hielo) + friction default no-persiste-en-JSON.
+  - 3 en `test_raycast.cpp`: ignoredBodyId saltea al body cercano (pega al de atrás), ignoredBodyId del único body devuelve miss, ignoredBodyId == 0 (default) no filtra nada.
+  - Suite total **286/5555** (antes Hito 33 cerrado: 281/5535).
+  - Tag `v0.34.0-hito34`.
 
----
+## Lo que NO se cubrió
 
-## Candidatos activos
-
-Lista en orden de prioridad/coste.
-
-### A. Save/Load de gameplay state
-
-**Por qué:** hoy `.moodmap` describe nivel pero NO estado de juego. Save & load = primer eslabón de "juego con progresión". Encaja como continuación natural post Hito 33: ya hay armas (raycast) + zonas (triggers) que pueden cambiar el estado del juego, falta poder guardarlo.
-
-**Coste:** medio. Definir state vs setup, serializar `GameState::hud()` + globals Lua relevantes (`engine.exposed` overrides ya persisten; agregar runtime values?), integrar con menú "Save/Load" en `MoodPlayer`.
-
-**Trigger ideal:** primer demo que dependa de progresión.
-
-### B. UI de juego mejorada (HUD + main menu)
-
-**Por qué:** falta menú principal del MoodPlayer (New Game / Load Game / Settings / Quit), settings persistidos, HUD parametrizable.
-
-**Coste:** medio.
-
-**Trigger ideal:** combo con A (sin save/load no hay "Load Game").
-
-### C. Wire-up del Inspector restante (42 widgets) — del Hito 32
-
-**Por qué:** Hito 32 cableó 9 de 51 widgets con InspectorEditCommand. Los otros 42 son mecánicos (mismo patrón `pushEditIfDone<T>`). Cubre Light, Camera, AudioSource, ParticleEmitter, Animator, NavAgent, Environment, RigidBody, Trigger (que ya tiene 1 cableado del Hito 33 — los demás del componente serían `playerInside` que NO debería ser editable manualmente).
-
-**Coste:** bajo (mecánico) pero tedioso. Mejor hacer en bloque que widget-por-widget.
-
-**Trigger ideal:** sesión donde el dev quiere dejar el Inspector "completo" en undo.
-
-### D. PackageBuilder smart-pack — del Hito 26
-
-**Por qué:** hoy `PackageBuilder` copia `assets/` entero. Con Kenney pack (1.5 MB) + futuros packs, los packages se inflan rápido.
-
-**Coste:** medio. Escanear `.moodmap` + dependencias indirectas (material → textura; script → exposed property → asset path).
-
-**Trigger ideal:** demo packageado > 50 MB.
-
-### E. Inspector drop de textura sobre material slot — del Hito 26
-
-**Por qué:** hoy el albedo se setea solo al spawn. Drop de textura sobre el slot del Inspector permitiría cambiar texturas sin reasignar el material entero.
-
-**Coste:** bajo. Reusar drag payload `MOOD_TEXTURE_ASSET`.
-
-**Trigger ideal:** combo con cualquier hito visual.
-
-### F. Polish reactivo del Hito 33
-
-Si el dev usa los triggers/raycasts en demos reales y aparecen rough edges:
-- **Raycast con filtro de layer/tag**: parámetro opcional `ignoredBodyId` o `layerMask`.
-- **Triggers con `on_trigger_stay`**: callback per-frame mientras el actor está dentro.
-- **Triggers detectan dynamic bodies**: extender el loop a entidades con RigidBody.
-
-**Coste:** bajo cada uno. **Trigger ideal:** demo del dev pide explícitamente la feature.
+- **Tests headless de coyote/jump buffer y headbob velocity scale** (Bloques C, D): son features de feel/UI con dependencia de input + frame timing. Verificación visual del dev. Los headless mockearían SDL_GetKeyboardState + multiples frames — overhead sin valor proporcional.
+- **30+ widgets restantes del Inspector** (heredado de Hito 32). Patrón uniforme — sigue como pendiente menor.
+- **Setter runtime de friction**: editar friction en Play Mode no se aplica al body ya materializado. El re-Play sí lo aplica. Documentado en el header de `RigidBodyComponent`.
+- **Filtro de raycast por layer/tag**: solo `ignoredBodyId`. Sin filtros tipo "solo enemies" o "ignore static". Suficiente para "ignore self".
+- **Triggers detectan dynamic bodies / NPCs**, **emisión por shape**, **modelos `.obj` con `.mtl`**: pendientes medianos que quedan para hito gameplay/asset futuro.
 
 ---
 
-## Diferidos (revisar más adelante)
+## Decisiones tomadas
 
-### Polish menores del Hito 31
-- Sort por bucket-Z (vs centro de partícula simple).
-- `localSpace` con rotation/scale del entity (sparks orientadas).
-- Headbob escalado con velocidad.
-- Friction per-body en `RigidBodyComponent`.
-
-### Polish menores del Hito 32
-- `std::variant` del tracker no incluye `int`/`u32` (necesario para `DragInt`).
-- Compactación cross-frame para sliders externos al Inspector.
-
-### Polish menores del Hito 33
-- Trigger AABB no respeta rotation del Transform (aceptado pero documentado).
-- Raycast no expone batch API (`raycastAll`).
+Las nuevas en `DECISIONS.md` (2026-05-01):
+- Friction default 0.5 + persistencia opcional (sin bump de schema mayor).
+- Coyote 100ms / jump buffer 150ms hardcoded (no per-proyecto en v1).
+- Headbob amp con scaling lineal de velocity (no ease-in/out).
+- Raycast con `BodyFilter` subclase local en lugar de `IgnoreSingleBodyFilter` de Jolt (portabilidad).
 
 ---
 
-## Decisiones a tomar (cuando el hito se concrete)
+## Verificación visual del dev (criterios cumplidos)
 
-- [ ] Cuál de los candidatos activos arriba se elige.
-- [ ] Si toca persistencia, definir si bumpea format version o usa campo opcional.
-- [ ] Si toca scripting, definir si los nuevos bindings respetan el sandbox (no `io`, no `os`, no `package`).
-
----
-
-## Riesgos identificados (genéricos, completar al concretar el hito)
-
-- Cada candidato tiene riesgos propios; documentarlos al elegir.
+- Caja física empujada desde el char contra superficies de fricción 0.05 (hielo) sigue resbalando lejos; misma caja sobre superficie 0.5 (default) se detiene en pocos metros.
+- Raycast desde un body que se ignora a sí mismo encuentra el wall behind sin autodetectarse.
+- Saltar 50ms después de dejar un borde (correr off platform) sigue gatillando el salto (coyote OK).
+- Apretar SPACE 100ms antes de aterrizar y soltar antes del touchdown igual hace que el char salte al tocar el suelo (buffer OK).
+- Headbob al correr full-speed se siente igual que antes; al caminar en crouch (~50% speed) la cámara baja la amplitud notablemente; quieto = sin bob.
+- Editar light color/intensity/radius o rigid body mass/halfExtents desde el Inspector → Ctrl+Z revierte el drag completo.

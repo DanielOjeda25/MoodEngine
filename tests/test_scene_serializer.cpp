@@ -465,3 +465,72 @@ TEST_CASE("SceneSerializer: round-trip de RigidBodyComponent (Hito 12)") {
 
     std::filesystem::remove(path);
 }
+
+TEST_CASE("SceneSerializer: friction custom value round-trip (Hito 34 A)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+
+    Entity ice = scene.createEntity("Hielo");
+    {
+        RigidBodyComponent rb{};
+        rb.type        = RigidBodyComponent::Type::Static;
+        rb.shape       = RigidBodyComponent::Shape::Box;
+        rb.halfExtents = glm::vec3(2.0f, 0.1f, 2.0f);
+        rb.friction    = 0.05f;  // hielo
+        ice.addComponent<RigidBodyComponent>(rb);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("friction_custom.moodmap");
+    SceneSerializer::save(empty, "ice", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1);
+    REQUIRE(loaded->entities[0].rigidBody.has_value());
+    CHECK(loaded->entities[0].rigidBody->friction == doctest::Approx(0.05f));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: friction default (0.5) NO se persiste en JSON (Hito 34 A)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+
+    Entity box = scene.createEntity("Caja");
+    {
+        RigidBodyComponent rb{};
+        rb.type        = RigidBodyComponent::Type::Dynamic;
+        rb.shape       = RigidBodyComponent::Shape::Box;
+        rb.halfExtents = glm::vec3(0.5f);
+        rb.mass        = 1.0f;
+        // rb.friction queda en su default 0.5f.
+        box.addComponent<RigidBodyComponent>(rb);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("friction_default.moodmap");
+    SceneSerializer::save(empty, "default", &scene, assets, path);
+
+    // Leer el archivo raw y verificar que el bloque rigid_body NO contiene
+    // un campo "friction" — back-compat con archivos pre-Hito 34 A.
+    std::ifstream f(path);
+    REQUIRE(f.is_open());
+    nlohmann::json j = nlohmann::json::parse(f);
+    f.close();
+    REQUIRE(j.contains("entities"));
+    REQUIRE(j["entities"].size() >= 1u);
+    const auto& jent = j["entities"][0];
+    REQUIRE(jent.contains("rigid_body"));
+    CHECK_FALSE(jent["rigid_body"].contains("friction"));
+
+    // Y el load igual recupera el default 0.5 (back-compat con archivos
+    // pre-Hito 34 A que tampoco tenian el campo).
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() >= 1u);
+    REQUIRE(loaded->entities[0].rigidBody.has_value());
+    CHECK(loaded->entities[0].rigidBody->friction == doctest::Approx(0.5f));
+
+    std::filesystem::remove(path);
+}

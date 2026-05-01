@@ -2377,3 +2377,87 @@ Las opciones eran:
 
 **Revisar si:** aparece un evento que necesite múltiples args tipados — extender a `dispatchEvent<Args...>` con templates de sol.
 
+## 2026-05-01: Friction per-body con default 0.5 + persistencia opcional (sin bump de schema)
+
+**Contexto:** Hito 34 A. Hasta el Hito 31 D la friction era hardcoded en `PhysicsWorld::createBody` a 0.5 (mejor que el 0.2 default de Jolt para cajas). Pero todos los Dynamic bodies compartían el mismo coef — no se podía hacer hielo (0.05) ni superficies adherentes (1.5). El `.moodmap` no tenía campo para friction.
+
+**Decisión:**
+1. **`RigidBodyComponent::friction = 0.5f`** como nuevo campo del componente. Default igual al hardcode anterior — comportamiento de archivos viejos no cambia.
+2. **`PhysicsWorld::createBody(..., friction = 0.5f)`** con default — los callers no obligados a pasarlo.
+3. **Persistencia opcional**: `EntitySerializer` solo escribe el campo `"friction"` si difiere del default 0.5. Mapas viejos quedan idénticos byte-a-byte; mapas nuevos solo crecen cuando el dev edita el slider.
+4. **Sin bump de schema mayor**: el campo "friction" en el JSON es opcional. Loader interpreta ausente como 0.5. Mismo patrón que `SavedTrigger` (Hito 33), `castShadows` (Hito 16), `ibl_intensity` (Hito 18).
+5. **Sin setter runtime**: editar friction durante Play Mode NO re-aplica al body activo. El cambio se ve al salir + entrar a Play (re-materialización). Para v1 alcanza — los workflows de tweaking son en Editor Mode.
+
+**Razones:**
+- **Default = hardcode anterior**: cero regresión. Los demos y mapas viejos se sienten exactamente igual.
+- **Persistencia opcional con threshold absoluto**: un mapa viejo abierto y guardado sin tocar friction queda byte-identico (no diff "ruidoso" en git). Solo el cambio explícito agrega el campo.
+- **Sin bump de schema**: bumpear schema_version forzaría a actualizar tests + readers. Para un campo aditivo opcional es overkill. El loader detecta su ausencia por value-with-default (`jrb.value("friction", 0.5f)`).
+- **Sin setter runtime**: requeriría exponer `JPH::BodyInterface::SetFriction(BodyID, friction)` + invalidar contactos. Trabajo desproporcionado para una feature que el dev rara vez tweakea en vivo.
+
+**Alternativas consideradas:**
+- **Bumpear schema mayor a v10**: rechazado por overkill.
+- **Persistir siempre**: ensucia mapas viejos al re-saveear sin cambios.
+- **Setter runtime via `BodyInterface::SetFriction`**: más complejo, sin valor proporcional para v1.
+- **Coef static + dynamic separados**: Jolt tiene un solo `mFriction`, no separa kinetic/static. Si se necesita en futuro, exponer dos campos.
+
+**Trade-offs:**
+- Se pierde: tweaking en vivo durante Play. Aceptado.
+- Se gana: archivos viejos idénticos, schema sin bump, default sin sorpresas.
+
+**Revisar si:** un demo necesita tweaks de friction en vivo (entonces agregar el setter runtime), o aparece la necesidad de coef separados kinetic/static.
+
+## 2026-05-01: Coyote time 100ms + jump buffer 150ms hardcoded; flanco de SPACE para el buffer
+
+**Contexto:** Hito 34 C. El salto del Hito 30 requería `isCharacterOnGround()` exactamente al frame en que se apretaba SPACE. Saltar al borde de un platform (correr off → SPACE 50ms tarde) o aterrizar con SPACE pre-apretado = no saltaba. Feel pobre comparado a Source/Quake/Celeste.
+
+**Decisión:**
+1. **Coyote window 100ms**: cuando el char está on-ground, `m_coyoteTimer = k_coyoteWindow`. Cuando deja el suelo, decae linealmente. Saltar permitido mientras `m_coyoteTimer > 0`. Al saltar, se consume (set a 0) para que no haya double-jump.
+2. **Jump buffer window 150ms**: el flanco `up→down` de SPACE setea `m_jumpBufferTimer = k_jumpBufferWindow`. Decae cada frame. Saltar requiere `m_jumpBufferTimer > 0` Y `m_coyoteTimer > 0`.
+3. **Detección de flanco** (no hold): `m_spacePrevFrame` guarda el estado del frame anterior. `spaceJustPressed = pressed && !prev`. Sin esto, el buffer se auto-recargaba mientras se mantenía SPACE → saltos repetidos cada cooldown (0.2s).
+4. **Cooldown de 0.2s del Hito 30 se mantiene** como anti-double-jump independiente. Tres condiciones para saltar: buffer > 0, coyote > 0, cooldown == 0.
+5. **Constantes hardcoded** (no configurables per-proyecto/per-character).
+
+**Razones:**
+- **Windows 100/150**: rangos estándar industria. Celeste usa ~6 frames @ 60Hz = 100ms de coyote. Source 2 usa ~150ms de buffer. Probado a ojo y se siente bien.
+- **Flanco vs hold**: hold permitiría que el buffer se recargue cada frame mientras SPACE está apretado → con cooldown 0.2s, char salta repetidamente. Flanco evita esto SIN tener que tocar el cooldown (cuya función es prevenir double-jump si el char rebota muy rápido del suelo).
+- **Hardcoded en v1**: en demos hoy hay UN solo char (el player). Configurar per-proyecto sumaría feature flag por valor — no vale el complejidad.
+- **Consume coyote al saltar**: previene "double coyote jump" — si el char salta usando coyote, el siguiente input dentro de los 100ms NO encuentra coyote disponible.
+
+**Alternativas consideradas:**
+- **Solo coyote, sin buffer**: feel mejor que nada pero el dev sigue notando "input perdido al aterrizar". Buffer suma marginal pero claro.
+- **Buffer ilimitado** (set on press, no decay): a primera press, char salta apenas toca el suelo aunque hayan pasado segundos. Surreal. El decay (150ms) ata el buffer al gesto humano.
+- **Constantes en `RigidBodyComponent` o nuevo `CharControllerComponent`**: Hito 30 no tiene componente del char. Crear uno solo para 2 floats es overkill ahora. Si emerge un segundo personaje con feel distinto, se hace.
+
+**Trade-offs:**
+- Se pierde: configurabilidad. Aceptado para v1.
+- Se gana: feel notablemente mejor sin nuevo componente ni schema bump.
+
+**Revisar si:** un demo agrega varios personajes con feel distinto (entonces extraer a un `CharControllerComponent` con campos), o el dev pide tweaking en vivo.
+
+## 2026-05-01: Headbob con scaling lineal de velocity horizontal (no ease-in/out)
+
+**Contexto:** Hito 34 D. El headbob del Hito 31 D era binario: caminando = 4cm de amplitud, parado = 0. Crouch (que reduce velocity 4→2 m/s) tenía la misma amplitud que correr — el cuello "vibraba" igual al andar lento. Disonancia visual.
+
+**Decisión:**
+1. **`m_horizSpeed01`** miembro per-frame, normalizado: `min(1.0, horizSpeed / k_walkSpeed)`. Solo se calcula cuando el char está walking (on-ground + horizSpeedSq > umbral).
+2. **Amplitud final** = `k_bobAmp * m_horizSpeed01`. Lineal, sin curvas.
+3. **Crouched** ≈ 0.5 (porque crouchSpeed=2.0, walkSpeed=4.0) → bob al 50%.
+4. **Quieto** = 0 (m_horizSpeed01 = 0 cuando !walking).
+5. **Paridad EditorPlayMode + PlayerApplication**.
+
+**Razones:**
+- **Lineal en lugar de ease-in/out**: el feel visual ya es bastante sutil con 4cm × scale ∈ [0..1]. Curvas no-lineales suman complejidad sin beneficio claro a esa escala. Si el dev nota "snap" al iniciar/parar, agregar suavizado por filter pole, no en la fórmula del bob.
+- **Normalizado contra `k_walkSpeed` (no `inputVel`)**: `horizSpeed` viene de la velocidad real post-physics (que puede ser menor por colisiones laterales o slope), no del input. Si el char queda atascado contra una pared, el bob baja proporcional — refleja "no estoy avanzando".
+- **`min(1.0, ...)` clamp**: futuros features (sprint > walkSpeed) no romperán visual con bob amplificado >1. Un sprint actual con 1.5× walk se vería con bob 1.0 (sin clamp daría 1.5× amp = jarring).
+
+**Alternativas consideradas:**
+- **Ease-in/out (smoothstep)**: visual diferente pero no "mejor" — el dev probó y no lo nota. Más código sin trigger.
+- **Frecuencia escalada con velocity** (correr más rápido = bob más rápido): conceptualmente correcto pero amplifica el snap al detenerse. Mantenemos frequency fija (5 Hz) y solo escalamos amplitud.
+- **`m_headbobTime` reseteado a 0 al detenerse**: probado en Hito 31, se sentía como un "tic" al recomenzar. Mantener el time accumulator es la solución correcta — la `sin()` queda en una fase arbitraria pero el bob entra suave por el scaling.
+
+**Trade-offs:**
+- Se pierde: posible "snap visual" cuando `m_horizSpeed01` cambia bruscamente (ej. choque súbito). Aceptado — el caso es raro y la amp es chica (4cm).
+- Se gana: feel coherente entre walk/crouch/sprint sin tocar el time accumulator.
+
+**Revisar si:** el dev observa snap visible al chocar paredes (entonces agregar suavizado lerp de m_horizSpeed01), o hay sprint > walkSpeed sin clamp.
+

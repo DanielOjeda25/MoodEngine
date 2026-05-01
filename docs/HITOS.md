@@ -38,7 +38,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 31 — Polish del feel: char controller (friction + crouch lerp + headbob) + particles (localSpace + sort) (completado, tag `v0.31.0-hito31`).
 - [x] Hito 32 — Cerrar deudas del editor: InspectorEditCommand + handle remap en HistoryStack (completado, tag `v0.32.0-hito32`).
 - [x] Hito 33 — Raycasts + triggers expuestos a Lua (completado, tag `v0.33.0-hito33`).
-- [ ] Hito 34 — TBD.
+- [x] Hito 34 — Cerrar deudas chicas: friction per-body + raycast filtrable + coyote/jump buffer + headbob velocity scale + 7 widgets undo (completado, tag `v0.34.0-hito34`).
+- [ ] Hito 35 — TBD.
 
 ## Hito 1 — Shell del editor
 
@@ -1178,6 +1179,62 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 ### Pendientes menores detectados en Hito 33
 
 - **Triggers no detectan dynamic bodies**: solo el char del jugador es el "actor" detectable. Cajas físicas o NPCs entrando/saliendo no disparan callback. Patrón a extender: loop adicional sobre `RigidBodyComponent`. **Trigger:** primer demo que requiera detectar otra cosa.
-- **Raycast sin filtro de layer/tag**: pega contra cualquier body. Sin "ignore self" ni "solo enemies". **Trigger:** demo necesita raycast desde el player que no se autodetecte.
+- ~~**Raycast sin filtro de layer/tag**: pega contra cualquier body. Sin "ignore self" ni "solo enemies".~~ Resuelto parcialmente en Hito 34 B con `ignoredBodyId` opcional (cubre "ignore self"). Filtro por layer/tag genérico sigue abierto pero sin trigger concreto.
 - **Trigger AABB axis-aligned no respeta rotation**: aceptado por simplicidad. Si aparece caso (puerta rotada), bumpea a OBB. **Trigger:** demo lo requiere.
 - **Sin `on_trigger_stay`**: solo enter/exit. Si un script necesita tick mientras dentro, consultar `playerInside` desde su `onUpdate`. **Trigger:** demo pide tick continuo.
+
+## Hito 34 — Cerrar deudas chicas (friction + raycast filtrable + coyote/jump buffer + headbob velocity + 7 widgets undo)
+
+**Objetivo:** sacar deudas chicas acumuladas en hitos 30-33 antes de meterse en features pesados (save/load, main menu). Mismo patrón que Hito 32 (cerrar deudas del editor): scope chico-medio, 5 bloques de bajo coste, todos visibles al usar el motor.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Friction per-body:*
+- Nuevo campo `RigidBodyComponent::friction = 0.5f` (default heredado del hardcode anterior).
+- `PhysicsWorld::createBody` recibe `friction` como param opcional con default 0.5.
+- Persistencia en `.moodmap` opcional: el campo solo se escribe si difiere del default 0.5 (back-compat con archivos viejos, sin bump de schema mayor).
+- Inspector con slider `DragFloat [0, 2]` undoable via `pushEditIfDone<f32>`.
+
+*Bloque B — Raycast con `ignoredBodyId`:*
+- `PhysicsWorld::raycast(origin, dir, maxDist, ignoredBodyId=0)` — default 0 = sin filtro (cero impacto en callers existentes del Hito 33).
+- Implementación con `JPH::BodyFilter` subclase local (`IgnoreOneBodyFilter`) — descarta el body en el broad/narrow phase, así que un wall detrás del body ignorado SÍ se detecta.
+- Lua: `physics.raycast(o, d, maxDist [, ignoredBodyId])` con 4to argumento como `sol::optional<u32>`. Scripts existentes con 3 args siguen funcionando.
+
+*Bloque C — Coyote time + jump buffer:*
+- Coyote window 100ms (saltar después de dejar el suelo, ej. correr off platform).
+- Jump buffer 150ms (apretar SPACE antes de aterrizar igual gatilla cuando el char toca el suelo).
+- Detección de flanco `up→down` de SPACE (ya no hold) para evitar buffer auto-recargándose.
+- Cooldown de 0.2s del Hito 30 se mantiene como anti-double-jump.
+- Lógica idéntica en `EditorPlayMode` y `PlayerApplication`.
+
+*Bloque D — Headbob amp escalado con velocity:*
+- Nuevo `m_horizSpeed01` per-frame normalizado contra `k_walkSpeed`.
+- Amplitud del bob = `k_bobAmp * m_horizSpeed01`. Caminando full-speed = bob completo (4cm); crouched (~50% speed) = bob sutil; quieto = sin bob.
+- Paridad editor/player.
+
+*Bloque E — Wire-up undo de 7 widgets selectos del Inspector:*
+- Cableado `pushEditIfDone<T>` en LightComponent (color, intensity, radius), RigidBodyComponent (halfExtents, mass), ParticleEmitterComponent (emitRate, gravityFactor).
+- Plus el friction del Bloque A = 8 widgets nuevos undoables en este hito.
+- Total Inspector: 9 (Hito 32) + 8 (Hito 34) = 17 widgets cableados; ~30 quedan como pendiente.
+
+*Bloque F — Tests + cierre:*
+- 2 tests en `test_scene_serializer.cpp`: friction custom round-trip (0.05 hielo) + friction default no-persiste-en-JSON (back-compat verificado leyendo el JSON crudo).
+- 3 tests en `test_raycast.cpp`: `ignoredBodyId` saltea body cercano (pega al de atrás), `ignoredBodyId` del único body devuelve miss, `ignoredBodyId == 0` (default) no filtra.
+- Suite total **286/5555** (antes Hito 33 cerrado: 281/5535).
+
+**Verificación visual del dev:**
+- Caja física empujada contra superficie de friction 0.05 (hielo) sigue resbalando lejos; misma caja sobre 0.5 default se detiene en pocos metros.
+- Saltar 50ms después de correr off platform sigue gatillando el salto (coyote OK).
+- Apretar SPACE 100ms antes de aterrizar igual hace que el char salte al touchdown (buffer OK).
+- Headbob al correr full-speed se siente igual; al caminar crouched la amplitud baja notablemente; quieto = sin bob.
+- Editar light color/intensity/radius o rigid body mass/halfExtents → Ctrl+Z revierte.
+
+**Siguiente paso tras completarlo:** Hito 35 (TBD). Plan en `docs/PLAN_HITO35.md`.
+
+### Pendientes menores detectados en Hito 34
+
+- **Setter runtime de friction**: hoy el cambio del slider del Inspector se aplica al re-materializar el body (próximo entrar a Play Mode). Editar friction durante Play no afecta el body activo. **Trigger:** dev demuestra con tweaks en vivo.
+- **Coyote/jump buffer windows hardcoded**: 100ms y 150ms son constantes globales. No configurables per-proyecto ni per-character. **Trigger:** demo con varios personajes con feel distinto.
+- **Filtro de raycast por layer/tag genérico**: solo `ignoredBodyId`. Sin "solo enemies" o "ignore static". **Trigger:** demo lo necesita.
+- **Tests headless de coyote/jump buffer y headbob velocity**: requieren mockear input + multiples frames + Jolt physics activo, overhead alto sin valor proporcional. Verificación visual del dev por ahora.
+- **30 widgets restantes del Inspector sin undo**: heredado de Hito 32. Patrón uniforme. **Trigger:** dev se queja de un widget específico no undoable.
