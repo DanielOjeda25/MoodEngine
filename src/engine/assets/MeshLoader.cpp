@@ -438,8 +438,13 @@ TextureAssetId extractAlbedo(const aiScene& scene,
     // meshLogicalPath ej "meshes/kenney_survival/barrel.glb"
     // path ej "Textures/colormap.png"
     // -> "meshes/kenney_survival/Textures/colormap.png"
+    //
+    // Hito 35 C: lexically_normal() colapsa segmentos `..`. Ej OBJ con
+    // `.mtl` + `map_Kd ../textures/brick.png` produce "meshes/../textures/
+    // brick.png" que el VFS rechaza por leak. Normalizar lo deja en
+    // "textures/brick.png" — el VFS lo acepta como path lógico válido.
     const auto baseDir = std::filesystem::path(meshLogicalPath).parent_path();
-    const auto resolved = (baseDir / path).generic_string();
+    const auto resolved = (baseDir / path).lexically_normal().generic_string();
     return am.loadTexture(resolved);
 }
 

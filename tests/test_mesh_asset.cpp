@@ -143,3 +143,33 @@ TEST_CASE("AssetManager::loadMesh carga pyramid.obj del repo y lo cachea") {
     CHECK(am.loadMesh("meshes/pyramid.obj") == id);
     CHECK(am.meshPathOf(id) == "meshes/pyramid.obj");
 }
+
+TEST_CASE("AssetManager::loadMesh carga .obj con .mtl y resuelve textura albedo (Hito 35 C)") {
+    // cube_mtl.obj referencia cube_mtl.mtl que define un newmtl 'Brick'
+    // con map_Kd ../textures/brick.png. Validamos que Assimp procese el
+    // .mtl y que el path Hito 26 (extracion de albedo external) lo
+    // capture en MeshAsset::materialAlbedoTextures.
+    AssetManager am("assets", nullTexFactory(), {}, stubMeshFactory());
+    const MeshAssetId id = am.loadMesh("meshes/cube_mtl.obj");
+    CHECK(id != am.missingMeshId());
+
+    MeshAsset* asset = am.getMesh(id);
+    REQUIRE(asset != nullptr);
+    CHECK(asset->submeshes.size() >= 1);
+    CHECK(asset->totalVertexCount() > 0);
+
+    // Al menos un material del .obj debe haberse resuelto a una textura
+    // real (no missing). Assimp puede registrar un default material en
+    // slot 0 + el Brick definido en .mtl en slot 1; iteramos buscando
+    // cualquier slot con albedo no-missing como evidencia de que el .mtl
+    // se proceso correctamente.
+    REQUIRE(asset->materialAlbedoTextures.size() >= 1);
+    bool foundAlbedo = false;
+    for (TextureAssetId tex : asset->materialAlbedoTextures) {
+        if (tex != 0 && tex != am.missingTextureId()) {
+            foundAlbedo = true;
+            break;
+        }
+    }
+    CHECK(foundAlbedo);
+}

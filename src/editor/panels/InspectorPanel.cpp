@@ -121,7 +121,7 @@ void InspectorPanel::onImGuiRender() {
     // mesh resuelto y la lista de materiales. Dropdown para cambiar el mesh
     // entra en Bloque 5 (drag & drop desde AssetBrowser).
     if (e.hasComponent<MeshRendererComponent>()) {
-        const auto& mr = e.getComponent<MeshRendererComponent>();
+        auto& mr = e.getComponent<MeshRendererComponent>();
         ImGui::TextDisabled("MeshRenderer");
         if (m_assets != nullptr) {
             ImGui::Text("mesh: %s (id %u)",
@@ -194,13 +194,34 @@ void InspectorPanel::onImGuiRender() {
                         if (auto* m = assetsCap->getMaterial(matIdCap)) m->aoMult = v;
                     },
                     "Editar ao");
-                // Estado de las texturas — read-only por ahora; el drop
-                // de texturas / .material desde AssetBrowser se agregara
-                // en un commit posterior.
+                // Estado de las texturas — read-only por ahora salvo el
+                // drop de albedo (Hito 35 A).
                 ImGui::TextDisabled(
                     "albedo: %u  MR: %u  normal: %u  ao: %u",
                     mat->albedo, mat->metallicRoughness,
                     mat->normal,  mat->ao);
+            }
+
+            // Hito 35 A: drop de textura del AssetBrowser sobre este slot
+            // -> reemplaza el material entero por uno nuevo (instance
+            // unico) con la textura como albedo. Anti-contagio: nunca
+            // muta el material previo (otras entidades pueden compartirlo).
+            // Sin undo todavia — es un cambio estructural, no edit
+            // per-frame; meterlo en HistoryStack requeriria un comando
+            // dedicado.
+            ImGui::Button("Drop textura para reemplazar material",
+                            ImVec2(-FLT_MIN, 0));
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* p =
+                        ImGui::AcceptDragDropPayload("MOOD_TEXTURE_ASSET")) {
+                    if (m_assets != nullptr && p->DataSize == sizeof(TextureAssetId)) {
+                        const TextureAssetId tex =
+                            *static_cast<const TextureAssetId*>(p->Data);
+                        mr.materials[i] = m_assets->createMaterialFromTexture(tex);
+                        m_editedThisFrame = true;
+                    }
+                }
+                ImGui::EndDragDropTarget();
             }
             ImGui::PopID();
         }
@@ -214,12 +235,27 @@ void InspectorPanel::onImGuiRender() {
         if (ImGui::DragFloat("fov (deg)##cam", &cam.fovDeg, 0.1f, 1.0f, 179.0f)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<f32>(m_editTracker, m_ui, e, cam.fovDeg,
+            [](Entity& en, const f32& v) {
+                en.getComponent<CameraComponent>().fovDeg = v;
+            },
+            "Editar camera fov");
         if (ImGui::DragFloat("near##cam", &cam.nearPlane, 0.001f, 0.001f, 100.0f)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<f32>(m_editTracker, m_ui, e, cam.nearPlane,
+            [](Entity& en, const f32& v) {
+                en.getComponent<CameraComponent>().nearPlane = v;
+            },
+            "Editar camera near");
         if (ImGui::DragFloat("far##cam", &cam.farPlane, 0.1f, 1.0f, 10000.0f)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<f32>(m_editTracker, m_ui, e, cam.farPlane,
+            [](Entity& en, const f32& v) {
+                en.getComponent<CameraComponent>().farPlane = v;
+            },
+            "Editar camera far");
         ImGui::Separator();
     }
 
@@ -295,16 +331,41 @@ void InspectorPanel::onImGuiRender() {
             m_editedThisFrame = true;
         }
         if (ImGui::ColorEdit3("color##envfog", &env.fogColor.x)) m_editedThisFrame = true;
+        pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, env.fogColor,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<EnvironmentComponent>().fogColor = v;
+            },
+            "Editar fog color");
         if (env.fogMode == 1) {
             if (ImGui::DragFloat("start (m)##env", &env.fogLinearStart, 0.1f, 0.0f, 500.0f)) m_editedThisFrame = true;
+            pushEditIfDone<f32>(m_editTracker, m_ui, e, env.fogLinearStart,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<EnvironmentComponent>().fogLinearStart = v;
+                },
+                "Editar fog linear start");
             if (ImGui::DragFloat("end (m)##env",   &env.fogLinearEnd,   0.1f, 0.0f, 500.0f)) m_editedThisFrame = true;
+            pushEditIfDone<f32>(m_editTracker, m_ui, e, env.fogLinearEnd,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<EnvironmentComponent>().fogLinearEnd = v;
+                },
+                "Editar fog linear end");
         } else if (env.fogMode == 2 || env.fogMode == 3) {
             if (ImGui::DragFloat("density##env", &env.fogDensity, 0.001f, 0.0f, 1.0f)) m_editedThisFrame = true;
+            pushEditIfDone<f32>(m_editTracker, m_ui, e, env.fogDensity,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<EnvironmentComponent>().fogDensity = v;
+                },
+                "Editar fog density");
         }
 
         ImGui::Separator();
         ImGui::TextUnformatted("Post-process");
         if (ImGui::DragFloat("exposure (EV)##env", &env.exposure, 0.05f, -5.0f, 5.0f)) m_editedThisFrame = true;
+        pushEditIfDone<f32>(m_editTracker, m_ui, e, env.exposure,
+            [](Entity& en, const f32& v) {
+                en.getComponent<EnvironmentComponent>().exposure = v;
+            },
+            "Editar exposure");
         const char* tonemaps[] = {"None", "Reinhard", "ACES"};
         int toneIdx = static_cast<int>(env.tonemapMode);
         if (ImGui::Combo("tonemap##env", &toneIdx, tonemaps, 3)) {
@@ -317,6 +378,11 @@ void InspectorPanel::onImGuiRender() {
                                 &env.iblIntensity, 0.0f, 2.0f, "%.2f")) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<f32>(m_editTracker, m_ui, e, env.iblIntensity,
+            [](Entity& en, const f32& v) {
+                en.getComponent<EnvironmentComponent>().iblIntensity = v;
+            },
+            "Editar IBL intensity");
         ImGui::Separator();
     }
 
@@ -529,13 +595,33 @@ void InspectorPanel::onImGuiRender() {
         if (ImGui::SliderFloat("volume##as", &asrc.volume, 0.0f, 1.0f)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<f32>(m_editTracker, m_ui, e, asrc.volume,
+            [](Entity& en, const f32& v) {
+                en.getComponent<AudioSourceComponent>().volume = v;
+            },
+            "Editar audio volume");
         if (ImGui::Checkbox("loop##as", &asrc.loop)) { m_editedThisFrame = true; }
+        pushEditIfDone<bool>(m_editTracker, m_ui, e, asrc.loop,
+            [](Entity& en, const bool& v) {
+                en.getComponent<AudioSourceComponent>().loop = v;
+            },
+            "Toggle audio loop");
         ImGui::SameLine();
         if (ImGui::Checkbox("playOnStart##as", &asrc.playOnStart)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<bool>(m_editTracker, m_ui, e, asrc.playOnStart,
+            [](Entity& en, const bool& v) {
+                en.getComponent<AudioSourceComponent>().playOnStart = v;
+            },
+            "Toggle audio playOnStart");
         ImGui::SameLine();
         if (ImGui::Checkbox("is3D##as", &asrc.is3D)) { m_editedThisFrame = true; }
+        pushEditIfDone<bool>(m_editTracker, m_ui, e, asrc.is3D,
+            [](Entity& en, const bool& v) {
+                en.getComponent<AudioSourceComponent>().is3D = v;
+            },
+            "Toggle audio is3D");
 
         // Preview: resetear `started` fuerza al AudioSystem a volver a
         // disparar la reproduccion en el proximo frame. Requiere playOnStart.
@@ -599,9 +685,24 @@ void InspectorPanel::onImGuiRender() {
         if (ImGui::DragFloat("speed##anim", &anim.speed, 0.05f, 0.0f, 10.0f)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<f32>(m_editTracker, m_ui, e, anim.speed,
+            [](Entity& en, const f32& v) {
+                en.getComponent<AnimatorComponent>().speed = v;
+            },
+            "Editar animator speed");
         if (ImGui::Checkbox("playing##anim", &anim.playing)) { m_editedThisFrame = true; }
+        pushEditIfDone<bool>(m_editTracker, m_ui, e, anim.playing,
+            [](Entity& en, const bool& v) {
+                en.getComponent<AnimatorComponent>().playing = v;
+            },
+            "Toggle animator playing");
         ImGui::SameLine();
         if (ImGui::Checkbox("loop##anim", &anim.loop)) { m_editedThisFrame = true; }
+        pushEditIfDone<bool>(m_editTracker, m_ui, e, anim.loop,
+            [](Entity& en, const bool& v) {
+                en.getComponent<AnimatorComponent>().loop = v;
+            },
+            "Toggle animator loop");
         ImGui::SameLine();
         if (ImGui::Button("Reset##anim")) {
             anim.time = 0.0f;
@@ -618,10 +719,25 @@ void InspectorPanel::onImGuiRender() {
         ImGui::TextDisabled("Particle Emitter");
 
         if (ImGui::Checkbox("emitting##pe", &em.emitting)) m_editedThisFrame = true;
+        pushEditIfDone<bool>(m_editTracker, m_ui, e, em.emitting,
+            [](Entity& en, const bool& v) {
+                en.getComponent<ParticleEmitterComponent>().emitting = v;
+            },
+            "Toggle particle emitting");
         ImGui::SameLine();
         if (ImGui::Checkbox("additive##pe", &em.additive)) m_editedThisFrame = true;
+        pushEditIfDone<bool>(m_editTracker, m_ui, e, em.additive,
+            [](Entity& en, const bool& v) {
+                en.getComponent<ParticleEmitterComponent>().additive = v;
+            },
+            "Toggle particle additive");
         ImGui::SameLine();
         if (ImGui::Checkbox("localSpace##pe", &em.localSpace)) m_editedThisFrame = true;
+        pushEditIfDone<bool>(m_editTracker, m_ui, e, em.localSpace,
+            [](Entity& en, const bool& v) {
+                en.getComponent<ParticleEmitterComponent>().localSpace = v;
+            },
+            "Toggle particle localSpace");
 
         if (ImGui::DragFloat("rate (1/s)##pe", &em.emitRate, 1.0f, 0.0f, 10000.0f)) {
             m_editedThisFrame = true;
@@ -639,9 +755,19 @@ void InspectorPanel::onImGuiRender() {
         if (ImGui::DragFloat3("velMin (m/s)##pe", &em.velocityMin.x, 0.05f)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, em.velocityMin,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<ParticleEmitterComponent>().velocityMin = v;
+            },
+            "Editar particle velocityMin");
         if (ImGui::DragFloat3("velMax (m/s)##pe", &em.velocityMax.x, 0.05f)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, em.velocityMax,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<ParticleEmitterComponent>().velocityMax = v;
+            },
+            "Editar particle velocityMax");
         if (ImGui::DragFloatRange2("size (m)##pe",
                                      &em.sizeStart, &em.sizeEnd,
                                      0.005f, 0.0f, 5.0f)) {
@@ -650,9 +776,19 @@ void InspectorPanel::onImGuiRender() {
         if (ImGui::ColorEdit4("colorStart##pe", &em.colorStart.x)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<glm::vec4>(m_editTracker, m_ui, e, em.colorStart,
+            [](Entity& en, const glm::vec4& v) {
+                en.getComponent<ParticleEmitterComponent>().colorStart = v;
+            },
+            "Editar particle colorStart");
         if (ImGui::ColorEdit4("colorEnd##pe", &em.colorEnd.x)) {
             m_editedThisFrame = true;
         }
+        pushEditIfDone<glm::vec4>(m_editTracker, m_ui, e, em.colorEnd,
+            [](Entity& en, const glm::vec4& v) {
+                en.getComponent<ParticleEmitterComponent>().colorEnd = v;
+            },
+            "Editar particle colorEnd");
         if (ImGui::DragFloat("gravityFactor##pe", &em.gravityFactor, 0.01f,
                               -2.0f, 2.0f)) {
             m_editedThisFrame = true;

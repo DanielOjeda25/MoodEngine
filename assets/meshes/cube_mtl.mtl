@@ -1,0 +1,6 @@
+# Material asociado a cube_mtl.obj. Albedo via map_Kd con path relativo
+# al .mtl. Hito 35 C: validar el path Assimp .obj + .mtl.
+
+newmtl Brick
+Kd 1.0 1.0 1.0
+map_Kd ../textures/brick.png
