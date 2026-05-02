@@ -1562,3 +1562,27 @@ Para Hito 39 (cierre Fase 1):
 - Tags duplicados en saves: V1 acepta como limitación (al cargar solo aplica al primer match).
 - Vec3 en Lua globals via heurística `tabla[1..3]+size==3` — si un script usa tabla con 4 floats con uno extra, se omite. Documentado.
 - Lua tables anidadas, funciones, userdata: omitidas silenciosamente. Por design.
+
+### 🚨 BUG PENDIENTE — Load Game no restaura bodies (continuar próxima sesión)
+
+Tras testing del dev (2026-05-02), reportado: al hacer **Load Game desde el main menu, las cajas físicas NO aparecen** en sus poses guardadas — el viewport carga el mapa pero los bodies dynamic se pierden.
+
+**Fixes ya aplicados en esta sesión (post-`v0.41.0-hito41`, sin tag — work-in-progress):**
+- Cursor visible en main menu + flank-detection al salir del menú (`SDL_SetRelativeMouseMode`).
+- Sync `body→Transform` en `updateRigidBodies` ahora copia **rotation** además de position (antes solo position — Transform stale en debug draw + saves).
+- Clamp velocidades < 0.01 m/s a 0 al save (evita reactivar bodies dormidos al load → cajas drifteando lentamente).
+- `applyLoadedSave` aplica al `TransformComponent` siempre (no solo al body) — cubre el caso "load antes del primer Play" cuando bodies aún no materializados (`bodyId == 0`).
+- "New Game" recarga el mapa default desde cero: cleanup char + bodies + scripts → `tryLoadGameManifest()` → reset GameState + cámara.
+- PackageBuilder ahora pregunta confirm si carpeta destino existe (sobreescribir SI/NO).
+- Spawner "Agregar caja física demo" usa tags únicos `CajaFisica_01/02/03` (antes todos `CajaFisica` → conflicto en byTag map del load).
+- F6 = Save As con file dialog (slot custom). F5 sigue siendo quicksave.
+- Estilo del MainMenu mejorado (panel 420×360, padding generoso, título grande, botones con hover).
+- Logs detallados en `[SAVE]` y `[LOAD]` para diagnóstico.
+
+**Lo que falta auditar (próxima sesión):**
+1. **Verificar el flow completo Load Game con dev presente**: capturar logs `[LOAD] body tag='X'...` que aparecen al cargar — comparar con `[SAVE]` previos. Si los tags no coinciden o falta alguno, ahí está el bug.
+2. **Test headless del flujo simulado**: crear un test que arme `SaveData` con N bodies, `applyLoadedSave` sobre un scene con entities con tags matcheados, verificar que cada `TransformComponent` quede en la pose esperada.
+3. **Revisar que `tryLoadGameManifest` se llame antes de `applyLoadedSave`**: si Load Game se aprieta SIN haber hecho New Game antes, el flow puede ser inconsistente — el constructor del MoodPlayer ya llama tryLoadGameManifest, pero si falla y cae a `buildTestMap`, las entidades del map real nunca existen y los snapshots no encuentran sus tags.
+4. **Considerar si Load Game debe RECARGAR el mapa** antes de aplicar snapshots (mismo flujo que New Game + apply state). Hoy asume que el mapa ya está cargado — falla si difiere del save.
+
+**Punto de entrada para retomar**: `PlayerApplication::applyLoadedSave` en `src/player/PlayerApplication.cpp` + handler "Load Game" en `drawMainMenu`.

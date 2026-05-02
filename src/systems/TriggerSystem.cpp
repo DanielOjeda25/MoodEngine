@@ -1,5 +1,6 @@
 #include "systems/TriggerSystem.h"
 
+#include "core/Log.h"
 #include "engine/physics/PhysicsWorld.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
@@ -71,8 +72,13 @@ void TriggerSystem::update(Scene& scene,
                     obbContainsWorldPoint(tf, tr.halfExtents, playerPos);
                 if (insideNow != tr.playerInside) {
                     tr.playerInside = insideNow;
-                    scripts.dispatchEvent(e.handle(),
-                        insideNow ? "on_trigger_enter" : "on_trigger_exit");
+                    const char* evt =
+                        insideNow ? "on_trigger_enter" : "on_trigger_exit";
+                    Log::script()->info(
+                        "[trigger#{}] player flank -> {} (dispatch {})",
+                        static_cast<u32>(e.handle()),
+                        insideNow ? "INSIDE" : "OUTSIDE", evt);
+                    scripts.dispatchEvent(e.handle(), evt);
                 } else if (insideNow) {
                     scripts.dispatchEvent(e.handle(), "on_trigger_stay");
                 }
@@ -89,6 +95,9 @@ void TriggerSystem::update(Scene& scene,
                 insideThisFrame.insert(be.entityRaw);
                 if (tr.bodiesInside.count(be.entityRaw) == 0) {
                     // Flank false→true: enter.
+                    Log::script()->info(
+                        "[trigger#{}] body#{} flank -> INSIDE (dispatch on_trigger_body_enter)",
+                        static_cast<u32>(e.handle()), be.entityRaw);
                     scripts.dispatchEvent(e.handle(),
                         "on_trigger_body_enter", be.entityRaw);
                 } else {
@@ -102,6 +111,9 @@ void TriggerSystem::update(Scene& scene,
             //    de bodies destruidos (handle no aparece en bodyEntries).
             for (auto it = tr.bodiesInside.begin(); it != tr.bodiesInside.end();) {
                 if (insideThisFrame.count(*it) == 0) {
+                    Log::script()->info(
+                        "[trigger#{}] body#{} flank -> OUTSIDE (dispatch on_trigger_body_exit)",
+                        static_cast<u32>(e.handle()), *it);
                     scripts.dispatchEvent(e.handle(),
                         "on_trigger_body_exit", *it);
                     it = tr.bodiesInside.erase(it);

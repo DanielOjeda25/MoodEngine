@@ -92,9 +92,13 @@ bool save(const SaveData& d, const std::filesystem::path& path) {
         return false;
     }
     f << j.dump(2);
-    Log::engine()->info("SaveLoad::save: '{}' OK ({} bytes)",
-                         path.generic_string(),
-                         static_cast<usize>(f.tellp()));
+    Log::engine()->info(
+        "SaveLoad::save: '{}' OK ({} bytes, {} bodies, {} script globals, hp={}, ammo={})",
+        path.generic_string(),
+        static_cast<usize>(f.tellp()),
+        d.bodies.size(),
+        d.scriptGlobals.size(),
+        d.hud.hp, d.hud.ammo);
     return true;
 }
 
@@ -207,9 +211,11 @@ std::optional<SaveData> load(const std::filesystem::path& path) {
         }
     }
 
-    Log::engine()->info("SaveLoad::load: '{}' OK (map='{}', hp={}, ammo={})",
-                         path.generic_string(),
-                         d.mapPath, d.hud.hp, d.hud.ammo);
+    Log::engine()->info(
+        "SaveLoad::load: '{}' OK (map='{}', hp={}, ammo={}, {} bodies, {} script globals)",
+        path.generic_string(),
+        d.mapPath, d.hud.hp, d.hud.ammo,
+        d.bodies.size(), d.scriptGlobals.size());
     return d;
 }
 

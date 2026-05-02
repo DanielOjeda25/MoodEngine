@@ -92,8 +92,14 @@ void InspectorPanel::onImGuiRender() {
             },
             "Mover entidad (Inspector)");
 
-        const bool hasMesh = e.hasComponent<MeshRendererComponent>();
-        if (hasMesh) {
+        // Rotation + scale: visibles si la entidad tiene MeshRenderer
+        // (efecto visual obvio) o TriggerComponent (rotation afecta el
+        // OBB del trigger — Hito 40 B). Para Light/Audio sin mesh
+        // siguen ocultos para no confundir.
+        const bool showRotScale =
+            e.hasComponent<MeshRendererComponent>() ||
+            e.hasComponent<TriggerComponent>();
+        if (showRotScale) {
             if (ImGui::DragFloat3("rotation (deg)##tr", &t.rotationEuler.x, 0.5f)) {
                 m_editedThisFrame = true;
             }

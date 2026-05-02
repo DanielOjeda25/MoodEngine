@@ -150,6 +150,12 @@ private:
     /// `<exeDir>/quicksave.moodsave` (sin file dialog — F5 keyboard
     /// shortcut). Loguea el resultado.
     void quickSave();
+    /// Hito 41 fix-up: idem quickSave pero con file dialog `pfd::save_file`
+    /// para que el dev elija nombre + ubicacion. Atajo F6 durante el juego.
+    void saveAs();
+    /// Helper: arma el SaveData del state runtime actual. Reusado por
+    /// quickSave + saveAs.
+    SaveLoad::SaveData captureCurrentState();
 };
 
 } // namespace Mood

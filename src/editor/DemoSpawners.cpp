@@ -170,7 +170,25 @@ void EditorApplication::processSpawnHudDemoRequest() {
 
 void EditorApplication::processSpawnPhysicsBoxRequest() {
     if (!(m_ui.consumeSpawnPhysicsBoxRequest() && m_scene && m_assetManager)) return;
-    Entity box = m_scene->createEntity("CajaFisica");
+    // Hito 41 fix: tag unico para que SaveLoad pueda matchear cada caja
+    // por separado. Con tags duplicados los snapshots se sobrescribian
+    // en el byTag map del load → cajas quedaban apiladas y Jolt las
+    // disparaba como si "desaparecieran".
+    int suffix = 1;
+    std::string tagName;
+    while (true) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "CajaFisica_%02d", suffix);
+        tagName = buf;
+        bool collision = false;
+        m_scene->forEach<TagComponent>(
+            [&](Entity, TagComponent& tag) {
+                if (tag.name == tagName) collision = true;
+            });
+        if (!collision) break;
+        ++suffix;
+    }
+    Entity box = m_scene->createEntity(tagName);
     auto& t = box.getComponent<TransformComponent>();
     t.position = glm::vec3(0.0f, 6.0f, 0.0f);
     t.scale    = glm::vec3(1.0f);

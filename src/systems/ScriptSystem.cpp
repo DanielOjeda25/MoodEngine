@@ -143,46 +143,60 @@ std::unordered_map<std::string, ExposedValue> ScriptSystem::captureGlobals(
     sol::state& lua = *it->second;
     // Hito 41 B: walk de globals top-level. Filtramos por tipos del
     // ExposedValue variant. Tablas, funciones, userdata se omiten.
-    for (const auto& kv : lua.globals()) {
-        sol::object key = kv.first;
-        sol::object val = kv.second;
-        if (!key.is<std::string>()) continue;
-        const std::string name = key.as<std::string>();
-        // Skipear globals built-in / internas. Prefijo `_` o nombres
-        // reservados (engine, log, hud, physics, self, etc.).
-        if (!name.empty() && name[0] == '_') continue;
-        static const std::unordered_set<std::string> kReserved{
-            "engine", "log", "hud", "physics", "self",
-            "string", "table", "math", "io", "os", "package",
-            "coroutine", "debug", "bit32", "utf8",
-            // funciones built-in del juego (eventos)
-            "onUpdate", "on_trigger_enter", "on_trigger_exit",
-            "on_trigger_stay", "on_trigger_body_enter",
-            "on_trigger_body_exit", "on_trigger_body_stay"
-        };
-        if (kReserved.count(name)) continue;
-        // Filtrar por tipo. Sol2 expone is<T>() para conversion check.
-        if (val.is<bool>()) {
-            out[name] = ExposedValue{val.as<bool>()};
-        } else if (val.is<f32>()) {
-            out[name] = ExposedValue{val.as<f32>()};
-        } else if (val.is<std::string>()) {
-            out[name] = ExposedValue{val.as<std::string>()};
-        }
-        // vec3: detectar via tabla con 3 floats numericos.
-        else if (val.is<sol::table>()) {
-            sol::table t = val.as<sol::table>();
-            sol::object v0 = t[1];
-            sol::object v1 = t[2];
-            sol::object v2 = t[3];
-            if (v0.is<f32>() && v1.is<f32>() && v2.is<f32>() &&
-                t.size() == 3) {
-                out[name] = ExposedValue{glm::vec3(
-                    v0.as<f32>(), v1.as<f32>(), v2.as<f32>())};
+    // Hito 41 fix-up: try/catch defensivo — sol2 puede lanzar excepciones
+    // o assert() en algunos tipos exoticos (userdata sin __index, tablas
+    // con weak refs). Capturamos cualquier fallo y continuamos con los
+    // globals que si pudieron leerse.
+    static const std::unordered_set<std::string> kReserved{
+        "engine", "log", "hud", "physics", "self",
+        "string", "table", "math", "io", "os", "package",
+        "coroutine", "debug", "bit32", "utf8",
+        // funciones built-in del juego (eventos)
+        "onUpdate", "on_trigger_enter", "on_trigger_exit",
+        "on_trigger_stay", "on_trigger_body_enter",
+        "on_trigger_body_exit", "on_trigger_body_stay"
+    };
+    try {
+        for (const auto& kv : lua.globals()) {
+            try {
+                sol::object key = kv.first;
+                sol::object val = kv.second;
+                if (!key.is<std::string>()) continue;
+                const std::string name = key.as<std::string>();
+                if (!name.empty() && name[0] == '_') continue;
+                if (kReserved.count(name)) continue;
+                // Lua object type: usar `get_type()` antes que `is<T>()`
+                // para evitar conversiones implicitas que pueden assert.
+                const sol::type t = val.get_type();
+                if (t == sol::type::boolean) {
+                    out[name] = ExposedValue{val.as<bool>()};
+                } else if (t == sol::type::number) {
+                    out[name] = ExposedValue{val.as<f32>()};
+                } else if (t == sol::type::string) {
+                    out[name] = ExposedValue{val.as<std::string>()};
+                } else if (t == sol::type::table) {
+                    sol::table tbl = val.as<sol::table>();
+                    if (tbl.size() == 3) {
+                        sol::object v0 = tbl[1];
+                        sol::object v1 = tbl[2];
+                        sol::object v2 = tbl[3];
+                        if (v0.get_type() == sol::type::number &&
+                            v1.get_type() == sol::type::number &&
+                            v2.get_type() == sol::type::number) {
+                            out[name] = ExposedValue{glm::vec3(
+                                v0.as<f32>(), v1.as<f32>(), v2.as<f32>())};
+                        }
+                    }
+                }
+                // function/userdata/thread → omit silencioso.
+            } catch (const std::exception& e) {
+                Log::script()->warn(
+                    "captureGlobals: skip global por excepcion: {}", e.what());
             }
-            // Tablas que no calzan con vec3 → omit.
         }
-        // Funciones, userdata, etc. → omit.
+    } catch (const std::exception& e) {
+        Log::script()->warn(
+            "captureGlobals: iteracion abortada por excepcion: {}", e.what());
     }
     return out;
 }

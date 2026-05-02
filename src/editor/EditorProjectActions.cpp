@@ -299,6 +299,27 @@ void EditorApplication::handlePackageProject() {
         m_project->root.parent_path().generic_string()).result();
     if (selection.empty()) return;
 
+    // Hito 41 fix-up: si el destino `<selection>/<projectName>` ya existe,
+    // pedir confirmacion al user antes de sobreescribir.
+    const std::filesystem::path outDir =
+        std::filesystem::path(selection) / m_project->name;
+    if (std::filesystem::exists(outDir)) {
+        const auto choice = pfd::message(
+            "MoodEngine — Carpeta existe",
+            "La carpeta:\n" + outDir.generic_string() + "\n\n"
+            "ya existe. Sobreescribir su contenido?\n\n"
+            "(SI = continuar y reemplazar archivos del paquete; "
+            "NO = cancelar empaquetado)",
+            pfd::choice::yes_no,
+            pfd::icon::warning).result();
+        if (choice != pfd::button::yes) {
+            Log::editor()->info(
+                "Empaquetado cancelado: el destino '{}' ya existe",
+                outDir.generic_string());
+            return;
+        }
+    }
+
     // Localizar el .exe del editor — junto a el viven MoodPlayer.exe,
     // SDL2*.dll, assets/, shaders/.
     char* base = SDL_GetBasePath();
