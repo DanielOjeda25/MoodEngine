@@ -93,26 +93,46 @@ glm::vec3 sampleEmissionOffset(const ParticleEmitterComponent& em, u64& s) {
             return glm::vec3(em.emissionShapeSize, 0.0f, 0.0f);
         }
         case ES::Cone: {
-            // Hito 39 A. Cono con axis +Y, altura == size, base radio
-            // == size en Y=0 (tip en Y=size). Para distribucion uniforme
-            // sobre el volumen: muestrear h ~ size * cbrt(rand) (ese
-            // sesgo compensa el menor area cerca del tip), y radio
-            // permitido en esa altura es `size * (1 - h/size)`. Disc
-            // sampling estandar adentro de ese radio.
+            // Hito 39 A + Hito 40 A. Cono con axis configurable
+            // (default +Y), altura == size, base radio == size.
+            // Sample en +Y local: h = size * cbrt(rand) (uniformidad
+            // volumetrica), radio permitido = size * (1 - h/size),
+            // disc rejection sampling en el plano XZ local.
+            // Despues rotamos la salida si emissionConeAxis != +Y.
             const f32 size = em.emissionShapeSize;
             const f32 u01 = randUnit(s);
-            const f32 hNorm = std::cbrt(u01);          // [0..1] hacia el tip
+            const f32 hNorm = std::cbrt(u01);
             const f32 h = hNorm * size;
             const f32 maxR = size * (1.0f - hNorm);
-            // Disc sampling para el (x, z) en plano horizontal.
+            glm::vec3 local{maxR, h, 0.0f}; // fallback si rejection falla
             for (int it = 0; it < 8; ++it) {
                 const f32 x = randUnit(s) * 2.0f - 1.0f;
                 const f32 z = randUnit(s) * 2.0f - 1.0f;
                 if (x * x + z * z <= 1.0f) {
-                    return glm::vec3(x * maxR, h, z * maxR);
+                    local = glm::vec3(x * maxR, h, z * maxR);
+                    break;
                 }
             }
-            return glm::vec3(maxR, h, 0.0f);
+            // Hito 40 A: rotar `local` (Y-up cone) hacia em.emissionConeAxis.
+            // Usamos el quaternion del eje +Y al axis target. Si el axis
+            // es ~+Y o (0,0,0) por edicion accidental, no rotamos.
+            const f32 axisLenSq = glm::dot(em.emissionConeAxis,
+                                            em.emissionConeAxis);
+            if (axisLenSq < 1e-6f) return local;
+            const glm::vec3 axisN = em.emissionConeAxis / std::sqrt(axisLenSq);
+            const glm::vec3 yUp(0.0f, 1.0f, 0.0f);
+            const f32 dotYA = glm::dot(yUp, axisN);
+            if (dotYA > 0.9999f) return local;          // axis ≈ +Y
+            if (dotYA < -0.9999f) return -local;        // axis = -Y → flip
+            // Eje de rotacion = Y x axis, angulo = acos(dotYA).
+            const glm::vec3 rotAxis = glm::normalize(glm::cross(yUp, axisN));
+            const f32 angle = std::acos(dotYA);
+            // Rodrigues: v_rot = v cos + (k x v) sin + k (k . v)(1 - cos)
+            const f32 c = std::cos(angle);
+            const f32 sN = std::sin(angle);
+            const f32 dotKL = glm::dot(rotAxis, local);
+            return local * c + glm::cross(rotAxis, local) * sN
+                 + rotAxis * dotKL * (1.0f - c);
         }
     }
     return glm::vec3(0.0f);

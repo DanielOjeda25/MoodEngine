@@ -44,8 +44,11 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 37 — Cerrar 3 medianas: PackageBuilder smart-pack + triggers detectan dynamic bodies + particle emission por shape (completado, tag `v0.37.0-hito37`).
 - [x] Hito 38 — Save/Load gameplay state (.moodsave) + Main menu del MoodPlayer (completado, tag `v0.38.0-hito38`).
 - [x] Hito 39 — Polish final + cierre Fase 1 (completado, tags `v0.39.0-hito39` + **`v1.0.0`** = fin Fase 1).
+- [x] Hito 40 — Cerrar pendientes chicos/medios post-v1.0.0: cone axis, OBB debug, runtime halfExtents, DragRange2/combos undo, char windows per-proyecto, sort stable bucket-Z, localSpace worldMatrix (completado, tag `v0.40.0-hito40`).
+- [ ] Hito 41 — Save/Load extendido con snapshots Jolt + Lua globals (TBD).
+- [ ] Hito 42 — Editor de materiales visual (TBD).
 
-**🏁 Fase 1 del proyecto terminada.** Tag final: `v1.0.0`. Próximo paso: recapitulación del dev + planning de Fase 2 (TBD).
+**🏁 Fase 1 cerrada con `v1.0.0`. Hito 40 cierra los pendientes chicos/medios pre-Fase 2.** Próximo paso: Hitos 41+42 (los 2 grandes restantes) → recapitulación del dev → Fase 2 (TBD).
 
 ## Hito 1 — Shell del editor
 
@@ -1460,7 +1463,64 @@ Para Hito 39 (cierre Fase 1):
 
 ### Pendientes menores detectados en Hito 39 (no crítico para v1.0.0)
 
-- Cone shape con direction custom: V1 hardcoded a +Y.
-- OBB Inspector preview: visualizar el OBB rotado en debug draw — hoy se ve como AABB axis-aligned.
-- Layers custom: hoy solo Static/Moving. Si emerge necesidad (ej. "solo enemies"), agregar enum + serializar.
-- Setter runtime de mass/halfExtents (no solo friction): mismo patrón.
+- ~~Cone shape con direction custom: V1 hardcoded a +Y.~~ Resuelto en Hito 40 A.
+- ~~OBB Inspector preview: visualizar el OBB rotado en debug draw.~~ Resuelto en Hito 40 B.
+- ~~Layers custom: hoy solo Static/Moving.~~ Cerrado en Hito 40 C — cubierto vía TagComponent + layerMask raycast.
+- ~~Setter runtime de mass/halfExtents.~~ `setBodyHalfExtents` resuelto en Hito 40 D. `setBodyMass` queda como stub documentado (API Jolt crashea con SEH; pendiente Fase 2).
+
+## Hito 40 — Cerrar pendientes chicos/medios post-v1.0.0
+
+**Objetivo:** tras `v1.0.0` (cierre Fase 1), barrer todos los polish/deudas chicos-medios documentados antes de la recapitulación del dev. 11 de 14 bloques cerrados.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Cone particle shape con axis custom:*
+- Nuevo campo `emissionConeAxis` (vec3, default +Y).
+- Sample en +Y local + rotación Rodrigues hacia el axis target. Persistencia opcional sin bumpear schema.
+
+*Bloque B — OBB trigger preview en debug draw:*
+- En `EditorRenderPass`, cuando `m_debugDraw && m_scene`, loop sobre `TriggerComponent + TransformComponent` que dibuja las 12 aristas del cubo del trigger usando `dbg.drawLine`. Respeta rotation del Transform — el OBB se ve rotado.
+
+*Bloque C — Layers custom (decisión documentada):*
+- Cubierto vía TagComponent + layerMask. Documentado en `PhysicsWorld.h` como decisión permanente.
+
+*Bloque D — Setter runtime mass/halfExtents:*
+- `setBodyHalfExtents` via `BodyInterface::SetShape` con `inUpdateMassProperties=true`.
+- `setBodyMass` quedó como **stub documentado** — API Jolt crashea SEH; el caller usa `setBodyHalfExtents` para cambios de mass por shape recompute.
+
+*Bloque E — DragFloatRange2 undoables:*
+- Agregado `std::pair<f32, f32>` al variant del `InspectorEditTracker`. Cableados lifetime + size del ParticleEmitter.
+
+*Bloque F — Combos estructurales con undo:*
+- RigidBody type/shape, Light type vía `EditPropertyCommand<u32>`. Animator clipName vía `EditPropertyCommand<std::string>` (setter resetea time = 0).
+
+*Bloque G — Coyote/jump-buffer per-proyecto:*
+- `Project::coyoteWindowSec` + `jumpBufferWindowSec` con defaults 0.10 / 0.15. Persistencia opcional en `.moodproj`. EditorPlayMode + PlayerApplication los leen del project.
+
+*Bloque H — Sort partículas bucket-Z:*
+- `std::sort` → `std::stable_sort` con quantize a 0.10m en view-space Z. Elimina flicker entre frames con partículas a profundidad similar.
+
+*Bloque I — `localSpace` con rotation/scale del entity:*
+- El render usa `tf.worldMatrix()` completa (no solo translation) cuando `localSpace=true`. Partículas siguen la rotación del emisor.
+
+*Bloque J — Compactación cross-frame Inspector (auditado):*
+- Auditado: ningún widget escapa el patrón `IsItem*` que ya garantiza un comando por gesto. Cierre por documentación.
+
+*Bloque K — Tests headless `setBodyFriction`/`setBodyHalfExtents`:*
+- 3 tests nuevos en `test_raycast.cpp`. Suite total **312/6564** (antes Hito 39 cerrado: 308/6554).
+
+*Bloques L + M — Tests coyote/jump-buffer + headbob velocity:*
+- NO HECHOS. Requieren refactor a pure functions (lógica acoplada a SDL input). Aceptados como pendientes Fase 2.
+
+**Verificación visual del dev:**
+- F1 toggle: trigger rotado 45° muestra OBB en debug.
+- Editar `coyoteWindowSec` en `.moodproj` a 0.30 cambia el feel del salto.
+- Dos emisores de humo overlapping NO flickerea entre frames.
+- Emisor con `localSpace=true` rotado en Y → partículas en `+X local` aparecen rotadas world.
+
+**Siguiente paso:** Hitos 41 (Save/Load extendido) + 42 (Editor de materiales visual) — los 2 grandes restantes. Después: recapitulación del dev + Fase 2.
+
+### Pendientes menores detectados en Hito 40 (Fase 2)
+
+- `setBodyMass` real (no stub) — requiere versión de Jolt que exponga API sin SEH crash.
+- Tests headless de coyote/jump-buffer y headbob — requiere refactor a pure functions.

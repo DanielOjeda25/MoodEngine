@@ -13,6 +13,8 @@
 //   }
 // Todos los paths son relativos a la carpeta del `.moodproj`.
 
+#include "core/Types.h"  // f32 (Hito 40 G)
+
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -29,6 +31,12 @@ struct Project {
     std::vector<std::filesystem::path> maps;
     /// Mapa que el editor abre al cargar el proyecto. Relativa a `root`.
     std::filesystem::path defaultMap;
+    /// Hito 40 G: configuracion del feel del char controller, editable
+    /// per-proyecto. Defaults coinciden con los hardcoded del Hito 34 C.
+    /// Se persisten al `.moodproj` solo si difieren del default (para no
+    /// ensuciar mapas viejos con campos nuevos).
+    f32 coyoteWindowSec     = 0.10f;  // segundos
+    f32 jumpBufferWindowSec = 0.15f;
 };
 
 class ProjectSerializer {

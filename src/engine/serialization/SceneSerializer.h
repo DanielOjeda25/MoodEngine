@@ -147,6 +147,8 @@ struct SavedParticleEmitter {
     // si != "point" (back-compat con mapas viejos).
     std::string emissionShape{"point"};
     f32         emissionShapeSize = 1.0f;
+    // Hito 40 A: axis del cono. Default +Y.
+    glm::vec3   emissionConeAxis{0.0f, 1.0f, 0.0f};
 };
 
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh

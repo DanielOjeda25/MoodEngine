@@ -90,8 +90,11 @@ void EditorApplication::updateCameras(f32 dt) {
         constexpr f32 k_charRadius           = 0.4f;
         constexpr f32 k_jumpVel              = 5.5f;
         constexpr f32 k_jumpCooldown         = 0.2f;
-        constexpr f32 k_coyoteWindow         = 0.10f; // Hito 34 C
-        constexpr f32 k_jumpBufferWindow     = 0.15f; // Hito 34 C
+        // Hito 40 G: ventanas del char controller editables per-proyecto
+        // (ver `.moodproj`). Si no hay project cargado, usa los defaults
+        // del Hito 34 C.
+        const f32 k_coyoteWindow     = m_project ? m_project->coyoteWindowSec     : 0.10f;
+        const f32 k_jumpBufferWindow = m_project ? m_project->jumpBufferWindowSec : 0.15f;
         constexpr f32 k_walkSpeed            = 4.0f;
         constexpr f32 k_crouchSpeed          = 2.0f;
         if (m_playerCharId == 0) {

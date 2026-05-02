@@ -313,6 +313,10 @@ struct ParticleEmitterComponent {
     enum class EmissionShape : u8 { Point = 0, Box = 1, Sphere = 2, Disc = 3, Cone = 4 };
     EmissionShape emissionShape = EmissionShape::Point;
     f32           emissionShapeSize = 1.0f;
+    // Hito 40 A: axis del cono (solo aplica si emissionShape == Cone).
+    // Default +Y. Se asume normalizado; si el caller pasa (0,0,0) el
+    // sample fallback usa +Y. Editar via Inspector con DragFloat3.
+    glm::vec3     emissionConeAxis{0.0f, 1.0f, 0.0f};
 
     // --- Configuracion editable ---
     f32 emitRate     = 60.0f;          // particles/sec

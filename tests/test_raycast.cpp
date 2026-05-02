@@ -155,6 +155,72 @@ TEST_CASE("PhysicsWorld::raycast: layerMask filtra Static vs Moving (Hito 39 C)"
     CHECK_FALSE(hitNone.hit);
 }
 
+TEST_CASE("PhysicsWorld: setBodyFriction es no-op para bodyId invalido (Hito 40 K)") {
+    PhysicsWorld pw;
+    // No crash con id 0 (no creado).
+    pw.setBodyFriction(0, 0.5f);
+    pw.setBodyFriction(99999u, 0.05f);  // id inexistente
+    CHECK(pw.bodyCount() == 0u);
+}
+
+TEST_CASE("PhysicsWorld: setBodyFriction acepta valor + reactiva body (Hito 40 K)") {
+    PhysicsWorld pw;
+    const u32 dyn = pw.createBody(glm::vec3(0.0f, 5.0f, 0.0f),
+                                    CollisionShape::Box,
+                                    glm::vec3(0.5f),
+                                    BodyType::Dynamic, 1.0f, 0.5f);
+    REQUIRE(dyn != 0u);
+    REQUIRE(pw.bodyCount() == 1u);
+    // Cambiar friction varias veces sin crash.
+    pw.setBodyFriction(dyn, 0.05f);
+    pw.setBodyFriction(dyn, 1.5f);
+    pw.setBodyFriction(dyn, 0.0f);
+    // Step para que la activacion del body tenga efecto sin trabarse.
+    pw.step(0.016f);
+    CHECK(pw.bodyCount() == 1u);
+}
+
+TEST_CASE("PhysicsWorld: setBodyMass valor valido sobre Dynamic OK (Hito 40 D)") {
+    PhysicsWorld pw;
+    const u32 dyn = pw.createBody(glm::vec3(0.0f, 5.0f, 0.0f),
+                                    CollisionShape::Box,
+                                    glm::vec3(0.5f),
+                                    BodyType::Dynamic, 1.0f, 0.5f);
+    REQUIRE(dyn != 0u);
+    // Step previo para que Jolt termine de inicializar las MotionProperties.
+    pw.step(0.016f);
+    // Cambio de masa modesto. Valores extremos pueden generar inertia
+    // patologica — fuera de scope para v1.
+    pw.setBodyMass(dyn, 2.0f);
+    pw.step(0.016f);
+    CHECK(pw.bodyCount() == 1u);
+
+    // No-op para inputs invalidos.
+    pw.setBodyMass(dyn, 0.0f);
+    pw.setBodyMass(dyn, -1.0f);
+    pw.setBodyMass(0u, 1.0f);
+    pw.setBodyMass(99999u, 1.0f);
+    CHECK(pw.bodyCount() == 1u);
+}
+
+TEST_CASE("PhysicsWorld: setBodyHalfExtents API contract (Hito 40 D)") {
+    PhysicsWorld pw;
+    const u32 dyn = pw.createBody(glm::vec3(0.0f, 5.0f, 0.0f),
+                                    CollisionShape::Box,
+                                    glm::vec3(0.5f),
+                                    BodyType::Dynamic, 1.0f, 0.5f);
+    REQUIRE(dyn != 0u);
+    pw.step(0.016f);
+    pw.setBodyHalfExtents(dyn, CollisionShape::Box, glm::vec3(1.0f));
+    pw.setBodyHalfExtents(dyn, CollisionShape::Sphere, glm::vec3(0.3f));
+    pw.step(0.016f);
+    CHECK(pw.bodyCount() == 1u);
+
+    // bodyId invalido es no-op.
+    pw.setBodyHalfExtents(0u, CollisionShape::Box, glm::vec3(1.0f));
+    CHECK(pw.bodyCount() == 1u);
+}
+
 TEST_CASE("PhysicsWorld::raycast: ignoredBodyId == 0 (default) no filtra nada (Hito 34 B)") {
     PhysicsWorld pw;
     const u32 boxId = pw.createBody(glm::vec3(0.0f, 0.0f, -5.0f),

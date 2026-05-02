@@ -38,6 +38,15 @@ void ProjectSerializer::save(const Project& project) {
         j["maps"].push_back(m.generic_string());
     }
 
+    // Hito 40 G: char controller settings — solo persistir si != defaults
+    // para no ensuciar `.moodproj` viejos con campos nuevos.
+    if (project.coyoteWindowSec != 0.10f) {
+        j["coyoteWindowSec"] = project.coyoteWindowSec;
+    }
+    if (project.jumpBufferWindowSec != 0.15f) {
+        j["jumpBufferWindowSec"] = project.jumpBufferWindowSec;
+    }
+
     const auto path = moodprojFile(project);
     std::error_code ec;
     std::filesystem::create_directories(project.root, ec);
@@ -77,6 +86,13 @@ std::optional<Project> ProjectSerializer::load(const std::filesystem::path& mood
         p.defaultMap = std::filesystem::path(j.at("defaultMap").get<std::string>());
         for (const auto& mj : j.at("maps")) {
             p.maps.emplace_back(mj.get<std::string>());
+        }
+        // Hito 40 G: char controller settings opcionales.
+        if (j.contains("coyoteWindowSec")) {
+            p.coyoteWindowSec = j.at("coyoteWindowSec").get<f32>();
+        }
+        if (j.contains("jumpBufferWindowSec")) {
+            p.jumpBufferWindowSec = j.at("jumpBufferWindowSec").get<f32>();
         }
 
         Log::assets()->info("Proyecto cargado: {} ({} mapas)",

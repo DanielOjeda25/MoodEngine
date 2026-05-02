@@ -149,12 +149,17 @@ void OpenGLParticleRenderer::render(Scene& scene,
         if (em.alive.empty())   return; // pool no inicializada
 
         // Hito 31 F: localSpace => particulas almacenadas en el espacio
-        // local del emisor; multiplicamos por la traslacion del entity
-        // antes de upload. Solo translation porque billboards igual
-        // siempre miran a la camara — rotation/scale del entity no
-        // tienen efecto visual sobre el sprite. Si en el futuro se
-        // quieren sparks rotando con la entidad, sumar quat aqui.
-        const glm::vec3 emitterTranslation = em.localSpace ? tf.position : glm::vec3(0.0f);
+        // local del emisor; transformamos al world via worldMatrix antes
+        // de upload.
+        // Hito 40 I: ahora usamos worldMatrix completa (translation +
+        // rotation + scale). Las particulas spawneadas a `(x, 0, z)`
+        // local en un emisor rotado 45 deg en Y aparecen rotadas en el
+        // world. Scale del entity tambien aplica al spawn pos (no al
+        // size del billboard — el size sigue siendo metros directos).
+        // Si !localSpace, identidad (positions ya estan en world).
+        const glm::mat4 emitterMat = em.localSpace
+            ? tf.worldMatrix()
+            : glm::mat4(1.0f);
 
         // Compactar particulas vivas en m_cpu con size/color interpolados.
         m_cpu.clear();
@@ -166,7 +171,9 @@ void OpenGLParticleRenderer::render(Scene& scene,
             const f32 t = std::clamp(em.ages[i] / lifetime, 0.0f, 1.0f);
             const f32 size = em.sizeStart + t * (em.sizeEnd - em.sizeStart);
             const glm::vec4 color = em.colorStart + t * (em.colorEnd - em.colorStart);
-            const glm::vec3 worldCenter = em.positions[i] + emitterTranslation;
+            const glm::vec3 worldCenter = em.localSpace
+                ? glm::vec3(emitterMat * glm::vec4(em.positions[i], 1.0f))
+                : em.positions[i];
             Instance ins{};
             ins.center[0] = worldCenter.x;
             ins.center[1] = worldCenter.y;
@@ -180,18 +187,24 @@ void OpenGLParticleRenderer::render(Scene& scene,
         }
         if (m_cpu.empty()) return;
 
-        // Hito 31 F: sort back-to-front para alpha blend correcto. Skip
-        // para additive (commutativo: el orden no cambia el resultado).
-        // Sort por view-space Z ascendente — mas negativo = mas lejos,
-        // se dibuja primero.
+        // Hito 31 F + 40 H: sort back-to-front para alpha blend correcto.
+        // Skip para additive (commutativo). Hito 40 H upgrade: bucket-Z
+        // estable. Las particulas se cuantizan a buckets de 0.1m en
+        // view-space; std::stable_sort garantiza que dos particulas en
+        // el mismo bucket mantengan su orden relativo entre frames —
+        // elimina el flicker visible del Hito 31 F al ver dos puffs
+        // de humo a misma profundidad.
         if (!em.additive && m_cpu.size() > 1) {
-            std::sort(m_cpu.begin(), m_cpu.end(),
+            constexpr f32 k_bucketSize = 0.1f;
+            std::stable_sort(m_cpu.begin(), m_cpu.end(),
                 [&view](const Instance& a, const Instance& b) {
                     const f32 za = (view * glm::vec4(
                         a.center[0], a.center[1], a.center[2], 1.0f)).z;
                     const f32 zb = (view * glm::vec4(
                         b.center[0], b.center[1], b.center[2], 1.0f)).z;
-                    return za < zb;
+                    const i32 ba = static_cast<i32>(std::floor(za / k_bucketSize));
+                    const i32 bb = static_cast<i32>(std::floor(zb / k_bucketSize));
+                    return ba < bb;
                 });
         }
 

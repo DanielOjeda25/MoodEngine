@@ -26,8 +26,11 @@
 #include "engine/scene/ScenePick.h"
 #include "engine/scene/ViewportPick.h"
 
+#include <glm/ext/matrix_transform.hpp>  // glm::translate, glm::rotate (Hito 40 B)
 #include <glm/mat4x4.hpp>
+#include <glm/trigonometric.hpp>         // glm::radians
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 namespace Mood {
 
@@ -130,6 +133,50 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                         const glm::vec3 c = tileToWorld(nav.path[nav.pathIndex]);
                         const glm::vec3 he(0.25f);
                         dbg.drawAabb(AABB{c - he, c + he}, cursorColor);
+                    }
+                });
+
+            // Hito 40 B: OBB de cada TriggerComponent. Color verde
+            // brillante. Construye los 8 vertices en local space y los
+            // proyecta con position + rotation del Transform (ignora
+            // scale para mantener `halfExtents` en metros directos —
+            // mismo invariante del TriggerSystem). 12 aristas dibujadas
+            // como `drawLine`. La rotation hace que se vea como un OBB
+            // (no AABB) cuando la entidad esta rotada.
+            const glm::vec3 trigColor(0.2f, 1.0f, 0.4f);
+            m_scene->forEach<TransformComponent, TriggerComponent>(
+                [&](Entity, TransformComponent& tf, TriggerComponent& tr) {
+                    glm::mat4 m(1.0f);
+                    m = glm::translate(m, tf.position);
+                    m = glm::rotate(m, glm::radians(tf.rotationEuler.y),
+                                     glm::vec3(0, 1, 0));
+                    m = glm::rotate(m, glm::radians(tf.rotationEuler.x),
+                                     glm::vec3(1, 0, 0));
+                    m = glm::rotate(m, glm::radians(tf.rotationEuler.z),
+                                     glm::vec3(0, 0, 1));
+                    const glm::vec3& he = tr.halfExtents;
+                    glm::vec3 corners[8];
+                    int idx = 0;
+                    for (int xi = -1; xi <= 1; xi += 2)
+                    for (int yi = -1; yi <= 1; yi += 2)
+                    for (int zi = -1; zi <= 1; zi += 2) {
+                        const glm::vec4 local(
+                            static_cast<f32>(xi) * he.x,
+                            static_cast<f32>(yi) * he.y,
+                            static_cast<f32>(zi) * he.z,
+                            1.0f);
+                        corners[idx++] = glm::vec3(m * local);
+                    }
+                    // 12 aristas del cubo. Indices: bit 0=x, bit 1=y,
+                    // bit 2=z. Aristas conectan corners que difieren en
+                    // exactamente 1 bit.
+                    for (int i = 0; i < 8; ++i) {
+                        for (int b = 0; b < 3; ++b) {
+                            const int j = i ^ (1 << b);
+                            if (j > i) {
+                                dbg.drawLine(corners[i], corners[j], trigColor);
+                            }
+                        }
                     }
                 });
         }

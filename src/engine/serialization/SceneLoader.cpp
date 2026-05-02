@@ -146,6 +146,7 @@ Entity applyOneEntity(const SavedEntity& se,
             else if (s.emissionShape == "cone")   em.emissionShape = ES::Cone;
             else                                   em.emissionShape = ES::Point;
             em.emissionShapeSize = s.emissionShapeSize;
+            em.emissionConeAxis  = s.emissionConeAxis;
             em.texture = s.texturePath.empty()
                 ? assets.missingTextureId()
                 : assets.loadTexture(s.texturePath);

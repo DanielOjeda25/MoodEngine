@@ -33,6 +33,18 @@ class BodyID;
 namespace Mood {
 
 /// @brief Layers de la simulacion. 8-bit por Jolt — alcanzan.
+///
+/// Hito 40 C (decision permanente): mantenemos solo Static + Moving.
+/// Para filtros de gameplay tipo "ignore enemies" o "solo pickups", el
+/// patron es:
+///   1. `TagComponent` para identificar el rol (ej. "enemy_grunt").
+///   2. `layerMask` del raycast (Hito 39 C) para Static vs Moving binario.
+///   3. Lua post-filtra el `bodyId` del hit consultando la entidad
+///      asociada (futuro: helper `engine.entity_from_body(id)`).
+/// Extender este enum cambia la matrix de colision Jolt y NO emerge
+/// como necesario en los demos previstos. Si en Fase 2 aparece, agregar
+/// aqui + actualizar `ObjectLayerPairFilterMood` + serializar layer
+/// per-body.
 enum class ObjectLayer : u8 {
     Static = 0, // world geometry (tiles, immovable props)
     Moving = 1, // dynamic bodies + character
@@ -103,6 +115,21 @@ public:
     ///        que las contactos vigentes recalculen friccion. Idempotente
     ///        para bodyId invalidos.
     void setBodyFriction(u32 bodyId, f32 friction);
+
+    /// @brief Hito 40 D: cambia la masa de un Dynamic body en runtime.
+    ///        Re-computa las propiedades de inercia desde el shape
+    ///        actual (asume distribucion uniforme). No-op para Static /
+    ///        Kinematic. Idempotente para bodyId invalidos.
+    void setBodyMass(u32 bodyId, f32 mass);
+
+    /// @brief Hito 40 D: cambia los halfExtents (shape) de un body en
+    ///        runtime. Implementa via SetShape de Jolt — barato cuando
+    ///        las extents son chicas; al recrear, posicion + velocidad
+    ///        se preservan, contacts se invalidan. No-op si bodyId
+    ///        invalido o shape no es Box/Sphere/Capsule (los soportados
+    ///        por `createBody`).
+    void setBodyHalfExtents(u32 bodyId, CollisionShape shape,
+                              const glm::vec3& halfExtents);
 
     /// @brief Aplica una fuerza al body este frame (Dynamic). En Newton.
     void addForce(u32 bodyId, const glm::vec3& force);

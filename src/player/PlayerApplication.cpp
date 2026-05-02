@@ -189,6 +189,9 @@ bool PlayerApplication::tryLoadGameManifest() {
     rebuildSceneFromMap();
     SceneLoader::applyEntitiesToScene(*savedMap, *m_scene, *m_assetManager);
     m_currentMapPath = mapRel;  // Hito 38 B: para que SaveLoad lo persista.
+    // Hito 40 G: char controller windows del proyecto.
+    m_coyoteWindowSec     = loaded->coyoteWindowSec;
+    m_jumpBufferWindowSec = loaded->jumpBufferWindowSec;
 
     Log::engine()->info(
         "MoodPlayer: proyecto '{}' cargado ({} entidades persistidas)",
@@ -422,8 +425,9 @@ void PlayerApplication::updateCamera(f32 dt) {
     constexpr f32 k_charRadius             = 0.4f;
     constexpr f32 k_jumpVel                = 5.5f; // ~1.5m de altura
     constexpr f32 k_jumpCooldown           = 0.2f; // anti-hold
-    constexpr f32 k_coyoteWindow           = 0.10f; // Hito 34 C
-    constexpr f32 k_jumpBufferWindow       = 0.15f; // Hito 34 C
+    // Hito 40 G: per-proyecto via .moodproj — capturados al cargar.
+    const f32 k_coyoteWindow     = m_coyoteWindowSec;
+    const f32 k_jumpBufferWindow = m_jumpBufferWindowSec;
     constexpr f32 k_walkSpeed              = 4.0f;
     constexpr f32 k_crouchSpeed            = 2.0f;
 

@@ -104,6 +104,10 @@ private:
     f32 m_jumpBufferTimer = 0.0f;
     bool m_spacePrevFrame = false;
     bool m_crouching = false;
+    // Hito 40 G: ventanas configurables per-proyecto (cargadas del
+    // `.moodproj`). Defaults coinciden con los hardcoded del Hito 34 C.
+    f32 m_coyoteWindowSec     = 0.10f;
+    f32 m_jumpBufferWindowSec = 0.15f;
     // Hito 31 D: crouch lerp visual + headbob (paridad con EditorApplication).
     f32 m_crouchVisualT = 0.0f;
     f32 m_headbobTime   = 0.0f;

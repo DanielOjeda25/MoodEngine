@@ -290,8 +290,25 @@ void InspectorPanel::onImGuiRender() {
         const char* items[] = {"Directional", "Point"};
         int current = static_cast<int>(lt.type);
         if (ImGui::Combo("type##lt", &current, items, 2)) {
-            lt.type = static_cast<LightComponent::Type>(current);
-            m_editedThisFrame = true;
+            // Hito 40 F: undo del light type combo.
+            const auto oldType = lt.type;
+            const auto newType = static_cast<LightComponent::Type>(current);
+            if (oldType != newType) {
+                HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
+                if (h != nullptr) {
+                    auto cmd = std::make_unique<EditPropertyCommand<u32>>(
+                        e, static_cast<u32>(oldType), static_cast<u32>(newType),
+                        [](Entity& en, const u32& v) {
+                            en.getComponent<LightComponent>().type =
+                                static_cast<LightComponent::Type>(v);
+                        },
+                        "Cambiar Light type");
+                    h->push(std::move(cmd));
+                } else {
+                    lt.type = newType;
+                }
+                m_editedThisFrame = true;
+            }
         }
         if (ImGui::ColorEdit3("color##lt", &lt.color.x)) m_editedThisFrame = true;
         pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, lt.color,
@@ -531,15 +548,50 @@ void InspectorPanel::onImGuiRender() {
         const char* typeNames[] = {"Static", "Kinematic", "Dynamic"};
         int typeIdx = static_cast<int>(rb.type);
         if (ImGui::Combo("type##rb", &typeIdx, typeNames, 3)) {
-            rb.type = static_cast<RigidBodyComponent::Type>(typeIdx);
-            m_editedThisFrame = true;
+            // Hito 40 F: undo via EditPropertyCommand<u32> (cambio
+            // estructural, atomico — no usa el tracker drag-end).
+            const auto oldType = rb.type;
+            const auto newType = static_cast<RigidBodyComponent::Type>(typeIdx);
+            if (oldType != newType) {
+                HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
+                if (h != nullptr) {
+                    auto cmd = std::make_unique<EditPropertyCommand<u32>>(
+                        e, static_cast<u32>(oldType), static_cast<u32>(newType),
+                        [](Entity& en, const u32& v) {
+                            en.getComponent<RigidBodyComponent>().type =
+                                static_cast<RigidBodyComponent::Type>(v);
+                        },
+                        "Cambiar RigidBody type");
+                    h->push(std::move(cmd));
+                } else {
+                    rb.type = newType;
+                }
+                m_editedThisFrame = true;
+            }
         }
 
         const char* shapeNames[] = {"Box", "Sphere", "Capsule"};
         int shapeIdx = static_cast<int>(rb.shape);
         if (ImGui::Combo("shape##rb", &shapeIdx, shapeNames, 3)) {
-            rb.shape = static_cast<RigidBodyComponent::Shape>(shapeIdx);
-            m_editedThisFrame = true;
+            // Hito 40 F: undo del shape combo.
+            const auto oldShape = rb.shape;
+            const auto newShape = static_cast<RigidBodyComponent::Shape>(shapeIdx);
+            if (oldShape != newShape) {
+                HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
+                if (h != nullptr) {
+                    auto cmd = std::make_unique<EditPropertyCommand<u32>>(
+                        e, static_cast<u32>(oldShape), static_cast<u32>(newShape),
+                        [](Entity& en, const u32& v) {
+                            en.getComponent<RigidBodyComponent>().shape =
+                                static_cast<RigidBodyComponent::Shape>(v);
+                        },
+                        "Cambiar RigidBody shape");
+                    h->push(std::move(cmd));
+                } else {
+                    rb.shape = newShape;
+                }
+                m_editedThisFrame = true;
+            }
         }
 
         if (ImGui::DragFloat3("halfExtents##rb", &rb.halfExtents.x, 0.05f, 0.01f, 100.0f)) {
@@ -685,9 +737,27 @@ void InspectorPanel::onImGuiRender() {
                     for (int i = 0; i < static_cast<int>(clipNames.size()); ++i) {
                         const bool selected = (currentIdx == i);
                         if (ImGui::Selectable(clipNames[i].c_str(), selected)) {
-                            anim.clipName = clipNames[i];
-                            anim.time = 0.0f; // reset al cambiar
-                            m_editedThisFrame = true;
+                            // Hito 40 F: undo del clipName combo (string).
+                            const std::string oldClip = anim.clipName;
+                            const std::string newClip = clipNames[i];
+                            if (oldClip != newClip) {
+                                HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
+                                if (h != nullptr) {
+                                    auto cmd = std::make_unique<EditPropertyCommand<std::string>>(
+                                        e, oldClip, newClip,
+                                        [](Entity& en, const std::string& v) {
+                                            auto& a = en.getComponent<AnimatorComponent>();
+                                            a.clipName = v;
+                                            a.time = 0.0f;  // reset al cambiar
+                                        },
+                                        "Cambiar Animator clip");
+                                    h->push(std::move(cmd));
+                                } else {
+                                    anim.clipName = newClip;
+                                    anim.time = 0.0f;
+                                }
+                                m_editedThisFrame = true;
+                            }
                         }
                         if (selected) ImGui::SetItemDefaultFocus();
                     }
@@ -777,6 +847,18 @@ void InspectorPanel::onImGuiRender() {
                 },
                 "Editar emission shape size");
         }
+        // Hito 40 A: cone axis solo visible si shape == Cone.
+        if (em.emissionShape == ES::Cone) {
+            if (ImGui::DragFloat3("cone axis##pe",
+                                    &em.emissionConeAxis.x, 0.01f, -1.0f, 1.0f)) {
+                m_editedThisFrame = true;
+            }
+            pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, em.emissionConeAxis,
+                [](Entity& en, const glm::vec3& v) {
+                    en.getComponent<ParticleEmitterComponent>().emissionConeAxis = v;
+                },
+                "Editar cone axis");
+        }
 
         if (ImGui::DragFloat("rate (1/s)##pe", &em.emitRate, 1.0f, 0.0f, 10000.0f)) {
             m_editedThisFrame = true;
@@ -791,6 +873,15 @@ void InspectorPanel::onImGuiRender() {
                                      0.05f, 0.05f, 60.0f)) {
             m_editedThisFrame = true;
         }
+        // Hito 40 E: undo del DragFloatRange2 (par de floats).
+        pushEditIfDone<std::pair<f32, f32>>(m_editTracker, m_ui, e,
+            std::pair<f32, f32>{em.lifetimeMin, em.lifetimeMax},
+            [](Entity& en, const std::pair<f32, f32>& v) {
+                auto& emc = en.getComponent<ParticleEmitterComponent>();
+                emc.lifetimeMin = v.first;
+                emc.lifetimeMax = v.second;
+            },
+            "Editar lifetime range");
         if (ImGui::DragFloat3("velMin (m/s)##pe", &em.velocityMin.x, 0.05f)) {
             m_editedThisFrame = true;
         }
@@ -812,6 +903,15 @@ void InspectorPanel::onImGuiRender() {
                                      0.005f, 0.0f, 5.0f)) {
             m_editedThisFrame = true;
         }
+        // Hito 40 E: undo del DragFloatRange2 (par de floats) — size.
+        pushEditIfDone<std::pair<f32, f32>>(m_editTracker, m_ui, e,
+            std::pair<f32, f32>{em.sizeStart, em.sizeEnd},
+            [](Entity& en, const std::pair<f32, f32>& v) {
+                auto& emc = en.getComponent<ParticleEmitterComponent>();
+                emc.sizeStart = v.first;
+                emc.sizeEnd   = v.second;
+            },
+            "Editar size range");
         if (ImGui::ColorEdit4("colorStart##pe", &em.colorStart.x)) {
             m_editedThisFrame = true;
         }

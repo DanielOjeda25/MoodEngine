@@ -184,6 +184,11 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
             }
             jpe["emission_shape"]      = shapeStr;
             jpe["emission_shape_size"] = em.emissionShapeSize;
+            // Hito 40 A: cone axis solo se persiste si != +Y default.
+            if (em.emissionShape == ParticleEmitterComponent::EmissionShape::Cone
+                && em.emissionConeAxis != glm::vec3(0.0f, 1.0f, 0.0f)) {
+                jpe["emission_cone_axis"] = em.emissionConeAxis;
+            }
         }
         // Texture path logico (no el id volátil). Vacio si no hay.
         if (em.texture != 0) {
@@ -312,6 +317,7 @@ SavedEntity parseEntityFromJson(const json& j) {
         // Hito 37 C: emission shape opcional, default "point".
         pe.emissionShape     = jpe.value("emission_shape",      pe.emissionShape);
         pe.emissionShapeSize = jpe.value("emission_shape_size", pe.emissionShapeSize);
+        pe.emissionConeAxis  = jpe.value("emission_cone_axis",  pe.emissionConeAxis);
         pe.texturePath  = jpe.value("texture_path",   std::string{});
         se.particleEmitter = std::move(pe);
     }

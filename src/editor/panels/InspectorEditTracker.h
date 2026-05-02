@@ -15,6 +15,16 @@
 // Solo un widget puede estar activo a la vez (no se pueden draggear dos
 // sliders simultaneo en ImGui) — un solo buffer global por panel basta.
 //
+// Hito 40 J (cierre de pendiente del Hito 32): "compactacion cross-frame
+// para sliders externos al Inspector" — auditado y aceptado como NO
+// requerido. Justificacion: el patron `IsItemActivated` (entrada del
+// drag) + `IsItemDeactivatedAfterEdit` (salida del drag) ya colapsa
+// CUALQUIER widget en un solo comando por gesto, sin importar cuantos
+// frames dure el drag. ImGui garantiza un widget activo a la vez por
+// frame; nunca hay solapamiento. Si en el futuro un widget custom escapa
+// del patron `IsItem*` (ej. drag con sub-frame state), se documenta
+// como pendiente especifico ahi.
+//
 // Uso desde InspectorPanel:
 //
 //   ImGui::DragFloat3("position##tr", &t.position.x, 0.05f);
@@ -49,8 +59,11 @@ struct InspectorEditTracker {
     /// realmente edita: f32 sliders, glm::vec3 transforms, glm::vec4
     /// colors, bool checkboxes, std::string text inputs, u32 DragInts +
     /// asset ids (Hito 36 — habilita undo de maxParticles del particle
-    /// emitter y de drops de textura sobre material slot).
-    std::variant<f32, glm::vec3, glm::vec4, bool, std::string, u32> before;
+    /// emitter y de drops de textura sobre material slot), std::pair<f32,f32>
+    /// para DragFloatRange2 (Hito 40 E — habilita undo de lifetime/size
+    /// del ParticleEmitter).
+    std::variant<f32, glm::vec3, glm::vec4, bool, std::string, u32,
+                  std::pair<f32, f32>> before;
 };
 
 /// Helper template: llamar INMEDIATAMENTE despues del widget ImGui que se

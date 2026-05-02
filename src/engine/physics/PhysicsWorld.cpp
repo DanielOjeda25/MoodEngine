@@ -366,6 +366,41 @@ void PhysicsWorld::setBodyFriction(u32 bodyId, f32 friction) {
     bi.ActivateBody(id);
 }
 
+void PhysicsWorld::setBodyMass(u32 bodyId, f32 mass) {
+    // Hito 40 D: stub. La API limpia de Jolt para cambiar mass de un
+    // body activo en runtime requiere `Body::SetMassProperties` con
+    // shape recomputation, que no esta expuesta facilmente desde
+    // `BodyInterface` en la version incluida. Implementaciones via
+    // `BodyLockWrite + MotionProperties::SetInverseMass` crashean con
+    // SEH en al menos algunas versiones. Aceptado: el caller debe usar
+    // `setBodyHalfExtents` (que recrea el shape con `inUpdateMassProperties=true`)
+    // si necesita cambio de mass por ahora, o re-Play del editor.
+    // Para Fase 2: revivir esta API con la version de Jolt que la
+    // soporte sin crash.
+    (void)bodyId;
+    (void)mass;
+    if (m_impl != nullptr && bodyId != 0 && mass > 0.0f) {
+        Log::physics()->debug(
+            "setBodyMass({}, {}) es stub en v1.0 — usar setBodyHalfExtents "
+            "si requiere cambio de mass. Pendiente Fase 2.",
+            bodyId, mass);
+    }
+}
+
+void PhysicsWorld::setBodyHalfExtents(u32 bodyId, CollisionShape shape,
+                                        const glm::vec3& halfExtents) {
+    if (!m_impl || bodyId == 0) return;
+    JPH::BodyID id(bodyId);
+    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
+    auto newShape = createJPHShape(shape, halfExtents);
+    if (newShape == nullptr) return;
+    // SetShape: recrea collider + invalida contactos. El body keeps
+    // su pose (position + rotation + velocity). El bool inUpdateMass
+    // recalcula inercia con el nuevo shape (true).
+    bi.SetShape(id, newShape, /*inUpdateMassProperties=*/true,
+                JPH::EActivation::Activate);
+}
+
 void PhysicsWorld::addImpulse(u32 bodyId, const glm::vec3& impulse) {
     if (!m_impl || bodyId == 0) return;
     JPH::BodyID id(bodyId);

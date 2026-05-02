@@ -6,8 +6,16 @@
 
 ## 1. ¿Dónde estamos?
 
-**🏁 Hito 39 cerrado — Fase 1 del proyecto TERMINADA.**
-Tags: `v0.39.0-hito39` (hito) + **`v1.0.0`** (fin Fase 1).
+**Hito 40 cerrado — pendientes chicos/medios post-v1.0.0 barridos.**
+Tag: `v0.40.0-hito40`.
+Verificado automático: suite doctest **312/6564** (+3 de `test_raycast` API contract de setters runtime + 1 de `test_particle_system` Cone). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: F1 toggle muestra OBB rotado en triggers; editar `coyoteWindowSec` en el `.moodproj` cambia el feel del salto; dos emisores de humo overlapping NO flickerea entre frames; emisor con `localSpace=true` rotado en Y → partículas siguen rotación.
+
+**Cambio importante:** 11 de 14 bloques cerrados (3 documentados como pendientes Fase 2 por requerir refactor a pure functions o version Jolt actualizada). Inspector con undo en 50+ widgets ahora (sumando Hitos 32+34+35+36+40). Particle Cone shape con axis custom. Settings de char controller per-proyecto. Sort partículas estable. localSpace con worldMatrix completa.
+
+**Próximo paso:** Hitos 41 (Save/Load extendido con snapshots Jolt + Lua globals) + 42 (Editor de materiales visual). Después: recapitulación del dev + Fase 2 (TBD).
+
+### Hito 39 (anterior, ya cerrado — `v1.0.0` = fin Fase 1)
+Tags: `v0.39.0-hito39` + **`v1.0.0`**.
 Verificado automático: suite doctest **308/6554** (+1 de `test_particle_system` Cone + 1 de `test_trigger_system` OBB + 1 de `test_raycast` layerMask). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: particle Cone con size 2 confina partículas en un cono recto; trigger rotado 45° respeta orientación (punto en world (0.7, 0, 0) detectado dentro del OBB pero no del AABB); raycast con mask=1 solo pega paredes Static, mask=2 solo cajas Dynamic; editar friction del Inspector durante Play cambia el deslizamiento de la caja física al instante.
 
 **Próximo paso:** recapitulación del dev + planning de Fase 2 (TBD). Tras 39 hitos el motor está completo para producir demos FPS reales con progresión.
