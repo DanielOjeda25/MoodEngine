@@ -1563,9 +1563,23 @@ Para Hito 39 (cierre Fase 1):
 - Vec3 en Lua globals via heurística `tabla[1..3]+size==3` — si un script usa tabla con 4 floats con uno extra, se omite. Documentado.
 - Lua tables anidadas, funciones, userdata: omitidas silenciosamente. Por design.
 
-### 🚨 BUG PENDIENTE — Load Game no restaura bodies (continuar próxima sesión)
+### ✅ BUG RESUELTO — Load Game no restauraba bodies (commit `fe9dbda`)
 
 Tras testing del dev (2026-05-02), reportado: al hacer **Load Game desde el main menu, las cajas físicas NO aparecen** en sus poses guardadas — el viewport carga el mapa pero los bodies dynamic se pierden.
+
+**Causa raíz** (identificada y fixeada post-`v0.41.0-hito41`, commit `fe9dbda`):
+1. `PhysicsWorld::createBody` siempre materializaba con `Quat::sIdentity()` — rotation del Transform se ignoraba al crear el body. Aunque `applyLoadedSave` aplicara la rotation al `TransformComponent`, el body Jolt arrancaba "derecho".
+2. `applyLoadedSave` aplicaba vels al body solo si `bodyId != 0`. Si el Load corría desde el Main Menu (bodies aún no materializados), las vels del snapshot se perdían — el body al materializar arrancaba quieto.
+3. Sin warning explícito cuando un tag del save no encontraba entity en el scene → el dev no tenía pista de que sus cajas spawneadas runtime nunca llegaron al `.moodmap`.
+
+**Fixes aplicados:**
+- `PhysicsWorld::createBody` toma `rotationQuat` (default identidad). El caller (`updateRigidBodies` en Player + Editor) pasa el `t.rotationEuler` convertido a quat.
+- `RigidBodyComponent` gana `hasPendingVel` + `pendingLinearVel` + `pendingAngularVel` (runtime-only). Si `applyLoadedSave` corre con `bodyId == 0`, stash ahí. `updateRigidBodies` las aplica post-materialize y limpia.
+- Log warn por snapshot huérfano explica al dev qué hacer ("Ctrl+S en editor antes de empaquetar").
+
+**Tests headless** (`test_save_load.cpp`): 4 casos cubriendo createBody con rotation, default identidad, pendingVel aplicada, pendingVel=false. Suite **319/6613**.
+
+**Verificación visual pendiente del dev:** confirmar el flow completo Spawn → F5 → cerrar → abrir → Load Game → cajas en pose+rotation+velocidad correctas.
 
 **Fixes ya aplicados en esta sesión (post-`v0.41.0-hito41`, sin tag — work-in-progress):**
 - Cursor visible en main menu + flank-detection al salir del menú (`SDL_SetRelativeMouseMode`).
