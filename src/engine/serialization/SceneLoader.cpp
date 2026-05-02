@@ -143,6 +143,7 @@ Entity applyOneEntity(const SavedEntity& se,
             if      (s.emissionShape == "box")    em.emissionShape = ES::Box;
             else if (s.emissionShape == "sphere") em.emissionShape = ES::Sphere;
             else if (s.emissionShape == "disc")   em.emissionShape = ES::Disc;
+            else if (s.emissionShape == "cone")   em.emissionShape = ES::Cone;
             else                                   em.emissionShape = ES::Point;
             em.emissionShapeSize = s.emissionShapeSize;
             em.texture = s.texturePath.empty()

@@ -301,12 +301,16 @@ struct ParticleEmitterComponent {
     // Hito 37 C: shape de emision. Las particulas se sampean en una
     // region alrededor de la posicion del emisor segun este enum.
     // Default Point = comportamiento del Hito 29 (todas spawnean en el
-    // centro). Box, Sphere, Disc dan volumetric emit. `emissionShapeSize`
-    // se interpreta segun el shape:
+    // centro). Box, Sphere, Disc, Cone dan volumetric emit.
+    // `emissionShapeSize` se interpreta segun el shape:
     //   Box:    halfExtents iguales (cubo de lado 2*size).
     //   Sphere: radio.
     //   Disc:   radio del disco en el plano XZ local del emisor.
-    enum class EmissionShape : u8 { Point = 0, Box = 1, Sphere = 2, Disc = 3 };
+    //   Cone (Hito 39 A): radio de la base; altura del cono fija a
+    //          `emissionShapeSize`. Axis = +Y. Particula spawneada en
+    //          un disc cuya area decrece linealmente con la altura
+    //          (uniform sampling sobre el volumen del cono).
+    enum class EmissionShape : u8 { Point = 0, Box = 1, Sphere = 2, Disc = 3, Cone = 4 };
     EmissionShape emissionShape = EmissionShape::Point;
     f32           emissionShapeSize = 1.0f;
 

@@ -43,7 +43,9 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 36 — Cerrar lo que arrastra: undo del drop de textura + maxParticles undoable (u32 en variant) + on_trigger_stay (completado, tag `v0.36.0-hito36`).
 - [x] Hito 37 — Cerrar 3 medianas: PackageBuilder smart-pack + triggers detectan dynamic bodies + particle emission por shape (completado, tag `v0.37.0-hito37`).
 - [x] Hito 38 — Save/Load gameplay state (.moodsave) + Main menu del MoodPlayer (completado, tag `v0.38.0-hito38`).
-- [ ] Hito 39 — Polish final + cierre Fase 1 (TBD; tag final `v1.0.0`).
+- [x] Hito 39 — Polish final + cierre Fase 1 (completado, tags `v0.39.0-hito39` + **`v1.0.0`** = fin Fase 1).
+
+**🏁 Fase 1 del proyecto terminada.** Tag final: `v1.0.0`. Próximo paso: recapitulación del dev + planning de Fase 2 (TBD).
 
 ## Hito 1 — Shell del editor
 
@@ -1416,3 +1418,49 @@ Para Hito 39 (cierre Fase 1):
 - **Filtro raycast layer/tag genérico** (Hito 34 B).
 - **Setter runtime de friction** (Hito 34 A).
 - Otros polish chicos que aparezcan al revisar el motor entero.
+
+## Hito 39 — Polish final + cierre Fase 1 (`v1.0.0`)
+
+**Objetivo:** cerrar los polish reactivos del Hito 37 (cone, OBB, raycast layer, friction runtime) y marcar el motor como **`v1.0.0` = fin de la Fase 1 del proyecto**. Tras este hito el dev hace recapitulación + planning de Fase 2.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Cone particle shape:*
+- Nuevo `EmissionShape::Cone` con axis +Y, altura == base radio == `emissionShapeSize`.
+- Sample con `cbrt(rand)` para uniformidad sobre el volumen del cono + disc rejection sampling con radio que decrece linealmente con la altura.
+- Persistencia + Inspector combo + serialización integradas con el patrón del Hito 37 C.
+
+*Bloque B — OBB trigger:*
+- Nueva `obbContainsWorldPoint(transform, halfExtents, worldPoint)` reemplaza el `aabbContainsPoint` previo.
+- Construye matriz solo con position + rotation (ignora scale para mantener `halfExtents` como metros directos), invierte y testea el actor en espacio local.
+- Si `rotationEuler == (0,0,0)`, resultado idéntico al AABB axis-aligned anterior — back-compat verificado por todos los tests existentes del trigger system.
+
+*Bloque C — Filtro raycast layer mask:*
+- `PhysicsWorld::raycast(..., layerMask = 0xFFFFFFFFu)` con `LayerMaskFilter` subclase de `JPH::ObjectLayerFilter`. Bit 0 = Static, bit 1 = Moving.
+- Lua: 5to argumento opcional. `physics.raycast(o, d, maxDist, ignored, mask)`.
+- `IgnoreOneBodyFilter` se hizo defensivo: chequea `m_ignoredRaw == 0` antes de comparar para combinar cleanly con layerMask sin ignored body.
+
+*Bloque D — Setter runtime de friction:*
+- `PhysicsWorld::setBodyFriction(bodyId, friction)` via `BodyInterface::SetFriction` + `ActivateBody` para que los contactos vigentes recalculen.
+- El slider del Inspector ahora aplica en vivo durante Play (no requiere re-Play).
+
+*Bloque E — Tests + cierre Fase 1:*
+- 1 test nuevo en `test_particle_system.cpp` (Cone confina partículas en el volumen).
+- 1 test nuevo en `test_trigger_system.cpp` (OBB respeta rotation 45°).
+- 1 test nuevo en `test_raycast.cpp` (layerMask filtra Static vs Moving vs nada).
+- Suite total **308/6554** (antes Hito 38 cerrado: 305/5947).
+
+**Verificación visual del dev:**
+- Particle emitter con shape `Cone` + size 2.0 spawnea humo confinado en un cono recto.
+- Trigger rotado 45° respeta su orientación — el AABB visible en debug y la detección coinciden.
+- `physics.raycast(o, d, 50, 0, 1)` desde Lua solo pega paredes/piso (Static), ignora cajas dinámicas. Mask `2` revierte el comportamiento.
+- Editar friction en el Inspector durante Play → la caja física cambia su comportamiento al instante.
+
+**Siguiente paso tras completarlo:** recapitulación del dev + Fase 2 (TBD).
+
+### Pendientes menores detectados en Hito 39 (no crítico para v1.0.0)
+
+- Cone shape con direction custom: V1 hardcoded a +Y.
+- OBB Inspector preview: visualizar el OBB rotado en debug draw — hoy se ve como AABB axis-aligned.
+- Layers custom: hoy solo Static/Moving. Si emerge necesidad (ej. "solo enemies"), agregar enum + serializar.
+- Setter runtime de mass/halfExtents (no solo friction): mismo patrón.

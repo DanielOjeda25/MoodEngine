@@ -758,11 +758,11 @@ void InspectorPanel::onImGuiRender() {
             },
             "Toggle particle localSpace");
 
-        // Hito 37 C: shape de emision.
+        // Hito 37 C / 39 A: shape de emision (Point/Box/Sphere/Disc/Cone).
         using ES = ParticleEmitterComponent::EmissionShape;
-        const char* shapeNames[] = {"Point", "Box", "Sphere", "Disc"};
+        const char* shapeNames[] = {"Point", "Box", "Sphere", "Disc", "Cone"};
         int shapeIdx = static_cast<int>(em.emissionShape);
-        if (ImGui::Combo("emit shape##pe", &shapeIdx, shapeNames, 4)) {
+        if (ImGui::Combo("emit shape##pe", &shapeIdx, shapeNames, 5)) {
             em.emissionShape = static_cast<ES>(shapeIdx);
             m_editedThisFrame = true;
         }

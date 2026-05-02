@@ -309,6 +309,44 @@ TEST_CASE("TriggerSystem: bodies Static no se detectan (Hito 37 B)") {
     std::filesystem::remove(path);
 }
 
+TEST_CASE("TriggerSystem: OBB respeta rotation del Transform (Hito 39 B)") {
+    // Trigger rotado 45 deg en Y, halfExtents (0.5, 0.5, 0.5). Sin
+    // rotation, el AABB axis-aligned aceptaria un punto en (0.7, 0, 0)
+    // como AFUERA (porque |0.7| > 0.5). Con rotation 45 alrededor del Y,
+    // el OBB local corresponde a un cubo que cubre +/-0.7 en world X
+    // (la diagonal del cubo unit es sqrt(0.5)). En espacio local del
+    // trigger, ese punto ~(0.7, 0, 0) world se mapea a ~(0.495, 0, -0.495)
+    // local — adentro del [-0.5, +0.5]^3.
+    const auto path = writeTempScript(R"(
+        function on_trigger_enter()
+            hud.setHp(hud.getHp() + 100)
+        end
+    )");
+
+    Scene scene;
+    Entity trig = scene.createEntity("trigger");
+    auto& trigT = trig.getComponent<TransformComponent>();
+    trigT.position = glm::vec3(0.0f);
+    trigT.rotationEuler = glm::vec3(0.0f, 45.0f, 0.0f);  // 45 deg en Y
+    trig.addComponent<TriggerComponent>(TriggerComponent{glm::vec3(0.5f)});
+    trig.addComponent<ScriptComponent>(path.generic_string());
+
+    PhysicsWorld pw;
+    // Char en (0.7, 0, 0) world: afuera del AABB axis-aligned standard
+    // pero adentro del OBB rotado.
+    const u32 charId = pw.createCharacter(glm::vec3(0.7f, 0.0f, 0.0f),
+                                            k_charHalfHeight, k_charRadius);
+    ScriptSystem scripts;
+    TriggerSystem triggers;
+
+    GameState::hud().hp = 0;
+    scripts.update(scene, 0.016f);
+    triggers.update(scene, pw, scripts, charId);
+    CHECK(GameState::hud().hp == 100);  // OBB lo detecto
+
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("TriggerSystem: NO dispatcha stay cuando el player esta fuera (Hito 36 C)") {
     const auto path = writeTempScript(R"(
         function on_trigger_stay()

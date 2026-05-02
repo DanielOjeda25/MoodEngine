@@ -179,6 +179,7 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
                 case ParticleEmitterComponent::EmissionShape::Box:    shapeStr = "box";    break;
                 case ParticleEmitterComponent::EmissionShape::Sphere: shapeStr = "sphere"; break;
                 case ParticleEmitterComponent::EmissionShape::Disc:   shapeStr = "disc";   break;
+                case ParticleEmitterComponent::EmissionShape::Cone:   shapeStr = "cone";   break;
                 default: break;
             }
             jpe["emission_shape"]      = shapeStr;

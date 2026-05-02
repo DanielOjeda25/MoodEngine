@@ -122,6 +122,39 @@ TEST_CASE("PhysicsWorld::raycast: ignoredBodyId del unico body devuelve miss (Hi
     CHECK(hit.bodyId == 0u);
 }
 
+TEST_CASE("PhysicsWorld::raycast: layerMask filtra Static vs Moving (Hito 39 C)") {
+    PhysicsWorld pw;
+    // Static box mas cercano + Dynamic box mas lejos en la misma direccion.
+    const u32 staticId  = pw.createBody(glm::vec3(0.0f, 0.0f, -3.0f),
+                                          CollisionShape::Box,
+                                          glm::vec3(0.5f),
+                                          BodyType::Static);
+    const u32 dynamicId = pw.createBody(glm::vec3(0.0f, 0.0f, -8.0f),
+                                          CollisionShape::Box,
+                                          glm::vec3(0.5f),
+                                          BodyType::Dynamic);
+
+    // Mask = 1 (solo Static layer 0): pega al static.
+    auto hitStatic = pw.raycast(glm::vec3(0.0f),
+                                  glm::vec3(0.0f, 0.0f, -1.0f),
+                                  20.0f, 0u, /*layerMask=*/1u);
+    CHECK(hitStatic.hit);
+    CHECK(hitStatic.bodyId == staticId);
+
+    // Mask = 2 (solo Moving layer 1): se saltea el static, pega al dynamic.
+    auto hitDynamic = pw.raycast(glm::vec3(0.0f),
+                                  glm::vec3(0.0f, 0.0f, -1.0f),
+                                  20.0f, 0u, /*layerMask=*/2u);
+    CHECK(hitDynamic.hit);
+    CHECK(hitDynamic.bodyId == dynamicId);
+
+    // Mask = 0 (nada): miss.
+    auto hitNone = pw.raycast(glm::vec3(0.0f),
+                                glm::vec3(0.0f, 0.0f, -1.0f),
+                                20.0f, 0u, /*layerMask=*/0u);
+    CHECK_FALSE(hitNone.hit);
+}
+
 TEST_CASE("PhysicsWorld::raycast: ignoredBodyId == 0 (default) no filtra nada (Hito 34 B)") {
     PhysicsWorld pw;
     const u32 boxId = pw.createBody(glm::vec3(0.0f, 0.0f, -5.0f),

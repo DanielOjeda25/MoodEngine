@@ -355,6 +355,17 @@ void PhysicsWorld::addForce(u32 bodyId, const glm::vec3& force) {
     bi.AddForce(id, JPH::Vec3(force.x, force.y, force.z));
 }
 
+void PhysicsWorld::setBodyFriction(u32 bodyId, f32 friction) {
+    if (!m_impl || bodyId == 0) return;
+    JPH::BodyID id(bodyId);
+    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
+    bi.SetFriction(id, friction);
+    // Reactivar el body para que los contactos vigentes recalculen
+    // friccion en el proximo step. Sin esto un dynamic en reposo
+    // mantiene el coef anterior hasta que algo lo despierte.
+    bi.ActivateBody(id);
+}
+
 void PhysicsWorld::addImpulse(u32 bodyId, const glm::vec3& impulse) {
     if (!m_impl || bodyId == 0) return;
     JPH::BodyID id(bodyId);
@@ -475,22 +486,40 @@ bool PhysicsWorld::setCharacterShape(u32 charId,
 // Hito 34 B: filtro que descarta un body especifico durante un cast.
 // Heredado de JPH::BodyFilter — el default `ShouldCollide` devuelve true,
 // nosotros lo overrideamos para excluir `m_ignored`. Acotado a archivo.
+// Si `m_ignoredRaw == 0`, no excluimos nada (Hito 39 C combo con layer
+// filter — el caller puede querer solo layer sin ignored body).
 namespace {
 class IgnoreOneBodyFilter : public JPH::BodyFilter {
 public:
-    explicit IgnoreOneBodyFilter(JPH::BodyID id) : m_ignored(id) {}
+    explicit IgnoreOneBodyFilter(u32 ignoredRaw) : m_ignoredRaw(ignoredRaw) {}
     bool ShouldCollide(const JPH::BodyID& inBodyID) const override {
-        return inBodyID != m_ignored;
+        if (m_ignoredRaw == 0u) return true;
+        return inBodyID.GetIndexAndSequenceNumber() != m_ignoredRaw;
     }
 private:
-    JPH::BodyID m_ignored;
+    u32 m_ignoredRaw;
+};
+
+// Hito 39 C: filtro por layer mask aplicado al ObjectLayer del body.
+// Bit 0 = ObjectLayer::Static, bit 1 = ObjectLayer::Moving. Permite
+// "solo paredes" (1u), "solo dinamicos" (2u), o ambos (3u/default).
+class LayerMaskFilter : public JPH::ObjectLayerFilter {
+public:
+    explicit LayerMaskFilter(u32 mask) : m_mask(mask) {}
+    bool ShouldCollide(JPH::ObjectLayer layer) const override {
+        const u32 bit = (1u << static_cast<u32>(layer));
+        return (m_mask & bit) != 0u;
+    }
+private:
+    u32 m_mask;
 };
 } // namespace
 
 PhysicsWorld::RaycastHit PhysicsWorld::raycast(const glm::vec3& origin,
                                                 const glm::vec3& direction,
                                                 f32 maxDistance,
-                                                u32 ignoredBodyId) const {
+                                                u32 ignoredBodyId,
+                                                u32 layerMask) const {
     RaycastHit out{};
     if (!m_impl || maxDistance <= 0.0f) return out;
 
@@ -509,17 +538,16 @@ PhysicsWorld::RaycastHit PhysicsWorld::raycast(const glm::vec3& origin,
         scaled);
     JPH::RayCastResult result;
 
-    // Si el caller pidio ignorar un body, instanciamos un filtro custom.
-    // ignoredBodyId == 0 -> filtro default (no descarta nada); evita el
-    // overhead de la virtual ShouldCollide cuando no hace falta.
+    // Hito 34 B + 39 C: filtros opcionales. Default args (0 / 0xFFFFFFFF)
+    // arman filtros que aceptan todo — equivalente a no pasar nada.
+    // Cuando alguno es restrictivo, instanciamos los filtros custom.
     bool hit;
-    if (ignoredBodyId != 0) {
-        // Brace-init para evitar most-vexing-parse — sin {}, MSVC lee
-        // `const IgnoreOneBodyFilter filter(JPH::BodyID(ignoredBodyId))`
-        // como la declaracion de una funcion `filter`.
-        const IgnoreOneBodyFilter filter{JPH::BodyID(ignoredBodyId)};
+    const bool useFilters = (ignoredBodyId != 0) || (layerMask != 0xFFFFFFFFu);
+    if (useFilters) {
+        const IgnoreOneBodyFilter bodyFilter{ignoredBodyId};
+        const LayerMaskFilter     layerFilter{layerMask};
         hit = m_impl->physicsSystem->GetNarrowPhaseQuery().CastRay(
-            ray, result, {}, {}, filter);
+            ray, result, {}, layerFilter, bodyFilter);
     } else {
         hit = m_impl->physicsSystem->GetNarrowPhaseQuery().CastRay(ray, result);
     }

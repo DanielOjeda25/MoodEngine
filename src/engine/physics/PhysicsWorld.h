@@ -98,6 +98,12 @@ public:
     ///        para setear pose inicial de Dynamic antes de activarlo.
     void setBodyPosition(u32 bodyId, const glm::vec3& position);
 
+    /// @brief Hito 39 D: cambia el coef de friction de un body en runtime.
+    ///        Aplica al `BodyInterface` directo y reactiva el body para
+    ///        que las contactos vigentes recalculen friccion. Idempotente
+    ///        para bodyId invalidos.
+    void setBodyFriction(u32 bodyId, f32 friction);
+
     /// @brief Aplica una fuerza al body este frame (Dynamic). En Newton.
     void addForce(u32 bodyId, const glm::vec3& force);
 
@@ -176,10 +182,15 @@ public:
     ///        para el cast (ni cuenta como hit ni ocluye al body que esta
     ///        detras). Util para "ignore self" en armas FPS desde un
     ///        body que no quiere autodetectarse.
+    /// @param layerMask Hito 39 C. Bitfield aplicado al `ObjectLayer` del
+    ///        body candidato: bit 0 = Static, bit 1 = Moving. Default
+    ///        `0xFFFFFFFFu` = todos. Ej. `1u` solo paredes/piso, `2u`
+    ///        solo Dynamic+Kinematic, `3u` ambos (== default).
     RaycastHit raycast(const glm::vec3& origin,
                        const glm::vec3& direction,
                        f32 maxDistance,
-                       u32 ignoredBodyId = 0) const;
+                       u32 ignoredBodyId = 0,
+                       u32 layerMask = 0xFFFFFFFFu) const;
 
 private:
     struct Impl;

@@ -6,6 +6,8 @@
 #include "engine/scene/Scene.h"
 #include "systems/ScriptSystem.h"
 
+#include <glm/gtc/matrix_inverse.hpp>
+
 #include <unordered_set>
 #include <vector>
 
@@ -13,15 +15,24 @@ namespace Mood {
 
 namespace {
 
-bool aabbContainsPoint(const glm::vec3& center,
-                        const glm::vec3& halfExtents,
-                        const glm::vec3& point) {
-    return point.x >= (center.x - halfExtents.x)
-        && point.x <= (center.x + halfExtents.x)
-        && point.y >= (center.y - halfExtents.y)
-        && point.y <= (center.y + halfExtents.y)
-        && point.z >= (center.z - halfExtents.z)
-        && point.z <= (center.z + halfExtents.z);
+// Hito 39 B: testea si `worldPoint` cae en el AABB del trigger,
+// transformado al espacio LOCAL del trigger (respeta rotation +
+// translation del Transform; ignora scale para que halfExtents siga
+// siendo metros directos). Si rotationEuler == (0,0,0), el resultado
+// es identico al AABB axis-aligned anterior.
+bool obbContainsWorldPoint(const TransformComponent& tf,
+                            const glm::vec3& halfExtents,
+                            const glm::vec3& worldPoint) {
+    // Construir matrix solo con position + rotation (sin scale).
+    glm::mat4 m(1.0f);
+    m = glm::translate(m, tf.position);
+    m = glm::rotate(m, glm::radians(tf.rotationEuler.y), glm::vec3(0, 1, 0));
+    m = glm::rotate(m, glm::radians(tf.rotationEuler.x), glm::vec3(1, 0, 0));
+    m = glm::rotate(m, glm::radians(tf.rotationEuler.z), glm::vec3(0, 0, 1));
+    const glm::vec3 local = glm::vec3(glm::inverse(m) * glm::vec4(worldPoint, 1.0f));
+    return local.x >= -halfExtents.x && local.x <= halfExtents.x
+        && local.y >= -halfExtents.y && local.y <= halfExtents.y
+        && local.z >= -halfExtents.z && local.z <= halfExtents.z;
 }
 
 } // namespace
@@ -57,7 +68,7 @@ void TriggerSystem::update(Scene& scene,
                 tr.playerInside = false;
             } else {
                 const bool insideNow =
-                    aabbContainsPoint(tf.position, tr.halfExtents, playerPos);
+                    obbContainsWorldPoint(tf, tr.halfExtents, playerPos);
                 if (insideNow != tr.playerInside) {
                     tr.playerInside = insideNow;
                     scripts.dispatchEvent(e.handle(),
@@ -72,7 +83,7 @@ void TriggerSystem::update(Scene& scene,
             //    + emitir stay para los que ya estaban dentro.
             std::unordered_set<u32> insideThisFrame;
             for (const auto& be : bodyEntries) {
-                if (!aabbContainsPoint(tf.position, tr.halfExtents, be.position)) {
+                if (!obbContainsWorldPoint(tf, tr.halfExtents, be.position)) {
                     continue;
                 }
                 insideThisFrame.insert(be.entityRaw);

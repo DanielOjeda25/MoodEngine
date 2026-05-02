@@ -328,6 +328,39 @@ TEST_CASE("ParticleSystem: emit shape Sphere spawnea dentro del radio (Hito 37 C
     }
 }
 
+TEST_CASE("ParticleSystem: emit shape Cone confina particulas dentro del volumen (Hito 39 A)") {
+    Scene scene;
+    Entity e = scene.createEntity("ConeEmitter");
+    auto& tf = e.getComponent<TransformComponent>();
+    tf.position = glm::vec3(0.0f);
+    ParticleEmitterComponent em{};
+    em.emissionShape     = ParticleEmitterComponent::EmissionShape::Cone;
+    em.emissionShapeSize = 2.0f;  // base radio = 2, altura = 2
+    em.emitRate     = 200.0f;
+    em.maxParticles = 256;
+    em.lifetimeMin  = em.lifetimeMax = 100.0f;
+    em.velocityMin  = em.velocityMax = glm::vec3(0.0f);
+    em.gravityFactor = 0.0f;
+    e.addComponent<ParticleEmitterComponent>(std::move(em));
+
+    ParticleSystem ps;
+    ps.update(scene, 1.0f);
+
+    auto& got = e.getComponent<ParticleEmitterComponent>();
+    REQUIRE(got.aliveCount > 0);
+    // Cada particula debe estar dentro del cono: 0 <= y <= size,
+    // x^2 + z^2 <= (size * (1 - y/size))^2.
+    const f32 size = 2.0f;
+    for (u32 i = 0; i < got.alive.size(); ++i) {
+        if (got.alive[i] == 0) continue;
+        const glm::vec3& p = got.positions[i];
+        CHECK(p.y >= 0.0f);
+        CHECK(p.y <= size + 1e-3f);
+        const f32 maxR = size * (1.0f - p.y / size);
+        CHECK(p.x * p.x + p.z * p.z <= maxR * maxR + 1e-3f);
+    }
+}
+
 TEST_CASE("ParticleSystem: emit shape Disc mantiene Y constante (Hito 37 C)") {
     Scene scene;
     Entity e = scene.createEntity("DiscEmitter");

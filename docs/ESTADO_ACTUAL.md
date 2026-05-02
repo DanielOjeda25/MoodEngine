@@ -6,7 +6,13 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 38 cerrado.**
+**🏁 Hito 39 cerrado — Fase 1 del proyecto TERMINADA.**
+Tags: `v0.39.0-hito39` (hito) + **`v1.0.0`** (fin Fase 1).
+Verificado automático: suite doctest **308/6554** (+1 de `test_particle_system` Cone + 1 de `test_trigger_system` OBB + 1 de `test_raycast` layerMask). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: particle Cone con size 2 confina partículas en un cono recto; trigger rotado 45° respeta orientación (punto en world (0.7, 0, 0) detectado dentro del OBB pero no del AABB); raycast con mask=1 solo pega paredes Static, mask=2 solo cajas Dynamic; editar friction del Inspector durante Play cambia el deslizamiento de la caja física al instante.
+
+**Próximo paso:** recapitulación del dev + planning de Fase 2 (TBD). Tras 39 hitos el motor está completo para producir demos FPS reales con progresión.
+
+### Hito 38 (anterior, ya cerrado)
 Tag: `v0.38.0-hito38`.
 Verificado automático: suite doctest **305/5947** (+5 de `test_save_load`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: doble-click a `MoodPlayer.exe` → menu modal "MoodEngine" con New Game / Load Game / Quit. New Game → entra al juego con char en spawn default + HUD reset. Load Game → file dialog filtra `.moodsave`. F5 durante el juego → quicksave silencioso a `<exeDir>/quicksave.moodsave`. "Salir al menu" del pause overlay vuelve al menu (no cierra la app — Quit definitivo solo desde el main menu).
 

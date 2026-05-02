@@ -92,6 +92,28 @@ glm::vec3 sampleEmissionOffset(const ParticleEmitterComponent& em, u64& s) {
             }
             return glm::vec3(em.emissionShapeSize, 0.0f, 0.0f);
         }
+        case ES::Cone: {
+            // Hito 39 A. Cono con axis +Y, altura == size, base radio
+            // == size en Y=0 (tip en Y=size). Para distribucion uniforme
+            // sobre el volumen: muestrear h ~ size * cbrt(rand) (ese
+            // sesgo compensa el menor area cerca del tip), y radio
+            // permitido en esa altura es `size * (1 - h/size)`. Disc
+            // sampling estandar adentro de ese radio.
+            const f32 size = em.emissionShapeSize;
+            const f32 u01 = randUnit(s);
+            const f32 hNorm = std::cbrt(u01);          // [0..1] hacia el tip
+            const f32 h = hNorm * size;
+            const f32 maxR = size * (1.0f - hNorm);
+            // Disc sampling para el (x, z) en plano horizontal.
+            for (int it = 0; it < 8; ++it) {
+                const f32 x = randUnit(s) * 2.0f - 1.0f;
+                const f32 z = randUnit(s) * 2.0f - 1.0f;
+                if (x * x + z * z <= 1.0f) {
+                    return glm::vec3(x * maxR, h, z * maxR);
+                }
+            }
+            return glm::vec3(maxR, h, 0.0f);
+        }
     }
     return glm::vec3(0.0f);
 }
