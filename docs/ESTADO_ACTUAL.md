@@ -6,7 +6,15 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 37 cerrado.**
+**Hito 38 cerrado.**
+Tag: `v0.38.0-hito38`.
+Verificado automático: suite doctest **305/5947** (+5 de `test_save_load`). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: doble-click a `MoodPlayer.exe` → menu modal "MoodEngine" con New Game / Load Game / Quit. New Game → entra al juego con char en spawn default + HUD reset. Load Game → file dialog filtra `.moodsave`. F5 durante el juego → quicksave silencioso a `<exeDir>/quicksave.moodsave`. "Salir al menu" del pause overlay vuelve al menu (no cierra la app — Quit definitivo solo desde el main menu).
+
+**Cambio importante:** primer feature visible post-cleanup. Nuevo módulo `engine/saving/SaveLoad.{h,cpp}` con schema `.moodsave` v1 (JSON aparte del `.moodmap`: state runtime separado del level design). Persiste hud + player position + camera yaw/pitch. `MoodPlayer` ahora arranca con `m_inMainMenu = true` y un guard `gameUpdating` que detiene TODO el update del juego durante el menu (camera/physics/scripts/animation/nav/particles). MoodPlayer ahora linkea `pfd` para el file dialog.
+
+**Próximo paso:** Hito 39 (polish reactivo + tag final `v1.0.0` que cierra la Fase 1 del proyecto). Plan en `docs/PLAN_HITO39.md`.
+
+### Hito 37 (anterior, ya cerrado)
 Tag: `v0.37.0-hito37`.
 Verificado automático: suite doctest **300/5927** (+2 de `test_package_builder` smart-pack walk + 3 de `test_trigger_system` body detection + 4 de `test_particle_system` emission shapes). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: "Empaquetar proyecto" produce paquetes con solo los assets referenciados — el zip pesa fracciones de lo que pesaba con el copy entero. Caja física empujada al AABB de un trigger imprime `on_trigger_body_enter` con el body id; al sacarla `on_trigger_body_exit`. Particle emitter con shape `Sphere` distribuye partículas en un volumen real (no todas saliendo de un punto). Save/cerrar/reabrir preserva shape + size.
 

@@ -42,7 +42,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 35 — Cerrar deudas viejas: drop textura sobre material slot + 23 widgets undo + validar .obj+.mtl (fix path normalize) (completado, tag `v0.35.0-hito35`).
 - [x] Hito 36 — Cerrar lo que arrastra: undo del drop de textura + maxParticles undoable (u32 en variant) + on_trigger_stay (completado, tag `v0.36.0-hito36`).
 - [x] Hito 37 — Cerrar 3 medianas: PackageBuilder smart-pack + triggers detectan dynamic bodies + particle emission por shape (completado, tag `v0.37.0-hito37`).
-- [ ] Hito 38 — TBD.
+- [x] Hito 38 — Save/Load gameplay state (.moodsave) + Main menu del MoodPlayer (completado, tag `v0.38.0-hito38`).
+- [ ] Hito 39 — Polish final + cierre Fase 1 (TBD; tag final `v1.0.0`).
 
 ## Hito 1 — Shell del editor
 
@@ -1374,3 +1375,44 @@ Backlog scope chico-medio = limpio. Lo que queda son items con coste medio sin t
 - **Setter runtime de friction** (Hito 34 A): bajo-medio.
 - **Filtro raycast layer/tag genérico** (Hito 34 B): bajo.
 - **DragFloatRange2 widgets undoables** + combos estructurales (Hito 32-36): heredado.
+
+## Hito 38 — Save/Load gameplay state + Main menu del MoodPlayer
+
+**Objetivo:** primer hito post-cleanup que abre demos con progresión. El `MoodPlayer` arranca con un main menu y permite save/load del state.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Save/Load del gameplay state:*
+- Nuevo módulo `engine/saving/SaveLoad.{h,cpp}` con `save(SaveData, path)` + `load(path)`.
+- Schema v1 JSON `.moodsave`: version + map_path + hud (hp/ammo) + player (position + yaw + pitch). El `.moodmap` queda intocado (level design); el `.moodsave` aparte (runtime state).
+- Defensivo: load valida version + handle JSON malformado + campos faltantes caen a defaults.
+- V1 NO persiste snapshots de Dynamic bodies ni globals Lua arbitrarios (alcance limitado por scope).
+
+*Bloque B — Main menu del MoodPlayer:*
+- Nuevo flag `m_inMainMenu = true` al arranque. Mientras true, todos los updates del juego están skipped vía guard `gameUpdating` propagado a camera/physics/scripts/animation/nav/particles.
+- `drawMainMenu()` ImGui modal centrado con 3 botones: New Game (reset GameState), Load Game (`pfd::open_file` filter `.moodsave` → apply state), Quit (close app).
+- F5 durante el juego = quicksave silencioso a `<exeDir>/quicksave.moodsave`.
+- `GameOverlay` "Salir al menu" en lugar de "Salir del juego" — Quit definitivo solo desde el main menu.
+- `MoodPlayer` ahora linkea `pfd` (portable-file-dialogs) además de `mood_engine_lib`.
+
+*Bloque C — Tests + cierre:*
+- 5 tests nuevos en `test_save_load.cpp`: round-trip básico + load de archivo inexistente + load de JSON malformado + load de versión futura + campos faltantes con defaults.
+- Suite total **305/5947** (antes Hito 37 cerrado: 300/5927).
+
+**Verificación visual del dev:**
+- Doble-click a `MoodPlayer.exe` → menu modal con New/Load/Quit.
+- "New Game" → entra al juego con char en spawn default + HUD reset.
+- "Load Game" → file dialog `.moodsave`. Eligiendo uno valido, hud + char position + camera yaw/pitch se restauran.
+- F5 → log `[engine] [info] Quicksave OK -> ...`.
+- "Salir al menu" del pause overlay → vuelve al menu sin cerrar la app.
+
+**Siguiente paso tras completarlo:** Hito 39 (polish reactivo + tag final `v1.0.0`). Plan en `docs/PLAN_HITO39.md`.
+
+### Pendientes menores detectados en Hito 38
+
+Para Hito 39 (cierre Fase 1):
+- **Cone particle shape** (Hito 37 C): completar el enum.
+- **OBB trigger** (Hito 33): rotation del Transform al test AABB.
+- **Filtro raycast layer/tag genérico** (Hito 34 B).
+- **Setter runtime de friction** (Hito 34 A).
+- Otros polish chicos que aparezcan al revisar el motor entero.

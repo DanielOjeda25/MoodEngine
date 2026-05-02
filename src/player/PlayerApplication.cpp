@@ -36,6 +36,7 @@
 #include <backends/imgui_impl_opengl3.h>
 #include <backends/imgui_impl_sdl2.h>
 #include <imgui.h>
+#include <portable-file-dialogs.h>
 
 #include <algorithm>  // std::min/max para crouch lerp clamp
 #include <cmath>      // std::sin para headbob
@@ -187,6 +188,7 @@ bool PlayerApplication::tryLoadGameManifest() {
     m_map = std::move(savedMap->map);
     rebuildSceneFromMap();
     SceneLoader::applyEntitiesToScene(*savedMap, *m_scene, *m_assetManager);
+    m_currentMapPath = mapRel;  // Hito 38 B: para que SaveLoad lo persista.
 
     Log::engine()->info(
         "MoodPlayer: proyecto '{}' cargado ({} entidades persistidas)",
@@ -323,8 +325,17 @@ void PlayerApplication::processEvents() {
                    ev.key.keysym.sym == SDLK_ESCAPE) {
             // Esc: togglea pausa. El sync de cursor con SDL lo hace
             // updateCamera al detectar la transicion del flag (igual que
-            // en EditorApplication).
-            GameState::paused() = !GameState::paused();
+            // en EditorApplication). En el main menu lo ignoramos (no
+            // hay nada que pausar).
+            if (!m_inMainMenu) {
+                GameState::paused() = !GameState::paused();
+            }
+        } else if (ev.type == SDL_KEYDOWN &&
+                   ev.key.keysym.sym == SDLK_F5 &&
+                   !m_inMainMenu) {
+            // Hito 38 B: F5 = quicksave a `<exeDir>/quicksave.moodsave`.
+            // Solo durante el juego (en el menu no hay state que guardar).
+            quickSave();
         }
     }
 }
@@ -353,12 +364,22 @@ void PlayerApplication::endFrame() {
         ImGui::Image(m_sceneRenderer->viewportFb().colorAttachmentHandle(),
                       imgSize, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
 
-        // HUD + menu de pausa por encima del Image, en el mismo
-        // drawlist de la ventana. "Salir del juego" cierra la app.
-        GameOverlay::draw(ImGui::GetWindowDrawList(),
-                           imgPos.x, imgPos.y, imgSize.x, imgSize.y,
-                           "Salir del juego",
-                           [this]() { m_running = false; });
+        // Hito 38 B: si estamos en el main menu, dibujamos el menu en
+        // lugar del HUD. El viewport sigue rendereando el mapa cargado
+        // detras como background. Si !m_inMainMenu: HUD + pause overlay
+        // normal — "Salir del juego" del pause overlay vuelve al menu
+        // (no cierra la app — Quit se hace desde el main menu).
+        if (m_inMainMenu) {
+            drawMainMenu();
+        } else {
+            GameOverlay::draw(ImGui::GetWindowDrawList(),
+                               imgPos.x, imgPos.y, imgSize.x, imgSize.y,
+                               "Salir al menu",
+                               [this]() {
+                                   m_inMainMenu = true;
+                                   GameState::paused() = false;
+                               });
+        }
 
         ImGui::End();
         ImGui::PopStyleVar(2);
@@ -593,23 +614,38 @@ int PlayerApplication::run() {
         processEvents();
         beginFrame();
 
-        updateCamera(dt);
-        updateRigidBodies(dt);
+        // Hito 38 B: durante el main menu skipeamos todos los updates
+        // del juego para que el viewport quede congelado como
+        // background detras del menu (sin char movimiento ni
+        // particulas avanzando). El render del scene SI se hace mas
+        // abajo — vemos el ultimo state como wallpaper.
+        // Truco: forzamos GameState::paused() = true en menu para que
+        // los sistemas pause-aware (nav, particles) se detengan sin
+        // tocar su lógica. Los que no son pause-aware (scripts,
+        // animation) los guardamos explicitamente.
+        const bool gameUpdating = !m_inMainMenu;
+        if (gameUpdating) {
+            updateCamera(dt);
+            updateRigidBodies(dt);
+        } else {
+            GameState::paused() = true;  // freeze pause-aware systems
+        }
 
         // Scripts + animation + audio: igual orden que el editor.
         // Cuando paused, scripts y animation siguen corriendo (para
         // que un script pueda mostrar UI o ejecutar logica de menu),
         // pero el audio sigue su flow normal — TBD si se quiere mute
         // global en pausa.
-        if (m_scene && m_scriptSystem) {
+        if (gameUpdating && m_scene && m_scriptSystem) {
             m_scriptSystem->update(*m_scene, dt, m_physicsWorld.get());
         }
         // Hito 33: triggers — solo cuando el char del player ya existe.
-        if (m_scene && m_scriptSystem && m_physicsWorld && m_playerCharId != 0) {
+        if (gameUpdating && m_scene && m_scriptSystem && m_physicsWorld
+            && m_playerCharId != 0) {
             m_triggerSystem.update(*m_scene, *m_physicsWorld,
                                     *m_scriptSystem, m_playerCharId);
         }
-        if (m_scene && m_animationSystem && m_assetManager) {
+        if (gameUpdating && m_scene && m_animationSystem && m_assetManager) {
             m_animationSystem->update(*m_scene, *m_assetManager, dt);
         }
 
@@ -661,6 +697,124 @@ int PlayerApplication::run() {
     }
 
     return 0;
+}
+
+// === Hito 38 B: Main Menu ===
+
+namespace {
+// Path al exe del MoodPlayer (donde escribimos quicksave + leemos al
+// inicio). SDL_GetBasePath devuelve string allocado — wrapper RAII.
+std::filesystem::path exeBaseDir() {
+    char* p = SDL_GetBasePath();
+    if (p == nullptr) return std::filesystem::path{};
+    std::filesystem::path out(p);
+    SDL_free(p);
+    return out;
+}
+} // namespace
+
+void PlayerApplication::drawMainMenu() {
+    // Overlay translucido sobre todo el viewport para oscurecer el mundo
+    // detras del menu. ImGui drawlist directo (mismo patron que GameOverlay).
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(vp->Pos,
+                       ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y),
+                       IM_COL32(0, 0, 0, 200));
+
+    // Panel modal centrado.
+    constexpr float k_panelW = 320.0f;
+    constexpr float k_panelH = 280.0f;
+    ImGui::SetNextWindowPos(
+        ImVec2(vp->Pos.x + vp->Size.x * 0.5f - k_panelW * 0.5f,
+               vp->Pos.y + vp->Size.y * 0.5f - k_panelH * 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(k_panelW, k_panelH));
+    ImGui::Begin("##MainMenu", nullptr,
+                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                  ImGuiWindowFlags_NoSavedSettings);
+
+    ImGui::PushFont(nullptr);  // por si el dev tiene un font grande activo
+    ImGui::TextUnformatted("MoodEngine");
+    ImGui::PopFont();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    constexpr ImVec2 k_btn(-FLT_MIN, 40.0f);
+    if (ImGui::Button("New Game", k_btn)) {
+        GameState::reset();
+        m_inMainMenu = false;
+    }
+    if (ImGui::Button("Load Game", k_btn)) {
+        // pfd::open_file devuelve un vector<string>; vacio = cancel.
+        const auto results = pfd::open_file(
+            "Cargar partida",
+            (exeBaseDir()).generic_string(),
+            { "MoodSave (*.moodsave)", "*.moodsave",
+              "All Files", "*" }).result();
+        if (!results.empty()) {
+            const std::filesystem::path savePath(results[0]);
+            const auto data = SaveLoad::load(savePath);
+            if (data.has_value()) {
+                applyLoadedSave(*data);
+                m_inMainMenu = false;
+            } else {
+                Log::engine()->warn(
+                    "MainMenu: no se pudo cargar '{}' (ver warning anterior)",
+                    savePath.generic_string());
+            }
+        }
+    }
+    if (ImGui::Button("Quit", k_btn)) {
+        m_running = false;
+    }
+
+    ImGui::Spacing();
+    ImGui::TextDisabled("F5 = quicksave durante el juego");
+    ImGui::End();
+}
+
+void PlayerApplication::applyLoadedSave(const SaveLoad::SaveData& data) {
+    // V1: no cambiamos de mapa. Si el data.mapPath no coincide con el
+    // map activo, logueamos warning pero seguimos aplicando el state
+    // sobre el map actual — es responsabilidad del caller del menu
+    // pre-cargar el map correcto si tiene saves de varios niveles.
+    if (!data.mapPath.empty() && !m_currentMapPath.empty() &&
+        data.mapPath != m_currentMapPath.generic_string()) {
+        Log::engine()->warn(
+            "Load: el .moodsave referencia '{}' pero el map actual es '{}' — "
+            "se aplica el state sobre el map actual",
+            data.mapPath, m_currentMapPath.generic_string());
+    }
+
+    GameState::reset();
+    GameState::hud() = data.hud;
+
+    if (m_physicsWorld && m_playerCharId != 0) {
+        m_physicsWorld->setCharacterPosition(m_playerCharId, data.playerPosition);
+    }
+    m_playCamera.setOrientation(data.playerYaw, data.playerPitch);
+    m_playCamera.setPosition(data.playerPosition + glm::vec3(0.0f, 0.7f, 0.0f));
+}
+
+void PlayerApplication::quickSave() {
+    SaveLoad::SaveData d;
+    d.mapPath        = m_currentMapPath.generic_string();
+    d.hud            = GameState::hud();
+    if (m_physicsWorld && m_playerCharId != 0) {
+        d.playerPosition = m_physicsWorld->characterPosition(m_playerCharId);
+    } else {
+        d.playerPosition = m_playCamera.position();
+    }
+    d.playerYaw   = m_playCamera.yawDeg();
+    d.playerPitch = m_playCamera.pitchDeg();
+
+    const auto savePath = exeBaseDir() / "quicksave.moodsave";
+    if (SaveLoad::save(d, savePath)) {
+        Log::engine()->info("Quicksave OK -> '{}'", savePath.generic_string());
+    } else {
+        Log::engine()->warn("Quicksave fallo -> '{}'", savePath.generic_string());
+    }
 }
 
 } // namespace Mood

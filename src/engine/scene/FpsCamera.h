@@ -37,6 +37,15 @@ public:
     ///        sincronizar la camara con el `JPH::CharacterVirtual` post-step.
     void setPosition(const glm::vec3& pos) { m_position = pos; }
 
+    /// @brief Hito 38 A: setea yaw/pitch directos. La usa SaveLoad para
+    ///        restaurar la orientacion al cargar un `.moodsave`.
+    void setOrientation(float yawDeg, float pitchDeg) {
+        m_yawDeg = yawDeg;
+        m_pitchDeg = pitchDeg;
+    }
+    float yawDeg() const { return m_yawDeg; }
+    float pitchDeg() const { return m_pitchDeg; }
+
     glm::vec3 position() const { return m_position; }
     glm::vec3 forward() const;
     glm::mat4 viewMatrix() const;

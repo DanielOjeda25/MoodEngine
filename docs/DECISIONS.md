@@ -2669,3 +2669,65 @@ Sin bumpear schema del package — es cambio del builder, el runtime que lee no 
 
 **Revisar si:** aparece un profile que muestra emit cost dominante. Improbable — particles spawnean ~60-200/sec, no 60000.
 
+## 2026-05-02: `.moodsave` separado del `.moodmap` — runtime state vs level design
+
+**Contexto:** Hito 38 A. Para Save/Load del gameplay state había dos opciones: extender el `.moodmap` con un campo `runtime_state` o crear un formato separado. El `.moodmap` describe nivel design (paredes, mesh renderers, scripts asignados, parametros configurados), no estado de juego (hp/ammo, char pos, vidas restantes).
+
+**Decisión:** formato `.moodsave` aparte del `.moodmap`. Schema v1:
+```json
+{
+  "version": 1,
+  "map_path": "maps/level1.moodmap",
+  "hud": { "hp": 75, "ammo": 22 },
+  "player": { "position": [x, y, z], "yaw": 45.0, "pitch": -10.0 }
+}
+```
+
+V1 NO persiste:
+- Snapshots de Dynamic bodies (Jolt body pose + linear/angular vel) — respawnean en su Transform original al cargar el map.
+- Globals Lua (variables top-level del script) — el dev puede declararlas con `engine.exposed` y se persisten en el `.moodmap` (mecanismo del Hito 24).
+
+**Razones:**
+- **Separación de concerns**: el `.moodmap` es level design, intocado por el gameplay. El `.moodsave` es state mutable. Mezclarlos significaría que cada save sobreescribe el level design — inaceptable.
+- **Schema mas simple**: el `.moodmap` ya tiene v9; agregarle un campo `runtime_state` complicaría el formato. Un archivo aparte mantiene cada uno con responsibility única.
+- **Cero impacto en `.moodmap` existing**: los hitos 1-37 dejaron al `.moodmap` con un schema cerrado. No queremos bumpearlo a v10 solo por save/load.
+- **`map_path` en el `.moodsave`**: permite (futuro) que un save recuerde de qué map vino — para v1 asumimos que el caller del Load ya tiene el map activo correcto, pero el campo está para evolución.
+- **Snapshots de Jolt bodies aceptado fuera de scope**: capturar `BodyInterface::GetWorldPosition` + `GetLinearVelocity` por body es realizable pero requiere serializar el `bodyId` (volátil) o el TAG de la entidad (estable). Para v1 con el patrón "mapas tipo Wolfenstein" donde los bodies dinámicos son cajas escenográficas, perderlos al load es aceptable.
+
+**Alternativas consideradas:**
+- **Extender `.moodmap` con runtime_state**: rechazado por mezcla de concerns.
+- **Binary format**: rechazado para v1 — JSON es debuggable, los `.moodsave` no son hot path.
+- **`.moodsave` como ZIP con multiple archivos** (uno por sistema): overengineering para v1.
+
+**Trade-offs:**
+- Se pierde: state de Dynamic bodies + Lua globals arbitrarias. Aceptado.
+- Se gana: schema simple, level design intocado, evolución incremental (futuras versiones pueden agregar campos opcionales sin bumpe mayor).
+
+**Revisar si:** un demo necesita explicitamente preservar la pose de cajas físicas. Entonces agregar `bodies` array al schema y bumpear a v2.
+
+## 2026-05-02: Main menu del MoodPlayer con `m_inMainMenu` flag + `gameUpdating` propagado a sistemas
+
+**Contexto:** Hito 38 B. Para que el MoodPlayer arranque con un main menu en lugar de directo al juego, había dos approaches: (1) un enum `GameMode { MainMenu, Playing, Paused }` con state machine clara, (2) un bool flag simple `m_inMainMenu` con guards en cada sistema.
+
+**Decisión:** opción 2 — flag simple `bool m_inMainMenu = true` en `PlayerApplication`. En el `run()` loop, antes de cada update de sistema, se chequea un local `const bool gameUpdating = !m_inMainMenu`. Si `gameUpdating`, los sistemas avanzan; si no, todo se detiene (camera, physics, scripts, animation, nav, particles).
+
+Adicionalmente, durante el menu se fuerza `GameState::paused() = true` para que los sistemas pause-aware (nav, particles) se detengan via su guard existente — cero código extra.
+
+**Razones:**
+- **State machine es overkill para 2 estados**: el bool es claro al lectura. Un enum agregaría boilerplate (asignaciones, switch en cada lugar) sin info adicional.
+- **Pausa "Salir al menu" en lugar de "Quit"**: el flow desde el juego es Esc → pause → "Salir al menu" (regresa a menu sin destruir el state) → desde el menu, Quit cierra la app. Refleja el patrón de Source/Half-Life: el juego sigue corriendo en background del menu, listo para resume.
+- **`gameUpdating` propagado a TODOS los sistemas**: garantiza que durante el menu nada cambia. Si dejamos solo cámara skipped pero scripts corren, un script con timer podría avanzar el HP. Mejor freezing total.
+- **GameState::paused() = true durante menu**: hack elegante. Sin esto habría que duplicar guards en sistemas pause-aware (nav, particles) que ya tienen `if (!GameState::paused())`. Forzar el flag desde fuera del menu evita ese refactor.
+- **Wallpaper visual del último frame del juego**: el SceneRenderer sigue renderizando el último estado, dando ambiente. Más vivo que un menu sobre fondo negro.
+
+**Alternativas consideradas:**
+- **Enum `GameMode`**: rechazado por overkill.
+- **Stop the SceneRenderer too**: el viewport quedaría negro. Menos atractivo visualmente.
+- **No re-usar GameState::paused()**: implicaría duplicar guards en cada sistema. Peor.
+
+**Trade-offs:**
+- Se pierde: claridad de "modo claro" tipo enum. Aceptado — el bool con un comentario es suficiente.
+- Se gana: cero refactor de sistemas existentes, flag testeable en 1 línea, viewport como wallpaper.
+
+**Revisar si:** aparece un tercer modo "loading" entre menu y playing (ej. progress bar de carga de assets pesados). Entonces sí, migrar a enum.
+

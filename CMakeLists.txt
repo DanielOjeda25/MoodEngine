@@ -265,6 +265,8 @@ add_library(mood_engine_lib STATIC
 
     src/engine/physics/PhysicsWorld.cpp
 
+    src/engine/saving/SaveLoad.cpp
+
     src/engine/serialization/EntitySerializer.cpp
     src/engine/serialization/SceneLoader.cpp
     src/engine/serialization/SceneSerializer.cpp
@@ -425,6 +427,7 @@ add_executable(MoodPlayer
 
 target_link_libraries(MoodPlayer PRIVATE
     mood_engine_lib
+    pfd  # Hito 38 B: file dialogs para Save/Load Game
 )
 
 mood_set_compiler_warnings(MoodPlayer)

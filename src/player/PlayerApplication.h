@@ -13,12 +13,14 @@
 
 #include "core/Time.h"
 #include "core/Types.h"
+#include "engine/saving/SaveLoad.h"  // SaveData (Hito 38)
 #include "engine/scene/FpsCamera.h"
 #include "engine/world/GridMap.h"
 #include "systems/TriggerSystem.h"
 
 #include <glm/vec3.hpp>
 
+#include <filesystem>
 #include <memory>
 
 namespace Mood {
@@ -122,6 +124,28 @@ private:
 
     Timer m_deltaTimer;
     bool  m_running = true;
+
+    // Hito 38 B: Main Menu state. true = mostrar New/Load/Quit;
+    // false = juego corriendo. La transicion main_menu → game se gatilla
+    // desde los botones del menu o tras un Load exitoso.
+    bool m_inMainMenu = true;
+    // Path al `.moodmap` activo. Se setea en tryLoadGameManifest +
+    // buildTestMap; lo persiste el SaveLoad::save y lo lee Load Game
+    // para verificar coincidencia (v1: no cambia de mapa, asume que
+    // el save coincide con el map actualmente cargado).
+    std::filesystem::path m_currentMapPath;
+    /// Hito 38 B: render del Main Menu sobre el viewport. Tres botones:
+    /// New Game (sale del menu y resetea GameState), Load Game (pfd
+    /// dialog .moodsave + apply state), Quit (m_running=false).
+    void drawMainMenu();
+    /// Hito 38 B: aplica un SaveData al estado runtime (hud + char pos +
+    /// camara yaw/pitch). Asume que el map actualmente cargado coincide
+    /// con `data.mapPath` (no cambia de mapa).
+    void applyLoadedSave(const SaveLoad::SaveData& data);
+    /// Hito 38 B: arma un SaveData con el state actual y lo escribe a
+    /// `<exeDir>/quicksave.moodsave` (sin file dialog — F5 keyboard
+    /// shortcut). Loguea el resultado.
+    void quickSave();
 };
 
 } // namespace Mood
