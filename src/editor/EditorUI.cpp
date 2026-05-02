@@ -35,8 +35,9 @@ void EditorUI::pruneMissingRecents() {
 
 EditorUI::EditorUI() {
     m_panels = {&m_viewport, &m_hierarchy, &m_inspector, &m_assetBrowser,
-                &m_console, &m_luaApi, &m_scriptEditor};
-    m_scriptEditor.visible = false; // por defecto oculto; togglear en menu Ver
+                &m_console, &m_luaApi, &m_scriptEditor, &m_materialEditor};
+    m_scriptEditor.visible   = false; // por defecto oculto; togglear en menu Ver
+    m_materialEditor.visible = false; // Hito 42: idem.
 }
 
 void EditorUI::draw(bool& requestQuit) {

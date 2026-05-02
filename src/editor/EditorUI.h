@@ -14,6 +14,7 @@
 #include "editor/panels/HierarchyPanel.h"
 #include "editor/panels/LuaApiPanel.h"
 #include "editor/panels/InspectorPanel.h"
+#include "editor/panels/MaterialEditorPanel.h"  // Hito 42
 #include "editor/panels/ScriptEditorPanel.h"
 #include "editor/panels/ViewportPanel.h"
 #include "engine/scene/Entity.h"
@@ -63,6 +64,10 @@ public:
     /// @brief Acceso al panel Inspector (se le inyecta el Scene para
     ///        conocer la entidad seleccionada y editar sus componentes).
     InspectorPanel& inspector() { return m_inspector; }
+
+    /// @brief Hito 42: panel dedicado de edicion de materiales (drop
+    ///        textures + sliders sin necesidad de tener entidad seleccionada).
+    MaterialEditorPanel& materialEditor() { return m_materialEditor; }
 
     /// @brief Hito 27: HistoryStack del editor inyectado desde
     ///        EditorApplication. La MenuBar lo usa para los items
@@ -303,6 +308,7 @@ private:
     ConsolePanel m_console;
     LuaApiPanel m_luaApi;
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
+    MaterialEditorPanel m_materialEditor;  // Hito 42
     Entity m_selectedEntity;
 
     // Hito 27: punter inyectado por EditorApplication para que MenuBar

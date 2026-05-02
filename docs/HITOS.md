@@ -45,8 +45,10 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 38 — Save/Load gameplay state (.moodsave) + Main menu del MoodPlayer (completado, tag `v0.38.0-hito38`).
 - [x] Hito 39 — Polish final + cierre Fase 1 (completado, tags `v0.39.0-hito39` + **`v1.0.0`** = fin Fase 1).
 - [x] Hito 40 — Cerrar pendientes chicos/medios post-v1.0.0: cone axis, OBB debug, runtime halfExtents, DragRange2/combos undo, char windows per-proyecto, sort stable bucket-Z, localSpace worldMatrix (completado, tag `v0.40.0-hito40`).
-- [x] Hito 41 — Save/Load extendido: snapshots Dynamic bodies (pose + vel) + Lua globals filtradas (completado, tag `v0.41.0-hito41`).
-- [ ] Hito 42 — Editor de materiales visual (TBD).
+- [x] Hito 41 — Save/Load extendido: snapshots Dynamic bodies (pose + vel) + Lua globals filtradas (completado, tags `v0.41.0-hito41` + `v0.41.1-hito41-final` con fix-ups del bug Load Game).
+- [x] Hito 42 — Editor de materiales visual lite: panel dedicado con combo + drop slots + sliders (completado, tag `v0.42.0-hito42`). Preview esférico + node-graph quedan para Fase 2.
+
+**🏁 Backlog post-`v1.0.0` cerrado (Hitos 40-42).** Próximo paso: recapitulación del dev + planning de Fase 2 (TBD).
 
 **🏁 Fase 1 cerrada con `v1.0.0`. Hito 40 cierra los pendientes chicos/medios pre-Fase 2.** Próximo paso: Hitos 41+42 (los 2 grandes restantes) → recapitulación del dev → Fase 2 (TBD).
 
@@ -1600,3 +1602,42 @@ Tras testing del dev (2026-05-02), reportado: al hacer **Load Game desde el main
 4. **Considerar si Load Game debe RECARGAR el mapa** antes de aplicar snapshots (mismo flujo que New Game + apply state). Hoy asume que el mapa ya está cargado — falla si difiere del save.
 
 **Punto de entrada para retomar**: `PlayerApplication::applyLoadedSave` en `src/player/PlayerApplication.cpp` + handler "Load Game" en `drawMainMenu`.
+
+**Update 2026-05-02 — bug RESUELTO** (`v0.41.1-hito41-final`): el fix profesional fue extender `PhysicsWorld::createBody` con un parámetro `rotationQuat` (default identidad) + agregar campos `hasPendingVel + pendingLinearVelocity + pendingAngularVelocity` al `RigidBodyComponent`. Cuando `applyLoadedSave` corre antes de que los bodies estén materializados (caso "Load Game desde main menu inicial"), las velocidades quedan stash en el componente. `updateRigidBodies` materializa el body en su próximo frame leyendo Transform actualizado + propagando rotation al body via `createBody` + aplicando las pending velocities. 4 tests nuevos en `test_save_load.cpp` cubren el flow completo.
+
+## Hito 42 — Editor de materiales visual (versión lite)
+
+**Objetivo:** último item grande del backlog post-`v1.0.0`. Versión lite de un editor de materiales standalone — el dev puede tweakear materiales sin requerir entidad seleccionada en el viewport. Sin preview esférico ni node-graph (esos quedan para Fase 2).
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — `MaterialEditorPanel`:*
+- Nuevo panel dock-able registrado en `EditorUI::m_panels`. Default `visible=false` (togglear desde menú "Ver > Material Editor").
+- Combo con todos los `MaterialAsset` del AssetManager.
+- Sliders escalares idénticos al Inspector: `albedoTint` (ColorEdit3), `metallic`, `roughness`, `ao` (SliderFloat).
+- 4 drop slots para texturas (`albedo`, `metallic_roughness`, `normal`, `ao`) reusando el payload `MOOD_TEXTURE_ASSET` del AssetBrowser. Botón `X` por slot para limpiar la asignación.
+- `setAssetManager` para inyección desde `EditorApplication` post-init.
+
+*Bloque B — Integración:*
+- Registro en `EditorUI::m_panels` → menú "Ver" lo lista automáticamente.
+- `EditorApplication::initEditor` (post-init) llama `m_ui.materialEditor().setAssetManager(...)`.
+- `MaterialEditorPanel.cpp` agregado al CMakeLists del MoodEditor target.
+
+*Bloque C — Cierre:*
+- Suite total **319/6613** (sin tests nuevos — la lógica del panel es puramente UI ImGui que valida visualmente el dev).
+- Tag `v0.42.0-hito42`.
+
+**Verificación visual del dev:**
+- Menú "Ver > Material Editor" muestra/oculta el panel.
+- Combo lista todos los materiales registrados (defaults + `.material` cargados del repo).
+- Drop de textura desde el Asset Browser sobre un slot → cambio en vivo en cualquier entidad que use ese material.
+- Sliders afectan render en tiempo real.
+
+**Siguiente paso:** **🎬 RECAPITULACIÓN DEL DEV** + planning de Fase 2 (TBD).
+
+### Pendientes menores detectados en Hito 42 (Fase 2)
+
+- **Preview esférico off-screen** dentro del panel: requiere FBO chico + mini-scene + render dedicado. El dev firmó "a futuro deberemos mejorar".
+- **Node graph** (estilo Substance/UE): feature mayor con su propio hito.
+- **Save As `.material`** desde el panel para crear materiales nuevos sin tocar archivos.
+- **Undo/Redo en el panel**: el Inspector tiene undo desde Hito 32, este panel no — diff intencional para v1 lite.

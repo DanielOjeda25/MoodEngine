@@ -202,6 +202,7 @@ EditorApplication::EditorApplication() {
     m_ui.hierarchy().setEditorUi(&m_ui);
     m_ui.inspector().setEditorUi(&m_ui);
     m_ui.inspector().setAssetManager(m_assetManager.get());
+    m_ui.materialEditor().setAssetManager(m_assetManager.get());  // Hito 42
 
     buildInitialTestMap();
     rebuildSceneFromMap();

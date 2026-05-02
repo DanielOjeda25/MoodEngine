@@ -6,7 +6,18 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 41 cerrado — Save/Load extendido (snapshots Jolt + Lua globals).**
+**🏁 Hitos 40-42 cerrados (backlog post-`v1.0.0` limpio).**
+Tags: `v0.40.0-hito40` + `v0.41.0-hito41` + `v0.41.1-hito41-final` (fix profesional del bug Load Game) + `v0.42.0-hito42`.
+Verificado automático: suite doctest **319/6613**. Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo en sesión interactiva: Save/Load full cycle funciona (cajas vuelven a poses + velocity exactas, sin drift entre saves), F5 quicksave + F6 save as con dialog, main menu con cursor + estilo dark, "New Game" recarga mapa fresco, "Salir al menu" desde pause overlay. Material Editor panel disponible en menú "Ver".
+
+**Cambio importante:** completamos los 3 hitos post-`v1.0.0` que cierran el backlog acumulado de scope chico-medio + 2 features grandes:
+- **Hito 40**: 11/14 bloques de polish/cleanup (cone axis, OBB debug, runtime halfExtents, DragRange2/combos undo, char windows per-proyecto, sort stable, localSpace worldMatrix).
+- **Hito 41**: Save/Load extendido con snapshots Jolt + Lua globals filtradas. Bug del Load Game encontrado en testing del dev y resuelto profesionalmente con `createBody(rotationQuat)` + `pendingVel` en `RigidBodyComponent`.
+- **Hito 42**: Material Editor panel lite (sin preview esférico ni node-graph — Fase 2).
+
+**Próximo paso:** **🎬 RECAPITULACIÓN DEL DEV** sobre el estado del motor. Después: planning de Fase 2 (TBD). El motor está completo para producir demos FPS reales con progresión, save/load, triggers, particles, animation, scripts, raycasts, undo/redo, paquetes standalone.
+
+### Hito 41 (anterior, ya cerrado)
 Tag: `v0.41.0-hito41`.
 Verificado automático: suite doctest **315/6591** (+3 tests `test_save_load`: round-trip bodies + round-trip script globals + back-compat v1). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: F5 con cajas físicas empujadas → load restaura pose + velocity exactas; script con globals captura/restaura correcto; archivos `.moodsave` v1 cargan sin errores ni warnings (back-compat).
 

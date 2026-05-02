@@ -2731,3 +2731,35 @@ Adicionalmente, durante el menu se fuerza `GameState::paused() = true` para que 
 
 **Revisar si:** aparece un tercer modo "loading" entre menu y playing (ej. progress bar de carga de assets pesados). Entonces sí, migrar a enum.
 
+## 2026-05-02: Material Editor V1 lite (sin preview esférico, sin node-graph)
+
+**Contexto:** Hito 42. El editor de materiales es el último item grande del backlog post-`v1.0.0`. Hay dos extremos: (a) versión completa estilo Substance/UE con node-graph + preview esférico off-screen + save-as flow — feature mayor de 1-2 hitos enteros con risk visual; (b) versión lite que se monta sobre lo que ya tiene el Inspector — panel dedicado, mismas capabilities pero standalone.
+
+**Decisión:** **versión lite (B)**.
+
+`MaterialEditorPanel`:
+- Combo con todos los `MaterialAsset` del AssetManager.
+- Sliders escalares idénticos a los del Inspector (`albedoTint`, `metallic`, `roughness`, `ao`).
+- 4 drop slots para texturas (`MOOD_TEXTURE_ASSET` payload del AssetBrowser, mismo del Hito 35 A).
+- Botón `X` por slot para limpiar.
+- **NO** preview esférico off-screen.
+- **NO** node-graph.
+- **NO** undo/redo del panel.
+
+**Razones:**
+- **El Inspector ya cubre el 90%**: el dev ya puede editar sliders + drop texturas via Inspector cuando una entidad con MeshRenderer está seleccionada. El panel dedicado solo elimina la fricción "necesito una entidad" — no agrega capacidades nuevas.
+- **Preview esférico requiere FBO + mini-scene**: render off-screen con un viewport chico embebido, una esfera con el material aplicado, una luz, etc. Posible pero ~3-4 horas de implementación + risk de bugs visuales (alpha, IBL state shared con scene principal). Para v1 standalone, mostrar el preview en el viewport principal (asignar el material a una entidad) es suficiente.
+- **Node-graph es feature mayor**: 1-2 hitos enteros (parsing + UI nodos + connections + compile a shader template). Risk de bugs en muchos lados. El dev firmó "a futuro deberemos mejorar todo eso si o si" — explicita que el lite es transitorio.
+- **Sin undo en este panel** (Inspector sí tiene undo desde Hito 32-36): diff intencional. Si el panel también empuja al stack, los edits del Inspector + edits del MaterialEditor se mezclan en un mismo history sin contexto. Aceptable para v1 — el dev edita en uno O el otro a la vez.
+
+**Alternativas consideradas:**
+- **Versión completa node-graph**: rechazada por scope. Hito propio en Fase 2.
+- **Reutilizar el Inspector con un "Material focus mode"** (oculta el resto de componentes): rechazada — el Inspector sigue siendo "edit la entidad seleccionada"; el MaterialEditor es "edit material standalone".
+- **Preview esférico inline**: rechazado para v1 (scope), aceptado para Fase 2.
+
+**Trade-offs:**
+- Se pierde: preview visual inline, node-graph workflow, undo en el panel.
+- Se gana: standalone editing, scope chico, sin risk visual, dock-able como cualquier otro panel.
+
+**Revisar si:** un demo concreto requiere node-graph (probable: cuando el dev cree shaders custom). Entonces sí, hito propio para implementarlo.
+
