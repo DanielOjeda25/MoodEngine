@@ -14,6 +14,7 @@
 // globales del script no cruzan entre entidades).
 
 #include "core/Types.h"
+#include "engine/scripting/ExposedProperty.h"  // ExposedValue (Hito 41 B)
 
 #include <entt/entt.hpp>
 #include <sol/sol.hpp>
@@ -63,11 +64,32 @@ public:
     ///        sin args.
     void dispatchEvent(entt::entity entity, const char* eventName, u32 arg);
 
+    /// @brief Hito 41 B: snapshot de globals top-level del sol::state
+    ///        de la entidad, filtrando por tipos del `ExposedValue`
+    ///        variant (number, bool, string, vec3 array de 3 floats).
+    ///        Tablas, funciones, userdata se omiten silencio. Si la
+    ///        entidad no tiene state cargado, devuelve mapa vacio.
+    std::unordered_map<std::string, ExposedValue> captureGlobals(
+        entt::entity entity) const;
+
+    /// @brief Hito 41 B: restaura globals desde un mapa al sol::state
+    ///        de la entidad. Si el state aun no existe (ej. el script
+    ///        todavia no se cargo), guarda los pendings y los aplica
+    ///        en el proximo update() tras la primera carga.
+    void restoreGlobals(entt::entity entity,
+                         const std::unordered_map<std::string, ExposedValue>& globals);
+
 private:
     // Mapa entidad -> su sol::state persistente. Usamos unordered_map para
     // que la direccion del sol::state no se invalide al agregar otros
     // (ownership via unique_ptr evita mover el state).
     std::unordered_map<entt::entity, std::unique_ptr<sol::state>> m_states;
+
+    // Hito 41 B: globals pendientes de aplicar cuando un sol::state
+    // aun no existe al hacer restoreGlobals (ej. el script no se cargo
+    // todavia). Se aplican en el proximo update() post-load.
+    std::unordered_map<entt::entity,
+                        std::unordered_map<std::string, ExposedValue>> m_pendingGlobals;
 
     // Hot-reload: cache de mtime por path para detectar cambios. Compartido
     // entre entidades que apunten al mismo .lua, pero cada una recarga sobre

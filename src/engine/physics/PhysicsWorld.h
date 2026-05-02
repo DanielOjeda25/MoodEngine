@@ -17,6 +17,7 @@
 #include "core/Types.h"
 
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>  // Hito 41 C: setBodyPositionRot quat
 
 #include <memory>
 
@@ -133,6 +134,21 @@ public:
 
     /// @brief Aplica una fuerza al body este frame (Dynamic). En Newton.
     void addForce(u32 bodyId, const glm::vec3& force);
+
+    /// @brief Hito 41 C: getter/setter de velocidades para snapshot
+    ///        Save/Load. Sin lock — Jolt expone API thread-safe.
+    glm::vec3 bodyLinearVelocity(u32 bodyId) const;
+    glm::vec3 bodyAngularVelocity(u32 bodyId) const;
+    void setBodyLinearVelocity(u32 bodyId, const glm::vec3& v);
+    void setBodyAngularVelocity(u32 bodyId, const glm::vec3& w);
+
+    /// @brief Hito 41 A: getter/setter combinado de pose. Position
+    ///        + rotation como quaternion (X, Y, Z, W). Save/Load lo
+    ///        usa para restaurar bodies dynamic con su orientation
+    ///        post-fisica.
+    glm::vec3 bodyPositionRot(u32 bodyId, glm::vec4& outQuatXYZW) const;
+    void setBodyPositionRot(u32 bodyId, const glm::vec3& pos,
+                              const glm::vec4& quatXYZW);
 
     /// @brief Aplica un impulso instantaneo (no acumula por dt).
     void addImpulse(u32 bodyId, const glm::vec3& impulse);

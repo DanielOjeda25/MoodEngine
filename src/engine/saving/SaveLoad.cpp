@@ -9,7 +9,32 @@
 namespace Mood::SaveLoad {
 
 namespace {
-constexpr int k_supportedVersion = 1;
+constexpr int k_supportedVersion = 2;  // Hito 41: bumpe v1 -> v2
+
+// Convierte un ExposedValue al primitive JSON correspondiente.
+// Reusamos el patron del EntitySerializer (Hito 24) — lo duplicamos
+// porque el include cruza modules. Si crece, extraer a JsonHelpers.
+nlohmann::json exposedValueToJson(const ExposedValue& v) {
+    return std::visit([](auto&& val) -> nlohmann::json {
+        using T = std::decay_t<decltype(val)>;
+        if constexpr (std::is_same_v<T, glm::vec3>) {
+            return nlohmann::json(std::vector<f32>{val.x, val.y, val.z});
+        } else {
+            return nlohmann::json(val);
+        }
+    }, v);
+}
+
+std::optional<ExposedValue> jsonToExposedValue(const nlohmann::json& jv) {
+    if (jv.is_boolean()) return ExposedValue{jv.get<bool>()};
+    if (jv.is_number())  return ExposedValue{jv.get<f32>()};
+    if (jv.is_string())  return ExposedValue{jv.get<std::string>()};
+    if (jv.is_array() && jv.size() == 3) {
+        return ExposedValue{glm::vec3(
+            jv[0].get<f32>(), jv[1].get<f32>(), jv[2].get<f32>())};
+    }
+    return std::nullopt;
+}
 } // namespace
 
 bool save(const SaveData& d, const std::filesystem::path& path) {
@@ -23,6 +48,39 @@ bool save(const SaveData& d, const std::filesystem::path& path) {
         d.playerPosition.x, d.playerPosition.y, d.playerPosition.z};
     j["player"]["yaw"]   = d.playerYaw;
     j["player"]["pitch"] = d.playerPitch;
+
+    // Hito 41 A: snapshots de Dynamic bodies.
+    if (!d.bodies.empty()) {
+        j["bodies"] = nlohmann::json::array();
+        for (const auto& b : d.bodies) {
+            nlohmann::json jb;
+            jb["tag"]               = b.entityTag;
+            jb["position"]          = std::vector<f32>{
+                b.position.x, b.position.y, b.position.z};
+            jb["rotation"]          = std::vector<f32>{
+                b.rotationQuat.x, b.rotationQuat.y,
+                b.rotationQuat.z, b.rotationQuat.w};
+            jb["linear_velocity"]   = std::vector<f32>{
+                b.linearVelocity.x, b.linearVelocity.y, b.linearVelocity.z};
+            jb["angular_velocity"]  = std::vector<f32>{
+                b.angularVelocity.x, b.angularVelocity.y, b.angularVelocity.z};
+            j["bodies"].push_back(std::move(jb));
+        }
+    }
+
+    // Hito 41 B: Lua script globals filtradas.
+    if (!d.scriptGlobals.empty()) {
+        j["script_globals"] = nlohmann::json::array();
+        for (const auto& sg : d.scriptGlobals) {
+            nlohmann::json jsg;
+            jsg["path"]    = sg.scriptPath;
+            jsg["globals"] = nlohmann::json::object();
+            for (const auto& [name, value] : sg.globals) {
+                jsg["globals"][name] = exposedValueToJson(value);
+            }
+            j["script_globals"].push_back(std::move(jsg));
+        }
+    }
 
     std::error_code ec;
     fs::create_directories(path.parent_path(), ec);
@@ -90,6 +148,63 @@ std::optional<SaveData> load(const std::filesystem::path& path) {
         }
         d.playerYaw   = jp.value("yaw",   d.playerYaw);
         d.playerPitch = jp.value("pitch", d.playerPitch);
+    }
+
+    // Hito 41 A: bodies array (opcional — v1 no lo tiene).
+    if (j.contains("bodies") && j.at("bodies").is_array()) {
+        for (const auto& jb : j.at("bodies")) {
+            BodySnapshot b;
+            b.entityTag = jb.value("tag", std::string{});
+            if (jb.contains("position") && jb.at("position").is_array()
+                && jb.at("position").size() == 3) {
+                b.position = glm::vec3(
+                    jb.at("position")[0].get<f32>(),
+                    jb.at("position")[1].get<f32>(),
+                    jb.at("position")[2].get<f32>());
+            }
+            if (jb.contains("rotation") && jb.at("rotation").is_array()
+                && jb.at("rotation").size() == 4) {
+                b.rotationQuat = glm::vec4(
+                    jb.at("rotation")[0].get<f32>(),
+                    jb.at("rotation")[1].get<f32>(),
+                    jb.at("rotation")[2].get<f32>(),
+                    jb.at("rotation")[3].get<f32>());
+            }
+            if (jb.contains("linear_velocity") && jb.at("linear_velocity").is_array()
+                && jb.at("linear_velocity").size() == 3) {
+                b.linearVelocity = glm::vec3(
+                    jb.at("linear_velocity")[0].get<f32>(),
+                    jb.at("linear_velocity")[1].get<f32>(),
+                    jb.at("linear_velocity")[2].get<f32>());
+            }
+            if (jb.contains("angular_velocity") && jb.at("angular_velocity").is_array()
+                && jb.at("angular_velocity").size() == 3) {
+                b.angularVelocity = glm::vec3(
+                    jb.at("angular_velocity")[0].get<f32>(),
+                    jb.at("angular_velocity")[1].get<f32>(),
+                    jb.at("angular_velocity")[2].get<f32>());
+            }
+            if (!b.entityTag.empty()) d.bodies.push_back(std::move(b));
+        }
+    }
+
+    // Hito 41 B: script_globals array (opcional).
+    if (j.contains("script_globals") && j.at("script_globals").is_array()) {
+        for (const auto& jsg : j.at("script_globals")) {
+            ScriptGlobalsSnapshot sg;
+            sg.scriptPath = jsg.value("path", std::string{});
+            if (jsg.contains("globals") && jsg.at("globals").is_object()) {
+                for (const auto& item : jsg.at("globals").items()) {
+                    if (auto opt = jsonToExposedValue(item.value());
+                        opt.has_value()) {
+                        sg.globals[item.key()] = std::move(*opt);
+                    }
+                }
+            }
+            if (!sg.scriptPath.empty()) {
+                d.scriptGlobals.push_back(std::move(sg));
+            }
+        }
     }
 
     Log::engine()->info("SaveLoad::load: '{}' OK (map='{}', hp={}, ammo={})",

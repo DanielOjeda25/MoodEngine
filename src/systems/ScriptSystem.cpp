@@ -7,6 +7,8 @@
 #include "engine/scripting/LuaBindings.h"
 
 #include <system_error>
+#include <type_traits>
+#include <unordered_set>
 
 namespace Mood {
 
@@ -52,6 +54,14 @@ void ScriptSystem::update(Scene& scene, f32 dt, PhysicsWorld* physics) {
             if (!ec) m_mtimes[sc.path] = mt;
 
             Log::script()->info("Cargado '{}'", sc.path);
+
+            // Hito 41 B: si habia globals pendientes (restoreGlobals
+            // llamado antes de la primera carga), aplicarlas ahora.
+            auto pending = m_pendingGlobals.find(e.handle());
+            if (pending != m_pendingGlobals.end()) {
+                restoreGlobals(e.handle(), pending->second);
+                m_pendingGlobals.erase(pending);
+            }
         }
         // Hot-reload: si paso el throttle y el archivo cambio en disco,
         // re-ejecutamos sobre el MISMO sol::state para preservar globals.
@@ -122,6 +132,82 @@ void ScriptSystem::dispatchEvent(entt::entity entity, const char* eventName) {
     if (!r.valid()) {
         sol::error err = r;
         Log::script()->warn("Error en {}: {}", eventName, err.what());
+    }
+}
+
+std::unordered_map<std::string, ExposedValue> ScriptSystem::captureGlobals(
+        entt::entity entity) const {
+    std::unordered_map<std::string, ExposedValue> out;
+    auto it = m_states.find(entity);
+    if (it == m_states.end()) return out;
+    sol::state& lua = *it->second;
+    // Hito 41 B: walk de globals top-level. Filtramos por tipos del
+    // ExposedValue variant. Tablas, funciones, userdata se omiten.
+    for (const auto& kv : lua.globals()) {
+        sol::object key = kv.first;
+        sol::object val = kv.second;
+        if (!key.is<std::string>()) continue;
+        const std::string name = key.as<std::string>();
+        // Skipear globals built-in / internas. Prefijo `_` o nombres
+        // reservados (engine, log, hud, physics, self, etc.).
+        if (!name.empty() && name[0] == '_') continue;
+        static const std::unordered_set<std::string> kReserved{
+            "engine", "log", "hud", "physics", "self",
+            "string", "table", "math", "io", "os", "package",
+            "coroutine", "debug", "bit32", "utf8",
+            // funciones built-in del juego (eventos)
+            "onUpdate", "on_trigger_enter", "on_trigger_exit",
+            "on_trigger_stay", "on_trigger_body_enter",
+            "on_trigger_body_exit", "on_trigger_body_stay"
+        };
+        if (kReserved.count(name)) continue;
+        // Filtrar por tipo. Sol2 expone is<T>() para conversion check.
+        if (val.is<bool>()) {
+            out[name] = ExposedValue{val.as<bool>()};
+        } else if (val.is<f32>()) {
+            out[name] = ExposedValue{val.as<f32>()};
+        } else if (val.is<std::string>()) {
+            out[name] = ExposedValue{val.as<std::string>()};
+        }
+        // vec3: detectar via tabla con 3 floats numericos.
+        else if (val.is<sol::table>()) {
+            sol::table t = val.as<sol::table>();
+            sol::object v0 = t[1];
+            sol::object v1 = t[2];
+            sol::object v2 = t[3];
+            if (v0.is<f32>() && v1.is<f32>() && v2.is<f32>() &&
+                t.size() == 3) {
+                out[name] = ExposedValue{glm::vec3(
+                    v0.as<f32>(), v1.as<f32>(), v2.as<f32>())};
+            }
+            // Tablas que no calzan con vec3 → omit.
+        }
+        // Funciones, userdata, etc. → omit.
+    }
+    return out;
+}
+
+void ScriptSystem::restoreGlobals(entt::entity entity,
+        const std::unordered_map<std::string, ExposedValue>& globals) {
+    auto it = m_states.find(entity);
+    if (it == m_states.end()) {
+        // State aun no existe (script no cargado). Stash hasta el
+        // proximo update() post-carga.
+        m_pendingGlobals[entity] = globals;
+        return;
+    }
+    sol::state& lua = *it->second;
+    for (const auto& [name, value] : globals) {
+        std::visit([&](auto&& v) {
+            using T = std::decay_t<decltype(v)>;
+            if constexpr (std::is_same_v<T, glm::vec3>) {
+                sol::table t = lua.create_table();
+                t[1] = v.x; t[2] = v.y; t[3] = v.z;
+                lua[name] = t;
+            } else {
+                lua[name] = v;
+            }
+        }, value);
     }
 }
 

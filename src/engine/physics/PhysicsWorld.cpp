@@ -2,6 +2,8 @@
 
 #include "core/Log.h"
 
+#include <glm/vec4.hpp>  // Hito 41 C: setBodyPositionRot quat
+
 // Jolt headers — incluir en un orden especifico. El `Jolt.h` maestro define
 // macros que el resto necesita.
 #include <Jolt/Jolt.h>
@@ -346,6 +348,65 @@ void PhysicsWorld::setBodyPosition(u32 bodyId, const glm::vec3& position) {
     JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
     bi.SetPosition(id, JPH::RVec3(position.x, position.y, position.z),
                     JPH::EActivation::Activate);
+}
+
+glm::vec3 PhysicsWorld::bodyLinearVelocity(u32 bodyId) const {
+    if (!m_impl || bodyId == 0) return glm::vec3(0.0f);
+    JPH::BodyID id(bodyId);
+    const JPH::BodyInterface& bi =
+        m_impl->physicsSystem->GetBodyInterfaceNoLock();
+    const JPH::Vec3 v = bi.GetLinearVelocity(id);
+    return glm::vec3(v.GetX(), v.GetY(), v.GetZ());
+}
+
+glm::vec3 PhysicsWorld::bodyAngularVelocity(u32 bodyId) const {
+    if (!m_impl || bodyId == 0) return glm::vec3(0.0f);
+    JPH::BodyID id(bodyId);
+    const JPH::BodyInterface& bi =
+        m_impl->physicsSystem->GetBodyInterfaceNoLock();
+    const JPH::Vec3 w = bi.GetAngularVelocity(id);
+    return glm::vec3(w.GetX(), w.GetY(), w.GetZ());
+}
+
+void PhysicsWorld::setBodyLinearVelocity(u32 bodyId, const glm::vec3& v) {
+    if (!m_impl || bodyId == 0) return;
+    JPH::BodyID id(bodyId);
+    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
+    bi.SetLinearVelocity(id, JPH::Vec3(v.x, v.y, v.z));
+    bi.ActivateBody(id);
+}
+
+void PhysicsWorld::setBodyAngularVelocity(u32 bodyId, const glm::vec3& w) {
+    if (!m_impl || bodyId == 0) return;
+    JPH::BodyID id(bodyId);
+    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
+    bi.SetAngularVelocity(id, JPH::Vec3(w.x, w.y, w.z));
+    bi.ActivateBody(id);
+}
+
+glm::vec3 PhysicsWorld::bodyPositionRot(u32 bodyId, glm::vec4& outQuatXYZW) const {
+    outQuatXYZW = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    if (!m_impl || bodyId == 0) return glm::vec3(0.0f);
+    JPH::BodyID id(bodyId);
+    // GetBodyInterfaceNoLock es const + no-locking — apto para const-method.
+    const JPH::BodyInterface& bi =
+        m_impl->physicsSystem->GetBodyInterfaceNoLock();
+    JPH::RVec3 pos;
+    JPH::Quat q;
+    bi.GetPositionAndRotation(id, pos, q);
+    outQuatXYZW = glm::vec4(q.GetX(), q.GetY(), q.GetZ(), q.GetW());
+    return glm::vec3(pos.GetX(), pos.GetY(), pos.GetZ());
+}
+
+void PhysicsWorld::setBodyPositionRot(u32 bodyId, const glm::vec3& pos,
+                                        const glm::vec4& quatXYZW) {
+    if (!m_impl || bodyId == 0) return;
+    JPH::BodyID id(bodyId);
+    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
+    bi.SetPositionAndRotation(id,
+        JPH::RVec3(pos.x, pos.y, pos.z),
+        JPH::Quat(quatXYZW.x, quatXYZW.y, quatXYZW.z, quatXYZW.w),
+        JPH::EActivation::Activate);
 }
 
 void PhysicsWorld::addForce(u32 bodyId, const glm::vec3& force) {

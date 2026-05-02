@@ -45,7 +45,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 38 — Save/Load gameplay state (.moodsave) + Main menu del MoodPlayer (completado, tag `v0.38.0-hito38`).
 - [x] Hito 39 — Polish final + cierre Fase 1 (completado, tags `v0.39.0-hito39` + **`v1.0.0`** = fin Fase 1).
 - [x] Hito 40 — Cerrar pendientes chicos/medios post-v1.0.0: cone axis, OBB debug, runtime halfExtents, DragRange2/combos undo, char windows per-proyecto, sort stable bucket-Z, localSpace worldMatrix (completado, tag `v0.40.0-hito40`).
-- [ ] Hito 41 — Save/Load extendido con snapshots Jolt + Lua globals (TBD).
+- [x] Hito 41 — Save/Load extendido: snapshots Dynamic bodies (pose + vel) + Lua globals filtradas (completado, tag `v0.41.0-hito41`).
 - [ ] Hito 42 — Editor de materiales visual (TBD).
 
 **🏁 Fase 1 cerrada con `v1.0.0`. Hito 40 cierra los pendientes chicos/medios pre-Fase 2.** Próximo paso: Hitos 41+42 (los 2 grandes restantes) → recapitulación del dev → Fase 2 (TBD).
@@ -1524,3 +1524,41 @@ Para Hito 39 (cierre Fase 1):
 
 - `setBodyMass` real (no stub) — requiere versión de Jolt que exponga API sin SEH crash.
 - Tests headless de coyote/jump-buffer y headbob — requiere refactor a pure functions.
+
+## Hito 41 — Save/Load extendido: snapshots Dynamic bodies + Lua globals
+
+**Objetivo:** primer item grande del backlog post-v1.0.0. Extender Save/Load del Hito 38 A para persistir state runtime que V1 dejó afuera (snapshots de bodies dinámicos + globals Lua filtradas). Schema bumpea a v2 con back-compat de v1.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Snapshots de Dynamic bodies:*
+- Nueva `BodySnapshot { entityTag, position, rotationQuat, linearVel, angularVel }` en `SaveData`.
+- Save itera entidades con `RigidBodyComponent::Type::Dynamic + bodyId != 0 + tag != ""` y captura via PhysicsWorld getters.
+- Load matchea por tag (estable entre sesiones); aplica `setBodyPositionRot` + `setBodyLinearVelocity` + `setBodyAngularVelocity`.
+
+*Bloque B — Lua globals filtradas:*
+- Nueva `ScriptGlobalsSnapshot { scriptPath, globals: map<name, ExposedValue> }`.
+- `ScriptSystem::captureGlobals(entity)` filtra por tipos del `ExposedValue` variant + reserved names list.
+- `ScriptSystem::restoreGlobals(entity, map)` aplica al sol::state, o stash en `m_pendingGlobals` si el script aún no se cargó (aplica en próximo `update()`).
+
+*Bloque C — PhysicsWorld vel API:*
+- `bodyLinearVelocity` / `bodyAngularVelocity` (const, vía `GetBodyInterfaceNoLock`).
+- `setBodyLinearVelocity` / `setBodyAngularVelocity`.
+- `bodyPositionRot` / `setBodyPositionRot` con quaternion XYZW para pose completa.
+
+*Bloque D — Tests + cierre:*
+- 3 tests nuevos en `test_save_load.cpp`: round-trip de bodies + round-trip de script globals + back-compat de v1 file con schema v2 (campos nuevos vacíos).
+- Suite total **315/6591** (antes Hito 40 cerrado: 312/6564).
+
+**Verificación visual del dev:**
+- F5 (quicksave) con cajas físicas empujadas → load restaura pose + velocity exactas.
+- Script con globals (hp, alive, name, spawn_pos como vec3) → save los captura, load los restaura antes del primer onUpdate post-load.
+- Cargar `.moodsave` v1 → OK, sin bodies ni globals (back-compat).
+
+**Siguiente paso:** Hito 42 (Editor de materiales visual) — el último item grande del backlog antes de la recapitulación del dev + Fase 2.
+
+### Pendientes menores detectados en Hito 41 (Fase 2 si emerge)
+
+- Tags duplicados en saves: V1 acepta como limitación (al cargar solo aplica al primer match).
+- Vec3 en Lua globals via heurística `tabla[1..3]+size==3` — si un script usa tabla con 4 floats con uno extra, se omite. Documentado.
+- Lua tables anidadas, funciones, userdata: omitidas silenciosamente. Por design.

@@ -6,7 +6,15 @@
 
 ## 1. ¿Dónde estamos?
 
-**Hito 40 cerrado — pendientes chicos/medios post-v1.0.0 barridos.**
+**Hito 41 cerrado — Save/Load extendido (snapshots Jolt + Lua globals).**
+Tag: `v0.41.0-hito41`.
+Verificado automático: suite doctest **315/6591** (+3 tests `test_save_load`: round-trip bodies + round-trip script globals + back-compat v1). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: F5 con cajas físicas empujadas → load restaura pose + velocity exactas; script con globals captura/restaura correcto; archivos `.moodsave` v1 cargan sin errores ni warnings (back-compat).
+
+**Cambio importante:** `.moodsave` schema bumpea a v2 con campos opcionales `bodies` (Dynamic body snapshots por tag) + `script_globals` (filtradas por ExposedValue variant). Nuevos getters/setters en PhysicsWorld para velocity. ScriptSystem gana `captureGlobals` + `restoreGlobals` con `m_pendingGlobals` para casos donde el script aún no cargó.
+
+**Próximo paso:** Hito 42 (Editor de materiales visual) — último item grande del backlog. Después: recapitulación del dev + Fase 2 (TBD).
+
+### Hito 40 (anterior, ya cerrado)
 Tag: `v0.40.0-hito40`.
 Verificado automático: suite doctest **312/6564** (+3 de `test_raycast` API contract de setters runtime + 1 de `test_particle_system` Cone). Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo: F1 toggle muestra OBB rotado en triggers; editar `coyoteWindowSec` en el `.moodproj` cambia el feel del salto; dos emisores de humo overlapping NO flickerea entre frames; emisor con `localSpace=true` rotado en Y → partículas siguen rotación.
 

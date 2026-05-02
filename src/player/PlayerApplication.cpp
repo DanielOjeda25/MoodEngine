@@ -799,6 +799,44 @@ void PlayerApplication::applyLoadedSave(const SaveLoad::SaveData& data) {
     }
     m_playCamera.setOrientation(data.playerYaw, data.playerPitch);
     m_playCamera.setPosition(data.playerPosition + glm::vec3(0.0f, 0.7f, 0.0f));
+
+    // Hito 41 A: aplicar snapshots de Dynamic bodies. Buscamos por tag
+    // de la entidad — bodyId raw es volatil, los tags son estables.
+    if (m_scene && m_physicsWorld && !data.bodies.empty()) {
+        std::unordered_map<std::string, const SaveLoad::BodySnapshot*> byTag;
+        byTag.reserve(data.bodies.size());
+        for (const auto& b : data.bodies) byTag[b.entityTag] = &b;
+
+        m_scene->forEach<TagComponent, RigidBodyComponent>(
+            [&](Entity, TagComponent& tag, RigidBodyComponent& rb) {
+                if (rb.type != RigidBodyComponent::Type::Dynamic) return;
+                if (rb.bodyId == 0) return;
+                auto it = byTag.find(tag.name);
+                if (it == byTag.end()) return;
+                const auto& snap = *it->second;
+                m_physicsWorld->setBodyPositionRot(
+                    rb.bodyId, snap.position, snap.rotationQuat);
+                m_physicsWorld->setBodyLinearVelocity(
+                    rb.bodyId, snap.linearVelocity);
+                m_physicsWorld->setBodyAngularVelocity(
+                    rb.bodyId, snap.angularVelocity);
+            });
+    }
+
+    // Hito 41 B: restaurar globals Lua. Si un script aun no se cargo,
+    // ScriptSystem::restoreGlobals los stash en pendingGlobals.
+    if (m_scene && m_scriptSystem && !data.scriptGlobals.empty()) {
+        std::unordered_map<std::string, const SaveLoad::ScriptGlobalsSnapshot*> byPath;
+        byPath.reserve(data.scriptGlobals.size());
+        for (const auto& sg : data.scriptGlobals) byPath[sg.scriptPath] = &sg;
+
+        m_scene->forEach<ScriptComponent>(
+            [&](Entity e, ScriptComponent& sc) {
+                auto it = byPath.find(sc.path);
+                if (it == byPath.end()) return;
+                m_scriptSystem->restoreGlobals(e.handle(), it->second->globals);
+            });
+    }
 }
 
 void PlayerApplication::quickSave() {
@@ -812,6 +850,38 @@ void PlayerApplication::quickSave() {
     }
     d.playerYaw   = m_playCamera.yawDeg();
     d.playerPitch = m_playCamera.pitchDeg();
+
+    // Hito 41 A: capturar snapshots de Dynamic bodies activos.
+    if (m_scene && m_physicsWorld) {
+        m_scene->forEach<TagComponent, RigidBodyComponent>(
+            [&](Entity, TagComponent& tag, RigidBodyComponent& rb) {
+                if (rb.type != RigidBodyComponent::Type::Dynamic) return;
+                if (rb.bodyId == 0) return;
+                if (tag.name.empty()) return;  // sin tag estable, skip
+                SaveLoad::BodySnapshot b;
+                b.entityTag = tag.name;
+                glm::vec4 quat;
+                b.position = m_physicsWorld->bodyPositionRot(rb.bodyId, quat);
+                b.rotationQuat = quat;
+                b.linearVelocity  = m_physicsWorld->bodyLinearVelocity(rb.bodyId);
+                b.angularVelocity = m_physicsWorld->bodyAngularVelocity(rb.bodyId);
+                d.bodies.push_back(std::move(b));
+            });
+    }
+
+    // Hito 41 B: capturar globals Lua per script.
+    if (m_scene && m_scriptSystem) {
+        m_scene->forEach<ScriptComponent>(
+            [&](Entity e, ScriptComponent& sc) {
+                if (sc.path.empty() || !sc.loaded) return;
+                auto globals = m_scriptSystem->captureGlobals(e.handle());
+                if (globals.empty()) return;
+                SaveLoad::ScriptGlobalsSnapshot sg;
+                sg.scriptPath = sc.path;
+                sg.globals    = std::move(globals);
+                d.scriptGlobals.push_back(std::move(sg));
+            });
+    }
 
     const auto savePath = exeBaseDir() / "quicksave.moodsave";
     if (SaveLoad::save(d, savePath)) {
