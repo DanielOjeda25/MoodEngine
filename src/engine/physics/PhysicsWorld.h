@@ -93,12 +93,20 @@ public:
     /// @param mass            Solo para Dynamic. Static/Kinematic lo ignoran.
     /// @param friction        Hito 34 A. Coef. friction Jolt [0, +inf]. Defaults a
     ///                        0.5 (madera-sobre-madera). Aplica a Static + Dynamic.
+    /// @param rotationQuat    Hito 41 fix-up #2: rotacion inicial del body
+    ///                        como quat (X, Y, Z, W). Default identidad.
+    ///                        Critico para Load Game: la materializacion
+    ///                        post-load del body Dynamic preserva la
+    ///                        rotation del Transform (antes el body
+    ///                        arrancaba "derecho" aunque el save lo tuviera
+    ///                        rotado).
     u32 createBody(const glm::vec3& position,
                    CollisionShape shape,
                    const glm::vec3& halfExtents,
                    BodyType type,
                    f32 mass = 1.0f,
-                   f32 friction = 0.5f);
+                   f32 friction = 0.5f,
+                   const glm::vec4& rotationQuat = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
     /// @brief Destruye y remueve un body. Llamar cuando la entidad se borra
     ///        del Scene. Idempotente (id invalido = no-op).

@@ -581,9 +581,24 @@ void PlayerApplication::updateRigidBodies(f32 dt) {
                 case RigidBodyComponent::Type::Kinematic: type = BodyType::Kinematic; break;
                 case RigidBodyComponent::Type::Dynamic:   type = BodyType::Dynamic; break;
             }
+            // Hito 41 fix-up #2: convertir t.rotationEuler (degrees) a
+            // quat XYZW para que el body materializado preserve la
+            // rotation del Transform (critico post-Load Game).
+            const glm::quat q = glm::quat(glm::radians(t.rotationEuler));
             rb.bodyId = m_physicsWorld->createBody(t.position, shape,
                                                     rb.halfExtents, type, rb.mass,
-                                                    rb.friction);
+                                                    rb.friction,
+                                                    glm::vec4(q.x, q.y, q.z, q.w));
+            // Si applyLoadedSave dejo velocidades pending (porque al
+            // momento del load el body no estaba materializado), las
+            // aplicamos ahora y limpiamos el flag.
+            if (rb.hasPendingVel && rb.bodyId != 0) {
+                m_physicsWorld->setBodyLinearVelocity(rb.bodyId, rb.pendingLinearVel);
+                m_physicsWorld->setBodyAngularVelocity(rb.bodyId, rb.pendingAngularVel);
+                rb.hasPendingVel = false;
+                rb.pendingLinearVel = glm::vec3(0.0f);
+                rb.pendingAngularVel = glm::vec3(0.0f);
+            }
         });
 
     // Stepear simulacion + sync body -> Transform para dinamicos.
@@ -936,38 +951,38 @@ void PlayerApplication::applyLoadedSave(const SaveLoad::SaveData& data) {
             byTag[b.entityTag] = &b;
         }
 
+        // Hito 41 fix-up #2: tracking de cuales tags del save matchean
+        // entidades del scene. Lo usamos para loguear los huerfanos al
+        // final (snapshots cuya entidad NO existe en el .moodmap actual).
+        std::unordered_map<std::string, bool> tagMatched;
+        for (const auto& kv : byTag) tagMatched[kv.first] = false;
+
         m_scene->forEach<TagComponent, TransformComponent, RigidBodyComponent>(
             [&](Entity, TagComponent& tag, TransformComponent& tf, RigidBodyComponent& rb) {
                 if (rb.type != RigidBodyComponent::Type::Dynamic) return;
                 auto it = byTag.find(tag.name);
-                if (it == byTag.end()) {
-                    Log::engine()->warn(
-                        "    [LOAD] entity tag='{}' no tiene snapshot en el save",
-                        tag.name);
-                    return;
-                }
+                if (it == byTag.end()) return; // entity sin snapshot — OK silencioso
                 const auto& snap = *it->second;
+                tagMatched[tag.name] = true;
 
                 // 1) SIEMPRE: aplicar al TransformComponent. Cubre el
                 //    caso "load desde main menu antes del primer Play"
                 //    (body NO materializado todavia → updateRigidBodies
-                //    leera del Transform en el siguiente frame).
+                //    leera Transform + pending vels en el siguiente frame).
                 tf.position = snap.position;
-                // Convertir quat → euler para el Transform. glm tiene
-                // helper. Quat (0,0,0,1) = identidad → euler (0,0,0).
                 const glm::quat q(snap.rotationQuat.w, snap.rotationQuat.x,
                                    snap.rotationQuat.y, snap.rotationQuat.z);
                 tf.rotationEuler = glm::degrees(glm::eulerAngles(q));
 
                 // 2) Si el body YA esta materializado (Play activo),
-                //    aplicar tambien al body para preservar vel.
+                //    aplicar al body en vivo. Si no, stash en
+                //    pendingVel — updateRigidBodies las aplica al
+                //    materializar.
                 if (rb.bodyId != 0 && m_physicsWorld) {
                     Log::engine()->info(
-                        "    [LOAD] body tag='{}' bodyId={} pos=({:.2f},{:.2f},{:.2f}) quat=({:.3f},{:.3f},{:.3f},{:.3f}) [Transform+Body]",
+                        "    [LOAD] body tag='{}' bodyId={} pos=({:.2f},{:.2f},{:.2f}) [Transform+Body+Vel]",
                         tag.name, rb.bodyId,
-                        snap.position.x, snap.position.y, snap.position.z,
-                        snap.rotationQuat.x, snap.rotationQuat.y,
-                        snap.rotationQuat.z, snap.rotationQuat.w);
+                        snap.position.x, snap.position.y, snap.position.z);
                     m_physicsWorld->setBodyPositionRot(
                         rb.bodyId, snap.position, snap.rotationQuat);
                     m_physicsWorld->setBodyLinearVelocity(
@@ -976,12 +991,31 @@ void PlayerApplication::applyLoadedSave(const SaveLoad::SaveData& data) {
                         rb.bodyId, snap.angularVelocity);
                 } else {
                     Log::engine()->info(
-                        "    [LOAD] body tag='{}' bodyId=0 pos=({:.2f},{:.2f},{:.2f}) [Transform only — body se materializara con esta pose]",
+                        "    [LOAD] body tag='{}' bodyId=0 pos=({:.2f},{:.2f},{:.2f}) [Transform + pendingVel — body se materializara con pose+vel]",
                         tag.name,
                         snap.position.x, snap.position.y, snap.position.z);
+                    rb.hasPendingVel = true;
+                    rb.pendingLinearVel = snap.linearVelocity;
+                    rb.pendingAngularVel = snap.angularVelocity;
                 }
                 ++bodiesApplied;
             });
+
+        // Snapshots huerfanos: el save tiene tags que NO existen en el
+        // scene actual. Tipicamente significa que las entidades viven
+        // en runtime (spawneadas via "Agregar caja fisica demo" sin
+        // Ctrl+S al .moodmap antes de empaquetar). El usuario lo nota
+        // como "las cajas no aparecen al hacer Load Game" — el log
+        // explica la causa raiz.
+        for (const auto& [tag, matched] : tagMatched) {
+            if (!matched) {
+                Log::engine()->warn(
+                    "[Load] snapshot huerfano: tag='{}' del .moodsave NO matchea ninguna entity Dynamic en el scene. "
+                    "Probablemente la entidad fue spawneada en runtime y nunca persistida al .moodmap "
+                    "(Ctrl+S en el editor antes de empaquetar).",
+                    tag);
+            }
+        }
     }
     Log::engine()->info(
         "[Load] Applied {}/{} body snapshots (tag matched), hud hp={}, player @ ({:.2f},{:.2f},{:.2f})",

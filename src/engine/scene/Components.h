@@ -164,6 +164,16 @@ struct RigidBodyComponent {
 
     u32 bodyId = 0;               // llenado por PhysicsSystem (0 = no creado)
 
+    // Hito 41 fix-up #2: pending velocidades del Save/Load. Si
+    // `applyLoadedSave` corre ANTES de que el body se materialice
+    // (bodyId == 0), las vels del snapshot se quedan stash aca.
+    // `updateRigidBodies` las aplica al body recien creado y limpia
+    // el flag. NO se serializan en `.moodmap` ni `.moodsave` (estado
+    // transitorio entre load y siguiente updateRigidBodies).
+    bool hasPendingVel = false;
+    glm::vec3 pendingLinearVel{0.0f};
+    glm::vec3 pendingAngularVel{0.0f};
+
     RigidBodyComponent() = default;
     RigidBodyComponent(Type t, Shape s, glm::vec3 he, f32 m = 1.0f)
         : type(t), shape(s), halfExtents(he), mass(m) {}

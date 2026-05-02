@@ -2,7 +2,15 @@
 
 #include <doctest/doctest.h>
 
+#include "engine/physics/PhysicsWorld.h"
 #include "engine/saving/SaveLoad.h"
+#include "engine/scene/Components.h"
+#include "engine/scene/Entity.h"
+#include "engine/scene/Scene.h"
+
+#include <glm/gtc/quaternion.hpp>
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #include <chrono>
 #include <filesystem>
@@ -183,4 +191,118 @@ TEST_CASE("SaveLoad: campos faltantes caen a defaults sin lanzar") {
     CHECK(r->playerYaw == doctest::Approx(-90.0f));
     CHECK(r->playerPitch == doctest::Approx(0.0f));
     std::filesystem::remove(path);
+}
+
+// --- Hito 41 fix-up #2: createBody con rotation quat ---
+// Bug raiz del Load Game: el body materializado post-load arrancaba con
+// quat identidad aunque el Transform ya tuviera la rotation correcta.
+// Estos tests verifican que createBody acepta quat y que el body lo
+// preserva (lo lee de vuelta via bodyPositionRot).
+
+TEST_CASE("PhysicsWorld::createBody con rotation quat preserva la pose en el body") {
+    PhysicsWorld pw;
+
+    // Quat de 45° sobre Y (yaw). w = cos(22.5°), y = sin(22.5°).
+    const glm::quat qExpected = glm::angleAxis(
+        glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::vec4 quatXYZW(qExpected.x, qExpected.y, qExpected.z, qExpected.w);
+
+    const u32 id = pw.createBody(
+        glm::vec3(1.0f, 2.0f, 3.0f),
+        CollisionShape::Box,
+        glm::vec3(0.5f),
+        BodyType::Dynamic,
+        /*mass*/ 1.0f, /*friction*/ 0.5f,
+        quatXYZW);
+    REQUIRE(id != 0);
+
+    glm::vec4 outQuat;
+    const glm::vec3 pos = pw.bodyPositionRot(id, outQuat);
+    CHECK(pos.x == doctest::Approx(1.0f));
+    CHECK(pos.y == doctest::Approx(2.0f));
+    CHECK(pos.z == doctest::Approx(3.0f));
+    // Comparamos componentes del quat. Los signos pueden cambiar
+    // (q y -q representan la misma rotacion); chequeamos abs.
+    CHECK(std::abs(outQuat.x) == doctest::Approx(std::abs(quatXYZW.x)).epsilon(0.001));
+    CHECK(std::abs(outQuat.y) == doctest::Approx(std::abs(quatXYZW.y)).epsilon(0.001));
+    CHECK(std::abs(outQuat.z) == doctest::Approx(std::abs(quatXYZW.z)).epsilon(0.001));
+    CHECK(std::abs(outQuat.w) == doctest::Approx(std::abs(quatXYZW.w)).epsilon(0.001));
+}
+
+TEST_CASE("PhysicsWorld::createBody sin rotation explicita usa identidad") {
+    // Compatibilidad con call sites pre-fix que no pasan el parametro.
+    PhysicsWorld pw;
+    const u32 id = pw.createBody(
+        glm::vec3(0.0f), CollisionShape::Box, glm::vec3(0.5f),
+        BodyType::Static);
+    REQUIRE(id != 0);
+
+    glm::vec4 outQuat;
+    pw.bodyPositionRot(id, outQuat);
+    // Identidad: (0, 0, 0, 1) con tolerancia.
+    CHECK(outQuat.x == doctest::Approx(0.0f).epsilon(0.001));
+    CHECK(outQuat.y == doctest::Approx(0.0f).epsilon(0.001));
+    CHECK(outQuat.z == doctest::Approx(0.0f).epsilon(0.001));
+    CHECK(std::abs(outQuat.w) == doctest::Approx(1.0f).epsilon(0.001));
+}
+
+// --- Hito 41 fix-up #2: pending velocidades del SaveLoad ---
+// Cuando applyLoadedSave corre antes de que el body se materialice
+// (caso "Load Game directo desde el Main Menu"), las vels del snapshot
+// se stash en `RigidBodyComponent::pendingLinearVel/AngularVel`.
+// Tras `updateRigidBodies` materializar el body, las pending se aplican
+// y el flag se limpia. Aca testeamos esa pieza pura: armar el rb con
+// pending, llamar createBody + setVel + clear, leer del body.
+
+TEST_CASE("RigidBodyComponent: pending vels aplicadas al materializar") {
+    PhysicsWorld pw;
+
+    // Simulamos lo que applyLoadedSave deja: el snapshot del save tenia
+    // linearVel=(2,0,0) y angularVel=(0,1,0); el body aun no existe.
+    RigidBodyComponent rb{
+        RigidBodyComponent::Type::Dynamic,
+        RigidBodyComponent::Shape::Box,
+        glm::vec3(0.5f), 5.0f};
+    rb.hasPendingVel = true;
+    rb.pendingLinearVel  = glm::vec3(2.0f, 0.0f, 0.0f);
+    rb.pendingAngularVel = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    // updateRigidBodies-like: crea el body + aplica pending + limpia.
+    rb.bodyId = pw.createBody(glm::vec3(0.0f, 5.0f, 0.0f),
+                                CollisionShape::Box, rb.halfExtents,
+                                BodyType::Dynamic, rb.mass, rb.friction);
+    REQUIRE(rb.bodyId != 0);
+    if (rb.hasPendingVel) {
+        pw.setBodyLinearVelocity(rb.bodyId, rb.pendingLinearVel);
+        pw.setBodyAngularVelocity(rb.bodyId, rb.pendingAngularVel);
+        rb.hasPendingVel = false;
+        rb.pendingLinearVel = glm::vec3(0.0f);
+        rb.pendingAngularVel = glm::vec3(0.0f);
+    }
+
+    CHECK_FALSE(rb.hasPendingVel);
+    const glm::vec3 v = pw.bodyLinearVelocity(rb.bodyId);
+    const glm::vec3 w = pw.bodyAngularVelocity(rb.bodyId);
+    CHECK(v.x == doctest::Approx(2.0f).epsilon(0.01));
+    CHECK(w.y == doctest::Approx(1.0f).epsilon(0.01));
+}
+
+TEST_CASE("RigidBodyComponent: hasPendingVel=false → no se aplica nada al materializar") {
+    PhysicsWorld pw;
+    RigidBodyComponent rb{
+        RigidBodyComponent::Type::Dynamic,
+        RigidBodyComponent::Shape::Box,
+        glm::vec3(0.5f), 1.0f};
+    // Sin pending — caso normal de spawn fresco sin Load.
+    REQUIRE_FALSE(rb.hasPendingVel);
+
+    rb.bodyId = pw.createBody(glm::vec3(0.0f), CollisionShape::Box,
+                                rb.halfExtents, BodyType::Dynamic,
+                                rb.mass, rb.friction);
+    REQUIRE(rb.bodyId != 0);
+
+    const glm::vec3 v = pw.bodyLinearVelocity(rb.bodyId);
+    CHECK(v.x == doctest::Approx(0.0f));
+    CHECK(v.y == doctest::Approx(0.0f));
+    CHECK(v.z == doctest::Approx(0.0f));
 }

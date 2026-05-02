@@ -12,7 +12,8 @@
 #include "systems/ScriptSystem.h"
 
 #include <glm/vec3.hpp>
-#include <glm/common.hpp>  // glm::mix
+#include <glm/common.hpp>          // glm::mix
+#include <glm/gtc/quaternion.hpp>   // Hito 41 fix-up: euler → quat
 
 #include <cmath>            // std::sin
 #include <string>
@@ -161,9 +162,22 @@ void EditorApplication::updateRigidBodies(f32 dt) {
                 case RigidBodyComponent::Type::Kinematic: type = BodyType::Kinematic; break;
                 case RigidBodyComponent::Type::Dynamic:   type = BodyType::Dynamic; break;
             }
+            // Hito 41 fix-up #2: pasar rotation del Transform al body
+            // (antes el body Dynamic se creaba siempre con identidad).
+            const glm::quat q = glm::quat(glm::radians(t.rotationEuler));
             rb.bodyId = m_physicsWorld->createBody(t.position, shape,
                                                     rb.halfExtents, type, rb.mass,
-                                                    rb.friction);
+                                                    rb.friction,
+                                                    glm::vec4(q.x, q.y, q.z, q.w));
+            // Aplicar pending vels del Save/Load si las hay (caso load
+            // antes de entrar a Play Mode — body recien materializado).
+            if (rb.hasPendingVel && rb.bodyId != 0) {
+                m_physicsWorld->setBodyLinearVelocity(rb.bodyId, rb.pendingLinearVel);
+                m_physicsWorld->setBodyAngularVelocity(rb.bodyId, rb.pendingAngularVel);
+                rb.hasPendingVel = false;
+                rb.pendingLinearVel = glm::vec3(0.0f);
+                rb.pendingAngularVel = glm::vec3(0.0f);
+            }
         });
 
     // 2) Stepear la simulacion SOLO en Play Mode. En Editor Mode los bodies

@@ -284,7 +284,8 @@ u32 PhysicsWorld::createBody(const glm::vec3& position,
                               const glm::vec3& halfExtents,
                               BodyType type,
                               f32 mass,
-                              f32 friction) {
+                              f32 friction,
+                              const glm::vec4& rotationQuat) {
     if (!m_impl) return 0;
 
     auto jphShape = createJPHShape(shape, halfExtents);
@@ -296,10 +297,21 @@ u32 PhysicsWorld::createBody(const glm::vec3& position,
     const ObjectLayer layer = (type == BodyType::Static)
         ? ObjectLayer::Static : ObjectLayer::Moving;
 
+    // Hito 41 fix-up #2: rotation desde el caller (quat XYZW). Si el
+    // quat es zero (caller no lo pasa explicito y olvida default),
+    // caemos a identidad para no crashear Jolt con quat normalizado=0.
+    JPH::Quat jphQuat(rotationQuat.x, rotationQuat.y, rotationQuat.z,
+                       rotationQuat.w);
+    if (jphQuat.LengthSq() < 1e-6f) {
+        jphQuat = JPH::Quat::sIdentity();
+    } else {
+        jphQuat = jphQuat.Normalized();
+    }
+
     JPH::BodyCreationSettings settings(
         jphShape,
         JPH::RVec3(position.x, position.y, position.z),
-        JPH::Quat::sIdentity(),
+        jphQuat,
         toJPHMotion(type),
         toJPHLayer(layer));
 
