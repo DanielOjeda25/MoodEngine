@@ -70,6 +70,34 @@
 > cambia (esperado). Si la camara mira lejos del grid, **el frame baja de
 > 222ms a 16.67ms — speedup x13.3**.
 
+### Post-F2H4 (con instancing del pase opaco activado)
+
+> Mismas escenas + nueva (100K cubos = 8336 entidades, antes congelaba
+> el editor). El instancing junta entidades con el mismo (mesh, material)
+> en un solo `glDrawArraysInstanced`.
+
+| Escena | Entities | Draws | Tris dibujados | FPS | Frame ms | Speedup vs F2H2 |
+|---|---|---|---|---|---|---|
+| Empty (control) | 2 | 2 | 24 | 60.0 | 16.67 | sin cambio |
+| **10K_full_view** | 836 | **3** | 10,032 | **60.0 (vsync cap)** | **16.67** | **x15** (4 → 60 FPS) |
+| 10K_no_view | 836 | 1 | 12 | 60.0 | 16.67 | igual a F2H3 (cull saca todo antes de batchear) |
+| **100K_full_view** | 8,336 | **3** | 82,260 | **10.4** | **96** | **antes congelado, ahora editable** |
+| 100K_no_view | 8,336 | 0 | 0 | 11.1 | 89 | cull descarta todo; cuello restante = scene iter |
+
+> **Lectura crucial**: en `10K_full_view` los 836 cubos comparten mesh +
+> material → **3 draw calls** (1 batch del cubo + skybox + debug renderer).
+> El FPS satura el vsync cap: el rendering ya no es el cuello.
+>
+> En `100K_full_view` con 8336 cubos, el rendering sigue siendo 1 batch +
+> skybox + debug = 3 draws. Frame 96ms = el cuello ya no es draws sino
+> **iteracion de la escena en otros sistemas** (ImGui Hierarchy con 8336
+> entries pesa ~6ms, scene scan en otros systems suma el resto).
+>
+> En `100K_no_view`, el cull descarta los 8336 cubos → 0 draws → pero
+> el frame sigue en 89ms. Eso es **el proximo cuello a atacar**: con
+> tantas entidades, el costo "por entidad" en sistemas no-render
+> (Hierarchy panel, animation/script/nav scans aunque vacios) domina.
+
 ## Top 5 cuellos de botella identificados
 
 ### Baseline F2H2 (Tracy 3163 frames, escena 10K con viewport completo)
@@ -117,11 +145,46 @@ con max 2574 ms = spikes brutales en frames con scene churn.
 | 10K_half_view | 836 | 731 | 13% (cuelpos rotando ~50%) |
 | 10K_no_view | 836 | **1** | **>99%** (todo el grid fuera del frustum) |
 
+**Validacion del cull con counters del HUD** (snapshots CSV):
+
+| Escena | Entities | Draws (sin cull = 836) | Cull rate |
+|---|---|---|---|
+| 10K_full_view | 836 | 743 | 11% (cubos del borde del FOV) |
+| 10K_half_view | 836 | 731 | 13% (cubos rotando ~50%) |
+| 10K_no_view | 836 | **1** | **>99%** (todo el grid fuera del frustum) |
+
 **Conclusion accionable**: F2H3 cumple su objetivo — bajar `PBR::staticPass`
-proporcional a cuanto cae fuera del frustum. **Proximo target: F2H4 (LOD)**
-para que cubos lejanos pesen menos aunque esten dentro del frustum, y
-**batching/instancing** como hito propio si despues del LOD seguimos
-draw-call bound.
+proporcional a cuanto cae fuera del frustum. **Proximo target (segun
+swap documentado): F2H4 instancing** para atacar el cuello real de draw
+call submission, no triangle setup.
+
+### Post-F2H4 (Tracy 4993 frames, escenas 10K + 100K mezcladas con cambios de camara)
+
+| # | Zona | % frame | Mean | Stddev | Max | Delta vs F2H2 |
+|---|---|---:|---:|---:|---:|---|
+| 1 | `renderSceneToViewport` total | 29.69% | 9.76 ms | 18.0 ms | 92 ms | -41 pts (la mitad de lo que era) |
+| 2 | `endFrame` (incl. swapBuffers) | 26.04% | 8.56 ms | 5.1 ms | 29 ms | sube por vsync wait — frame mas rapido |
+| 3 | `swapBuffers` (vsync wait) | 25.53% | 8.39 ms | 5.2 ms | 29 ms | +7 pts en %; mean baja vs F2H2 |
+| 4 | `UI::draw` (ImGui) | **19.06%** | 6.27 ms | 8.7 ms | 53 ms | **+15 pts** — Hierarchy con 8336 entries pesa |
+| 5 | **`PBR::instancedPass`** | **2.52%** | **0.88 ms** | 0.23 ms | 4 ms | **el cuello del 70.74% desaparecio** |
+
+**Lectura**:
+- **`PBR::instancedPass` mean 0.88 ms vs F2H2 baseline 42.5 ms = ~48x mas
+  rapido por draw**. El cuello del 70% del frame que F2H2 revelo esta
+  resuelto. Confirma que F2H4 instancing era el ataque correcto al cuello
+  medido (CPU-bound en draw call setup, no triangle processing).
+- **`UI::draw` sube a 19.06% (mean 6.27 ms)** — con 8336 entidades en la
+  escena, el panel Hierarchy de ImGui (sin virtualizacion) lista todas y
+  procesa hover/click por entry. **Nuevo cuello dominante** y candidato
+  natural para F2H5 / F2H? (virtualizar Hierarchy con `ImGuiListClipper`).
+- **`swapBuffers` 25.53%** = vsync wait. El frame ahora es tan rapido en
+  el render que pasa el cuarto del frame esperando el monitor. No es un
+  cuello a atacar — es senial de que el pipeline esta saludable.
+- **`100K_no_view` con 0 draws sigue en 11 FPS**: la escena tiene 8336
+  entidades. Aunque el render salta todo (cull descarta), iterar las
+  8336 entidades en otros sistemas (animation/script/nav scans aunque
+  vacios) y construir el panel Hierarchy = ~89 ms. **Eso es el escalon
+  siguiente** despues del UI::draw.
 
 ## Conclusiones
 
@@ -143,13 +206,33 @@ draw-call bound.
   top 10 zonas). Confirma la decision de F2H3 plano vs jerarquico: hoy
   no es cuello, ni siquiera con 836 entidades.
 
+### F2H4 (post-instancing)
+- **Cuello principal medido en F2H2 resuelto**: `PBR::instancedPass` mean
+  0.88 ms vs `PBR::staticPass` baseline 42.5 ms = ~48x mas rapido por
+  draw. 836 cubos del stress 10K → 3 draw calls (1 batch + skybox +
+  debug). Vsync cap a 60 FPS.
+- **Escena 100K editable por primera vez**: 8336 entidades, antes
+  congelaba el editor; ahora corre a 10.4 FPS / 96 ms con 3 draws. F2H3
+  + F2H4 en cadena hacen viable un escenario que el motor literalmente
+  no soportaba.
+- **Costo del cull + batching**: <<3% del frame con 836 cubos.
+  Despreciable. Confirma que la decision "plano + sin cache de AABB"
+  era correcta para v1.
+
 ### Proximo paso
-**F2H4 — LOD**: para que cubos lejanos (pero dentro del frustum) pesen menos
-en triangle setup. Despues, si seguimos draw-call bound, **hito propio de
-batching/instancing**. Repetir esta medicion entonces para tener la
-columna "post-F2H4" en la tabla de resultados. Tambien vale medir en build
-Release con `MOOD_PROFILE=OFF` para tener el numero "real" esperado en
-producto (3-10x mejor que Debug).
+- **Cuello dominante ahora**: `UI::draw` (19% del frame, 6 ms) por el
+  panel Hierarchy listando 8336 entries sin virtualizacion. **Candidato
+  natural** para un hito de virtualizacion ImGui (`ImGuiListClipper` en
+  el Hierarchy + AssetBrowser cuando crezca). Probable F2H5 o subhito.
+- **Cuello secundario**: scene iteration en sistemas no-render con 8336
+  entidades suma ~80 ms cuando todo esta culled. Atacable cuando
+  emerja una escena real que justifique las 8K entidades vivas.
+- **F2H5 LOD original**: postergado pero NO descartado. Sigue siendo
+  necesario cuando aparezca contenido con meshes complejos
+  (Fox/CesiumMan + props del catalogo Kenney). Hoy con cubos primitivos
+  no hay LOD que reducir — los cubos ya son el LOD minimo.
+- Repetir mediciones en build Release con `MOOD_PROFILE=OFF` para tener
+  el numero "real" esperado en producto (3-10x mejor que Debug).
 
 ## Notas de medicion
 
