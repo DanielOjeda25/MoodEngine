@@ -45,6 +45,9 @@ add_executable(mood_tests
     test_trigger_system.cpp
     test_save_load.cpp
     test_frustum.cpp
+    test_render_batching.cpp
+
+    ${CMAKE_SOURCE_DIR}/src/engine/render/scene_renderer/RenderBatching.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para

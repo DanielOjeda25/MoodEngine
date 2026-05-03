@@ -322,9 +322,11 @@ add_library(mood_engine_lib STATIC
     src/engine/render/backend/opengl/OpenGLShadowMap.cpp
     src/engine/render/backend/opengl/OpenGLSSBO.cpp
     src/engine/render/backend/opengl/OpenGLDebugRenderer.cpp
+    src/engine/render/backend/opengl/OpenGLInstanceBuffer.cpp
     src/engine/render/backend/opengl/OpenGLParticleRenderer.cpp
 
     src/engine/render/pipeline/LightGrid.cpp
+    src/engine/render/scene_renderer/RenderBatching.cpp
     src/engine/render/scene_renderer/SceneRenderer.cpp
 )
 
