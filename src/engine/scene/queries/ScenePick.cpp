@@ -4,7 +4,7 @@
 #include "engine/assets/AssetManager.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/Components.h"
-#include "engine/scene/Scene.h"
+#include "engine/scene/core/Scene.h"
 
 #include <glm/geometric.hpp>
 #include <glm/matrix.hpp>

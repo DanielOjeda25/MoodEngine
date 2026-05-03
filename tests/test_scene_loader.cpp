@@ -14,8 +14,8 @@
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/world/GridMap.h"
 #include "engine/scene/components/Components.h"
-#include "engine/scene/Entity.h"
-#include "engine/scene/Scene.h"
+#include "engine/scene/core/Entity.h"
+#include "engine/scene/core/Scene.h"
 #include "engine/serialization/SceneLoader.h"
 #include "engine/serialization/SceneSerializer.h"
 

@@ -4,7 +4,7 @@
 #include "engine/assets/AssetManager.h"
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/scene/components/Components.h"
-#include "engine/scene/Entity.h"
+#include "engine/scene/core/Entity.h"
 #include "engine/serialization/JsonHelpers.h" // adapters glm::vec3 <-> json
 
 #include <variant>

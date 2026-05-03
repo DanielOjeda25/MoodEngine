@@ -3,8 +3,8 @@
 #include "core/Log.h"
 #include "engine/render/rhi/IShader.h"
 #include "engine/scene/components/Components.h"
-#include "engine/scene/Entity.h"
-#include "engine/scene/Scene.h"
+#include "engine/scene/core/Entity.h"
+#include "engine/scene/core/Scene.h"
 
 #include <glm/geometric.hpp>
 

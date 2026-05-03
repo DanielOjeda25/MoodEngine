@@ -273,9 +273,9 @@ add_library(mood_engine_lib STATIC
     src/engine/serialization/ProjectSerializer.cpp
     src/engine/serialization/PrefabSerializer.cpp
 
-    src/engine/scene/EditorCamera.cpp
-    src/engine/scene/FpsCamera.cpp
-    src/engine/scene/Scene.cpp
+    src/engine/scene/core/EditorCamera.cpp
+    src/engine/scene/core/FpsCamera.cpp
+    src/engine/scene/core/Scene.cpp
     src/engine/scene/queries/ViewportPick.cpp
     src/engine/scene/queries/ScenePick.cpp
 

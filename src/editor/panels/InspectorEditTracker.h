@@ -38,7 +38,7 @@
 #include "core/Types.h"
 #include "editor/commands/EditPropertyCommand.h"
 #include "editor/commands/HistoryStack.h"
-#include "engine/scene/Entity.h"
+#include "engine/scene/core/Entity.h"
 
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>

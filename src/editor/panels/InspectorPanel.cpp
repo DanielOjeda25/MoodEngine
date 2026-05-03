@@ -6,7 +6,7 @@
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/Components.h"
-#include "engine/scene/Entity.h"
+#include "engine/scene/core/Entity.h"
 
 #include <imgui.h>
 

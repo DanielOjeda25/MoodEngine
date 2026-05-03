@@ -48,9 +48,9 @@ add_executable(mood_tests
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
     # testear. Cuando crezca, convertir a target `mood_core` compartido.
-    ${CMAKE_SOURCE_DIR}/src/engine/scene/EditorCamera.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/scene/FpsCamera.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/scene/Scene.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/core/EditorCamera.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/core/FpsCamera.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/core/Scene.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/queries/ScenePick.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/GridMap.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/Pathfinding.cpp

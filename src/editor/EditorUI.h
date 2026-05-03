@@ -17,7 +17,7 @@
 #include "editor/panels/MaterialEditorPanel.h"  // Hito 42
 #include "editor/panels/ScriptEditorPanel.h"
 #include "editor/panels/ViewportPanel.h"
-#include "engine/scene/Entity.h"
+#include "engine/scene/core/Entity.h"
 
 #include <filesystem>
 #include <optional>

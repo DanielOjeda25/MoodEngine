@@ -6,7 +6,7 @@
 //
 // Size: 8 bytes (id) + 8 bytes (puntero). Copiable/movible trivialmente.
 
-#include "engine/scene/Scene.h"
+#include "engine/scene/core/Scene.h"
 
 #include <entt/entt.hpp>
 

@@ -14,7 +14,7 @@
 // Antes el (3) vivia inline en EditorProjectActions; ahora lo expone
 // `applyEntitiesToScene` para que el player tambien lo use.
 
-#include "engine/scene/Entity.h"
+#include "engine/scene/core/Entity.h"
 
 #include <filesystem>
 

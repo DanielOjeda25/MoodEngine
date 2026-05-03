@@ -8,8 +8,8 @@
 #include <doctest/doctest.h>
 
 #include "engine/scene/components/Components.h"
-#include "engine/scene/Entity.h"
-#include "engine/scene/Scene.h"
+#include "engine/scene/core/Entity.h"
+#include "engine/scene/core/Scene.h"
 #include "engine/scene/queries/ScenePick.h"
 
 #include <glm/ext/matrix_clip_space.hpp>

@@ -3,8 +3,8 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/scene/EditorCamera.h"
-#include "engine/scene/FpsCamera.h"
+#include "engine/scene/core/EditorCamera.h"
+#include "engine/scene/core/FpsCamera.h"
 
 #include <glm/geometric.hpp>
 

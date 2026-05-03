@@ -18,7 +18,7 @@
 //   para v1, mostrar warning antes podria ser un polish futuro.
 
 #include "editor/panels/IPanel.h"
-#include "engine/scene/Entity.h"
+#include "engine/scene/core/Entity.h"
 
 #include <string>
 

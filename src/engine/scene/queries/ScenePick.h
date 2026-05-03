@@ -9,7 +9,7 @@
 // mismo concepto vendra cuando `PhysicsWorld::rayCast` exista (Hito 13+).
 
 #include "core/Types.h"
-#include "engine/scene/Entity.h"
+#include "engine/scene/core/Entity.h"
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
