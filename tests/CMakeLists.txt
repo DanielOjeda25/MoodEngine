@@ -44,6 +44,7 @@ add_executable(mood_tests
     test_raycast.cpp
     test_trigger_system.cpp
     test_save_load.cpp
+    test_frustum.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para
