@@ -3,8 +3,8 @@
 #include "editor/EditorUI.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/audio/AudioClip.h"
-#include "engine/render/MaterialAsset.h"
-#include "engine/render/MeshAsset.h"
+#include "engine/render/resources/MaterialAsset.h"
+#include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 

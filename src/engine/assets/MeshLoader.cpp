@@ -5,7 +5,7 @@
 #include "engine/animation/Skeleton.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/render/IMesh.h"
-#include "engine/render/MeshAsset.h"
+#include "engine/render/resources/MeshAsset.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>

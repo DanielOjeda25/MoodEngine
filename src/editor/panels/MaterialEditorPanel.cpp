@@ -1,7 +1,7 @@
 #include "editor/panels/MaterialEditorPanel.h"
 
 #include "engine/assets/AssetManager.h"
-#include "engine/render/MaterialAsset.h"
+#include "engine/render/resources/MaterialAsset.h"
 
 #include <imgui.h>
 

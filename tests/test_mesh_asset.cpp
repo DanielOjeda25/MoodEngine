@@ -9,7 +9,7 @@
 #include "engine/assets/MeshLoader.h"
 #include "engine/render/IMesh.h"
 #include "engine/render/ITexture.h"
-#include "engine/render/MeshAsset.h"
+#include "engine/render/resources/MeshAsset.h"
 
 #include <chrono>
 #include <filesystem>

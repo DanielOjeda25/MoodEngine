@@ -1,7 +1,7 @@
 #include "engine/serialization/SceneLoader.h"
 
 #include "engine/assets/AssetManager.h"
-#include "engine/render/MeshAsset.h"
+#include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"

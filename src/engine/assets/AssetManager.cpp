@@ -6,8 +6,8 @@
 #include "engine/audio/AudioClip.h"
 #include "engine/render/IMesh.h"
 #include "engine/render/ITexture.h"
-#include "engine/render/MaterialAsset.h"
-#include "engine/render/MeshAsset.h"
+#include "engine/render/resources/MaterialAsset.h"
+#include "engine/render/resources/MeshAsset.h"
 #include "engine/serialization/PrefabSerializer.h"
 
 #include <nlohmann/json.hpp>

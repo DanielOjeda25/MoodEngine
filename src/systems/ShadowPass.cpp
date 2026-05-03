@@ -4,7 +4,7 @@
 #include "engine/assets/AssetManager.h"
 #include "engine/render/IMesh.h"
 #include "engine/render/IRenderer.h"
-#include "engine/render/MeshAsset.h"
+#include "engine/render/resources/MeshAsset.h"
 #include "engine/render/ShadowMath.h"
 #include "engine/render/opengl/OpenGLShader.h"
 #include "engine/render/opengl/OpenGLShadowMap.h"
