@@ -1,4 +1,4 @@
-#include "editor/panels/AssetBrowserPanel.h"
+#include "editor/panels/assets/AssetBrowserPanel.h"
 
 #include "core/Log.h"
 #include "engine/audio/clips/AudioClip.h"

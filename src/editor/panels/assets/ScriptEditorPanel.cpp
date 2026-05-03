@@ -1,4 +1,4 @@
-#include "editor/panels/ScriptEditorPanel.h"
+#include "editor/panels/assets/ScriptEditorPanel.h"
 
 #include "core/Log.h"
 #include "engine/scene/components/Components.h"

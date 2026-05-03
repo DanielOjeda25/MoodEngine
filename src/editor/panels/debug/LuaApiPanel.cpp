@@ -1,4 +1,4 @@
-#include "editor/panels/LuaApiPanel.h"
+#include "editor/panels/debug/LuaApiPanel.h"
 
 #include <imgui.h>
 

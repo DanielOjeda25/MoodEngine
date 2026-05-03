@@ -1,4 +1,4 @@
-#include "editor/panels/ConsolePanel.h"
+#include "editor/panels/debug/ConsolePanel.h"
 
 #include "core/Log.h"
 #include "core/LogRingSink.h"

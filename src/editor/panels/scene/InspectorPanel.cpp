@@ -1,4 +1,4 @@
-#include "editor/panels/InspectorPanel.h"
+#include "editor/panels/scene/InspectorPanel.h"
 
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"

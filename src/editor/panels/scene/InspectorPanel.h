@@ -1,7 +1,7 @@
 #pragma once
 
 #include "editor/panels/IPanel.h"
-#include "editor/panels/InspectorEditTracker.h"
+#include "editor/panels/scene/InspectorEditTracker.h"
 
 namespace Mood {
 

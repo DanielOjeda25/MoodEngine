@@ -1,4 +1,4 @@
-#include "editor/panels/MaterialEditorPanel.h"
+#include "editor/panels/assets/MaterialEditorPanel.h"
 
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/resources/MaterialAsset.h"

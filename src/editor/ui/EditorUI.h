@@ -9,14 +9,14 @@
 #include "editor/ui/MenuBar.h"
 #include "editor/ui/StatusBar.h"
 #include "editor/commands/HistoryStack.h"
-#include "editor/panels/AssetBrowserPanel.h"
-#include "editor/panels/ConsolePanel.h"
-#include "editor/panels/HierarchyPanel.h"
-#include "editor/panels/LuaApiPanel.h"
-#include "editor/panels/InspectorPanel.h"
-#include "editor/panels/MaterialEditorPanel.h"  // Hito 42
-#include "editor/panels/ScriptEditorPanel.h"
-#include "editor/panels/ViewportPanel.h"
+#include "editor/panels/assets/AssetBrowserPanel.h"
+#include "editor/panels/debug/ConsolePanel.h"
+#include "editor/panels/scene/HierarchyPanel.h"
+#include "editor/panels/debug/LuaApiPanel.h"
+#include "editor/panels/scene/InspectorPanel.h"
+#include "editor/panels/assets/MaterialEditorPanel.h"  // Hito 42
+#include "editor/panels/assets/ScriptEditorPanel.h"
+#include "editor/panels/scene/ViewportPanel.h"
 #include "engine/scene/core/Entity.h"
 
 #include <filesystem>

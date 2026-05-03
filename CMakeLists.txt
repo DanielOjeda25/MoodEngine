@@ -359,14 +359,14 @@ add_executable(MoodEditor
     src/editor/commands/EditTransformCommand.cpp
     src/editor/commands/DeleteEntityCommand.cpp
     src/editor/commands/CreateEntityCommand.cpp
-    src/editor/panels/ViewportPanel.cpp
-    src/editor/panels/InspectorPanel.cpp
-    src/editor/panels/AssetBrowserPanel.cpp
-    src/editor/panels/ConsolePanel.cpp
-    src/editor/panels/HierarchyPanel.cpp
-    src/editor/panels/LuaApiPanel.cpp
-    src/editor/panels/ScriptEditorPanel.cpp
-    src/editor/panels/MaterialEditorPanel.cpp
+    src/editor/panels/scene/ViewportPanel.cpp
+    src/editor/panels/scene/InspectorPanel.cpp
+    src/editor/panels/assets/AssetBrowserPanel.cpp
+    src/editor/panels/debug/ConsolePanel.cpp
+    src/editor/panels/scene/HierarchyPanel.cpp
+    src/editor/panels/debug/LuaApiPanel.cpp
+    src/editor/panels/assets/ScriptEditorPanel.cpp
+    src/editor/panels/assets/MaterialEditorPanel.cpp
 )
 
 target_link_libraries(MoodEditor PRIVATE

@@ -1,4 +1,4 @@
-#include "editor/panels/ViewportPanel.h"
+#include "editor/panels/scene/ViewportPanel.h"
 
 #include "engine/render/rhi/IFramebuffer.h"
 

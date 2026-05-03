@@ -1,4 +1,4 @@
-#include "editor/panels/HierarchyPanel.h"
+#include "editor/panels/scene/HierarchyPanel.h"
 
 #include "editor/ui/EditorUI.h"
 #include "engine/scene/components/Components.h"
