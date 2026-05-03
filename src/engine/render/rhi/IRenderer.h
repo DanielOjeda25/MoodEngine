@@ -41,6 +41,19 @@ public:
     ///        listos (VAO creado, program linkado).
     virtual void drawMesh(const IMesh& mesh, const IShader& shader) = 0;
 
+    /// @brief F2H4: dibuja N instancias de la misma malla en un solo
+    ///        draw call. Las matrices `model` viajan como atributo de
+    ///        instancia (locations 5-8 = mat4) en `instanceData`. El
+    ///        caller es duenio de subir esos datos a un buffer GL antes
+    ///        de llamar (ver `OpenGLInstanceBuffer`). El shader debe
+    ///        leer `aModel` desde locations 5-8 con divisor=1.
+    ///
+    ///        Counter `frameStats().drawCalls` se incrementa en 1 (es
+    ///        un solo draw call); `frameStats().triangles` se incrementa
+    ///        en `instanceCount * (vertexCount/3)`.
+    virtual void drawMeshInstanced(const IMesh& mesh, const IShader& shader,
+                                     u32 instanceCount) = 0;
+
     /// @brief F2H2: contadores acumulados durante el frame actual. Reset en
     ///        cada `beginFrame`. Util para el Performance HUD del editor.
     virtual FrameStats frameStats() const = 0;

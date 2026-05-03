@@ -60,4 +60,21 @@ void OpenGLRenderer::drawMesh(const IMesh& mesh, const IShader& shader) {
     m_stats.triangles += static_cast<u32>(vc / 3);
 }
 
+void OpenGLRenderer::drawMeshInstanced(const IMesh& mesh,
+                                         const IShader& shader,
+                                         u32 instanceCount) {
+    if (instanceCount == 0) return;
+    shader.bind();
+    mesh.bind();
+    const auto vc = mesh.vertexCount();
+    // F2H4: los atributos de instancia (mat4 model en locations 5-8) los
+    // bindea el caller via OpenGLInstanceBuffer ANTES de llamar — esta
+    // funcion no asume nada sobre el VBO de instancias, solo issue el
+    // draw indirect.
+    glDrawArraysInstanced(GL_TRIANGLES, 0, static_cast<GLsizei>(vc),
+                           static_cast<GLsizei>(instanceCount));
+    ++m_stats.drawCalls;
+    m_stats.triangles += static_cast<u32>(vc / 3) * instanceCount;
+}
+
 } // namespace Mood
