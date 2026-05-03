@@ -5,7 +5,7 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/physics/PhysicsWorld.h"
+#include "engine/physics/world/PhysicsWorld.h"
 
 #include <glm/vec3.hpp>
 

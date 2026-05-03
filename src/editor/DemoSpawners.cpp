@@ -13,7 +13,7 @@
 #include "core/Log.h"
 #include "editor/commands/CreateEntityCommand.h"
 #include "engine/assets/AssetManager.h"
-#include "engine/physics/PhysicsWorld.h"
+#include "engine/physics/world/PhysicsWorld.h"
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"

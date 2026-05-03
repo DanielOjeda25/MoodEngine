@@ -1,7 +1,7 @@
 #include "systems/TriggerSystem.h"
 
 #include "core/Log.h"
-#include "engine/physics/PhysicsWorld.h"
+#include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"

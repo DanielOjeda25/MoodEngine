@@ -4,7 +4,7 @@
 #include "core/math/AABB.h"
 #include "engine/game/GameOverlay.h"
 #include "engine/game/GameState.h"
-#include "engine/physics/PhysicsWorld.h"
+#include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/queries/ViewportPick.h"
 #include "engine/world/GridMap.h"
 #include "platform/Window.h"

@@ -1,4 +1,4 @@
-#include "engine/physics/PhysicsWorld.h"
+#include "engine/physics/world/PhysicsWorld.h"
 
 #include "core/Log.h"
 

@@ -7,7 +7,7 @@
 #include "engine/game/GameManifest.h"
 #include "engine/game/GameOverlay.h"
 #include "engine/game/GameState.h"
-#include "engine/physics/PhysicsWorld.h"
+#include "engine/physics/world/PhysicsWorld.h"
 #include "engine/render/rhi/IMesh.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"

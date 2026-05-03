@@ -3,7 +3,7 @@
 #include "core/Log.h"
 #include "editor/commands/DeleteEntityCommand.h"
 #include "engine/assets/AssetManager.h"
-#include "engine/physics/PhysicsWorld.h"
+#include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"

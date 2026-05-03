@@ -263,7 +263,7 @@ add_library(mood_engine_lib STATIC
 
     src/engine/packaging/PackageBuilder.cpp
 
-    src/engine/physics/PhysicsWorld.cpp
+    src/engine/physics/world/PhysicsWorld.cpp
 
     src/engine/saving/SaveLoad.cpp
 

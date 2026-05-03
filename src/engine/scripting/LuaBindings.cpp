@@ -2,7 +2,7 @@
 
 #include "core/Log.h"
 #include "engine/game/GameState.h"
-#include "engine/physics/PhysicsWorld.h"
+#include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scripting/ExposedProperty.h"

@@ -85,7 +85,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/editor/commands/EditTransformCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/DeleteEntityCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/CreateEntityCommand.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/physics/PhysicsWorld.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld.cpp
 )
 
 # AssetManager.cpp usa spdlog (via core/Log). JsonHelpers requiere nlohmann_json.
