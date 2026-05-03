@@ -5,7 +5,7 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/render/Fog.h"
+#include "engine/render/pipeline/Fog.h"
 
 using namespace Mood;
 

@@ -11,7 +11,7 @@
 #include "editor/commands/HistoryStack.h"
 #include "systems/TriggerSystem.h"
 #include "engine/assets/AssetManager.h"
-#include "engine/render/Fog.h"
+#include "engine/render/pipeline/Fog.h"
 #include "engine/scene/EditorCamera.h"
 #include "engine/scene/FpsCamera.h"
 #include "engine/scene/Scene.h"

@@ -13,7 +13,7 @@
 #include "engine/assets/AssetManager.h"
 #include "engine/render/IRenderer.h"
 #include "engine/render/ITexture.h"
-#include "engine/render/LightGrid.h"
+#include "engine/render/pipeline/LightGrid.h"
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/RendererTypes.h"

@@ -78,7 +78,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/audio/miniaudio_impl.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/AudioSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/LightSystem.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/render/LightGrid.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/render/pipeline/LightGrid.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Log.cpp
     ${CMAKE_SOURCE_DIR}/src/core/LogRingSink.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/HistoryStack.cpp

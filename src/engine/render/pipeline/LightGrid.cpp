@@ -1,4 +1,4 @@
-#include "engine/render/LightGrid.h"
+#include "engine/render/pipeline/LightGrid.h"
 
 #include <glm/vec4.hpp>
 

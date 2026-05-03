@@ -5,7 +5,7 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/render/ShadowMath.h"
+#include "engine/render/pipeline/ShadowMath.h"
 
 #include <glm/gtc/matrix_inverse.hpp>
 

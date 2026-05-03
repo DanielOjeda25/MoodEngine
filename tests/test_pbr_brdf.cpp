@@ -6,7 +6,7 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/render/PbrMath.h"
+#include "engine/render/pipeline/PbrMath.h"
 
 #include <glm/geometric.hpp>
 

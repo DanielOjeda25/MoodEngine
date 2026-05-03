@@ -19,7 +19,7 @@
 // y lo que `MoodPlayer` blittea al backbuffer.
 
 #include "core/Types.h"
-#include "engine/render/Fog.h"
+#include "engine/render/pipeline/Fog.h"
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
