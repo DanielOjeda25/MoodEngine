@@ -1,4 +1,4 @@
-#include "systems/PostProcessPass.h"
+#include "systems/render/PostProcessPass.h"
 
 #include "core/Log.h"
 #include "engine/render/rhi/IShader.h"

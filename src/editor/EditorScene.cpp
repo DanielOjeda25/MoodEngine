@@ -8,8 +8,8 @@
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 #include "engine/world/grid/GridMap.h"
-#include "systems/AudioSystem.h"
-#include "systems/ScriptSystem.h"
+#include "systems/audio/AudioSystem.h"
+#include "systems/scripting/ScriptSystem.h"
 
 #include <glm/vec3.hpp>
 #include <glm/common.hpp>          // glm::mix

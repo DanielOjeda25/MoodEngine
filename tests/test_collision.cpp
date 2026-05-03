@@ -6,7 +6,7 @@
 
 #include "core/math/AABB.h"
 #include "engine/world/grid/GridMap.h"
-#include "systems/PhysicsSystem.h"
+#include "systems/physics/PhysicsSystem.h"
 
 #include <glm/vec3.hpp>
 

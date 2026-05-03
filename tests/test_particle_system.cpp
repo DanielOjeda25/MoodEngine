@@ -11,7 +11,7 @@
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/world/grid/GridMap.h"
-#include "systems/ParticleSystem.h"
+#include "systems/particles/ParticleSystem.h"
 
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>

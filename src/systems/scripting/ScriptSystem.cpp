@@ -1,4 +1,4 @@
-#include "systems/ScriptSystem.h"
+#include "systems/scripting/ScriptSystem.h"
 
 #include "core/Log.h"
 #include "engine/scene/components/Components.h"

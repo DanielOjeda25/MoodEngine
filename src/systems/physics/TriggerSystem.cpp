@@ -1,11 +1,11 @@
-#include "systems/TriggerSystem.h"
+#include "systems/physics/TriggerSystem.h"
 
 #include "core/Log.h"
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
-#include "systems/ScriptSystem.h"
+#include "systems/scripting/ScriptSystem.h"
 
 #include <glm/gtc/matrix_inverse.hpp>
 

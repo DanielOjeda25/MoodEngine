@@ -1,4 +1,4 @@
-#include "systems/AnimationSystem.h"
+#include "systems/animation/AnimationSystem.h"
 
 #include "engine/animation/clips/AnimationClip.h"
 #include "engine/animation/skeleton/Skeleton.h"

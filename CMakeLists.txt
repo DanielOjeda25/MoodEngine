@@ -282,17 +282,17 @@ add_library(mood_engine_lib STATIC
     src/engine/world/grid/GridMap.cpp
     src/engine/world/grid/Pathfinding.cpp
 
-    src/systems/AnimationSystem.cpp
-    src/systems/AudioSystem.cpp
-    src/systems/LightSystem.cpp
-    src/systems/NavSystem.cpp
-    src/systems/ParticleSystem.cpp
-    src/systems/PhysicsSystem.cpp
-    src/systems/PostProcessPass.cpp
-    src/systems/ScriptSystem.cpp
-    src/systems/ShadowPass.cpp
-    src/systems/TriggerSystem.cpp
-    src/systems/SkyboxRenderer.cpp
+    src/systems/animation/AnimationSystem.cpp
+    src/systems/audio/AudioSystem.cpp
+    src/systems/light/LightSystem.cpp
+    src/systems/ai/NavSystem.cpp
+    src/systems/particles/ParticleSystem.cpp
+    src/systems/physics/PhysicsSystem.cpp
+    src/systems/render/PostProcessPass.cpp
+    src/systems/scripting/ScriptSystem.cpp
+    src/systems/render/ShadowPass.cpp
+    src/systems/physics/TriggerSystem.cpp
+    src/systems/render/SkyboxRenderer.cpp
 
     src/engine/scripting/exposed/ExposedProperty.cpp
     src/engine/scripting/bindings/LuaBindings.cpp

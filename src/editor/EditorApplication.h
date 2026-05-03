@@ -9,7 +9,7 @@
 #include "editor/EditorMode.h"
 #include "editor/EditorUI.h"
 #include "editor/commands/HistoryStack.h"
-#include "systems/TriggerSystem.h"
+#include "systems/physics/TriggerSystem.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/pipeline/Fog.h"
 #include "engine/scene/core/EditorCamera.h"

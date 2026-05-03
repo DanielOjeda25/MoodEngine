@@ -28,10 +28,10 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
-#include "systems/LightSystem.h"
-#include "systems/PostProcessPass.h"
-#include "systems/ShadowPass.h"
-#include "systems/SkyboxRenderer.h"
+#include "systems/light/LightSystem.h"
+#include "systems/render/PostProcessPass.h"
+#include "systems/render/ShadowPass.h"
+#include "systems/render/SkyboxRenderer.h"
 
 #include <glad/gl.h>
 

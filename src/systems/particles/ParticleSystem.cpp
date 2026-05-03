@@ -1,4 +1,4 @@
-#include "systems/ParticleSystem.h"
+#include "systems/particles/ParticleSystem.h"
 
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"

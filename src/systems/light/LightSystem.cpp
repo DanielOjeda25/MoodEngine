@@ -1,4 +1,4 @@
-#include "systems/LightSystem.h"
+#include "systems/light/LightSystem.h"
 
 #include "core/Log.h"
 #include "engine/render/rhi/IShader.h"

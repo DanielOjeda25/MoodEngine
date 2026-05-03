@@ -15,7 +15,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
-#include "systems/AudioSystem.h"
+#include "systems/audio/AudioSystem.h"
 
 #include <memory>
 #include <stdexcept>

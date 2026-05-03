@@ -1,4 +1,4 @@
-#include "systems/ShadowPass.h"
+#include "systems/render/ShadowPass.h"
 
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"

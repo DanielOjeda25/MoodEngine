@@ -1,4 +1,4 @@
-#include "systems/SkyboxRenderer.h"
+#include "systems/render/SkyboxRenderer.h"
 
 #include "core/Log.h"
 #include "engine/render/rhi/IShader.h"

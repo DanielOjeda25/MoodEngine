@@ -8,7 +8,7 @@
 #include "engine/scene/queries/ViewportPick.h"
 #include "engine/world/grid/GridMap.h"
 #include "platform/Window.h"
-#include "systems/PhysicsSystem.h"
+#include "systems/physics/PhysicsSystem.h"
 
 #include <SDL.h>
 

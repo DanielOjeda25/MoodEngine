@@ -20,7 +20,7 @@
 // fragment evalua la directional siempre + las point lights de su tile.
 
 #include "core/Types.h"
-#include "systems/LightSystem.h" // LightFrameData, PointLightData
+#include "systems/light/LightSystem.h" // LightFrameData, PointLightData
 
 #include <glm/mat4x4.hpp>
 

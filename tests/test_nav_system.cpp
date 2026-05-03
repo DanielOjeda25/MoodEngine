@@ -8,7 +8,7 @@
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 #include "engine/world/grid/GridMap.h"
-#include "systems/NavSystem.h"
+#include "systems/ai/NavSystem.h"
 
 #include <cmath>
 

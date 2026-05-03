@@ -12,7 +12,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
-#include "systems/ScriptSystem.h"
+#include "systems/scripting/ScriptSystem.h"
 
 #include <chrono>
 #include <filesystem>

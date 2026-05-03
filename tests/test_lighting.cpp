@@ -9,7 +9,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
-#include "systems/LightSystem.h"
+#include "systems/light/LightSystem.h"
 
 #include <glm/geometric.hpp>
 

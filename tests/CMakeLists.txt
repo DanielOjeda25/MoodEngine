@@ -54,11 +54,11 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scene/queries/ScenePick.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/grid/GridMap.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/grid/Pathfinding.cpp
-    ${CMAKE_SOURCE_DIR}/src/systems/NavSystem.cpp
-    ${CMAKE_SOURCE_DIR}/src/systems/ParticleSystem.cpp
-    ${CMAKE_SOURCE_DIR}/src/systems/PhysicsSystem.cpp
-    ${CMAKE_SOURCE_DIR}/src/systems/ScriptSystem.cpp
-    ${CMAKE_SOURCE_DIR}/src/systems/TriggerSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/ai/NavSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/particles/ParticleSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/physics/PhysicsSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/scripting/ScriptSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/physics/TriggerSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/exposed/ExposedProperty.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/game/state/GameState.cpp
@@ -76,8 +76,8 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/audio/clips/AudioClip.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/audio/device/AudioDevice.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/audio/device/miniaudio_impl.cpp
-    ${CMAKE_SOURCE_DIR}/src/systems/AudioSystem.cpp
-    ${CMAKE_SOURCE_DIR}/src/systems/LightSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/audio/AudioSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/light/LightSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/render/pipeline/LightGrid.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Log.cpp
     ${CMAKE_SOURCE_DIR}/src/core/LogRingSink.cpp

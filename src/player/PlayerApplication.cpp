@@ -21,13 +21,13 @@
 #include "engine/scene/serialization/SceneLoader.h"
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "platform/Window.h"
-#include "systems/AnimationSystem.h"
-#include "systems/AudioSystem.h"
-#include "systems/NavSystem.h"
-#include "systems/ParticleSystem.h"
-#include "systems/PhysicsSystem.h"
-#include "systems/ScriptSystem.h"
-#include "systems/TriggerSystem.h"
+#include "systems/animation/AnimationSystem.h"
+#include "systems/audio/AudioSystem.h"
+#include "systems/ai/NavSystem.h"
+#include "systems/particles/ParticleSystem.h"
+#include "systems/physics/PhysicsSystem.h"
+#include "systems/scripting/ScriptSystem.h"
+#include "systems/physics/TriggerSystem.h"
 
 // glad/gl.h debe ir antes que cualquier otro header que pueda incluir GL.
 #include <glad/gl.h>
