@@ -53,7 +53,7 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 ### Fase 2
 
 - [x] **F2H1** — Reorganización arquitectónica de `src/` por dominios (completado, tag `v1.1.0-fase2-hito1`). Bloques A-H + cierre. 18 sub-commits, 0 regresiones (suite **319/6613**).
-- [ ] **F2H2** — Tracy + benchmark sistemático (TBD).
+- [x] **F2H2** — Tracy + benchmark sistemático (completado, tag `v1.1.0-fase2-hito2`). Bloques A-H. Cliente Tracy v0.11.1 vía CPM (controlado por `MOOD_PROFILE`); 10 zonas en frame loop + sub-zonas SceneRenderer; 4 spawners stress-test (10K/100K/500K/1M tris); Performance HUD con snapshot CSV. Baseline GTX 1660 / Ryzen 5 5600G en `docs/PERFORMANCE.md`: top cuello = `PBR::staticPass` (70.74% del frame con 836 cubos). Suite **319/6613**.
 
 **🏁 Fase 1 cerrada con `v1.0.0`. Hito 40 cierra los pendientes chicos/medios pre-Fase 2.** Próximo paso: Hitos 41+42 (los 2 grandes restantes) → recapitulación del dev → Fase 2 (TBD).
 

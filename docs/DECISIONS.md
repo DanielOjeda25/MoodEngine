@@ -2790,4 +2790,32 @@ Adicionalmente, durante el menu se fuerza `GameState::paused() = true` para que 
 
 **Revisar si:** algún sub-bloque queda con 1 archivo solo durante mucho tiempo (puede colapsarse). Por ahora todos justifican existencia futura (placeholders documentados con `.gitkeep`).
 
+## 2026-05-03: Tracy adoptado como profiler oficial (F2H2)
+
+**Contexto:** F2H2 abre la sub-fase de optimización de Fase 2. Antes de empezar a optimizar (frustum culling F2H3, LOD F2H4, batching futuro) hay que saber **dónde** se va el tiempo de frame. Sin profiler real, las decisiones serían intuición.
+
+**Decisión:** integrar **Tracy v0.11.1** como profiler. Cliente linkeado al ejecutable vía CPM (target `Tracy::TracyClient`), controlado por la opción CMake `MOOD_PROFILE` (default ON). Macros propias `MOOD_PROFILE_FRAME / SCOPE / FUNCTION / PLOT` en `src/core/Profiler.h` que expanden a Tracy cuando ON y a `do{}while(0)` cuando OFF (coste cero en builds finales).
+
+Instrumentación inicial: 10 zonas en `EditorApplication::run` (eventos / UI / física / scripts / animación / nav / partículas / audio / render / present) + 8 sub-zonas dentro de `SceneRenderer::renderScene` (shadow / skybox / light grid / PBR static / PBR skinned / particles / debug / post-process). Plots de FPS y entity count.
+
+**Razones:**
+- **Cliente embedded ≠ servidor externo.** El cliente vive linkeado, el servidor es `tracy-profiler.exe` portable que se conecta por TCP. Con server cerrado la overhead es ~1-2% del frame; con server abierto ~5-8%. En Release con `MOOD_PROFILE=OFF` las macros desaparecen del binary.
+- **Granularidad real**: Tracy mide por zona con stddev / min / max — no es una vista global tipo "frame ms". Con 3163 frames de captura ya tenemos `mean / max / stddev` por cada zona.
+- **`tracy-csvexport.exe`** permite extraer los % de zona a CSV sin la GUI — útil cuando hay mismatch de versión o headless. Esta sesión lo usó: el `tracy-profiler.exe` que el dev bajó tenía protocolo distinto (mismatch), pero `tracy-capture.exe` capturó el `.tracy` y `tracy-csvexport.exe` lo decodificó. La data del baseline final salió de ese pipeline.
+- **CMake CPM** lo trae en una línea, sin dependencia adicional al sistema.
+
+**Alternativas consideradas:**
+- **Optick**: similar feature set, menos mantenido. Tracy tiene más adopción y mejor visualización.
+- **`std::chrono` ad-hoc**: sin overhead pero sin granularidad por zona ni vista temporal — solo da un total. Insuficiente para identificar cuellos.
+- **Profilers nativos (Visual Studio Profiler, Superluminal)**: excelentes pero requieren instalación + licencia / setup. Tracy es portable y lib propia, va con el repo.
+- **PIX / RenderDoc**: orientados a GPU, no a CPU + frame-level. Complementarios pero distintos.
+
+**Trade-offs:**
+- Se pierde: tamaño binario crece ~500KB con Tracy linkeado en Debug. Aceptable en builds de desarrollo, irrelevante en Release con `MOOD_PROFILE=OFF`.
+- Se gana: cuellos identificables por zona con stddev. Para F2H2 inmediatamente útil: `PBR::staticPass` se queda con el 70.74% del frame con 836 cubos = decisión clara para F2H3.
+
+**Lección aprendida (mismatch de versión):** el cliente linkeado y el `tracy-profiler.exe` deben ser **exactamente la misma versión**. Bajar el ZIP del tag exacto (v0.11.1 en este caso). El protocolo TCP cambia entre versiones y el server muestra "Protocol mismatch" al conectar. Si pasa, fallback al pipeline `tracy-capture.exe` → `tracy-csvexport.exe`.
+
+**Revisar si:** Tracy deja de ser mantenido (improbable a corto plazo, proyecto activo) o si una migración a Vulkan/D3D12 requiere features de profiling GPU más profundas (entonces evaluar PIX o RenderDoc en paralelo, no como reemplazo).
+
 

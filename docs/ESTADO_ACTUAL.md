@@ -6,7 +6,17 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 abierta. F2H1 cerrado — Reorganización arquitectónica.**
+**🚀 Fase 2 — F2H2 cerrado: Tracy + benchmark sistemático.**
+Tag: `v1.1.0-fase2-hito2`.
+Verificado automático: suite doctest **319/6613** sin regresiones (todo el código nuevo es aditivo + macros no-op cuando `MOOD_PROFILE=OFF`). Verificado por el dev a ojo: editor con HUD `Ver > Performance` muestra FPS / frame ms / draws / tris / entities en vivo; spawner `Ayuda > Stress test` produce los grids de cubos esperados; botón "Snapshot baseline F2H2" appendea fila a `performance_baseline.csv` correctamente.
+
+**Cambio importante:** primer profiler real integrado. Cliente Tracy v0.11.1 vía CPM (`MOOD_PROFILE` ON por default — macros no-op cuando OFF, coste cero). 10 zonas instrumentadas en frame loop + sub-zonas dentro de SceneRenderer (shadow / skybox / light grid / PBR static / PBR skinned / particle / debug / post-process). Counter `FrameStats` en `IRenderer` (draws + tris) consumido por el HUD. 4 spawners stress-test (10K/100K/500K/1M tris en cubos). Nuevo panel `PerformanceHudPanel` con snapshot CSV.
+
+**Baseline medido (GTX 1660 / Ryzen 5 5600G / 16GB DDR4-2666):** documentado en `docs/PERFORMANCE.md`. Empty: 60 FPS vsync-cap. 10K tris (836 cubos): ~4 FPS, ~250 ms/frame. 100K+ tris: viewport congelado en Debug, postergado a post-F2H3/F2H4. Top cuello medido: `PBR::staticPass` 70.74% del frame (mean 42.5 ms; ~50 µs por cubo de 12 tris = CPU-bound en draw call setup, no GPU).
+
+**Próximo paso:** **F2H3 — Frustum culling** (entra con datos: el 70% del frame se va en `PBR::staticPass`, sin culling todo se procesa). Plan en `docs/PLAN_FASE2.md` sección F2H3.
+
+### F2H1 (anterior, ya cerrado)
 Tag: `v1.1.0-fase2-hito1`.
 Verificado automático: suite doctest **319/6613** sin regresiones después de cada uno de los 18 sub-commits. Editor + MoodPlayer compilan limpios y se ven idénticos a v1.0.0 (zero behavior change).
 
@@ -24,8 +34,6 @@ Verificado automático: suite doctest **319/6613** sin regresiones después de c
 - `editor/{application,ui,panels/{scene,assets,debug,world},commands,tools,overlay}/`
 
 Carpetas `.gitkeep` documentan dónde van features de hitos posteriores (CSG en F2H9-F2H16, dialog/quest/inventory en F2H29-F2H31, i18n en F2H5).
-
-**Próximo paso:** **F2H2 — Tracy + benchmark sistemático** (sub-fase 2.1). Crear escenas stress-test (10K, 100K, 500K, 1M tris), medir FPS en GTX 1660, identificar top 5 cuellos de botella, documentar en `docs/PERFORMANCE.md`. Nueva dep: Tracy.
 
 ### Fase 1 cerrada — Recapitulación
 Tags: `v1.0.0` (Hito 39, fin de Fase 1) + `v0.40.0-hito40` + `v0.41.0-hito41` + `v0.41.1-hito41-final` (fix Load Game) + `v0.42.0-hito42` (Material Editor lite).
