@@ -25,6 +25,10 @@ public:
 
     PerformanceHudPanel() {
         visible = false;  // off por defecto; toggle desde menu Ver
+        // Default label cubre el primer snapshot del benchmark F2H2 (escena
+        // vacia). El dev lo cambia manualmente para 10K / 100K / 500K / 1M.
+        m_snapshotLabel[0] = 'E'; m_snapshotLabel[1] = 'm'; m_snapshotLabel[2] = 'p';
+        m_snapshotLabel[3] = 't'; m_snapshotLabel[4] = 'y'; m_snapshotLabel[5] = '\0';
     }
 
     void onImGuiRender() override;
@@ -34,6 +38,9 @@ public:
 
 private:
     Metrics m_metrics{};
+    // F2H2 Bloque G: snapshot dump → log + performance_baseline.csv
+    char m_snapshotLabel[64]{};
+    void writeSnapshot();
 };
 
 } // namespace Mood

@@ -1,6 +1,11 @@
 #include "editor/panels/debug/PerformanceHudPanel.h"
 
+#include "core/Log.h"
+
 #include <imgui.h>
+
+#include <filesystem>
+#include <fstream>
 
 namespace Mood {
 
@@ -52,7 +57,51 @@ void PerformanceHudPanel::onImGuiRender() {
 
     ImGui::Text("Entities:   %u", m_metrics.entityCount);
 
+    ImGui::Separator();
+
+    // F2H2 Bloque G: snapshot dump del estado actual al log + CSV. El dev
+    // setea el label de la escena (Empty / 10K / 100K / 500K / 1M) y
+    // clickea "Snapshot". Append-only — multiples clicks generan multiples
+    // filas en el CSV (util si querés re-medir despues de estabilizar).
+    ImGui::SetNextItemWidth(120.0f);
+    ImGui::InputText("Label", m_snapshotLabel, sizeof(m_snapshotLabel));
+    ImGui::SameLine();
+    if (ImGui::Button("Snapshot baseline F2H2")) {
+        writeSnapshot();
+    }
+
     ImGui::End();
+}
+
+void PerformanceHudPanel::writeSnapshot() {
+    // CSV en el cwd del proceso (donde se lance MoodEditor.exe). Append-only:
+    // si no existe, escribimos cabecera primero.
+    const auto path = std::filesystem::current_path() / "performance_baseline.csv";
+    const bool needHeader = !std::filesystem::exists(path);
+    std::ofstream out(path, std::ios::app);
+    if (!out.is_open()) {
+        Log::editor()->warn("[F2H2_SNAPSHOT] no se pudo abrir '{}'",
+                              path.generic_string());
+        return;
+    }
+    if (needHeader) {
+        out << "label,fps,frame_ms,draw_calls,tris,entities\n";
+    }
+    out << m_snapshotLabel << ','
+        << m_metrics.fps    << ','
+        << m_metrics.frameMs << ','
+        << m_metrics.drawCalls << ','
+        << m_metrics.triangles << ','
+        << m_metrics.entityCount << '\n';
+    out.flush();
+
+    // Tambien al log con formato parseable: el dev (o un script) puede
+    // recuperar las filas con `Select-String "F2H2_SNAPSHOT" mood.log`.
+    Log::editor()->info(
+        "[F2H2_SNAPSHOT] label={} fps={:.1f} frame_ms={:.2f} "
+        "draws={} tris={} entities={}",
+        m_snapshotLabel, m_metrics.fps, m_metrics.frameMs,
+        m_metrics.drawCalls, m_metrics.triangles, m_metrics.entityCount);
 }
 
 } // namespace Mood
