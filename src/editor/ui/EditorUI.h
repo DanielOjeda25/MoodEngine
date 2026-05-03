@@ -13,6 +13,7 @@
 #include "editor/panels/debug/ConsolePanel.h"
 #include "editor/panels/scene/HierarchyPanel.h"
 #include "editor/panels/debug/LuaApiPanel.h"
+#include "editor/panels/debug/PerformanceHudPanel.h"
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/assets/MaterialEditorPanel.h"  // Hito 42
 #include "editor/panels/assets/ScriptEditorPanel.h"
@@ -68,6 +69,11 @@ public:
     /// @brief Hito 42: panel dedicado de edicion de materiales (drop
     ///        textures + sliders sin necesidad de tener entidad seleccionada).
     MaterialEditorPanel& materialEditor() { return m_materialEditor; }
+
+    /// @brief F2H2: panel del Performance HUD (FPS / frame ms / draw calls /
+    ///        triangulos / entity count). EditorApplication le pasa las
+    ///        metricas cada frame con `setMetrics`.
+    PerformanceHudPanel& performanceHud() { return m_performanceHud; }
 
     /// @brief Hito 27: HistoryStack del editor inyectado desde
     ///        EditorApplication. La MenuBar lo usa para los items
@@ -321,6 +327,7 @@ private:
     AssetBrowserPanel m_assetBrowser;
     ConsolePanel m_console;
     LuaApiPanel m_luaApi;
+    PerformanceHudPanel m_performanceHud;  // F2H2
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     MaterialEditorPanel m_materialEditor;  // Hito 42
     Entity m_selectedEntity;

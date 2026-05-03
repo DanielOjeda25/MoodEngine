@@ -15,6 +15,10 @@ public:
     void endFrame() override;
     void setViewport(i32 x, i32 y, u32 width, u32 height) override;
     void drawMesh(const IMesh& mesh, const IShader& shader) override;
+    FrameStats frameStats() const override { return m_stats; }
+
+private:
+    FrameStats m_stats{};  // F2H2: reset en beginFrame, increment en drawMesh
 };
 
 } // namespace Mood

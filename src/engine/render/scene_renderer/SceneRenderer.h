@@ -106,6 +106,14 @@ public:
     ///        primer render.
     void applyEnvironmentFromScene(Scene& scene);
 
+    /// @brief F2H2: contadores per-frame del IRenderer (draw calls + tris).
+    ///        Reset cada `beginFrame`. Solo cubre las draws via drawMesh
+    ///        (PBR static + skinned + shadow); skybox/particles/debug NO
+    ///        se cuentan.
+    FrameStats frameStats() const {
+        return m_renderer ? m_renderer->frameStats() : FrameStats{};
+    }
+
 private:
     std::unique_ptr<IRenderer> m_renderer;
     std::unique_ptr<OpenGLFramebuffer> m_sceneFb;     // HDR RGBA16F

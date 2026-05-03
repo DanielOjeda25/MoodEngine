@@ -22,6 +22,9 @@ void OpenGLRenderer::init() {
 }
 
 void OpenGLRenderer::beginFrame(const ClearValues& clear) {
+    // F2H2: reset de contadores per-frame al inicio del frame.
+    m_stats = FrameStats{};
+
     GLbitfield mask = 0;
     if (clear.clearColor) {
         glClearColor(clear.color.r, clear.color.g, clear.color.b, clear.color.a);
@@ -51,7 +54,10 @@ void OpenGLRenderer::drawMesh(const IMesh& mesh, const IShader& shader) {
     // y todos los cubos terminarian dibujandose en la posicion del primero.
     shader.bind();
     mesh.bind();
-    glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh.vertexCount()));
+    const auto vc = mesh.vertexCount();
+    glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vc));
+    ++m_stats.drawCalls;
+    m_stats.triangles += static_cast<u32>(vc / 3);
 }
 
 } // namespace Mood

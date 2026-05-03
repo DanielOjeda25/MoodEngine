@@ -12,6 +12,15 @@
 
 namespace Mood {
 
+/// @brief F2H2: contadores per-frame para el Performance HUD. Solo cuentan
+///        las draws que pasan por `IRenderer::drawMesh` (cuerpo opaco PBR +
+///        skinned + shadow). Pases con calls glDraw* directos (skybox = 1,
+///        particles = 1 instanced, debug = 1-2) NO se contabilizan.
+struct FrameStats {
+    u32 drawCalls = 0;
+    u32 triangles = 0;
+};
+
 class IRenderer {
 public:
     virtual ~IRenderer() = default;
@@ -31,6 +40,10 @@ public:
     /// @brief Dibuja una malla con el shader indicado. Ambos deben estar
     ///        listos (VAO creado, program linkado).
     virtual void drawMesh(const IMesh& mesh, const IShader& shader) = 0;
+
+    /// @brief F2H2: contadores acumulados durante el frame actual. Reset en
+    ///        cada `beginFrame`. Util para el Performance HUD del editor.
+    virtual FrameStats frameStats() const = 0;
 };
 
 } // namespace Mood

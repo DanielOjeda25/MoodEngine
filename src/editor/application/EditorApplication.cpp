@@ -435,6 +435,25 @@ int EditorApplication::run() {
                 static_cast<int64_t>(m_scene->entityCount()));
         }
 
+        // F2H2: pasar metricas al Performance HUD. Lee stats del frame
+        // ANTERIOR (m_renderer->frameStats todavia no fue reset por
+        // beginFrame de este frame). Esto es lo que queremos: el HUD
+        // muestra la carga real del frame que el dev acaba de ver.
+        {
+            PerformanceHudPanel::Metrics metrics;
+            metrics.fps = fps;
+            metrics.frameMs = static_cast<f32>(dtD * 1000.0);
+            if (m_sceneRenderer) {
+                const FrameStats stats = m_sceneRenderer->frameStats();
+                metrics.drawCalls = stats.drawCalls;
+                metrics.triangles = stats.triangles;
+            }
+            if (m_scene) {
+                metrics.entityCount = static_cast<u32>(m_scene->entityCount());
+            }
+            m_ui.performanceHud().setMetrics(metrics);
+        }
+
         // Hot-reload de shaders (Hito 25 G): chequeo throttle 500ms de
         // mtime y recompila los .vert/.frag que cambiaron en disco.
         // Iterativo y atomico — un error de compilacion mantiene el
