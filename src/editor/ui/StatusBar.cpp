@@ -1,4 +1,4 @@
-#include "editor/StatusBar.h"
+#include "editor/ui/StatusBar.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>

@@ -1,6 +1,6 @@
 #include "editor/panels/HierarchyPanel.h"
 
-#include "editor/EditorUI.h"
+#include "editor/ui/EditorUI.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"

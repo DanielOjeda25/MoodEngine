@@ -1,6 +1,6 @@
 #include "editor/panels/InspectorPanel.h"
 
-#include "editor/EditorUI.h"
+#include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/audio/clips/AudioClip.h"
 #include "engine/render/resources/MaterialAsset.h"

@@ -1,7 +1,7 @@
-#include "editor/MenuBar.h"
+#include "editor/ui/MenuBar.h"
 
 #include "core/Log.h"
-#include "editor/EditorUI.h"
+#include "editor/ui/EditorUI.h"
 #include "editor/panels/IPanel.h"
 
 #include <imgui.h>

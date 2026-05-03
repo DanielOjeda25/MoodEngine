@@ -4,10 +4,10 @@
 // bar, los paneles acoplables y la status bar. No hace init/shutdown de
 // ImGui ni gestiona input: eso vive en EditorApplication.
 
-#include "editor/Dockspace.h"
+#include "editor/ui/Dockspace.h"
 #include "editor/EditorMode.h"
-#include "editor/MenuBar.h"
-#include "editor/StatusBar.h"
+#include "editor/ui/MenuBar.h"
+#include "editor/ui/StatusBar.h"
 #include "editor/commands/HistoryStack.h"
 #include "editor/panels/AssetBrowserPanel.h"
 #include "editor/panels/ConsolePanel.h"

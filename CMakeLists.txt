@@ -351,10 +351,10 @@ add_executable(MoodEditor
     src/editor/EditorProjectActions.cpp
     src/editor/EditorRenderPass.cpp
     src/editor/EditorScene.cpp
-    src/editor/EditorUI.cpp
-    src/editor/MenuBar.cpp
-    src/editor/StatusBar.cpp
-    src/editor/Dockspace.cpp
+    src/editor/ui/EditorUI.cpp
+    src/editor/ui/MenuBar.cpp
+    src/editor/ui/StatusBar.cpp
+    src/editor/ui/Dockspace.cpp
     src/editor/commands/HistoryStack.cpp
     src/editor/commands/EditTransformCommand.cpp
     src/editor/commands/DeleteEntityCommand.cpp
