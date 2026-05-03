@@ -228,6 +228,20 @@ public:
         return r;
     }
 
+    /// @brief F2H2: request para spawnear un grid 3D de cubos hasta el
+    ///        target de triangulos indicado (cubo = 12 tris). Valores
+    ///        validos: 10000, 100000, 500000, 1000000. 0 = sin request.
+    ///        EditorApplication consume con `consumeSpawnStressTrisRequest`
+    ///        y crea las entidades.
+    void requestSpawnStressTris(int targetTris) {
+        m_spawnStressTrisRequested = targetTris;
+    }
+    int consumeSpawnStressTrisRequest() {
+        const int n = m_spawnStressTrisRequested;
+        m_spawnStressTrisRequested = 0;
+        return n;
+    }
+
     /// @brief Modo actual del editor. EditorApplication es quien lo cambia;
     ///        la UI lo consulta para mostrarlo en la status bar y el label
     ///        del boton Play/Stop en la menu bar.
@@ -336,6 +350,7 @@ private:
     bool m_spawnAnimatedCharacterRequested = false; // Hito 19
     bool m_spawnFireParticlesRequested = false;     // Hito 29
     bool m_spawnTriggerRequested = false;           // Hito 33
+    int  m_spawnStressTrisRequested = 0;             // F2H2 (target tris)
     bool m_recentsDirty = false; // Hito 15 polish: edicion manual de la lista de recientes
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;

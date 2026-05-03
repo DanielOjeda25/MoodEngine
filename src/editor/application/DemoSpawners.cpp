@@ -29,6 +29,8 @@
 #include <glm/ext/matrix_transform.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <limits>
 #include <string>
@@ -923,6 +925,57 @@ void EditorApplication::processSpawnTriggerRequest() {
         "Spawned trigger demo en (0, 1, 0) con halfExtents=(1,1,1) + "
         "script trigger_demo.lua. Solo dispatcha en Play Mode.");
     pushCreatedEntities({e}, "Spawn trigger demo");
+}
+
+void EditorApplication::processSpawnStressTrisRequest() {
+    const int targetTris = m_ui.consumeSpawnStressTrisRequest();
+    if (targetTris <= 0 || !m_scene || !m_assetManager) return;
+
+    // Cubo = 12 tris. Numero de cubos para alcanzar el target.
+    constexpr int k_trisPerCube = 12;
+    const int cubeCount = (targetTris + k_trisPerCube - 1) / k_trisPerCube;
+
+    // Grid 3D centrado en el origen. side = ceil(cbrt(cubeCount)) +
+    // spacing 2.0m (un cubo de lado 1m con holgura). Centramos sobre
+    // la altura y=2 para que no se pisen con el piso del demo de sombras.
+    const int side = static_cast<int>(std::ceil(std::cbrt(
+        static_cast<double>(cubeCount))));
+    const f32 spacing = 2.0f;
+    const f32 half = static_cast<f32>(side - 1) * 0.5f * spacing;
+
+    const MeshAssetId cubeMesh = m_assetManager->missingMeshId();
+    // Material default unico compartido — en este test no nos importa que
+    // tengan materiales independientes (lo que medimos es draw call cost
+    // + scene iteration, no Inspector).
+    const MaterialAssetId mat =
+        m_assetManager->createMaterialFromTexture(m_wallTextureId);
+
+    std::vector<Entity> created;
+    created.reserve(static_cast<usize>(cubeCount));
+    int idx = 0;
+    for (int yi = 0; yi < side && idx < cubeCount; ++yi) {
+        for (int zi = 0; zi < side && idx < cubeCount; ++zi) {
+            for (int xi = 0; xi < side && idx < cubeCount; ++xi) {
+                char name[64];
+                std::snprintf(name, sizeof(name), "StressCube_%06d", idx);
+                Entity cube = m_scene->createEntity(name);
+                auto& t = cube.getComponent<TransformComponent>();
+                t.position = glm::vec3(
+                    static_cast<f32>(xi) * spacing - half,
+                    static_cast<f32>(yi) * spacing + 2.0f,
+                    static_cast<f32>(zi) * spacing - half);
+                t.scale = glm::vec3(1.0f);
+                cube.addComponent<MeshRendererComponent>(cubeMesh, mat);
+                created.push_back(cube);
+                ++idx;
+            }
+        }
+    }
+    Log::editor()->info(
+        "Spawned stress test {} cubos ({} tris) en grid {}x{}x{} "
+        "centrado en origen, spacing {:.1f}m",
+        cubeCount, cubeCount * k_trisPerCube, side, side, side, spacing);
+    pushCreatedEntities(std::move(created), "Spawn stress test");
 }
 
 void EditorApplication::pushCreatedEntities(std::vector<Entity> created,

@@ -172,6 +172,26 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Agregar trigger demo", nullptr, false, ui.hasProject())) {
                 ui.requestSpawnTrigger();
             }
+
+            // F2H2: stress tests de poligonos. Spawnean grids 3D de cubos
+            // hasta el target de tris (cubo = 12 tris). Para benchmark de
+            // FPS, draw calls y identificacion de cuellos de botella.
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Stress test poligonos", ui.hasProject())) {
+                if (ImGui::MenuItem("Spawn 10K tris (cubos)")) {
+                    ui.requestSpawnStressTris(10000);
+                }
+                if (ImGui::MenuItem("Spawn 100K tris (cubos)")) {
+                    ui.requestSpawnStressTris(100000);
+                }
+                if (ImGui::MenuItem("Spawn 500K tris (cubos)")) {
+                    ui.requestSpawnStressTris(500000);
+                }
+                if (ImGui::MenuItem("Spawn 1M tris (cubos)")) {
+                    ui.requestSpawnStressTris(1000000);
+                }
+                ImGui::EndMenu();
+            }
             ImGui::EndMenu();
         }
 

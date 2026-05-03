@@ -513,6 +513,7 @@ int EditorApplication::run() {
         processSpawnAnimatedCharacterRequest();
         processSpawnFireParticlesRequest();
         processSpawnTriggerRequest();
+        processSpawnStressTrisRequest();
         processSpawnPointLightRequest();
         processSpawnAudioSourceRequest();
         processSavePrefabRequest();
