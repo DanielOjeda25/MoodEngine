@@ -14,7 +14,7 @@
 // globales del script no cruzan entre entidades).
 
 #include "core/Types.h"
-#include "engine/scripting/ExposedProperty.h"  // ExposedValue (Hito 41 B)
+#include "engine/scripting/exposed/ExposedProperty.h"  // ExposedValue (Hito 41 B)
 
 #include <entt/entt.hpp>
 #include <sol/sol.hpp>

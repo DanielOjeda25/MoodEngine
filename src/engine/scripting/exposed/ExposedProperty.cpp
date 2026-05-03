@@ -1,4 +1,4 @@
-#include "engine/scripting/ExposedProperty.h"
+#include "engine/scripting/exposed/ExposedProperty.h"
 
 namespace Mood {
 

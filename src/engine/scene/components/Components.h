@@ -12,7 +12,7 @@
 #include "core/Types.h"
 #include "engine/assets/AssetManager.h" // TextureAssetId, AudioAssetId, MeshAssetId
 #include "engine/audio/device/AudioDevice.h"    // SoundHandle
-#include "engine/scripting/ExposedProperty.h" // Hito 24
+#include "engine/scripting/exposed/ExposedProperty.h" // Hito 24
 
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>

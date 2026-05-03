@@ -294,8 +294,8 @@ add_library(mood_engine_lib STATIC
     src/systems/TriggerSystem.cpp
     src/systems/SkyboxRenderer.cpp
 
-    src/engine/scripting/ExposedProperty.cpp
-    src/engine/scripting/LuaBindings.cpp
+    src/engine/scripting/exposed/ExposedProperty.cpp
+    src/engine/scripting/bindings/LuaBindings.cpp
 
     src/engine/render/backend/opengl/OpenGLMesh.cpp
     src/engine/render/backend/opengl/OpenGLShader.cpp

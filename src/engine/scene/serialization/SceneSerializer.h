@@ -38,7 +38,7 @@
 // leen igual (entities queda vacio).
 
 #include "core/Types.h"
-#include "engine/scripting/ExposedProperty.h"
+#include "engine/scripting/exposed/ExposedProperty.h"
 #include "engine/world/GridMap.h"
 
 #include <glm/vec3.hpp>

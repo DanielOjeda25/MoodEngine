@@ -1,11 +1,11 @@
-#include "engine/scripting/LuaBindings.h"
+#include "engine/scripting/bindings/LuaBindings.h"
 
 #include "core/Log.h"
 #include "engine/game/GameState.h"
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
-#include "engine/scripting/ExposedProperty.h"
+#include "engine/scripting/exposed/ExposedProperty.h"
 
 #include <glm/vec3.hpp>
 

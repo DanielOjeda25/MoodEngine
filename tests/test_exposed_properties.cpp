@@ -16,8 +16,8 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
-#include "engine/scripting/ExposedProperty.h"
-#include "engine/scripting/LuaBindings.h"
+#include "engine/scripting/exposed/ExposedProperty.h"
+#include "engine/scripting/bindings/LuaBindings.h"
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/world/GridMap.h"
 

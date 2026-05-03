@@ -40,7 +40,7 @@
 
 #include "core/Types.h"
 #include "engine/game/GameState.h"
-#include "engine/scripting/ExposedProperty.h"  // ExposedValue (Hito 41 B)
+#include "engine/scripting/exposed/ExposedProperty.h"  // ExposedValue (Hito 41 B)
 
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
