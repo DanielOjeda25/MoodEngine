@@ -46,8 +46,10 @@ add_executable(mood_tests
     test_save_load.cpp
     test_frustum.cpp
     test_render_batching.cpp
+    test_hierarchy_collect.cpp
 
     ${CMAKE_SOURCE_DIR}/src/engine/render/scene_renderer/RenderBatching.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/panels/scene/HierarchyCollect.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para

@@ -390,6 +390,7 @@ add_executable(MoodEditor
     src/editor/panels/assets/AssetBrowserPanel.cpp
     src/editor/panels/debug/ConsolePanel.cpp
     src/editor/panels/scene/HierarchyPanel.cpp
+    src/editor/panels/scene/HierarchyCollect.cpp
     src/editor/panels/debug/LuaApiPanel.cpp
     src/editor/panels/debug/PerformanceHudPanel.cpp
     src/editor/panels/assets/ScriptEditorPanel.cpp

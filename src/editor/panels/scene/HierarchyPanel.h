@@ -4,13 +4,37 @@
 // (sin jerarquia padre-hijo todavia; eso entra cuando agreguemos
 // ChildrenComponent o el equivalente). Click en un item actualiza la
 // seleccion compartida con el Inspector via `EditorUI::setSelectedEntity`.
+//
+// F2H5: el render usa `ImGuiListClipper` para virtualizar — con escenas
+// grandes (8K+ entidades) solo se procesan las entries visibles del
+// scroll area, no todas. La lista se cachea en `m_entries` cada frame
+// y se reusa el storage entre frames para no reallocar.
 
 #include "editor/panels/IPanel.h"
+
+#include <entt/entt.hpp>
+
+#include <vector>
 
 namespace Mood {
 
 class Scene;
 class EditorUI;
+struct TagComponent;
+
+/// @brief Una fila del Hierarchy: entidad + puntero al tag para evitar
+///        un `getComponent` dentro del clipper (el get es barato pero
+///        se llama por entry visible, no acumula).
+struct HierarchyEntry {
+    entt::entity handle{entt::null};
+    const TagComponent* tag{nullptr};
+};
+
+/// @brief Recolecta las entidades con TagComponent en `out`. PURO: no
+///        toca ImGui. `out` se limpia con `clear()` antes de rellenar
+///        — el caller puede pasar el mismo vector entre frames para
+///        reusar la capacidad.
+void collectHierarchyEntries(Scene& scene, std::vector<HierarchyEntry>& out);
 
 class HierarchyPanel : public IPanel {
 public:
@@ -27,6 +51,9 @@ public:
 private:
     Scene* m_scene = nullptr;
     EditorUI* m_ui = nullptr;
+    /// Cache de la lista de entries. Se rellena al inicio de cada
+    /// `onImGuiRender` y se reusa el storage entre frames.
+    std::vector<HierarchyEntry> m_entries;
 };
 
 } // namespace Mood
