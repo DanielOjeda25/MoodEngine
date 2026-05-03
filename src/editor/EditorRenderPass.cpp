@@ -19,7 +19,7 @@
 #include "core/math/AABB.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
-#include "engine/render/opengl/OpenGLDebugRenderer.h"
+#include "engine/render/backend/opengl/OpenGLDebugRenderer.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"

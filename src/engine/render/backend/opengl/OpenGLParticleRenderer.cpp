@@ -1,4 +1,4 @@
-#include "engine/render/opengl/OpenGLParticleRenderer.h"
+#include "engine/render/backend/opengl/OpenGLParticleRenderer.h"
 
 #include "core/Log.h"
 #include "engine/assets/AssetManager.h"

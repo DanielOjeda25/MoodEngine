@@ -2,8 +2,8 @@
 
 #include "core/Log.h"
 #include "engine/render/rhi/IShader.h"
-#include "engine/render/opengl/OpenGLFramebuffer.h"
-#include "engine/render/opengl/OpenGLShader.h"
+#include "engine/render/backend/opengl/OpenGLFramebuffer.h"
+#include "engine/render/backend/opengl/OpenGLShader.h"
 
 namespace Mood {
 

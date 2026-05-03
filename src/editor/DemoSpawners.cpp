@@ -16,7 +16,7 @@
 #include "engine/physics/PhysicsWorld.h"
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
-#include "engine/render/opengl/OpenGLFramebuffer.h"
+#include "engine/render/backend/opengl/OpenGLFramebuffer.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
