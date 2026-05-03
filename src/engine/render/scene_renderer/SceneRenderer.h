@@ -37,6 +37,7 @@ class LightSystem;
 class OpenGLCubemapTexture;
 class OpenGLDebugRenderer;
 class OpenGLFramebuffer;
+class OpenGLInstanceBuffer;
 class OpenGLParticleRenderer;
 class OpenGLSSBO;
 class PostProcessPass;
@@ -119,8 +120,13 @@ private:
     std::unique_ptr<OpenGLFramebuffer> m_viewportFb;  // LDR RGBA8
     std::unique_ptr<PostProcessPass>   m_postProcess;
 
-    std::unique_ptr<IShader> m_pbrShader;         // PBR estatico
-    std::unique_ptr<IShader> m_pbrSkinnedShader;  // PBR + LBS skinning
+    std::unique_ptr<IShader> m_pbrShader;          // PBR estatico (no instanced)
+    std::unique_ptr<IShader> m_pbrInstancedShader; // F2H4: variante instanced
+    std::unique_ptr<IShader> m_pbrSkinnedShader;   // PBR + LBS skinning
+
+    // F2H4: VBO para subir las matrices model como atributo de instancia
+    // (locations 5-8) cada frame antes del draw instanced.
+    std::unique_ptr<OpenGLInstanceBuffer> m_instanceBuffer;
 
     std::unique_ptr<OpenGLDebugRenderer> m_debugRenderer;
     std::unique_ptr<SkyboxRenderer>       m_skyboxRenderer;

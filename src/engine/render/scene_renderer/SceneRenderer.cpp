@@ -12,10 +12,12 @@
 #include "core/Profiler.h"
 #include "engine/animation/skeleton/Skeleton.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/render/backend/opengl/OpenGLInstanceBuffer.h"
 #include "engine/render/pipeline/Frustum.h"
 #include "engine/render/rhi/IRenderer.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/pipeline/LightGrid.h"
+#include "engine/render/scene_renderer/RenderBatching.h"
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/rhi/RendererTypes.h"
@@ -63,9 +65,16 @@ SceneRenderer::SceneRenderer()
     // PBR (Cook-Torrance + metallic-roughness) — Hito 17.
     m_pbrShader = std::make_unique<OpenGLShader>(
         "shaders/pbr.vert", "shaders/pbr.frag");
+    // F2H4: variante instanced. Mismo .frag que el static — el .vert
+    // lee `mat4 model` desde locations 5-8 con divisor=1.
+    m_pbrInstancedShader = std::make_unique<OpenGLShader>(
+        "shaders/pbr_instanced.vert", "shaders/pbr.frag");
     // Skinned vertex shader, mismo .frag — Hito 19.
     m_pbrSkinnedShader = std::make_unique<OpenGLShader>(
         "shaders/pbr_skinned.vert", "shaders/pbr.frag");
+
+    // F2H4: VBO recyclable para subir las matrices model cada frame.
+    m_instanceBuffer = std::make_unique<OpenGLInstanceBuffer>();
 
     m_debugRenderer = std::make_unique<OpenGLDebugRenderer>();
 
@@ -166,7 +175,9 @@ SceneRenderer::~SceneRenderer() {
     m_postProcess.reset();
     m_debugRenderer.reset();
     m_pbrSkinnedShader.reset();
+    m_pbrInstancedShader.reset();
     m_pbrShader.reset();
+    m_instanceBuffer.reset();
     m_viewportFb.reset();
     m_sceneFb.reset();
     m_renderer.reset();
@@ -463,43 +474,97 @@ void SceneRenderer::renderScene(Scene& scene,
         }
     };
 
-    // F2H3: frustum culling para el pase opaco. Construimos los 6 planos
-    // del frustum una sola vez y testeamos el AABB world-space de cada
-    // mesh antes del draw. Conservador (puede dejar pasar AABBs que no
-    // se ven, no descarta los que si). Skinned + shadow NO se cullean
-    // por ahora (ROI bajo segun baseline F2H2).
+    // F2H3 + F2H4: agrupamos las entidades estaticas por (mesh, material)
+    // y dibujamos los batches con `glDrawArraysInstanced`. Las que no
+    // pasan el cull se descartan; las que no son batcheables (multi-submesh
+    // o materiales mixtos) caen al path no-instanced del fallback.
     const Frustum frustum = frustumFromViewProj(projection * view);
-    u32 culledStatic = 0;
+    BatchingResult batching = groupByBatch(scene, assets, frustum);
+    u32 emittedBatches = 0;
+    u32 emittedInstances = 0;
 
-    // Pase A: estaticos.
-    {
+    // Pase A.1: batches instanced.
+    if (!batching.batches.empty()) {
+        MOOD_PROFILE_SCOPE("PBR::instancedPass");
+        applyShaderUniforms(*m_pbrInstancedShader);
+        for (auto& [key, batch] : batching.batches) {
+            MeshAsset* asset = assets.getMesh(key.mesh);
+            if (asset == nullptr || asset->submeshes.empty()) continue;
+            const auto& sub = asset->submeshes.front();
+            if (sub.mesh == nullptr) continue;
+
+            // Bindeo de texturas + uniforms del material (mismo flow que
+            // drawMeshRenderer, pero usando la material id de la BatchKey
+            // en lugar de la del MeshRenderer — son equivalentes para
+            // entidades batcheables porque tienen 1 submesh).
+            const MaterialAsset* mat = assets.getMaterial(key.material);
+            const bool hasAlbedo = (mat != nullptr && mat->useAlbedoMap);
+            glActiveTexture(GL_TEXTURE0);
+            assets.getTexture(hasAlbedo ? mat->albedo : 0)->bind(0);
+            m_pbrInstancedShader->setInt("uHasAlbedoMap", hasAlbedo ? 1 : 0);
+
+            const bool hasMR = (mat != nullptr && mat->metallicRoughness != 0);
+            glActiveTexture(GL_TEXTURE2);
+            if (hasMR) assets.getTexture(mat->metallicRoughness)->bind(2);
+            else       dummyTex->bind(2);
+            m_pbrInstancedShader->setInt("uHasMetallicRoughness", hasMR ? 1 : 0);
+
+            const bool hasAo = (mat != nullptr && mat->ao != 0);
+            glActiveTexture(GL_TEXTURE3);
+            if (hasAo) assets.getTexture(mat->ao)->bind(3);
+            else       dummyTex->bind(3);
+            m_pbrInstancedShader->setInt("uHasAoMap", hasAo ? 1 : 0);
+
+            if (mat != nullptr) {
+                m_pbrInstancedShader->setVec3 ("uAlbedoTint",    mat->albedoTint);
+                m_pbrInstancedShader->setFloat("uMetallicMult",  mat->metallicMult);
+                m_pbrInstancedShader->setFloat("uRoughnessMult", mat->roughnessMult);
+                m_pbrInstancedShader->setFloat("uAoMult",        mat->aoMult);
+            } else {
+                m_pbrInstancedShader->setVec3 ("uAlbedoTint",    glm::vec3(1.0f));
+                m_pbrInstancedShader->setFloat("uMetallicMult",  0.0f);
+                m_pbrInstancedShader->setFloat("uRoughnessMult", 0.5f);
+                m_pbrInstancedShader->setFloat("uAoMult",        1.0f);
+            }
+
+            // Subir matrices model + bindear atributos de instancia. El
+            // bind del mesh-VAO ocurre dentro de drawMeshInstanced (via
+            // `mesh.bind()`), pero el VAO necesita el VBO de instancias
+            // bindeado AHORA para que `glVertexAttribPointer` funcione
+            // sobre el VBO correcto.
+            sub.mesh->bind();
+            const u32 sizeBytes = static_cast<u32>(
+                batch.models.size() * sizeof(glm::mat4));
+            m_instanceBuffer->upload(batch.models.data(), sizeBytes);
+            m_instanceBuffer->bindAsAttributeMat4(/*startLocation=*/5);
+
+            glActiveTexture(GL_TEXTURE0);
+            m_renderer->drawMeshInstanced(*sub.mesh, *m_pbrInstancedShader,
+                                            static_cast<u32>(batch.models.size()));
+            ++emittedBatches;
+            emittedInstances += static_cast<u32>(batch.models.size());
+        }
+    }
+
+    // Pase A.2: fallback no-instanced para entidades non-batchable
+    // (multi-submesh o materiales mixtos). Mismo path que el F2H3 puro
+    // pero solo sobre la lista que ya pre-cullada el helper.
+    if (!batching.nonBatchable.empty()) {
         MOOD_PROFILE_SCOPE("PBR::staticPass");
         applyShaderUniforms(*m_pbrShader);
-        scene.forEach<TransformComponent, MeshRendererComponent>(
-            [&](Entity e, TransformComponent& t, MeshRendererComponent& mr) {
-                if (e.hasComponent<SkeletonComponent>()) return;
-
-                // Frustum cull: si el mesh tiene AABB y queda fuera del
-                // frustum, saltamos. Mesh sin AABB (asset == null o
-                // AABB invalido) se renderea igual que antes — no
-                // queremos meter el "missing mesh" como desaparecido.
-                MeshAsset* asset = assets.getMesh(mr.mesh);
-                if (asset != nullptr) {
-                    const AABB localAabb{asset->aabbMin, asset->aabbMax};
-                    if (localAabb.isValid()) {
-                        const AABB worldBox = worldAabb(localAabb, t.worldMatrix());
-                        if (!aabbVisible(worldBox, frustum)) {
-                            ++culledStatic;
-                            return;
-                        }
-                    }
-                }
-
-                m_pbrShader->setMat4("uModel", t.worldMatrix());
-                drawMeshRenderer(*m_pbrShader, mr);
-            });
+        for (Entity e : batching.nonBatchable) {
+            if (!e.hasComponent<TransformComponent>() ||
+                !e.hasComponent<MeshRendererComponent>()) continue;
+            auto& t = e.getComponent<TransformComponent>();
+            auto& mr = e.getComponent<MeshRendererComponent>();
+            m_pbrShader->setMat4("uModel", t.worldMatrix());
+            drawMeshRenderer(*m_pbrShader, mr);
+        }
     }
-    MOOD_PROFILE_PLOT("PBR::CulledStatic", static_cast<i64>(culledStatic));
+
+    MOOD_PROFILE_PLOT("PBR::CulledStatic", static_cast<i64>(batching.culledCount));
+    MOOD_PROFILE_PLOT("PBR::BatchedDrawCalls", static_cast<i64>(emittedBatches));
+    MOOD_PROFILE_PLOT("PBR::Instances", static_cast<i64>(emittedInstances));
 
     // Pase B: skinneadas. Solo bindear el skinned shader si hay alguna.
     bool hasSkinned = false;
