@@ -1,6 +1,6 @@
 #include "engine/scene/queries/ViewportPick.h"
 
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 
 #include <glm/geometric.hpp>
 #include <glm/matrix.hpp>

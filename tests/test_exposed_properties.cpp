@@ -19,7 +19,7 @@
 #include "engine/scripting/exposed/ExposedProperty.h"
 #include "engine/scripting/bindings/LuaBindings.h"
 #include "engine/scene/serialization/SceneSerializer.h"
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 
 #include <sol/sol.hpp>
 

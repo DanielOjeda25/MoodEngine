@@ -3,8 +3,8 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/world/GridMap.h"
-#include "engine/world/Pathfinding.h"
+#include "engine/world/grid/GridMap.h"
+#include "engine/world/grid/Pathfinding.h"
 
 using namespace Mood;
 using Pathfinding::TileCoord;

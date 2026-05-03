@@ -39,7 +39,7 @@
 
 #include "core/Types.h"
 #include "engine/scripting/exposed/ExposedProperty.h"
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>

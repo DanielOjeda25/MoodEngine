@@ -12,7 +12,7 @@
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MeshAsset.h"
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"

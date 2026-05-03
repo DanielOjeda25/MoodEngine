@@ -14,7 +14,7 @@
 
 #include "core/Types.h"
 #include "core/math/AABB.h"
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>

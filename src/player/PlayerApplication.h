@@ -15,7 +15,7 @@
 #include "core/Types.h"
 #include "engine/saving/SaveLoad.h"  // SaveData (Hito 38)
 #include "engine/scene/core/FpsCamera.h"
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 #include "systems/TriggerSystem.h"
 
 #include <glm/vec3.hpp>

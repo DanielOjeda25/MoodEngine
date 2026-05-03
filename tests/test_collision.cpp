@@ -5,7 +5,7 @@
 #include <doctest/doctest.h>
 
 #include "core/math/AABB.h"
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 #include "systems/PhysicsSystem.h"
 
 #include <glm/vec3.hpp>

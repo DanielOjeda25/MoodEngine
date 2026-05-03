@@ -9,7 +9,7 @@
 #include "engine/scene/serialization/JsonHelpers.h"
 #include "engine/scene/serialization/ProjectSerializer.h"
 #include "engine/scene/serialization/SceneSerializer.h"
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 
 #include <nlohmann/json.hpp>
 

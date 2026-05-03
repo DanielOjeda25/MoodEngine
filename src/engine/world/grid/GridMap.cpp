@@ -1,4 +1,4 @@
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 
 namespace Mood {
 

@@ -6,7 +6,7 @@
 #include "engine/game/GameState.h"
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/queries/ViewportPick.h"
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 #include "platform/Window.h"
 #include "systems/PhysicsSystem.h"
 

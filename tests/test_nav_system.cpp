@@ -7,7 +7,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 #include "systems/NavSystem.h"
 
 #include <cmath>

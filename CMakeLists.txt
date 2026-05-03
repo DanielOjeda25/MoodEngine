@@ -279,8 +279,8 @@ add_library(mood_engine_lib STATIC
     src/engine/scene/queries/ViewportPick.cpp
     src/engine/scene/queries/ScenePick.cpp
 
-    src/engine/world/GridMap.cpp
-    src/engine/world/Pathfinding.cpp
+    src/engine/world/grid/GridMap.cpp
+    src/engine/world/grid/Pathfinding.cpp
 
     src/systems/AnimationSystem.cpp
     src/systems/AudioSystem.cpp

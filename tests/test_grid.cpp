@@ -4,7 +4,7 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 
 using namespace Mood;
 

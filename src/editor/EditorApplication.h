@@ -17,7 +17,7 @@
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/queries/ViewportPick.h"
 #include "engine/scene/serialization/ProjectSerializer.h"
-#include "engine/world/GridMap.h"
+#include "engine/world/grid/GridMap.h"
 #include "platform/Window.h"
 
 #include <filesystem>
