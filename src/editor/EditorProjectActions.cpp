@@ -18,7 +18,7 @@
 #include "core/Log.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/packaging/PackageBuilder.h"
-#include "engine/render/SceneRenderer.h"
+#include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/serialization/SceneLoader.h"
 #include "engine/scene/Components.h"
 

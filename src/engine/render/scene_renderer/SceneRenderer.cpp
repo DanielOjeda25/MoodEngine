@@ -6,7 +6,7 @@
 // `editor/EditorSceneOverlay.cpp` y se agregan via `debugRenderer()`
 // entre `renderScene` y `endFrame`.
 
-#include "engine/render/SceneRenderer.h"
+#include "engine/render/scene_renderer/SceneRenderer.h"
 
 #include "core/Log.h"
 #include "engine/animation/Skeleton.h"

@@ -1,7 +1,7 @@
 #include "editor/EditorApplication.h"
 
 #include "editor/commands/EditTransformCommand.h"
-#include "engine/render/SceneRenderer.h"
+#include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"

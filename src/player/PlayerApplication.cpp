@@ -10,7 +10,7 @@
 #include "engine/physics/PhysicsWorld.h"
 #include "engine/render/rhi/IMesh.h"
 #include "engine/render/rhi/ITexture.h"
-#include "engine/render/SceneRenderer.h"
+#include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/render/opengl/OpenGLMesh.h"
 #include "engine/render/opengl/OpenGLTexture.h"

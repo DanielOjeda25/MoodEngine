@@ -309,7 +309,7 @@ add_library(mood_engine_lib STATIC
     src/engine/render/opengl/OpenGLParticleRenderer.cpp
 
     src/engine/render/pipeline/LightGrid.cpp
-    src/engine/render/SceneRenderer.cpp
+    src/engine/render/scene_renderer/SceneRenderer.cpp
 )
 
 target_include_directories(mood_engine_lib PUBLIC
