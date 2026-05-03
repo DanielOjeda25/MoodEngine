@@ -5,7 +5,7 @@
 // ImGui ni gestiona input: eso vive en EditorApplication.
 
 #include "editor/ui/Dockspace.h"
-#include "editor/EditorMode.h"
+#include "editor/application/EditorMode.h"
 #include "editor/ui/MenuBar.h"
 #include "editor/ui/StatusBar.h"
 #include "editor/commands/HistoryStack.h"

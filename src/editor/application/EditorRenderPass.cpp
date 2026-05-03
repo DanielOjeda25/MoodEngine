@@ -14,7 +14,7 @@
 //
 // Lo del player es lo mismo pero sin paso 3.
 
-#include "editor/EditorApplication.h"
+#include "editor/application/EditorApplication.h"
 
 #include "core/math/AABB.h"
 #include "engine/assets/manager/AssetManager.h"

@@ -8,7 +8,7 @@
 // `m_ui.draw()` para que la UI emita y el modelo reaccione en el mismo
 // frame.
 
-#include "editor/EditorApplication.h"
+#include "editor/application/EditorApplication.h"
 
 #include "core/Log.h"
 #include "editor/commands/CreateEntityCommand.h"

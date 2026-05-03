@@ -1,4 +1,4 @@
-#include "editor/EditorApplication.h"
+#include "editor/application/EditorApplication.h"
 
 #include "editor/commands/EditTransformCommand.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"

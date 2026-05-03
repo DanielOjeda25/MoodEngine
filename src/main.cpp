@@ -7,7 +7,7 @@
 #include <SDL.h>
 
 #include "core/Log.h"
-#include "editor/EditorApplication.h"
+#include "editor/application/EditorApplication.h"
 
 #include <cstdio>
 #include <exception>

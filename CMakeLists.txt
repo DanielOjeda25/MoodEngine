@@ -344,13 +344,13 @@ mood_set_compiler_warnings(mood_engine_lib)
 add_executable(MoodEditor
     src/main.cpp
 
-    src/editor/DemoSpawners.cpp
-    src/editor/EditorApplication.cpp
-    src/editor/EditorOverlay.cpp
-    src/editor/EditorPlayMode.cpp
-    src/editor/EditorProjectActions.cpp
-    src/editor/EditorRenderPass.cpp
-    src/editor/EditorScene.cpp
+    src/editor/application/DemoSpawners.cpp
+    src/editor/application/EditorApplication.cpp
+    src/editor/application/EditorOverlay.cpp
+    src/editor/application/EditorPlayMode.cpp
+    src/editor/application/EditorProjectActions.cpp
+    src/editor/application/EditorRenderPass.cpp
+    src/editor/application/EditorScene.cpp
     src/editor/ui/EditorUI.cpp
     src/editor/ui/MenuBar.cpp
     src/editor/ui/StatusBar.cpp

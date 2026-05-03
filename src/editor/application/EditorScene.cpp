@@ -1,4 +1,4 @@
-#include "editor/EditorApplication.h"
+#include "editor/application/EditorApplication.h"
 
 #include "core/Log.h"
 #include "editor/commands/DeleteEntityCommand.h"

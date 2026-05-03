@@ -6,7 +6,7 @@
 
 #include "core/Time.h"
 #include "core/Types.h"
-#include "editor/EditorMode.h"
+#include "editor/application/EditorMode.h"
 #include "editor/ui/EditorUI.h"
 #include "editor/commands/HistoryStack.h"
 #include "systems/physics/TriggerSystem.h"

@@ -4,7 +4,7 @@
 // libre de estado.
 
 #include "core/Types.h"
-#include "editor/EditorMode.h"
+#include "editor/application/EditorMode.h"
 
 #include <string>
 

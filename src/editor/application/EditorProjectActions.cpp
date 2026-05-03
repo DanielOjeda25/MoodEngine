@@ -13,7 +13,7 @@
 // definiciones para que el .cpp principal no acumule la pipeline completa
 // de proyecto.
 
-#include "editor/EditorApplication.h"
+#include "editor/application/EditorApplication.h"
 
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
