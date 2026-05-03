@@ -6,7 +6,26 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H3 cerrado: Frustum culling (pase opaco).**
+**🚀 Fase 2 — F2H4 cerrado: Instancing del pase opaco estático.**
+Tag: `v1.1.2-fase2-hito4`.
+Verificado automático: suite doctest **340/6678** sin regresiones (+9 cases en `test_render_batching.cpp`, -1 caso obsoleto). Verificado por el dev a ojo + Tracy: 836 cubos del stress 10K → **3 draws / 60 FPS (vsync cap)**; 8336 cubos del stress 100K (antes congelaba el editor) → editable a 10.4 FPS; visual comparado con/sin instancing — idéntico. Captura `test3.tracy` confirma `PBR::instancedPass` mean 0.88 ms vs F2H2 baseline 42.5 ms.
+
+**Swap vs PLAN_FASE2.md:** F2H4 era LOD según el plan original. Con datos del baseline F2H2 vimos que el cuello real era CPU-bound en **draw call submission** (50 µs por cubo de 12 tris), no triangle setup. Entonces F2H4 = instancing y F2H5 = LOD. Documentado en DECISIONS.md con razones. El LOD no se descarta — sigue siendo necesario cuando aparezca contenido con meshes complejos (Fox/CesiumMan, props Kenney).
+
+**Cambio importante:** segunda optimización medible de Fase 2. Helpers nuevos:
+- `src/engine/render/scene_renderer/RenderBatching.{h,cpp}`: helper PURO `groupByBatch(scene, assets, frustum)` → `BatchMap<(meshId,materialId), vector<mat4 model>>` + `vector<Entity> nonBatchable` + `culledCount`. Reglas v1: 1 submesh + materials.size() ≤ 1.
+- `src/engine/render/backend/opengl/OpenGLInstanceBuffer.{h,cpp}`: VBO recyclable con orphan upload (`glBufferData GL_DYNAMIC_DRAW`) y `bindAsAttributeMat4` que setea las 4 columnas en locations consecutivas con divisor=1.
+- `IRenderer::drawMeshInstanced` agregado al RHI; `OpenGLRenderer` lo implementa con `glDrawArraysInstanced`. Counter `frameStats().drawCalls` se incrementa en 1 (un solo draw call), `triangles` en `instanceCount * (vc/3)`.
+- `shaders/pbr_instanced.vert`: clon de `pbr.vert` con `mat4 aModel` como atributo de instancia. Reusa `pbr.frag`.
+- `SceneRenderer::renderScene`: agrupa por (mesh, material) y emite 1 `drawMeshInstanced` por batch. Non-batchables caen al path no-instanced del F2H3 (fallback). Plots Tracy nuevos: `PBR::BatchedDrawCalls`, `PBR::Instances`.
+
+**Mejora medida (vs F2H2 baseline):** `PBR::instancedPass` mean **0.88 ms** vs `PBR::staticPass` baseline mean **42.5 ms** = **~48x más rápido por draw**. Escena 10K: 836→3 draws, 4→60 FPS. Escena 100K: antes congelado, ahora 10.4 FPS / 3 draws / 82K tris. F2H3 + F2H4 en cadena hacen viable un escenario que el motor literalmente no soportaba.
+
+**Cuello dominante post-F2H4:** `UI::draw` 19% del frame, mean 6 ms. El panel Hierarchy de ImGui lista 8336 entries sin virtualización con 100K cubos. Candidato natural para F2H5 / subhito (`ImGuiListClipper`).
+
+**Próximo paso:** **F2H5 — virtualización ImGui Hierarchy** (probable, decisión final cuando empiece) o **F2H5 LOD** (postergado del plan original — útil cuando entre contenido real con meshes complejos).
+
+### F2H3 (anterior, ya cerrado)
 Tag: `v1.1.1-fase2-hito3`.
 Verificado automático: suite doctest **331/6645** sin regresiones (+12 cases en `test_frustum.cpp`). Verificado por el dev a ojo: editor + spawn 10K cubos + cámara apuntando al grid → 4.4 FPS (igual baseline F2H2 — todo dentro del frustum); cámara apuntando lejos → 60 FPS vsync-cap (835/836 cubos descartados); CSV `performance_baseline.csv` y captura Tracy `testtrace2.tracy` confirman los números.
 
@@ -15,8 +34,6 @@ Verificado automático: suite doctest **331/6645** sin regresiones (+12 cases en
 **Mejora medida (vs F2H2 baseline):** `PBR::staticPass` baja de **70.74% → 15.73%** del frame promediando los 3 escenarios de cámara (full / half / no_view). Stddev baja 3x, max 10x. Caso extremo (cámara apuntando lejos del grid 10K): frame ms **222 → 16.67** = **speedup x13.3**, draws **836 → 1**. Cuando todo cae dentro del viewport, el cull no inventa mejora (esperado). Costo del culling: <<1% del frame, no aparece en top 10 zonas.
 
 **Scope intencional v1:** solo PBR static. Shadow + skinned passes excluidos (ROI bajo según baseline F2H2). Implementación plana (loop linear) — jerárquico (BVH/octree) postergado a hito propio si una medición posterior lo justifica. API extensible: el upgrade interno no rompe callers.
-
-**Próximo paso:** **F2H4 — LOD system** (cubos lejanos pero dentro del frustum siguen costando como cubos cercanos en triangle setup). Plan en `docs/PLAN_FASE2.md` sección F2H4.
 
 ### F2H2 (anterior, ya cerrado)
 Tag: `v1.1.0-fase2-hito2`.

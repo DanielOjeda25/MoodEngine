@@ -2854,4 +2854,34 @@ Instrumentación inicial: 10 zonas en `EditorApplication::run` (eventos / UI / f
 
 **Revisar si:** una medición futura muestra que el loop linear (no el cull en sí) es cuello — escenario probable solo a >100K entidades visibles, lo cual el motor todavía no soporta por otros cuellos pendientes (LOD F2H4, batching futuro).
 
+## 2026-05-03: F2H4 = instancing (swap con LOD original) + decisiones MVP de instancing
+
+**Contexto:** `PLAN_FASE2.md` originalmente colocaba F2H4 = LOD. Cuando llegó el momento de implementarlo después de F2H3, los datos medidos del baseline F2H2 mostraban que el cuello real era **`PBR::staticPass` 70.74% del frame, mean 42.5 ms / 836 entidades = 50 µs por cubo de 12 tris**. Eso es CPU-bound en draw call submission, no GPU-bound en triangle processing. LOD ataca lo segundo; instancing ataca lo primero. Si hubiéramos seguido el plan literal, F2H4 LOD habría dado mejora marginal (los cubos primitivos ya tienen 12 tris, no hay LOD que reducir) y dejado el cuello real intacto.
+
+**Decisión:** **swap F2H4 ↔ F2H5**. Este F2H4 = "Instancing del pase opaco estático", F2H5 = "LOD" (postergado). El plan F2H4 LOD no se descarta — sigue siendo necesario cuando aparezca contenido con meshes de alto poly (Fox.glb, CesiumMan.glb, props complejos del catálogo Kenney). Hoy no hay con qué medirlo útil.
+
+**Validación medida (test3.tracy, 4993 frames):**
+- `PBR::instancedPass` mean **0.88 ms** vs `PBR::staticPass` baseline F2H2 mean **42.5 ms** = **~48x más rápido por draw**.
+- Escena 10K (836 cubos): antes 4 FPS / 836 draws, ahora **60 FPS / 3 draws** (vsync cap; el rendering ya no es el cuello).
+- Escena 100K (8336 cubos): antes congelaba el editor, ahora **10.4 FPS / 3 draws / 82K tris** = editable. F2H3 + F2H4 en cadena hicieron viable un escenario que el motor literalmente no soportaba.
+- Costo del helper `groupByBatch` + culling: <<3% del frame con 836 cubos. Despreciable.
+
+**Decisiones MVP del instancing (sub-decisiones, valen revisarse cuando emerjan):**
+
+1. **Re-upload del VBO de instancias cada frame con `glBufferData` orphan-then-fill**: el más simple. Para 836 mat4 = ~50 KB, transferencia en microsegundos. Probable que resista hasta 10K-20K instancias visibles. Cuando emerja (medición futura), upgrade a *persistent mapped buffers* o *triple buffering* sin tocar la API pública (`OpenGLInstanceBuffer::upload`).
+2. **Sin caché de matrices model**: las recalculamos cada frame en `groupByBatch`. Para 836 entidades = micro-segundos. Cuando 100K+ entidades estáticas justifiquen caché, agregar dirty-flag en `TransformComponent`. La API de `groupByBatch` no cambia.
+3. **Reglas estrictas de batcheable**: 1 submesh + `materials.size() ≤ 1`. Multi-submesh y materiales mixtos caen al path no-instanced del F2H3. Conservador para v1 — extender el grouping a "batch por submesh" cuando contenido real lo justifique.
+4. **Shader instanced separado** (`pbr_instanced.vert` + reuso de `pbr.frag`): no usamos `#define INSTANCED` con un solo .vert porque mezcla código con/sin atributos en el mismo archivo dificulta debug de VAO state. Los dos `.vert` son menos LOC totales que el toggle.
+
+**Trade-offs del enfoque MVP:**
+- Se pierde: rendimiento extra que persistent mapped + scene caching darían a >100K entidades.
+- Se gana: ~700 LOC totales (helper + RHI + shader + cableo + tests). API limpia y extensible. **Cuello del 70% medido en F2H2 → 2.5%** con esta inversión.
+
+**Lección aprendida:** atacar lo que se mide, no lo que el plan original asumió. F2H2 fue exactamente para esto — para que F2H3+F2H4 entren con datos. Si hubiéramos seguido el plan literal, habríamos hecho LOD primero (mejora marginal) y descubierto el cuello real recién después.
+
+**Revisar si:**
+- El upload del VBO emerge como cuello (medible en escenas con cambios bruscos de cuántas entidades son visibles por frame).
+- Una medición muestra que el helper `groupByBatch` es cuello (reupload cada frame con 100K+ entidades).
+- Aparece contenido real con multi-submesh frecuente que justifique extender el grouping a "batch por submesh".
+
 
