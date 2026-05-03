@@ -2763,3 +2763,31 @@ Adicionalmente, durante el menu se fuerza `GameState::paused() = true` para que 
 
 **Revisar si:** un demo concreto requiere node-graph (probable: cuando el dev cree shaders custom). Entonces sí, hito propio para implementarlo.
 
+## 2026-05-03: Reorganización arquitectónica de `src/` por dominios (F2H1)
+
+**Problema:** post-v1.0.0 el árbol `src/engine/` era flat con 11K líneas en sub-carpetas planas (`render/`, `scene/`, `physics/`, etc.). Cualquier hito futuro de Fase 2 que aporte 3-5K líneas adicionales (CSG, dialog, quest, material node-graph) iba a contaminar más esa estructura. Antes de empezar a sumar features, reorganizar.
+
+**Decisión:** subdividir `engine/`, `systems/` y `editor/` por sub-dominio explícito. Plan completo en `PLAN_FASE2.md` sección 2. Los movimientos se hicieron bloque por bloque con commits atómicos:
+
+- **Bloque A — `engine/render/`**: split en `rhi/` (interfaces), `backend/opengl/` (impl GL — único lugar que incluye `glad/gl.h`), `pipeline/` (Fog, LightGrid, math), `resources/` (Mesh/Material assets), `scene_renderer/` (coordinador). 5 sub-commits.
+- **Bloque B — `engine/scene/`**: split en `core/` (Scene, Entity, Cameras), `components/` (Components.h), `serialization/` (movido desde `engine/serialization/`), `queries/` (ScenePick/ViewportPick). 4 sub-commits.
+- **Bloque C — `engine/physics/`**: PhysicsWorld a `world/`, placeholders para `components/` `character/` `queries/`.
+- **Bloque D — `engine/animation/audio/scripting/assets/`**: cada uno subdividido. 4 sub-commits.
+- **Bloque E — `engine/world/`**: GridMap+Pathfinding a `grid/`, placeholders `csg/` (F2H9+) + `streaming/` (Fase 3).
+- **Bloque F — `engine/game/`**: subdivisión en manifest/overlay/state + placeholders dialog/quest/inventory + nueva carpeta `engine/i18n/` (F2H5).
+- **Bloque G — `systems/`**: subdividido por dominio: render/physics/animation/ai/particles/audio/light/scripting.
+- **Bloque H — `editor/`**: split en `application/` (EditorApplication + 6 partials), `ui/` (Dockspace/MenuBar/StatusBar/EditorUI), `panels/{scene,assets,debug,world}/` por categoría. 3 sub-commits.
+
+**Razones:**
+- **Cabe en mente.** Cada subcarpeta es un dominio identificable; nuevas features tienen lugar obvio.
+- **Reglas de dependencia aplicables.** Con `backend/opengl/` aislado, el "único lugar con glad/gl.h" se vuelve operacional, no aspiracional.
+- **Placeholders `.gitkeep` para hitos futuros.** Cuando F2H9-F2H16 agregue brushes 3D, hay carpeta esperándolos. Idem dialog/quest/inventory en F2H29-F2H31.
+- **Zero regression.** Cada sub-bloque cierra con la suite intacta (319/6613). Editor + MoodPlayer compilan limpios y se ven idénticos a v1.0.0.
+
+**Trade-offs:**
+- Se pierde: profundidad de paths más larga (ej. `engine/scene/serialization/SceneSerializer.h` vs `engine/serialization/SceneSerializer.h`). Aceptable: el IDE autocompleta y el cambio de path se hizo con sed bulk, no a mano.
+- Se gana: superficie de "engine flat" desaparece. Cualquier dev que llega al repo en F2H10+ encuentra `engine/world/csg/` directamente y sabe dónde editar.
+
+**Revisar si:** algún sub-bloque queda con 1 archivo solo durante mucho tiempo (puede colapsarse). Por ahora todos justifican existencia futura (placeholders documentados con `.gitkeep`).
+
+

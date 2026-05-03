@@ -6,16 +6,31 @@
 
 ## 1. ¿Dónde estamos?
 
-**🏁 Hitos 40-42 cerrados (backlog post-`v1.0.0` limpio).**
-Tags: `v0.40.0-hito40` + `v0.41.0-hito41` + `v0.41.1-hito41-final` (fix profesional del bug Load Game) + `v0.42.0-hito42`.
-Verificado automático: suite doctest **319/6613**. Editor + MoodPlayer compilan limpios. Verificado por el dev a ojo en sesión interactiva: Save/Load full cycle funciona (cajas vuelven a poses + velocity exactas, sin drift entre saves), F5 quicksave + F6 save as con dialog, main menu con cursor + estilo dark, "New Game" recarga mapa fresco, "Salir al menu" desde pause overlay. Material Editor panel disponible en menú "Ver".
+**🚀 Fase 2 abierta. F2H1 cerrado — Reorganización arquitectónica.**
+Tag: `v1.1.0-fase2-hito1`.
+Verificado automático: suite doctest **319/6613** sin regresiones después de cada uno de los 18 sub-commits. Editor + MoodPlayer compilan limpios y se ven idénticos a v1.0.0 (zero behavior change).
 
-**Cambio importante:** completamos los 3 hitos post-`v1.0.0` que cierran el backlog acumulado de scope chico-medio + 2 features grandes:
-- **Hito 40**: 11/14 bloques de polish/cleanup (cone axis, OBB debug, runtime halfExtents, DragRange2/combos undo, char windows per-proyecto, sort stable, localSpace worldMatrix).
-- **Hito 41**: Save/Load extendido con snapshots Jolt + Lua globals filtradas. Bug del Load Game encontrado en testing del dev y resuelto profesionalmente con `createBody(rotationQuat)` + `pendingVel` en `RigidBodyComponent`.
-- **Hito 42**: Material Editor panel lite (sin preview esférico ni node-graph — Fase 2).
+**Cambio importante:** `src/engine/` flat → jerárquico por dominio. La estructura nueva está documentada en `ARCHITECTURE.md` y la sección 2 de `PLAN_FASE2.md`. Resumen:
+- `engine/render/{rhi,backend/opengl,pipeline,resources,scene_renderer,debug,passes}/`
+- `engine/scene/{core,components,serialization,queries}/`
+- `engine/physics/{world,components,character,queries}/`
+- `engine/animation/{skeleton,clips,animator}/`
+- `engine/audio/{device,clips,sources}/`
+- `engine/scripting/{runtime,bindings,exposed}/`
+- `engine/assets/{manager,loaders,primitives}/`
+- `engine/world/{grid,csg,streaming}/`
+- `engine/game/{manifest,overlay,state,dialog,quest,inventory}/` + `engine/i18n/`
+- `systems/{render,physics,animation,ai,particles,audio,light,scripting}/`
+- `editor/{application,ui,panels/{scene,assets,debug,world},commands,tools,overlay}/`
 
-**Próximo paso:** **🎬 RECAPITULACIÓN DEL DEV** sobre el estado del motor. Después: planning de Fase 2 (TBD). El motor está completo para producir demos FPS reales con progresión, save/load, triggers, particles, animation, scripts, raycasts, undo/redo, paquetes standalone.
+Carpetas `.gitkeep` documentan dónde van features de hitos posteriores (CSG en F2H9-F2H16, dialog/quest/inventory en F2H29-F2H31, i18n en F2H5).
+
+**Próximo paso:** **F2H2 — Tracy + benchmark sistemático** (sub-fase 2.1). Crear escenas stress-test (10K, 100K, 500K, 1M tris), medir FPS en GTX 1660, identificar top 5 cuellos de botella, documentar en `docs/PERFORMANCE.md`. Nueva dep: Tracy.
+
+### Fase 1 cerrada — Recapitulación
+Tags: `v1.0.0` (Hito 39, fin de Fase 1) + `v0.40.0-hito40` + `v0.41.0-hito41` + `v0.41.1-hito41-final` (fix Load Game) + `v0.42.0-hito42` (Material Editor lite).
+
+El motor Fase 1 está completo para producir demos FPS reales con progresión, save/load, triggers, particles, animation, scripts, raycasts, undo/redo, paquetes standalone. F2H1 reorganiza el código antes de empezar a sumar features grandes (CSG, material node-graph, dialog/quest/inventory, Mixamo importer).
 
 ### Hito 41 (anterior, ya cerrado)
 Tag: `v0.41.0-hito41`.

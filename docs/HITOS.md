@@ -48,7 +48,12 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 - [x] Hito 41 — Save/Load extendido: snapshots Dynamic bodies (pose + vel) + Lua globals filtradas (completado, tags `v0.41.0-hito41` + `v0.41.1-hito41-final` con fix-ups del bug Load Game).
 - [x] Hito 42 — Editor de materiales visual lite: panel dedicado con combo + drop slots + sliders (completado, tag `v0.42.0-hito42`). Preview esférico + node-graph quedan para Fase 2.
 
-**🏁 Backlog post-`v1.0.0` cerrado (Hitos 40-42).** Próximo paso: recapitulación del dev + planning de Fase 2 (TBD).
+**🏁 Backlog post-`v1.0.0` cerrado (Hitos 40-42).**
+
+### Fase 2
+
+- [x] **F2H1** — Reorganización arquitectónica de `src/` por dominios (completado, tag `v1.1.0-fase2-hito1`). Bloques A-H + cierre. 18 sub-commits, 0 regresiones (suite **319/6613**).
+- [ ] **F2H2** — Tracy + benchmark sistemático (TBD).
 
 **🏁 Fase 1 cerrada con `v1.0.0`. Hito 40 cierra los pendientes chicos/medios pre-Fase 2.** Próximo paso: Hitos 41+42 (los 2 grandes restantes) → recapitulación del dev → Fase 2 (TBD).
 
