@@ -11,7 +11,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
-#include "engine/serialization/PrefabSerializer.h"
+#include "engine/scene/serialization/PrefabSerializer.h"
 
 #include <nlohmann/json.hpp>
 

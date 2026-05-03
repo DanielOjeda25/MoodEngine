@@ -16,7 +16,7 @@
 #include "engine/scene/core/FpsCamera.h"
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/queries/ViewportPick.h"
-#include "engine/serialization/ProjectSerializer.h"
+#include "engine/scene/serialization/ProjectSerializer.h"
 #include "engine/world/GridMap.h"
 #include "platform/Window.h"
 

@@ -5,7 +5,7 @@
 #include <doctest/doctest.h>
 
 #include "core/math/AABB.h"
-#include "engine/serialization/JsonHelpers.h"
+#include "engine/scene/serialization/JsonHelpers.h"
 
 #include <glm/vec3.hpp>
 

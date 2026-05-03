@@ -8,8 +8,8 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
-#include "engine/serialization/JsonHelpers.h"
-#include "engine/serialization/SceneSerializer.h"
+#include "engine/scene/serialization/JsonHelpers.h"
+#include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/world/GridMap.h"
 
 #include <nlohmann/json.hpp>

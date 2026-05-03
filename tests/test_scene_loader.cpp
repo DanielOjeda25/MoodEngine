@@ -16,8 +16,8 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
-#include "engine/serialization/SceneLoader.h"
-#include "engine/serialization/SceneSerializer.h"
+#include "engine/scene/serialization/SceneLoader.h"
+#include "engine/scene/serialization/SceneSerializer.h"
 
 #include <filesystem>
 #include <memory>

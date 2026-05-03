@@ -1,7 +1,7 @@
-#include "engine/serialization/ProjectSerializer.h"
+#include "engine/scene/serialization/ProjectSerializer.h"
 
 #include "core/Log.h"
-#include "engine/serialization/JsonHelpers.h"
+#include "engine/scene/serialization/JsonHelpers.h"
 
 #include <nlohmann/json.hpp>
 

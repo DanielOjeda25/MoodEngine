@@ -22,7 +22,7 @@
 //                                //   instancio (Hito 14 Bloque 6).
 //   }
 
-#include "engine/serialization/SceneSerializer.h" // SavedEntity y subtipos
+#include "engine/scene/serialization/SceneSerializer.h" // SavedEntity y subtipos
 
 #include <nlohmann/json.hpp>
 

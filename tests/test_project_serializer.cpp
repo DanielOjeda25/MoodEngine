@@ -6,9 +6,9 @@
 
 #include "engine/assets/AssetManager.h"
 #include "engine/render/rhi/ITexture.h"
-#include "engine/serialization/JsonHelpers.h"
-#include "engine/serialization/ProjectSerializer.h"
-#include "engine/serialization/SceneSerializer.h"
+#include "engine/scene/serialization/JsonHelpers.h"
+#include "engine/scene/serialization/ProjectSerializer.h"
+#include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/world/GridMap.h"
 
 #include <nlohmann/json.hpp>

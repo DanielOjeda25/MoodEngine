@@ -5,8 +5,8 @@
 #include "engine/assets/AssetManager.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Scene.h"
-#include "engine/serialization/EntitySerializer.h"
-#include "engine/serialization/SceneLoader.h"
+#include "engine/scene/serialization/EntitySerializer.h"
+#include "engine/scene/serialization/SceneLoader.h"
 
 namespace Mood {
 

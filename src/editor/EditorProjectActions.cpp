@@ -19,14 +19,14 @@
 #include "engine/assets/AssetManager.h"
 #include "engine/packaging/PackageBuilder.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
-#include "engine/serialization/SceneLoader.h"
+#include "engine/scene/serialization/SceneLoader.h"
 #include "engine/scene/components/Components.h"
 
 #include <SDL.h>
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
-#include "engine/serialization/ProjectSerializer.h"
-#include "engine/serialization/SceneSerializer.h"
+#include "engine/scene/serialization/ProjectSerializer.h"
+#include "engine/scene/serialization/SceneSerializer.h"
 
 #include <nlohmann/json.hpp>
 #include <portable-file-dialogs.h>

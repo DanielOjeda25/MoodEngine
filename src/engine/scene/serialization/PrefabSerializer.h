@@ -23,7 +23,7 @@
 // son los mismos que en `.moodmap`: Mesh / Light / RigidBody (+ link path).
 
 #include "core/Types.h"
-#include "engine/serialization/SceneSerializer.h" // SavedEntity
+#include "engine/scene/serialization/SceneSerializer.h" // SavedEntity
 
 #include <filesystem>
 #include <optional>

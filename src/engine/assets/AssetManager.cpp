@@ -8,7 +8,7 @@
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
-#include "engine/serialization/PrefabSerializer.h"
+#include "engine/scene/serialization/PrefabSerializer.h"
 
 #include <nlohmann/json.hpp>
 

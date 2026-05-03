@@ -9,7 +9,7 @@
 #include <doctest/doctest.h>
 
 #include "engine/packaging/PackageBuilder.h"
-#include "engine/serialization/ProjectSerializer.h"
+#include "engine/scene/serialization/ProjectSerializer.h"
 
 #include <nlohmann/json.hpp>
 

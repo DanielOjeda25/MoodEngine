@@ -17,7 +17,7 @@
 #include "core/Types.h"
 #include "editor/commands/Command.h"
 #include "engine/scene/core/Entity.h"
-#include "engine/serialization/SceneSerializer.h"  // SavedEntity
+#include "engine/scene/serialization/SceneSerializer.h"  // SavedEntity
 
 #include <functional>
 #include <string>

@@ -267,11 +267,11 @@ add_library(mood_engine_lib STATIC
 
     src/engine/saving/SaveLoad.cpp
 
-    src/engine/serialization/EntitySerializer.cpp
-    src/engine/serialization/SceneLoader.cpp
-    src/engine/serialization/SceneSerializer.cpp
-    src/engine/serialization/ProjectSerializer.cpp
-    src/engine/serialization/PrefabSerializer.cpp
+    src/engine/scene/serialization/EntitySerializer.cpp
+    src/engine/scene/serialization/SceneLoader.cpp
+    src/engine/scene/serialization/SceneSerializer.cpp
+    src/engine/scene/serialization/ProjectSerializer.cpp
+    src/engine/scene/serialization/PrefabSerializer.cpp
 
     src/engine/scene/core/EditorCamera.cpp
     src/engine/scene/core/FpsCamera.cpp

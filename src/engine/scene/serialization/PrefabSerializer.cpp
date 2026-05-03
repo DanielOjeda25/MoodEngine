@@ -1,9 +1,9 @@
-#include "engine/serialization/PrefabSerializer.h"
+#include "engine/scene/serialization/PrefabSerializer.h"
 
 #include "core/Log.h"
 #include "engine/scene/core/Entity.h"
-#include "engine/serialization/EntitySerializer.h"
-#include "engine/serialization/JsonHelpers.h" // checkFormatVersion
+#include "engine/scene/serialization/EntitySerializer.h"
+#include "engine/scene/serialization/JsonHelpers.h" // checkFormatVersion
 
 #include <nlohmann/json.hpp>
 

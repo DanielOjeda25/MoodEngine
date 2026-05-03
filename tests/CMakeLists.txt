@@ -64,15 +64,15 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/game/GameState.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/packaging/PackageBuilder.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/saving/SaveLoad.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/serialization/SceneLoader.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/SceneLoader.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/VFS.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/AssetManager.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/MeshLoader.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/PrimitiveMeshes.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/serialization/EntitySerializer.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/serialization/SceneSerializer.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/serialization/ProjectSerializer.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/serialization/PrefabSerializer.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/EntitySerializer.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/SceneSerializer.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/ProjectSerializer.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/PrefabSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/audio/AudioClip.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/audio/AudioDevice.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/audio/miniaudio_impl.cpp

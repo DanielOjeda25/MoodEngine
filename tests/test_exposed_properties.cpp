@@ -18,7 +18,7 @@
 #include "engine/scene/core/Scene.h"
 #include "engine/scripting/ExposedProperty.h"
 #include "engine/scripting/LuaBindings.h"
-#include "engine/serialization/SceneSerializer.h"
+#include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/world/GridMap.h"
 
 #include <sol/sol.hpp>

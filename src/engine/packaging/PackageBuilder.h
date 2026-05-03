@@ -26,7 +26,7 @@
 // completo) asegura que los fallbacks del runtime siempre estan
 // presentes. Default: smart-pack ON.
 
-#include "engine/serialization/ProjectSerializer.h"
+#include "engine/scene/serialization/ProjectSerializer.h"
 
 #include <filesystem>
 #include <string>
