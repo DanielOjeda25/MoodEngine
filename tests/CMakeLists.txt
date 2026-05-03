@@ -61,7 +61,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/systems/TriggerSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/exposed/ExposedProperty.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/game/GameState.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/game/state/GameState.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/packaging/PackageBuilder.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/saving/SaveLoad.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/SceneLoader.cpp

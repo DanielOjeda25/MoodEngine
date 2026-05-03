@@ -17,7 +17,7 @@
 #include "engine/scene/serialization/ProjectSerializer.h"
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/audio/device/AudioDevice.h"
-#include "engine/game/GameState.h"
+#include "engine/game/state/GameState.h"
 #include "engine/physics/world/PhysicsWorld.h"
 #include "systems/AnimationSystem.h"
 #include "systems/AudioSystem.h"

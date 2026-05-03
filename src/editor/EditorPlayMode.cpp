@@ -2,8 +2,8 @@
 
 #include "core/Log.h"
 #include "core/math/AABB.h"
-#include "engine/game/GameOverlay.h"
-#include "engine/game/GameState.h"
+#include "engine/game/overlay/GameOverlay.h"
+#include "engine/game/state/GameState.h"
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/queries/ViewportPick.h"
 #include "engine/world/grid/GridMap.h"

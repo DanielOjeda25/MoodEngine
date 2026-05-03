@@ -1,7 +1,7 @@
-#include "engine/game/GameOverlay.h"
+#include "engine/game/overlay/GameOverlay.h"
 
 #include "core/Log.h"
-#include "engine/game/GameState.h"
+#include "engine/game/state/GameState.h"
 
 #include <imgui.h>
 

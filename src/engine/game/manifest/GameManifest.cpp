@@ -1,4 +1,4 @@
-#include "engine/game/GameManifest.h"
+#include "engine/game/manifest/GameManifest.h"
 
 #include "core/Log.h"
 

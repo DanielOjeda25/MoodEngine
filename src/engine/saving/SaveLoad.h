@@ -39,7 +39,7 @@
 //   - El loader es defensivo: campos faltantes caen a defaults sin lanzar.
 
 #include "core/Types.h"
-#include "engine/game/GameState.h"
+#include "engine/game/state/GameState.h"
 #include "engine/scripting/exposed/ExposedProperty.h"  // ExposedValue (Hito 41 B)
 
 #include <glm/vec3.hpp>

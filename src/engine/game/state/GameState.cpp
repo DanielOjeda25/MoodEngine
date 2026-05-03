@@ -1,4 +1,4 @@
-#include "engine/game/GameState.h"
+#include "engine/game/state/GameState.h"
 
 namespace Mood::GameState {
 

@@ -257,9 +257,9 @@ add_library(mood_engine_lib STATIC
     src/engine/audio/device/AudioDevice.cpp
     src/engine/audio/device/miniaudio_impl.cpp
 
-    src/engine/game/GameManifest.cpp
-    src/engine/game/GameOverlay.cpp
-    src/engine/game/GameState.cpp
+    src/engine/game/manifest/GameManifest.cpp
+    src/engine/game/overlay/GameOverlay.cpp
+    src/engine/game/state/GameState.cpp
 
     src/engine/packaging/PackageBuilder.cpp
 
