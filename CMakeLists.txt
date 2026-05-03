@@ -104,6 +104,22 @@ CPMAddPackage(
         "JSON_Install OFF"
 )
 
+# Tracy (F2H2): profiler de baja overhead. ON por default en Debug, OFF en
+# Release final. El cliente vive linkeado al ejecutable; el server es
+# tracy-profiler.exe externo y se conecta por TCP. Cuando MOOD_PROFILE=OFF las
+# macros de core/Profiler.h son no-op total (zero overhead).
+option(MOOD_PROFILE "Habilitar instrumentacion Tracy" ON)
+if(MOOD_PROFILE)
+    CPMAddPackage(
+        NAME tracy
+        GITHUB_REPOSITORY wolfpld/tracy
+        GIT_TAG v0.11.1
+        OPTIONS
+            "TRACY_ENABLE ON"
+            "TRACY_ON_DEMAND ON"
+    )
+endif()
+
 # Portable File Dialogs (single-header, cross-platform). Download-only para
 # crear un target INTERFACE propio; el repo no define uno utilizable via CMake.
 CPMAddPackage(
@@ -335,6 +351,14 @@ target_link_libraries(mood_engine_lib PUBLIC
     Jolt
     OpenGL::GL
 )
+
+# Tracy (F2H2): el target Tracy::TracyClient ya define TRACY_ENABLE PUBLIC,
+# asi que cualquier consumidor que incluya core/Profiler.h y linke a
+# mood_engine_lib activa las macros. Cuando MOOD_PROFILE=OFF, no se linkea
+# Tracy y las macros caen al fallback no-op.
+if(MOOD_PROFILE)
+    target_link_libraries(mood_engine_lib PUBLIC Tracy::TracyClient)
+endif()
 
 mood_set_compiler_warnings(mood_engine_lib)
 
