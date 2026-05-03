@@ -12,6 +12,7 @@
 #include "core/Profiler.h"
 #include "engine/animation/skeleton/Skeleton.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/render/pipeline/Frustum.h"
 #include "engine/render/rhi/IRenderer.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/pipeline/LightGrid.h"
@@ -462,6 +463,14 @@ void SceneRenderer::renderScene(Scene& scene,
         }
     };
 
+    // F2H3: frustum culling para el pase opaco. Construimos los 6 planos
+    // del frustum una sola vez y testeamos el AABB world-space de cada
+    // mesh antes del draw. Conservador (puede dejar pasar AABBs que no
+    // se ven, no descarta los que si). Skinned + shadow NO se cullean
+    // por ahora (ROI bajo segun baseline F2H2).
+    const Frustum frustum = frustumFromViewProj(projection * view);
+    u32 culledStatic = 0;
+
     // Pase A: estaticos.
     {
         MOOD_PROFILE_SCOPE("PBR::staticPass");
@@ -469,10 +478,28 @@ void SceneRenderer::renderScene(Scene& scene,
         scene.forEach<TransformComponent, MeshRendererComponent>(
             [&](Entity e, TransformComponent& t, MeshRendererComponent& mr) {
                 if (e.hasComponent<SkeletonComponent>()) return;
+
+                // Frustum cull: si el mesh tiene AABB y queda fuera del
+                // frustum, saltamos. Mesh sin AABB (asset == null o
+                // AABB invalido) se renderea igual que antes — no
+                // queremos meter el "missing mesh" como desaparecido.
+                MeshAsset* asset = assets.getMesh(mr.mesh);
+                if (asset != nullptr) {
+                    const AABB localAabb{asset->aabbMin, asset->aabbMax};
+                    if (localAabb.isValid()) {
+                        const AABB worldBox = worldAabb(localAabb, t.worldMatrix());
+                        if (!aabbVisible(worldBox, frustum)) {
+                            ++culledStatic;
+                            return;
+                        }
+                    }
+                }
+
                 m_pbrShader->setMat4("uModel", t.worldMatrix());
                 drawMeshRenderer(*m_pbrShader, mr);
             });
     }
+    MOOD_PROFILE_PLOT("PBR::CulledStatic", static_cast<i64>(culledStatic));
 
     // Pase B: skinneadas. Solo bindear el skinned shader si hay alguna.
     bool hasSkinned = false;
