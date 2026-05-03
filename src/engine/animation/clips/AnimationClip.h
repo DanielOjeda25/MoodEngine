@@ -16,7 +16,7 @@
 // Header-only puro (sin GL ni assimp); testeable directo desde doctest.
 
 #include "core/Types.h"
-#include "engine/animation/Skeleton.h"
+#include "engine/animation/skeleton/Skeleton.h"
 
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/matrix_transform.hpp>

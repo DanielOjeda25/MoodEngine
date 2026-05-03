@@ -8,8 +8,8 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/animation/AnimationClip.h"
-#include "engine/animation/Skeleton.h"
+#include "engine/animation/clips/AnimationClip.h"
+#include "engine/animation/skeleton/Skeleton.h"
 
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/matrix_transform.hpp>

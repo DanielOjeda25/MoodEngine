@@ -1,7 +1,7 @@
 #include "systems/AnimationSystem.h"
 
-#include "engine/animation/AnimationClip.h"
-#include "engine/animation/Skeleton.h"
+#include "engine/animation/clips/AnimationClip.h"
+#include "engine/animation/skeleton/Skeleton.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/Components.h"

@@ -1,8 +1,8 @@
 #include "engine/assets/MeshLoader.h"
 
 #include "core/Log.h"
-#include "engine/animation/AnimationClip.h"
-#include "engine/animation/Skeleton.h"
+#include "engine/animation/clips/AnimationClip.h"
+#include "engine/animation/skeleton/Skeleton.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/render/rhi/IMesh.h"
 #include "engine/render/resources/MeshAsset.h"

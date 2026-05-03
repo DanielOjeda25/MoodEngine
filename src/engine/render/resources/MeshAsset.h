@@ -28,8 +28,8 @@
 //   exceder el bind.
 
 #include "core/Types.h"
-#include "engine/animation/AnimationClip.h"
-#include "engine/animation/Skeleton.h"
+#include "engine/animation/clips/AnimationClip.h"
+#include "engine/animation/skeleton/Skeleton.h"
 
 #include <glm/vec3.hpp>
 

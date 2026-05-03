@@ -9,7 +9,7 @@
 #include "engine/render/scene_renderer/SceneRenderer.h"
 
 #include "core/Log.h"
-#include "engine/animation/Skeleton.h"
+#include "engine/animation/skeleton/Skeleton.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/render/rhi/IRenderer.h"
 #include "engine/render/rhi/ITexture.h"
