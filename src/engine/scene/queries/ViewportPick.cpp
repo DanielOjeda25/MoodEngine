@@ -1,4 +1,4 @@
-#include "engine/scene/ViewportPick.h"
+#include "engine/scene/queries/ViewportPick.h"
 
 #include "engine/world/GridMap.h"
 

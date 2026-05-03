@@ -5,7 +5,7 @@
 #include "engine/game/GameOverlay.h"
 #include "engine/game/GameState.h"
 #include "engine/physics/PhysicsWorld.h"
-#include "engine/scene/ViewportPick.h"
+#include "engine/scene/queries/ViewportPick.h"
 #include "engine/world/GridMap.h"
 #include "platform/Window.h"
 #include "systems/PhysicsSystem.h"

@@ -23,8 +23,8 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
-#include "engine/scene/ScenePick.h"
-#include "engine/scene/ViewportPick.h"
+#include "engine/scene/queries/ScenePick.h"
+#include "engine/scene/queries/ViewportPick.h"
 
 #include <glm/ext/matrix_transform.hpp>  // glm::translate, glm::rotate (Hito 40 B)
 #include <glm/mat4x4.hpp>

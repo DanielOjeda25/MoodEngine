@@ -51,7 +51,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scene/EditorCamera.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/FpsCamera.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/Scene.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/scene/ScenePick.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/queries/ScenePick.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/GridMap.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/Pathfinding.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/NavSystem.cpp

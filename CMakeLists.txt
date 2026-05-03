@@ -276,8 +276,8 @@ add_library(mood_engine_lib STATIC
     src/engine/scene/EditorCamera.cpp
     src/engine/scene/FpsCamera.cpp
     src/engine/scene/Scene.cpp
-    src/engine/scene/ViewportPick.cpp
-    src/engine/scene/ScenePick.cpp
+    src/engine/scene/queries/ViewportPick.cpp
+    src/engine/scene/queries/ScenePick.cpp
 
     src/engine/world/GridMap.cpp
     src/engine/world/Pathfinding.cpp

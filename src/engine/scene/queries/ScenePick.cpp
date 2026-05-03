@@ -1,4 +1,4 @@
-#include "engine/scene/ScenePick.h"
+#include "engine/scene/queries/ScenePick.h"
 
 #include "core/math/AABB.h"
 #include "engine/assets/AssetManager.h"

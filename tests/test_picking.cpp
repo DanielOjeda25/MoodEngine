@@ -10,7 +10,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
-#include "engine/scene/ScenePick.h"
+#include "engine/scene/queries/ScenePick.h"
 
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
