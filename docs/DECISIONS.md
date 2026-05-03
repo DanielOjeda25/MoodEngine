@@ -2818,4 +2818,40 @@ Instrumentación inicial: 10 zonas en `EditorApplication::run` (eventos / UI / f
 
 **Revisar si:** Tracy deja de ser mantenido (improbable a corto plazo, proyecto activo) o si una migración a Vulkan/D3D12 requiere features de profiling GPU más profundas (entonces evaluar PIX o RenderDoc en paralelo, no como reemplazo).
 
+## 2026-05-03: Frustum culling plano, no jerárquico (F2H3)
+
+**Contexto:** F2H2 midió que `PBR::staticPass` se llevaba el 70.74% del frame con 836 cubos. F2H3 ataca eso descartando entidades fuera del frustum antes del draw call. La pregunta: ¿implementación plana (loop linear sobre todas las entidades) o jerárquica (BVH / octree / quadtree espacial)?
+
+**Decisión:** **plana** para v1, con **API diseñada para que el upgrade interno a estructura jerárquica sea transparente** para los callers. El loop de PBR static itera por entidad como antes, agrega 3 líneas: calcular AABB world, test contra frustum, `continue` si fuera. El header `Frustum.h` expone `aabbVisible` y `worldAabb` en el estilo header-only del motor; los callers no iteran por dentro de una estructura — la API es "test este AABB contra este frustum".
+
+**Razones:**
+- **No es cuello todavía.** El test AABB-vs-frustum con truco p-vertex es 1 dot product por plano → 6 dots × ~1 ns = 6 ns por entidad. Para 836 entidades = 5 µs totales. Para 10K entidades = 60 µs. Para 100K = 0.6 ms. Cuando el dato medido diga que el loop linear es cuello, agregamos BVH como hito propio. Hoy no.
+- **Costo de implementación.** Un loop de 3 líneas vs un BVH (~300-500 LOC con build, refit en cambios de transform, traversal por frustum, tests). El BVH además agrega risk de bugs en refit incorrecto cuando un transform cambia.
+- **API extensible.** Hoy `aabbVisible(aabb, frustum)` se llama por entidad. Mañana, si reemplazamos el loop por `bvh.queryFrustum(frustum) → [aabbs visibles]`, ese cambio queda aislado en `SceneRenderer::renderScene` — el resto del código no se entera.
+- **Profile don't guess.** Filosofía Fase 2 (ver `docs/PLAN_FASE2.md`): no optimizar antes de medir. F2H3 nace con datos, no con intuición. El próximo nivel también nacerá así.
+
+**Alternativas consideradas:**
+- **BVH dinámico desde día 1**: rechazado por scope. ~5x más código, más superficie de bugs, sin necesidad inmediata.
+- **Octree estático**: no encaja con el modelo de mundo dinámico (entidades se mueven con scripts y physics). Refit constante haría perder la ventaja.
+- **Spatial hashing (grid uniforme)**: alternativa simple al BVH; postergado para evaluar si emerge como necesidad real.
+
+**Scope explícito de F2H3:**
+- Cull solo en `PBR::staticPass`. Shadow + skinned passes excluidos.
+  - **Shadow**: cada light tiene su propio frustum (CSM o radius esfera para points). Implementarlo correcto es ~2x el código de v1, y el baseline F2H2 dice que `ShadowPass` ni aparece en top 10 zonas. ROI bajo.
+  - **Skinned**: sub-1% del baseline. Cuando emerja en un baseline futuro lo agregamos.
+- AABB world-space calculado **on-the-fly cada frame** (sin caché por dirty-flag). Costo medido ~30 ns por entidad, despreciable. Caché entra solo si una medición lo justifica.
+- Test conservador: descarta solo cuando los 8 vértices del AABB están del lado negativo de un mismo plano (truco p-vertex). Falsos positivos posibles (AABB que pasa pero no se ve), falsos negativos NO. Es la garantía correcta — preferimos dibujar de más a "que se note un mesh faltando".
+
+**Trade-offs:**
+- Se pierde: rendimiento extra que un BVH daría a >100K entidades (cuando ese escenario aparezca).
+- Se gana: 3 líneas de código + 12 tests + API estable. Rendimiento medido x13.3 cuando el viewport está vacío de mesh (escena 10K, cámara apuntando lejos).
+
+**Validado en producción** (testtrace2.tracy, 1162 frames, GTX 1660):
+- `PBR::staticPass` 70.74% → 15.73% del frame (promedio mezcla escenarios).
+- Max de la zona: 2574 ms → 251 ms (10x menos varianza en peor caso).
+- `PBR::CulledStatic` plot reporta hasta 835/836 entidades descartadas.
+- Costo del culling: <<1% del frame, no entra en top 10 zonas.
+
+**Revisar si:** una medición futura muestra que el loop linear (no el cull en sí) es cuello — escenario probable solo a >100K entidades visibles, lo cual el motor todavía no soporta por otros cuellos pendientes (LOD F2H4, batching futuro).
+
 

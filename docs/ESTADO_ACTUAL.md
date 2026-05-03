@@ -6,15 +6,25 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H2 cerrado: Tracy + benchmark sistemático.**
+**🚀 Fase 2 — F2H3 cerrado: Frustum culling (pase opaco).**
+Tag: `v1.1.1-fase2-hito3`.
+Verificado automático: suite doctest **331/6645** sin regresiones (+12 cases en `test_frustum.cpp`). Verificado por el dev a ojo: editor + spawn 10K cubos + cámara apuntando al grid → 4.4 FPS (igual baseline F2H2 — todo dentro del frustum); cámara apuntando lejos → 60 FPS vsync-cap (835/836 cubos descartados); CSV `performance_baseline.csv` y captura Tracy `testtrace2.tracy` confirman los números.
+
+**Cambio importante:** primera optimización medible de Fase 2. Nuevo header `src/engine/render/pipeline/Frustum.h` con `Frustum`, `Plane`, `frustumFromViewProj` (extracción Gribb-Hartmann), `aabbVisible` (test conservador con truco p-vertex — 1 dot product por plano), `worldAabb` (transforma AABB local→world rotando 8 vértices). Gate de visibilidad en `SceneRenderer::renderScene` antes del pase opaco estático: descarta entidades cuyo AABB world-space cae fuera del frustum. Plot Tracy `PBR::CulledStatic` reporta el conteo descartado por frame.
+
+**Mejora medida (vs F2H2 baseline):** `PBR::staticPass` baja de **70.74% → 15.73%** del frame promediando los 3 escenarios de cámara (full / half / no_view). Stddev baja 3x, max 10x. Caso extremo (cámara apuntando lejos del grid 10K): frame ms **222 → 16.67** = **speedup x13.3**, draws **836 → 1**. Cuando todo cae dentro del viewport, el cull no inventa mejora (esperado). Costo del culling: <<1% del frame, no aparece en top 10 zonas.
+
+**Scope intencional v1:** solo PBR static. Shadow + skinned passes excluidos (ROI bajo según baseline F2H2). Implementación plana (loop linear) — jerárquico (BVH/octree) postergado a hito propio si una medición posterior lo justifica. API extensible: el upgrade interno no rompe callers.
+
+**Próximo paso:** **F2H4 — LOD system** (cubos lejanos pero dentro del frustum siguen costando como cubos cercanos en triangle setup). Plan en `docs/PLAN_FASE2.md` sección F2H4.
+
+### F2H2 (anterior, ya cerrado)
 Tag: `v1.1.0-fase2-hito2`.
 Verificado automático: suite doctest **319/6613** sin regresiones (todo el código nuevo es aditivo + macros no-op cuando `MOOD_PROFILE=OFF`). Verificado por el dev a ojo: editor con HUD `Ver > Performance` muestra FPS / frame ms / draws / tris / entities en vivo; spawner `Ayuda > Stress test` produce los grids de cubos esperados; botón "Snapshot baseline F2H2" appendea fila a `performance_baseline.csv` correctamente.
 
 **Cambio importante:** primer profiler real integrado. Cliente Tracy v0.11.1 vía CPM (`MOOD_PROFILE` ON por default — macros no-op cuando OFF, coste cero). 10 zonas instrumentadas en frame loop + sub-zonas dentro de SceneRenderer (shadow / skybox / light grid / PBR static / PBR skinned / particle / debug / post-process). Counter `FrameStats` en `IRenderer` (draws + tris) consumido por el HUD. 4 spawners stress-test (10K/100K/500K/1M tris en cubos). Nuevo panel `PerformanceHudPanel` con snapshot CSV.
 
 **Baseline medido (GTX 1660 / Ryzen 5 5600G / 16GB DDR4-2666):** documentado en `docs/PERFORMANCE.md`. Empty: 60 FPS vsync-cap. 10K tris (836 cubos): ~4 FPS, ~250 ms/frame. 100K+ tris: viewport congelado en Debug, postergado a post-F2H3/F2H4. Top cuello medido: `PBR::staticPass` 70.74% del frame (mean 42.5 ms; ~50 µs por cubo de 12 tris = CPU-bound en draw call setup, no GPU).
-
-**Próximo paso:** **F2H3 — Frustum culling** (entra con datos: el 70% del frame se va en `PBR::staticPass`, sin culling todo se procesa). Plan en `docs/PLAN_FASE2.md` sección F2H3.
 
 ### F2H1 (anterior, ya cerrado)
 Tag: `v1.1.0-fase2-hito1`.
