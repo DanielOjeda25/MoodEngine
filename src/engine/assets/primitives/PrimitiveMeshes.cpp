@@ -1,4 +1,4 @@
-#include "engine/assets/PrimitiveMeshes.h"
+#include "engine/assets/primitives/PrimitiveMeshes.h"
 
 #include <cmath>
 

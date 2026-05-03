@@ -12,7 +12,7 @@
 
 #include "core/Log.h"
 #include "editor/commands/CreateEntityCommand.h"
-#include "engine/assets/AssetManager.h"
+#include "engine/assets/manager/AssetManager.h"
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"

@@ -6,7 +6,7 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/assets/AssetManager.h"
+#include "engine/assets/manager/AssetManager.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"

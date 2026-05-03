@@ -1,7 +1,7 @@
 #include "engine/scene/serialization/SceneSerializer.h"
 
 #include "core/Log.h"
-#include "engine/assets/AssetManager.h"
+#include "engine/assets/manager/AssetManager.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"

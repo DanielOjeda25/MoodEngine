@@ -6,7 +6,7 @@
 // mapa. Drag & drop entra en Hito 6.
 
 #include "editor/panels/IPanel.h"
-#include "engine/assets/AssetManager.h"
+#include "engine/assets/manager/AssetManager.h"
 
 #include <optional>
 #include <string>

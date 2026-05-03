@@ -2,7 +2,7 @@
 
 #include "core/Log.h"
 #include "core/math/AABB.h"
-#include "engine/assets/AssetManager.h"
+#include "engine/assets/manager/AssetManager.h"
 #include "engine/audio/device/AudioDevice.h"
 #include "engine/game/GameManifest.h"
 #include "engine/game/GameOverlay.h"

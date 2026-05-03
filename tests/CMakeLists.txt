@@ -66,9 +66,9 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/saving/SaveLoad.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/SceneLoader.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/VFS.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/assets/AssetManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/assets/MeshLoader.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/assets/PrimitiveMeshes.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/primitives/PrimitiveMeshes.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/EntitySerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/SceneSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/ProjectSerializer.cpp

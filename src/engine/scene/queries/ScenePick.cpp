@@ -1,7 +1,7 @@
 #include "engine/scene/queries/ScenePick.h"
 
 #include "core/math/AABB.h"
-#include "engine/assets/AssetManager.h"
+#include "engine/assets/manager/AssetManager.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Scene.h"

@@ -10,7 +10,7 @@
 
 #include "core/Log.h"
 #include "engine/animation/skeleton/Skeleton.h"
-#include "engine/assets/AssetManager.h"
+#include "engine/assets/manager/AssetManager.h"
 #include "engine/render/rhi/IRenderer.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/pipeline/LightGrid.h"

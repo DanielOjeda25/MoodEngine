@@ -10,7 +10,7 @@
 #include "editor/EditorUI.h"
 #include "editor/commands/HistoryStack.h"
 #include "systems/TriggerSystem.h"
-#include "engine/assets/AssetManager.h"
+#include "engine/assets/manager/AssetManager.h"
 #include "engine/render/pipeline/Fog.h"
 #include "engine/scene/core/EditorCamera.h"
 #include "engine/scene/core/FpsCamera.h"

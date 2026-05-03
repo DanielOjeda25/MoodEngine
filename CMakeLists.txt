@@ -248,10 +248,10 @@ add_library(mood_engine_lib STATIC
     src/platform/Window.cpp
     src/platform/VFS.cpp
 
-    src/engine/assets/AssetManager.cpp
-    src/engine/assets/MeshLoader.cpp
-    src/engine/assets/PrimitiveMeshes.cpp
-    src/engine/assets/stb_impl.cpp
+    src/engine/assets/manager/AssetManager.cpp
+    src/engine/assets/loaders/MeshLoader.cpp
+    src/engine/assets/primitives/PrimitiveMeshes.cpp
+    src/engine/assets/loaders/stb_impl.cpp
 
     src/engine/audio/clips/AudioClip.cpp
     src/engine/audio/device/AudioDevice.cpp

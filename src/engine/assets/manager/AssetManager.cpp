@@ -1,8 +1,8 @@
-#include "engine/assets/AssetManager.h"
+#include "engine/assets/manager/AssetManager.h"
 
 #include "core/Log.h"
-#include "engine/assets/MeshLoader.h"
-#include "engine/assets/PrimitiveMeshes.h"
+#include "engine/assets/loaders/MeshLoader.h"
+#include "engine/assets/primitives/PrimitiveMeshes.h"
 #include "engine/audio/clips/AudioClip.h"
 #include "engine/render/rhi/IMesh.h"
 #include "engine/render/rhi/ITexture.h"

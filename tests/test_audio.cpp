@@ -8,7 +8,7 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/assets/AssetManager.h"
+#include "engine/assets/manager/AssetManager.h"
 #include "engine/audio/clips/AudioClip.h"
 #include "engine/audio/device/AudioDevice.h"
 #include "engine/render/rhi/ITexture.h"

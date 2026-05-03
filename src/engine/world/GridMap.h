@@ -13,7 +13,7 @@
 
 #include "core/Types.h"
 #include "core/math/AABB.h"
-#include "engine/assets/AssetManager.h" // TextureAssetId
+#include "engine/assets/manager/AssetManager.h" // TextureAssetId
 
 #include <vector>
 

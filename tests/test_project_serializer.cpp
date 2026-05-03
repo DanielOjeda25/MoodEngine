@@ -4,7 +4,7 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/assets/AssetManager.h"
+#include "engine/assets/manager/AssetManager.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/scene/serialization/JsonHelpers.h"
 #include "engine/scene/serialization/ProjectSerializer.h"

@@ -17,7 +17,7 @@
 #include "editor/EditorApplication.h"
 
 #include "core/math/AABB.h"
-#include "engine/assets/AssetManager.h"
+#include "engine/assets/manager/AssetManager.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/render/backend/opengl/OpenGLDebugRenderer.h"
 #include "engine/scene/components/Components.h"

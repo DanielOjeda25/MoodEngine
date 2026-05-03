@@ -5,8 +5,8 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/assets/AssetManager.h"
-#include "engine/assets/MeshLoader.h"
+#include "engine/assets/manager/AssetManager.h"
+#include "engine/assets/loaders/MeshLoader.h"
 #include "engine/render/rhi/IMesh.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MeshAsset.h"

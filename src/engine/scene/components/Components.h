@@ -10,7 +10,7 @@
 //     dueno del ciclo de vida.
 
 #include "core/Types.h"
-#include "engine/assets/AssetManager.h" // TextureAssetId, AudioAssetId, MeshAssetId
+#include "engine/assets/manager/AssetManager.h" // TextureAssetId, AudioAssetId, MeshAssetId
 #include "engine/audio/device/AudioDevice.h"    // SoundHandle
 #include "engine/scripting/exposed/ExposedProperty.h" // Hito 24
 
