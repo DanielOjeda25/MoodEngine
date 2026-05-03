@@ -14,7 +14,7 @@
 //     destruidas.
 
 #include "core/Types.h"
-#include "engine/audio/AudioDevice.h"
+#include "engine/audio/device/AudioDevice.h"
 
 #include <glm/vec3.hpp>
 

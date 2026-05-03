@@ -3,7 +3,7 @@
 #include "core/Log.h"
 #include "engine/assets/MeshLoader.h"
 #include "engine/assets/PrimitiveMeshes.h"
-#include "engine/audio/AudioClip.h"
+#include "engine/audio/clips/AudioClip.h"
 #include "engine/render/rhi/IMesh.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MaterialAsset.h"

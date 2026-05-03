@@ -9,8 +9,8 @@
 #include <doctest/doctest.h>
 
 #include "engine/assets/AssetManager.h"
-#include "engine/audio/AudioClip.h"
-#include "engine/audio/AudioDevice.h"
+#include "engine/audio/clips/AudioClip.h"
+#include "engine/audio/device/AudioDevice.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"

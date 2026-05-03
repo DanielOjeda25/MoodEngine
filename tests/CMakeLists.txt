@@ -73,9 +73,9 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/SceneSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/ProjectSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/PrefabSerializer.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/audio/AudioClip.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/audio/AudioDevice.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/audio/miniaudio_impl.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/audio/clips/AudioClip.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/audio/device/AudioDevice.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/audio/device/miniaudio_impl.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/AudioSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/LightSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/render/pipeline/LightGrid.cpp

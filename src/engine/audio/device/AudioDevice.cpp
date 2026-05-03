@@ -1,7 +1,7 @@
-#include "engine/audio/AudioDevice.h"
+#include "engine/audio/device/AudioDevice.h"
 
 #include "core/Log.h"
-#include "engine/audio/AudioClip.h"
+#include "engine/audio/clips/AudioClip.h"
 
 #include <miniaudio.h>
 

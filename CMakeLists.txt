@@ -253,9 +253,9 @@ add_library(mood_engine_lib STATIC
     src/engine/assets/PrimitiveMeshes.cpp
     src/engine/assets/stb_impl.cpp
 
-    src/engine/audio/AudioClip.cpp
-    src/engine/audio/AudioDevice.cpp
-    src/engine/audio/miniaudio_impl.cpp
+    src/engine/audio/clips/AudioClip.cpp
+    src/engine/audio/device/AudioDevice.cpp
+    src/engine/audio/device/miniaudio_impl.cpp
 
     src/engine/game/GameManifest.cpp
     src/engine/game/GameOverlay.cpp

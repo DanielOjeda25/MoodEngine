@@ -1,4 +1,4 @@
-#include "engine/audio/AudioClip.h"
+#include "engine/audio/clips/AudioClip.h"
 
 #include <miniaudio.h>
 

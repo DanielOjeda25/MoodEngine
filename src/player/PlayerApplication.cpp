@@ -3,7 +3,7 @@
 #include "core/Log.h"
 #include "core/math/AABB.h"
 #include "engine/assets/AssetManager.h"
-#include "engine/audio/AudioDevice.h"
+#include "engine/audio/device/AudioDevice.h"
 #include "engine/game/GameManifest.h"
 #include "engine/game/GameOverlay.h"
 #include "engine/game/GameState.h"
