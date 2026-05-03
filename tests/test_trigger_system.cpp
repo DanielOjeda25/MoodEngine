@@ -9,7 +9,7 @@
 
 #include "engine/game/GameState.h"
 #include "engine/physics/PhysicsWorld.h"
-#include "engine/scene/Components.h"
+#include "engine/scene/components/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
 #include "systems/ScriptSystem.h"

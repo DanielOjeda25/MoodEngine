@@ -14,7 +14,7 @@
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
 #include "engine/render/backend/opengl/OpenGLMesh.h"
 #include "engine/render/backend/opengl/OpenGLTexture.h"
-#include "engine/scene/Components.h"
+#include "engine/scene/components/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
 #include "engine/serialization/ProjectSerializer.h"

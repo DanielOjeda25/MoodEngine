@@ -2,7 +2,7 @@
 
 #include "editor/commands/EditTransformCommand.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
-#include "engine/scene/Components.h"
+#include "engine/scene/components/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
 

@@ -8,7 +8,7 @@
 #include "engine/render/pipeline/ShadowMath.h"
 #include "engine/render/backend/opengl/OpenGLShader.h"
 #include "engine/render/backend/opengl/OpenGLShadowMap.h"
-#include "engine/scene/Components.h"
+#include "engine/scene/components/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
 

@@ -1,7 +1,7 @@
 #include "editor/panels/ScriptEditorPanel.h"
 
 #include "core/Log.h"
-#include "engine/scene/Components.h"
+#include "engine/scene/components/Components.h"
 
 #include <imgui.h>
 

@@ -2,7 +2,7 @@
 
 #include "core/Log.h"
 #include "engine/render/rhi/IShader.h"
-#include "engine/scene/Components.h"
+#include "engine/scene/components/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"
 

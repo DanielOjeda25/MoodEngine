@@ -3,7 +3,7 @@
 #include "core/Log.h"
 #include "engine/assets/AssetManager.h"
 #include "engine/render/resources/MaterialAsset.h"
-#include "engine/scene/Components.h"
+#include "engine/scene/components/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/serialization/JsonHelpers.h" // adapters glm::vec3 <-> json
 

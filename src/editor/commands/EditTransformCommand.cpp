@@ -1,7 +1,7 @@
 #include "editor/commands/EditTransformCommand.h"
 
 #include "core/Log.h"
-#include "engine/scene/Components.h"
+#include "engine/scene/components/Components.h"
 #include "engine/scene/Scene.h"
 
 #include <cmath>
