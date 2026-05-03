@@ -43,6 +43,7 @@ class PostProcessPass;
 class Scene;
 class ShadowPass;
 class SkyboxRenderer;
+struct FrameStats;
 enum class TonemapMode : i32;
 
 class SceneRenderer {
@@ -110,9 +111,7 @@ public:
     ///        Reset cada `beginFrame`. Solo cubre las draws via drawMesh
     ///        (PBR static + skinned + shadow); skybox/particles/debug NO
     ///        se cuentan.
-    FrameStats frameStats() const {
-        return m_renderer ? m_renderer->frameStats() : FrameStats{};
-    }
+    FrameStats frameStats() const;
 
 private:
     std::unique_ptr<IRenderer> m_renderer;

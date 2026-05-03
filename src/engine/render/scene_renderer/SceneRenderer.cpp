@@ -171,6 +171,10 @@ SceneRenderer::~SceneRenderer() {
     m_renderer.reset();
 }
 
+FrameStats SceneRenderer::frameStats() const {
+    return m_renderer ? m_renderer->frameStats() : FrameStats{};
+}
+
 void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
     // Reset a defaults primero. Sin este reset, abrir un proyecto sin
     // Environment hereda los valores del proyecto anterior.

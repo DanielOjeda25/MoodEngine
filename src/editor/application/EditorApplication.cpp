@@ -3,6 +3,7 @@
 #include "core/Log.h"
 #include "core/Profiler.h"
 #include "core/math/AABB.h"
+#include "engine/render/rhi/IRenderer.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
