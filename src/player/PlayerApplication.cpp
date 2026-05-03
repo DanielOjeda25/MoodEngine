@@ -1,6 +1,7 @@
 #include "player/PlayerApplication.h"
 
 #include "core/Log.h"
+#include "core/Profiler.h"
 #include "core/math/AABB.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/audio/device/AudioDevice.h"
@@ -746,6 +747,8 @@ int PlayerApplication::run() {
         }
 
         endFrame();
+
+        MOOD_PROFILE_FRAME();
     }
 
     return 0;

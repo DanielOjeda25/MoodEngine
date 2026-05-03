@@ -9,6 +9,7 @@
 #include "engine/render/scene_renderer/SceneRenderer.h"
 
 #include "core/Log.h"
+#include "core/Profiler.h"
 #include "engine/animation/skeleton/Skeleton.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/rhi/IRenderer.h"
@@ -202,6 +203,7 @@ void SceneRenderer::renderScene(Scene& scene,
                                  const glm::vec3& cameraPos,
                                  u32 panelWidth,
                                  u32 panelHeight) {
+    MOOD_PROFILE_FUNCTION();
     if (panelWidth > 0 && panelHeight > 0) {
         m_sceneFb->resize(panelWidth, panelHeight);
         m_viewportFb->resize(panelWidth, panelHeight);
@@ -228,6 +230,7 @@ void SceneRenderer::renderScene(Scene& scene,
             });
     }
     if (shadowEnabled) {
+        MOOD_PROFILE_SCOPE("ShadowPass::record");
         // Bounding sphere fijo amplio para cubrir el mapa + props. Cuando
         // llegue CSM se reemplaza por una serie de cascadas. El centro y
         // radio los fijamos aproximadamente al origen del mundo: el caller
@@ -259,6 +262,7 @@ void SceneRenderer::renderScene(Scene& scene,
 
     // Skybox primero (depth=1 + LEQUAL).
     if (m_skyboxRenderer) {
+        MOOD_PROFILE_SCOPE("Skybox::draw");
         m_skyboxRenderer->draw(view, projection);
     }
 
@@ -267,12 +271,19 @@ void SceneRenderer::renderScene(Scene& scene,
     // parametro es ref).
     applyEnvironmentFromScene(scene);
 
-    LightFrameData lights = m_lightSystem->buildFrameData(scene);
+    LightFrameData lights;
+    {
+        MOOD_PROFILE_SCOPE("LightSystem::buildFrameData");
+        lights = m_lightSystem->buildFrameData(scene);
+    }
 
     // Hito 18: Forward+ light grid.
     const u32 fbW = m_sceneFb->width();
     const u32 fbH = m_sceneFb->height();
-    m_lightGrid->compute(lights, view, projection, fbW, fbH);
+    {
+        MOOD_PROFILE_SCOPE("LightGrid::compute");
+        m_lightGrid->compute(lights, view, projection, fbW, fbH);
+    }
 
     // Log diagnostico one-shot al cambiar la cantidad de luces.
     const u32 pcount = static_cast<u32>(lights.pointLights.size());
@@ -448,19 +459,23 @@ void SceneRenderer::renderScene(Scene& scene,
     };
 
     // Pase A: estaticos.
-    applyShaderUniforms(*m_pbrShader);
-    scene.forEach<TransformComponent, MeshRendererComponent>(
-        [&](Entity e, TransformComponent& t, MeshRendererComponent& mr) {
-            if (e.hasComponent<SkeletonComponent>()) return;
-            m_pbrShader->setMat4("uModel", t.worldMatrix());
-            drawMeshRenderer(*m_pbrShader, mr);
-        });
+    {
+        MOOD_PROFILE_SCOPE("PBR::staticPass");
+        applyShaderUniforms(*m_pbrShader);
+        scene.forEach<TransformComponent, MeshRendererComponent>(
+            [&](Entity e, TransformComponent& t, MeshRendererComponent& mr) {
+                if (e.hasComponent<SkeletonComponent>()) return;
+                m_pbrShader->setMat4("uModel", t.worldMatrix());
+                drawMeshRenderer(*m_pbrShader, mr);
+            });
+    }
 
     // Pase B: skinneadas. Solo bindear el skinned shader si hay alguna.
     bool hasSkinned = false;
     scene.forEach<SkeletonComponent>(
         [&](Entity, SkeletonComponent&) { hasSkinned = true; });
     if (hasSkinned && m_pbrSkinnedShader) {
+        MOOD_PROFILE_SCOPE("PBR::skinnedPass");
         applyShaderUniforms(*m_pbrSkinnedShader);
         scene.forEach<TransformComponent, MeshRendererComponent,
                        SkeletonComponent>(
@@ -487,6 +502,7 @@ void SceneRenderer::renderScene(Scene& scene,
     // arriba de todo). Depth write OFF dentro del renderer para que las
     // particulas no se descarten entre si.
     if (m_particleRenderer) {
+        MOOD_PROFILE_SCOPE("ParticleRenderer::render");
         m_particleRenderer->render(scene, assets, view, projection);
     }
 
@@ -497,11 +513,15 @@ void SceneRenderer::renderScene(Scene& scene,
 }
 
 void SceneRenderer::endFrame() {
+    MOOD_PROFILE_FUNCTION();
     // Si el caller acumulo geometria de debug entre `renderScene` y
     // `endFrame`, la flusheamos aqui usando las matrices del frame.
     // Cuando no hay debug pendiente el flush es no-op (el renderer no
     // ejecuta vertex array vacio).
-    m_debugRenderer->flush(m_lastView, m_lastProjection);
+    {
+        MOOD_PROFILE_SCOPE("DebugRenderer::flush");
+        m_debugRenderer->flush(m_lastView, m_lastProjection);
+    }
 
     m_renderer->endFrame();
     m_sceneFb->unbind();
@@ -509,6 +529,7 @@ void SceneRenderer::endFrame() {
     // Hito 15 Bloque 3: post-process pass. Lee `m_sceneFb` (HDR), escribe
     // a `m_viewportFb` (LDR).
     if (m_postProcess && m_sceneFb && m_viewportFb) {
+        MOOD_PROFILE_SCOPE("PostProcess::apply");
         m_postProcess->apply(*m_sceneFb, *m_viewportFb,
                               m_exposure, m_tonemap);
         m_viewportFb->unbind();

@@ -1,6 +1,7 @@
 #include "editor/application/EditorApplication.h"
 
 #include "core/Log.h"
+#include "core/Profiler.h"
 #include "core/math/AABB.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
@@ -290,6 +291,7 @@ EditorApplication::~EditorApplication() {
 }
 
 void EditorApplication::processEvents() {
+    MOOD_PROFILE_FUNCTION();
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         ImGui_ImplSDL2_ProcessEvent(&ev);
@@ -356,13 +358,18 @@ void EditorApplication::processEvents() {
 }
 
 void EditorApplication::beginFrame() {
+    MOOD_PROFILE_FUNCTION();
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 }
 
 void EditorApplication::endFrame() {
-    ImGui::Render();
+    MOOD_PROFILE_FUNCTION();
+    {
+        MOOD_PROFILE_SCOPE("ImGui::Render");
+        ImGui::Render();
+    }
 
     int fbWidth = 0;
     int fbHeight = 0;
@@ -372,9 +379,15 @@ void EditorApplication::endFrame() {
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    {
+        MOOD_PROFILE_SCOPE("ImGui_ImplOpenGL3_RenderDrawData");
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    }
 
-    m_window->swapBuffers();
+    {
+        MOOD_PROFILE_SCOPE("swapBuffers");
+        m_window->swapBuffers();
+    }
 }
 
 glm::vec3 EditorApplication::mapWorldOrigin() const {
@@ -415,6 +428,12 @@ int EditorApplication::run() {
 
         const f32 fps = m_fpsCounter.tick(dtD);
         m_ui.setFps(fps);
+        MOOD_PROFILE_PLOT("FPS", fps);
+        MOOD_PROFILE_PLOT("FrameMs", static_cast<f32>(dtD * 1000.0));
+        if (m_scene) {
+            MOOD_PROFILE_PLOT("EntityCount",
+                static_cast<int64_t>(m_scene->entityCount()));
+        }
 
         // Hot-reload de shaders (Hito 25 G): chequeo throttle 500ms de
         // mtime y recompila los .vert/.frag que cambiaron en disco.
@@ -428,7 +447,10 @@ int EditorApplication::run() {
         // 1) Construir el widget tree de ImGui. ViewportPanel captura input
         //    de camara aqui (solo efectivo en Editor Mode).
         bool requestQuit = false;
-        m_ui.draw(requestQuit);
+        {
+            MOOD_PROFILE_SCOPE("UI::draw");
+            m_ui.draw(requestQuit);
+        }
 
         // 2) Atender toggles de modo solicitados desde la UI (boton Play/Stop).
         if (m_ui.consumeTogglePlayRequest()) {
@@ -532,17 +554,24 @@ int EditorApplication::run() {
         processViewportScriptDrop();
 
         // 3) Input -> camaras.
-        updateCameras(dt);
+        {
+            MOOD_PROFILE_SCOPE("updateCameras");
+            updateCameras(dt);
+        }
 
         // 3.4) Fisica (Jolt, Hito 12): materializa bodies nuevos siempre y
         //      stepea la sim solo en Play Mode. Despues del input y antes
         //      de scripts — asi un script puede leer la posicion post-step.
-        updateRigidBodies(dt);
+        {
+            MOOD_PROFILE_SCOPE("Physics::updateRigidBodies");
+            updateRigidBodies(dt);
+        }
 
         // 3.5) Scripts Lua: correr onUpdate(self, dt) en cada entidad con
         //      ScriptComponent. Antes del render para que los cambios en
         //      Transform se vean este mismo frame.
         if (m_scene && m_scriptSystem) {
+            MOOD_PROFILE_SCOPE("ScriptSystem::update");
             m_scriptSystem->update(*m_scene, dt, m_physicsWorld.get());
         }
 
@@ -552,6 +581,7 @@ int EditorApplication::run() {
         // los handlers ya esten registrados.
         if (m_scene && m_scriptSystem && m_physicsWorld
             && m_mode == EditorMode::Play) {
+            MOOD_PROFILE_SCOPE("TriggerSystem::update");
             m_triggerSystem.update(*m_scene, *m_physicsWorld,
                                     *m_scriptSystem, m_playerCharId);
         }
@@ -561,6 +591,7 @@ int EditorApplication::run() {
         //       del audio para que un sound posicional adjunto a un hueso
         //       (futuro) ya tenga la pose actualizada — hoy es indistinto.
         if (m_scene && m_animationSystem) {
+            MOOD_PROFILE_SCOPE("AnimationSystem::update");
             m_animationSystem->update(*m_scene, *m_assetManager, dt);
         }
 
@@ -572,6 +603,7 @@ int EditorApplication::run() {
         //       target (patrol, idle, item), lo va a poder hacer via
         //       binding cuando se exponga NavAgent a sol2.
         if (m_mode == EditorMode::Play && m_scene && m_navSystem) {
+            MOOD_PROFILE_SCOPE("NavSystem::update");
             const glm::vec3 playerPos = m_playCamera.position();
             m_scene->forEach<NavAgentComponent>(
                 [&](Entity, NavAgentComponent& nav) {
@@ -585,6 +617,7 @@ int EditorApplication::run() {
         //       Sin pausa especifica — si el dev quiere congelarlas, baja
         //       el emitRate a 0 desde el Inspector.
         if (m_scene && m_particleSystem) {
+            MOOD_PROFILE_SCOPE("ParticleSystem::update");
             m_particleSystem->update(*m_scene, dt);
         }
 
@@ -592,6 +625,7 @@ int EditorApplication::run() {
         //      el listener a la camara activa. Despues de scripts para que
         //      cualquier cambio de Transform del frame ya este aplicado.
         if (m_scene && m_audioSystem) {
+            MOOD_PROFILE_SCOPE("AudioSystem::update");
             m_audioSystem->update(*m_scene, dt);
 
             // Listener = camara activa segun modo. World-up fijo (0,1,0).
@@ -613,7 +647,10 @@ int EditorApplication::run() {
         }
 
         // 4) Render 3D al framebuffer offscreen (el panel mostrara la textura).
-        renderSceneToViewport(dt);
+        {
+            MOOD_PROFILE_SCOPE("renderSceneToViewport");
+            renderSceneToViewport(dt);
+        }
 
         // 5) Draw final de ImGui.
         endFrame();
@@ -621,6 +658,8 @@ int EditorApplication::run() {
         if (requestQuit) {
             m_running = false;
         }
+
+        MOOD_PROFILE_FRAME();
     }
 
     return 0;
