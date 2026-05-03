@@ -2,7 +2,7 @@
 
 #include "core/Log.h"
 #include "engine/audio/AudioClip.h"
-#include "engine/render/ITexture.h"
+#include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MeshAsset.h"
 
 #include <imgui.h>

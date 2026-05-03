@@ -3,7 +3,7 @@
 // Interfaz abstracta de una textura 2D. La creacion concreta la hace cada
 // backend (p.ej. OpenGLTexture carga con stb_image y sube a GPU con glTexImage2D).
 
-#include "engine/render/RendererTypes.h"
+#include "engine/render/rhi/RendererTypes.h"
 #include "core/Types.h"
 
 namespace Mood {

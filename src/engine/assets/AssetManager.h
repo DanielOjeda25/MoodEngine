@@ -11,7 +11,7 @@
 // por un lookup mas completo; la API publica no cambia.
 
 #include "core/Types.h"
-#include "engine/render/RendererTypes.h"
+#include "engine/render/rhi/RendererTypes.h"
 #include "platform/VFS.h"
 
 #include <filesystem>

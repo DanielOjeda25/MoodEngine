@@ -4,8 +4,8 @@
 // interleaved. Por ahora no se usan EBOs: los meshes se dibujan con
 // `glDrawArrays`.
 
-#include "engine/render/IMesh.h"
-#include "engine/render/RendererTypes.h"
+#include "engine/render/rhi/IMesh.h"
+#include "engine/render/rhi/RendererTypes.h"
 #include "core/Types.h"
 
 #include <glad/gl.h>

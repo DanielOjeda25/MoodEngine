@@ -3,7 +3,7 @@
 // Generadores de mallas primitivas para debug / desarrollo temprano.
 // Los datos se devuelven como CPU-side; el backend decide como subirlos a GPU.
 
-#include "engine/render/RendererTypes.h"
+#include "engine/render/rhi/RendererTypes.h"
 #include "core/Types.h"
 
 #include <vector>

@@ -1,6 +1,6 @@
 #include "editor/panels/ViewportPanel.h"
 
-#include "engine/render/IFramebuffer.h"
+#include "engine/render/rhi/IFramebuffer.h"
 
 #include <imgui.h>
 

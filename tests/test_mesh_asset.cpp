@@ -7,8 +7,8 @@
 
 #include "engine/assets/AssetManager.h"
 #include "engine/assets/MeshLoader.h"
-#include "engine/render/IMesh.h"
-#include "engine/render/ITexture.h"
+#include "engine/render/rhi/IMesh.h"
+#include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MeshAsset.h"
 
 #include <chrono>

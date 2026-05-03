@@ -17,7 +17,7 @@
 // expansion juntos a un `OpenGLIndexedMesh` que use EBOs.
 
 #include "core/Types.h"
-#include "engine/render/RendererTypes.h"
+#include "engine/render/rhi/RendererTypes.h"
 
 #include <functional>
 #include <memory>

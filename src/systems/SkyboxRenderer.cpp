@@ -1,8 +1,8 @@
 #include "systems/SkyboxRenderer.h"
 
 #include "core/Log.h"
-#include "engine/render/IShader.h"
-#include "engine/render/ITexture.h"
+#include "engine/render/rhi/IShader.h"
+#include "engine/render/rhi/ITexture.h"
 #include "engine/render/opengl/OpenGLCubemapTexture.h"
 #include "engine/render/opengl/OpenGLShader.h"
 #include "engine/render/opengl/OpenGLTexture.h"

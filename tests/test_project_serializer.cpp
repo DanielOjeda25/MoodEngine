@@ -5,7 +5,7 @@
 #include <doctest/doctest.h>
 
 #include "engine/assets/AssetManager.h"
-#include "engine/render/ITexture.h"
+#include "engine/render/rhi/ITexture.h"
 #include "engine/serialization/JsonHelpers.h"
 #include "engine/serialization/ProjectSerializer.h"
 #include "engine/serialization/SceneSerializer.h"

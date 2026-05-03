@@ -12,7 +12,7 @@
 #include <doctest/doctest.h>
 
 #include "engine/assets/AssetManager.h"
-#include "engine/render/ITexture.h"
+#include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MaterialAsset.h"
 
 #include <chrono>

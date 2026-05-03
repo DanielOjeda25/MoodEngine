@@ -2,7 +2,7 @@
 
 // Implementacion OpenGL de ITexture. Carga imagenes desde disco via stb_image.
 
-#include "engine/render/ITexture.h"
+#include "engine/render/rhi/ITexture.h"
 
 #include <glad/gl.h>
 

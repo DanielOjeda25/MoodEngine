@@ -2,8 +2,8 @@
 
 #include "core/Log.h"
 #include "engine/assets/AssetManager.h"
-#include "engine/render/IMesh.h"
-#include "engine/render/IRenderer.h"
+#include "engine/render/rhi/IMesh.h"
+#include "engine/render/rhi/IRenderer.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/pipeline/ShadowMath.h"
 #include "engine/render/opengl/OpenGLShader.h"

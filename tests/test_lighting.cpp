@@ -5,7 +5,7 @@
 
 #include <doctest/doctest.h>
 
-#include "engine/render/IShader.h"
+#include "engine/render/rhi/IShader.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"

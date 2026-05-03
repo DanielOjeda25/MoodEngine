@@ -4,7 +4,7 @@
 // de texto y cachea ubicaciones de uniforms para no consultarlas por frame.
 
 #include "core/Types.h"
-#include "engine/render/IShader.h"
+#include "engine/render/rhi/IShader.h"
 
 #include <glad/gl.h>
 

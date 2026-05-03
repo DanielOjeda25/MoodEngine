@@ -4,7 +4,7 @@
 #include "engine/animation/AnimationClip.h"
 #include "engine/animation/Skeleton.h"
 #include "engine/assets/AssetManager.h"
-#include "engine/render/IMesh.h"
+#include "engine/render/rhi/IMesh.h"
 #include "engine/render/resources/MeshAsset.h"
 
 #include <assimp/Importer.hpp>

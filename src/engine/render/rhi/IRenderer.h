@@ -4,10 +4,10 @@
 // contra esta API, sin saber de OpenGL ni de Vulkan. Permite futuros backends
 // sin refactorizar el resto del motor.
 
-#include "engine/render/IFramebuffer.h"
-#include "engine/render/IMesh.h"
-#include "engine/render/IShader.h"
-#include "engine/render/RendererTypes.h"
+#include "engine/render/rhi/IFramebuffer.h"
+#include "engine/render/rhi/IMesh.h"
+#include "engine/render/rhi/IShader.h"
+#include "engine/render/rhi/RendererTypes.h"
 #include "core/Types.h"
 
 namespace Mood {

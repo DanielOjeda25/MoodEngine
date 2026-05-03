@@ -3,8 +3,8 @@
 // Implementacion OpenGL de IFramebuffer. Crea un FBO con color attachment
 // (textura) + depth renderbuffer, lista para ser mostrada dentro de ImGui.
 
-#include "engine/render/IFramebuffer.h"
-#include "engine/render/RendererTypes.h"
+#include "engine/render/rhi/IFramebuffer.h"
+#include "engine/render/rhi/RendererTypes.h"
 #include "core/Types.h"
 
 #include <glad/gl.h>

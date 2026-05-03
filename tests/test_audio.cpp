@@ -11,7 +11,7 @@
 #include "engine/assets/AssetManager.h"
 #include "engine/audio/AudioClip.h"
 #include "engine/audio/AudioDevice.h"
-#include "engine/render/ITexture.h"
+#include "engine/render/rhi/ITexture.h"
 #include "engine/scene/Components.h"
 #include "engine/scene/Entity.h"
 #include "engine/scene/Scene.h"

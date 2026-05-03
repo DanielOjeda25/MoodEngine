@@ -4,7 +4,7 @@
 // renderizar el viewport del editor a una textura que luego ImGui muestra
 // dentro del panel Viewport con ImGui::Image.
 
-#include "engine/render/RendererTypes.h"
+#include "engine/render/rhi/RendererTypes.h"
 #include "core/Types.h"
 
 namespace Mood {

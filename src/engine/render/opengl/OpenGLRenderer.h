@@ -4,7 +4,7 @@
 // esconda OpenGL del resto del motor. Estado complejo (Z-buffer, blending,
 // culling) se va agregando cuando los hitos lo pidan.
 
-#include "engine/render/IRenderer.h"
+#include "engine/render/rhi/IRenderer.h"
 
 namespace Mood {
 

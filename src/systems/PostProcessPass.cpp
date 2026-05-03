@@ -1,7 +1,7 @@
 #include "systems/PostProcessPass.h"
 
 #include "core/Log.h"
-#include "engine/render/IShader.h"
+#include "engine/render/rhi/IShader.h"
 #include "engine/render/opengl/OpenGLFramebuffer.h"
 #include "engine/render/opengl/OpenGLShader.h"
 
