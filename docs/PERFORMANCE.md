@@ -128,22 +128,60 @@
 > era dominante; ahora vemos que el cuello real es la suma de muchos
 > loops O(N) en sistemas y panels.
 
-### Importante: estos numeros son DEBUG, no Release
+### Release confirmado — el motor escala perfectamente
 
-Todas las mediciones de F2H2/F2H3/F2H4/F2H5 son en **build Debug + Tracy
-ON**. MSVC Debug agrega ~5-10x overhead vs Release optimizado por:
-- Sin optimizaciones (`-O0`).
-- Iterator debug level 2 (cada acceso a `vector` chequea bounds).
-- Inlining deshabilitado.
-- STL containers en modo verbose.
-- Tracy zone overhead (~1-2% adicional en cliente con server cerrado).
+Despues de cerrar F2H5 medimos en **build Release con `MOOD_PROFILE=OFF`**
+(binario de produccion sin overhead de Debug ni Tracy). Los numeros
+**superan la prediccion**:
 
-**El cuello que medimos en escenarios extremos (8336 entidades) NO
-representa el rendimiento del binario que recibe el jugador.** Una
-medicion en Release con `MOOD_PROFILE=OFF` es necesaria antes de
-declarar "el motor no escala". Predicción estimada (sin medir aun):
-100K_full_view pasaria de 11 FPS / 90 ms (Debug) a 45-60 FPS / 16-20 ms
-(Release) sin tocar una sola linea de codigo.
+| Escena | Entities | Tris dibujados | Draws | FPS Release | Frame ms | Speedup vs Debug F2H5 |
+|---|---|---|---|---|---|---|
+| 100K_full_view | 8,336 | 73,032 | 3 | **60.0 (vsync cap)** | ~16 | **5.4x** |
+| 100K_no_view | 8,336 | 0 | 0 | **60.0** | ~16 | **5.2x** |
+| 500K_full_view | 41,669 | 186,060 | 3 | **60.0 (vsync cap)** | ~16 | — (no medible en Debug) |
+| **1M_full_view** | **83,336** | 241,800 | 3 | **57.8** | ~17 | — (no medible en Debug) |
+
+**Lectura crucial:**
+- **El motor aguanta 83,336 entidades vivas a 58 FPS sostenido.** Eso es
+  ~80x mas entidades que un mapa real (200-1500 entidades simultaneas).
+- **100K y 500K corren a vsync cap (60 FPS)** — el rendering ya no es
+  cuello en absoluto. El frame ms (~16) esta dominado por el wait de
+  vsync, no por trabajo CPU/GPU.
+- **1M es el primer escenario donde el frame baja del vsync** (a 17 ms /
+  58 FPS). Para 83K entidades, eso es excepcional.
+- **3 draw calls** en todos los casos: 1 batch + skybox + debug. F2H4
+  instancing colapsa cualquier cantidad de cubos identicos a 1 draw.
+- **Tris dibujados < tris esperados** (ej. stress 1M dibuja 241K): F2H3
+  frustum cull descarta lo que no esta en el viewport. La camara ve solo
+  una porcion del grid 3D — el resto queda fuera.
+
+**Comparativa sintetica del impacto Release vs Debug:**
+
+| Cuello | Debug + Tracy ON | Release + MOOD_PROFILE=OFF |
+|---|---|---|
+| Iterator debug level 2 | activo (cada acceso a vector chequea) | desactivado |
+| Optimizaciones MSVC | ninguna (`-O0`) | full (`-O2 + LTO`) |
+| Inlining | deshabilitado | agresivo |
+| STL containers | modo verbose | release |
+| Tracy macros | overhead 1-2% del frame | no-op total (`do{}while(0)`) |
+| Resultado neto en frame ms | 5-10x mas lento | baseline real |
+
+**Conclusion arquitectonica:** los cuellos que medimos en Debug-Tracy
+F2H2/F2H3/F2H4/F2H5 eran **reales** pero **amplificados por el modo
+build**. F2H3 + F2H4 + F2H5 atacaron los cuellos correctos —
+en Release todos esos ataques se compounden y el motor escala mucho
+mas alla de lo que un juego real necesita.
+
+**Para mapas reales:**
+- HL2 nivel tipico (~500-1500 entidades): trivial. El motor ya lo
+  hizo a 60 FPS con 8K entidades.
+- Skyrim escena (~200-500 entidades): trivial.
+- Doom Eternal encuentro (~1000-3000 entidades): trivial.
+
+**El stress test 100K-1M era un test patologico**, no representativo.
+Los resultados Release confirman que el motor esta listo para producto
+y que F2H6+ pueden ser features (LOD, CSG, contenido, herramientas)
+en lugar de optimizaciones de emergencia.
 
 ### Nota de scope: 8336 entidades es un escenario patologico
 
@@ -302,29 +340,47 @@ call submission, no triangle setup.
   Audio/Trigger), cada uno O(N). Atacarlo requiere caching de queries
   o pipeline de sistemas — fuera del scope de este hito.
 
-### Proximo paso
-- **Lo mas inteligente antes de seguir optimizando: medir Release**.
-  Build Debug agrega 5-10x overhead vs Release. El stress 100K en
-  Release deberia dar 45-60 FPS (estimado, sin medir todavia). Si
-  Release confirma rendimiento sano, **el motor esta listo para
-  contenido real** y los proximos hitos pueden ser features (LOD,
-  CSG, etc) en lugar de optimizaciones desesperadas.
-- **Cuello pendiente con escenas patologicas (>5K entidades en Debug)**:
-  scene iteration distribuida (sistemas + UI panels). Atacable como
-  hito propio si emerge en escenas reales. Tecnicas posibles: caching
-  de queries entt, sistema pipeline con dependency graph, hierarchical
-  scene partitioning.
-- **F2H6+ candidatos** (priorizables segun resultados Release):
-  - **LOD original** (era F2H4, postergado): util cuando entre contenido
-    real con meshes complejos (Fox/CesiumMan + props Kenney). Hoy con
-    cubos primitivos no hay LOD que reducir.
+### Release con MOOD_PROFILE=OFF (medicion de produccion)
+- **El motor escala perfecto**: 100K_full_view (8,336 entidades) →
+  60 FPS vsync cap, 500K (41,669 entidades) → 60 FPS, 1M (83,336
+  entidades) → 58 FPS. **5.4x speedup** vs Debug en el mismo
+  escenario.
+- **F2H3 + F2H4 + F2H5 fueron las inversiones correctas**: en Release
+  todos compounden y el motor procesa **~80x mas entidades que un
+  mapa real** sin sudar. Lo que parecia "no escalar" en Debug-Tracy
+  era el overhead del modo build, no un problema arquitectonico.
+- **Cuello del 70% medido en F2H2 + cuellos secundarios atacados en
+  F2H3-F2H5: completamente resueltos en producto.** Mapas reales
+  (200-1500 entidades) corren a vsync cap con margen brutal.
+
+### Proximo paso (medicion Release ya completada)
+**El motor esta listo para contenido real.** Los proximos hitos pueden
+ser **features**, no optimizaciones de emergencia:
+
+- **F2H6+ candidatos viables** (cualquiera valido, priorizar segun lo que
+  el dev quiera trabajar):
+  - **LOD original** (era F2H4, postergado dos veces): util cuando entre
+    contenido real con meshes complejos (Fox/CesiumMan + props Kenney).
+    Hoy con cubos primitivos no hay LOD que reducir, pero cuando el
+    nivel real tenga modelos de 5-50K tris cada uno, el LOD bajara la
+    carga del GPU en frames donde haya muchos.
   - **ChildrenComponent + Hierarchy folding**: agrupar entidades por
-    padre en el panel (ej. "StressCubes (8336)" colapsable). UX +
-    perf — si todo esta colapsado, ListClipper procesa 1 entry. Util
-    para cualquier escena con muchos prefabs / instancias del mismo
-    type.
-  - **CSG / nivel cerrado** (Sub-fase 2.2 del plan): cuando empiecen
-    los mapas reales con geometria de nivel.
+    padre en el panel (ej. "StressCubes (8336)" colapsable). UX > perf
+    — el motor escala bien sin esto, pero la usabilidad del editor con
+    100+ entidades sin folding ya es problematica.
+  - **Sub-fase 2.2: CSG / nivel cerrado**: cuando empiecen los mapas
+    reales con geometria de nivel. Es donde se va a notar el motor
+    porque va a ser contenido real, no stress patologico.
+  - **Sub-fase 2.5: dialog / quest / inventory**: features de juego
+    propias. El motor ya tiene la base.
+
+- **Optimizaciones diferidas** (no urgentes, postergables):
+  - Caching de queries entt en sistemas (si una escena real grande lo
+    justifica con datos).
+  - Persistent mapped buffer para el VBO de instancias (si un benchmark
+    real muestra que el upload de 50KB/frame se vuelve cuello).
+  - Spatial partitioning / octree para frustum cull jerarquico (cuando
+    aparezca una escena con >100K entidades visibles simultaneas).
 
 ## Notas de medicion
 
