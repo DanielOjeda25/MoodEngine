@@ -49,6 +49,7 @@ add_executable(mood_tests
     test_hierarchy_collect.cpp
     test_lod.cpp
     test_workspace_manager.cpp
+    test_save_load_full_roundtrip.cpp
 
     ${CMAKE_SOURCE_DIR}/src/engine/render/scene_renderer/RenderBatching.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/panels/scene/HierarchyCollect.cpp
