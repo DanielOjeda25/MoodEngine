@@ -137,6 +137,25 @@ void InspectorPanel::onImGuiRender() {
                 ImGui::Text("submeshes: %u, vertices: %u",
                              static_cast<u32>(asset->submeshes.size()),
                              asset->totalVertexCount());
+
+                // F2H6: info de LODs (read-only en v1). Editar manualmente
+                // o regenerar = hito futuro.
+                const u32 lod0Tris = asset->totalVertexCount() / 3;
+                u32 lod1Tris = 0, lod2Tris = 0;
+                for (const auto& s : asset->lod1Submeshes) lod1Tris += s.vertexCount / 3;
+                for (const auto& s : asset->lod2Submeshes) lod2Tris += s.vertexCount / 3;
+                if (lod1Tris > 0 || lod2Tris > 0) {
+                    ImGui::TextDisabled("LOD 0: %u tris (full)", lod0Tris);
+                    ImGui::TextDisabled("LOD 1: %u tris", lod1Tris);
+                    ImGui::TextDisabled("LOD 2: %u tris", lod2Tris);
+                    ImGui::TextDisabled("LOD distances: %.0fm / %.0fm",
+                                          static_cast<double>(asset->lodDistances.x),
+                                          static_cast<double>(asset->lodDistances.y));
+                } else if (asset->hasSkeleton()) {
+                    ImGui::TextDisabled("LODs: skinned (no generado)");
+                } else {
+                    ImGui::TextDisabled("LODs: no aplicable (mesh chico)");
+                }
             }
         } else {
             ImGui::Text("mesh id: %u", mr.mesh);
