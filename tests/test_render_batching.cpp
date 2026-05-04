@@ -62,7 +62,7 @@ TEST_CASE("groupByBatch: scene vacia devuelve resultado vacio") {
     Scene s;
     AssetManager assets("assets", stubFactoryBatch());
     const auto frustum = bigFrustum();
-    const auto r = groupByBatch(s, assets, frustum);
+    const auto r = groupByBatch(s, assets, frustum, glm::vec3(0.0f));
     CHECK(r.batches.empty());
     CHECK(r.nonBatchable.empty());
     CHECK(r.culledCount == 0u);
@@ -75,7 +75,7 @@ TEST_CASE("groupByBatch: 3 entidades mismo (mesh, material) -> 1 batch con 3 mat
     spawnCube(s, glm::vec3(2.0f, 0.0f, -5.0f));
     spawnCube(s, glm::vec3(-2.0f, 0.0f, -5.0f));
 
-    const auto r = groupByBatch(s, assets, bigFrustum());
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
     CHECK(r.batches.size() == 1u);
     CHECK(r.nonBatchable.empty());
 
@@ -96,7 +96,7 @@ TEST_CASE("groupByBatch: 2 entidades con materials distintos -> 2 batches") {
     spawnCube(s, glm::vec3(2.0f, 0.0f, -5.0f), {mat1}); // mat 1
     spawnCube(s, glm::vec3(-2.0f, 0.0f, -5.0f), {mat1});// mat 1
 
-    const auto r = groupByBatch(s, assets, bigFrustum());
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
     CHECK(r.batches.size() == 2u);
     CHECK(r.nonBatchable.empty());
     CHECK(r.batches.at(BatchKey{0u, 0u}).models.size() == 2u);
@@ -115,7 +115,7 @@ TEST_CASE("groupByBatch: entidad con materiales multiples (>1) cae a non-batchab
     // Y otra batcheable normal para confirmar que no afecta.
     spawnCube(s, glm::vec3(2.0f, 0.0f, -5.0f));
 
-    const auto r = groupByBatch(s, assets, bigFrustum());
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
     CHECK(r.batches.size() == 1u);
     CHECK(r.nonBatchable.size() == 1u);
     CHECK(r.batches.at(BatchKey{0u, 0u}).models.size() == 1u);
@@ -128,7 +128,7 @@ TEST_CASE("groupByBatch: entidad con SkeletonComponent NO entra (lo maneja skinn
     skinned.addComponent<SkeletonComponent>(SkeletonComponent{});
     spawnCube(s, glm::vec3(2.0f, 0.0f, -5.0f));
 
-    const auto r = groupByBatch(s, assets, bigFrustum());
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
     // Solo la no-skinned debe estar en algun lado.
     CHECK(r.batches.size() == 1u);
     CHECK(r.nonBatchable.empty());
@@ -143,7 +143,7 @@ TEST_CASE("groupByBatch: entidad fuera del frustum es culled (no batch ni non-ba
     // Una detras de la camara (z=+10) con frustum mirando -Z.
     spawnCube(s, glm::vec3(0.0f, 0.0f, 10.0f));
 
-    const auto r = groupByBatch(s, assets, bigFrustum());
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
     CHECK(r.batches.size() == 1u);
     CHECK(r.batches.at(BatchKey{0u, 0u}).models.size() == 1u);
     CHECK(r.nonBatchable.empty());
@@ -156,7 +156,7 @@ TEST_CASE("groupByBatch: matriz model preserva la posicion del Transform") {
     // Posicion dentro del frustum (FOV 90° a z=-10 da plano XY +/-10).
     spawnCube(s, glm::vec3(2.0f, 1.0f, -10.0f));
 
-    const auto r = groupByBatch(s, assets, bigFrustum());
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
     REQUIRE(r.batches.size() == 1u);
     REQUIRE(r.batches.at(BatchKey{0u, 0u}).models.size() == 1u);
 
@@ -174,15 +174,15 @@ TEST_CASE("groupByBatch: stress test 100 cubos visibles -> 1 batch con 100 mats"
         spawnCube(s, glm::vec3(static_cast<f32>(i % 10),
                                   static_cast<f32>(i / 10), -10.0f));
     }
-    const auto r = groupByBatch(s, assets, bigFrustum());
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
     CHECK(r.batches.size() == 1u);
     CHECK(r.batches.at(BatchKey{0u, 0u}).models.size() == 100u);
 }
 
 TEST_CASE("BatchKey: igualdad y hash") {
-    BatchKey a{1u, 2u};
-    BatchKey b{1u, 2u};
-    BatchKey c{1u, 3u};
+    BatchKey a{1u, 2u, 0u};
+    BatchKey b{1u, 2u, 0u};
+    BatchKey c{1u, 3u, 0u};
     CHECK(a == b);
     CHECK_FALSE(a == c);
     BatchKeyHash h;
@@ -190,4 +190,20 @@ TEST_CASE("BatchKey: igualdad y hash") {
     // No es invariante absoluto pero hashes distintos para keys
     // diferentes son lo esperado en este rango.
     CHECK(h(a) != h(c));
+}
+
+TEST_CASE("BatchKey: lod distinto produce keys distintas") {
+    // F2H6: dos entidades con mismo mesh + material pero distinto LOD
+    // deben caer en batches separados (un draw call por LOD).
+    BatchKey lod0{1u, 2u, 0u};
+    BatchKey lod1{1u, 2u, 1u};
+    BatchKey lod2{1u, 2u, 2u};
+    CHECK_FALSE(lod0 == lod1);
+    CHECK_FALSE(lod1 == lod2);
+    CHECK_FALSE(lod0 == lod2);
+    BatchKeyHash h;
+    // Idealmente hashes distintos en este rango; basta con verificar
+    // que la igualdad de keys los distingue.
+    CHECK(h(lod0) != h(lod1));
+    CHECK(h(lod1) != h(lod2));
 }

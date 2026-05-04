@@ -479,9 +479,10 @@ void SceneRenderer::renderScene(Scene& scene,
     // pasan el cull se descartan; las que no son batcheables (multi-submesh
     // o materiales mixtos) caen al path no-instanced del fallback.
     const Frustum frustum = frustumFromViewProj(projection * view);
-    BatchingResult batching = groupByBatch(scene, assets, frustum);
+    BatchingResult batching = groupByBatch(scene, assets, frustum, cameraPos);
     u32 emittedBatches = 0;
     u32 emittedInstances = 0;
+    u32 instancesLod0 = 0, instancesLod1 = 0, instancesLod2 = 0;
 
     // Pase A.1: batches instanced.
     if (!batching.batches.empty()) {
@@ -489,8 +490,13 @@ void SceneRenderer::renderScene(Scene& scene,
         applyShaderUniforms(*m_pbrInstancedShader);
         for (auto& [key, batch] : batching.batches) {
             MeshAsset* asset = assets.getMesh(key.mesh);
-            if (asset == nullptr || asset->submeshes.empty()) continue;
-            const auto& sub = asset->submeshes.front();
+            if (asset == nullptr) continue;
+            // F2H6: usa el LOD pedido por la BatchKey con fallback automatico
+            // a LOD 0 si el nivel no fue generado (mesh muy chico, skinned,
+            // o cache invalido).
+            const auto& lodSubmeshes = asset->submeshesForLod(key.lod);
+            if (lodSubmeshes.empty()) continue;
+            const auto& sub = lodSubmeshes.front();
             if (sub.mesh == nullptr) continue;
 
             // Bindeo de texturas + uniforms del material (mismo flow que
@@ -542,7 +548,12 @@ void SceneRenderer::renderScene(Scene& scene,
             m_renderer->drawMeshInstanced(*sub.mesh, *m_pbrInstancedShader,
                                             static_cast<u32>(batch.models.size()));
             ++emittedBatches;
-            emittedInstances += static_cast<u32>(batch.models.size());
+            const u32 batchSize = static_cast<u32>(batch.models.size());
+            emittedInstances += batchSize;
+            // F2H6: distribucion de instancias por LOD (debug Tracy).
+            if (key.lod == 0)      instancesLod0 += batchSize;
+            else if (key.lod == 1) instancesLod1 += batchSize;
+            else                   instancesLod2 += batchSize;
         }
     }
 
@@ -565,6 +576,9 @@ void SceneRenderer::renderScene(Scene& scene,
     MOOD_PROFILE_PLOT("PBR::CulledStatic", static_cast<i64>(batching.culledCount));
     MOOD_PROFILE_PLOT("PBR::BatchedDrawCalls", static_cast<i64>(emittedBatches));
     MOOD_PROFILE_PLOT("PBR::Instances", static_cast<i64>(emittedInstances));
+    MOOD_PROFILE_PLOT("PBR::InstancesLod0", static_cast<i64>(instancesLod0));
+    MOOD_PROFILE_PLOT("PBR::InstancesLod1", static_cast<i64>(instancesLod1));
+    MOOD_PROFILE_PLOT("PBR::InstancesLod2", static_cast<i64>(instancesLod2));
 
     // Pase B: skinneadas. Solo bindear el skinned shader si hay alguna.
     bool hasSkinned = false;

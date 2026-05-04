@@ -22,6 +22,7 @@
 #include "engine/scene/core/Entity.h"
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 
 #include <cstddef>
 #include <functional>
@@ -38,12 +39,17 @@ using MaterialAssetId = u32;
 
 /// @brief Clave de agrupacion. Dos entidades con la misma key pueden
 ///        dibujarse en un solo `glDrawArraysInstanced`.
+///        F2H6: incluye `lod` — entidades del mismo (mesh, material)
+///        pero distinto LOD van a batches separados.
 struct BatchKey {
     MeshAssetId mesh{0};
     MaterialAssetId material{0};
+    u32 lod{0};
 
     bool operator==(const BatchKey& other) const noexcept {
-        return mesh == other.mesh && material == other.material;
+        return mesh == other.mesh
+            && material == other.material
+            && lod == other.lod;
     }
 };
 
@@ -51,7 +57,9 @@ struct BatchKeyHash {
     std::size_t operator()(const BatchKey& k) const noexcept {
         // Mezcla simple — tipo boost::hash_combine. Para los rangos
         // tipicos de IDs (<10K cada uno) la dispersion es buena.
-        return std::hash<u32>{}(k.mesh) ^ (std::hash<u32>{}(k.material) << 1);
+        return std::hash<u32>{}(k.mesh)
+             ^ (std::hash<u32>{}(k.material) << 1)
+             ^ (std::hash<u32>{}(k.lod) << 2);
     }
 };
 
@@ -76,9 +84,14 @@ struct BatchingResult {
 };
 
 /// @brief Recorre la escena y produce batches agrupados + non-batchable +
-///        culled. PURO: no toca GL. Es la entrada del pipeline F2H3+F2H4.
+///        culled. PURO: no toca GL. Es la entrada del pipeline F2H3+F2H4+F2H6.
+///        `cameraPos` se usa para elegir el LOD por entidad via
+///        `selectLod(distance, asset->lodDistances)`. Si el mesh no tiene
+///        LODs generados (skinned, muy chico, o cache invalido), todas las
+///        entidades caen en `lod = 0`.
 BatchingResult groupByBatch(Scene& scene,
                               AssetManager& assets,
-                              const Frustum& frustum);
+                              const Frustum& frustum,
+                              const glm::vec3& cameraPos);
 
 } // namespace Mood

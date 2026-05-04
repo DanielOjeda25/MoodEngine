@@ -5,11 +5,14 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Scene.h"
 
+#include <glm/geometric.hpp>  // glm::distance
+
 namespace Mood {
 
 BatchingResult groupByBatch(Scene& scene,
                               AssetManager& assets,
-                              const Frustum& frustum) {
+                              const Frustum& frustum,
+                              const glm::vec3& cameraPos) {
     BatchingResult result;
 
     scene.forEach<TransformComponent, MeshRendererComponent>(
@@ -54,8 +57,22 @@ BatchingResult groupByBatch(Scene& scene,
                 return;
             }
 
+            // F2H6: seleccion de LOD por distancia camera→entidad. La
+            // distancia se calcula desde el centro del AABB world-space
+            // (mas estable que t.position cuando hay rotaciones que mueven
+            // el centro de masa visual). Si el mesh no tiene LOD para el
+            // nivel calculado, `submeshesForLod()` cae a LOD 0 — el
+            // BatchKey igual lo agrupa por nivel pedido para que las
+            // entidades con/sin LOD del mismo mesh queden separadas
+            // (asi el caller decide que IMesh dibujar con `submeshesForLod`).
+            const glm::vec3 entityCenter = localAabb.isValid()
+                ? glm::vec3(worldMat * glm::vec4(localAabb.center(), 1.0f))
+                : glm::vec3(worldMat[3]); // fallback: traslacion pura
+            const f32 distance = glm::distance(cameraPos, entityCenter);
+            const u32 lod = selectLod(distance, asset->lodDistances);
+
             const MaterialAssetId matId = mr.materialOrMissing(0);
-            const BatchKey key{mr.mesh, matId};
+            const BatchKey key{mr.mesh, matId, lod};
             result.batches[key].models.push_back(worldMat);
         });
 
