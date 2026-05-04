@@ -6,37 +6,72 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H10 cerrado: CI/CD con GitHub Actions.**
-Tag: `v1.1.7-fase2-hito10`.
-Verificado automático: el primer push de los workflows disparó `build.yml` y corrió verde (Configure + Build Debug + ctest 396/6948). El badge del README aparece en verde. El push del tag dispara `release.yml` que crea un GitHub Release con el message como body.
+**🚀 Fase 2 — F2H11 cerrado: CSG arquitectura base (primer hito de sub-fase 2.2).**
+Tag: `v1.2.0-fase2-hito11`.
+Verificado automático: suite doctest **447/7562** verde (+51 cases vs F2H10) en `test_plane.cpp`, `test_csg_brush.cpp`, `test_brush_persistence.cpp`. Verificado por el dev a ojo: spawn box brush desde menú → cubo gris liso aparece en (0,1,0), pickable con click en viewport, movible con gizmo, Inspector muestra info readonly, save → close → reopen → brush persiste correctamente.
 
-**Cambio importante**: cierre de la sub-fase 2.1 "cimientos". El motor ahora tiene CI verificando cada push + PR, con cache de CPM deps para que builds incrementales sean rápidos (~2-4 min después de la primera con cache). Cualquier regresión accidental se detecta inmediatamente. Sub-fase 2.2 (CSG) — que es trabajo grande — entra con red de seguridad activa.
+**Cambio importante**: arranca la sub-fase 2.2 (Editor de niveles serio). MoodEngine empieza a construir CSG estilo Hammer / TrenchBroom: brushes implícitos definidos como N planos por cara (no mesh triangulada). El primer brush vivo en pantalla es la **Box arbitraria orientada**.
+
+**Decisión arquitectónica clave**: CSG **a mano**, no manifold ni Carve. Razón: la representación implícita con planos por cara habilita features que manifold (mesh triangulada) perdería:
+- Lock-to-world UVs (F2H14): UVs calculadas desde el plano global, textura no se deforma al mover.
+- Edición no destructiva: arrastrás una cara, planos se actualizan, geometría se regenera.
+- Operaciones booleanas limpias (F2H12): clipping de planos vs Cramer = ~500 LOC documentadas.
+- Mapas livianos: 100 brushes = 600 planos, no 100K vértices.
+
+Refs: Ericson "Real-Time Collision Detection" cap 5; TrenchBroom source.
+
+**Implementación (7 bloques A-G, ~2000 LOC nuevas + 51 tests):**
+
+- **Bloque B — math de planos**. `Plane` promovido de `engine/render/pipeline/Frustum.h` a `core/math/Plane.h` (compartido entre frustum culling y CSG). Helpers nuevos: `signedDistance`, `planeFromPointAndNormal`, `intersectThreePlanes` (regla de Cramer con guarda `kPlaneEpsilon=1e-4f` para 2+ planos paralelos / coincidentes / casi-paralelos). 17 tests cubriendo casos canónicos, vertices de box, paralelos, coincidentes, casi-paralelos, determinismo bit-a-bit.
+
+- **Bloque C — Brush + buildBrushMesh**. Subsystem `engine/world/csg/`:
+  - `BrushFace { plane, materialIndex }`, `Brush { faces[], localAabb }`.
+  - `makeBoxBrush(worldFromLocal, materialIndex)` construye 6 caras canónicas locales (-X/+X/-Y/+Y/-Z/+Z con `distance=-0.5`) transformadas via inversa-transpuesta (correcto para normales bajo escalas no uniformes).
+  - `computeBrushAabb` itera tripletes (i<j<k), intersecta sus planos, filtra los que están dentro del brush (signedDistance ≤ kEpsilon en todas las demás caras), envuelve.
+  - `buildBrushMesh` (algoritmo central): para cada cara, intersecta su plano con cada par de OTROS planos → vertices candidatos → filter (in-brush) → dedup → CCW sort por atan2 en plano tangente → fan triangulate (válido por convexidad). UV en F2H11 = proyección planar trivial (eje tangente); F2H14 reemplaza con UVs reales.
+  - `brushMeshDataToInterleaved` expande índices al layout PBR (pos+color+uv+normal=11 floats por vértice, sin EBO — matchea `createCubeMesh`).
+  - 23 tests: box unitaria → 24 vertices + 36 índices, normales canónicas, triángulos CCW respecto a la normal, box rotada → centroide en origen (mesh cerrada simétrica), determinismo bit-a-bit, brush degenerado <4 caras → mesh vacía sin crash.
+
+- **Bloque D — integración ECS + render**. `BrushComponent { Brush, MaterialAssetId, unique_ptr<IMesh> meshCache, dirty }` en `engine/scene/components/`. Owning `unique_ptr<IMesh>` es excepción al patrón POD non-owning de `Components.h` — los brushes son geometría editable runtime que no encaja en el modelo asset-loaded-from-disk. `AssetManager::createDynamicMesh(verts, attrs)` expone la `MeshFactory` para crear IMesh runtime no persistidas en cache. `SceneRenderer::PBR::brushPass` (entre static pass y particles): rebuild on-dirty + draw 1 call por brush. **Look "blank gris"** (albedoTint=0.7, roughness=0.85, sin textura) cuando `material==0` en lugar de caer al missing.png — los brushes sin material son WIP esperando F2H14, no warning visible. `ProjectAction::AddBoxBrush` + `handleAddBoxBrush` + entrada de menú **Archivo > Mapa > Añadir Box Brush** crea entidad con tag único `Brush_Box_NN` en (0, 1, 0). Undo via `pushCreatedEntities`.
+
+- **Bloque E — persistencia .moodmap**. Schema bump v9→v10 con array top-level `brushes[]`:
+  ```json
+  "brushes": [
+    {
+      "tag": "Brush_Box_01",
+      "transform": { "position": [...], "rotationEuler": [...], "scale": [...] },
+      "material": "",
+      "faces": [{"normal": [1,0,0], "distance": -0.5, "materialIndex": 0}, ...6]
+    }
+  ]
+  ```
+  `BrushComponent` excluido del array `entities[]` para evitar doble-persistencia. `SceneLoader::applyEntitiesToScene` recompone `Csg::Brush` desde planos persistidos con `dirty=true` para forzar regen de mesh al primer frame. Mapas v9 sin `brushes[]` cargan con lista vacía (back-compat aditiva). 8 tests del round-trip cubriendo planos, transform, materialIndex per-cara, mesh post-load idéntica al original.
+
+- **Bloque F — UI (Inspector readonly + bug fix picking)**. Sección nueva **"Brush (CSG)"** en InspectorPanel cuando la entidad tiene `BrushComponent`: # faces, localAABB.size(), material path o "(blank look)", estado de mesh cache, flag dirty, botón "Recompute mesh" (debug helper). **Bug fix detectado en validación visual**: `ScenePick::pickEntity` solo iteraba `MeshRendererComponent`/Light/Audio, dejando brushes fuera del flow → click en el viewport no los seleccionaba. Fix: rama `BrushComponent` con `brushAabbWorld` (8 corners de `bc.brush.localAabb` proyectados a world via `t.worldMatrix()`, mismo flow que `meshAabbWorld`). Click en el cubo ahora selecciona la entidad correctamente.
+
+- **Bloque G — cierre**. Este documento + HITOS + DECISIONS + tag `v1.2.0-fase2-hito11`.
+
+**NO entra en F2H11** (sub-fase 2.2 sigue con):
+- F2H12: operaciones booleanas Union/Subtract/Intersect entre brushes (clipping de planos).
+- F2H13: primitivas extendidas (cilindro, prisma triangular/hexagonal, esfera poliédrica, pirámide, wedge).
+- F2H14: texturizado per-cara con UV editor + lock-to-world.
+- F2H15: selección de cara individual + multi-edit + sub-modo Face Mode.
+- F2H16: compilación brush→mesh estática unificada (vertex weld + cull caras internas) al guardar el mapa.
+
+**Próximo paso**: F2H12 (operaciones booleanas).
+
+### F2H10 (anterior, ya cerrado)
+Tag: `v1.1.7-fase2-hito10`.
+Verificado automático: el primer push de los workflows disparó `build.yml` y corrió verde (Configure + Build Debug + ctest 396/6948). Badge del README en verde. El push del tag dispara `release.yml` que crea un GitHub Release con el message como body.
+
+**Cambio importante**: cierre de la sub-fase 2.1 "cimientos". El motor tiene CI verificando cada push + PR, con cache de CPM deps (~2-4 min después de la primera con cache). Sub-fase 2.2 (CSG) entra con red de seguridad activa.
 
 **Implementación:**
-- `.github/workflows/build.yml`: trigger en push a `main` y cada PR. `runs-on: windows-latest`. Cache de `build/debug/_deps` con key derivada del hash de `CMakeLists.txt` + `cmake/CPM.cmake`. Cache de build artifacts adicional. `concurrency: cancel-in-progress` para que pushes rápidos no acumulen colas.
-- `.github/workflows/release.yml`: trigger en push de tags `v*.*.*`. Lee el message del tag con `git tag -l --format='%(contents)'` y lo pasa como body al `softprops/action-gh-release@v2`. Sin assets pre-compilados.
+- `.github/workflows/build.yml`: trigger en push a `main` y cada PR. `runs-on: windows-latest`. Cache de `build/debug/_deps` con key derivada del hash de `CMakeLists.txt` + `cmake/CPM.cmake`. `concurrency: cancel-in-progress`.
+- `.github/workflows/release.yml`: trigger en push de tags `v*.*.*`. Lee el message del tag con `git tag -l --format='%(contents)'` y lo pasa como body al `softprops/action-gh-release@v2`.
 - `README.md`: badge `build` arriba del título + estado actualizado.
 
-**Decisiones explícitas:**
-- **Solo Windows MSVC**: Linux fuera de scope (directiva durable).
-- **Sin Dependabot**: ruido innecesario en proyecto solo; deps CPM pinneadas con `GIT_TAG`.
-- **Sin assets pre-compilados** en releases: diferido a hito propio si emerge necesidad de "binary releases" tipo Godot.
-- **Build solo en Debug** en CI: matchea el desarrollo del dev. Release se diferirá si emerge necesidad de validación de optimizaciones automáticas.
-
-**Estado de Sub-fase 2.1 (cimientos):**
-- ✅ F2H1 reorganización src/
-- ✅ F2H2 Tracy + benchmark
-- ✅ F2H3 frustum culling
-- ✅ F2H4 instancing
-- ✅ F2H5 virtualización Hierarchy
-- ✅ F2H6 LOD system
-- ✅ F2H7 workspaces estilo Blender
-- ✅ F2H8 multi-mapa + fix Floor
-- ✅ F2H10 CI/CD GitHub Actions
-- ⏳ F2H9 documentación pública (postergado, opcional)
-- ⏳ Sub-fase 2.2 = CSG arquitectura (próximo gran salto)
-
-**Próximo paso:** **sub-fase 2.2 = CSG / editor de niveles real** (originalmente F2H9-F2H16 en el plan, probablemente F2H11+ ahora). Es trabajo grande — 2-3 meses estimados según `docs/PLAN_FASE2.md`. **O F2H9 docs públicas** si querés "limpieza" antes del CSG.
+**Decisiones explícitas:** Solo Windows MSVC; sin Dependabot; sin assets pre-compilados en releases; build solo Debug en CI.
 
 ### F2H8 (anterior, ya cerrado)
 Tag: `v1.1.6-fase2-hito8`.

@@ -3040,8 +3040,61 @@ Lista hardcoded en `applyOneEntity`. Otros tags (Multi, CajaFisica, etc.) siguen
 - "Binary releases" se vuelve necesidad real (cuando el motor sea producto consumible).
 - Multiplataforma emerge como necesidad real (probable solo si el proyecto se vuelve open-source con tracción).
 
+## 2026-05-04: CSG a mano (no manifold/Carve), brush implícito como representación canónica (F2H11)
 
+**Contexto:** primer hito de sub-fase 2.2 (Editor de niveles serio estilo Hammer / TrenchBroom). Necesitamos elegir la representación de los brushes 3D y el algoritmo para convertirlos en mesh renderable. Tres approaches viables:
 
+1. **Brush implícito + plane clipping a mano**: cada brush son N planos (uno por cara), la geometría sale de intersectar tripletes de planos. Algoritmo ~1500 LOC bien documentadas en "Real-Time Collision Detection" (Ericson) cap 5 + TrenchBroom source.
+2. **manifold** (Google, MIT, lo usa Blender 4.x): library state-of-art, exact arithmetic, paralelo. Trabaja sobre mesh triangulada, no sobre brush implícito.
+3. **Carve / libcsg**: abandonadas (Carve último commit 2014), pesadas, no las recomienda nadie hoy.
+
+**Decisión:** **CSG a mano con brush implícito** (opción 1). Reusar libs existentes (glm para math, meshoptimizer para weld futuro en F2H16, nlohmann/json para persistencia, EnTT para components) pero el algoritmo CSG core es código propio.
+
+**Razones (críticas para el roadmap):**
+
+- **Lock-to-world UVs (F2H14)**: feature que define editores tipo Hammer. La textura no se deforma al mover el brush porque las UVs se calculan desde el plano global (no desde vértices triangulados). Solo posible si la representación canónica es por-plano. Con manifold (mesh triangulada) tendríamos que reconstruir esto a mano por encima — más trabajo, no menos.
+- **Edición no destructiva**: arrastrás una cara, los planos se actualizan, la geometría se regenera deterministamente. Con mesh triangulada, mover una cara requiere reconstruir índices vecinos.
+- **Operaciones booleanas limpias (F2H12)**: clipping de polígonos contra planos del otro brush ~500 LOC. Los brushes son convexos por construcción (trivial dado que son intersecciones de half-spaces), entonces los algoritmos se simplifican mucho.
+- **Mapas livianos**: 100 brushes = 600 planos en JSON, no 100K vértices.
+- **Approach industria estándar**: TrenchBroom (Quake/Half-Life mapping pro), Hammer (Source/Source 2), Godot CSGShape3D — todos a mano. Blender usa manifold pero Blender no es editor de niveles tipo brush, trabaja siempre con mesh triangulada y no necesita planos por cara.
+
+**Alternativas descartadas:**
+- **manifold**: por la pérdida de lock-to-world. Mantener manifold como escape hatch en hito futuro si surge un problema duro de robustez numérica que el clipping a mano no resuelva.
+- **Carve / libcsg**: abandonadas.
+- **CGAL**: industry-grade pero LGPL/GPL parcial, build pesadísimo, overkill para el scope.
+
+**Convención del Plane** (durable, compartida con frustum culling):
+`dot(normal, p) + distance = 0` define el plano.
+`signedDistance(plane, p) = dot(plane.normal, p) + plane.distance`:
+- > 0 → p del lado de la normal.
+- < 0 → p del lado opuesto.
+- ≈ 0 → p sobre el plano.
+
+Para CSG, la `normal` apunta hacia AFUERA del brush. Un punto pertenece al brush ⇔ `signedDistance ≤ kPlaneEpsilon` en TODOS los planos. `kPlaneEpsilon = 1e-4f` da resolución sub-milimétrica sin caer en ruido de float (validado por tests de planos casi paralelos / coincidentes).
+
+**`Plane.h` promovido** desde `engine/render/pipeline/Frustum.h` (donde lo introdujo F2H3) a `core/math/Plane.h`. CSG (subsystem en `engine/world/csg/`) no debe depender de `engine/render/pipeline/`.
+
+**`BrushComponent` con ownership de `unique_ptr<IMesh>`** (excepción al patrón POD non-owning de Components.h): los brushes son geometría editable runtime, no encajan en el modelo asset-loaded-from-disk del AssetManager. Para no contaminar el header común, vive en su propio `engine/scene/components/BrushComponent.h`. `AssetManager::createDynamicMesh(verts, attrs)` expone la `MeshFactory` interna para crear IMesh runtime no persistidas en cache.
+
+**Look "blank gris" para brushes sin material**: `albedoTint=0.7, roughness=0.85, useAlbedoMap=false`. NO caer al material slot 0 (missing.png) — ese es warning visible para meshes con material faltante, no para brushes que conscientemente no tienen material todavía (F2H14 los va a tener per-cara real).
+
+**Schema `.moodmap` v9 → v10**: nuevo array top-level `brushes[]` paralelo a `entities[]`. `BrushComponent` se excluye de `entities[]` para evitar doble-persistencia. Mapas v9 sin `brushes[]` se cargan con lista vacía (back-compat aditiva). En F2H14 vamos a bumpear a v11 cuando el material pase de global por-brush a per-cara con UVs.
+
+**Trade-offs:**
+- Se pierde: cero deps nuevas, pero ganamos ~2000 LOC propias que mantener en lugar de ~100 LOC de bindings a manifold. Cualquier bug numérico en plane clipping es nuestro problema.
+- Se gana: control total sobre el approach que matchea exactamente el roadmap (lock-to-world, multi-edit per-cara, compilación al guardar). Cero dependencia que pueda morir o cambiar API.
+
+**Lección aprendida**: la elección de representación canónica define qué features son baratos vs caros más adelante. Manifold es excelente para **modelado** (Blender), pero el editor de niveles tipo Hammer es un workflow distinto — los brushes no son meshes editadas vértice por vértice, son volúmenes definidos por restricciones (planos). Elegir la abstracción correcta de entrada evita pelearle al motor en cada hito siguiente.
+
+**Refs canónicas:**
+- "Real-Time Collision Detection" (Christer Ericson, 2005) cap 5 — planes y intersection tests.
+- TrenchBroom source: https://github.com/TrenchBroom/TrenchBroom — `lib/vm/` para math, `common/src/Model/Brush*.cpp` para el algoritmo.
+- Quake / Half-Life Hammer 4 — referencia histórica del workflow de mapping.
+
+**Revisar si:**
+- Emerge un caso de robustez numérica que el clipping a mano no resuelva (brushes con caras casi coplanares en posiciones extremas) → considerar manifold como helper interno.
+- F2H12 (booleanos) revela que el clipping puro es insuficiente para operaciones complejas y la suite tipo BSP es necesaria → pivot al approach Quake/Hammer clásico (BSP tree).
+- Lock-to-world UV (F2H14) resulta innecesario en la práctica del dev → relajar a UVs per-vertex y reconsiderar manifold.
 
 
 
