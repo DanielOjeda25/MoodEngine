@@ -124,6 +124,32 @@ private:
     ///        hay dirty. Muestra MessageBox con resultado.
     void handlePackageProject();
 
+    // F2H8: gestion multi-mapa intra-proyecto.
+    /// @brief Crea un mapa nuevo (16x16, vacio) en `<project.root>/maps/`.
+    ///        Pide nombre via pfd::save_file. Si el actual esta dirty,
+    ///        confirmDiscardChanges. Switch al nuevo map.
+    void handleNewMap();
+    /// @brief Guarda el mapa actual con otro nombre. pfd::save_file con
+    ///        default `<currentName>_copy.moodmap`. Agrega al
+    ///        project.maps + switch al nuevo.
+    void handleSaveMapAs();
+    /// @brief Carga un mapa especifico del proyecto (entre los `maps[]`).
+    ///        Usado por el menu "Archivo > Mapa > Abrir mapa". Si actual
+    ///        dirty, confirmDiscardChanges.
+    void handleOpenMap(const std::filesystem::path& mapPath);
+    /// @brief Marca el mapa actual como `defaultMap` del proyecto.
+    void handleSetCurrentMapAsDefault();
+    /// @brief Elimina el mapa actual del proyecto + del disco. Si era
+    ///        el ultimo, popup error. Si era el default, reasigna.
+    void handleDeleteCurrentMap();
+
+    /// @brief F2H8: sincroniza el snapshot de mapas del proyecto al
+    ///        EditorUI (para que MenuBar pueda dibujar el submenu).
+    ///        Llamar despues de cada operacion que cambie m_project.maps,
+    ///        m_project.defaultMap o m_currentMapPath. No-op si no hay
+    ///        proyecto activo (limpia el snapshot).
+    void syncMapsSnapshot();
+
     /// @brief Hito 22 Bloque 3: crea un .lua nuevo en
     ///        `assets/scripts/<nombre>.lua` con un template, y refresca
     ///        el Asset Browser para que aparezca en la lista.

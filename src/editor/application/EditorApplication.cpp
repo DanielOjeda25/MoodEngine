@@ -495,7 +495,16 @@ int EditorApplication::run() {
             case ProjectAction::CloseProject:   handleCloseProject();   break;
             case ProjectAction::PackageProject: handlePackageProject(); break;
             case ProjectAction::NewScript:      handleNewScript();      break;
+            // F2H8: gestion multi-mapa.
+            case ProjectAction::NewMap:                  handleNewMap();                   break;
+            case ProjectAction::SaveMapAs:               handleSaveMapAs();                break;
+            case ProjectAction::SetCurrentMapAsDefault:  handleSetCurrentMapAsDefault();   break;
+            case ProjectAction::DeleteCurrentMap:        handleDeleteCurrentMap();         break;
             case ProjectAction::None:           break;
+        }
+        // F2H8: open map request (con payload del path).
+        if (auto openMap = m_ui.consumeOpenMapRequest()) {
+            handleOpenMap(*openMap);
         }
 
         // Hito 15 polish: el modal Welcome puede editar la lista de

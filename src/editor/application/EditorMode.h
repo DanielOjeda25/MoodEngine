@@ -23,6 +23,11 @@ enum class ProjectAction {
     CloseProject,
     PackageProject, // Hito 21 Bloque 5: empaqueta el proyecto activo
     NewScript,      // Hito 22 Bloque 3: crea assets/scripts/<nombre>.lua
+    // F2H8: gestion multi-mapa intra-proyecto.
+    NewMap,
+    SaveMapAs,
+    SetCurrentMapAsDefault,
+    DeleteCurrentMap,
 };
 
 } // namespace Mood

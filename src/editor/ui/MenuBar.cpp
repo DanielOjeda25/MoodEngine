@@ -23,11 +23,54 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem("Guardar", "Ctrl+S", false, ui.hasProject())) {
                 ui.requestProjectAction(ProjectAction::Save);
             }
-            if (ImGui::MenuItem("Guardar como...", nullptr, false, ui.hasProject())) {
-                ui.requestProjectAction(ProjectAction::SaveAs);
-            }
             if (ImGui::MenuItem("Cerrar proyecto", nullptr, false, ui.hasProject())) {
                 ui.requestProjectAction(ProjectAction::CloseProject);
+            }
+            ImGui::Separator();
+
+            // F2H8: gestion multi-mapa intra-proyecto.
+            if (ImGui::BeginMenu("Mapa", ui.hasProject())) {
+                if (ImGui::MenuItem("Nuevo mapa")) {
+                    ui.requestProjectAction(ProjectAction::NewMap);
+                }
+                if (ImGui::BeginMenu("Abrir mapa", !ui.projectMaps().empty())) {
+                    for (const auto& p : ui.projectMaps()) {
+                        const std::string display = p.filename().generic_string();
+                        const bool isCurrent =
+                            p.generic_string() == ui.currentMapPath().generic_string();
+                        const bool isDefault =
+                            p.generic_string() == ui.defaultMapPath().generic_string();
+                        // Marca visual: bullet • si es current; estrella ★ si es default.
+                        std::string label;
+                        if (isCurrent) label += "* ";
+                        label += display;
+                        if (isDefault) label += "  [default]";
+                        if (ImGui::MenuItem(label.c_str(), nullptr, isCurrent)) {
+                            if (!isCurrent) ui.requestOpenMap(p);
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+                if (ImGui::MenuItem("Guardar mapa como...")) {
+                    ui.requestProjectAction(ProjectAction::SaveMapAs);
+                }
+                {
+                    const bool alreadyDefault =
+                        ui.currentMapPath().generic_string() ==
+                        ui.defaultMapPath().generic_string();
+                    if (ImGui::MenuItem("Establecer como default", nullptr,
+                                          alreadyDefault, !alreadyDefault)) {
+                        ui.requestProjectAction(ProjectAction::SetCurrentMapAsDefault);
+                    }
+                }
+                {
+                    const bool canDelete = ui.projectMaps().size() > 1u;
+                    if (ImGui::MenuItem("Eliminar mapa actual", nullptr,
+                                          false, canDelete)) {
+                        ui.requestProjectAction(ProjectAction::DeleteCurrentMap);
+                    }
+                }
+                ImGui::EndMenu();
             }
             ImGui::Separator();
             // Hito 21 Bloque 5: empaqueta el proyecto activo en una

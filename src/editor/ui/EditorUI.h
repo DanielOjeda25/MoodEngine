@@ -333,6 +333,32 @@ public:
         return p;
     }
 
+    /// @brief F2H8: el menu "Archivo > Mapa > Abrir mapa" pide abrir un
+    ///        mapa especifico del proyecto. EditorApplication lo consume.
+    void requestOpenMap(std::filesystem::path p) { m_openMapRequest = std::move(p); }
+    std::optional<std::filesystem::path> consumeOpenMapRequest() {
+        auto p = std::move(m_openMapRequest);
+        m_openMapRequest.reset();
+        return p;
+    }
+
+    /// @brief F2H8: snapshot de la info de mapas del proyecto para que
+    ///        MenuBar pueda dibujar el submenu sin acoplarse al `Project`
+    ///        directamente. EditorApplication lo sincroniza tras cada
+    ///        operacion de mapas (open project, NewMap, SaveMapAs, etc).
+    void setProjectMapsSnapshot(std::vector<std::filesystem::path> maps,
+                                  std::filesystem::path currentMap,
+                                  std::filesystem::path defaultMap) {
+        m_projectMaps = std::move(maps);
+        m_currentMapPath = std::move(currentMap);
+        m_defaultMapPath = std::move(defaultMap);
+    }
+    const std::vector<std::filesystem::path>& projectMaps() const {
+        return m_projectMaps;
+    }
+    const std::filesystem::path& currentMapPath() const { return m_currentMapPath; }
+    const std::filesystem::path& defaultMapPath() const { return m_defaultMapPath; }
+
 private:
     Dockspace m_dockspace;
     MenuBar m_menuBar;
@@ -378,6 +404,11 @@ private:
     bool m_recentsDirty = false; // Hito 15 polish: edicion manual de la lista de recientes
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;
+    std::optional<std::filesystem::path> m_openMapRequest;  // F2H8
+    // F2H8: snapshot de la info de mapas del proyecto.
+    std::vector<std::filesystem::path> m_projectMaps;
+    std::filesystem::path m_currentMapPath;
+    std::filesystem::path m_defaultMapPath;
 
     /// @brief Dibuja un modal bloqueante con [Nuevo Proyecto] [Abrir Proyecto]
     ///        + lista de recientes. Se ejecuta SOLO cuando `m_hasProject` es
