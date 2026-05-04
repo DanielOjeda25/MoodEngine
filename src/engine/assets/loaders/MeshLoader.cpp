@@ -3,9 +3,12 @@
 #include "core/Log.h"
 #include "engine/animation/clips/AnimationClip.h"
 #include "engine/animation/skeleton/Skeleton.h"
+#include "engine/assets/cache/LodCache.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/rhi/IMesh.h"
 #include "engine/render/resources/MeshAsset.h"
+
+#include <meshoptimizer.h>
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -448,6 +451,71 @@ TextureAssetId extractAlbedo(const aiScene& scene,
     return am.loadTexture(resolved);
 }
 
+// F2H6: simplifica un buffer de vertices flat (sin EBO) usando
+// meshoptimizer. Internamente: dedup -> simplify -> re-expandir a flat.
+// Devuelve el array de floats listo para uploadear como nuevo IMesh.
+// Si la entrada tiene <100 tris (300 vertices), no simplifica — el
+// resultado seria degenerado para meshes ya pequenos.
+//
+// `reductionRatio` ej 0.5 = pedir 50% del numero de indices original.
+// `errorRatio` ej 0.05 = tolerancia geometrica relativa al bounding box.
+std::vector<f32> generateLodFlatVertices(const std::vector<f32>& sourceFlat,
+                                            f32 reductionRatio,
+                                            f32 errorRatio) {
+    constexpr usize kStride = k_strideFloats;
+    const usize sourceVertexCount = sourceFlat.size() / kStride;
+    if (sourceVertexCount < 300) {
+        return {};  // mesh muy chico — sin LOD
+    }
+
+    // Indices implicitos 0..N (mesh flat = un index por vertice).
+    std::vector<u32> sourceIndices(sourceVertexCount);
+    for (usize i = 0; i < sourceVertexCount; ++i) {
+        sourceIndices[i] = static_cast<u32>(i);
+    }
+
+    // Dedup: meshoptimizer trabaja sobre (indexed mesh) + un index buffer.
+    std::vector<u32> remap(sourceVertexCount);
+    const usize uniqueCount = meshopt_generateVertexRemap(
+        remap.data(), sourceIndices.data(), sourceIndices.size(),
+        sourceFlat.data(), sourceVertexCount, kStride * sizeof(f32));
+
+    std::vector<f32> dedupedVertices(uniqueCount * kStride);
+    std::vector<u32> dedupedIndices(sourceIndices.size());
+    meshopt_remapVertexBuffer(dedupedVertices.data(), sourceFlat.data(),
+                                sourceVertexCount, kStride * sizeof(f32),
+                                remap.data());
+    meshopt_remapIndexBuffer(dedupedIndices.data(), sourceIndices.data(),
+                               sourceIndices.size(), remap.data());
+
+    // Simplify. meshopt_simplify trabaja con position en los primeros
+    // 3 floats del vertice (offset 0) — nuestro layout matchea.
+    const usize targetIndexCount = static_cast<usize>(
+        static_cast<f32>(dedupedIndices.size()) * reductionRatio);
+    std::vector<u32> simplifiedIndices(dedupedIndices.size());
+    f32 resultError = 0.0f;
+    const usize newIndexCount = meshopt_simplify(
+        simplifiedIndices.data(), dedupedIndices.data(), dedupedIndices.size(),
+        dedupedVertices.data(), uniqueCount, kStride * sizeof(f32),
+        targetIndexCount, errorRatio, /*options=*/0u, &resultError);
+    simplifiedIndices.resize(newIndexCount);
+
+    // Si el simplify no logro reducir significativamente (<10%), no vale
+    // la pena agregar el LOD. Devuelve vacio = "sin LOD".
+    if (newIndexCount > dedupedIndices.size() * 9 / 10) {
+        return {};
+    }
+
+    // Re-expandir a flat (un vertice por indice consecutivo).
+    std::vector<f32> result;
+    result.reserve(newIndexCount * kStride);
+    for (u32 idx : simplifiedIndices) {
+        const f32* src = &dedupedVertices[idx * kStride];
+        result.insert(result.end(), src, src + kStride);
+    }
+    return result;
+}
+
 } // namespace
 
 std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
@@ -510,6 +578,12 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
     glm::vec3 aabbMin( std::numeric_limits<float>::max());
     glm::vec3 aabbMax(-std::numeric_limits<float>::max());
 
+    // F2H6: guardamos los floats LOD 0 en paralelo para alimentar a
+    // meshoptimizer despues del loop. Si el mesh es skinned, este vector
+    // se limpia y no se generan LODs.
+    std::vector<std::vector<f32>> submeshVerticesLod0;
+    submeshVerticesLod0.reserve(scene->mNumMeshes);
+
     const auto attrs = defaultAttributes();
     for (u32 i = 0; i < scene->mNumMeshes; ++i) {
         const aiMesh* m = scene->mMeshes[i];
@@ -534,6 +608,7 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
             continue;
         }
         asset->submeshes.push_back(std::move(sm));
+        submeshVerticesLod0.push_back(std::move(vertices));
     }
 
     if (asset->submeshes.empty()) {
@@ -564,6 +639,95 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
             if (mat == nullptr) continue;
             asset->materialAlbedoTextures[mi] =
                 extractAlbedo(*scene, *mat, logicalPath, *assetManager);
+        }
+    }
+
+    // F2H6: generar LODs (1 y 2) para meshes estaticos. Skinned saltea
+    // — re-mapear bone weights en mesh simplificado es scope grande con
+    // risk de bugs visuales (postergado a hito futuro).
+    //
+    // Flujo: lookup en cache de disco -> miss -> generar con
+    // meshoptimizer -> save cache. El cache vive en
+    // assets/.cache/lods/<hash>.moodlod, lateral al formato .moodmap.
+    if (!asset->hasSkeleton() && !submeshVerticesLod0.empty()) {
+        // mtime + size del source para invalidacion de cache.
+        std::error_code ec;
+        const auto fsPath = std::filesystem::path(filesystemPath);
+        const u64 sourceSize = static_cast<u64>(
+            std::filesystem::file_size(fsPath, ec));
+        const auto mtime = std::filesystem::last_write_time(fsPath, ec);
+        const u64 sourceMtimeNs = static_cast<u64>(
+            mtime.time_since_epoch().count());
+
+        const auto cachePath = LodCache::pathFor(logicalPath);
+        LodCache::LodCacheEntry cached;
+        bool cacheHit = (!ec) && LodCache::tryLoad(
+            cachePath, sourceMtimeNs, sourceSize, cached);
+
+        // Si miss, generar. Resultado se persiste para el proximo arranque.
+        LodCache::LodCacheEntry generated;
+        if (!cacheHit) {
+            generated.lod1.reserve(submeshVerticesLod0.size());
+            generated.lod2.reserve(submeshVerticesLod0.size());
+            for (usize i = 0; i < submeshVerticesLod0.size(); ++i) {
+                const auto& srcVerts = submeshVerticesLod0[i];
+                const u32 matIndex = asset->submeshes[i].materialIndex;
+
+                LodCache::LodSubmeshData sm1;
+                sm1.materialIndex = matIndex;
+                sm1.vertices = generateLodFlatVertices(
+                    srcVerts, /*ratio=*/0.5f, /*error=*/0.05f);
+                sm1.vertexCount = static_cast<u32>(
+                    sm1.vertices.size() / k_strideFloats);
+                generated.lod1.push_back(std::move(sm1));
+
+                LodCache::LodSubmeshData sm2;
+                sm2.materialIndex = matIndex;
+                sm2.vertices = generateLodFlatVertices(
+                    srcVerts, /*ratio=*/0.15f, /*error=*/0.10f);
+                sm2.vertexCount = static_cast<u32>(
+                    sm2.vertices.size() / k_strideFloats);
+                generated.lod2.push_back(std::move(sm2));
+            }
+            // Save (best-effort: fallar al escribir no rompe el load).
+            if (!ec) {
+                LodCache::save(cachePath, sourceMtimeNs, sourceSize, generated);
+            }
+        }
+
+        const auto& lodSource = cacheHit ? cached : generated;
+
+        // Reconstruir IMesh para LOD 1 y LOD 2. Vertices vacios (mesh
+        // muy chico para simplificar) saltean — el submeshesForLod()
+        // helper hara fallback a LOD 0 cuando se consulte.
+        for (const auto& sm : lodSource.lod1) {
+            SubMesh out{};
+            out.materialIndex = sm.materialIndex;
+            out.vertexCount = sm.vertexCount;
+            if (sm.vertexCount > 0) {
+                out.mesh = meshFactory(sm.vertices, attrs);
+            }
+            asset->lod1Submeshes.push_back(std::move(out));
+        }
+        for (const auto& sm : lodSource.lod2) {
+            SubMesh out{};
+            out.materialIndex = sm.materialIndex;
+            out.vertexCount = sm.vertexCount;
+            if (sm.vertexCount > 0) {
+                out.mesh = meshFactory(sm.vertices, attrs);
+            }
+            asset->lod2Submeshes.push_back(std::move(out));
+        }
+
+        // Reporte de tris por LOD (solo si hubo generacion util).
+        u32 totalLod1 = 0, totalLod2 = 0;
+        for (const auto& s : asset->lod1Submeshes) totalLod1 += s.vertexCount / 3;
+        for (const auto& s : asset->lod2Submeshes) totalLod2 += s.vertexCount / 3;
+        if (totalLod1 > 0 || totalLod2 > 0) {
+            Log::assets()->info(
+                "[lod] '{}' LOD0={} tris LOD1={} tris LOD2={} tris (cache={})",
+                logicalPath, asset->totalVertexCount() / 3, totalLod1, totalLod2,
+                cacheHit ? "hit" : "miss");
         }
     }
 

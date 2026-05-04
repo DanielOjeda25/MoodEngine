@@ -32,7 +32,7 @@
 #include <string>
 #include <vector>
 
-namespace Mood {
+namespace Mood::LodCache {
 
 /// @brief Una "vista" en CPU de un submesh listo para uploadear como
 ///        IMesh. Contiene los floats interleaved + metadatos.
@@ -49,8 +49,6 @@ struct LodCacheEntry {
     std::vector<LodSubmeshData> lod1;
     std::vector<LodSubmeshData> lod2;
 };
-
-namespace LodCache {
 
 /// @brief Path del cache para un logical path dado. Crea el directorio
 ///        padre si no existe.
@@ -78,6 +76,4 @@ void save(const std::filesystem::path& cachePath,
            u64 sourceSizeBytes,
            const LodCacheEntry& entry);
 
-} // namespace LodCache
-
-} // namespace Mood
+} // namespace Mood::LodCache
