@@ -98,6 +98,72 @@
 > tantas entidades, el costo "por entidad" en sistemas no-render
 > (Hierarchy panel, animation/script/nav scans aunque vacios) domina.
 
+### Post-F2H5 (con virtualizacion ImGui Hierarchy)
+
+> Misma escena 100K (8336 entidades), Hierarchy panel siempre visible,
+> ListClipper activo → solo las ~30 entries visibles del scroll area
+> se procesan, no las 8336.
+
+| Escena | Entities | Draws | FPS | Frame ms | Mejora vs F2H4 |
+|---|---|---|---|---|---|
+| Empty (control) | 2 | 2-3 | 60.0 | 16.67 | sin cambio (vsync cap) |
+| 100K_full_view | 8,336 | 4 | **11.0** | **90.5** | **~6%** (10.4 → 11.0 FPS, 96 → 90.5 ms) |
+| 100K_no_view | 8,336 | 0 | **11.5** | **86.5** | **~4%** (11.1 → 11.5 FPS, 89.9 → 86.5 ms) |
+
+> **Lectura honesta**: la prediccion del plan F2H5 era 12-15 FPS. La
+> medida real fue 11.0 — mejora del **~6%**, no del 25-40% predicho.
+>
+> **Por que la prediccion fallo**: el plan asumia que `UI::draw` (19% del
+> frame en F2H4, mean 6.27 ms) era **dominantemente** el panel Hierarchy.
+> La realidad: ese 19% se reparte entre Hierarchy + Inspector (cuando
+> hay entidad seleccionada con muchos componentes) + AssetBrowser +
+> Performance HUD + gizmos. Atacar solo el Hierarchy mejora una fraccion
+> del 19%, no el 19% completo.
+>
+> **Lo que F2H4 destapo realmente** (visible al cerrar F2H5): con 8336
+> entidades, el cuello no es **solo** UI — es **scene iteration
+> distribuida**. Multiples sistemas (Animation/Script/Nav/Particle/Audio/
+> Trigger) hacen `scene.forEach<...>` cada frame, sumando costo lineal
+> por entidad fuera del rendering. F2H5 ataco el cuello que pensabamos
+> era dominante; ahora vemos que el cuello real es la suma de muchos
+> loops O(N) en sistemas y panels.
+
+### Importante: estos numeros son DEBUG, no Release
+
+Todas las mediciones de F2H2/F2H3/F2H4/F2H5 son en **build Debug + Tracy
+ON**. MSVC Debug agrega ~5-10x overhead vs Release optimizado por:
+- Sin optimizaciones (`-O0`).
+- Iterator debug level 2 (cada acceso a `vector` chequea bounds).
+- Inlining deshabilitado.
+- STL containers en modo verbose.
+- Tracy zone overhead (~1-2% adicional en cliente con server cerrado).
+
+**El cuello que medimos en escenarios extremos (8336 entidades) NO
+representa el rendimiento del binario que recibe el jugador.** Una
+medicion en Release con `MOOD_PROFILE=OFF` es necesaria antes de
+declarar "el motor no escala". Predicción estimada (sin medir aun):
+100K_full_view pasaria de 11 FPS / 90 ms (Debug) a 45-60 FPS / 16-20 ms
+(Release) sin tocar una sola linea de codigo.
+
+### Nota de scope: 8336 entidades es un escenario patologico
+
+El stress "100K tris" usa 8336 cubos primitivos (12 tris cada uno). Eso
+NO es representativo de un mapa real:
+
+| Caso | Tris en pantalla | Entidades simultaneas |
+|---|---|---|
+| **Stress test 100K (este)** | 100K | **8336** |
+| **Half-Life 2 nivel tipico** | 500K - 2M | ~500 - 1500 |
+| **Skyrim escena tipica** | 1M - 5M | ~200 - 500 |
+| **Doom Eternal encuentro** | 10M - 50M | ~1000 - 3000 |
+
+**Los mapas reales tienen MUCHOS mas triangulos pero MUCHAS menos
+entidades** porque la geometria del nivel se mete en 1-3 meshes grandes
++ unas centenas de props. F2H3 + F2H4 cubren ambos extremos: instancing
+para props repetidos, frustum cull para mesh grande no visible. El
+stress test esta disenado para encontrar cuellos, no para representar
+contenido real.
+
 ## Top 5 cuellos de botella identificados
 
 ### Baseline F2H2 (Tracy 3163 frames, escena 10K con viewport completo)
@@ -219,20 +285,46 @@ call submission, no triangle setup.
   Despreciable. Confirma que la decision "plano + sin cache de AABB"
   era correcta para v1.
 
+### F2H5 (post-virtualizacion Hierarchy)
+- **Mejora medida modesta** (~6% en frame ms con 8336 entidades): 96
+  → 90 ms / 10.4 → 11.0 FPS. Por debajo de los 12-15 FPS predichos
+  en el plan.
+- **Por que la prediccion fallo**: el cuello UI::draw NO era solo el
+  Hierarchy — era una suma de Hierarchy + Inspector + AssetBrowser +
+  HUD + gizmos. F2H5 ataco una fraccion. Aprendizaje: medir antes de
+  predecir % de mejora con escenas grandes.
+- **El refactor en si es codigo limpio + reusable**: el patron
+  ListClipper queda como template para otros panels que crezcan
+  (AssetBrowser cuando haya cientos de assets, Inspector cuando se
+  agreguen muchos componentes).
+- **Cuello real dominante con 8336 entidades**: scene iteration
+  distribuida en multiples sistemas (Animation/Script/Nav/Particle/
+  Audio/Trigger), cada uno O(N). Atacarlo requiere caching de queries
+  o pipeline de sistemas — fuera del scope de este hito.
+
 ### Proximo paso
-- **Cuello dominante ahora**: `UI::draw` (19% del frame, 6 ms) por el
-  panel Hierarchy listando 8336 entries sin virtualizacion. **Candidato
-  natural** para un hito de virtualizacion ImGui (`ImGuiListClipper` en
-  el Hierarchy + AssetBrowser cuando crezca). Probable F2H5 o subhito.
-- **Cuello secundario**: scene iteration en sistemas no-render con 8336
-  entidades suma ~80 ms cuando todo esta culled. Atacable cuando
-  emerja una escena real que justifique las 8K entidades vivas.
-- **F2H5 LOD original**: postergado pero NO descartado. Sigue siendo
-  necesario cuando aparezca contenido con meshes complejos
-  (Fox/CesiumMan + props del catalogo Kenney). Hoy con cubos primitivos
-  no hay LOD que reducir — los cubos ya son el LOD minimo.
-- Repetir mediciones en build Release con `MOOD_PROFILE=OFF` para tener
-  el numero "real" esperado en producto (3-10x mejor que Debug).
+- **Lo mas inteligente antes de seguir optimizando: medir Release**.
+  Build Debug agrega 5-10x overhead vs Release. El stress 100K en
+  Release deberia dar 45-60 FPS (estimado, sin medir todavia). Si
+  Release confirma rendimiento sano, **el motor esta listo para
+  contenido real** y los proximos hitos pueden ser features (LOD,
+  CSG, etc) en lugar de optimizaciones desesperadas.
+- **Cuello pendiente con escenas patologicas (>5K entidades en Debug)**:
+  scene iteration distribuida (sistemas + UI panels). Atacable como
+  hito propio si emerge en escenas reales. Tecnicas posibles: caching
+  de queries entt, sistema pipeline con dependency graph, hierarchical
+  scene partitioning.
+- **F2H6+ candidatos** (priorizables segun resultados Release):
+  - **LOD original** (era F2H4, postergado): util cuando entre contenido
+    real con meshes complejos (Fox/CesiumMan + props Kenney). Hoy con
+    cubos primitivos no hay LOD que reducir.
+  - **ChildrenComponent + Hierarchy folding**: agrupar entidades por
+    padre en el panel (ej. "StressCubes (8336)" colapsable). UX +
+    perf — si todo esta colapsado, ListClipper procesa 1 entry. Util
+    para cualquier escena con muchos prefabs / instancias del mismo
+    type.
+  - **CSG / nivel cerrado** (Sub-fase 2.2 del plan): cuando empiecen
+    los mapas reales con geometria de nivel.
 
 ## Notas de medicion
 
