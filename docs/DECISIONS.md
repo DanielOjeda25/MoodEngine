@@ -2884,4 +2884,42 @@ Instrumentación inicial: 10 zonas en `EditorApplication::run` (eventos / UI / f
 - Una medición muestra que el helper `groupByBatch` es cuello (reupload cada frame con 100K+ entidades).
 - Aparece contenido real con multi-submesh frecuente que justifique extender el grouping a "batch por submesh".
 
+## 2026-05-03: F2H5 = virtualización ImGui Hierarchy + lección sobre predicciones de % de mejora
+
+**Contexto:** F2H4 destapó el cuello `UI::draw` 19% del frame con 8336 entidades. F2H5 según `PLAN_FASE2.md` era LOD; segundo swap consecutivo (F2H4 ya había swapeado con LOD original). El plan F2H5 predijo que virtualizar el panel Hierarchy bajaría `UI::draw` de 19% a <2%, llevando el FPS de 10.4 a 12-15.
+
+**Decisión:** seguir adelante con F2H5 = virtualización Hierarchy. Refactor con `ImGuiListClipper`, helper `collectHierarchyEntries` extraído a `HierarchyCollect.cpp` para testing.
+
+**Resultado medido (CSV + repetición de medición sin Tracy):**
+- 100K_full_view: 96 → 90.5 ms / 10.4 → 11.0 FPS = **~6% mejora** (no el 25-40% predicho).
+- 100K_no_view: 89.9 → 86.5 ms / 11.1 → 11.5 FPS = **~4% mejora**.
+
+**Por qué falló la predicción:** el plan asumía que `UI::draw` (19% del frame) era **dominantemente** el panel Hierarchy. La realidad: ese 19% se reparte entre Hierarchy + Inspector (con muchos componentes seleccionados) + AssetBrowser + Performance HUD + gizmos + tooltips. Atacar solo el Hierarchy mejora una fracción, no el total.
+
+**Lo que F2H4 destapó realmente** (visible al cerrar F2H5): el cuello con 8336 entidades NO es un panel específico — es **scene iteration distribuida**. Multiples sistemas (`Animation/Script/Nav/Particle/Audio/Trigger`) hacen `scene.forEach<...>` cada frame, sumando costo lineal por entidad. F2H5 no atacaba eso.
+
+**Aprendizaje aceptado para futuros hitos:**
+1. **Las predicciones de % de mejora con escenas grandes son frágiles**. Tracy mide zonas con nombre fijo — `UI::draw` engloba todos los panels, no separa por panel. Antes de predecir mejora, instrumentar sub-zonas (`UI::Hierarchy::draw`, `UI::Inspector::draw`, etc.) para tener attribución real.
+2. **Atacar lo medido, no lo asumido** (lección F2H4 reaplica). Sin sub-zonas en F2H4 no podíamos saber qué fracción del 19% era cada panel.
+3. **Una mejora del 6% sigue siendo positiva** y el código del refactor es correcto: el patrón ListClipper queda como template para `AssetBrowser`, `Inspector` listas, etc. cuando crezcan.
+
+**Decisión de continuar (no revertir):**
+El refactor en sí es código limpio y reusable. No introduce regresiones (suite 345/6736). El comportamiento visual es idéntico. **Cerrar F2H5 con la mejora real documentada** > mantenerlo abierto buscando más speedup.
+
+**Aclaración crítica de scope (anotada al cerrar F2H5):**
+Todas las mediciones de F2H2-F2H5 son en **build Debug + Tracy ON**. MSVC Debug agrega 5-10x overhead vs Release optimizado. Antes de invertir más hitos en optimización CPU, **medir Release** es el paso obligatorio. Predicción (sin medir aún): 100K_full_view pasaría de 11 FPS / 90 ms (Debug) a 45-60 FPS / 16-20 ms (Release).
+
+**El stress 100K es patológico, no representativo:**
+8336 cubos primitivos individuales. Mapas reales tienen muchos más triángulos pero muchas menos entidades:
+- HL2 nivel típico: 500K-2M tris en 500-1500 entidades (geometría del nivel = pocos meshes grandes + props sueltos).
+- Skyrim escena: 1-5M tris en 200-500 entidades.
+- Doom Eternal encuentro: 10-50M tris en 1000-3000 entidades.
+
+F2H3 + F2H4 cubren ambos casos: instancing para props repetidos, frustum cull para mesh grande no visible. **El motor con 100-300 entidades reales en una escena va a estar perfecto** — el stress test 8336 es un test de extremo, no un escenario de producto.
+
+**Revisar si:**
+- Una medición de Release muestra que el motor en producto sigue siendo limitado (improbable).
+- Otros panels (Inspector, AssetBrowser) emergen como cuellos en escenas reales y justifican aplicar el mismo patrón ListClipper.
+- Aparece la necesidad de instrumentar sub-zonas Tracy por panel para tener attribución correcta antes de futuros hitos UI.
+
 

@@ -6,7 +6,25 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H4 cerrado: Instancing del pase opaco estático.**
+**🚀 Fase 2 — F2H5 cerrado: Virtualización Hierarchy con ImGuiListClipper.**
+Tag: `v1.1.3-fase2-hito5`.
+Verificado automático: suite doctest **345/6736** sin regresiones (+5 cases en `test_hierarchy_collect.cpp`). Verificado por el dev a ojo: panel Hierarchy se ve idéntico al pre-F2H5; con 8336 entidades (stress 100K) el panel scrollea fluido. Selección persiste correcta, orden estable. CSV confirma mejora del frame ms.
+
+**Swap vs PLAN_FASE2 (segundo swap):** F2H5 era LOD según el plan. El cuello que F2H4 destapó (`UI::draw` 19% del frame con 8336 entries en Hierarchy) era atacable con un patrón estándar — decidimos hacer eso primero. LOD pasa a F2H6+. Documentado en DECISIONS.md.
+
+**Cambio importante:** primera virtualización ImGui en el motor. Refactor de `src/editor/panels/scene/HierarchyPanel.cpp`: cache `vector<HierarchyEntry{handle,tag*}>` cacheado por frame (storage reusable entre frames vía `clear()+reserve`), iteración con `ImGuiListClipper` — solo las ~30 entries visibles del scroll area se procesan, no las 8336. Helper `collectHierarchyEntries` extraído como función pura en `HierarchyCollect.cpp` para testing aislado de ImGui.
+
+**Mejora medida**: ~6% del frame ms con 8336 entidades (96→90.5 ms, 10.4→11.0 FPS). **Por debajo del 25-40% predicho** en el plan F2H5 — el cuello `UI::draw` no era dominantemente el Hierarchy sino una **suma** con Inspector + AssetBrowser + Performance HUD + gizmos. **Aprendizaje aceptado**: las predicciones de % de mejora con escenas grandes son frágiles si no hay attribución por panel separada en Tracy. El refactor es correcto y el patrón ListClipper queda reusable para otros panels que crezcan.
+
+**Cuello real dominante con escenas patológicas (8336+ entidades en Debug):** scene iteration distribuida — múltiples sistemas (`Animation/Script/Nav/Particle/Audio/Trigger`) hacen `scene.forEach<...>` cada frame, sumando costo lineal por entidad fuera del rendering. Atacable con caching de queries entt o pipeline de sistemas — fuera del scope F2H5.
+
+**Importante (contexto que cambia la urgencia)**: todas las mediciones F2H2-F2H5 son en **build Debug** + Tracy ON. MSVC Debug agrega 5-10x overhead vs Release. Antes de seguir optimizando, **medir Release** es el siguiente paso natural. Predicción: 100K_full_view pasaría de 11 FPS / 90 ms (Debug) a **45-60 FPS / 16-20 ms (Release)** sin tocar código. Si Release confirma rendimiento sano, el motor está listo para contenido real y los próximos hitos pueden ser features (LOD, CSG, etc) en lugar de optimizaciones desesperadas.
+
+**Aclaración de scope sobre "100K tris"**: el stress de 100K tris usa **8336 cubos primitivos individuales** (12 tris cada uno). Mapas reales (HL2/Skyrim/Doom) tienen MUCHOS más triángulos pero MUCHAS menos entidades (200-1500 simultáneas) porque la geometría del nivel está en 1-3 meshes grandes + props. F2H3 (cull) + F2H4 (instancing) cubren ambos extremos. **El stress 100K es patológico, no representativo de un mapa real.**
+
+**Próximo paso:** **medir Release** (build incremental, mismo flujo de snapshots, comparar). Después decidir F2H6 con datos: probable LOD original (postergado dos veces) o ChildrenComponent + folding del Hierarchy (UX + perf).
+
+### F2H4 (anterior, ya cerrado)
 Tag: `v1.1.2-fase2-hito4`.
 Verificado automático: suite doctest **340/6678** sin regresiones (+9 cases en `test_render_batching.cpp`, -1 caso obsoleto). Verificado por el dev a ojo + Tracy: 836 cubos del stress 10K → **3 draws / 60 FPS (vsync cap)**; 8336 cubos del stress 100K (antes congelaba el editor) → editable a 10.4 FPS; visual comparado con/sin instancing — idéntico. Captura `test3.tracy` confirma `PBR::instancedPass` mean 0.88 ms vs F2H2 baseline 42.5 ms.
 
@@ -20,10 +38,6 @@ Verificado automático: suite doctest **340/6678** sin regresiones (+9 cases en 
 - `SceneRenderer::renderScene`: agrupa por (mesh, material) y emite 1 `drawMeshInstanced` por batch. Non-batchables caen al path no-instanced del F2H3 (fallback). Plots Tracy nuevos: `PBR::BatchedDrawCalls`, `PBR::Instances`.
 
 **Mejora medida (vs F2H2 baseline):** `PBR::instancedPass` mean **0.88 ms** vs `PBR::staticPass` baseline mean **42.5 ms** = **~48x más rápido por draw**. Escena 10K: 836→3 draws, 4→60 FPS. Escena 100K: antes congelado, ahora 10.4 FPS / 3 draws / 82K tris. F2H3 + F2H4 en cadena hacen viable un escenario que el motor literalmente no soportaba.
-
-**Cuello dominante post-F2H4:** `UI::draw` 19% del frame, mean 6 ms. El panel Hierarchy de ImGui lista 8336 entries sin virtualización con 100K cubos. Candidato natural para F2H5 / subhito (`ImGuiListClipper`).
-
-**Próximo paso:** **F2H5 — virtualización ImGui Hierarchy** (probable, decisión final cuando empiece) o **F2H5 LOD** (postergado del plan original — útil cuando entre contenido real con meshes complejos).
 
 ### F2H3 (anterior, ya cerrado)
 Tag: `v1.1.1-fase2-hito3`.
