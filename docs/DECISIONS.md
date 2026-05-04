@@ -2981,4 +2981,38 @@ Alternativa rechazada: UI editor para "Generar LOD" / "Importar LOD custom" / ba
 - Aparece la necesidad de un sub-hito UI para "Editor de LOD" (custom LODs importados, override per-mesh visual, sliders de threshold).
 - Meshes con multi-submesh + materiales distintos por submesh emergen como caso común y necesitan extensión del flujo (hoy multi-submesh CAE al fallback no-instanced del F2H3, sigue funcionando pero sin LOD).
 
+## 2026-05-04: Multi-mapa intra-proyecto (F2H8) + bug arquitectónico de "tags auto-generados"
+
+**Contexto:** el `.moodproj` soporta `maps[]` desde Hito 6 pero el editor solo opera sobre `defaultMap`. El "Save As" del menú Archivo era un stub explícito ("no implementado, requiere UI multi-mapa"). El dev eligió cerrar la deuda con la opción C (multi-mapa intra-proyecto) en lugar de "Save Project As" (copiar carpeta entera, diferido a hito futuro).
+
+**Decisión 1 — Scope multi-mapa**: F2H8 implementa el CRUD completo de mapas dentro de un proyecto: New, SaveAs, Open, SetDefault, Delete. Sin schema bump (todo lo necesario ya existía). Sin back-compat de proyectos viejos (el dev confirmó que están borrados). UX bajo `Archivo > Mapa` con submenu listando `project.maps[]`.
+
+**Decisión 2 — Helper `MapsManager` PURO**: la lógica de "lista + default + current con invariantes" vive en `editor/project/MapsManager.{h,cpp}`, sin acoplarse a UI ni a disco. Invariantes que mantiene: ≥1 mapa, default + current dentro de la lista, dedup por `generic_string` (paths con separadores distintos = mismo path). Testeado con 13 cases en `tests/test_maps_manager.cpp`.
+
+**Decisión 3 — Snapshot de mapas en EditorUI**: para que `MenuBar` pueda dibujar el submenu sin acoplarse al `Project` directamente, `EditorUI` mantiene un snapshot `(maps[], currentMap, defaultMap)` que `EditorApplication::syncMapsSnapshot()` refresca tras cada operación de mapas. Patrón consistente con `setProjectMapsSnapshot` similar al que usa el `WorkspaceManager` en F2H7.
+
+**Decisión 4 — Bug arquitectónico de "tags auto-generados" descubierto durante el testing**: durante la validación visual de F2H8 emergió que cuando el dev movía el `Floor` (el piso del mapa) y switcheaba entre maps, el editor freezaba. Diagnóstico con datos del `.moodmap` confirmó que el Floor se duplicaba: `rebuildSceneFromMap` creaba un Floor default cada vez, y `applyEntitiesToScene` aplicaba el Floor del JSON sobre eso. Resultado: 2 planos 48×48 superpuestos → fillrate brutal → freeze.
+
+**Fix arquitectónico**: el helper de `applyOneEntity` que reemplaza entidades con mismo tag al cargar (introducido en el fix de Tile_X_Y modificados) se extiende para cubrir TODOS los "tags auto-generados por rebuildSceneFromMap":
+- `Floor` (entidad única).
+- `Tile_X_Y` (entidad por celda del grid).
+
+Lista hardcoded en `applyOneEntity`. Otros tags (Multi, CajaFisica, etc.) siguen permitiendo duplicados — necesario para `CreateEntityCommand::execute` (redo de comandos batch).
+
+**Lección aprendida**: cualquier entidad creada automáticamente por el motor (no por el user) y que pueda ser modificada por el editor necesita persistencia + reemplazo en el load. El concepto "tag auto-generado" es la primera abstracción que aparece — si emergen más casos (e.g. `Skybox`, `LightProbe`), agregar al patrón.
+
+**Test arquitectónico**: el caso del Floor está cubierto en `test_save_load_full_roundtrip.cpp` con un test que simula el flow exacto del editor (rebuildSceneFromMap → applyEntitiesToScene) y valida que hay un solo Floor con la position del JSON. Si alguien rompe el patrón en el futuro, el test falla con mensaje claro.
+
+**Trade-offs:**
+- Se gana: workflow estándar de IDE (varios mapas por proyecto, switching), bug fix del Floor que era prácticamente bloqueante para usar multi-mapa.
+- Se pierde: Save Project As (copiar carpeta entera) sigue stub. Diferido — emergencia baja.
+
+**Revisar si:**
+- Aparecen escenas con multi-submesh + materiales mixtos modificados (caso similar a Tile pero para entidades arbitrarias).
+- El user empieza a usar muchos mapas (>10) y la UI del submenu necesita scrolling/categorías.
+- "Save Project As" emerge como necesidad real (workflow de "duplicar proyecto para experimentar").
+
+
+
+
 

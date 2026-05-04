@@ -6,7 +6,29 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H7 cerrado: Workspaces estilo Blender + menú Ver categorizado.**
+**🚀 Fase 2 — F2H8 cerrado: Multi-mapa intra-proyecto + fix de save/load de tiles modificados.**
+Tag: `v1.1.6-fase2-hito8`.
+Verificado automático: suite doctest **396/6948** sin regresiones (+13 cases en `test_maps_manager.cpp` + casos del Floor en `test_save_load_full_roundtrip.cpp`). Verificado por el dev a ojo: crear proyecto, modificar tiles + Floor, guardar, crear segundo mapa, modificar, guardar, switchear entre mapas → todo persiste sin duplicación, sin freeze, los cambios se mantienen al cerrar y reabrir.
+
+**Cambio importante**: cierra dos deudas técnicas a la vez.
+
+**1) Multi-mapa intra-proyecto** (Save As completo, opción C que el dev eligió):
+- Backend ya estaba: el `.moodproj` schema soporta `maps[]` y `defaultMap` desde Hito 6. F2H8 implementa el UX faltante.
+- `src/editor/project/MapsManager.{h,cpp}`: helper PURO con invariantes (≥1 mapa, default + current dentro de la lista, dedup por `generic_string`).
+- 5 handlers nuevos en `EditorApplication`: `handleNewMap`, `handleSaveMapAs`, `handleOpenMap`, `handleSetCurrentMapAsDefault`, `handleDeleteCurrentMap`. Cada uno con confirm popups donde aplica + sync del snapshot al `EditorUI`.
+- UI `Archivo > Mapa`: submenu con 5 items + sub-submenu "Abrir mapa" listando los `project.maps[]` (current marcado con `*`, default con `[default]`).
+- `handleSaveAs` (era stub desde Hito 6) ahora redirige a `handleSaveMapAs`.
+- "Save Project As" (copiar carpeta entera del proyecto a otra ubicación) sigue **out-of-scope** — diferido para hito futuro si emerge necesidad.
+
+**2) Fix del bug de save/load de Floor** (descubierto durante testing visual de F2H8):
+- El dev mueve el `Floor` del piso, guarda, cambia de mapa, vuelve. El editor parecía freezar.
+- Diagnóstico con datos del `.moodmap`: el Floor se persistía como entidad regular del JSON, pero al cargar el mapa, `rebuildSceneFromMap` creaba un Floor default + `applyEntitiesToScene` aplicaba el Floor del JSON → **2 planos 48×48 superpuestos** → fillrate brutal → freeze percibido.
+- Fix en `SceneLoader::applyOneEntity`: el reemplazo de entidades existentes con mismo tag se extiende de `Tile_X_Y` (fix anterior) a también `Floor`. Lista hardcoded de "tags auto-generados por rebuild"; otros tags siguen permitiendo duplicados (necesario para Multi/CajaFisica en redo de comandos batch).
+- Test cubre el caso exacto.
+
+**Próximo paso:** F2H9 (era F2H7 plan original = "Documentación pública") o sub-fase 2.2 = CSG (era F2H9 plan). Decidible según necesidad.
+
+### F2H7 (anterior, ya cerrado)
 Tag: `v1.1.5-fase2-hito7`.
 Verificado automático: suite doctest **367/6847** sin regresiones (+9 cases en `test_workspace_manager.cpp`). Verificado por el dev a ojo: 4 tabs (Layout/Scripting/Profile/Materials) en la misma fila del menú principal (estilo Blender), click en cada tab cambia layout completamente, panels editados (drag/resize) persisten al switchear y volver. Persistencia al `.moodproj` confirmada en proyecto nuevo.
 
