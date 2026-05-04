@@ -31,6 +31,7 @@
 #include "engine/animation/clips/AnimationClip.h"
 #include "engine/animation/skeleton/Skeleton.h"
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include <memory>
@@ -52,6 +53,20 @@ struct MeshAsset {
     /// Path logico usado por el serializer (p.ej. "meshes/suzanne.obj").
     std::string logicalPath;
     std::vector<SubMesh> submeshes;
+
+    /// F2H6: niveles LOD adicionales generados con meshoptimizer al
+    /// cargar el mesh. Vacios = no hay LOD (fallback a `submeshes` que
+    /// es LOD 0). Skinned meshes los dejan vacios — el re-mapping de
+    /// bone weights es scope grande con risk de bugs visuales y se
+    /// posterga a hito futuro.
+    std::vector<SubMesh> lod1Submeshes;
+    std::vector<SubMesh> lod2Submeshes;
+
+    /// F2H6: distancias camera→entity para transicionar entre LODs.
+    /// `.x` = LOD 0 → 1, `.y` = LOD 1 → 2. Defaults sensatos para
+    /// escenas tipicas; override per-mesh si una medicion futura lo
+    /// justifica (UI editor para cambiarlo es hito futuro).
+    glm::vec2 lodDistances{30.0f, 80.0f};
 
     /// AABB del bind pose en mesh-space. Si los submeshes no aportaron
     /// vertices (caso degenerado), queda en (-0.5, +0.5) — cubo unitario
@@ -95,6 +110,31 @@ struct MeshAsset {
     bool hasSkeleton() const {
         return skeleton.has_value() && !skeleton->empty();
     }
+
+    /// F2H6: devuelve la lista de submeshes para el LOD pedido.
+    /// Fallback automatico a LOD 0 si el nivel pedido esta vacio
+    /// (mesh sin LODs generados, o skinned). Garantiza que el caller
+    /// SIEMPRE recibe una lista valida — no hay que chequear empty.
+    const std::vector<SubMesh>& submeshesForLod(u32 lod) const {
+        if (lod == 1 && !lod1Submeshes.empty()) return lod1Submeshes;
+        if (lod == 2 && !lod2Submeshes.empty()) return lod2Submeshes;
+        return submeshes;
+    }
 };
+
+/// @brief Selecciona el LOD apropiado para una distancia camera→entidad
+///        dada los thresholds de un MeshAsset. PURO: no toca state
+///        global, no llama a meshoptimizer. Util para tests + para que
+///        SceneRenderer y groupByBatch usen la misma logica.
+///
+///        Convencion:
+///          distance < thresholds.x          -> LOD 0 (full detail)
+///          thresholds.x <= d < thresholds.y -> LOD 1 (~50%)
+///          thresholds.y <= d                -> LOD 2 (~15%)
+inline u32 selectLod(f32 distance, const glm::vec2& thresholds) {
+    if (distance < thresholds.x) return 0;
+    if (distance < thresholds.y) return 1;
+    return 2;
+}
 
 } // namespace Mood
