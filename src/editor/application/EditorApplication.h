@@ -143,6 +143,11 @@ private:
     ///        el ultimo, popup error. Si era el default, reasigna.
     void handleDeleteCurrentMap();
 
+    /// @brief F2H11: crea una entidad nueva con TransformComponent +
+    ///        BrushComponent (Box 1x1x1) en el origen. Marca el mapa
+    ///        como dirty. Selecciona la entidad nueva.
+    void handleAddBoxBrush();
+
     /// @brief F2H8: sincroniza el snapshot de mapas del proyecto al
     ///        EditorUI (para que MenuBar pueda dibujar el submenu).
     ///        Llamar despues de cada operacion que cambie m_project.maps,

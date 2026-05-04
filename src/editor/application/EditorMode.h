@@ -28,6 +28,7 @@ enum class ProjectAction {
     SaveMapAs,
     SetCurrentMapAsDefault,
     DeleteCurrentMap,
+    AddBoxBrush, // F2H11: agrega un brush CSG Box al mapa actual
 };
 
 } // namespace Mood

@@ -395,6 +395,13 @@ std::string AssetManager::meshPathOf(MeshAssetId id) const {
     return m_meshes[id]->logicalPath;
 }
 
+std::unique_ptr<IMesh> AssetManager::createDynamicMesh(
+    const std::vector<f32>& vertices,
+    const std::vector<VertexAttribute>& attributes) const {
+    if (!m_meshFactory) return nullptr;
+    return m_meshFactory(vertices, attributes);
+}
+
 // ----------------------------------------------------------------------------
 // Hot-reload de texturas (Hito 5 Bloque 2)
 // ----------------------------------------------------------------------------

@@ -30,8 +30,11 @@
 #include "engine/scene/serialization/ProjectSerializer.h"
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/world/grid/GridMap.h"  // F2H8: handleNewMap
+#include "engine/world/csg/Brush.h"     // F2H11: handleAddBoxBrush
+#include "engine/scene/components/BrushComponent.h"
 
 #include <algorithm>  // F2H8: std::remove_if en handleDeleteCurrentMap
+#include <cstdio>     // F2H11: snprintf para naming unico
 
 #include <nlohmann/json.hpp>
 #include <portable-file-dialogs.h>
@@ -721,6 +724,45 @@ void EditorApplication::saveEditorState() const {
     std::ofstream out(std::filesystem::path(".mood") / "editor_state.json");
     if (!out.is_open()) return;
     out << j.dump(2);
+}
+
+// ----------------------------------------------------------------------------
+// F2H11: handleAddBoxBrush — crea una entidad con BrushComponent (Box 1x1x1).
+// ----------------------------------------------------------------------------
+
+void EditorApplication::handleAddBoxBrush() {
+    if (!m_scene) return;
+
+    // Tag unico (Brush_Box_01, Brush_Box_02, ...).
+    int suffix = 1;
+    std::string tagName;
+    while (true) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "Brush_Box_%02d", suffix);
+        tagName = buf;
+        bool collision = false;
+        m_scene->forEach<TagComponent>(
+            [&](Entity, TagComponent& tag) {
+                if (tag.name == tagName) collision = true;
+            });
+        if (!collision) break;
+        ++suffix;
+    }
+
+    Entity e = m_scene->createEntity(tagName);
+    auto& t = e.getComponent<TransformComponent>();
+    // Posicion arbitraria un poco arriba del suelo para que sea visible.
+    t.position = glm::vec3(0.0f, 1.0f, 0.0f);
+    t.scale    = glm::vec3(1.0f);
+
+    BrushComponent bc;
+    bc.brush = Csg::makeBoxBrush(glm::mat4(1.0f));
+    bc.material = 0;     // material default (slot 0 del AssetManager)
+    bc.dirty   = true;
+    e.addComponent<BrushComponent>(std::move(bc));
+
+    Log::editor()->info("Anadir Box Brush: '{}' en (0, 1, 0)", tagName);
+    pushCreatedEntities({e}, "Anadir Box Brush");
 }
 
 } // namespace Mood

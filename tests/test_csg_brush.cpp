@@ -311,6 +311,49 @@ TEST_CASE("buildBrushMesh: las UV no son todas iguales (proyeccion planar funcio
     CHECK((vMax - vMin) > k_eps);
 }
 
+// ============================================================
+// brushMeshDataToInterleaved
+// ============================================================
+
+TEST_CASE("brushMeshDataToInterleaved: box -> 36 vertices * 11 floats = 396 floats") {
+    const Brush b = makeBoxBrush(glm::mat4(1.0f));
+    const BrushMeshData mesh = buildBrushMesh(b);
+    REQUIRE(mesh.indices.size() == 36);
+    const std::vector<f32> interleaved = brushMeshDataToInterleaved(mesh);
+    CHECK(interleaved.size() == 36 * 11);
+}
+
+TEST_CASE("brushMeshDataToInterleaved: layout pos(3)+color(3)+uv(2)+normal(3)") {
+    const Brush b = makeBoxBrush(glm::mat4(1.0f));
+    const BrushMeshData mesh = buildBrushMesh(b);
+    const std::vector<f32> flat = brushMeshDataToInterleaved(mesh);
+    REQUIRE(flat.size() >= 11);
+
+    const u32 firstIdx = mesh.indices[0];
+    const auto& v0 = mesh.vertices[firstIdx];
+    // Posicion (offset 0-2)
+    CHECK(flat[0] == doctest::Approx(v0.position.x));
+    CHECK(flat[1] == doctest::Approx(v0.position.y));
+    CHECK(flat[2] == doctest::Approx(v0.position.z));
+    // Color (offset 3-5) = blanco
+    CHECK(flat[3] == doctest::Approx(1.0f));
+    CHECK(flat[4] == doctest::Approx(1.0f));
+    CHECK(flat[5] == doctest::Approx(1.0f));
+    // UV (offset 6-7)
+    CHECK(flat[6] == doctest::Approx(v0.uv.x));
+    CHECK(flat[7] == doctest::Approx(v0.uv.y));
+    // Normal (offset 8-10)
+    CHECK(flat[8] == doctest::Approx(v0.normal.x));
+    CHECK(flat[9] == doctest::Approx(v0.normal.y));
+    CHECK(flat[10] == doctest::Approx(v0.normal.z));
+}
+
+TEST_CASE("brushMeshDataToInterleaved: mesh vacia produce vector vacio") {
+    BrushMeshData empty;
+    const std::vector<f32> flat = brushMeshDataToInterleaved(empty);
+    CHECK(flat.empty());
+}
+
 TEST_CASE("buildBrushMesh: box rotada produce mesh cerrada (centroide dentro de AABB)") {
     const glm::mat4 R = glm::rotate(glm::mat4(1.0f), glm::radians(30.0f),
                                      glm::vec3(0, 1, 0));

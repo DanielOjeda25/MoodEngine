@@ -152,4 +152,28 @@ BrushMeshData buildBrushMesh(const Brush& brush) {
     return out;
 }
 
+std::vector<f32> brushMeshDataToInterleaved(const BrushMeshData& data) {
+    // Layout PBR: pos(3) + color(3) + uv(2) + normal(3) = 11 floats.
+    constexpr usize kFloatsPerVertex = 11;
+    std::vector<f32> out;
+    out.reserve(data.indices.size() * kFloatsPerVertex);
+
+    for (u32 idx : data.indices) {
+        if (idx >= data.vertices.size()) continue;  // brush corrupto
+        const BrushMeshVertex& v = data.vertices[idx];
+        out.push_back(v.position.x);
+        out.push_back(v.position.y);
+        out.push_back(v.position.z);
+        out.push_back(1.0f);  // color blanco; albedoTint domina
+        out.push_back(1.0f);
+        out.push_back(1.0f);
+        out.push_back(v.uv.x);
+        out.push_back(v.uv.y);
+        out.push_back(v.normal.x);
+        out.push_back(v.normal.y);
+        out.push_back(v.normal.z);
+    }
+    return out;
+}
+
 } // namespace Mood::Csg

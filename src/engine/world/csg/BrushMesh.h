@@ -49,4 +49,15 @@ struct BrushMeshData {
 ///        ningun indice — el llamador debe chequear `data.indices.size()`.
 BrushMeshData buildBrushMesh(const Brush& brush);
 
+/// @brief Convierte el BrushMeshData (vertices+indices) al layout
+///        interleaved que consume el shader PBR del motor:
+///          pos.xyz (3), color.rgb (3), uv.xy (2), normal.xyz (3) = 11 floats.
+///        Expande los indices: cada vertice del triangulo aparece
+///        duplicado en el buffer (no usamos EBOs en este path,
+///        igual que createCubeMesh). El color se setea en blanco
+///        (1,1,1) para que el `albedoTint` del material domine
+///        (mismo patron que createSphereMesh).
+///        Resultado: `vertices.size() == indices.size() * 11`.
+std::vector<f32> brushMeshDataToInterleaved(const BrushMeshData& data);
+
 } // namespace Mood::Csg

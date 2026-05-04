@@ -500,6 +500,7 @@ int EditorApplication::run() {
             case ProjectAction::SaveMapAs:               handleSaveMapAs();                break;
             case ProjectAction::SetCurrentMapAsDefault:  handleSetCurrentMapAsDefault();   break;
             case ProjectAction::DeleteCurrentMap:        handleDeleteCurrentMap();         break;
+            case ProjectAction::AddBoxBrush:             handleAddBoxBrush();              break;
             case ProjectAction::None:           break;
         }
         // F2H8: open map request (con payload del path).

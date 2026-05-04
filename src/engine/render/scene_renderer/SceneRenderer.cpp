@@ -29,9 +29,11 @@
 #include "engine/render/backend/opengl/OpenGLSSBO.h"
 #include "engine/render/backend/opengl/OpenGLShader.h"
 #include "engine/render/backend/opengl/OpenGLTexture.h"
+#include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
+#include "engine/world/csg/BrushMesh.h"
 #include "systems/light/LightSystem.h"
 #include "systems/render/PostProcessPass.h"
 #include "systems/render/ShadowPass.h"
@@ -603,6 +605,89 @@ void SceneRenderer::renderScene(Scene& scene,
                 }
                 drawMeshRenderer(*m_pbrSkinnedShader, mr);
             });
+    }
+
+    // F2H11: pase de brushes CSG. Cada entidad con BrushComponent +
+    // TransformComponent se dibuja con su mesh propia (sin instancing
+    // — los brushes son pocos y editables; la mesh unificada con
+    // weld + cull caras internas viene en F2H16). Si el brush esta
+    // dirty, regeneramos la mesh aqui mismo. Reusa el shader PBR
+    // del pase no-instanced y el material del componente.
+    {
+        bool hasAnyBrush = false;
+        scene.forEach<BrushComponent>([&](Entity, BrushComponent&) {
+            hasAnyBrush = true;
+        });
+        if (hasAnyBrush) {
+            MOOD_PROFILE_SCOPE("PBR::brushPass");
+            applyShaderUniforms(*m_pbrShader);
+            const std::vector<VertexAttribute> kBrushAttrs = {
+                {0, 3}, {1, 3}, {2, 2}, {3, 3}  // pos, color, uv, normal
+            };
+            scene.forEach<TransformComponent, BrushComponent>(
+                [&](Entity, TransformComponent& t, BrushComponent& bc) {
+                    if (bc.dirty || !bc.meshCache) {
+                        const Csg::BrushMeshData data =
+                            Csg::buildBrushMesh(bc.brush);
+                        if (data.indices.empty()) {
+                            bc.dirty = false;
+                            return;  // brush degenerado: nada que dibujar
+                        }
+                        const std::vector<f32> verts =
+                            Csg::brushMeshDataToInterleaved(data);
+                        bc.meshCache = assets.createDynamicMesh(verts, kBrushAttrs);
+                        bc.dirty = false;
+                    }
+                    if (!bc.meshCache) return;
+
+                    m_pbrShader->setMat4("uModel", t.worldMatrix());
+
+                    // Bindeo de material. Si bc.material == 0 (sin material
+                    // asignado) usamos un look "blank brush" estilo Hammer/
+                    // TrenchBroom: gris liso, mate, sin textura. NO caer al
+                    // missing del material slot 0 — ese es warning visible
+                    // para meshes con material faltante, no para brushes
+                    // que conscientemente no tienen material todavia.
+                    // F2H14 reemplaza esto con material per-cara real.
+                    const bool useBlankLook = (bc.material == 0);
+                    const MaterialAsset* mat = useBlankLook
+                        ? nullptr : assets.getMaterial(bc.material);
+
+                    const bool hasAlbedo = (mat != nullptr && mat->useAlbedoMap);
+                    glActiveTexture(GL_TEXTURE0);
+                    if (hasAlbedo) assets.getTexture(mat->albedo)->bind(0);
+                    else           dummyTex->bind(0);
+                    m_pbrShader->setInt("uHasAlbedoMap", hasAlbedo ? 1 : 0);
+
+                    const bool hasMR = (mat != nullptr && mat->metallicRoughness != 0);
+                    glActiveTexture(GL_TEXTURE2);
+                    if (hasMR) assets.getTexture(mat->metallicRoughness)->bind(2);
+                    else       dummyTex->bind(2);
+                    m_pbrShader->setInt("uHasMetallicRoughness", hasMR ? 1 : 0);
+
+                    const bool hasAo = (mat != nullptr && mat->ao != 0);
+                    glActiveTexture(GL_TEXTURE3);
+                    if (hasAo) assets.getTexture(mat->ao)->bind(3);
+                    else       dummyTex->bind(3);
+                    m_pbrShader->setInt("uHasAoMap", hasAo ? 1 : 0);
+
+                    if (mat != nullptr) {
+                        m_pbrShader->setVec3 ("uAlbedoTint",   mat->albedoTint);
+                        m_pbrShader->setFloat("uMetallicMult", mat->metallicMult);
+                        m_pbrShader->setFloat("uRoughnessMult",mat->roughnessMult);
+                        m_pbrShader->setFloat("uAoMult",       mat->aoMult);
+                    } else {
+                        // Look "blank brush": gris claro mate.
+                        m_pbrShader->setVec3 ("uAlbedoTint",   glm::vec3(0.7f));
+                        m_pbrShader->setFloat("uMetallicMult", 0.0f);
+                        m_pbrShader->setFloat("uRoughnessMult",0.85f);
+                        m_pbrShader->setFloat("uAoMult",       1.0f);
+                    }
+
+                    glActiveTexture(GL_TEXTURE0);
+                    m_renderer->drawMesh(*bc.meshCache, *m_pbrShader);
+                });
+        }
     }
 
     // Hito 29 Bloque 2: pase de particulas. Va DESPUES de la geometria

@@ -308,6 +308,8 @@ add_library(mood_engine_lib STATIC
 
     src/engine/world/grid/GridMap.cpp
     src/engine/world/grid/Pathfinding.cpp
+    src/engine/world/csg/Brush.cpp
+    src/engine/world/csg/BrushMesh.cpp
 
     src/systems/animation/AnimationSystem.cpp
     src/systems/audio/AudioSystem.cpp

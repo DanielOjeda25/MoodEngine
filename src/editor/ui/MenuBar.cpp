@@ -70,6 +70,11 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                         ui.requestProjectAction(ProjectAction::DeleteCurrentMap);
                     }
                 }
+                ImGui::Separator();
+                // F2H11: agregar un brush CSG Box al mapa actual.
+                if (ImGui::MenuItem("Anadir Box Brush")) {
+                    ui.requestProjectAction(ProjectAction::AddBoxBrush);
+                }
                 ImGui::EndMenu();
             }
             ImGui::Separator();

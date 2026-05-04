@@ -204,6 +204,15 @@ public:
     /// @brief Cantidad de meshes cacheados (incluye missing).
     usize meshCount() const { return m_meshes.size(); }
 
+    /// @brief F2H11: crea un IMesh **dinamico** que NO se persiste en
+    ///        el cache de meshes. Pensado para geometria runtime
+    ///        regenerada (CSG brushes). El llamador es dueno del
+    ///        unique_ptr resultante. Si la factoria no esta seteada
+    ///        (caso defensivo) devuelve nullptr.
+    std::unique_ptr<IMesh> createDynamicMesh(
+        const std::vector<f32>& vertices,
+        const std::vector<VertexAttribute>& attributes) const;
+
     // ---- Prefab (Hito 14) ----
 
     /// @brief Carga (o devuelve cacheado) un prefab por path logico (p.ej.
