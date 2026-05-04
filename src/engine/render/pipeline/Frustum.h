@@ -18,6 +18,7 @@
 
 #include "core/Types.h"
 #include "core/math/AABB.h"
+#include "core/math/Plane.h"  // Mood::Plane (promovido desde aqui en F2H11)
 
 #include <glm/geometric.hpp>  // glm::dot, glm::length
 #include <glm/mat4x4.hpp>
@@ -27,11 +28,6 @@
 #include <array>
 
 namespace Mood {
-
-struct Plane {
-    glm::vec3 normal{0.0f, 1.0f, 0.0f};
-    f32 distance{0.0f};
-};
 
 struct Frustum {
     /// @brief Orden: left, right, bottom, top, near, far.
