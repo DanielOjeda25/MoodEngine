@@ -7,6 +7,8 @@
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/serialization/EntitySerializer.h"
 #include "engine/scene/serialization/JsonHelpers.h"
+#include "engine/scene/serialization/TilePersistence.h"
+#include "engine/world/grid/GridMap.h"
 
 #include <nlohmann/json.hpp>
 
@@ -60,14 +62,20 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
         }
     }
 
-    // Entidades no-tile (Hito 10 Bloque 6). Filtro por prefijo de tag:
-    // las Tile_X_Y se reconstruyen del grid al cargar, asi que no se
-    // persisten aqui (evita duplicacion + inconsistencias si el grid cambia).
+    // Entidades no-tile (Hito 10 Bloque 6). Tiles default (Tile_X_Y sin
+    // modificaciones) se reconstruyen del grid al cargar y NO se persisten.
+    // Tiles MODIFICADOS por el user (estirados, con material custom, con
+    // componentes extras) SI se persisten — el bug previo era filtrarlos
+    // por prefijo Tile_* siempre, lo que destruia los cambios en el round-trip.
+    // El helper isTileModified() decide caso por caso.
     j["entities"] = json::array();
     if (scene != nullptr) {
         auto* mutableScene = const_cast<Scene*>(scene); // forEach requiere non-const
         mutableScene->forEach<TagComponent>([&](Entity e, TagComponent& tag) {
-            if (isTileTag(tag.name)) return;
+            // Tiles del grid: persistir solo si fueron modificados.
+            if (isTileTag(tag.name) && !isTileModified(e, map, assets)) {
+                return;
+            }
             // Persistimos cualquier entidad con al menos un componente
             // serializable: MeshRenderer (Hito 10), Light (Hito 11),
             // RigidBody (Hito 12), Environment (Hito 15), Script con

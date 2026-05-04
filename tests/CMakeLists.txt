@@ -50,6 +50,9 @@ add_executable(mood_tests
     test_lod.cpp
     test_workspace_manager.cpp
     test_save_load_full_roundtrip.cpp
+    test_tile_persistence.cpp
+
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/TilePersistence.cpp
 
     ${CMAKE_SOURCE_DIR}/src/engine/render/scene_renderer/RenderBatching.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/panels/scene/HierarchyCollect.cpp

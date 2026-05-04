@@ -342,6 +342,8 @@ add_library(mood_engine_lib STATIC
 
     src/engine/assets/cache/LodCache.cpp
 
+    src/engine/scene/serialization/TilePersistence.cpp
+
     src/editor/workspace/WorkspaceManager.cpp
 )
 

@@ -6,6 +6,7 @@
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/serialization/SceneSerializer.h"
+#include "engine/scene/serialization/TilePersistence.h"
 
 #include <utility>
 #include <vector>
@@ -15,6 +16,30 @@ namespace Mood::SceneLoader {
 Entity applyOneEntity(const SavedEntity& se,
                        Scene& scene,
                        AssetManager& assets) {
+    // Reemplazo de tile: si esta SavedEntity tiene tag "Tile_X_Y" Y
+    // ya existe una entidad con ese mismo tag en el scene (caso típico:
+    // rebuildSceneFromMap creó un tile default que este load debe
+    // reemplazar con los valores persistidos), la destruimos antes de
+    // crear la nueva. Sin esto, el scene quedaría con dos entidades
+    // de mismo tag.
+    //
+    // **Limitado a tiles** (parseTileCoords matchea): otros tags pueden
+    // ser duplicados legítimamente (ej. múltiples "CajaFisica", "Multi"
+    // en redo de comandos batch). Reemplazar TODOS rompería esos casos
+    // — regresión que detecté en test_create_entity_command.
+    u32 tileX = 0, tileY = 0;
+    if (parseTileCoords(se.tag.c_str(), tileX, tileY)) {
+        Entity existing;
+        scene.forEach<TagComponent>([&](Entity ex, TagComponent& tag) {
+            if (tag.name == se.tag && !static_cast<bool>(existing)) {
+                existing = ex;
+            }
+        });
+        if (static_cast<bool>(existing)) {
+            scene.destroyEntity(existing);
+        }
+    }
+
     Entity e = scene.createEntity(se.tag);
     auto& t = e.getComponent<TransformComponent>();
     t.position      = se.position;

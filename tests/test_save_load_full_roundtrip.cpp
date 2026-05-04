@@ -138,50 +138,113 @@ TEST_CASE("Full round-trip: entidad NO-tile preserva Transform.scale + material"
 }
 
 // ============================================================================
-// Caso B: tile del grid modificado. Aqui esta la hipotesis del bug —
-// el filtro `Tile_*` del SceneSerializer descarta tiles, asi que cualquier
-// modificacion al Transform.scale o materials de un tile se PIERDE en el
-// save. Documentamos el comportamiento actual con un test que pasa
-// (afirmando lo que pasa) — si despues cambiamos el comportamiento, el
-// test va a romperse y debe actualizarse junto al fix.
+// Caso B: tile del grid MODIFICADO. Tras el fix de isTileModified, los
+// tiles modificados (scale != tileSize, material != tileTextureAt(x,y),
+// componentes extras) AHORA se persisten al `.moodmap` como entidades.
+// Tiles NO modificados se reconstruyen del grid al cargar (sin overhead
+// en el JSON).
 // ============================================================================
 
-TEST_CASE("Full round-trip: tiles modificados — comportamiento actual (hipotesis del bug)") {
+TEST_CASE("Full round-trip: tile MODIFICADO se persiste y se restaura via applyEntitiesToScene") {
     AssetManager assets("assets", stubFactoryRT());
     const TextureAssetId brickTex = assets.loadTexture("textures/brick.png");
-    const MaterialAssetId brickMat = assets.createMaterialFromTexture(brickTex);
 
-    // 1) Construir scene origen con un "tile" (prefijo Tile_) modificado.
-    //    Simula lo que hace `rebuildSceneFromMap`: crea Tile_X_Y entities.
+    // 1) Construir scene origen con un Tile_5_5 MODIFICADO (estirado en Y).
+    //    Simula lo que hace `rebuildSceneFromMap` para el tile original:
+    //    scale = (tileSize, tileSize, tileSize), material = createMaterial
+    //    de la textura del grid en (5,5). Despues lo "estiramos".
     Scene origScene;
+    GridMap map(10u, 10u, 3.0f);  // tileSize = 3
+    map.setTile(5u, 5u, TileType::SolidWall, brickTex);
     {
         Entity tile = origScene.createEntity("Tile_5_5");
         auto& t = tile.getComponent<TransformComponent>();
-        t.position = glm::vec3(5.0f, 0.0f, 5.0f);
-        t.scale    = glm::vec3(3.0f, 1.0f, 3.0f);  // <-- estirado
+        t.position = glm::vec3(15.0f, 1.5f, 15.0f);
+        // Default scale = tileSize (3). El user lo estira en Y a 6m.
+        t.scale    = glm::vec3(3.0f, 6.0f, 3.0f);
+        const MaterialAssetId mat =
+            assets.createMaterialFromTexture(brickTex);
         tile.addComponent<MeshRendererComponent>(
             assets.missingMeshId(),
-            std::vector<MaterialAssetId>{brickMat});
+            std::vector<MaterialAssetId>{mat});
     }
 
     // 2) Save.
     const auto path = tempPathRT("tile_modified.moodmap");
-    GridMap emptyMap(10u, 10u, 1.0f);
-    SceneSerializer::save(emptyMap, "tile_test", &origScene, assets, path);
+    SceneSerializer::save(map, "tile_test", &origScene, assets, path);
 
     // 3) Load.
     const auto saved = SceneSerializer::load(path, assets);
     REQUIRE(saved.has_value());
 
-    // 4) Comportamiento ACTUAL del sistema: el Tile_5_5 NO esta en el array
-    //    `entities` porque fue filtrado. Esto demuestra que las
-    //    modificaciones a tiles desde el editor SE PIERDEN.
+    // 4) El Tile_5_5 modificado debe estar en `entities[]`.
     bool foundTile = false;
+    glm::vec3 savedScale(0.0f);
     for (const auto& se : saved->entities) {
-        if (se.tag == "Tile_5_5") foundTile = true;
+        if (se.tag == "Tile_5_5") {
+            foundTile = true;
+            savedScale = se.scale;
+        }
     }
-    CHECK_FALSE(foundTile);  // <-- el bug: tile no se persiste.
-    CHECK(saved->entities.size() == 0u);  // ninguna entidad sobrevive.
+    CHECK(foundTile);
+    CHECK(savedScale.y == doctest::Approx(6.0f));
+
+    // 5) applyEntitiesToScene debe crear el tile en el scene live con
+    //    los valores modificados. Si una entidad Tile_5_5 ya existe
+    //    (caso real: rebuildSceneFromMap construyo un default antes),
+    //    debe ser reemplazada.
+    Scene reloadedScene;
+    // Simulamos el flow del load: rebuildSceneFromMap crea un tile default.
+    Entity defaultTile = reloadedScene.createEntity("Tile_5_5");
+    {
+        auto& t = defaultTile.getComponent<TransformComponent>();
+        t.scale = glm::vec3(3.0f);  // default
+    }
+    SceneLoader::applyEntitiesToScene(*saved, reloadedScene, assets);
+
+    // 6) Validar que el tile reaparece estirado y NO duplicado.
+    int tileCount = 0;
+    Entity reloadedTile;
+    reloadedScene.forEach<TagComponent>([&](Entity e, TagComponent& tag) {
+        if (tag.name == "Tile_5_5") {
+            ++tileCount;
+            reloadedTile = e;
+        }
+    });
+    CHECK(tileCount == 1);  // SIN duplicacion
+    REQUIRE(static_cast<bool>(reloadedTile));
+    const auto& t = reloadedTile.getComponent<TransformComponent>();
+    CHECK(t.scale.y == doctest::Approx(6.0f));  // estiramiento preservado
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("Full round-trip: tile NO modificado NO se persiste (no infla el JSON)") {
+    AssetManager assets("assets", stubFactoryRT());
+    const TextureAssetId brickTex = assets.loadTexture("textures/brick.png");
+
+    // Tile en estado default exacto (scale = tileSize, material matchea
+    // grid texture). El SceneSerializer NO debe persistirlo.
+    Scene origScene;
+    GridMap map(10u, 10u, 3.0f);
+    map.setTile(5u, 5u, TileType::SolidWall, brickTex);
+    {
+        Entity tile = origScene.createEntity("Tile_5_5");
+        auto& t = tile.getComponent<TransformComponent>();
+        t.scale = glm::vec3(map.tileSize());  // default
+        const MaterialAssetId mat =
+            assets.createMaterialFromTexture(map.tileTextureAt(5u, 5u));
+        tile.addComponent<MeshRendererComponent>(
+            assets.missingMeshId(),
+            std::vector<MaterialAssetId>{mat});
+    }
+
+    const auto path = tempPathRT("tile_default.moodmap");
+    SceneSerializer::save(map, "tile_default", &origScene, assets, path);
+
+    const auto saved = SceneSerializer::load(path, assets);
+    REQUIRE(saved.has_value());
+    CHECK(saved->entities.size() == 0u);  // tile default NO persiste
 
     std::filesystem::remove(path);
 }
