@@ -23,6 +23,8 @@
 #include "engine/scene/components/Components.h"
 
 #include <SDL.h>
+#include <imgui.h>  // F2H7: SaveIniSettingsToMemory para persistencia de workspace
+
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/serialization/ProjectSerializer.h"
@@ -198,6 +200,13 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
     m_projectDirty = false;
     addToRecentProjects(std::filesystem::absolute(moodproj));
     updateWindowTitle();
+
+    // F2H7: poblar el WorkspaceManager con los workspaces persistidos del
+    // proyecto. Si el array esta vacio (proyecto recien creado o pre-F2H7),
+    // setWorkspaces({}) cae a los 4 defaults.
+    m_ui.workspaceManager().setWorkspaces(m_project->workspaces);
+    m_ui.requestWorkspaceSwitch(0);  // siempre arranca en el primer workspace
+
     m_ui.setStatusMessage("Proyecto abierto: " + m_project->name);
     Log::editor()->info("Proyecto abierto: {}", m_project->name);
     return true;
@@ -230,6 +239,18 @@ void EditorApplication::handleSave() {
     try {
         SceneSerializer::save(m_map, m_currentMapPath.stem().generic_string(),
                               m_scene.get(), *m_assetManager, mapPath);
+
+        // F2H7: capturar el ini ImGui actual al workspace activo + copiar
+        // todos los workspaces al Project antes de serializar.
+        {
+            size_t size = 0;
+            const char* iniData = ImGui::SaveIniSettingsToMemory(&size);
+            if (iniData != nullptr && size > 0) {
+                m_ui.workspaceManager().captureCurrentLayout(
+                    std::string(iniData, size));
+            }
+            m_project->workspaces = m_ui.workspaceManager().workspaces();
+        }
         ProjectSerializer::save(*m_project);
         m_projectDirty = false;
         updateWindowTitle();

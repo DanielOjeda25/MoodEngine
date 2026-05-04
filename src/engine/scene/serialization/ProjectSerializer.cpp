@@ -47,6 +47,18 @@ void ProjectSerializer::save(const Project& project) {
         j["jumpBufferWindowSec"] = project.jumpBufferWindowSec;
     }
 
+    // F2H7: workspaces — solo persistir si la lista no esta vacia (proyectos
+    // nuevos los inicializan al abrirse via WorkspaceManager defaults).
+    if (!project.workspaces.empty()) {
+        j["workspaces"] = json::array();
+        for (const auto& ws : project.workspaces) {
+            j["workspaces"].push_back({
+                {"name",       ws.name},
+                {"ini_layout", ws.iniLayout},
+            });
+        }
+    }
+
     const auto path = moodprojFile(project);
     std::error_code ec;
     std::filesystem::create_directories(project.root, ec);
@@ -93,6 +105,19 @@ std::optional<Project> ProjectSerializer::load(const std::filesystem::path& mood
         }
         if (j.contains("jumpBufferWindowSec")) {
             p.jumpBufferWindowSec = j.at("jumpBufferWindowSec").get<f32>();
+        }
+
+        // F2H7: workspaces opcionales. Si no estan, queda vacio y el
+        // WorkspaceManager usara los 4 defaults al cargar el proyecto.
+        if (j.contains("workspaces")) {
+            for (const auto& wj : j.at("workspaces")) {
+                Workspace ws;
+                ws.name      = wj.value("name", std::string{});
+                ws.iniLayout = wj.value("ini_layout", std::string{});
+                if (!ws.name.empty()) {
+                    p.workspaces.push_back(std::move(ws));
+                }
+            }
         }
 
         Log::assets()->info("Proyecto cargado: {} ({} mapas)",

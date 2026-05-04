@@ -14,6 +14,7 @@
 // Todos los paths son relativos a la carpeta del `.moodproj`.
 
 #include "core/Types.h"  // f32 (Hito 40 G)
+#include "editor/workspace/Workspace.h"  // F2H7
 
 #include <filesystem>
 #include <optional>
@@ -37,6 +38,11 @@ struct Project {
     /// ensuciar mapas viejos con campos nuevos).
     f32 coyoteWindowSec     = 0.10f;  // segundos
     f32 jumpBufferWindowSec = 0.15f;
+    /// F2H7: workspaces del editor (Layout/Scripting/Profile/Materials).
+    /// Vacio en proyecto nuevo: el WorkspaceManager los inicializa con
+    /// defaults la primera vez que se abre. Al guardar, el editor captura
+    /// el iniLayout actual y los persiste todos.
+    std::vector<Workspace> workspaces;
 };
 
 class ProjectSerializer {
