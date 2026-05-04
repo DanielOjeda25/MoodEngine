@@ -6,7 +6,39 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H8 cerrado: Multi-mapa intra-proyecto + fix de save/load de tiles modificados.**
+**🚀 Fase 2 — F2H10 cerrado: CI/CD con GitHub Actions.**
+Tag: `v1.1.7-fase2-hito10`.
+Verificado automático: el primer push de los workflows disparó `build.yml` y corrió verde (Configure + Build Debug + ctest 396/6948). El badge del README aparece en verde. El push del tag dispara `release.yml` que crea un GitHub Release con el message como body.
+
+**Cambio importante**: cierre de la sub-fase 2.1 "cimientos". El motor ahora tiene CI verificando cada push + PR, con cache de CPM deps para que builds incrementales sean rápidos (~2-4 min después de la primera con cache). Cualquier regresión accidental se detecta inmediatamente. Sub-fase 2.2 (CSG) — que es trabajo grande — entra con red de seguridad activa.
+
+**Implementación:**
+- `.github/workflows/build.yml`: trigger en push a `main` y cada PR. `runs-on: windows-latest`. Cache de `build/debug/_deps` con key derivada del hash de `CMakeLists.txt` + `cmake/CPM.cmake`. Cache de build artifacts adicional. `concurrency: cancel-in-progress` para que pushes rápidos no acumulen colas.
+- `.github/workflows/release.yml`: trigger en push de tags `v*.*.*`. Lee el message del tag con `git tag -l --format='%(contents)'` y lo pasa como body al `softprops/action-gh-release@v2`. Sin assets pre-compilados.
+- `README.md`: badge `build` arriba del título + estado actualizado.
+
+**Decisiones explícitas:**
+- **Solo Windows MSVC**: Linux fuera de scope (directiva durable).
+- **Sin Dependabot**: ruido innecesario en proyecto solo; deps CPM pinneadas con `GIT_TAG`.
+- **Sin assets pre-compilados** en releases: diferido a hito propio si emerge necesidad de "binary releases" tipo Godot.
+- **Build solo en Debug** en CI: matchea el desarrollo del dev. Release se diferirá si emerge necesidad de validación de optimizaciones automáticas.
+
+**Estado de Sub-fase 2.1 (cimientos):**
+- ✅ F2H1 reorganización src/
+- ✅ F2H2 Tracy + benchmark
+- ✅ F2H3 frustum culling
+- ✅ F2H4 instancing
+- ✅ F2H5 virtualización Hierarchy
+- ✅ F2H6 LOD system
+- ✅ F2H7 workspaces estilo Blender
+- ✅ F2H8 multi-mapa + fix Floor
+- ✅ F2H10 CI/CD GitHub Actions
+- ⏳ F2H9 documentación pública (postergado, opcional)
+- ⏳ Sub-fase 2.2 = CSG arquitectura (próximo gran salto)
+
+**Próximo paso:** **sub-fase 2.2 = CSG / editor de niveles real** (originalmente F2H9-F2H16 en el plan, probablemente F2H11+ ahora). Es trabajo grande — 2-3 meses estimados según `docs/PLAN_FASE2.md`. **O F2H9 docs públicas** si querés "limpieza" antes del CSG.
+
+### F2H8 (anterior, ya cerrado)
 Tag: `v1.1.6-fase2-hito8`.
 Verificado automático: suite doctest **396/6948** sin regresiones (+13 cases en `test_maps_manager.cpp` + casos del Floor en `test_save_load_full_roundtrip.cpp`). Verificado por el dev a ojo: crear proyecto, modificar tiles + Floor, guardar, crear segundo mapa, modificar, guardar, switchear entre mapas → todo persiste sin duplicación, sin freeze, los cambios se mantienen al cerrar y reabrir.
 

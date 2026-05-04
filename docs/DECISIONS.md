@@ -3012,6 +3012,35 @@ Lista hardcoded en `applyOneEntity`. Otros tags (Multi, CajaFisica, etc.) siguen
 - El user empieza a usar muchos mapas (>10) y la UI del submenu necesita scrolling/categorías.
 - "Save Project As" emerge como necesidad real (workflow de "duplicar proyecto para experimentar").
 
+## 2026-05-04: CI/CD con GitHub Actions (F2H10)
+
+**Contexto:** post-F2H8 el proyecto tiene 396 tests + 8 hitos de Fase 2 cerrados. Sin CI, cualquier regresión accidental podía durar varios commits sin detectarse. Sub-fase 2.2 (CSG / editor de niveles real) viene grande — 2-3 meses estimados — entrar con red de seguridad activa es responsabilidad básica.
+
+**Decisión 1 — Solo Windows MSVC**: el dev tiene como directiva durable que "multiplataforma Linux está fuera de scope" (memoria del proyecto). El plan original de Fase 2 mencionaba "Linux como test de portabilidad", pero eso nunca fue prioridad real. Si emerge necesidad cross-platform, agregar Linux como matrix entry es trivial; mientras tanto, no agrega valor a un proyecto solo del dev.
+
+**Decisión 2 — Sin Dependabot**: el repo es propiedad personal del dev, sin colaboradores externos. Las deps CPM están pinneadas con `GIT_TAG` exactos (Tracy v0.11.1, meshoptimizer v0.21, etc.). Updates de deps van a hacerse de forma deliberada cuando emerja necesidad concreta — no como notificación automática semanal que solo agregaría ruido.
+
+**Decisión 3 — Cache agresivo de CPM deps**: la primera build sin cache puede tardar 15-25 min descargando + compilando 8 deps grandes. Con `actions/cache@v4` y key derivada del hash de `CMakeLists.txt` + `cmake/CPM.cmake`, builds posteriores caen a 2-4 min. La key se invalida automáticamente si una dep cambia de tag. Cache adicional de build artifacts (`CMakeFiles` + `*.obj` + `*.lib`) acelera más cuando solo cambia código del repo.
+
+**Decisión 4 — Build solo en Debug**: CI corre el mismo build que el desarrollo del dev. Release se difiere si emerge necesidad de validación de optimizaciones automáticas (ya hicimos Release manual en F2H5 testing visual y todo OK). Doble build (Debug + Release) duplica el tiempo de CI sin valor proporcional para v1.
+
+**Decisión 5 — Release auto al taguear sin assets pre-compilados**: el workflow `release.yml` con trigger en `v*.*.*` crea un GitHub Release y usa el message del annotated tag como body (con `git tag -l --format='%(contents)'`). Esto da historial visible público sin trabajo manual. **Sin assets pre-compilados** porque hoy nadie consume el motor como binary — el dev clona y compila. "Binary releases" es hito propio cuando el motor sea consumible standalone (probable post-Fase 2 cuando exista MoodPlayer estable).
+
+**Decisión 6 — `concurrency: cancel-in-progress`**: pushes rápidos seguidos (3 commits seguidos en main) no deben acumular 3 builds en cola — solo el último importa. Esto ahorra minutos del plan free de Actions y da feedback más rápido.
+
+**Trade-offs:**
+- Se pierde: validación automática en Linux/Mac, releases con binarios, alertas de updates de deps.
+- Se gana: red de seguridad real contra regresiones, badge público de status, releases con historial visible y notes consistentes.
+
+**Lección aprendida del primer build CI**: el cache se llena en la primera build (15-25 min). Si en el futuro alguien forkea el repo o agrega un nuevo branch, la primera build ahí también va a ser lenta. Aceptable como cost una sola vez por entorno.
+
+**Revisar si:**
+- Emerge un colaborador externo o un fork con PR — Dependabot puede tener sentido entonces.
+- Aparece necesidad de validar Release automatizada (regresiones que solo aparecen con optimizaciones MSVC).
+- "Binary releases" se vuelve necesidad real (cuando el motor sea producto consumible).
+- Multiplataforma emerge como necesidad real (probable solo si el proyecto se vuelve open-source con tracción).
+
+
 
 
 
