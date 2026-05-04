@@ -48,9 +48,11 @@ add_executable(mood_tests
     test_render_batching.cpp
     test_hierarchy_collect.cpp
     test_lod.cpp
+    test_workspace_manager.cpp
 
     ${CMAKE_SOURCE_DIR}/src/engine/render/scene_renderer/RenderBatching.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/panels/scene/HierarchyCollect.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/workspace/WorkspaceManager.cpp
 
     # Incluimos las fuentes de las unidades testeadas directamente: ninguna
     # depende de GL, asi que no hace falta extraer una libreria solo para

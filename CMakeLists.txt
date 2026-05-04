@@ -341,6 +341,8 @@ add_library(mood_engine_lib STATIC
     src/engine/render/scene_renderer/SceneRenderer.cpp
 
     src/engine/assets/cache/LodCache.cpp
+
+    src/editor/workspace/WorkspaceManager.cpp
 )
 
 target_include_directories(mood_engine_lib PUBLIC
