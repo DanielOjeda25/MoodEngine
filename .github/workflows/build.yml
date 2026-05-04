@@ -1,0 +1,60 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancelar runs viejos del mismo branch al pushear nuevos commits.
+# Sin esto, varios pushes seguidos generan colas innecesarias.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-msvc-debug:
+    runs-on: windows-latest
+    timeout-minutes: 45  # primera build (sin cache) puede tardar 15-25 min
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Cache de las dependencias CPM (Tracy, meshoptimizer, assimp,
+      # Jolt, EnTT, sol2, lua, glm, glad, imgui, doctest, etc).
+      # Key incluye hash de CMakeLists.txt — si una dep cambia tag,
+      # la cache se invalida. La primera build de un proyecto nuevo
+      # tarda 10-15 min; con cache, builds posteriores 2-4 min.
+      - name: Cache CPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/debug/_deps
+          key: ${{ runner.os }}-cpm-${{ hashFiles('CMakeLists.txt', 'cmake/CPM.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-cpm-
+
+      # Cache del build incremental para ahorrar tiempo de compilación
+      # cuando el código fuente del repo cambia poco entre commits.
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/debug/CMakeFiles
+            build/debug/**/*.obj
+            build/debug/Debug/*.lib
+          key: ${{ runner.os }}-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+
+      - name: Configure (CMake preset)
+        run: cmake --preset windows-msvc-debug
+
+      - name: Build (Debug)
+        run: cmake --build build/debug --config Debug
+
+      # ctest corre el binario mood_tests (registrado por add_test en
+      # tests/CMakeLists.txt). --output-on-failure muestra el detalle
+      # del case que rompe sin tener que rebuscar en logs.
+      - name: Test (ctest)
+        run: ctest --test-dir build/debug -C Debug --output-on-failure

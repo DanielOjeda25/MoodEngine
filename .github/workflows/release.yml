@@ -1,0 +1,49 @@
+name: release
+
+# Trigger en push de tags v*.*.* (matchea v1.1.7, v2.0.0, v0.42.0, etc).
+# El message del tag se usa como body del GitHub Release. Sin assets
+# pre-compilados — los users clonan y compilan localmente. "Binary
+# releases" se diferiran a un hito propio si emerge necesidad
+# (probablemente cuando el motor sea consumible standalone tipo Godot).
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest  # release creation no compila — solo gh API
+    permissions:
+      contents: write       # para crear/editar releases
+
+    steps:
+      - name: Checkout (con tags)
+        uses: actions/checkout@v4
+        with:
+          # Necesitamos los tags + el message — checkout default trae
+          # solo el commit, no los annotated tags con sus mensajes.
+          fetch-depth: 0
+
+      - name: Extraer mensaje del tag
+        id: tag
+        shell: bash
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          echo "name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          # `git tag -l --format='%(contents)'` devuelve el message
+          # completo del annotated tag, sin el header automatico.
+          echo "body<<RELEASE_EOF" >> $GITHUB_OUTPUT
+          git tag -l --format='%(contents)' "${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "RELEASE_EOF" >> $GITHUB_OUTPUT
+
+      - name: Crear GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.tag.outputs.name }}
+          body: ${{ steps.tag.outputs.body }}
+          # draft=false + prerelease=false: el release queda publicado
+          # automaticamente. Si emerge un workflow de "review antes de
+          # publicar", cambiar a draft=true.
+          draft: false
+          prerelease: false

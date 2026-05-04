@@ -1,8 +1,10 @@
 # MoodEngine
 
+[![build](https://github.com/DanielOjeda25/MoodEngine/actions/workflows/build.yml/badge.svg)](https://github.com/DanielOjeda25/MoodEngine/actions/workflows/build.yml)
+
 Motor gráfico 3D propio con editor visual integrado, escrito en C++17. Inspirado en la arquitectura de Source Engine y la filosofía de desarrollo de id Software.
 
-**Estado actual:** Hito 1 — Shell del editor.
+**Estado actual:** Fase 2 sub-fase 2.1 (cimientos) — F2H10 CI/CD cerrado. Próximo: sub-fase 2.2 (CSG / editor de niveles real) o F2H9 docs públicas.
 
 ## Requisitos
 
