@@ -360,6 +360,11 @@ void EditorApplication::processEvents() {
 
 void EditorApplication::beginFrame() {
     MOOD_PROFILE_FUNCTION();
+    // F2H7: aplicar pending workspace switch ANTES de NewFrame.
+    // LoadIniSettingsFromMemory no debe llamarse dentro de un frame
+    // ImGui activo (segun la doc de ImGui).
+    m_ui.applyPendingWorkspaceSwitch();
+
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();

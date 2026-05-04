@@ -1,5 +1,7 @@
 #include "editor/ui/EditorUI.h"
 
+#include "core/Log.h"
+
 #include <imgui.h>
 
 #include <algorithm>
@@ -39,6 +41,49 @@ EditorUI::EditorUI() {
                 &m_scriptEditor, &m_materialEditor};
     m_scriptEditor.visible   = false; // por defecto oculto; togglear en menu Ver
     m_materialEditor.visible = false; // Hito 42: idem.
+
+    // F2H7: el dockspace arranca apuntando al workspace default (Layout).
+    m_dockspace.setActiveWorkspaceName(m_workspaceManager.activeWorkspace().name);
+}
+
+void EditorUI::applyPendingWorkspaceSwitch() {
+    if (m_pendingWorkspaceSwitch < 0) return;
+    const int target = m_pendingWorkspaceSwitch;
+    m_pendingWorkspaceSwitch = -1;
+
+    if (target < 0 || target >= static_cast<int>(m_workspaceManager.count())) {
+        return; // defensivo
+    }
+    if (target == m_workspaceManager.activeIndex()) {
+        return; // ya esta activo
+    }
+
+    // 1) Capturar el layout actual al workspace que estaba activo (auto-save).
+    {
+        size_t size = 0;
+        const char* iniData = ImGui::SaveIniSettingsToMemory(&size);
+        if (iniData != nullptr && size > 0) {
+            m_workspaceManager.captureCurrentLayout(std::string(iniData, size));
+        }
+    }
+
+    // 2) Cambiar de workspace.
+    m_workspaceManager.setActiveByIndex(target);
+    const auto& nextWs = m_workspaceManager.activeWorkspace();
+    m_dockspace.setActiveWorkspaceName(nextWs.name);
+
+    // 3) Aplicar el layout del nuevo workspace.
+    if (!nextWs.iniLayout.empty()) {
+        // ImGui restaura la posicion + tamano + dock state desde el ini.
+        ImGui::LoadIniSettingsFromMemory(nextWs.iniLayout.c_str(),
+                                          nextWs.iniLayout.size());
+    } else {
+        // Workspace nunca activado en este proyecto: el Dockspace
+        // construira el layout default segun el nombre.
+        m_dockspace.requestRebuildForCurrentWorkspace();
+    }
+
+    Log::editor()->info("[workspace] switched to '{}'", nextWs.name);
 }
 
 void EditorUI::draw(bool& requestQuit) {
@@ -50,6 +95,31 @@ void EditorUI::draw(bool& requestQuit) {
 
     if (m_dockspace.begin()) {
         m_menuBar.draw(*this, requestQuit);
+
+        // F2H7: tabs de workspaces estilo Blender, debajo del menú principal
+        // y dentro de la ventana host. El click solo emite el request — el
+        // switch se aplica en `applyPendingWorkspaceSwitch()` antes del
+        // próximo NewFrame (LoadIniSettingsFromMemory no debe llamarse en
+        // un frame ImGui activo).
+        if (ImGui::BeginTabBar("##WorkspaceTabs",
+                                ImGuiTabBarFlags_Reorderable |
+                                ImGuiTabBarFlags_FittingPolicyScroll)) {
+            for (int i = 0; i < static_cast<int>(m_workspaceManager.count()); ++i) {
+                const auto& ws = m_workspaceManager.workspaces()[i];
+                ImGuiTabItemFlags flags = ImGuiTabItemFlags_None;
+                if (i == m_workspaceManager.activeIndex() &&
+                    m_pendingWorkspaceSwitch == -1) {
+                    flags |= ImGuiTabItemFlags_SetSelected;
+                }
+                if (ImGui::BeginTabItem(ws.name.c_str(), nullptr, flags)) {
+                    if (i != m_workspaceManager.activeIndex()) {
+                        requestWorkspaceSwitch(i);
+                    }
+                    ImGui::EndTabItem();
+                }
+            }
+            ImGui::EndTabBar();
+        }
     }
     m_dockspace.end();
 

@@ -18,6 +18,7 @@
 #include "editor/panels/assets/MaterialEditorPanel.h"  // Hito 42
 #include "editor/panels/assets/ScriptEditorPanel.h"
 #include "editor/panels/scene/ViewportPanel.h"
+#include "editor/workspace/WorkspaceManager.h"
 #include "engine/scene/core/Entity.h"
 
 #include <filesystem>
@@ -53,6 +54,22 @@ public:
     /// @brief Acceso al dockspace. MenuBar lo usa para pedir "Restablecer
     ///        layout" cuando el usuario lo elige desde el menu Ver.
     Dockspace& dockspace() { return m_dockspace; }
+
+    /// @brief F2H7: manager de workspaces (Layout/Scripting/Profile/Materials).
+    ///        ProjectSerializer lo lee/escribe; la UI dibuja los tabs.
+    WorkspaceManager& workspaceManager() { return m_workspaceManager; }
+    const WorkspaceManager& workspaceManager() const { return m_workspaceManager; }
+
+    /// @brief F2H7: solicita cambiar de workspace al index pasado. Lo aplica
+    ///        `applyPendingWorkspaceSwitch()` ANTES del proximo NewFrame
+    ///        (LoadIniSettingsFromMemory no debe llamarse dentro de un frame
+    ///        ImGui activo, segun la doc).
+    void requestWorkspaceSwitch(int idx) { m_pendingWorkspaceSwitch = idx; }
+
+    /// @brief F2H7: aplica el switch de workspace pendiente. Llamar en
+    ///        `EditorApplication::beginFrame` ANTES de `ImGui::NewFrame`.
+    ///        No-op si no hay switch pendiente.
+    void applyPendingWorkspaceSwitch();
 
     /// @brief Acceso al panel Asset Browser para inyectarle el AssetManager
     ///        desde EditorApplication y leer la seleccion actual.
@@ -367,6 +384,12 @@ private:
     ///        false. Bloquea toda interaccion con el editor hasta que el
     ///        usuario elija.
     void drawWelcomeModal();
+
+    // F2H7: workspaces.
+    WorkspaceManager m_workspaceManager;
+    /// `-1` = no hay switch pendiente. Otra valor = index objetivo, lo aplica
+    /// `applyPendingWorkspaceSwitch()` antes de `NewFrame`.
+    int m_pendingWorkspaceSwitch{-1};
 };
 
 } // namespace Mood
