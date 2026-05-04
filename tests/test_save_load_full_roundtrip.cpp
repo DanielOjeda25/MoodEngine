@@ -219,6 +219,69 @@ TEST_CASE("Full round-trip: tile MODIFICADO se persiste y se restaura via applyE
     std::filesystem::remove(path);
 }
 
+TEST_CASE("Full round-trip: Floor modificado NO se duplica al cargar") {
+    // **Bug detectado en F2H8 testing visual** (multi-mapa): el Floor
+    // del piso (creado por rebuildSceneFromMap con tag exacto "Floor")
+    // se persiste como entidad regular del .moodmap si el user lo
+    // mueve. Al cargar otro mapa, rebuildSceneFromMap crea un Floor
+    // default + applyEntitiesToScene crea OTRO Floor del JSON. Dos
+    // planos 48×48 superpuestos = fillrate brutal = freeze.
+    //
+    // Fix: applyOneEntity reemplaza la entidad existente para tags
+    // auto-generados (Floor, Tile_X_Y). Este test es la red de seguridad.
+    AssetManager assets("assets", stubFactoryRT());
+    const TextureAssetId gridTex = assets.loadTexture("textures/grid.png");
+
+    // 1) Origen: scene con un Floor "movido" (position alterada).
+    Scene origScene;
+    {
+        Entity floor = origScene.createEntity("Floor");
+        auto& t = floor.getComponent<TransformComponent>();
+        t.position = glm::vec3(0.0f, -0.05f, -49.4f);
+        t.scale    = glm::vec3(48.0f, 0.1f, 48.0f);
+        floor.addComponent<MeshRendererComponent>(
+            assets.missingMeshId(),
+            std::vector<MaterialAssetId>{
+                assets.createMaterialFromTexture(gridTex)});
+    }
+
+    // 2) Save + load.
+    const auto path = tempPathRT("floor_dup.moodmap");
+    GridMap emptyMap(16u, 16u, 3.0f);
+    SceneSerializer::save(emptyMap, "floor_test", &origScene, assets, path);
+    const auto saved = SceneSerializer::load(path, assets);
+    REQUIRE(saved.has_value());
+
+    // 3) Simulamos el flow del editor: rebuildSceneFromMap crea un
+    //    Floor default ANTES de que applyEntitiesToScene corra.
+    Scene reloadedScene;
+    Entity defaultFloor = reloadedScene.createEntity("Floor");
+    {
+        auto& t = defaultFloor.getComponent<TransformComponent>();
+        t.position = glm::vec3(0.0f);
+        t.scale = glm::vec3(48.0f, 0.1f, 48.0f);
+    }
+
+    SceneLoader::applyEntitiesToScene(*saved, reloadedScene, assets);
+
+    // 4) Validar que hay UN SOLO Floor (no dos superpuestos).
+    int floorCount = 0;
+    Entity reloadedFloor;
+    reloadedScene.forEach<TagComponent>([&](Entity e, TagComponent& tag) {
+        if (tag.name == "Floor") {
+            ++floorCount;
+            reloadedFloor = e;
+        }
+    });
+    CHECK(floorCount == 1);
+    REQUIRE(static_cast<bool>(reloadedFloor));
+    // Y debe tener la position movida (la del JSON, no la del default).
+    const auto& t = reloadedFloor.getComponent<TransformComponent>();
+    CHECK(t.position.z == doctest::Approx(-49.4f).epsilon(0.01));
+
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("Full round-trip: tile NO modificado NO se persiste (no infla el JSON)") {
     AssetManager assets("assets", stubFactoryRT());
     const TextureAssetId brickTex = assets.loadTexture("textures/brick.png");
