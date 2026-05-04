@@ -17,6 +17,7 @@ class LuaApiPanel : public IPanel {
 public:
     void onImGuiRender() override;
     const char* name() const override { return "Lua API"; }
+    const char* category() const override { return "Debug"; }
 };
 
 } // namespace Mood

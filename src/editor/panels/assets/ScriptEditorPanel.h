@@ -28,6 +28,7 @@ class ScriptEditorPanel : public IPanel {
 public:
     void onImGuiRender() override;
     const char* name() const override { return "Script Editor"; }
+    const char* category() const override { return "Assets"; }
 
     /// @brief El EditorUI llama esto cada frame antes del draw para que
     ///        el panel sepa que entidad esta seleccionada. Si cambia de

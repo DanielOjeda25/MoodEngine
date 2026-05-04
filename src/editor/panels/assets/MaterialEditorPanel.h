@@ -33,6 +33,7 @@ class MaterialEditorPanel : public IPanel {
 public:
     void onImGuiRender() override;
     const char* name() const override { return "Material Editor"; }
+    const char* category() const override { return "Assets"; }
 
     /// @brief Inyecta el AssetManager para poblar el combo + resolver
     ///        ids de texturas dropeadas. Non-owning.

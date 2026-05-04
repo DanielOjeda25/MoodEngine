@@ -18,6 +18,7 @@ class AssetBrowserPanel : public IPanel {
 public:
     void onImGuiRender() override;
     const char* name() const override { return "Asset Browser"; }
+    const char* category() const override { return "Assets"; }
 
     /// @brief El panel queda inerte (muestra "Asset manager no inyectado")
     ///        hasta que `EditorApplication` le pasa el manager real.

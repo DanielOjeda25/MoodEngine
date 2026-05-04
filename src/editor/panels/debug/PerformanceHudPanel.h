@@ -33,6 +33,7 @@ public:
 
     void onImGuiRender() override;
     const char* name() const override { return "Performance"; }
+    const char* category() const override { return "Debug"; }
 
     void setMetrics(const Metrics& m) { m_metrics = m; }
 

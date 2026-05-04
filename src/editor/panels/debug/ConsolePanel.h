@@ -14,6 +14,7 @@ class ConsolePanel : public IPanel {
 public:
     void onImGuiRender() override;
     const char* name() const override { return "Console"; }
+    const char* category() const override { return "Debug"; }
 
 private:
     // Filtro por substring dentro del campo `channel` de cada entry.

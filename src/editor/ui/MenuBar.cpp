@@ -6,6 +6,8 @@
 
 #include <imgui.h>
 
+#include <string_view>
+
 namespace Mood {
 
 void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
@@ -79,11 +81,29 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
         }
 
         if (ImGui::BeginMenu("Ver")) {
-            for (IPanel* panel : ui.panels()) {
-                ImGui::MenuItem(panel->name(), nullptr, &panel->visible);
+            // F2H7: agrupar paneles por categoria (Scene/Assets/Debug/World).
+            // Cada IPanel sobreescribe `category()` o usa el default "Scene".
+            // El order de las categorias arriba es deliberado: Scene primero
+            // (lo mas frecuente), Assets despues, Debug al final, World
+            // placeholder hasta F2H10+ (CSG).
+            const char* kCategories[] = {"Scene", "Assets", "Debug", "World"};
+            for (const char* cat : kCategories) {
+                if (ImGui::BeginMenu(cat)) {
+                    bool any = false;
+                    for (IPanel* panel : ui.panels()) {
+                        if (std::string_view(panel->category()) == cat) {
+                            ImGui::MenuItem(panel->name(), nullptr, &panel->visible);
+                            any = true;
+                        }
+                    }
+                    if (!any) {
+                        ImGui::TextDisabled("(vacio)");
+                    }
+                    ImGui::EndMenu();
+                }
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Restablecer layout")) {
+            if (ImGui::MenuItem("Restablecer layout del workspace activo")) {
                 ui.dockspace().requestResetToDefault();
                 Log::editor()->info("Layout restablecido al default");
             }

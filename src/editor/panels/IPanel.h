@@ -18,6 +18,12 @@ public:
     ///        de la ventana ImGui.
     virtual const char* name() const = 0;
 
+    /// @brief F2H7: categoria para el menu "Ver" jerarquico.
+    ///        Valores convencionales: "Scene", "Assets", "Debug", "World".
+    ///        Default = "Scene" (el grueso de los panels existentes vive ahi).
+    ///        Override por panel cuando aplique (ej. AssetBrowser → "Assets").
+    virtual const char* category() const { return "Scene"; }
+
     /// @brief Toggle de visibilidad. El EditorUI revisa este flag antes de
     ///        invocar onImGuiRender.
     bool visible = true;
