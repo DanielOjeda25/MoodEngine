@@ -6,7 +6,30 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H6 cerrado: LOD system con cache en disco.**
+**🚀 Fase 2 — F2H7 cerrado: Workspaces estilo Blender + menú Ver categorizado.**
+Tag: `v1.1.5-fase2-hito7`.
+Verificado automático: suite doctest **367/6847** sin regresiones (+9 cases en `test_workspace_manager.cpp`). Verificado por el dev a ojo: 4 tabs (Layout/Scripting/Profile/Materials) en la misma fila del menú principal (estilo Blender), click en cada tab cambia layout completamente, panels editados (drag/resize) persisten al switchear y volver. Persistencia al `.moodproj` confirmada en proyecto nuevo.
+
+**Cambio cualitativo de UX**, no optimización. Mejora cómo trabaja el dev día a día. Modela Blender:
+- Workspaces son parte del proyecto (`.moodproj` schema con array `workspaces`).
+- Switching = swap del layout completo de panels. Mismo proyecto, distinta vista.
+- 4 defaults hardcoded; UI para crear/eliminar custom = hito futuro (F2H8+).
+- Modificaciones manuales se auto-guardan al switchear (captura ini ImGui actual al workspace previo).
+- Sin back-compat (el dev borró proyectos viejos): proyecto sin `workspaces` = poblar con los 4 defaults.
+
+**Implementación**:
+- `src/editor/workspace/Workspace.{h}`: struct `{name, iniLayout}`.
+- `src/editor/workspace/WorkspaceManager.{h,cpp}`: PURO (sin ImGui). Lista + activo + helpers.
+- `src/editor/ui/Dockspace.cpp`: layouts predefinidos via `ImGui::DockBuilder` (4 builders distintos según nombre del workspace).
+- `src/editor/ui/MenuBar.cpp`: tabs como Buttons con highlight del activo (sin `BeginTabBar` para evitar conflictos con state interno de ImGui que producía flicker).
+- `EditorUI::applyPendingWorkspaceSwitch` en `EditorApplication::beginFrame` ANTES de `ImGui::NewFrame` (la doc de ImGui prohíbe `LoadIniSettingsFromMemory` dentro de un frame activo).
+- `IPanel::category()` virtual con default `"Scene"`. Override en panels de Assets/Debug.
+
+**Pendiente (no bloqueante para cerrar el hito)**: bug pre-existente en save/load del scene reportado por el dev — modificaciones de Transform.scale + materiales asignados no se restauran al reabrir el proyecto. Investigación profesional con tests = próximo paso inmediato.
+
+**Próximo paso:** **investigar y arreglar el bug de save/load** con tests reales. Después F2H8 (docs públicas + iconos en tabs si querés) o F2H10+ (CSG).
+
+### F2H6 (anterior, ya cerrado)
 Tag: `v1.1.4-fase2-hito6`.
 Verificado automático: suite doctest **358/6814** sin regresiones (+12 cases en `test_lod.cpp` + 1 case en `test_render_batching.cpp`). Verificado por el dev a ojo: editor compila + arranca, panel Inspector muestra info de LODs read-only para meshes con LODs generados. Validación con escenario de meshes complejos (Fox.glb / kenney_survival) postergada — los stress de cubos primitivos no se benefician (12 tris ya, no hay reducción posible). Build Release confirmó (post-F2H5) que el motor procesa 1M tris a 58 FPS sin LODs — el LOD entra como cimiento para cuando llegue contenido AAA real, no como optimización urgente.
 
