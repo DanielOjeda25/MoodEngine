@@ -5,6 +5,7 @@
 #include "engine/audio/clips/AudioClip.h"
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
+#include "engine/scene/components/BrushComponent.h"  // F2H11
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 
@@ -1018,6 +1019,44 @@ void InspectorPanel::onImGuiRender() {
             "Editar trigger halfExtents");
         ImGui::TextDisabled("playerInside: %s",
                              tc.playerInside ? "si" : "no");
+        ImGui::Separator();
+    }
+
+    // --- BrushComponent (F2H11) ---
+    // Read-only en F2H11. F2H13 agrega edicion de primitivas (cilindro,
+    // esfera, etc.); F2H14 agrega editor de UV per-cara con drag &
+    // drop de materiales; F2H15 agrega seleccion de cara individual.
+    if (e.hasComponent<BrushComponent>()) {
+        auto& bc = e.getComponent<BrushComponent>();
+        ImGui::TextDisabled("Brush (CSG)");
+
+        ImGui::Text("faces: %u", static_cast<u32>(bc.brush.faces.size()));
+
+        const glm::vec3 size = bc.brush.localAabb.size();
+        ImGui::TextDisabled("local AABB: %.2f x %.2f x %.2f",
+                             static_cast<double>(size.x),
+                             static_cast<double>(size.y),
+                             static_cast<double>(size.z));
+
+        if (m_assets != nullptr) {
+            const std::string matPath = (bc.material == 0)
+                ? std::string{"(blank look)"}
+                : m_assets->materialPathOf(bc.material);
+            ImGui::Text("material: %s (id %u)",
+                         matPath.c_str(), static_cast<unsigned>(bc.material));
+        }
+
+        ImGui::TextDisabled("mesh cache: %s",
+                             bc.meshCache ? "uploaded" : "(pending)");
+        ImGui::TextDisabled("dirty: %s", bc.dirty ? "si" : "no");
+
+        // Recompute mesh: util para debug si la mesh quedo stale por
+        // un cambio que no marcamos dirty (no deberia pasar pero es
+        // breadcrumb util cuando F2H12+ agreguen booleanos).
+        if (ImGui::Button("Recompute mesh")) {
+            bc.dirty = true;
+        }
+
         ImGui::Separator();
     }
 

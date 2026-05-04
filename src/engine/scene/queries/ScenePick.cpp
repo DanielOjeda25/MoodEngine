@@ -3,6 +3,7 @@
 #include "core/math/AABB.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/resources/MeshAsset.h"
+#include "engine/scene/components/BrushComponent.h"  // F2H11
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Scene.h"
 
@@ -105,6 +106,33 @@ AABB meshAabbWorld(const TransformComponent& t,
     return AABB{wMin, wMax};
 }
 
+/// @brief F2H11: AABB world-space de un brush. Toma `bc.brush.localAabb`
+///        (computado por makeBoxBrush / load) y lo proyecta via los 8
+///        corners — mismo flow que meshAabbWorld pero sin MeshAsset.
+AABB brushAabbWorld(const TransformComponent& t, const BrushComponent& bc) {
+    const glm::vec3 localMin = bc.brush.localAabb.min;
+    const glm::vec3 localMax = bc.brush.localAabb.max;
+    const glm::vec3 corners[8] = {
+        {localMin.x, localMin.y, localMin.z},
+        {localMax.x, localMin.y, localMin.z},
+        {localMin.x, localMax.y, localMin.z},
+        {localMax.x, localMax.y, localMin.z},
+        {localMin.x, localMin.y, localMax.z},
+        {localMax.x, localMin.y, localMax.z},
+        {localMin.x, localMax.y, localMax.z},
+        {localMax.x, localMax.y, localMax.z},
+    };
+    const glm::mat4 model = t.worldMatrix();
+    glm::vec3 wMin( std::numeric_limits<f32>::max());
+    glm::vec3 wMax(-std::numeric_limits<f32>::max());
+    for (int i = 0; i < 8; ++i) {
+        const glm::vec4 w = model * glm::vec4(corners[i], 1.0f);
+        wMin = glm::min(wMin, glm::vec3(w));
+        wMax = glm::max(wMax, glm::vec3(w));
+    }
+    return AABB{wMin, wMax};
+}
+
 } // namespace
 
 ScenePickResult pickEntity(Scene& scene,
@@ -128,13 +156,17 @@ ScenePickResult pickEntity(Scene& scene,
     f32 bestT = std::numeric_limits<f32>::max();
 
     scene.forEach<TransformComponent>([&](Entity e, TransformComponent& t) {
-        // 3 targets posibles, en orden de preferencia (mesh gana):
+        // Targets posibles, en orden de preferencia (mesh gana):
         //   a) MeshRenderer: AABB del mesh.
-        //   b) Light / AudioSource sin mesh: esfera del icono.
+        //   b) Brush (F2H11): AABB del brush.
+        //   c) Light / AudioSource sin mesh: esfera del icono.
         f32 t_hit = -1.0f;
         if (e.hasComponent<MeshRendererComponent>()) {
             const auto& mr = e.getComponent<MeshRendererComponent>();
             t_hit = rayAABB(origin, dir, meshAabbWorld(t, &mr, assets));
+        } else if (e.hasComponent<BrushComponent>()) {
+            const auto& bc = e.getComponent<BrushComponent>();
+            t_hit = rayAABB(origin, dir, brushAabbWorld(t, bc));
         } else if (e.hasComponent<LightComponent>() ||
                    e.hasComponent<AudioSourceComponent>()) {
             t_hit = raySphere(origin, dir, t.position, k_iconPickRadius);
