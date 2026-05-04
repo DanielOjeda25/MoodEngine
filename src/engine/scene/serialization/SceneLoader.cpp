@@ -2,6 +2,7 @@
 
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/resources/MeshAsset.h"
+#include "engine/scene/components/BrushComponent.h"   // F2H11
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -217,6 +218,38 @@ void applyEntitiesToScene(const SavedMap& saved,
                           AssetManager& assets) {
     for (const auto& se : saved.entities) {
         applyOneEntity(se, scene, assets);
+    }
+
+    // F2H11: aplicar brushes CSG. Cada SavedBrush -> nueva entidad con
+    // TagComponent + TransformComponent (los crea createEntity) +
+    // BrushComponent. Reconstruimos `Csg::Brush` directamente desde
+    // los planos persistidos: los SavedBrushFace ya contienen normal y
+    // distance en world space (las que makeBoxBrush escribio al
+    // serializar). dirty=true fuerza al SceneRenderer a regenerar la
+    // mesh en el primer frame.
+    for (const auto& sb : saved.brushes) {
+        Entity e = scene.createEntity(sb.tag);
+        auto& t = e.getComponent<TransformComponent>();
+        t.position      = sb.position;
+        t.rotationEuler = sb.rotationEuler;
+        t.scale         = sb.scale;
+
+        BrushComponent bc;
+        bc.brush.faces.reserve(sb.faces.size());
+        for (const auto& sf : sb.faces) {
+            Csg::BrushFace face;
+            face.plane.normal   = sf.normal;
+            face.plane.distance = sf.distance;
+            face.materialIndex  = sf.materialIndex;
+            bc.brush.faces.push_back(face);
+        }
+        bc.brush.localAabb = Csg::computeBrushAabb(bc.brush);
+        // Material por path logico. "" significa "sin material"
+        // (slot 0 = look blank gris).
+        bc.material = sb.materialPath.empty()
+            ? 0u : assets.loadMaterial(sb.materialPath);
+        bc.dirty = true;
+        e.addComponent<BrushComponent>(std::move(bc));
     }
 }
 

@@ -172,10 +172,37 @@ struct SavedEntity {
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
 };
 
+/// @brief F2H11: copia persistida de una BrushFace. Solo guarda lo
+///        suficiente para reconstruir el plano: normal (unitaria) +
+///        distance (forma `dot(n,p) + d = 0`). El material por cara
+///        viene en F2H14; en F2H11 todas las caras tienen el mismo
+///        materialIndex que se completa con 0 si no esta presente.
+struct SavedBrushFace {
+    glm::vec3 normal{0.0f, 1.0f, 0.0f};
+    f32       distance = 0.0f;
+    u32       materialIndex = 0;
+};
+
+/// @brief F2H11: copia persistida de un BrushComponent. La AABB no se
+///        persiste (se recomputa al rebuild de la mesh). El `dirty`
+///        tampoco — al cargar siempre arranca dirty=true. El material
+///        global del brush (F2H11) viaja como path logico de
+///        `.material`; vacio = sin material asignado (look "blank
+///        gris"). En F2H14 esto se reemplaza por material per-cara.
+struct SavedBrush {
+    std::string tag;
+    glm::vec3 position{0.0f};
+    glm::vec3 rotationEuler{0.0f};
+    glm::vec3 scale{1.0f};
+    std::string materialPath;            // vacio = sin material (id 0)
+    std::vector<SavedBrushFace> faces;
+};
+
 struct SavedMap {
     std::string name;
     GridMap map;
     std::vector<SavedEntity> entities;
+    std::vector<SavedBrush> brushes;     // F2H11
 };
 
 class SceneSerializer {

@@ -62,7 +62,12 @@ namespace Mood {
 // maxParticles, emitting, additive). Estado runtime (positions, ages,
 // rngState) NO se persiste — la simulacion arranca de cero al cargar.
 // Archivos v8 sin `particle_emitter` se leen igual.
-constexpr int k_MoodmapFormatVersion = 9;
+// v10 (F2H11): nuevo array top-level `brushes` para CSG. Cada brush
+// guarda {tag, transform, material (path logico), faces[{normal,
+// distance, materialIndex}]}. Archivos v9 sin `brushes` se leen
+// igual (lista vacia). El campo `material` por-brush en F2H11 es
+// global; F2H14 lo movera a per-cara con UV editor (otro bump).
+constexpr int k_MoodmapFormatVersion = 10;
 constexpr int k_MoodprojFormatVersion = 1;
 
 /// @brief Verifica que la version declarada en un archivo sea legible.

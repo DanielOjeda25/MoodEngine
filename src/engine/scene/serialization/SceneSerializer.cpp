@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/scene/components/BrushComponent.h"  // F2H11
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -37,6 +38,59 @@ inline json serializeEntity(Entity e, const AssetManager& assets) {
 }
 inline SavedEntity parseEntity(const json& j) {
     return parseEntityFromJson(j);
+}
+
+// F2H11: helpers de (de)serializacion de SavedBrush.
+
+json serializeBrush(Entity e, const AssetManager& assets) {
+    auto& tag = e.getComponent<TagComponent>();
+    auto& t   = e.getComponent<TransformComponent>();
+    auto& bc  = e.getComponent<BrushComponent>();
+
+    json out;
+    out["tag"] = tag.name;
+    out["transform"] = {
+        {"position",      t.position},
+        {"rotationEuler", t.rotationEuler},
+        {"scale",         t.scale},
+    };
+    // Material por path logico. Slot 0 (default sentinel) se serializa
+    // como "" para que el archivo no tenga un path interno raro.
+    const std::string matPath = (bc.material == 0)
+        ? std::string{} : assets.materialPathOf(bc.material);
+    out["material"] = matPath;
+
+    out["faces"] = json::array();
+    for (const auto& face : bc.brush.faces) {
+        out["faces"].push_back({
+            {"normal",        face.plane.normal},
+            {"distance",      face.plane.distance},
+            {"materialIndex", face.materialIndex},
+        });
+    }
+    return out;
+}
+
+SavedBrush parseBrush(const json& j) {
+    SavedBrush sb;
+    sb.tag = j.value("tag", std::string{});
+    if (j.contains("transform")) {
+        const auto& jt = j.at("transform");
+        sb.position      = jt.value("position",      glm::vec3(0.0f));
+        sb.rotationEuler = jt.value("rotationEuler", glm::vec3(0.0f));
+        sb.scale         = jt.value("scale",         glm::vec3(1.0f));
+    }
+    sb.materialPath = j.value("material", std::string{});
+    if (j.contains("faces") && j.at("faces").is_array()) {
+        for (const auto& jf : j.at("faces")) {
+            SavedBrushFace face;
+            face.normal        = jf.value("normal", glm::vec3(0, 1, 0));
+            face.distance      = jf.value("distance", 0.0f);
+            face.materialIndex = jf.value("materialIndex", 0u);
+            sb.faces.push_back(face);
+        }
+    }
+    return sb;
 }
 
 } // namespace
@@ -76,6 +130,11 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             if (isTileTag(tag.name) && !isTileModified(e, map, assets)) {
                 return;
             }
+            // F2H11: entidades con BrushComponent se persisten en el
+            // array `brushes`, NO en `entities`. Saltearlas aqui evita
+            // doble-persistencia y entradas en `entities` que el loader
+            // no sabria interpretar (no tienen mesh, light, etc.).
+            if (e.hasComponent<BrushComponent>()) return;
             // Persistimos cualquier entidad con al menos un componente
             // serializable: MeshRenderer (Hito 10), Light (Hito 11),
             // RigidBody (Hito 12), Environment (Hito 15), Script con
@@ -90,6 +149,20 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             const bool hasPe = e.hasComponent<ParticleEmitterComponent>();
             if (!hasMr && !hasLi && !hasRb && !hasEnv && !hasScript && !hasPe) return;
             j["entities"].push_back(serializeEntity(e, assets));
+        });
+    }
+
+    // F2H11: brushes CSG. Cada entidad con BrushComponent se persiste
+    // como un objeto en el array top-level `brushes` (paralelo a
+    // `entities`). Las entidades brush NO entran en el array
+    // `entities` porque su contenido (planos, no mesh asset) no encaja
+    // en el flow estandar de EntitySerializer.
+    j["brushes"] = json::array();
+    if (scene != nullptr) {
+        auto* mutableScene = const_cast<Scene*>(scene);
+        mutableScene->forEach<BrushComponent>([&](Entity e, BrushComponent&) {
+            if (!e.hasComponent<TransformComponent>()) return;
+            j["brushes"].push_back(serializeBrush(e, assets));
         });
     }
 
@@ -158,10 +231,21 @@ std::optional<SavedMap> SceneSerializer::load(const std::filesystem::path& path,
             }
         }
 
+        // F2H11: brushes CSG (campo nuevo en v10; opcional para
+        // compat con v9 y anteriores).
+        std::vector<SavedBrush> brushes;
+        if (j.contains("brushes") && j.at("brushes").is_array()) {
+            for (const auto& jb : j.at("brushes")) {
+                brushes.push_back(parseBrush(jb));
+            }
+        }
+
         Log::assets()->info(
-            "Mapa cargado: {} ({} tiles solidos, {} entidades)",
-            path.generic_string(), map.solidCount(), entities.size());
-        return SavedMap{name, std::move(map), std::move(entities)};
+            "Mapa cargado: {} ({} tiles solidos, {} entidades, {} brushes)",
+            path.generic_string(), map.solidCount(), entities.size(),
+            brushes.size());
+        return SavedMap{name, std::move(map), std::move(entities),
+                         std::move(brushes)};
     } catch (const std::exception& e) {
         Log::assets()->warn(
             "SceneSerializer::load: falla semantica en '{}': {}",
