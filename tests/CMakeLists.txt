@@ -47,6 +47,7 @@ add_executable(mood_tests
     test_frustum.cpp
     test_render_batching.cpp
     test_hierarchy_collect.cpp
+    test_lod.cpp
 
     ${CMAKE_SOURCE_DIR}/src/engine/render/scene_renderer/RenderBatching.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/panels/scene/HierarchyCollect.cpp
