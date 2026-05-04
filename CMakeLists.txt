@@ -120,6 +120,17 @@ if(MOOD_PROFILE)
     )
 endif()
 
+# meshoptimizer (F2H6): generacion de LODs por simplificacion de mesh
+# y otras optimizaciones de geometria. Usado en `AssetManager::loadMesh`
+# tras cargar el LOD 0 para auto-generar LOD 1 (50% tris) y LOD 2 (15%).
+# Skinned meshes lo saltean en v1 (re-mapping de bone weights es scope
+# grande con risk visual).
+CPMAddPackage(
+    NAME meshoptimizer
+    GITHUB_REPOSITORY zeux/meshoptimizer
+    GIT_TAG v0.21
+)
+
 # Portable File Dialogs (single-header, cross-platform). Download-only para
 # crear un target INTERFACE propio; el repo no define uno utilizable via CMake.
 CPMAddPackage(
@@ -351,6 +362,7 @@ target_link_libraries(mood_engine_lib PUBLIC
     miniaudio
     assimp::assimp
     Jolt
+    meshoptimizer
     OpenGL::GL
 )
 
