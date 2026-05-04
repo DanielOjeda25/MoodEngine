@@ -345,6 +345,7 @@ add_library(mood_engine_lib STATIC
     src/engine/scene/serialization/TilePersistence.cpp
 
     src/editor/workspace/WorkspaceManager.cpp
+    src/editor/project/MapsManager.cpp
 )
 
 target_include_directories(mood_engine_lib PUBLIC
