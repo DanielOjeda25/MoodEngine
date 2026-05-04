@@ -215,6 +215,33 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ImGui::EndMenu();
         }
 
+        // F2H7: workspace tabs en la misma menu bar — estilo Blender.
+        // Despues de los menus (Archivo/Editar/Ver/Ayuda) y antes del
+        // boton Play. Buttons con highlight del activo, sin BeginTabBar
+        // para evitar conflictos con state interno de ImGui.
+        ImGui::Separator();
+        {
+            auto& wm = ui.workspaceManager();
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+            for (int i = 0; i < static_cast<int>(wm.count()); ++i) {
+                const auto& ws = wm.workspaces()[i];
+                const bool isActive = (i == wm.activeIndex());
+                if (isActive) {
+                    const ImVec4 hi = ImGui::GetStyleColorVec4(ImGuiCol_TabActive);
+                    ImGui::PushStyleColor(ImGuiCol_Button, hi);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hi);
+                } else {
+                    const ImVec4 dim = ImGui::GetStyleColorVec4(ImGuiCol_Tab);
+                    ImGui::PushStyleColor(ImGuiCol_Button, dim);
+                }
+                if (ImGui::Button(ws.name.c_str())) {
+                    if (!isActive) ui.requestWorkspaceSwitch(i);
+                }
+                ImGui::PopStyleColor(isActive ? 2 : 1);
+            }
+            ImGui::PopStyleVar();
+        }
+
         // Boton Play/Stop empujado a la derecha de la menu bar.
         const bool isPlay = ui.mode() == EditorMode::Play;
         const char* btnLabel = isPlay ? "Stop" : "Play";

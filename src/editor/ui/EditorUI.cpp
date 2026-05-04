@@ -3,6 +3,7 @@
 #include "core/Log.h"
 
 #include <imgui.h>
+#include <imgui_internal.h>  // BeginViewportSideBar
 
 #include <algorithm>
 #include <filesystem>
@@ -87,39 +88,16 @@ void EditorUI::applyPendingWorkspaceSwitch() {
 }
 
 void EditorUI::draw(bool& requestQuit) {
-    // Status bar primero: usa BeginViewportSideBar que reserva una franja
-    // inferior del viewport. Al dibujarse ANTES del dockspace, este toma
-    // solo el area disponible restante y los paneles docked no se solapan
-    // con la status bar.
+    // F2H7: los workspace tabs se dibujan ahora DENTRO del menu bar
+    // principal (estilo Blender, todo en una sola fila: Archivo / Editar /
+    // Ver / Ayuda | Layout / Scripting / Profile / Materials | ... Play).
+    // La logica vive en MenuBar.cpp.
+
+    // Status bar inferior: BeginViewportSideBar con ImGuiDir_Down.
     m_statusBar.draw(m_mode);
 
     if (m_dockspace.begin()) {
         m_menuBar.draw(*this, requestQuit);
-
-        // F2H7: tabs de workspaces estilo Blender, debajo del menú principal
-        // y dentro de la ventana host. El click solo emite el request — el
-        // switch se aplica en `applyPendingWorkspaceSwitch()` antes del
-        // próximo NewFrame (LoadIniSettingsFromMemory no debe llamarse en
-        // un frame ImGui activo).
-        if (ImGui::BeginTabBar("##WorkspaceTabs",
-                                ImGuiTabBarFlags_Reorderable |
-                                ImGuiTabBarFlags_FittingPolicyScroll)) {
-            for (int i = 0; i < static_cast<int>(m_workspaceManager.count()); ++i) {
-                const auto& ws = m_workspaceManager.workspaces()[i];
-                ImGuiTabItemFlags flags = ImGuiTabItemFlags_None;
-                if (i == m_workspaceManager.activeIndex() &&
-                    m_pendingWorkspaceSwitch == -1) {
-                    flags |= ImGuiTabItemFlags_SetSelected;
-                }
-                if (ImGui::BeginTabItem(ws.name.c_str(), nullptr, flags)) {
-                    if (i != m_workspaceManager.activeIndex()) {
-                        requestWorkspaceSwitch(i);
-                    }
-                    ImGui::EndTabItem();
-                }
-            }
-            ImGui::EndTabBar();
-        }
     }
     m_dockspace.end();
 
