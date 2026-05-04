@@ -323,6 +323,22 @@ call submission, no triangle setup.
   Despreciable. Confirma que la decision "plano + sin cache de AABB"
   era correcta para v1.
 
+### F2H6 (post-LOD system)
+- **No medible con stress de cubos primitivos**: los cubos tienen 12
+  tris, ya estan en el LOD minimo posible — no hay con que reducir.
+  Era esperado y documentado en el plan.
+- **Cimiento listo para contenido real**: cuando entren meshes
+  complejos (Fox.glb ~1500 tris, kenney_survival props 500-2000 tris
+  cada uno), el LOD reducira proporcionalmente. Ratios fijos en v1:
+  LOD 1 = 50% tris (error 0.05), LOD 2 = 15% tris (error 0.10).
+- **Cache en disco** (`assets/.cache/lods/<hash>.moodlod`) hace que el
+  primer arranque genere los LODs (~ms por mesh) y los siguientes
+  arranques sean instant. Borrarlo no rompe nada.
+- **Skinned meshes saltean LOD** en v1 (re-mapping de bone weights con
+  reduccion = scope grande con risk visual).
+- **Validacion futura**: spawn de 50 Foxes en grid 100m + medicion
+  cuando el dev decida poblar una escena de prueba con contenido AAA.
+
 ### F2H5 (post-virtualizacion Hierarchy)
 - **Mejora medida modesta** (~6% en frame ms con 8336 entidades): 96
   → 90 ms / 10.4 → 11.0 FPS. Por debajo de los 12-15 FPS predichos

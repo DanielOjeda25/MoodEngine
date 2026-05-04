@@ -26,6 +26,12 @@ CMakeUserPresets.json
 # pero son modelos 3D que si queremos versionar).
 !assets/meshes/*.obj
 
+# F2H6: cache de LODs generados al cargar meshes. Lateral al formato
+# .moodmap (borrarlo no rompe nada — solo fuerza re-generacion al
+# proximo arranque). No commiteable porque depende del meshoptimizer
+# instalado del dev y de los mtimes de los sources.
+assets/.cache/
+
 # Logs
 logs/
 *.log

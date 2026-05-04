@@ -6,7 +6,25 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H5 cerrado: Virtualización Hierarchy con ImGuiListClipper.**
+**🚀 Fase 2 — F2H6 cerrado: LOD system con cache en disco.**
+Tag: `v1.1.4-fase2-hito6`.
+Verificado automático: suite doctest **358/6814** sin regresiones (+12 cases en `test_lod.cpp` + 1 case en `test_render_batching.cpp`). Verificado por el dev a ojo: editor compila + arranca, panel Inspector muestra info de LODs read-only para meshes con LODs generados. Validación con escenario de meshes complejos (Fox.glb / kenney_survival) postergada — los stress de cubos primitivos no se benefician (12 tris ya, no hay reducción posible). Build Release confirmó (post-F2H5) que el motor procesa 1M tris a 58 FPS sin LODs — el LOD entra como cimiento para cuando llegue contenido AAA real, no como optimización urgente.
+
+**Cambio importante:** retoma el LOD original (era F2H4 plan, postergado dos veces — primero por instancing F2H4, después por virtualización F2H5). Implementación con **cimiento sólido** (filosofía industria estándar Unity/Unreal/Godot, documentada en DECISIONS.md):
+
+- **`meshoptimizer v0.21` via CPM**: nueva dep para `meshopt_simplify`. Linkeada a `mood_engine_lib` y `mood_tests`.
+- **`MeshAsset` extendido**: `lod1Submeshes` / `lod2Submeshes` (vacíos = no LOD generado, fallback a LOD 0). Campo `lodDistances{30, 80}` configurable per-mesh con default global. Helper inline `selectLod(distance, thresholds)` + método `submeshesForLod(lod)` con fallback automático.
+- **`LodCache` (`assets/.cache/lods/<hash>.moodlod`)**: cache binario lateral al `.moodmap` formato. FNV-1a 64-bit del logical path como nombre. Header con magic/version/mtime/size para invalidación. Borrarlo NO rompe el proyecto — solo fuerza re-generación. Documentado en `.gitignore` (`assets/.cache/`).
+- **`MeshLoader::loadMeshWithAssimp` auto-gen**: tras cargar el mesh original, si NO es skinned y >100 tris, intenta cargar LODs del cache; si miss, llama `meshoptimizer::simplify` con ratios 50%/15% (errores 0.05/0.10) y persiste. Skinned salta (re-mapping de bone weights con LOD = scope grande con risk visual, postergado a hito futuro).
+- **`groupByBatch` extendido**: `BatchKey` gana campo `lod`, recibe `cameraPos`. Calcula distancia camera→centro AABB world-space y llama `selectLod` con thresholds del mesh. Entidades del mismo mesh+material pero distinto LOD van a batches separados.
+- **`SceneRenderer::renderScene`**: pasa `cameraPos` a `groupByBatch`, usa `submeshesForLod(key.lod).front().mesh` con fallback automático. Plots Tracy nuevos: `PBR::InstancesLod{0,1,2}` con la distribución por nivel.
+- **Inspector**: muestra read-only info de LODs cuando hay MeshRendererComponent seleccionado (tris LOD 0/1/2 + thresholds en m). Editar manualmente o regenerar = hito futuro.
+
+**Mejora medida**: validación con escenarios de meshes complejos pendiente. Para los stress patológicos de cubos primitivos (12 tris/instance), el LOD no reduce nada porque ya están en el mínimo. Cuando entre contenido real (Fox.glb ~1500 tris, kenney_survival props ~500-2000 tris cada uno), spawnar 50+ instancias a distintas distancias mostrará el speedup esperado del LOD 1 (50%) y LOD 2 (15%).
+
+**Próximo paso:** **F2H7 — Reorg UI editor por categorías** (era F2H6 según orden plan original) o **F2H8 — Documentación pública** (era F2H7). Ambos son sub-fase 2.1 cierre. Después: sub-fase 2.2 = CSG arquitectura (F2H9 plan).
+
+### F2H5 (anterior, ya cerrado)
 Tag: `v1.1.3-fase2-hito5`.
 Verificado automático: suite doctest **345/6736** sin regresiones (+5 cases en `test_hierarchy_collect.cpp`). Verificado por el dev a ojo: panel Hierarchy se ve idéntico al pre-F2H5; con 8336 entidades (stress 100K) el panel scrollea fluido. Selección persiste correcta, orden estable. CSV confirma mejora del frame ms.
 

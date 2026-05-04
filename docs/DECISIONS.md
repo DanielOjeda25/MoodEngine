@@ -2922,4 +2922,63 @@ F2H3 + F2H4 cubren ambos casos: instancing para props repetidos, frustum cull pa
 - Otros panels (Inspector, AssetBrowser) emergen como cuellos en escenas reales y justifican aplicar el mismo patrón ListClipper.
 - Aparece la necesidad de instrumentar sub-zonas Tracy por panel para tener attribución correcta antes de futuros hitos UI.
 
+## 2026-05-03: F2H6 LOD con cache en disco — cimiento sólido vs parche
+
+**Contexto:** F2H6 retoma el LOD original (era F2H4 plan, postergado dos veces — primero por instancing F2H4, después por virtualización F2H5). El dev preguntó explícitamente "¿esto va a ser parche o cimiento sólido?" antes de implementar. Las decisiones siguen lo que hacen Unity, Unreal y Godot.
+
+**Decisión 1 — Persistencia con cache en disco (NO regeneración pura):**
+
+Lo que hacen los motores serios:
+- Unity LOD Group → persiste en `.meta` del asset → load instant.
+- Unreal Mesh Editor → persiste en `.uasset` → load instant.
+- Godot auto-genera al import → persiste en `.scn` → load instant.
+
+Implementación: `LodCache` lateral al formato `.moodmap` en `assets/.cache/lods/<hash>.moodlod`. FNV-1a 64-bit del logical path como nombre del archivo. Header binario con magic `MLOD` + version + mtime + size del source para invalidación. Borrar el dir `.cache/` no rompe nada — solo fuerza re-generación al próximo arranque.
+
+**Razones:**
+- **Tiempo de arranque**: regenerar 50 meshes complejos al cargar un proyecto = 5-30 seg de spinner. Persistir = abre instantáneo después del primer arranque.
+- **Determinismo**: lo que ve el dev en el editor === lo que ve el jugador.
+- **Workflow futuro**: cuando alguien quiera importar LOD custom de Blender, la API ya está lista (sub-hito futuro).
+- **Si meshoptimizer hace algo feo**, el dev puede borrar el cache y regenerar (operativo, no ideal — UI editor es hito futuro).
+
+**Por qué cache lateral, no schema bump:** bumpear `.moodmap` para guardar LODs implicaría migración + back-compat para todos los proyectos existentes. El cache es privado del workspace, no afecta proyectos compartidos. Si emerge necesidad de "guardar LODs en el proyecto" (ej. compartir LODs custom con el equipo), entonces sí schema bump como hito propio.
+
+**Decisión 2 — Per-MeshAsset con default global (NO ranges hardcoded):**
+
+Lo que hacen los motores serios: todos (Unity LOD Group, Unreal Mesh Editor, Godot) permiten configurar los rangos **por mesh**. Razón: un personaje hero usa LOD 0 hasta más lejos; un ladrillo de fondo usa LOD 2 desde cerca. Hardcoded global no escala.
+
+Implementación: campo `lodDistances{30, 80}` en `MeshAsset` (default global). Override per-mesh disponible programáticamente. UI editor para cambiarlo es hito futuro — por ahora el dev edita los defaults o el código.
+
+**Por qué hardcoded global hubiera sido parche:** ata el motor a un escenario "uniforme" que no existe en juegos reales. Cuando aparezca el primer mesh que necesita rangos custom (probable: un personaje hero visible desde lejos en FPS), tendríamos que re-arquitectar.
+
+**Decisión 3 — Skinned meshes saltean LOD generation en v1:**
+
+Reducir vértices en un mesh skinned implica re-mapear los bone weights consistentemente (cada vértice tiene 4 índices + 4 pesos que apuntan al esqueleto). meshoptimizer trabaja sobre vertex positions; los bone weights del vertex eliminado tendrían que redistribuirse a sus vecinos. Implementación correcta es scope grande con risk de bugs visuales (animación que se rompe en LOD 1/2).
+
+Para v1: skinned siempre usa LOD 0. Postergado a hito propio cuando emerja un benchmark con >50 personajes skinned simultáneos. Hoy con CesiumMan + Fox como únicos skinned del catálogo, el cuello no aparece.
+
+**Decisión 4 — Auto-gen al loadMesh, no en el editor manualmente:**
+
+Workflow: el dev arrastra un `.glb` al proyecto, los LODs se generan automáticamente, se cachean en disco, se ven inmediatamente. Sin pasos manuales. Si el resultado de meshoptimizer no le gusta, edita el source y re-arrastra (mtime cambia, cache se invalida).
+
+Alternativa rechazada: UI editor para "Generar LOD" / "Importar LOD custom" / barras visuales de threshold (estilo Unity LOD Group). Es scope grande para v1 — UX nice-to-have pero no esencial. Hito futuro cuando los workflows reales lo justifiquen.
+
+**Trade-offs:**
+- Se pierde: control fino sobre cada LOD (no podés "tocar" el resultado de meshoptimizer en el editor todavía). UX de Unity LOD Group con barras y screen-space size visual.
+- Se gana: workflow zero-config. El dev importa un mesh y "simplemente funciona". Cache persiste, así que después de la primera vez no hay penalty de tiempo. API queda preparada para los hitos futuros sin re-arquitectar.
+
+**Validación medida**: pendiente con escena de meshes complejos. Los stress patológicos actuales (cubos primitivos) no se benefician del LOD porque ya están en el mínimo (12 tris). Cuando entre contenido real (Fox.glb ~1500 tris, kenney_survival props ~500-2000 tris cada uno), spawnar 50+ instancias a distintas distancias mostrará el speedup esperado: LOD 1 = 750/250-1000 tris, LOD 2 = 225/75-300 tris.
+
+**Lo que NO sería cimiento sólido (rechazado):**
+- ❌ Regenerar siempre al load (sin cache): tiempo de arranque crece linealmente, ningún motor profesional hace esto.
+- ❌ Schema `.moodmap` bump para guardar LODs: contamina el formato del proyecto, dificulta back-compat.
+- ❌ Sin override per-mesh: ata el motor a un escenario uniforme irreal.
+- ❌ Hardcoded de "siempre 3 LODs": Unity/Unreal soportan hasta 8 niveles. v1 usa 3 (0/1/2) con espacio para extender (basta agregar `lod3Submeshes` y otro threshold).
+
+**Revisar si:**
+- Una medición real con meshes complejos muestra que los ratios 50%/15% no son los óptimos (probable que ajustemos por dominio: characters quizás 60%/30%, props 50%/15%, vegetación 40%/10%).
+- El cache crece mucho (>500MB en proyectos grandes) y hace falta política de evicción.
+- Aparece la necesidad de un sub-hito UI para "Editor de LOD" (custom LODs importados, override per-mesh visual, sliders de threshold).
+- Meshes con multi-submesh + materiales distintos por submesh emergen como caso común y necesitan extensión del flujo (hoy multi-submesh CAE al fallback no-instanced del F2H3, sigue funcionando pero sin LOD).
+
 
