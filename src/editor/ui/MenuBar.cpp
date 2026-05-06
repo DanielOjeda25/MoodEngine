@@ -75,6 +75,11 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                 if (ImGui::MenuItem("Anadir Box Brush")) {
                     ui.requestProjectAction(ProjectAction::AddBoxBrush);
                 }
+                // F2H12: operaciones booleanas entre brushes.
+                // A = entidad actualmente seleccionada (debe tener
+                // BrushComponent); B se elige del submenu listando
+                // los demas brushes del mapa.
+                ui.drawBooleanOpMenu();
                 ImGui::EndMenu();
             }
             ImGui::Separator();

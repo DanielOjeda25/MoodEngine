@@ -200,6 +200,7 @@ EditorApplication::EditorApplication() {
     m_audioSystem = std::make_unique<AudioSystem>(*m_audioDevice, *m_assetManager);
 
     // Inyectar dependencias en los paneles de ECS.
+    m_ui.setScene(m_scene.get());  // F2H12: necesario para drawBooleanOpMenu
     m_ui.hierarchy().setScene(m_scene.get());
     m_ui.hierarchy().setEditorUi(&m_ui);
     m_ui.inspector().setEditorUi(&m_ui);
@@ -506,6 +507,11 @@ int EditorApplication::run() {
         // F2H8: open map request (con payload del path).
         if (auto openMap = m_ui.consumeOpenMapRequest()) {
             handleOpenMap(*openMap);
+        }
+
+        // F2H12: boolean op request (con payload kind + entity B).
+        if (auto bop = m_ui.consumeBooleanOpRequest()) {
+            handleBooleanOp(bop->kind, bop->brushB);
         }
 
         // Hito 15 polish: el modal Welcome puede editar la lista de

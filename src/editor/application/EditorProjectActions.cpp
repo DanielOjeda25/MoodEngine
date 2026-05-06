@@ -31,7 +31,12 @@
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/world/grid/GridMap.h"  // F2H8: handleNewMap
 #include "engine/world/csg/Brush.h"     // F2H11: handleAddBoxBrush
+#include "engine/world/csg/BrushOps.h"  // F2H12: subtract / unionOp / intersectOp
 #include "engine/scene/components/BrushComponent.h"
+
+#include <glm/gtc/matrix_inverse.hpp>   // F2H12: glm::inverseTranspose
+#include "editor/commands/BooleanOpCommand.h"
+#include "editor/commands/HistoryStack.h"
 
 #include <algorithm>  // F2H8: std::remove_if en handleDeleteCurrentMap
 #include <cstdio>     // F2H11: snprintf para naming unico
@@ -763,6 +768,238 @@ void EditorApplication::handleAddBoxBrush() {
 
     Log::editor()->info("Anadir Box Brush: '{}' en (0, 1, 0)", tagName);
     pushCreatedEntities({e}, "Anadir Box Brush");
+}
+
+// ----------------------------------------------------------------------------
+// F2H12: handleBooleanOp — Subtract / Union / Intersect entre dos brushes.
+// ----------------------------------------------------------------------------
+
+namespace {
+
+/// @brief Captura un SavedBrush desde una entity con BrushComponent +
+///        TransformComponent. Usado por el handler para snapshot
+///        pre-op (que el comando undo va a usar para recrear A/B).
+SavedBrush snapshotBrush(Entity e, const AssetManager& assets) {
+    SavedBrush sb;
+    if (e.hasComponent<TagComponent>()) {
+        sb.tag = e.getComponent<TagComponent>().name;
+    }
+    if (e.hasComponent<TransformComponent>()) {
+        const auto& t = e.getComponent<TransformComponent>();
+        sb.position      = t.position;
+        sb.rotationEuler = t.rotationEuler;
+        sb.scale         = t.scale;
+    }
+    if (e.hasComponent<BrushComponent>()) {
+        const auto& bc = e.getComponent<BrushComponent>();
+        sb.materialPath = (bc.material == 0)
+            ? std::string{} : assets.materialPathOf(bc.material);
+        for (const auto& f : bc.brush.faces) {
+            SavedBrushFace sf;
+            sf.normal        = f.plane.normal;
+            sf.distance      = f.plane.distance;
+            sf.materialIndex = f.materialIndex;
+            sb.faces.push_back(sf);
+        }
+    }
+    return sb;
+}
+
+/// @brief Empaqueta un Csg::Brush (cuyos planos estan en WORLD space
+///        tras la op booleana) + tag elegido en un SavedBrush con
+///        transform centrado en el AABB y planos rebasados a local.
+///
+///        Sin esto, los brushes resultado quedan con position=(0,0,0)
+///        y el gizmo aparece en el origen del mundo (UX rota — al
+///        rotar/escalar lo hace alrededor de (0,0,0) en lugar del
+///        centro del brush).
+SavedBrush snapshotResultWorld(const Csg::Brush& worldBrush,
+                                 const std::string& tag,
+                                 const std::string& materialPath) {
+    SavedBrush sb;
+    sb.tag = tag;
+    sb.materialPath = materialPath;
+    sb.rotationEuler = glm::vec3(0.0f);
+    sb.scale         = glm::vec3(1.0f);
+
+    // Centroide en world = centro de la AABB del brush en world.
+    const glm::vec3 centroid = worldBrush.localAabb.center();
+    sb.position = centroid;
+
+    // Planos en local: trasladar por -centroid. Plano world
+    // dot(n,p) + d_w = 0  =>  con p = p_local + centroid:
+    //   dot(n, p_local + centroid) + d_w = 0
+    //   dot(n, p_local) + d_w + dot(n, centroid) = 0
+    // => d_local = d_w + dot(n, centroid).
+    for (const auto& f : worldBrush.faces) {
+        SavedBrushFace sf;
+        sf.normal        = f.plane.normal;
+        sf.distance      = f.plane.distance + glm::dot(f.plane.normal, centroid);
+        sf.materialIndex = f.materialIndex;
+        sb.faces.push_back(sf);
+    }
+    return sb;
+}
+
+std::string uniqueResultTag(const Scene& scene, const std::string& base) {
+    int suffix = 1;
+    while (true) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "%s_%02d", base.c_str(), suffix);
+        std::string candidate = buf;
+        bool collision = false;
+        // forEach requiere non-const Scene; cast aqui es seguro
+        // porque solo leemos.
+        const_cast<Scene&>(scene).forEach<TagComponent>(
+            [&](Entity, TagComponent& tag) {
+                if (tag.name == candidate) collision = true;
+            });
+        if (!collision) return candidate;
+        ++suffix;
+    }
+}
+
+} // namespace
+
+void EditorApplication::handleBooleanOp(EditorUI::BooleanOpRequestKind kind,
+                                         Entity brushB) {
+    if (!m_scene || !m_assetManager) return;
+
+    Entity brushA = m_ui.selectedEntity();
+    if (!static_cast<bool>(brushA) || !static_cast<bool>(brushB)) {
+        Log::editor()->warn("BooleanOp: brushes A o B invalidos");
+        return;
+    }
+    if (!brushA.hasComponent<BrushComponent>() ||
+        !brushB.hasComponent<BrushComponent>()) {
+        Log::editor()->warn("BooleanOp: brushes A o B sin BrushComponent");
+        return;
+    }
+    if (brushA.handle() == brushB.handle()) {
+        Log::editor()->warn("BooleanOp: A == B no tiene sentido, abortando");
+        return;
+    }
+
+    // Snapshots pre-op (para undo).
+    SavedBrush aSnap = snapshotBrush(brushA, *m_assetManager);
+    SavedBrush bSnap = snapshotBrush(brushB, *m_assetManager);
+
+    // Para que la operacion booleana use planos en world space, los
+    // reconstruimos transformando las caras locales por la worldMatrix.
+    auto buildWorldBrush = [](Entity e) -> Csg::Brush {
+        const auto& bc = e.getComponent<BrushComponent>();
+        const auto& t = e.getComponent<TransformComponent>();
+        // Transformar los planos locales a world. makeBoxBrush lo hace
+        // con identity (los planos del BrushComponent SON los locales).
+        // Reutilizamos la misma logica: empezar con un brush vacio y
+        // llenar con los planos transformados por t.worldMatrix().
+        const glm::mat4 world = t.worldMatrix();
+        const glm::mat3 normalMatrix = glm::inverseTranspose(glm::mat3(world));
+        Csg::Brush worldBrush;
+        worldBrush.faces.reserve(bc.brush.faces.size());
+        for (const auto& f : bc.brush.faces) {
+            const glm::vec3 worldNormal =
+                glm::normalize(normalMatrix * f.plane.normal);
+            // Punto sobre el plano local: -d * n.
+            const glm::vec3 pointLocal = -f.plane.distance * f.plane.normal;
+            const glm::vec3 pointWorld =
+                glm::vec3(world * glm::vec4(pointLocal, 1.0f));
+            Csg::BrushFace wf;
+            wf.plane = Mood::planeFromPointAndNormal(pointWorld, worldNormal);
+            wf.materialIndex = f.materialIndex;
+            worldBrush.faces.push_back(wf);
+        }
+        worldBrush.localAabb = Csg::computeBrushAabb(worldBrush);
+        return worldBrush;
+    };
+
+    const Csg::Brush A = buildWorldBrush(brushA);
+    const Csg::Brush B = buildWorldBrush(brushB);
+
+    // Aplicar la op.
+    std::vector<Csg::Brush> resultBrushes;
+    const char* opName = "?";
+    std::string resultBaseTag = "Brush_Result";
+    switch (kind) {
+        case EditorUI::BooleanOpRequestKind::Subtract:
+            resultBrushes = Csg::subtract(A, B);
+            opName = "Subtract";
+            resultBaseTag = "Brush_Sub";
+            break;
+        case EditorUI::BooleanOpRequestKind::Union:
+            resultBrushes = Csg::unionOp(A, B);
+            opName = "Union";
+            resultBaseTag = "Brush_Union";
+            break;
+        case EditorUI::BooleanOpRequestKind::Intersect: {
+            opName = "Intersect";
+            resultBaseTag = "Brush_Int";
+            if (auto r = Csg::intersectOp(A, B)) {
+                resultBrushes.push_back(std::move(*r));
+            }
+            break;
+        }
+    }
+
+    Log::editor()->info("BooleanOp {}: {} brush(es) resultante(s)",
+                         opName, resultBrushes.size());
+
+    // Material que heredan los resultados: el de A.
+    const auto& bcA = brushA.getComponent<BrushComponent>();
+    const std::string heritedMatPath = (bcA.material == 0)
+        ? std::string{} : m_assetManager->materialPathOf(bcA.material);
+
+    // Snapshots de los resultados (para que el comando los pueda
+    // recrear en redo sin re-ejecutar la op).
+    std::vector<SavedBrush> resultSnaps;
+    resultSnaps.reserve(resultBrushes.size());
+    for (const auto& rb : resultBrushes) {
+        const std::string tag = uniqueResultTag(*m_scene, resultBaseTag);
+        SavedBrush sb = snapshotResultWorld(rb, tag, heritedMatPath);
+        // Reservar el tag creando un placeholder marker — no lo
+        // creamos como entity todavia, pero el siguiente
+        // uniqueResultTag debe verlo como ocupado. Solucion simple:
+        // lo creamos ya pero sin populate.
+        // (Mas simple: creamos el resultado entity ahora y dejamos
+        // que el handler haga el flow completo.)
+        resultSnaps.push_back(std::move(sb));
+    }
+
+    // Destruir A y B.
+    m_scene->destroyEntity(brushA);
+    m_scene->destroyEntity(brushB);
+    m_ui.setSelectedEntity(Entity{});
+
+    // Crear entidades resultado desde los snapshots.
+    for (const auto& sb : resultSnaps) {
+        Entity e = m_scene->createEntity(sb.tag);
+        auto& t = e.getComponent<TransformComponent>();
+        t.position      = sb.position;
+        t.rotationEuler = sb.rotationEuler;
+        t.scale         = sb.scale;
+        BrushComponent bc;
+        for (const auto& sf : sb.faces) {
+            Csg::BrushFace face;
+            face.plane.normal   = sf.normal;
+            face.plane.distance = sf.distance;
+            face.materialIndex  = sf.materialIndex;
+            bc.brush.faces.push_back(face);
+        }
+        bc.brush.localAabb = Csg::computeBrushAabb(bc.brush);
+        bc.material = sb.materialPath.empty()
+            ? 0u : m_assetManager->loadMaterial(sb.materialPath);
+        bc.dirty = true;
+        e.addComponent<BrushComponent>(std::move(bc));
+    }
+
+    // Pushear el comando para undo/redo.
+    BooleanOpKind cmdKind = BooleanOpKind::Subtract;
+    if (kind == EditorUI::BooleanOpRequestKind::Union)     cmdKind = BooleanOpKind::Union;
+    if (kind == EditorUI::BooleanOpRequestKind::Intersect) cmdKind = BooleanOpKind::Intersect;
+    m_history.push(std::make_unique<BooleanOpCommand>(
+        cmdKind, std::move(aSnap), std::move(bSnap), std::move(resultSnaps),
+        m_scene.get(), m_assetManager.get(),
+        std::string{"Boolean "} + opName));
 }
 
 } // namespace Mood

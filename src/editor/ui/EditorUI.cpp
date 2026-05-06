@@ -1,12 +1,16 @@
 #include "editor/ui/EditorUI.h"
 
 #include "core/Log.h"
+#include "engine/scene/components/BrushComponent.h"  // F2H12
+#include "engine/scene/components/Components.h"      // F2H12: TagComponent
+#include "engine/scene/core/Scene.h"                  // F2H12
 
 #include <imgui.h>
 #include <imgui_internal.h>  // BeginViewportSideBar
 
 #include <algorithm>
 #include <filesystem>
+#include <vector>
 
 namespace Mood {
 
@@ -230,6 +234,69 @@ void EditorUI::drawWelcomeModal() {
 
         ImGui::EndPopup();
     }
+}
+
+// ----------------------------------------------------------------------------
+// F2H12: drawBooleanOpMenu
+// ----------------------------------------------------------------------------
+
+void EditorUI::drawBooleanOpMenu() {
+    // Disabled si no hay scene o no hay entidad seleccionada con BrushComponent.
+    const bool hasA = static_cast<bool>(m_selectedEntity)
+        && m_scene != nullptr
+        && m_scene->registry().valid(m_selectedEntity.handle())
+        && m_selectedEntity.hasComponent<BrushComponent>();
+
+    if (!ImGui::BeginMenu("Boolean", hasA)) {
+        return;
+    }
+
+    // Coleccionar los demas brushes (B candidates) del scene.
+    struct Candidate {
+        Entity entity;
+        std::string tag;
+    };
+    std::vector<Candidate> candidates;
+    if (m_scene != nullptr) {
+        m_scene->forEach<BrushComponent>(
+            [&](Entity e, BrushComponent&) {
+                if (e.handle() == m_selectedEntity.handle()) return;
+                std::string tagName;
+                if (e.hasComponent<TagComponent>()) {
+                    tagName = e.getComponent<TagComponent>().name;
+                } else {
+                    tagName = "(sin tag)";
+                }
+                candidates.push_back({e, std::move(tagName)});
+            });
+    }
+
+    auto drawOpSubmenu = [&](const char* label, BooleanOpRequestKind kind) {
+        if (!ImGui::BeginMenu(label, !candidates.empty())) {
+            return;
+        }
+        for (const auto& c : candidates) {
+            if (ImGui::MenuItem(c.tag.c_str())) {
+                requestBooleanOp(kind, c.entity);
+            }
+        }
+        if (candidates.empty()) {
+            ImGui::TextDisabled("(no hay otros brushes)");
+        }
+        ImGui::EndMenu();
+    };
+
+    // A es siempre la entidad seleccionada; B se elige del submenu.
+    const std::string aTag = m_selectedEntity.hasComponent<TagComponent>()
+        ? m_selectedEntity.getComponent<TagComponent>().name : std::string{"?"};
+    ImGui::TextDisabled("A = %s", aTag.c_str());
+    ImGui::Separator();
+
+    drawOpSubmenu("Subtract (A - B)",  BooleanOpRequestKind::Subtract);
+    drawOpSubmenu("Union (A U B)",     BooleanOpRequestKind::Union);
+    drawOpSubmenu("Intersect (A & B)", BooleanOpRequestKind::Intersect);
+
+    ImGui::EndMenu();
 }
 
 } // namespace Mood

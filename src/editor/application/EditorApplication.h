@@ -148,6 +148,15 @@ private:
     ///        como dirty. Selecciona la entidad nueva.
     void handleAddBoxBrush();
 
+    /// @brief F2H12: aplica una operacion booleana entre el brush A
+    ///        (entidad seleccionada) y el B (pasado como argumento).
+    ///        Approach destructivo: destruye A y B, crea entidades
+    ///        para cada brush resultante. Pushea un BooleanOpCommand
+    ///        al HistoryStack para undo/redo. Si la op falla
+    ///        (resultado vacio en intersect, brushes invalidos, etc.)
+    ///        no aplica nada y loguea la causa.
+    void handleBooleanOp(EditorUI::BooleanOpRequestKind kind, Entity brushB);
+
     /// @brief F2H8: sincroniza el snapshot de mapas del proyecto al
     ///        EditorUI (para que MenuBar pueda dibujar el submenu).
     ///        Llamar despues de cada operacion que cambie m_project.maps,

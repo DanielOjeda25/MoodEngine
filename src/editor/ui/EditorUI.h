@@ -28,6 +28,8 @@
 
 namespace Mood {
 
+class Scene;
+
 class EditorUI {
 public:
     EditorUI();
@@ -103,6 +105,20 @@ public:
     ///        el Inspector). Entity default-constructed = sin seleccion.
     Entity selectedEntity() const { return m_selectedEntity; }
     void setSelectedEntity(Entity e) { m_selectedEntity = e; }
+
+    /// @brief F2H12: pointer non-owning al scene activo. Necesario
+    ///        para que MenuBar pueda iterar brushes (drawBooleanOpMenu).
+    ///        EditorApplication lo setea una vez al crear/cambiar
+    ///        el scene.
+    void setScene(Scene* s) { m_scene = s; }
+    Scene* scene() const { return m_scene; }
+
+    /// @brief F2H12: dibuja el submenu "Boolean" dentro de
+    ///        "Archivo > Mapa". Se llama desde MenuBar::draw. Vive
+    ///        aqui porque accede a m_scene + m_selectedEntity y
+    ///        despacha via requestBooleanOp(). Externo a MenuBar
+    ///        para no acoplar MenuBar al Scene.
+    void drawBooleanOpMenu();
 
     /// @brief Demo del Hito 8: request para crear una entidad con
     ///        ScriptComponent apuntando a `scripts/rotator.lua`.
@@ -342,6 +358,25 @@ public:
         return p;
     }
 
+    /// @brief F2H12: el menu "Archivo > Mapa > Boolean > {Subtract,
+    ///        Union, Intersect} > <brushB>" pide aplicar una op
+    ///        booleana entre el brush A (selectedEntity) y el B
+    ///        elegido del submenu. EditorApplication lo consume y
+    ///        despacha al handler correspondiente.
+    enum class BooleanOpRequestKind { Subtract, Union, Intersect };
+    struct BooleanOpRequest {
+        BooleanOpRequestKind kind;
+        Entity brushB;
+    };
+    void requestBooleanOp(BooleanOpRequestKind kind, Entity bEntity) {
+        m_booleanOpRequest = BooleanOpRequest{kind, bEntity};
+    }
+    std::optional<BooleanOpRequest> consumeBooleanOpRequest() {
+        auto r = std::move(m_booleanOpRequest);
+        m_booleanOpRequest.reset();
+        return r;
+    }
+
     /// @brief F2H8: snapshot de la info de mapas del proyecto para que
     ///        MenuBar pueda dibujar el submenu sin acoplarse al `Project`
     ///        directamente. EditorApplication lo sincroniza tras cada
@@ -374,6 +409,7 @@ private:
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     MaterialEditorPanel m_materialEditor;  // Hito 42
     Entity m_selectedEntity;
+    Scene* m_scene = nullptr;  // F2H12: non-owning, set by EditorApplication
 
     // Hito 27: punter inyectado por EditorApplication para que MenuBar
     // pueda dibujar los items Deshacer/Rehacer con el estado correcto.
@@ -405,6 +441,7 @@ private:
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;
     std::optional<std::filesystem::path> m_openMapRequest;  // F2H8
+    std::optional<BooleanOpRequest> m_booleanOpRequest;     // F2H12
     // F2H8: snapshot de la info de mapas del proyecto.
     std::vector<std::filesystem::path> m_projectMaps;
     std::filesystem::path m_currentMapPath;
