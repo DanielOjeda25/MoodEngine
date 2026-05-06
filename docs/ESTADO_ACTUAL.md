@@ -6,7 +6,38 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H13 cerrado: Multi-selección estilo Blender / Hammer + Boolean cascade.**
+**🚀 Fase 2 — F2H14 cerrado: Primitivas extendidas (Cylinder, Sphere, Pyramid, Wedge, Prism).**
+Tag: `v1.5.0-fase2-hito14`.
+Verificado automático: suite doctest **522/7830** verde (+27 cases vs F2H13). Verificado por el dev a ojo: spawn de cada primitiva, geometría correcta (cilindro redondo de 16 lados, esfera poliédrica de 12 caras, pirámide cuadrada, rampa wedge, prismas), Subtract entre primitivas distintas funciona, Union entre prismas genera la descomposición convexa esperada (bug-not-bug aclarado: CSG con brushes convexos no fusiona en 1 forma cóncava — eso es el approach Blender modifier que se descartó en F2H12).
+
+**Cambio importante**: el editor pasa de "solo cubos" a "set completo de primitivas Hammer". 5 primitivas nuevas + 7 entries en el menú **Añadir Brush** (Box, Cylinder, Sphere, Pyramid, Wedge, Prism Triangular, Prism Hexagonal). Cada una funciona out-of-the-box con todas las ops booleanas existentes (subtract, unionOp, intersectOp) sin tocar el algoritmo CSG core — la elegancia del approach "primitiva = Brush con N planos" prometido en F2H11 se materializa.
+
+**Decisión clave**: **primitivas como datos puros, no clases**. Cada primitiva es una función `make*Brush(matrix, params...)` que devuelve un `Csg::Brush` standalone. Sin herencia, sin polimorfismo, sin "PrimitiveType" enum runtime. Una vez creada, una primitiva es solo "un brush más" para todo el resto del sistema (render, persistencia, ops booleanas, gizmo, picking). Este patrón escala a futuras primitivas (cono, cápsula, torus poliédrico, etc.) sin tocar nada del core.
+
+**Implementación (7 bloques A-G, ~700 LOC + 27 tests):**
+
+- **Bloque B-D — 5 helpers nuevos en `engine/world/csg/Primitives.h`**:
+  - `makeCylinderBrush(matrix, segments=16)`: N planos laterales radiales + 2 caps top/bottom. Eje Y como altura. Default 16 segments matchea TrenchBroom. Helper privado `buildPrismaticBrush` factoriza el código compartido con `makePrismBrush`.
+  - `makePrismBrush(matrix, sides)`: alias de `makeCylinderBrush` con N=sides. Existe para claridad semántica (UI: "Prism Triangular" vs "Cylinder con 3 segments"). Defaults del editor: 3 (triangular) y 6 (hexagonal).
+  - `makeSphereBrush(matrix)`: dodecaedro regular inscripto en una esfera de radio 0.5. 12 caras pentagonales planas — aproximación convexa, no esfera real (igual que TrenchBroom). Las normales son las direcciones a los 12 vertices del icosaedro dual normalizadas.
+  - `makePyramidBrush(matrix)`: pirámide cuadrada con cima en `(0, +0.5, 0)` y base en `y=-0.5` con vertices `(±0.5, -0.5, ±0.5)`. 4 caras laterales convergentes (normales con componente +Y para apuntar hacia afuera-arriba) + 1 cap base. Las normales laterales se computan por geometría: `(±sqrt(0.8), sqrt(0.2), 0)` y `(0, sqrt(0.2), ±sqrt(0.8))`.
+  - `makeWedgeBrush(matrix)`: rampa cuadrada. 5 planos: `+X`, `-X`, base `-Y`, atrás `-Z`, e inclinado `(0, +sqrt(2)/2, +sqrt(2)/2)` conectando la arista superior trasera con la inferior delantera. Útil para escaleras / rampas / techos inclinados sin booleanos.
+  - **Convención canónica**: todas las primitivas viven en unit cell `[-0.5, +0.5]^3` antes del `worldFromLocal`. Eje Y = altura. Normales hacia afuera. `localAabb` computada con `computeBrushAabb`.
+
+- **Bloque E — UI menu reorganizado**. `ProjectAction` enum extendido con 6 acciones nuevas (`AddCylinderBrush`, `AddSphereBrush`, `AddPyramidBrush`, `AddWedgeBrush`, `AddPrismTriangularBrush`, `AddPrismHexagonalBrush`). El menú `Archivo > Mapa > Añadir Box Brush` se transforma en submenu `Archivo > Mapa > Añadir Brush > [...]` con 7 entries. Refactor del handler: `handleAddBoxBrush` se factorizó a helper genérico `spawnBrushEntity(scene, brush, tagPrefix, label)` reutilizado por las 7 acciones. Cada primitiva tiene tag prefix propio: `Brush_Box_NN`, `Brush_Cyl_NN`, `Brush_Sph_NN`, `Brush_Pyr_NN`, `Brush_Wed_NN`, `Brush_PrTri_NN`, `Brush_PrHex_NN`.
+
+- **Bug fix detectado durante validación visual** (no bloqueante pero necesario para UX completa):
+  - **Gizmo solo translate, no rotate ni scale en brushes**: el `EditorOverlay::drawGizmo` chequeaba `selected.hasComponent<MeshRendererComponent>()` para habilitar rotate/scale; brushes (sin MeshRenderer, solo BrushComponent) caían a translate-only. **Fix**: el filtro ahora chequea `MeshRendererComponent || BrushComponent` (renombrado a `hasGeometry` para claridad). Mismo fix en `InspectorPanel::showRotScale` para que el panel también muestre rotation/scale en brushes.
+
+- **Persistencia**: cero schema bump del `.moodmap` v10 (F2H11). Una primitiva se persiste como brush con N planos — el formato genérico ya soporta esto.
+
+- **Bloque G — cierre**: este documento + HITOS + DECISIONS + tag `v1.5.0-fase2-hito14`.
+
+**Pendiente conocido del approach**: el user esperaba inicialmente que Union de 2 prismas con overlap parcial diera "una sola forma" (mental model Blender modifier stack). El editor da N pedazos convexos (descomposición correcta para CSG con brushes convexos). Está documentado en DECISIONS.md y se resuelve en F2H17 (compilación brush → mesh estática unificada al guardar el mapa). Hasta entonces, los brushes en edición se ven como pedazos.
+
+**Próximo paso**: F2H15 (texturizado por cara + UV editor con lock-to-world). Era F2H14 en el plan original, renumerado por el adelanto de multi-selección como F2H13. Lock-to-world UVs es **el** feature que el approach brush implícito (decisión durable de F2H11) está habilitando — texturas que no se deforman al mover/escalar el brush porque las UVs se calculan desde el plano global por cara.
+
+### F2H13 (anterior, ya cerrado)
 Tag: `v1.4.0-fase2-hito13`.
 Verificado automático: suite doctest **495/7715** verde (+21 cases vs F2H12). Verificado por el dev a ojo: spawn 2-3 brushes, multi-selección con Shift+click en Hierarchy y en viewport, outline naranja sobre la `active` y amarillo claro sobre las demás `selected`, Boolean Subtract/Union/Intersect aplica al instante (sin combobox).
 

@@ -3224,6 +3224,109 @@ Cuando hay multi-selección, el Inspector muestra solo la `active` + un disclaim
 - Box-select / lasso-select del viewport emergen como necesidad real (probablemente al manejar 50+ brushes).
 - El SelectionSet escala mal a 1000+ entidades (improbable; el outline de 12000 líneas para 1000 brushes es ~negligible vs el cost del overlay 2D).
 
+## 2026-05-06: Primitivas como datos puros + sphere=dodecaedro + cylinder=16 segments (F2H14)
+
+**Contexto:** cuarto hito de sub-fase 2.2 (CSG). Era F2H13 en el plan original (primitivas extendidas), renumerado +1 por el adelanto de multi-selección como F2H13. F2H15-F2H17 también renumeran +1.
+
+### Decisión 1 — Primitivas como funciones libres, no clases
+
+**Problema:** decidir cómo representar 5 tipos de primitivas (cilindro, prisma, esfera, pirámide, wedge) en el subsystem CSG. Approach OOP tradicional sería: clase abstracta `Primitive` con métodos `toBrush()`, `getDefaultParams()`, etc. + 5 subclases.
+
+**Decisión:** **funciones libres `make*Brush(matrix, params...)`** que devuelven un `Csg::Brush` standalone. Sin herencia, sin polimorfismo, sin enum runtime "PrimitiveType".
+
+**Razones:**
+
+- **Coherencia con F2H11**: `makeBoxBrush` ya existía como función libre. Las nuevas primitivas siguen exactamente el mismo patrón.
+- **Una vez creado, una primitiva es solo "un brush más"**: render, persistencia, ops booleanas, gizmo, picking — todo opera sobre `Csg::Brush` sin saber qué primitiva era originalmente. **No hay estado runtime de "esto es un cilindro"** después de la creación.
+- **Cero schema bump del `.moodmap`**: como las primitivas no tienen identidad post-creación, el formato v10 (que persiste `Brush` genéricos como arrays de planos) sirve sin cambios. Nuevas primitivas en hitos futuros tampoco van a requerir schema bumps.
+- **Escala trivialmente**: agregar cono / cápsula / torus poliédrico = 1 función nueva. Sin tocar el dispatch de render, persistencia, picking, etc.
+- **Tests más limpios**: cada primitiva = 1 archivo de test puro, sin mocks de jerarquía de clases.
+
+**Trade-off:** se pierde la capacidad de "editar parámetros" después del spawn (cambiar segments=16 a 32 en un cilindro existente). En CSG con planos esto requeriría regenerar el brush completo; el approach actual delega a "edición de planos individuales en F2H16 (face mode)" o "delete + spawn nueva con otros parámetros". Aceptable.
+
+**Patrón aplicable** a futuros generadores: primitives de F2H14, primitivas de mapa-entity de F2H17 (lights, triggers visuales), etc.
+
+### Decisión 2 — Sphere como dodecaedro inscripto (12 caras), no UV-sphere
+
+**Decisión:** `makeSphereBrush` devuelve un dodecaedro regular inscripto en esfera de radio 0.5 — 12 caras pentagonales planas.
+
+**Razones:**
+
+- **Convexidad por construcción**: el dodecaedro es convexo, encaja directo con el approach brush implícito. Una UV-sphere (típica de gráficos) NO es convexa por ser una mesh triangulada con N×M tris.
+- **Mismo enfoque que TrenchBroom**: la "sphere" de TrenchBroom también es poliédrica (~ icosaedro). Es lo que el dev histórico de Hammer/Quake espera ver.
+- **12 caras es suficiente para uso típico**: detail props, columnas redondeadas, etc. Si se necesita más resolución, hito futuro agrega `makeIcosphereBrush(subdivisions=1)` con 80 caras (1 nivel de subdivisión del icosaedro).
+- **Boolean ops escalables**: `subtract(box, sphere)` con 12 caras es submilisegundo. Una sphere de 32+ caras (alta resolución) sería ~10x más lenta — diferido hasta que emerja el caso de uso.
+
+**Geometría**: las normales son las 12 direcciones canónicas del icosaedro dual `(0, ±a, ±b)`, `(±a, ±b, 0)`, `(±b, 0, ±a)` con `a = 1/√(1+φ²)`, `b = φ/√(1+φ²)`, `φ` = razón áurea. Distance fija a `-0.5` para inscribir en unit sphere de radio 0.5.
+
+### Decisión 3 — Cylinder default 16 segments
+
+**Decisión:** `makeCylinderBrush` con default `segments=16`. Permite override pero el editor no lo expone (UI fixed defaults en F2H14, params dinámicos = hito futuro).
+
+**Razones:**
+
+- **Matchea TrenchBroom default**.
+- **Visualmente "redondo enough"** para mapping FPS / exploration sin caer en facetado obvio.
+- **Performance aceptable**: cylinder de 16 segments = 18 caras (16 lat + 2 caps). Subtract contra otro brush de 18 caras es ~324 ops del algoritmo plane clipping = submilisegundo en Debug build.
+- **Consistencia entre cylinder y prisma**: prism triangular = cylinder con 3 segments; prism hexagonal = cylinder con 6. Mismo helper `buildPrismaticBrush` interno → cero duplicación.
+
+**Trade-off:** un cilindro de 16 segments tiene un perímetro discreto, no curva real. En distancias cercanas al jugador esto puede ser visible. Si emerge feedback visual, agregar variante `makeCylinderBrush(matrix, 32)` es trivial — el algoritmo ya lo soporta.
+
+### Decisión 4 — Wedge canónico con base cuadrada
+
+**Decisión:** `makeWedgeBrush` produce una rampa con base cuadrada `[-0.5, +0.5]^2` en X-Z, altura máxima en `z=-0.5` (atrás) y altura cero en `z=+0.5` (adelante). 5 planos: `+X`, `-X`, `-Y` (base), `-Z` (atrás), e inclinado `(0, sqrt(2)/2, sqrt(2)/2)`.
+
+**Razones:**
+
+- **Forma canónica de Hammer**: el "wedge" o "ramp" en Quake es exactamente esta forma — un prisma triangular acostado.
+- **Útil sin booleanos**: escaleras (1 wedge), rampas (1 wedge), techos inclinados (1 wedge rotado). Las alternativas serían "subtract de un box con un wedge invisible" — más cara computacional y conceptualmente.
+- **Plano inclinado con normal `(0, +y, +z)`**: hacia "arriba-adelante", consistente con la convención "rampa que sube hacia atrás".
+
+**Trade-off:** un wedge "no canónico" (ej. base triangular en lugar de cuadrada) requiere `makePrismBrush(matrix, 3)` rotado. Aceptable — el set de primitivas cubre la geometría común de mapping; casos exóticos van por boolean ops.
+
+### Decisión 5 — Pyramid cuadrada (4+1 caras), no triangular ni hexagonal
+
+**Decisión:** `makePyramidBrush` es **siempre** pirámide cuadrada (base 4 vertices, 4 caras laterales convergentes a la cima + 1 cap base). No hay parámetro `sides`.
+
+**Razones:**
+
+- **Mental model "pirámide" = cuadrada (egipcia)**: el dev no espera "pirámide hexagonal". Si emerge necesidad, `makeConeBrush(matrix, sides=4..N)` lo cubre.
+- **Las 4 caras laterales tienen geometría exacta computable a mano**: normales `(±lx, ly, 0)` y `(0, ly, ±lx)` con `lx = 1/√1.25`, `ly = 0.5/√1.25`.
+- **Distinción semántica con cylinder**: cilindro/prisma tienen N caras laterales paralelas al eje Y. Pirámide tiene N caras laterales **convergentes** a la cima.
+
+**Trade-off:** `makeConeBrush` (variante con cima en lugar de cap top) sería una primitiva nueva — pendiente como hito futuro si emerge necesidad.
+
+### Decisión 6 — Bug fix durable: gizmo rotate/scale para BrushComponent
+
+**Bug detectado en validación visual:** el gizmo (EditorOverlay) solo permitía Translate sobre brushes. Causa: el filtro `selected.hasComponent<MeshRendererComponent>()` decidía si mostrar rotate/scale; brushes sin MeshRenderer caían a translate-only.
+
+**Fix durable:** el filtro ahora chequea **`MeshRendererComponent || BrushComponent`** (renombrado a `hasGeometry` para claridad). Mismo cambio en `InspectorPanel::showRotScale`. **Lección durable:** cualquier nueva forma de "geometría visible" en hitos futuros (ej. `MapEntityComponent` para lights/triggers visuales en F2H17) debe extender este filtro o emergerá el mismo bug.
+
+**Patrón aplicable:** centralizar el chequeo de "tiene geometría" en un helper `bool hasGeometryFor(const Entity&)` cuando aparezca el 3er tipo de geometría (probable F2H17 con map entities).
+
+### Decisión 7 — Educar al user sobre Hammer vs Blender, no implementar Modifier Stack
+
+**Contexto:** durante validación visual de F2H14 emergió frustración del dev al ver Union de 2 prismas con overlap parcial → ~10 piezas convexas, no "una sola forma fusionada". El dev expresó "no es como blender, o yo estoy mal entendiendo algo".
+
+**Decisión:** **mantener el approach destructivo Hammer** (decisión durable de F2H12). NO implementar Blender Modifier Stack en este hito ni adelantar F2H17 (compilación brush → mesh estática). Educar al dev sobre la diferencia fundamental.
+
+**Razones:**
+
+- **CSG con brushes convexos NO PUEDE representar formas cóncavas como un solo objeto**. La unión de 2 convexos overlapping parcial es matemáticamente cóncava → debe descomponerse en N convexos o ser una mesh triangulada (Blender approach).
+- **El dev pidió Hammer-style explícitamente** al arrancar sub-fase 2.2 ("hagamos destructivo como hammer editor"). La frustración emergente es educacional, no un cambio de requirement.
+- **F2H17 ya está planeado** y resuelve el issue: al guardar el mapa, todos los brushes se compilan a UNA SOLA mesh triangulada con vertex weld + caras internas culled. **Visualmente vas a ver una sola forma** post-F2H17.
+- **Adelantar F2H17 ahora retrasa F2H15 (texturizado UV) y F2H16 (face mode)**, que son features más urgentes para el workflow básico de mapping.
+
+**Trade-off:** el user va a seguir viendo pedazos al hacer Union/Intersect hasta F2H17. Aceptable — la mayoría del workflow es Subtract (hacer huecos), donde la descomposición no se nota tanto visualmente porque los pedazos son geométricamente coherentes.
+
+**Lección durable**: cuando el approach matemático del motor diverge del mental model del user, **explicar la divergencia es la solución correcta** (no rebuild el approach). El path natural es "el plan original ya cubre esto en F2H17" — y eso vale más que un fix ad-hoc que rompe la coherencia destructiva.
+
+**Revisar si:**
+- Emergen primitivas con casos numéricos patológicos (vertices casi-coplanares en pirámide rotada extremo, sphere con caras casi-paralelas).
+- F2H15 (UV editor) revela que las primitivas no-cuadradas tienen problemas específicos de texturizado (esperable: cilindros con 16 segments tendrían UV "stitching" en cada cara).
+- El dev pide variantes (cono, cápsula, torus poliédrico, hemisphere) — todas son `make*Brush` nuevas sin tocar el core.
+
+
 
 
 
