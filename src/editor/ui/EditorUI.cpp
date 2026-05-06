@@ -109,7 +109,7 @@ void EditorUI::draw(bool& requestQuit) {
     // cada frame para detectar cambios y reload del .lua. La inyectamos aca
     // antes del render del panel (mismo flujo que InspectorPanel pero por
     // setter en lugar de pointer-back al EditorUI).
-    m_scriptEditor.setSelectedEntity(m_selectedEntity);
+    m_scriptEditor.setSelectedEntity(m_selectionSet.active);
 
     for (IPanel* panel : m_panels) {
         if (panel->visible) {
@@ -241,60 +241,39 @@ void EditorUI::drawWelcomeModal() {
 // ----------------------------------------------------------------------------
 
 void EditorUI::drawBooleanOpMenu() {
-    // Disabled si no hay scene o no hay entidad seleccionada con BrushComponent.
-    const bool hasA = static_cast<bool>(m_selectedEntity)
-        && m_scene != nullptr
-        && m_scene->registry().valid(m_selectedEntity.handle())
-        && m_selectedEntity.hasComponent<BrushComponent>();
+    // F2H13: la op opera sobre el SelectionSet completo. Habilitado
+    // solo si hay >= 2 entidades seleccionadas y todas tienen
+    // BrushComponent. La `active` es el "tool brush" B; las demas
+    // son las A's a operar contra B.
+    int brushCount = 0;
+    for (const Entity& e : m_selectionSet.selected) {
+        if (e && e.hasComponent<BrushComponent>()) ++brushCount;
+    }
+    const bool ready = (brushCount >= 2)
+        && (m_selectionSet.selected.size() == static_cast<usize>(brushCount));
 
-    if (!ImGui::BeginMenu("Boolean", hasA)) {
+    if (!ImGui::BeginMenu("Boolean", ready)) {
         return;
     }
 
-    // Coleccionar los demas brushes (B candidates) del scene.
-    struct Candidate {
-        Entity entity;
-        std::string tag;
-    };
-    std::vector<Candidate> candidates;
-    if (m_scene != nullptr) {
-        m_scene->forEach<BrushComponent>(
-            [&](Entity e, BrushComponent&) {
-                if (e.handle() == m_selectedEntity.handle()) return;
-                std::string tagName;
-                if (e.hasComponent<TagComponent>()) {
-                    tagName = e.getComponent<TagComponent>().name;
-                } else {
-                    tagName = "(sin tag)";
-                }
-                candidates.push_back({e, std::move(tagName)});
-            });
-    }
-
-    auto drawOpSubmenu = [&](const char* label, BooleanOpRequestKind kind) {
-        if (!ImGui::BeginMenu(label, !candidates.empty())) {
-            return;
-        }
-        for (const auto& c : candidates) {
-            if (ImGui::MenuItem(c.tag.c_str())) {
-                requestBooleanOp(kind, c.entity);
-            }
-        }
-        if (candidates.empty()) {
-            ImGui::TextDisabled("(no hay otros brushes)");
-        }
-        ImGui::EndMenu();
-    };
-
-    // A es siempre la entidad seleccionada; B se elige del submenu.
-    const std::string aTag = m_selectedEntity.hasComponent<TagComponent>()
-        ? m_selectedEntity.getComponent<TagComponent>().name : std::string{"?"};
-    ImGui::TextDisabled("A = %s", aTag.c_str());
+    // Header informativo: cuantos brushes y cual es la "tool".
+    const std::string activeTag = (m_selectionSet.active &&
+                                    m_selectionSet.active.hasComponent<TagComponent>())
+        ? m_selectionSet.active.getComponent<TagComponent>().name
+        : std::string{"?"};
+    ImGui::TextDisabled("%d brushes seleccionados", brushCount);
+    ImGui::TextDisabled("Tool brush (B): %s", activeTag.c_str());
     ImGui::Separator();
 
-    drawOpSubmenu("Subtract (A - B)",  BooleanOpRequestKind::Subtract);
-    drawOpSubmenu("Union (A U B)",     BooleanOpRequestKind::Union);
-    drawOpSubmenu("Intersect (A & B)", BooleanOpRequestKind::Intersect);
+    if (ImGui::MenuItem("Subtract (A - B) por cada A")) {
+        requestBooleanOp(BooleanOpRequestKind::Subtract);
+    }
+    if (ImGui::MenuItem("Union (A U B) en cascada")) {
+        requestBooleanOp(BooleanOpRequestKind::Union);
+    }
+    if (ImGui::MenuItem("Intersect (A & B) en cascada")) {
+        requestBooleanOp(BooleanOpRequestKind::Intersect);
+    }
 
     ImGui::EndMenu();
 }

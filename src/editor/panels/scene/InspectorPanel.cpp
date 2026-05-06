@@ -5,6 +5,7 @@
 #include "engine/audio/clips/AudioClip.h"
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
+#include "editor/selection/SelectionSet.h"            // F2H13
 #include "engine/scene/components/BrushComponent.h"  // F2H11
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
@@ -55,6 +56,19 @@ void InspectorPanel::onImGuiRender() {
         ImGui::TextDisabled("Click en el panel Hierarchy para elegir una.");
         ImGui::End();
         return;
+    }
+
+    // F2H13: header "+N adicionales" cuando hay multi-seleccion.
+    // Inspector solo edita la `active`; multi-edit es diferido.
+    if (m_ui != nullptr) {
+        const SelectionSet& set = m_ui->selectionSet();
+        if (set.selected.size() > 1) {
+            ImGui::TextDisabled(
+                "+%d entidad(es) adicional(es) seleccionada(s) — solo se "
+                "edita la activa",
+                static_cast<int>(set.selected.size() - 1));
+            ImGui::Separator();
+        }
     }
 
     // --- TagComponent ---

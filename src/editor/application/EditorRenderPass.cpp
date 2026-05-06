@@ -20,6 +20,7 @@
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/render/backend/opengl/OpenGLDebugRenderer.h"
+#include "engine/scene/components/BrushComponent.h"  // F2H13
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -237,33 +238,59 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
         }
     }
 
-    // Outline 3D de la entidad seleccionada (OBB naranja estilo
-    // Blender/Unity). Para entidades sin mesh (Light/Audio) no se
-    // dibuja: el icono 2D ya las marca con halo cyan en el overlay
-    // del ViewportPanel.
+    // F2H13: outline 3D de TODAS las entidades del SelectionSet.
+    // Color naranja para la `active`, gris para las demas selected.
+    // Para entidades sin mesh / brush (Light / Audio) no se dibuja —
+    // el icono 2D ya las marca con halo cyan en el overlay 2D.
     if (m_scene && m_mode == EditorMode::Editor) {
-        Entity sel = m_ui.selectedEntity();
-        if (sel && sel.hasComponent<TransformComponent>() &&
-            sel.hasComponent<MeshRendererComponent>()) {
+        constexpr int kEdges[12][2] = {
+            {0,1},{1,2},{2,3},{3,0},
+            {4,5},{5,6},{6,7},{7,4},
+            {0,4},{1,5},{2,6},{3,7}};
+        const glm::vec3 activeColor(1.00f, 0.35f, 0.00f); // naranja Blender saturado
+        const glm::vec3 selColor   (0.95f, 0.95f, 0.20f); // amarillo claro (resalta sobre cielo gris-azul)
+
+        const SelectionSet& set = m_ui.selectionSet();
+        for (const Entity& sel : set.selected) {
+            if (!sel || !sel.hasComponent<TransformComponent>()) continue;
             const auto& tf = sel.getComponent<TransformComponent>();
             const glm::mat4 model = tf.worldMatrix();
-            constexpr glm::vec3 kCorners[8] = {
-                {-0.5f, -0.5f, -0.5f}, { 0.5f, -0.5f, -0.5f},
-                { 0.5f,  0.5f, -0.5f}, {-0.5f,  0.5f, -0.5f},
-                {-0.5f, -0.5f,  0.5f}, { 0.5f, -0.5f,  0.5f},
-                { 0.5f,  0.5f,  0.5f}, {-0.5f,  0.5f,  0.5f}};
+
+            // Corners locales: para mesh = cubo unitario (compromise
+            // historico, no usa el AABB real del MeshAsset);
+            // para brush = AABB local del brush (preciso, F2H11
+            // ya lo computa).
+            glm::vec3 localMin(-0.5f), localMax(0.5f);
+            if (sel.hasComponent<BrushComponent>()) {
+                const auto& bc = sel.getComponent<BrushComponent>();
+                if (bc.brush.localAabb.isValid()) {
+                    localMin = bc.brush.localAabb.min;
+                    localMax = bc.brush.localAabb.max;
+                }
+            } else if (!sel.hasComponent<MeshRendererComponent>()) {
+                continue;  // sin mesh ni brush -> no outline
+            }
+
+            const glm::vec3 corners[8] = {
+                {localMin.x, localMin.y, localMin.z},
+                {localMax.x, localMin.y, localMin.z},
+                {localMax.x, localMax.y, localMin.z},
+                {localMin.x, localMax.y, localMin.z},
+                {localMin.x, localMin.y, localMax.z},
+                {localMax.x, localMin.y, localMax.z},
+                {localMax.x, localMax.y, localMax.z},
+                {localMin.x, localMax.y, localMax.z}};
             glm::vec3 w[8];
             for (int i = 0; i < 8; ++i) {
-                const glm::vec4 p = model * glm::vec4(kCorners[i], 1.0f);
+                const glm::vec4 p = model * glm::vec4(corners[i], 1.0f);
                 w[i] = glm::vec3(p);
             }
-            constexpr int kEdges[12][2] = {
-                {0,1},{1,2},{2,3},{3,0},
-                {4,5},{5,6},{6,7},{7,4},
-                {0,4},{1,5},{2,6},{3,7}};
-            const glm::vec3 selColor(1.0f, 0.55f, 0.05f); // naranja Blender
+
+            const bool isActive = static_cast<bool>(set.active)
+                && set.active.handle() == sel.handle();
+            const glm::vec3& color = isActive ? activeColor : selColor;
             for (const auto& e : kEdges) {
-                dbg.drawLine(w[e[0]], w[e[1]], selColor);
+                dbg.drawLine(w[e[0]], w[e[1]], color);
             }
         }
     }

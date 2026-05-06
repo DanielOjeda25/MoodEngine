@@ -92,8 +92,21 @@ void appendFaceUnique(Brush& b, const Plane& p, u32 materialIndex) {
 bool isBrushValid(const Brush& b) {
     // Solido cerrado en 3D necesita al menos 4 caras (tetraedro).
     if (b.faces.size() < 4) return false;
-    // Y al menos 4 vertices unicos pertenecientes al brush.
-    return countBrushVertices(b) >= 4;
+    // Al menos 4 vertices unicos pertenecientes al brush.
+    if (countBrushVertices(b) < 4) return false;
+    // AABB no-degenerada: extension > kPlaneEpsilon en los 3 ejes.
+    // Sin esto, un brush "cuadrilatero plano" (4 vertices coplanares,
+    // ej. y=0.5 con x,z variando) pasaba el check de 4 vertices y
+    // las ops booleanas generaban brushes degenerados (subtract de
+    // disjuntos producia hasta 4 copias planas de A).
+    const AABB aabb = computeBrushAabb(b);
+    const glm::vec3 size = aabb.size();
+    if (size.x < kPlaneEpsilon ||
+        size.y < kPlaneEpsilon ||
+        size.z < kPlaneEpsilon) {
+        return false;
+    }
+    return true;
 }
 
 std::vector<Brush> subtract(const Brush& A, const Brush& B) {

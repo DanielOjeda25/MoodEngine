@@ -18,6 +18,7 @@
 #include "editor/panels/assets/MaterialEditorPanel.h"  // Hito 42
 #include "editor/panels/assets/ScriptEditorPanel.h"
 #include "editor/panels/scene/ViewportPanel.h"
+#include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/workspace/WorkspaceManager.h"
 #include "engine/scene/core/Entity.h"
 
@@ -102,9 +103,27 @@ public:
     HistoryStack* historyStack() const { return m_history; }
 
     /// @brief Entidad seleccionada por el panel Hierarchy (compartida con
-    ///        el Inspector). Entity default-constructed = sin seleccion.
-    Entity selectedEntity() const { return m_selectedEntity; }
-    void setSelectedEntity(Entity e) { m_selectedEntity = e; }
+    ///        el Inspector). En F2H13 esto devuelve la `active` del
+    ///        SelectionSet — la mayoria de los callsites del editor
+    ///        operan sobre la active sin saber que hay multi-seleccion.
+    ///        Entity default-constructed = sin seleccion.
+    Entity selectedEntity() const { return m_selectionSet.active; }
+
+    /// @brief F2H13: reemplaza el set por una sola entidad. Patron
+    ///        "click plain" (sin Shift / Ctrl). Mantiene el contrato
+    ///        de la API previa para callsites que solo conocen
+    ///        seleccion singular.
+    void setSelectedEntity(Entity e) {
+        replaceWithSingle(m_selectionSet, e);
+    }
+
+    /// @brief F2H13: acceso al set completo. HierarchyPanel y
+    ///        Viewport picking usan estos getters para aplicar
+    ///        Shift/Ctrl semantics; SelectionOverlay para el
+    ///        outline; drawBooleanOpMenu para iterar los brushes
+    ///        seleccionados como A's en cascade.
+    SelectionSet& selectionSet() { return m_selectionSet; }
+    const SelectionSet& selectionSet() const { return m_selectionSet; }
 
     /// @brief F2H12: pointer non-owning al scene activo. Necesario
     ///        para que MenuBar pueda iterar brushes (drawBooleanOpMenu).
@@ -358,20 +377,19 @@ public:
         return p;
     }
 
-    /// @brief F2H12: el menu "Archivo > Mapa > Boolean > {Subtract,
-    ///        Union, Intersect} > <brushB>" pide aplicar una op
-    ///        booleana entre el brush A (selectedEntity) y el B
-    ///        elegido del submenu. EditorApplication lo consume y
-    ///        despacha al handler correspondiente.
+    /// @brief F2H13: request de operacion booleana en cascada.
+    ///        El callsite (drawBooleanOpMenu) NO pasa B explicito —
+    ///        EditorApplication lee el SelectionSet completo y aplica
+    ///        la op contra cada selected != active, usando active
+    ///        como "tool brush" B.
+    ///
+    ///        Reemplaza el flujo de F2H12 que pedia brushB en submenu
+    ///        cascading (requeria seleccion singular + combobox de B).
     enum class BooleanOpRequestKind { Subtract, Union, Intersect };
-    struct BooleanOpRequest {
-        BooleanOpRequestKind kind;
-        Entity brushB;
-    };
-    void requestBooleanOp(BooleanOpRequestKind kind, Entity bEntity) {
-        m_booleanOpRequest = BooleanOpRequest{kind, bEntity};
+    void requestBooleanOp(BooleanOpRequestKind kind) {
+        m_booleanOpRequest = kind;
     }
-    std::optional<BooleanOpRequest> consumeBooleanOpRequest() {
+    std::optional<BooleanOpRequestKind> consumeBooleanOpRequest() {
         auto r = std::move(m_booleanOpRequest);
         m_booleanOpRequest.reset();
         return r;
@@ -408,7 +426,7 @@ private:
     PerformanceHudPanel m_performanceHud;  // F2H2
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     MaterialEditorPanel m_materialEditor;  // Hito 42
-    Entity m_selectedEntity;
+    SelectionSet m_selectionSet;  // F2H13: reemplaza m_selectedEntity
     Scene* m_scene = nullptr;  // F2H12: non-owning, set by EditorApplication
 
     // Hito 27: punter inyectado por EditorApplication para que MenuBar
@@ -441,7 +459,7 @@ private:
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;
     std::optional<std::filesystem::path> m_openMapRequest;  // F2H8
-    std::optional<BooleanOpRequest> m_booleanOpRequest;     // F2H12
+    std::optional<BooleanOpRequestKind> m_booleanOpRequest; // F2H13 (kind only)
     // F2H8: snapshot de la info de mapas del proyecto.
     std::vector<std::filesystem::path> m_projectMaps;
     std::filesystem::path m_currentMapPath;

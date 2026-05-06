@@ -510,8 +510,8 @@ int EditorApplication::run() {
         }
 
         // F2H12: boolean op request (con payload kind + entity B).
-        if (auto bop = m_ui.consumeBooleanOpRequest()) {
-            handleBooleanOp(bop->kind, bop->brushB);
+        if (auto bopKind = m_ui.consumeBooleanOpRequest()) {
+            handleBooleanOp(*bopKind);
         }
 
         // Hito 15 polish: el modal Welcome puede editar la lista de
@@ -575,14 +575,30 @@ int EditorApplication::run() {
             const ScenePickResult hit = pickEntity(*m_scene, view, projection,
                                                     glm::vec2(click.ndcX, click.ndcY),
                                                     m_assetManager.get());
+            // F2H13: aplicar Shift / Ctrl semantics igual que en Hierarchy.
+            //   Plain click   -> replaceWithSingle.
+            //   Shift+click   -> toggle.
+            //   Ctrl+click    -> add (que ademas setea active).
+            // Click en vacio (no hit) sin modifier -> clear.
+            //                  con modifier         -> no-op (preserva).
+            const Uint8* keys = SDL_GetKeyboardState(nullptr);
+            const bool keyShift = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+            const bool keyCtrl  = keys[SDL_SCANCODE_LCTRL]  || keys[SDL_SCANCODE_RCTRL];
+            SelectionSet& set = m_ui.selectionSet();
             if (hit) {
-                m_ui.setSelectedEntity(hit.entity);
+                if (keyShift) {
+                    toggle(set, hit.entity);
+                } else if (keyCtrl) {
+                    add(set, hit.entity);
+                } else {
+                    replaceWithSingle(set, hit.entity);
+                }
                 if (hit.entity.hasComponent<TagComponent>()) {
                     Log::editor()->info("Click-select: '{}'",
                         hit.entity.getComponent<TagComponent>().name);
                 }
-            } else {
-                m_ui.setSelectedEntity(Entity{});
+            } else if (!keyShift && !keyCtrl) {
+                clear(set);
             }
         }
 

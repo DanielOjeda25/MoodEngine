@@ -141,12 +141,14 @@ void OpenGLDebugRenderer::flush(const glm::mat4& view, const glm::mat4& projecti
     }
     glBufferSubData(GL_ARRAY_BUFFER, 0, bytes, m_cpu.data());
 
-    // Lineas 1px se pierden contra fondos texturados; pedimos 2px. La spec
-    // Core Profile solo garantiza 1.0, pero la mayoria de drivers (incluido
-    // el Intel Iris Xe) soportan widths mayores. Si falla, cae a 1.0 sin error.
+    // Lineas 1px se pierden contra fondos texturados; pedimos 3px (F2H13:
+    // antes 2px, el dev reporto que el outline de seleccion era poco
+    // visible). La spec Core Profile solo garantiza 1.0, pero la
+    // mayoria de drivers (incluido el Intel Iris Xe) soportan widths
+    // mayores. Si falla, cae a 1.0 sin error.
     GLfloat prevWidth = 1.0f;
     glGetFloatv(GL_LINE_WIDTH, &prevWidth);
-    glLineWidth(2.0f);
+    glLineWidth(3.0f);
 
     glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(m_cpu.size()));
 
