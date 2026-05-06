@@ -6,7 +6,35 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H11 cerrado: CSG arquitectura base (primer hito de sub-fase 2.2).**
+**🚀 Fase 2 — F2H12 cerrado: CSG operaciones booleanas Subtract / Union / Intersect.**
+Tag: `v1.3.0-fase2-hito12`.
+Verificado automático: suite doctest **474/7668** verde (+27 cases vs F2H11) en `test_csg_brush_ops.cpp`. Verificado por el dev a ojo: spawn 2 brushes con overlap, click en A, **Archivo > Mapa > Boolean > Subtract / Union / Intersect > B** → resultado correcto en pantalla, gizmo del resultado en el centroide (no en el origen del mundo), Ctrl+Z restaura A y B originales, Ctrl+Y rehace.
+
+**Cambio importante**: el motor pasa de "podés crear brushes" (F2H11) a "podés combinarlos con CSG real" (F2H12). El editor empieza a parecerse de verdad a Hammer/TrenchBroom para las geometrías básicas. Los 3 booleans son la herramienta canónica que usan los mappers profesionales: **Subtract** para hacer huecos en paredes (ventanas, puertas), **Union** para combinar piezas convexas en una concavidad lógica, **Intersect** para recortar a la intersección común (raro pero útil para detail props).
+
+**Decisión arquitectónica clave**: booleans **destructivos** (no modifier stack estilo Blender). Razón: matchea el workflow Hammer/TrenchBroom (commit definitivo, undoable), simple, suficiente para v1. La no-destructividad (modifier stack que recalcula cada frame) es ~2x más complejo y se difiere a hito propio si emerge necesidad.
+
+**Implementación (7 bloques A-G, ~600 LOC nuevas + 27 tests):**
+
+- **Bloque B — `isBrushValid`**. Helper en `engine/world/csg/BrushOps.h` que cuenta vertices únicos del brush (tripletes filtrados por inside-test), exige ≥4 para ser válido. Usado por las 3 ops para descartar resultados degenerados sin crashear.
+
+- **Bloque C — `subtract(A, B)`**. Algoritmo Quake/Hammer clásico: mantener un `remainder` que arranca como A; para cada plano `P_i` de B, generar `frag_i = remainder ∪ {flip(P_i)}` y conservar si tiene volumen, después remplazar `remainder ← remainder ∪ {P_i}`. Al final, los `frag_i` juntos son `A \ B` (descomposición convexa). Edge case: planos coincidentes con caras de A se skipean (no aportan carving real). Material heredado de A.
+
+- **Bloque D — `intersectOp(A, B)`**. Brush con `A.faces ∪ B.faces` (dedup por kPlaneEpsilon), validado por `isBrushValid`. Devuelve `nullopt` si la intersección es vacía o degenerada.
+
+- **Bloque E — `unionOp(A, B)`**. Composición: si `A subtract B == ∅` → `[B]` (A ⊆ B); si `B subtract A == ∅` → `[A]` (B ⊆ A); si `intersect(A, B) == nullopt` → `[A, B]` (disjuntos); sino → `(A subtract B) ∪ {B}`.
+
+- **Bloque F — `BooleanOpCommand` + UI**. Comando undoable con snapshots `SavedBrush` de A, B y de cada resultado. Captura snapshots por valor (no por handle) porque los handles cambian entre execute/undo. Patrón "currentlyApplied flag" igual a `CreateEntityCommand` para distinguir primer push vs redo. **UX**: nuevo `EditorUI::drawBooleanOpMenu()` que vive en `EditorUI` (acceso a `m_scene` + `m_selectedEntity`) y se invoca desde `MenuBar::draw`. Menú `Archivo > Mapa > Boolean > {Subtract, Union, Intersect} > <brush B candidate>`. **Decisión**: para evitar implementar multi-selección global ahora (scope grande), el menú lista los brushes del mapa como B en submenu cascading. Multi-selección con Shift+click se hace en hito siguiente.
+
+- **Bug fix detectado en validación visual**: los brushes resultantes salían con `transform.position=(0,0,0)` mientras la geometría estaba en world space → gizmo en el origen del mundo, UX rota. Fix: `snapshotResultWorld` setea `position = AABB.center()` (en world) y rebasea los planos a local (`d_local = d_world + dot(n, centroid)`). Ahora el gizmo aparece en el centro del brush resultante.
+
+- **Bloque G — cierre**. Este documento + HITOS + DECISIONS + tag `v1.3.0-fase2-hito12`.
+
+**Pendiente conocido**: el menú `Archivo > Mapa` está acumulando items (file ops + geometría). Reorganización diferida a hito futuro (memoria del proyecto). El feedback del dev fue "más adelante habrá que organizar un poco los menúes".
+
+**Próximo paso**: multi-selección estilo Blender/Hammer (Shift+click acumula, "active" en color distinto, gizmo opera sobre la active). Esto era el F2H15 del plan original — promovido al lugar siguiente porque sin multi-select el flow del menú boolean es awkward (combobox en lugar de selección visual). Después F2H13 (primitivas extendidas: cilindro, esfera, prisma).
+
+### F2H11 (anterior, ya cerrado)
 Tag: `v1.2.0-fase2-hito11`.
 Verificado automático: suite doctest **447/7562** verde (+51 cases vs F2H10) en `test_plane.cpp`, `test_csg_brush.cpp`, `test_brush_persistence.cpp`. Verificado por el dev a ojo: spawn box brush desde menú → cubo gris liso aparece en (0,1,0), pickable con click en viewport, movible con gizmo, Inspector muestra info readonly, save → close → reopen → brush persiste correctamente.
 

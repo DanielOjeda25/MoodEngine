@@ -3096,5 +3096,50 @@ Para CSG, la `normal` apunta hacia AFUERA del brush. Un punto pertenece al brush
 - F2H12 (booleanos) revela que el clipping puro es insuficiente para operaciones complejas y la suite tipo BSP es necesaria → pivot al approach Quake/Hammer clásico (BSP tree).
 - Lock-to-world UV (F2H14) resulta innecesario en la práctica del dev → relajar a UVs per-vertex y reconsiderar manifold.
 
+## 2026-05-04: CSG booleanos destructivos via plane clipping (F2H12)
+
+**Contexto:** segundo hito de sub-fase 2.2 (CSG). Decidir cómo modelar las operaciones booleanas Subtract / Union / Intersect entre brushes. Dos approaches dominantes:
+
+1. **Destructivo** (Hammer / TrenchBroom / Quake): la op reemplaza los brushes input por el resultado. Commit definitivo, undoable via comando.
+2. **No-destructivo / Modifier stack** (Blender Boolean modifier): los brushes input siguen vivos y editables; la op se "stackea" como modifier que recalcula la geometría cada frame.
+
+**Decisión:** **destructivo**. Las ops `subtract` / `unionOp` / `intersectOp` devuelven `std::vector<Brush>` (cardinalidad 0-N), el editor reemplaza A y B por el resultado, y `BooleanOpCommand` captura snapshots `SavedBrush` para undo/redo.
+
+**Razones:**
+
+- **Workflow Hammer/TrenchBroom**: el dev viene del modelo "Quake-style mapping" (referencia explícita en F2H11). Ese flow es destructivo: arrastrás un brush B sobre A, "Subtract", aparecen los pedazos. Ctrl+Z restaura. Es el comportamiento mental que el user espera.
+- **Simplicidad de implementación**: ~600 LOC + 27 tests vs estimado ~1500 LOC + state runtime para modifier stack (recalcular cada frame, manejar dependency graph entre brushes, gestión de cache, hot-reload del modifier al editar input).
+- **Suficiente para v1**: ningún juego tipo Quake / Half-Life / CS usa modifier stacks. El user no pidió no-destructividad explícitamente.
+- **Undoability via comando estándar**: el patrón `BooleanOpCommand` (con snapshots por tag, no por handle) reusa la infra del HistoryStack existente sin caso especial.
+
+**Alternativas descartadas:**
+- **Modifier stack tipo Blender**: ~2x más código, complejidad de ciclos / dependencias entre brushes (qué pasa si A se subtractea de B y B se subtractea de C — invalidación en cadena), no encaja con el workflow de mapping. Diferido a hito propio si emerge necesidad real (ej. el dev dice "necesito poder editar A después de hacer subtract").
+- **Boolean ops via libs externas (manifold, Carve)**: ya descartado en F2H11 (decisión durable de "CSG a mano").
+
+**Algoritmo: plane clipping puro a mano.**
+- `subtract(A, B)`: half-space carving plano por plano. Mantener un `remainder` que arranca como A; para cada plano `P_i` de B, generar `frag_i = remainder ∪ {flip(P_i)}` y conservar si tiene volumen, después remplazar `remainder ← remainder ∪ {P_i}`. Los `frag_i` juntos forman `A \ B` como descomposición convexa. Edge case: planos coincidentes con caras de A se skipean.
+- `intersectOp(A, B)`: brush con `A.faces ∪ B.faces` (dedup por kPlaneEpsilon), validado por `isBrushValid` (≥4 vertices únicos del brush via tripletes filtrados por inside-test).
+- `unionOp(A, B)`: composición vía `(A subtract B) ∪ {B}` con casos especiales para contención total y disjunto.
+
+Reusa todos los tipos puros de F2H11 (`Plane`, `Brush`, `BrushFace`, `intersectThreePlanes`, `signedDistance`, `kPlaneEpsilon=1e-4f`). Cero deps nuevas.
+
+**Snapshot pattern para undoability:** `BooleanOpCommand` captura `SavedBrush` por valor (no `Entity` handles). Razón: tras execute/undo los handles cambian (entidades destruidas y recreadas), pero los snapshots permiten reconstruir desde tag/transform/faces. Mismo patrón que `CreateEntityCommand` de Hito 27. La función `recreateBrushEntity` interna duplica parte del código de `SceneLoader::applyEntitiesToScene` para no acoplar el comando al loader.
+
+**Bug fix durable — centroide del resultado:** en la primera validación los brushes resultantes salían con `transform.position=(0,0,0)` mientras la geometría estaba en world space → el gizmo aparecía en el origen del mundo. Fix: `snapshotResultWorld` setea `position = AABB.center()` (centroide en world) y rebasea los planos a local space via `d_local = d_world + dot(n, centroid)`. **Lección durable**: cualquier op CSG futura que produzca brushes resultantes debe seguir esta convención (transform al centroide + planos en local) para que el gizmo y la edición posterior se sientan naturales.
+
+**UX mínima en F2H12 — menú combobox:** `Archivo > Mapa > Boolean > {Subtract, Union, Intersect} > <brush B>` con submenu cascading listando los demás brushes del mapa como B. **NO multi-selección por Shift+click** todavía: requiere refactor del modelo de selección (Hierarchy + Viewport + Inspector + Gizmos) que es F2H15 del plan original. Promovido a hito siguiente porque sin multi-select el flow es awkward.
+
+**Trade-offs:**
+- Se pierde: capacidad de "ajustar A después de hacer subtract" sin reverter (modifier stack lo permitiría).
+- Se gana: simplicidad, alineación con workflow Hammer, undoability limpia, suficiente para los próximos hitos de la sub-fase 2.2 (cilindros, UVs, face mode).
+
+**Lección aprendida del scope:** el menú con combobox como B es subóptimo pero **funcional**. El user lo identificó al validar y propuso multi-select como mejora. Resistir el scope creep de "hagamos multi-select dentro de F2H12" — multi-select afecta Hierarchy, Viewport, Inspector, Gizmos, render outline; es claramente hito propio. F2H12 cierra con UX awkward y el siguiente hito hace el flow natural de Blender/Hammer.
+
+**Revisar si:**
+- El user pide explícitamente no-destructividad (workflow real lo demanda).
+- Edge cases de robustez numérica emergen en uso real con brushes asimétricos / muchas caras.
+- F2H13 (primitivas extendidas) revela que el algoritmo no escala a brushes con 32+ caras (cilindros) — profile y considerar BSP-style optimization.
+
+
 
 
