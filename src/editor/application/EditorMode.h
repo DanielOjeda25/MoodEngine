@@ -29,6 +29,13 @@ enum class ProjectAction {
     SetCurrentMapAsDefault,
     DeleteCurrentMap,
     AddBoxBrush, // F2H11: agrega un brush CSG Box al mapa actual
+    // F2H14: primitivas extendidas.
+    AddCylinderBrush,
+    AddSphereBrush,
+    AddPyramidBrush,
+    AddWedgeBrush,
+    AddPrismTriangularBrush,
+    AddPrismHexagonalBrush,
 };
 
 } // namespace Mood

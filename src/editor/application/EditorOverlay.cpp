@@ -2,6 +2,7 @@
 
 #include "editor/commands/EditTransformCommand.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
+#include "engine/scene/components/BrushComponent.h"  // F2H14: rotate/scale gizmo
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -225,13 +226,15 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
     if (!selected || !selected.hasComponent<TransformComponent>()) return;
 
     auto& tform = selected.getComponent<TransformComponent>();
-    const bool hasMesh = selected.hasComponent<MeshRendererComponent>();
+    // F2H14: tanto MeshRenderer como BrushComponent tienen geometria
+    // visible que se beneficia de rotate/scale. Light/Audio puros
+    // (sin mesh ni brush) caen a Translate.
+    const bool hasGeometry =
+        selected.hasComponent<MeshRendererComponent>() ||
+        selected.hasComponent<BrushComponent>();
 
-    // Rotate/Scale sobre entidades sin mesh caen a Translate: el
-    // Inspector oculta rotation/scale para esas (Light/Audio) y
-    // queremos consistencia UX.
     GizmoMode effectiveMode = m_gizmoMode;
-    if (!hasMesh && effectiveMode != GizmoMode::Translate) {
+    if (!hasGeometry && effectiveMode != GizmoMode::Translate) {
         effectiveMode = GizmoMode::Translate;
     }
 

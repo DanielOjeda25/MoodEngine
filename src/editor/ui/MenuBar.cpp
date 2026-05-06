@@ -71,9 +71,32 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                     }
                 }
                 ImGui::Separator();
-                // F2H11: agregar un brush CSG Box al mapa actual.
-                if (ImGui::MenuItem("Anadir Box Brush")) {
-                    ui.requestProjectAction(ProjectAction::AddBoxBrush);
+                // F2H11 + F2H14: agregar primitivas CSG al mapa actual.
+                // Submenu con todas las primitivas disponibles.
+                if (ImGui::BeginMenu("Anadir Brush")) {
+                    if (ImGui::MenuItem("Box")) {
+                        ui.requestProjectAction(ProjectAction::AddBoxBrush);
+                    }
+                    if (ImGui::MenuItem("Cylinder")) {
+                        ui.requestProjectAction(ProjectAction::AddCylinderBrush);
+                    }
+                    if (ImGui::MenuItem("Sphere (poliedrica)")) {
+                        ui.requestProjectAction(ProjectAction::AddSphereBrush);
+                    }
+                    if (ImGui::MenuItem("Pyramid")) {
+                        ui.requestProjectAction(ProjectAction::AddPyramidBrush);
+                    }
+                    if (ImGui::MenuItem("Wedge (rampa)")) {
+                        ui.requestProjectAction(ProjectAction::AddWedgeBrush);
+                    }
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("Prism Triangular")) {
+                        ui.requestProjectAction(ProjectAction::AddPrismTriangularBrush);
+                    }
+                    if (ImGui::MenuItem("Prism Hexagonal")) {
+                        ui.requestProjectAction(ProjectAction::AddPrismHexagonalBrush);
+                    }
+                    ImGui::EndMenu();
                 }
                 // F2H12: operaciones booleanas entre brushes.
                 // A = entidad actualmente seleccionada (debe tener

@@ -502,6 +502,13 @@ int EditorApplication::run() {
             case ProjectAction::SetCurrentMapAsDefault:  handleSetCurrentMapAsDefault();   break;
             case ProjectAction::DeleteCurrentMap:        handleDeleteCurrentMap();         break;
             case ProjectAction::AddBoxBrush:             handleAddBoxBrush();              break;
+            // F2H14: primitivas extendidas.
+            case ProjectAction::AddCylinderBrush:        handleAddCylinderBrush();         break;
+            case ProjectAction::AddSphereBrush:          handleAddSphereBrush();           break;
+            case ProjectAction::AddPyramidBrush:         handleAddPyramidBrush();          break;
+            case ProjectAction::AddWedgeBrush:           handleAddWedgeBrush();            break;
+            case ProjectAction::AddPrismTriangularBrush: handleAddPrismTriangularBrush();  break;
+            case ProjectAction::AddPrismHexagonalBrush:  handleAddPrismHexagonalBrush();   break;
             case ProjectAction::None:           break;
         }
         // F2H8: open map request (con payload del path).

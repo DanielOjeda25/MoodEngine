@@ -32,6 +32,7 @@
 #include "engine/world/grid/GridMap.h"  // F2H8: handleNewMap
 #include "engine/world/csg/Brush.h"     // F2H11: handleAddBoxBrush
 #include "engine/world/csg/BrushOps.h"  // F2H12: subtract / unionOp / intersectOp
+#include "engine/world/csg/Primitives.h" // F2H14: cylinder, sphere, etc.
 #include "engine/scene/components/BrushComponent.h"
 
 #include <glm/gtc/matrix_inverse.hpp>   // F2H12: glm::inverseTranspose
@@ -735,18 +736,24 @@ void EditorApplication::saveEditorState() const {
 // F2H11: handleAddBoxBrush — crea una entidad con BrushComponent (Box 1x1x1).
 // ----------------------------------------------------------------------------
 
-void EditorApplication::handleAddBoxBrush() {
-    if (!m_scene) return;
+namespace {
 
-    // Tag unico (Brush_Box_01, Brush_Box_02, ...).
+/// @brief Helper compartido para spawn de cualquier primitiva CSG.
+///        Crea entidad con tag unico (`Brush_<prefix>_NN`),
+///        TransformComponent en (0, 1, 0), BrushComponent con la
+///        Csg::Brush ya construida. Push al HistoryStack para undo.
+Entity spawnBrushEntity(Scene& scene,
+                         Csg::Brush brush,
+                         const char* tagPrefix,
+                         const char* opLabel) {
     int suffix = 1;
     std::string tagName;
     while (true) {
-        char buf[32];
-        std::snprintf(buf, sizeof(buf), "Brush_Box_%02d", suffix);
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "Brush_%s_%02d", tagPrefix, suffix);
         tagName = buf;
         bool collision = false;
-        m_scene->forEach<TagComponent>(
+        scene.forEach<TagComponent>(
             [&](Entity, TagComponent& tag) {
                 if (tag.name == tagName) collision = true;
             });
@@ -754,20 +761,77 @@ void EditorApplication::handleAddBoxBrush() {
         ++suffix;
     }
 
-    Entity e = m_scene->createEntity(tagName);
+    Entity e = scene.createEntity(tagName);
     auto& t = e.getComponent<TransformComponent>();
-    // Posicion arbitraria un poco arriba del suelo para que sea visible.
     t.position = glm::vec3(0.0f, 1.0f, 0.0f);
     t.scale    = glm::vec3(1.0f);
 
     BrushComponent bc;
-    bc.brush = Csg::makeBoxBrush(glm::mat4(1.0f));
-    bc.material = 0;     // material default (slot 0 del AssetManager)
-    bc.dirty   = true;
+    bc.brush = std::move(brush);
+    bc.material = 0;
+    bc.dirty = true;
     e.addComponent<BrushComponent>(std::move(bc));
 
-    Log::editor()->info("Anadir Box Brush: '{}' en (0, 1, 0)", tagName);
+    Log::editor()->info("{} '{}' en (0, 1, 0)", opLabel, tagName);
+    return e;
+}
+
+} // namespace
+
+void EditorApplication::handleAddBoxBrush() {
+    if (!m_scene) return;
+    Entity e = spawnBrushEntity(*m_scene,
+        Csg::makeBoxBrush(glm::mat4(1.0f)),
+        "Box", "Anadir Box Brush:");
     pushCreatedEntities({e}, "Anadir Box Brush");
+}
+
+void EditorApplication::handleAddCylinderBrush() {
+    if (!m_scene) return;
+    Entity e = spawnBrushEntity(*m_scene,
+        Csg::makeCylinderBrush(glm::mat4(1.0f)),
+        "Cyl", "Anadir Cylinder Brush:");
+    pushCreatedEntities({e}, "Anadir Cylinder Brush");
+}
+
+void EditorApplication::handleAddSphereBrush() {
+    if (!m_scene) return;
+    Entity e = spawnBrushEntity(*m_scene,
+        Csg::makeSphereBrush(glm::mat4(1.0f)),
+        "Sph", "Anadir Sphere Brush:");
+    pushCreatedEntities({e}, "Anadir Sphere Brush");
+}
+
+void EditorApplication::handleAddPyramidBrush() {
+    if (!m_scene) return;
+    Entity e = spawnBrushEntity(*m_scene,
+        Csg::makePyramidBrush(glm::mat4(1.0f)),
+        "Pyr", "Anadir Pyramid Brush:");
+    pushCreatedEntities({e}, "Anadir Pyramid Brush");
+}
+
+void EditorApplication::handleAddWedgeBrush() {
+    if (!m_scene) return;
+    Entity e = spawnBrushEntity(*m_scene,
+        Csg::makeWedgeBrush(glm::mat4(1.0f)),
+        "Wed", "Anadir Wedge Brush:");
+    pushCreatedEntities({e}, "Anadir Wedge Brush");
+}
+
+void EditorApplication::handleAddPrismTriangularBrush() {
+    if (!m_scene) return;
+    Entity e = spawnBrushEntity(*m_scene,
+        Csg::makePrismBrush(glm::mat4(1.0f), 3),
+        "PrTri", "Anadir Prism Triangular:");
+    pushCreatedEntities({e}, "Anadir Prism Triangular");
+}
+
+void EditorApplication::handleAddPrismHexagonalBrush() {
+    if (!m_scene) return;
+    Entity e = spawnBrushEntity(*m_scene,
+        Csg::makePrismBrush(glm::mat4(1.0f), 6),
+        "PrHex", "Anadir Prism Hexagonal:");
+    pushCreatedEntities({e}, "Anadir Prism Hexagonal");
 }
 
 // ----------------------------------------------------------------------------

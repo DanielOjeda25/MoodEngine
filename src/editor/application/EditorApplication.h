@@ -148,6 +148,16 @@ private:
     ///        como dirty. Selecciona la entidad nueva.
     void handleAddBoxBrush();
 
+    /// @brief F2H14: spawn de primitivas extendidas. Misma estructura
+    ///        que handleAddBoxBrush — crean entidad con tag unico
+    ///        de su prefijo + Brush correspondiente.
+    void handleAddCylinderBrush();
+    void handleAddSphereBrush();
+    void handleAddPyramidBrush();
+    void handleAddWedgeBrush();
+    void handleAddPrismTriangularBrush();
+    void handleAddPrismHexagonalBrush();
+
     /// @brief F2H13: aplica una operacion booleana en cascada sobre
     ///        el SelectionSet. La `active` es el "tool brush" B; las
     ///        demas selected son las A's. Para cada A: aplica
