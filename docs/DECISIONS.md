@@ -3326,6 +3326,104 @@ Cuando hay multi-selección, el Inspector muestra solo la `active` + un disclaim
 - F2H15 (UV editor) revela que las primitivas no-cuadradas tienen problemas específicos de texturizado (esperable: cilindros con 16 segments tendrían UV "stitching" en cada cara).
 - El dev pide variantes (cono, cápsula, torus poliédrico, hemisphere) — todas son `make*Brush` nuevas sin tocar el core.
 
+## 2026-05-06: UVs computed-not-stored + lock-to-world por-cara + UI global-en-brush diferida a face mode (F2H15)
+
+**Contexto:** quinto hito de sub-fase 2.2 (CSG). Materializa el feature que justificó el approach brush implícito de F2H11 (vs manifold mesh-based): **lock-to-world UVs**.
+
+### Decisión 1 — UVs computed-not-stored
+
+**Decisión:** las UVs por vertex no se almacenan en `BrushFace`. Cada cara guarda los **parámetros** de UV (`uAxis`, `vAxis`, `uvOffset`, `uvScale`, `uvRotation`, `lockToWorld`); las UVs se computan en `buildBrushMesh` desde esos params para cada vertex.
+
+**Razones:**
+- **Cero vertex data extra**: una cara con 100 vertices no almacena 100 UVs duplicadas — solo los 6 params.
+- **Edición instantánea**: cambiar `uvScale` no requiere recalcular vertex data — solo invalida el mesh cache. El SceneRenderer rebuildea en el siguiente frame.
+- **Persistencia compacta**: el `.moodmap` v11 guarda 6 floats por cara, no N×2 floats por vertex.
+- **Lock-to-world barato**: un solo flag por cara cambia el cómputo de proyección; sin lock-to-world, el código nunca evalúa `worldMatrix * pLocal`.
+
+**Trade-off:** UVs requieren rebuild del mesh cuando cambian. Aceptable porque cualquier cambio de UV viene del Inspector (humano = no-realtime).
+
+### Decisión 2 — `lockToWorld` como flag por-cara, no por brush
+
+**Decisión:** `lockToWorld` es campo de `BrushFace`, no de `BrushComponent`.
+
+**Razones:**
+- **Granularidad necesaria**: en F2H17 (face mode) el dev va a poder activar lock-to-world solo en algunas caras (ej. piso con textura world-locked + paredes con textura local-locked).
+- **Modelo escalable**: el cache `anyFaceLockToWorld` en `BrushComponent` es un summary computado, no la fuente de verdad.
+- **UI global por brush en F2H15** sigue siendo trivial — el toggle aplica a todas las caras a la vez. Per-cara emerge naturalmente cuando hay selección de cara (F2H17).
+
+**Trade-off:** un poco más de memoria por cara (1 byte). Negligible.
+
+### Decisión 3 — Tangent basis canónico al construir, override por edición posterior
+
+**Decisión:** las primitivas (`makeBoxBrush`, `makeCylinderBrush`, `makeSphereBrush`, `makePyramidBrush`, `makeWedgeBrush`, `makePrismBrush`) inicializan los UV params con `defaultTangentBasis(normal)` para `uAxis`/`vAxis`. Resto en defaults sensatos (offset 0, scale 1, rotation 0, lockToWorld false).
+
+**Razones:**
+- **UVs alineadas out-of-the-box**: el dev spawnea un cilindro y la textura ya se ve correctamente proyectada en cada cara — no requiere edición.
+- **Reusable para subtract/union/intersect**: los brushes resultantes de booleans pueden usar `defaultTangentBasis` para sus caras nuevas.
+- **Estable**: `defaultTangentBasis` depende solo de la normal, mismo input → mismo output.
+
+**Algoritmo de `defaultTangentBasis`:**
+```
+helper = (|normal.y| > 0.9) ? (1, 0, 0) : (0, 1, 0)
+uAxis = normalize(cross(helper, normal))
+vAxis = normalize(cross(normal, uAxis))
+```
+Switching axis cuando la normal está cerca del eje Y evita cross product con magnitud cero.
+
+**Trade-off:** cerca de la transición (normal con `|y|` ≈ 0.9) los `uAxis`/`vAxis` flippean, lo que puede causar UVs discontinuas entre caras adyacentes. Mitigación: tests con normales patológicas; si emerge en uso real, agregar smoothing o cachear tangent basis al construir el brush.
+
+### Decisión 4 — UV editor en F2H15 = global por brush; per-cara real = F2H17 (Face Mode)
+
+**Decisión:** el UV editor del Inspector aplica los sliders a TODAS las caras del brush a la vez en F2H15. Per-cara real (con selección visual de cara individual estilo Hammer) se difiere a hito propio.
+
+**Contexto:** durante validación visual el dev preguntó "qué pasa con las UV por caras? no faltaba más?". Se le ofrecieron 3 opciones:
+- **A**: cerrar F2H15 sin per-cara, F2H17 = face mode con selección visual.
+- **B**: workaround sin face mode — dropdown "Cara 0..N" en Inspector + sliders editando solo esa cara por índice (~30 min trabajo).
+- **C**: adelantar face mode a F2H16, postergar HistoryStack cleanup.
+
+**Decisión del dev: A** ("lo quiero igual que el hammer, agregalo como hito propio"). Rechazó workarounds parciales — quiere la cosa real cuando llegue.
+
+**Razones:**
+- **Selección visual de cara** requiere infraestructura propia: raycast contra polígonos individuales (no contra AABB del brush), sub-modo "Face Mode" del editor (toggle estilo Blender), render outline distinto solo de la cara seleccionada, comandos undoable per-cara, posible multi-selección de caras.
+- **Workaround dropdown sería desechable**: cuando llegue F2H17, el flow de "cara seleccionada por índice" se reemplaza completo. El dev prefiere esperar a tener la UX final.
+- **F2H15 entrega los cimientos**: estructura `BrushFace` per-cara + cómputo per-cara + persistencia per-cara. Ya está listo para que F2H17 solo agregue el UI visual.
+
+**Trade-off:** durante F2H15-F2H16, los UV params se editan globalmente por brush. Aceptable como UX intermedia.
+
+### Decisión 5 — Schema bump `.moodmap` v10 → v11 con back-compat aditiva + recompute de tangent basis
+
+**Decisión:** v11 agrega 6 campos opcionales a cada `face` del JSON (`uAxis`, `vAxis`, `uvOffset`, `uvScale`, `uvRotation`, `lockToWorld`). Faces v10 sin estos campos cargan con defaults del struct. **El loader detecta si `uAxis/vAxis` vienen como defaults canónicos (+X/+Y) y los recomputa con `defaultTangentBasis`** desde la normal real.
+
+**Razones:**
+- **Back-compat aditiva sin migración**: faces v10 que NO tenían UV params cargan con tangent basis correcto (auto desde la normal), no con `+X/+Y` canónico que se vería mal en caras no-axis-aligned.
+- **Idempotente**: si un mapa v11 se guardó con `uAxis=+X, vAxis=+Y` deliberadamente (caso raro pero posible), el loader lo recomputa al cargar — pero un re-save preserva los valores recomputados. Pequeña pérdida de info en ese caso edge; mitigación: el dev usa `defaultTangentBasis` consistentemente.
+
+**Trade-off:** ambigüedad si el dev quiere intencionalmente `uAxis=+X, vAxis=+Y` distinto al tangent basis. Caso raro (y siempre resoluble editando los params de otro modo); aceptable.
+
+### Decisión 6 — Bug fix durable: drop de textura/material detecta BrushComponent primero
+
+**Bug detectado:** drop de textura/material sobre un brush en el viewport creaba un **tile-pared en el grid del suelo** en lugar de asignar al brush. Causa: `processViewportTextureDrop` y `processViewportMaterialDrop` no consideraban `BrushComponent` — solo MeshRenderer (material) o tile pick (texture).
+
+**Fix durable:** ambos handlers chequean `BrushComponent` primero. Para texture drop además crea un material wrapper via `assets.createMaterialFromTexture(texId)` y lo asigna a `bc.material`. Solo cae al flow legacy si el cursor no está sobre un brush.
+
+**Lección durable:** cualquier futuro tipo de "geometría visible" (F2H17 face entities, F2H18 compiled meshes) debe extender estos handlers o el bug emerge de nuevo. Mismo patrón que el `hasGeometry` de F2H14 para gizmo rotate/scale.
+
+### Decisión 7 — Bug ABI mismatch en C++: clean rebuild requerido al cambiar size de struct persistido
+
+**Bug detectado:** al extender `SavedBrushFace` con los 6 campos UV (de ~16B a ~72B), una unidad de compilación que crea/copia el struct usaba el layout viejo. `push_back` en el `vector<SavedBrushFace>` agregaba más de 1 elemento por iteración (terminando en 20 faces para una box de 6). Build incremental no recompiló todo el código que tocaba el header.
+
+**Resolución:** `cmake --build ... --clean-first` forzó recompilación completa.
+
+**Lección durable:** cualquier cambio de tamaño en structs persistidos (`SavedBrushFace`, `SavedEntity`, etc.) o públicos en headers ampliamente incluidos requiere clean rebuild para evitar corrupción de memoria. Documentar como step de validación: "tras agregar/cambiar campos a structs en headers públicos, clean rebuild de la suite + lanzar editor y verificar persistencia básica antes de validar la nueva feature".
+
+**Trade-off:** clean rebuild toma 5-10 min vs incremental ~30s. Aceptable como step ocasional cuando se cambian structs.
+
+**Revisar si:**
+- El dev empieza a usar lock-to-world masivamente y el rebuild-on-transform-change pega en performance (probable solo con 50+ brushes lock-to-world editados al mismo tiempo).
+- F2H17 (face mode) revela que la API "todo per-brush" del UV editor de F2H15 confunde al dev — refactorear UI a "cara seleccionada activa".
+- Schema v11 tiene back-compat issues reportados por el dev (proyectos viejos cargan con UVs raras).
+
+
 
 
 

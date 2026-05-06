@@ -6,7 +6,49 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H14 cerrado: Primitivas extendidas (Cylinder, Sphere, Pyramid, Wedge, Prism).**
+**🚀 Fase 2 — F2H15 cerrado: Texturizado por cara + UV editor (lock-to-world).**
+Tag: `v1.6.0-fase2-hito15`.
+Verificado automático: suite doctest **531/8074** verde (+9 cases vs F2H14). Verificado por el dev a ojo: spawn brush, asignar material por drag&drop desde AssetBrowser (ahora detecta el brush bajo el cursor en lugar de crear un tile-pared en el grid), cambiar uvScale → textura escala, toggle lockToWorld + mover brush con el gizmo → textura queda fija al mundo, save/close/reopen → UV params persisten.
+
+**Cambio importante**: F2H15 materializa **el** feature que justificó el approach brush implícito de F2H11 (decisión durable de "CSG a mano, no manifold"). Las UVs ahora se proyectan **desde el plano de cada cara**, no desde una mesh triangulada — cuando `lockToWorld=true`, la textura literalmente "queda fija al mundo" y el brush se mueve por debajo de ella sin deformarla. Esto es el behaviour clásico Hammer/TrenchBroom imposible de replicar con mesh-based approach.
+
+**Decisión clave**: el UV editor del Inspector aplica los sliders a **TODAS las caras del brush** a la vez en F2H15. El control per-cara visual real (selección de cara individual con click en el viewport, sub-modo "Face Mode" estilo Hammer) se difiere a hito propio (F2H17 según roadmap actualizado). El user rechazó workarounds parciales — quiere la cosa real cuando llegue, no un dropdown intermedio.
+
+**Implementación (7 bloques A-G, ~700 LOC + 9 tests):**
+
+- **Bloque B — UV params en `BrushFace` + auto-tangent-basis**. `BrushFace` extendido con 6 campos: `uAxis`, `vAxis` (vec3), `uvOffset`, `uvScale` (vec2), `uvRotation` (f32 en radianes), `lockToWorld` (bool). Helper público `defaultTangentBasis(normal, &uAxis, &vAxis)` promovido al header de `Brush.h` desde el helper privado `buildTangentBasis` de F2H11. **Todas las primitivas** (`makeBoxBrush`, `makeCylinderBrush`, `makePrismBrush`, `makeSphereBrush`, `makePyramidBrush`, `makeWedgeBrush`) inicializan sus caras con tangent basis canónico desde la normal — UVs alineadas con la cara out-of-the-box.
+
+- **Bloque C — `buildBrushMesh` con UVs reales**. Firma actualizada: `buildBrushMesh(brush, worldMatrix=identity)`. Cómputo:
+  ```
+  pForUV = lockToWorld ? worldMatrix * pLocal : pLocal
+  uvBeforeRot = (dot(pForUV, uAxis), dot(pForUV, vAxis))
+  uvRot = mat2(rotation) * uvBeforeRot
+  uvFinal = uvRot * uvScale + uvOffset
+  ```
+  Reemplaza la proyección planar trivial de F2H11.
+
+- **Bloque D — Cache `anyFaceLockToWorld` + dirty agresivo**. `BrushComponent` cachea `anyFaceLockToWorld` (bool) + `lastWorldMatrix` (glm::mat4). El SceneRenderer en `PBR::brushPass`: ANTES de chequear `bc.dirty`, si `bc.anyFaceLockToWorld == true` y `t.worldMatrix() != bc.lastWorldMatrix` (delta > kPlaneEpsilon en cualquier elemento) → marca dirty. Tras rebuild, recomputa `anyFaceLockToWorld` recorriendo las caras y actualiza `bc.lastWorldMatrix`. Costo: ~1-3ms por brush con lock-to-world por frame de movimiento; aceptable.
+
+- **Bloque E — UV editor en Inspector**. Sección nueva "UV (Brush)" después de "Brush (CSG)" con: `DragFloat2 "uv scale"` (clamp [0.01, 100]), `DragFloat "uv rotation (deg)"` (paso 1°, conversión a radianes), `DragFloat2 "uv offset"`, `Checkbox "lock to world"`. Todo widget edita la cara 0 como representante y propaga el valor a TODAS las caras + marca `bc.dirty=true`. Texto informativo "%u/%u caras con lock-to-world" para cuando F2H17 permita per-cara y haya mezcla.
+
+- **Bloque F — Persistencia v11**. Schema bump v10 → v11. Cada `face` en JSON gana 6 campos opcionales (`uAxis`, `vAxis`, `uvOffset`, `uvScale`, `uvRotation`, `lockToWorld`). **Back-compat aditiva**: faces v10 sin estos campos cargan con defaults del struct; el loader detecta si `uAxis/vAxis` vienen como defaults canónicos (+X/+Y) y los **recomputa con `defaultTangentBasis`** desde la normal real — esto garantiza que mapas v10 cargan visualmente idénticos a F2H14.
+
+- **Drop fix relacionado** (no en plan original, detectado en validación):
+  - **Bug**: drop de textura/material sobre un brush en el viewport creaba un **tile-pared en el grid del suelo** en lugar de asignar al brush. Causa: `processViewportTextureDrop` y `processViewportMaterialDrop` no consideraban `BrushComponent` — solo MeshRenderer (material drop) o tile pick (texture drop).
+  - **Fix**: ambos handlers ahora **chequean `BrushComponent` primero**. Para texture drop, además crea un material wrapper via `assets.createMaterialFromTexture(texId)` y lo asigna a `bc.material`. Solo cae al flow de tile/MeshRenderer si el cursor no está sobre un brush.
+
+- **Bug fix C++ encontrado durante validación**: ABI mismatch. Al extender `SavedBrushFace` con los 6 campos UV, la unidad de compilación que crea/copia el struct usaba el layout viejo (sin recompilar tras el cambio del header) — `push_back` agregaba >1 elemento por iteración, terminando en 20 faces para una box de 6. **Resuelto con `--clean-first`** rebuild. Lección durable: cualquier cambio de tamaño en structs persistidos (`SavedBrushFace`, `SavedEntity`, etc.) requiere clean rebuild para evitar corrupción de memoria.
+
+- **Bloque G — cierre**: este documento + HITOS + DECISIONS + tag `v1.6.0-fase2-hito15`.
+
+**Pendientes conocidos** (memoria del proyecto):
+- **HistoryStack incompleto** (project_pending_history_stack.md): drops de textura/material, edits del UV editor, varios paths del Inspector NO se registran en el HistoryStack → Ctrl+Z los saltea. Hito propio próximo (F2H16).
+- **Face Mode estilo Hammer** (project_pending_face_mode.md): selección visual de cara individual + UV per-cara real. Hito propio (F2H17 según roadmap actualizado).
+- **Reorganización de menús** (project_pending_menu_org.md): `Archivo > Mapa` está acumulando items.
+
+**Próximo paso**: **F2H16 = limpieza HistoryStack**. Acción concreta: barrer cada handler que muta scene/map/brushes y agregar comandos undoable. Después F2H17 (Face Mode), F2H18 (compilación brush → mesh estática unificada — era F2H17 antes).
+
+### F2H14 (anterior, ya cerrado)
 Tag: `v1.5.0-fase2-hito14`.
 Verificado automático: suite doctest **522/7830** verde (+27 cases vs F2H13). Verificado por el dev a ojo: spawn de cada primitiva, geometría correcta (cilindro redondo de 16 lados, esfera poliédrica de 12 caras, pirámide cuadrada, rampa wedge, prismas), Subtract entre primitivas distintas funciona, Union entre prismas genera la descomposición convexa esperada (bug-not-bug aclarado: CSG con brushes convexos no fusiona en 1 forma cóncava — eso es el approach Blender modifier que se descartó en F2H12).
 
