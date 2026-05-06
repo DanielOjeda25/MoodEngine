@@ -6,7 +6,35 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H12 cerrado: CSG operaciones booleanas Subtract / Union / Intersect.**
+**🚀 Fase 2 — F2H13 cerrado: Multi-selección estilo Blender / Hammer + Boolean cascade.**
+Tag: `v1.4.0-fase2-hito13`.
+Verificado automático: suite doctest **495/7715** verde (+21 cases vs F2H12). Verificado por el dev a ojo: spawn 2-3 brushes, multi-selección con Shift+click en Hierarchy y en viewport, outline naranja sobre la `active` y amarillo claro sobre las demás `selected`, Boolean Subtract/Union/Intersect aplica al instante (sin combobox).
+
+**Cambio importante**: el editor pasa de selección singular (1 entidad) a **multi-selección con `active`** estilo Blender. Esto desbloquea el flow natural para CSG (selecciono 3 brushes, aplico Subtract, los 3 ≠ active se restan contra el active). El refactor es **back-compat full**: `selectedEntity()` ahora devuelve `selectionSet.active`, así que Inspector, Gizmo y todos los comandos del HistoryStack siguen funcionando con el mismo contrato singular sin tocarlos.
+
+**Decisión arquitectónica clave**: `SelectionSet` como **modelo puro testeable** en `editor/selection/SelectionSet.h` (header-only, helpers libres). Tests cubren todas las transiciones e invariantes. Separación clara de la lógica UI (Hierarchy, Viewport) que solo invoca los helpers. Esto permite que F2H14+ (primitivas extendidas) y F2H16+ (face mode) extiendan el modelo sin rebuild de la UI.
+
+**Implementación (7 bloques A-G, ~700 LOC nuevas + 21 tests):**
+
+- **Bloque B — `SelectionSet` puro + tests**. Header `editor/selection/SelectionSet.h` con `struct SelectionSet { vector<Entity> selected; Entity active; }`. Helpers libres `add`/`remove`/`toggle`/`replaceWithSingle`/`clear`/`contains` que garantizan invariantes: `selected.empty() ⇔ active == Entity{}`; `active != Entity{} ⇒ contains(set, active)`; sin duplicados. 21 tests en `test_selection_set.cpp` cubriendo todas las transiciones, idempotencia (toggle 2 veces = no-op), edge cases (Entity{} es no-op), determinismo (misma secuencia → mismo estado).
+
+- **Bloque C — Hierarchy panel multi-click**. `ImGui::GetIO().KeyShift / KeyCtrl` detecta modifiers. Plain click → `replaceWithSingle`, Shift+click → `toggle`, Ctrl+click → `add`. Color del Header de la `active` overrideado a naranja (`(0.95, 0.55, 0.10, 0.65)`); el `selected` no-active mantiene el highlight default de ImGui.
+
+- **Bloque D — Viewport picking + render outline**. Click en viewport con SDL key state detecta Shift/Ctrl con la misma semántica. Click en vacío sin modifier → `clear(set)`. **Outline 3D**: `EditorRenderPass.cpp` itera `set.selected` y dibuja 12 líneas por entidad (8 corners proyectados via worldMatrix). `MeshRenderer` usa cubo unitario (compromise histórico); `BrushComponent` usa `bc.brush.localAabb` real (más preciso). Color naranja saturado `(1.0, 0.35, 0.0)` para `active`, amarillo claro `(0.95, 0.95, 0.2)` para `selected` no-active. `glLineWidth` 2px → 3px global (afecta también triggers, drop highlights, navigation paths — todos ganan visibilidad).
+
+- **Bloque E — Inspector + Gizmo + Boolean menu**. Inspector muestra "+N entidad(es) adicional(es) seleccionada(s) — solo se edita la activa" cuando `set.selected.size() > 1`. Gizmo opera sobre la `active` (sin cambios — ya usa `selectedEntity()`). **Boolean menu reescrito**: header informativo "%d brushes seleccionados / Tool brush (B): %s" + 3 items que aplican al instante. **Subtract**: cascade per-A vs B (B = active = tool, se preserva); cualquier N≥2 funciona. **Union/Intersect**: exactamente N=2 (1 A + 1 B); destruyen ambos inputs y crean los resultados — cascade real de Union/Intersect con N>2 difiere a hito futuro. `handleBooleanOp(kind)` reescrito con flag `preserveB`.
+
+- **2 bug fixes detectados en validación visual**:
+  - **`isBrushValid` permitía brushes degenerados**: con 4 vertices coplanares (cuadriláteros planos) pasaba el check de "≥4 vertices únicos". Esto hacía que `subtract` con brushes disjuntos generara múltiples "copias planas" de A. Fix: el check ahora exige `AABB.size()` > `kPlaneEpsilon` en los 3 ejes. Lección durable documentada en DECISIONS.
+  - **`uniqueResultTag` repetía tags intra-batch**: cuando una op generaba N brushes resultantes, todos recibían el mismo `Brush_Union_01` porque el helper solo verificaba contra el scene actual, no contra los tags ya reservados en el mismo batch. Fix: parámetro `vector<string>& reserved` que el caller mantiene durante la generación de los snapshots.
+
+- **Bloque G — cierre**. Este documento + HITOS + DECISIONS + tag `v1.4.0-fase2-hito13`.
+
+**Pendiente conocido**: multi-edit en el Inspector (editar transform/properties de N entidades a la vez). Hito futuro si emerge necesidad. Box-select / lasso-select en el viewport también diferido.
+
+**Próximo paso**: F2H14 (primitivas extendidas — cilindro, prisma triangular/hexagonal, esfera poliédrica, pirámide, wedge). Era F2H13 en el plan original, renumerado por el adelanto de multi-selección.
+
+### F2H12 (anterior, ya cerrado)
 Tag: `v1.3.0-fase2-hito12`.
 Verificado automático: suite doctest **474/7668** verde (+27 cases vs F2H11) en `test_csg_brush_ops.cpp`. Verificado por el dev a ojo: spawn 2 brushes con overlap, click en A, **Archivo > Mapa > Boolean > Subtract / Union / Intersect > B** → resultado correcto en pantalla, gizmo del resultado en el centroide (no en el origen del mundo), Ctrl+Z restaura A y B originales, Ctrl+Y rehace.
 

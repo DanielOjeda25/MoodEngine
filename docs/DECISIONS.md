@@ -3140,6 +3140,91 @@ Reusa todos los tipos puros de F2H11 (`Plane`, `Brush`, `BrushFace`, `intersectT
 - Edge cases de robustez numérica emergen en uso real con brushes asimétricos / muchas caras.
 - F2H13 (primitivas extendidas) revela que el algoritmo no escala a brushes con 32+ caras (cilindros) — profile y considerar BSP-style optimization.
 
+## 2026-05-06: SelectionSet como modelo puro + isBrushValid robustecido (F2H13)
+
+**Contexto:** tercer hito de sub-fase 2.2. **Promovido del F2H15 original** porque al validar F2H12 emergió que el flow del menú Boolean con combobox (heredado de selección singular) era awkward. La selección visual primero, ops booleanas después, es el flujo natural Hammer/Blender.
+
+### Decisión 1 — `SelectionSet` como modelo puro testeable
+
+**Problema:** la mayoría del editor (Inspector, Gizmo, comandos del HistoryStack, Viewport overlays) dependía de `EditorUI::selectedEntity()` returnando un `Entity`. Refactorear todo eso a "operar sobre N entidades" sería un sprint propio y no es lo que F2H13 pide — solo necesitamos que **multi-click funcione** y que las ops booleanas escalen.
+
+**Decisión:** `SelectionSet` con dos campos: `vector<Entity> selected` + `Entity active`. La `active` es la entidad "primaria" — la última clickeada, la que el Inspector muestra, la que el Gizmo afecta. Las demás `selected` son contexto adicional para ops batch (Boolean cascade, futuro multi-delete, etc.).
+
+**Back-compat first:** `selectedEntity()` devuelve `m_selectionSet.active`. `setSelectedEntity(e)` hace `replaceWithSingle(set, e)`. Toda la base de código que asumía selección singular sigue funcionando. Esta API "fachada" desacopla los callsites del modelo interno y permite migrar a multi-edit gradual en hitos futuros.
+
+**Header-only con helpers libres:** `editor/selection/SelectionSet.h` define `add`, `remove`, `toggle`, `replaceWithSingle`, `clear`, `contains` como funciones libres. Sin métodos en el struct → testeable como POD, sin acoplamiento a EnTT más allá del `Entity` opaque handle. Invariantes garantizados por los helpers (no por el struct).
+
+**Invariantes durables** (verificados por tests):
+- `selected.empty() ⇔ active == Entity{}`.
+- `active != Entity{} ⇒ contains(set, active)`.
+- `selected` sin duplicados (mismo handle aparece a lo sumo una vez).
+
+**Política para `remove(set, e)` cuando `e` es la `active`:** el nuevo active es el ÚLTIMO elemento del set tras la remoción (o `Entity{}` si quedó vacío). "Último" = la mental model de "active = más recientemente clickeada de las que quedan".
+
+### Decisión 2 — Click semantics estilo Blender
+
+- **Plain click** → `replaceWithSingle(set, e)` (set queda con solo `e`).
+- **Shift+click** → `toggle(set, e)` (si está → quitar; si no → agregar y `setActive`).
+- **Ctrl+click** → `add(set, e)` (agrega si no estaba; siempre `setActive`).
+- **Click en vacío** (sin modifier, no hit) → `clear(set)`.
+- **Click en vacío** (con modifier) → no-op (preserva el set actual).
+
+Aplica en Hierarchy panel (`ImGui::GetIO().KeyShift / KeyCtrl`) y Viewport picking (`SDL_GetKeyboardState`).
+
+**Trade-off vs TrenchBroom:** TrenchBroom usa Ctrl+click para toggle (no Shift) en algunas builds. Elegimos Shift por alineación con Blender (más reciente, más usado por dev moderno). Si emerge fricción, agregar opción configurable.
+
+### Decisión 3 — Boolean ops cascade con preserveB
+
+**Subtract**: cascade real por A. Cada `A_i ≠ active` se reemplaza por sus pedazos `subtract(A_i, active)`. La `active` (B = "tool brush") se preserva. Ejemplo Hammer: agarras 5 cubos para hacer 5 huecos en una pared con la herramienta "tool".
+
+**Union / Intersect**: requiere exactamente N=2 brushes. Razón: la operación consume **ambos** brushes (no preserva el "tool"), y cascadear con N>2 es semánticamente ambiguo (¿izquierda-asociativo? ¿qué hacer si una iteración devuelve N>1?). La cardinalidad del resultado puede ser ≥1, todos brushes nuevos. Cascade real de Union/Intersect = hito futuro si emerge necesidad concreta.
+
+**Si N>2 con Union/Intersect**: warning en log + no-op (no aplica nada, no rompe estado).
+
+### Decisión 4 — Outline diferenciado vía debug renderer (no shaders)
+
+`EditorRenderPass.cpp` itera el set y dibuja 12 líneas (corners de AABB) con el debug renderer existente. Ventajas vs uniform de shader PBR:
+- **Sin tocar shaders**: cero superficie de regresión.
+- **Tunear visualmente sin rebuild de shaders**: cambiar colores y line width es 1 línea de C++.
+- **Funciona uniforme** entre MeshRenderer (corners unitarios) y BrushComponent (corners de `bc.brush.localAabb`).
+
+**Color choices durables:**
+- `active` = `(1.0, 0.35, 0.0)` naranja saturado Blender.
+- `selected` no-active = `(0.95, 0.95, 0.2)` amarillo claro.
+- `glLineWidth` 2px → 3px global. Afecta también triggers OBB, drop highlights, navigation paths — todos ganan visibilidad.
+
+**Trade-off**: el outline actual no respeta depth-test "ver detrás del objeto" tipo Blender silhouette. Si emerge, agregar pase con `glDepthFunc(GL_GREATER)` y color más tenue. Suficiente para v1.
+
+### Decisión 5 — `isBrushValid` exige AABB no-degenerada (bug fix durable)
+
+**Bug detectado en validación visual de F2H13**: `subtract(A, B)` con brushes disjuntos generaba múltiples "copias planas" de A en lugar de una sola copia 3D. Causa: el algoritmo de plane clipping iteraba sobre los planos de B y para cada uno donde A satisfacía el flipped half-space (ej. A está en `y ≤ 0.5` cuando flipped(+Y) dice "y ≤ 0.5"), generaba un fragment "remainder ∪ {flipped}". Si la restricción extra reducía el remainder a un cuadrilátero coplanar (sin volumen), `isBrushValid` lo aceptaba porque solo contaba "≥ 4 vertices únicos" — y un cuadrilátero plano tiene 4 vertices.
+
+**Fix:** `isBrushValid` ahora exige adicionalmente que la AABB del brush tenga `size > kPlaneEpsilon` en los 3 ejes. Sin esto, brushes 2D (cuadriláteros, polígonos coplanares) pasan el check pero rompen `buildBrushMesh` (que asume volumen 3D para fan triangulation).
+
+**Lección durable:** "vertices ≥ N" no es check suficiente para brush 3D. Cualquier futuro algoritmo que produzca brushes (más operaciones booleanas, primitivas con vertices casi coplanares, etc.) debe pasar por `isBrushValid` que ya garantiza volumen real.
+
+### Decisión 6 — `uniqueResultTag` con tags reservados intra-batch
+
+**Bug detectado**: cuando una op booleana generaba N brushes resultantes, todos recibían el mismo tag (`Brush_Union_01`) porque `uniqueResultTag` solo verificaba contra entidades **vivas** del scene. Los snapshots aún no creados como entidades no se contaban.
+
+**Fix:** parámetro `const vector<string>& reserved` que el caller mantiene durante la generación de los snapshots. Cada llamada agrega el tag generado a `reserved` y lo pasa a la siguiente. Sin acoplar a estado global ni tabla de tags vivos.
+
+**Patrón aplicable** a cualquier futuro batch que cree N entidades con tags auto-generados (duplicate, paste-multiple, etc.).
+
+### Decisión 7 — Multi-edit del Inspector diferido
+
+Cuando hay multi-selección, el Inspector muestra solo la `active` + un disclaimer "+N entidad(es) adicional(es) seleccionada(s) — solo se edita la activa". Multi-edit (editar property X en N entidades a la vez) requiere refactor de los comandos `EditPropertyCommand` que hoy capturan un `Entity` específico — no es trivial. Diferido a hito futuro si emerge necesidad concreta. El `DeleteEntityCommand` ya soporta multi-target desde Hito 27.
+
+**Trade-offs:**
+- Se pierde: editar transform de 5 brushes a la vez ("alinear todos al grid"); editar material de N props a la vez.
+- Se gana: foco en lo que F2H13 prometió (selección visual + Boolean cascade) sin meterse en refactor de comandos. Multi-edit es claramente "feature siguiente" — el dev puede pedirlo si lo necesita.
+
+**Revisar si:**
+- El dev pide editar transform / material de N entidades a la vez (probable post-F2H17 cuando aparezcan más entidades en mapas grandes).
+- Box-select / lasso-select del viewport emergen como necesidad real (probablemente al manejar 50+ brushes).
+- El SelectionSet escala mal a 1000+ entidades (improbable; el outline de 12000 líneas para 1000 brushes es ~negligible vs el cost del overlay 2D).
+
+
 
 
 
