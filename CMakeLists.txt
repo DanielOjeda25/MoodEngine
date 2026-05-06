@@ -310,6 +310,7 @@ add_library(mood_engine_lib STATIC
     src/engine/world/grid/Pathfinding.cpp
     src/engine/world/csg/Brush.cpp
     src/engine/world/csg/BrushMesh.cpp
+    src/engine/world/csg/BrushOps.cpp
 
     src/systems/animation/AnimationSystem.cpp
     src/systems/audio/AudioSystem.cpp
@@ -406,6 +407,7 @@ add_executable(MoodEditor
     src/editor/commands/EditTransformCommand.cpp
     src/editor/commands/DeleteEntityCommand.cpp
     src/editor/commands/CreateEntityCommand.cpp
+    src/editor/commands/BooleanOpCommand.cpp
     src/editor/panels/scene/ViewportPanel.cpp
     src/editor/panels/scene/InspectorPanel.cpp
     src/editor/panels/assets/AssetBrowserPanel.cpp
