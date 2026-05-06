@@ -6,47 +6,69 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H16 cerrado: Limpieza HistoryStack (deudas de undo/redo).**
+**🚀 Fase 2 — F2H17 cerrado: Face Mode estilo Hammer + Material per-cara.**
+Tag: `v1.8.0-fase2-hito17`.
+Verificado automático: suite doctest **567/8182** verde (+15 cases vs F2H16). Verificado por el dev a ojo: spawn brush → tecla **3** entra a Face Mode → click en una cara muestra outline naranja Half-Life + fill semi-transparente → drop de textura sobre cara → solo esa cara cambia, las demás conservan la anterior → save/reopen → slots de material persisten (schema v12). Drop en Object Mode (no Face Mode) sigue asignando a slot 0 (todo el brush).
+
+**Cambio importante**: F2H17 cierra **el feature que el dev pidió explícitamente** desde F2H15: "lo quiero igual que el hammer". También resuelve el TODO de F2H15 "control per-cara visual con face mode estilo Hammer queda como hito propio futuro". Multi-material rendering real: 1 draw call por slot distinto en uso, mismo patrón que `MeshRendererComponent` con submeshes.
+
+**Decisiones clave**:
+- **Tecla 3 para Face Mode** (Blender-style: 1=vertex, 2=edge, 3=face). Reservadas 1 y 2 sin implementar — convención que el dev ya conoce.
+- **Picking con back-face culling** (`dot(worldNormal, rayDir) > 0` filtra la cara opuesta). Sin esto, click en una cara seleccionaba la opuesta porque ambos triángulos de las caras paralelas intersectan el ray.
+- **Highlight visual estilo Half-Life**: outline naranja `(1.0, 0.5, 0.0)` siempre + fill `(1.0, 0.55, 0.10, 0.55)` con alpha blending + `glDepthFunc=LEQUAL` + `glDepthMask=GL_FALSE` para que se vea sobre la geometría sin Z-fighting. Cyan tradicional se vio "muy pobre" en validación.
+- **Fill oculto durante UV edit** (`Inspector::isEditingBrushUV()`) para no estorbar la edición — solo queda el outline. Pedido directo del dev: "alternar entre mostrar toda la cara o no".
+- **Multi-material via slots**: `BrushComponent.materials` (vector indexado por `face.materialIndex`), no un material por cara directo — permite que dos caras compartan material sin duplicación. Mismo patrón que `MeshRendererComponent`.
+- **`BrushComponent` move-only**: `vector<unique_ptr<IMesh>>` forzó copy-delete; migración de ~12 callsites a `addComponent<BrushComponent>(std::move(bc))`. Mantiene ownership runtime de meshes regenerables.
+- **Schema v11→v12 back-compat aditiva**: `materialPaths` array en JSON; v11 con `material` singular sintetiza `materials = [material]`. Mapas viejos cargan visualmente idénticos.
+
+**Implementación (7 bloques A-G):**
+
+- **Bloque B — Sub-modo Face + picking + highlight visual**:
+  - `EditorSubMode { Object, Face }` enum + toggle con tecla 3 en `EditorInput`.
+  - `Csg::pickFace(brush, worldMatrix, rayOrigin, rayDir)` con Möller-Trumbore + back-face cull.
+  - `OpenGLDebugRenderer::drawTriangle(p0, p1, p2, color)` con VAO/VBO separados para fills + alpha blending.
+  - `EditorRenderPass::drawFaceHighlight` dibuja outline (siempre) + fill (si !editingUV).
+
+- **Bloque C — Refactor multi-material (breaking)**:
+  - `BrushComponent.material` (singular) → `materials` (vector); copy ctor/op `=delete`.
+  - `BrushMeshData.submeshes[]` (1 por slot en uso); `BrushSubmeshData{vertices, indices, materialSlot}`.
+  - `buildBrushMesh` agrupa caras por `face.materialIndex`, produce N submeshes.
+  - `brushMeshDataToInterleaved` → `brushSubmeshToInterleaved(submesh)` (per-submesh).
+  - `SceneRenderer::brushPass`: `for (each submesh) bind material slot → drawMesh()`.
+  - Helpers `BrushMeshData::totalVertexCount/totalIndexCount/allVertices()` para tests.
+
+- **Bloque D — Drop handler Face-aware**:
+  - Drop sobre brush en Object Mode → `bc.materials[0] = matId` (legacy behavior).
+  - Drop sobre brush en Face Mode + cara seleccionada → busca slot existente con matId; si no existe agrega slot nuevo y setea `face.materialIndex = newSlot`.
+
+- **Bloque E — Persistencia v12 + back-compat**:
+  - `SavedBrush.materialPaths: vector<string>` (nuevo); `materialPath: string` legacy preservado.
+  - `serializeBrush` escribe array `materials` siempre + campo legacy `material` con slot 0 (compat readers v11).
+  - `parseBrush`: si `materials` array existe, lo lee; si no y `material` singular existe, sintetiza `materialPaths = [material]`; si no, `materialPaths = [""]` (1 slot vacío).
+  - `SceneLoader` resuelve cada path → `MaterialAssetId` y rellena `bc.materials`.
+
+- **Bloque F — Tests**: refactor de `test_csg_brush.cpp`, `test_brush_persistence.cpp`, `test_csg_brush_ops.cpp`, `test_csg_primitives.cpp` para la nueva API multi-submesh. +15 cases / +24 asserts. Tests cubren: 1 brush con 1 slot → 1 submesh, brush con 6 caras todas slot 0 → 1 submesh con 24 verts, schema v11 round-trip (singular `material`) → carga como `materials=[id]`, schema v12 round-trip multi-slot.
+
+- **Bloque G — cierre**: este documento + HITOS + DECISIONS + tag `v1.8.0-fase2-hito17`.
+
+**Bug fix relacionado** (no parte del scope core de F2H17 pero pedido en validación): el cubo `brick.png` que aparecía en `arena_16x16` al cargar mapa nuevo se eliminó — `EditorScene` arranca con mapa vacío. Pedido literal del dev: "el cubo que siempre aparece con textura brick.png del mapa podes eliminarlo, me molesta".
+
+**Pendientes conocidos** (memoria del proyecto):
+- **Reorganización de menús** (project_pending_menu_org.md): `Archivo > Mapa` sigue acumulando items.
+- **Limpieza HistoryStack adicional** (project_pending_history_stack.md): drops/UV edits que no se registran en el stack — F2H17 NO toca esto (pendiente hito propio).
+- **Drops adicionales** que pueden quedar sin command si emergen (ScriptComponent path edit desde drop, etc.) — auditar en cada hito futuro que agregue handlers.
+- **Multi-selección de caras** (Shift+click sobre múltiples caras del mismo brush). Diferido si emerge necesidad.
+- **Vertex / Edge mode** (teclas 1, 2). Reservadas pero no implementadas — sub-feature avanzada no típica de mapping FPS.
+
+**Próximo paso**: **F2H18 = compilación brush → mesh estática unificada al guardar el mapa**. Take all brushes del mapa, weld vertices coplanares, cull caras internas (entre dos brushes adyacentes), fusionar por material slot. El resultado es una mesh navegable y exportable como `.obj`. Era F2H17 antes del rerouting que metió Face Mode primero.
+
+### F2H16 (anterior, ya cerrado)
 Tag: `v1.7.0-fase2-hito16`.
 Verificado automático: suite doctest **552/8158** verde (+21 cases vs F2H15). Verificado por el dev a ojo: spawn brush → escalar → mover → 2 texturas → drop al suelo → cambiar UV → Ctrl+Z varias veces revierte CADA paso en orden inverso (antes saltaba). Statusbar muestra "Último: <comando>" Blender-style.
 
 **Cambio importante**: limpia toda la deuda de undo/redo acumulada desde Hito 5 hasta F2H15. Approach **Blender-style** sin refactor: el command pattern del Hito 27 ya era Blender-style en behaviour (drag completo = 1 command, nombres humano-legibles); solo faltaba **wireup** en handlers que mutaban state sin push.
 
 **Decisión clave**: **mantener command pattern, NO snapshot pattern**. Blender internamente usa snapshot global del state, pero el behaviour observable (granularidad por intención del user, drag = 1 step, "Last Operator" en UI) es idéntico. Refactor a snapshot pattern habría sido sprint propio sin valor agregado real.
-
-**Implementación (7 bloques A-G, ~700 LOC + 21 tests):**
-
-- **Bloque B — Auditoría exhaustiva** del editor para identificar deudas. Subagente recorrió el código y produjo lista concreta:
-  - DemoSpawners.cpp:625-626 — Drop textura sobre brush.
-  - DemoSpawners.cpp:645 — `setTile` (drop textura sobre tile del grid).
-  - DemoSpawners.cpp:853-854 — Drop material sobre brush.
-  - DemoSpawners.cpp:871-874 — Drop material sobre MeshRenderer.
-  - InspectorPanel.cpp:1090-1118 — 4 widgets del UV editor (uvScale, uvRotation, uvOffset, lockToWorld).
-
-- **Bloque C — Comandos nuevos para brushes**:
-  - `EditBrushMaterialCommand` (snapshot pre/post de `bc.material`, captura por tag).
-  - `EditBrushUVCommand` con `BrushUVSnapshot` capturando los 6 UV params (uAxes, vAxes, uvOffsets, uvScales, uvRotations, lockToWorlds) de TODAS las caras. Helper `captureBrushUV(brush)` + `applyBrushUV(brush, snap)` + `snapshotsEqual(a, b)` para evitar push spurio cuando el user clickea un slider sin mover.
-
-- **Bloque D — Comandos nuevos para tiles + meshes**:
-  - `SetTileCommand` (snapshot pre/post de `(TileType, TextureAssetId)` por (x,y) + sync callback `void(x, y, texture)` que el editor pasa como `&EditorApplication::updateTileEntity`).
-  - `EditMeshRendererMaterialCommand` (slot 0 del `mr.materials`; resize si el slot no existe).
-
-- **Bloque E — Wireup**:
-  - `processViewportTextureDrop`: caso brush pushea `EditBrushMaterialCommand`; caso tile pushea `SetTileCommand` (con `updateTileEntity` como sync).
-  - `processViewportMaterialDrop`: caso brush → `EditBrushMaterialCommand`; caso MeshRenderer → `EditMeshRendererMaterialCommand`.
-  - UV editor del Inspector: helper `captureSnapshotIfActivated()` + `pushCommandIfChanged(label)` reusable entre los 3 DragFloat. Checkbox lockToWorld es push instantáneo (capture pre + post + push en un solo frame).
-  - **StatusBar Blender-style**: `EditorUI::draw` cada frame llama `m_statusBar.setLastCommand(historyStack->undoName())`. Aparece como "**Último: <name>**" después del FPS y modo. Sin timeout — refleja siempre el tope del undo stack.
-
-- **Bloque F — Tests**: 4 archivos nuevos (`test_edit_brush_material_command.cpp`, `test_edit_brush_uv_command.cpp`, `test_set_tile_command.cpp`, `test_edit_mesh_renderer_material_command.cpp`) con 21 cases que cubren round-trip (execute → undo → estado igual al pre; execute → undo → execute → estado igual al post), tag inexistente sin crash, slot vacío con resize, snapshot con tamaño diferente saltea, name() devuelve label.
-
-- **Bloque G — cierre**: este documento + HITOS + DECISIONS + tag `v1.7.0-fase2-hito16`.
-
-**Pendientes conocidos** (memoria del proyecto):
-- **Face Mode estilo Hammer** (project_pending_face_mode.md): selección visual de cara individual + UV per-cara real. **Próximo hito (F2H17)** — el dev pidió explícitamente "lo quiero igual que el hammer".
-- **Reorganización de menús** (project_pending_menu_org.md): `Archivo > Mapa` está acumulando items.
-- **Drops adicionales** que pueden quedar sin command si emergen (ScriptComponent path edit desde drop, etc.) — auditar en cada hito futuro que agregue handlers.
-
-**Próximo paso**: **F2H17 = Face Mode estilo Hammer**. Sub-modo del editor con selección visual de cara individual (raycast contra polígono de cara, no AABB del brush), outline de cara seleccionada distinto al outline del brush, Inspector con UV params SOLO de la cara seleccionada, material per-cara real, comandos undoable (extensión de `EditBrushUVCommand` con índice de cara). Después F2H18 (compilación brush → mesh estática unificada — era F2H17 antes del rerouting de F2H16 limpieza).
 
 ### F2H15 (anterior, ya cerrado)
 Tag: `v1.6.0-fase2-hito15`.

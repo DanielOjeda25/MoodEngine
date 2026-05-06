@@ -3514,9 +3514,121 @@ Switching axis cuando la normal está cerca del eje Y evita cross product con ma
 - El statusbar "Último: ..." se llena demasiado visualmente con comandos largos — limitar a N caracteres con ellipsis.
 - Emergen NUEVOS handlers que mutan state sin command (probable en F2H17 face mode con material per-cara) — auditar en Bloque B de cada hito posterior.
 
+## 2026-05-06: Face Mode estilo Hammer + multi-material via slots (F2H17)
 
+**Contexto:** F2H15 cerró UV editor con sliders aplicados a TODAS las caras del brush. El dev pidió desde el día uno que la edición fuera per-cara real — "lo quiero igual que el hammer" — y rechazó workarounds parciales (dropdown intermedio, multi-edit aproximado). F2H17 materializa eso como sub-modo del editor con selección visual de cara individual + material distinto por cara.
 
+### Decisión 1 — Sub-modo Face con tecla 3 (Blender convention)
 
+**Decisión:** sub-modo del editor toggle con tecla **3**. Reservar `1` (vertex) y `2` (edge) sin implementar todavía. `Esc` o `3` otra vez vuelve a Object Mode.
+
+**Razones:**
+- **El dev ya conoce la convención** (usa Blender). Usar 3 para face es la elección obvia y reduce fricción cognitiva.
+- **No reinventar**: imitar Blender en lo que ya funciona. Hammer usa toolbox flotante con botones — feo y obsoleto.
+- **Reservar 1/2 ahora** = no romper el muscle memory si vertex/edge mode emergen después (mapping FPS rara vez los necesita, pero está la opción abierta).
+
+**Alternativas descartadas:**
+- Tecla `Tab` (Blender real): conflictua con el cycle de focus de ImGui en el editor.
+- Botón en la toolbar / menu: el dev pidió teclado-first explícitamente en F2H13.
+- Modal popup "elegir modo": rompe el flow rapid-fire del mapping.
+
+**Revisar si:**
+- Vertex / Edge mode emergen como necesidad real (improbable para FPS mapping).
+
+### Decisión 2 — Multi-material via slots (no MaterialAssetId per-cara directo)
+
+**Decisión:** `BrushComponent.materials: vector<MaterialAssetId>` (slots indexados por `face.materialIndex`). `BrushFace.materialIndex` ya existía desde F2H11 pero no se usaba — F2H17 lo activa apuntando al vector de slots.
+
+**Razones:**
+- **Mismo patrón que `MeshRendererComponent`**: la base de código ya conoce este modelo. `MeshRenderer.materials[]` con `submesh.materialIndex` indexando el array.
+- **Dedup natural**: dos caras pueden compartir el mismo MaterialAssetId sin duplicación. Slot 0 = "default del brush"; slots 1+ se agregan al asignar material distinto a una cara específica.
+- **Multi-material rendering eficiente**: `buildBrushMesh` agrupa caras por slot y produce 1 submesh por slot. SceneRenderer hace 1 draw call por slot — escala bien si el dev usa pocos materiales distintos por brush (caso común).
+- **Schema bump v11→v12 aditivo**: `materialPaths` array nuevo en JSON; v11 con `material` singular se sintetiza como `materials = [material]`. Mapas viejos cargan visualmente idénticos.
+
+**Alternativas descartadas:**
+- `MaterialAssetId per-face` directo (1 ID por cara): menos dedup, peor render perf (1 draw call per face en peor caso), refactor más invasivo del schema.
+- Mantener material global del brush + override per-cara opcional: dos paths de código diferentes en render, peor de ambos mundos.
+
+**Revisar si:**
+- N>16 slots por brush (improbable: típicamente brushes tienen ≤4 materiales distintos). Si pasa, considerar agrupar materiales similares por shader.
+
+### Decisión 3 — `BrushComponent` move-only (`unique_ptr<IMesh>` per slot)
+
+**Decisión:** `BrushComponent.meshCache` cambia de `unique_ptr<IMesh>` (singular) a `vector<unique_ptr<IMesh>>`. `BrushComponent` se vuelve move-only (copy ctor `=delete`).
+
+**Razones:**
+- **1 mesh GPU por slot** — alineado con la decisión 2 (multi-material). El SceneRenderer itera el vector y bindea el material correspondiente antes de cada draw.
+- **Move-only forzado por `unique_ptr`**: no se puede hacer copy del componente. Migración a `addComponent<BrushComponent>(std::move(bc))` en ~12 callsites — molesto pero refleja el modelo real (un BrushComponent es ownership de meshes runtime, no debería duplicarse).
+- **Catch errors at compile time**: el `=delete` explícito hace que cualquier copia silenciosa (por ej. en lambda capture) falle la compilación con error claro.
+
+**Alternativas descartadas:**
+- `vector<shared_ptr<IMesh>>`: copy-OK pero overhead refcount + ownership semánticamente ambigua. El BrushComponent ES el dueño, nadie más.
+- Mesh interleaved única con offset/count per slot (1 sola GPU buffer con sub-rangos): complica el rebuild parcial cuando cambia 1 cara, sin ganancia de perf real.
+
+**Revisar si:**
+- El refactor de move-only causa fricción en algún flow nuevo. Probablemente no — el patrón está bien establecido en EnTT.
+
+### Decisión 4 — Picking de cara con back-face culling (regla `dot > 0`)
+
+**Decisión:** `Csg::pickFace` filtra triángulos con `dot(worldNormal, rayDir) > 0` antes de Möller-Trumbore. Solo las caras de espalda al ray (no apuntan hacia la cámara) son skip — equivalente a back-face culling de render.
+
+**Razones:**
+- **Bug real en validación**: sin esto, click en una cara seleccionaba **la opuesta**. Razón: ambas caras paralelas (face front + back) tienen sus polígonos triangulados en el plano del brush; el ray entra por la cara visible y sale por la opuesta — Möller-Trumbore intersecta ambos triángulos y el "más cercano" puede ser la opuesta dependiendo del orden de iteración.
+- **Match con render**: las caras visibles son las que apuntan hacia la cámara (back-face culling activo en el shader). Picking en world space con la misma regla mantiene WYSIWYG.
+- **Cero falsos negativos**: si una cara está visible para la cámara, su `worldNormal` apunta hacia la cámara → `dot(worldNormal, -rayDir) > 0` → `dot(worldNormal, rayDir) < 0` → NO se filtra. Coincide con la convención de OpenGL.
+
+**Alternativas descartadas:**
+- "Más cercano" sin filtrar: bug confirmado por validación.
+- `glReadPixels` sobre un buffer de IDs (color picking): añade pase de render dedicado, complica el pipeline para 1 feature.
+
+**Revisar si:**
+- El dev rota la cámara dentro del brush (dentro de un cuarto sólido cerrado): las normales apuntarían hacia adentro y el filtro invertiría su efecto. Para mapping eso no pasa (siempre cámara fuera de los brushes), pero documentar.
+
+### Decisión 5 — Highlight visual: outline naranja + fill semi-transparente Half-Life
+
+**Decisión:** outline naranja `(1.0, 0.5, 0.0)` siempre + fill `(1.0, 0.55, 0.10, 0.55)` con alpha blending + `glDepthFunc=GL_LEQUAL` + `glDepthMask=GL_FALSE`. Fill se oculta cuando `Inspector::isEditingBrushUV()=true`.
+
+**Razones:**
+- **Cyan tradicional "se vio muy pobre"** en validación con el dev (literal). Naranja Half-Life es saturado, distintivo, asociado a "selección activa" en convención FPS-mapping (Hammer original).
+- **Fill semi-transparente, no sólido**: el dev lo necesita ver la textura debajo para poder editarla. Alpha 0.55 deja la textura visible pero comunica "este es el pivote".
+- **`LEQUAL` + `depthMask=FALSE`**: el highlight se ve sobre la geometría sin Z-fighting, pero no escribe al depth buffer (no oculta lo que esté detrás).
+- **Fill oculto en UV edit**: pedido directo del dev — "alternar entre mostrar toda la cara o no" estorbaba al editar UVs. Outline siempre porque es la confirmación visual de qué cara está activa.
+
+**Alternativas descartadas:**
+- Solo outline (sin fill): demasiado sutil cuando el brush es chico o está lejos.
+- Fill sólido sin alpha: tapaba la textura, imposible editar UVs.
+- Color cycling animado: efectista, distrae.
+
+**Revisar si:**
+- El dev cambia de tema visual del editor (claro/oscuro) y el naranja deja de contrastar — tema-aware highlight.
+
+### Decisión 6 — Schema v12 back-compat aditivo + dual-write `material` legacy
+
+**Decisión:** v12 escribe `materials` (array de paths) Y `material` (path del slot 0) en cada brush. Lectores v12 prefieren `materials` array; lectores v11 leen `material` singular y pierden la info de slots adicionales pero ven el brush con el slot 0 visualmente correcto.
+
+**Razones:**
+- **Forward compat**: si un mapa v12 cae en una build v11 antigua, no crashea ni se ve raro — la cara con slot 1+ pierde su material y cae al default, pero el brush completo sigue siendo válido.
+- **Gradual migration**: el dev no necesita rewriteear sus mapas viejos. v11 abre, v12 escribe, conversión transparente.
+- **Costo de bytes mínimo**: el campo legacy duplicado es 1 string corto adicional por brush. Cero impacto en performance de save/load.
+
+**Alternativas descartadas:**
+- Solo escribir `materials` (drop legacy): rompe la posibilidad de downgrade durante el desarrollo activo.
+- Versión rama (v11.5 con feature flag): complica el reader sin beneficio real.
+
+**Revisar si:**
+- El dev confirma que el flujo dev-vs-prod no requiere downgrade (estamos en proyecto solo). En ese caso la próxima versión puede dropear `material` legacy.
+
+### Decisión 7 — Cubo `brick.png` removido del mapa nuevo
+
+**Decisión:** `EditorScene::createDefaultMap` ya no spawnea un cubo con textura `brick.png` central. `arena_16x16` arranca completamente vacío.
+
+**Razones:**
+- **Pedido directo del dev**: "el cubo que siempre aparece con textura brick.png del mapa podes eliminarlo, me molesta". Distorsiona el flow de validación visual de cualquier feature CSG (siempre hay que mover/eliminar el cubo primero).
+- **Simplicidad**: un mapa vacío es el blank slate correcto para mapping. El dev spawnea lo que quiere desde menu Brush.
+- **Cero pérdida funcional**: el cubo era debug-leftover del Hito 4 (cuando solo había tiles). Ya no aplica.
+
+**Revisar si:**
+- Algún test o demo asume que el mapa default tiene contenido — verificar (tests pasaron 567/567 sin tocar nada, OK).
 
 
 
