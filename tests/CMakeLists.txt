@@ -58,11 +58,19 @@ add_executable(mood_tests
     test_csg_brush_ops.cpp
     test_selection_set.cpp
     test_csg_primitives.cpp
+    test_edit_brush_material_command.cpp
+    test_edit_brush_uv_command.cpp
+    test_set_tile_command.cpp
+    test_edit_mesh_renderer_material_command.cpp
 
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/Brush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/BrushMesh.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/BrushOps.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/Primitives.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/commands/EditBrushMaterialCommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/commands/EditBrushUVCommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/commands/SetTileCommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/commands/EditMeshRendererMaterialCommand.cpp
 
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/TilePersistence.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/MapsManager.cpp

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "editor/commands/EditBrushUVCommand.h"  // F2H16: BrushUVSnapshot
 #include "editor/panels/IPanel.h"
 #include "editor/panels/scene/InspectorEditTracker.h"
 
@@ -38,6 +39,17 @@ private:
     /// Hito 32: tracker de edits del Inspector para Undo/Redo. Solo un
     /// widget puede estar activo a la vez — un solo buffer alcanza.
     InspectorEditTracker m_editTracker;
+
+    /// F2H16: snapshot pre-edicion del UV editor del brush. Capturado
+    /// al ImGui::IsItemActivated() de cualquier slider de UV; usado
+    /// como `oldSnap` del EditBrushUVCommand cuando el widget se
+    /// deactiva after-edit.
+    BrushUVSnapshot m_uvSnapshotPre;
+    bool m_uvSnapshotValid = false;
+    /// Tag de la entidad sobre la que se inicio la edicion. Robusto
+    /// a cambios de seleccion durante el drag (improbable pero
+    /// defensivo).
+    std::string m_uvSnapshotEntityTag;
 };
 
 } // namespace Mood

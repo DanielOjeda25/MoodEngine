@@ -97,6 +97,13 @@ void EditorUI::draw(bool& requestQuit) {
     // Ver / Ayuda | Layout / Scripting / Profile / Materials | ... Play).
     // La logica vive en MenuBar.cpp.
 
+    // F2H16: sincronizar el "Ultimo: <command>" del statusbar con el
+    // tope del HistoryStack. Cada frame el dev ve que va a deshacer
+    // Ctrl+Z (Blender-style "Last Operator").
+    if (m_history != nullptr) {
+        m_statusBar.setLastCommand(m_history->undoName());
+    }
+
     // Status bar inferior: BeginViewportSideBar con ImGuiDir_Down.
     m_statusBar.draw(m_mode);
 

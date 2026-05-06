@@ -409,6 +409,10 @@ add_executable(MoodEditor
     src/editor/commands/DeleteEntityCommand.cpp
     src/editor/commands/CreateEntityCommand.cpp
     src/editor/commands/BooleanOpCommand.cpp
+    src/editor/commands/EditBrushMaterialCommand.cpp
+    src/editor/commands/EditBrushUVCommand.cpp
+    src/editor/commands/SetTileCommand.cpp
+    src/editor/commands/EditMeshRendererMaterialCommand.cpp
     src/editor/panels/scene/ViewportPanel.cpp
     src/editor/panels/scene/InspectorPanel.cpp
     src/editor/panels/assets/AssetBrowserPanel.cpp

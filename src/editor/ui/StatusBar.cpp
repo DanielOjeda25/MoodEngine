@@ -26,6 +26,12 @@ void StatusBar::draw(EditorMode mode) {
             ImGui::TextUnformatted(mode == EditorMode::Play ? "Play Mode" : "Editor Mode");
             ImGui::Separator();
             ImGui::TextUnformatted(m_message.c_str());
+            // F2H16: "Ultimo: <command name>" Blender-style. Solo se
+            // muestra si hay algo en el undo stack.
+            if (!m_lastCommand.empty()) {
+                ImGui::Separator();
+                ImGui::Text("Ultimo: %s", m_lastCommand.c_str());
+            }
             ImGui::EndMenuBar();
         }
     }

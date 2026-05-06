@@ -1085,13 +1085,47 @@ void InspectorPanel::onImGuiRender() {
         // params despues de cualquier edicion del UI.
         if (!bc.brush.faces.empty()) {
             auto& face0 = bc.brush.faces[0];
+            const std::string entityTag = e.hasComponent<TagComponent>()
+                ? e.getComponent<TagComponent>().name : std::string{};
+
+            // F2H16 helper: capturar snapshot pre al activar widget.
+            auto captureSnapshotIfActivated = [&]() {
+                if (ImGui::IsItemActivated()) {
+                    m_uvSnapshotPre = captureBrushUV(bc.brush);
+                    m_uvSnapshotValid = true;
+                    m_uvSnapshotEntityTag = entityTag;
+                }
+            };
+            // F2H16 helper: push command si el widget se deactivo y
+            // el snapshot post difiere del pre. Reusable entre los
+            // widgets del UV editor.
+            auto pushCommandIfChanged = [&](const char* label) {
+                if (!ImGui::IsItemDeactivatedAfterEdit()) return;
+                if (!m_uvSnapshotValid) return;
+                if (m_ui == nullptr || m_ui->scene() == nullptr) return;
+                const BrushUVSnapshot postSnap = captureBrushUV(bc.brush);
+                if (snapshotsEqual(m_uvSnapshotPre, postSnap)) {
+                    m_uvSnapshotValid = false;
+                    return;
+                }
+                if (HistoryStack* h = m_ui->historyStack()) {
+                    h->push(std::make_unique<EditBrushUVCommand>(
+                        m_ui->scene(), m_uvSnapshotEntityTag,
+                        std::move(m_uvSnapshotPre), std::move(postSnap),
+                        std::string{label}));
+                }
+                m_uvSnapshotValid = false;
+            };
 
             glm::vec2 uvScale = face0.uvScale;
             if (ImGui::DragFloat2("uv scale##uvbrush", &uvScale.x,
                                     0.05f, 0.01f, 100.0f)) {
                 for (auto& f : bc.brush.faces) f.uvScale = uvScale;
                 bc.dirty = true;
+                m_editedThisFrame = true;
             }
+            captureSnapshotIfActivated();
+            pushCommandIfChanged("Editar UV scale");
 
             f32 uvRotDeg = glm::degrees(face0.uvRotation);
             if (ImGui::DragFloat("uv rotation (deg)##uvbrush",
@@ -1099,27 +1133,47 @@ void InspectorPanel::onImGuiRender() {
                 const f32 uvRotRad = glm::radians(uvRotDeg);
                 for (auto& f : bc.brush.faces) f.uvRotation = uvRotRad;
                 bc.dirty = true;
+                m_editedThisFrame = true;
             }
+            captureSnapshotIfActivated();
+            pushCommandIfChanged("Editar UV rotation");
 
             glm::vec2 uvOffset = face0.uvOffset;
             if (ImGui::DragFloat2("uv offset##uvbrush", &uvOffset.x,
                                     0.05f)) {
                 for (auto& f : bc.brush.faces) f.uvOffset = uvOffset;
                 bc.dirty = true;
+                m_editedThisFrame = true;
             }
+            captureSnapshotIfActivated();
+            pushCommandIfChanged("Editar UV offset");
 
+            // Checkbox: instantaneo. Capturar pre + post al click + push.
             bool lockToWorld = face0.lockToWorld;
-            if (ImGui::Checkbox("lock to world##uvbrush", &lockToWorld)) {
-                for (auto& f : bc.brush.faces) f.lockToWorld = lockToWorld;
-                bc.dirty = true;
-                // Recompute cache flag — el SceneRenderer tambien lo
-                // actualizara en el proximo frame, pero hacerlo aqui
-                // mantiene el Inspector consistente sin esperar.
-                bc.anyFaceLockToWorld = lockToWorld;
+            BrushUVSnapshot lockPreSnap;
+            const bool lockChanged = [&]() {
+                if (ImGui::Checkbox("lock to world##uvbrush", &lockToWorld)) {
+                    lockPreSnap = captureBrushUV(bc.brush);
+                    for (auto& f : bc.brush.faces) f.lockToWorld = lockToWorld;
+                    bc.dirty = true;
+                    bc.anyFaceLockToWorld = lockToWorld;
+                    m_editedThisFrame = true;
+                    return true;
+                }
+                return false;
+            }();
+            if (lockChanged && m_ui != nullptr && m_ui->scene() != nullptr) {
+                if (HistoryStack* h = m_ui->historyStack()) {
+                    BrushUVSnapshot postSnap = captureBrushUV(bc.brush);
+                    h->push(std::make_unique<EditBrushUVCommand>(
+                        m_ui->scene(), entityTag,
+                        std::move(lockPreSnap), std::move(postSnap),
+                        std::string{"Toggle lock-to-world"}));
+                }
             }
 
             // Conteo informativo de caras con lock-to-world (util
-            // cuando F2H16 permita per-cara y haya mezcla).
+            // cuando F2H17 permita per-cara y haya mezcla).
             u32 lockedCount = 0;
             for (const auto& f : bc.brush.faces) {
                 if (f.lockToWorld) ++lockedCount;

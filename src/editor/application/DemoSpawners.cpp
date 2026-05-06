@@ -19,6 +19,10 @@
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
 #include "engine/scene/components/BrushComponent.h"  // F2H15: drop sobre brushes
 #include "engine/scene/components/Components.h"
+#include "editor/commands/EditBrushMaterialCommand.h"           // F2H16
+#include "editor/commands/EditMeshRendererMaterialCommand.h"     // F2H16
+#include "editor/commands/SetTileCommand.h"                       // F2H16
+#include "editor/commands/HistoryStack.h"                          // F2H16
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/queries/ScenePick.h"
@@ -619,19 +623,29 @@ void EditorApplication::processViewportTextureDrop() {
             glm::vec2(drop.ndcX, drop.ndcY),
             m_assetManager.get());
         if (brushHit && brushHit.entity.hasComponent<BrushComponent>()) {
-            const MaterialAssetId matId =
+            const MaterialAssetId newMat =
                 m_assetManager->createMaterialFromTexture(texId);
             auto& bc = brushHit.entity.getComponent<BrushComponent>();
-            bc.material = matId;
+            const MaterialAssetId oldMat = bc.material;
+            const std::string tag =
+                brushHit.entity.hasComponent<TagComponent>()
+                    ? brushHit.entity.getComponent<TagComponent>().name
+                    : std::string{"(sin tag)"};
+
+            // F2H16: empujar comando undoable. El comando aplica el
+            // cambio (lo hace ahora con execute() implicito al push,
+            // o se aplica aca y solo se push para undo).
+            // Usamos el patron: aplicar primero, push despues.
+            bc.material = newMat;
             bc.dirty = true;
+            m_history.push(std::make_unique<EditBrushMaterialCommand>(
+                m_scene.get(), tag, oldMat, newMat,
+                "Asignar textura a brush"));
+
             m_ui.setSelectedEntity(brushHit.entity);
             Log::editor()->info(
                 "Drop textura id={} -> brush '{}' (material {})",
-                drop.textureId,
-                brushHit.entity.hasComponent<TagComponent>()
-                    ? brushHit.entity.getComponent<TagComponent>().name
-                    : std::string{"(sin tag)"},
-                matId);
+                drop.textureId, tag, newMat);
             markDirty();
             return;
         }
@@ -641,10 +655,23 @@ void EditorApplication::processViewportTextureDrop() {
                                         glm::vec2(drop.ndcX, drop.ndcY));
     if (!hit.hit) return;
 
-    // Mantener el GridMap sincronizado (physics + serializer).
+    // F2H16: snapshot pre-mutacion + push command.
+    const TileType oldType = m_map.tileAt(hit.tileX, hit.tileY);
+    const TextureAssetId oldTex = m_map.tileTextureAt(hit.tileX, hit.tileY);
+
+    auto sync = [this](u32 tx, u32 ty, TextureAssetId tex) {
+        updateTileEntity(tx, ty, tex);
+    };
+
+    // Aplicar y push.
     m_map.setTile(hit.tileX, hit.tileY, TileType::SolidWall, texId);
-    // Edit localizado en la Scene (preserva handles + seleccion).
     updateTileEntity(hit.tileX, hit.tileY, texId);
+    m_history.push(std::make_unique<SetTileCommand>(
+        &m_map, std::move(sync), hit.tileX, hit.tileY,
+        oldType, oldTex,
+        TileType::SolidWall, texId,
+        "Pintar tile"));
+
     Log::editor()->info("Drop textura id={} -> tile ({}, {})",
                          drop.textureId, hit.tileX, hit.tileY);
     markDirty();
@@ -845,17 +872,23 @@ void EditorApplication::processViewportMaterialDrop() {
 
     const auto matId = static_cast<MaterialAssetId>(drop.materialId);
 
+    const std::string tagName = hit.entity.hasComponent<TagComponent>()
+        ? hit.entity.getComponent<TagComponent>().name
+        : std::string{"(sin tag)"};
+
     // F2H15: si la entidad bajo el cursor tiene BrushComponent,
     // asignar el material al brush (no al MeshRenderer). Brushes
     // CSG no tienen MeshRendererComponent.
     if (hit.entity.hasComponent<BrushComponent>()) {
         auto& bc = hit.entity.getComponent<BrushComponent>();
+        const MaterialAssetId oldMat = bc.material;
         bc.material = matId;
         bc.dirty = true;
+        // F2H16: push command undoable.
+        m_history.push(std::make_unique<EditBrushMaterialCommand>(
+            m_scene.get(), tagName, oldMat, matId,
+            "Asignar material a brush"));
         m_ui.setSelectedEntity(hit.entity);
-        const std::string tagName = hit.entity.hasComponent<TagComponent>()
-            ? hit.entity.getComponent<TagComponent>().name
-            : std::string{"(sin tag)"};
         Log::editor()->info("Drop material id {} -> brush '{}'",
                               drop.materialId, tagName);
         markDirty();
@@ -868,15 +901,19 @@ void EditorApplication::processViewportMaterialDrop() {
     }
 
     auto& mr = hit.entity.getComponent<MeshRendererComponent>();
+    // F2H16: snapshot pre del slot 0 + push command.
+    const MaterialAssetId oldMatMr = mr.materials.empty()
+        ? 0u : mr.materials[0];
     if (mr.materials.empty()) {
         mr.materials.push_back(matId);
     } else {
         mr.materials[0] = matId;
     }
+    // F2H16: push command. tagName ya capturado arriba.
+    m_history.push(std::make_unique<EditMeshRendererMaterialCommand>(
+        m_scene.get(), tagName, /*slotIndex=*/0u, oldMatMr, matId,
+        "Asignar material a mesh"));
     m_ui.setSelectedEntity(hit.entity);
-    const std::string tagName = hit.entity.hasComponent<TagComponent>()
-        ? hit.entity.getComponent<TagComponent>().name
-        : std::string{"(sin tag)"};
     Log::editor()->info("Drop material id {} -> entidad '{}'",
                          drop.materialId, tagName);
     markDirty();
