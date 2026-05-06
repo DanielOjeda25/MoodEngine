@@ -1054,15 +1054,23 @@ void InspectorPanel::onImGuiRender() {
                              static_cast<double>(size.z));
 
         if (m_assets != nullptr) {
-            const std::string matPath = (bc.material == 0)
-                ? std::string{"(blank look)"}
-                : m_assets->materialPathOf(bc.material);
-            ImGui::Text("material: %s (id %u)",
-                         matPath.c_str(), static_cast<unsigned>(bc.material));
+            // F2H17: el brush tiene N slots de material (uno por
+            // material distinto entre las caras). Mostrar todos.
+            ImGui::Text("materiales: %u slots",
+                         static_cast<u32>(bc.materials.size()));
+            for (u32 i = 0; i < bc.materials.size(); ++i) {
+                const MaterialAssetId mid = bc.materials[i];
+                const std::string matPath = (mid == 0)
+                    ? std::string{"(blank look)"}
+                    : m_assets->materialPathOf(mid);
+                ImGui::TextDisabled("  [%u] %s (id %u)", i,
+                                       matPath.c_str(),
+                                       static_cast<unsigned>(mid));
+            }
         }
 
-        ImGui::TextDisabled("mesh cache: %s",
-                             bc.meshCache ? "uploaded" : "(pending)");
+        ImGui::TextDisabled("mesh cache: %u submeshes",
+                             static_cast<u32>(bc.meshCache.size()));
         ImGui::TextDisabled("dirty: %s", bc.dirty ? "si" : "no");
 
         // Recompute mesh: util para debug si la mesh quedo stale por
@@ -1074,21 +1082,43 @@ void InspectorPanel::onImGuiRender() {
 
         ImGui::Separator();
 
-        // --- F2H15: UV editor (aplica a todas las caras del brush) ---
-        // F2H16 agregara seleccion de cara individual + UV editor
-        // per-cara. En F2H15 los widgets editan los params de TODAS
-        // las caras a la vez (UI fixed defaults).
-        ImGui::TextDisabled("UV (Brush)");
+        // --- F2H15 + F2H17: UV editor ---
+        // F2H17: si Face Mode + activeFaceIndex >= 0, los widgets
+        // editan SOLO esa cara. Sino, fallback al modo global F2H15
+        // (todas las caras). El header cambia entre "UV (Brush)" y
+        // "UV (Cara N)" para feedback visual.
+        const bool faceMode = (m_ui != nullptr) &&
+            (m_ui->subMode() == EditorSubMode::Face) &&
+            (m_ui->selectionSet().activeFaceIndex >= 0) &&
+            (static_cast<u32>(m_ui->selectionSet().activeFaceIndex)
+                < bc.brush.faces.size());
+        const i32 faceIdx = faceMode
+            ? m_ui->selectionSet().activeFaceIndex : -1;
 
-        // Tomamos la cara 0 como "representante" para mostrar los
-        // valores actuales. En F2H15 todas las caras tienen los mismos
-        // params despues de cualquier edicion del UI.
+        if (faceMode) {
+            ImGui::TextDisabled("UV (Cara %d)", faceIdx);
+        } else {
+            ImGui::TextDisabled("UV (Brush)");
+        }
+
         if (!bc.brush.faces.empty()) {
-            auto& face0 = bc.brush.faces[0];
+            // En faceMode, el "representante" es la cara activa;
+            // en object mode, sigue siendo la cara 0.
+            auto& faceRef = faceMode ? bc.brush.faces[faceIdx]
+                                       : bc.brush.faces[0];
             const std::string entityTag = e.hasComponent<TagComponent>()
                 ? e.getComponent<TagComponent>().name : std::string{};
 
-            // F2H16 helper: capturar snapshot pre al activar widget.
+            // Helper: aplicar mutacion a TODAS las caras (object mode)
+            // o solo a la cara activa (face mode).
+            auto applyToScope = [&](auto&& fn) {
+                if (faceMode) {
+                    fn(bc.brush.faces[faceIdx]);
+                } else {
+                    for (auto& f : bc.brush.faces) fn(f);
+                }
+            };
+
             auto captureSnapshotIfActivated = [&]() {
                 if (ImGui::IsItemActivated()) {
                     m_uvSnapshotPre = captureBrushUV(bc.brush);
@@ -1096,9 +1126,6 @@ void InspectorPanel::onImGuiRender() {
                     m_uvSnapshotEntityTag = entityTag;
                 }
             };
-            // F2H16 helper: push command si el widget se deactivo y
-            // el snapshot post difiere del pre. Reusable entre los
-            // widgets del UV editor.
             auto pushCommandIfChanged = [&](const char* label) {
                 if (!ImGui::IsItemDeactivatedAfterEdit()) return;
                 if (!m_uvSnapshotValid) return;
@@ -1117,46 +1144,57 @@ void InspectorPanel::onImGuiRender() {
                 m_uvSnapshotValid = false;
             };
 
-            glm::vec2 uvScale = face0.uvScale;
+            glm::vec2 uvScale = faceRef.uvScale;
             if (ImGui::DragFloat2("uv scale##uvbrush", &uvScale.x,
                                     0.05f, 0.01f, 100.0f)) {
-                for (auto& f : bc.brush.faces) f.uvScale = uvScale;
+                applyToScope([&](auto& f) { f.uvScale = uvScale; });
                 bc.dirty = true;
                 m_editedThisFrame = true;
             }
             captureSnapshotIfActivated();
-            pushCommandIfChanged("Editar UV scale");
+            pushCommandIfChanged(faceMode ? "Editar UV scale (cara)"
+                                            : "Editar UV scale");
 
-            f32 uvRotDeg = glm::degrees(face0.uvRotation);
+            f32 uvRotDeg = glm::degrees(faceRef.uvRotation);
             if (ImGui::DragFloat("uv rotation (deg)##uvbrush",
                                     &uvRotDeg, 1.0f, -360.0f, 360.0f)) {
                 const f32 uvRotRad = glm::radians(uvRotDeg);
-                for (auto& f : bc.brush.faces) f.uvRotation = uvRotRad;
+                applyToScope([&](auto& f) { f.uvRotation = uvRotRad; });
                 bc.dirty = true;
                 m_editedThisFrame = true;
             }
             captureSnapshotIfActivated();
-            pushCommandIfChanged("Editar UV rotation");
+            pushCommandIfChanged(faceMode ? "Editar UV rotation (cara)"
+                                            : "Editar UV rotation");
 
-            glm::vec2 uvOffset = face0.uvOffset;
+            glm::vec2 uvOffset = faceRef.uvOffset;
             if (ImGui::DragFloat2("uv offset##uvbrush", &uvOffset.x,
                                     0.05f)) {
-                for (auto& f : bc.brush.faces) f.uvOffset = uvOffset;
+                applyToScope([&](auto& f) { f.uvOffset = uvOffset; });
                 bc.dirty = true;
                 m_editedThisFrame = true;
             }
             captureSnapshotIfActivated();
-            pushCommandIfChanged("Editar UV offset");
+            pushCommandIfChanged(faceMode ? "Editar UV offset (cara)"
+                                            : "Editar UV offset");
 
             // Checkbox: instantaneo. Capturar pre + post al click + push.
-            bool lockToWorld = face0.lockToWorld;
+            bool lockToWorld = faceRef.lockToWorld;
             BrushUVSnapshot lockPreSnap;
             const bool lockChanged = [&]() {
                 if (ImGui::Checkbox("lock to world##uvbrush", &lockToWorld)) {
                     lockPreSnap = captureBrushUV(bc.brush);
-                    for (auto& f : bc.brush.faces) f.lockToWorld = lockToWorld;
+                    applyToScope([&](auto& f) { f.lockToWorld = lockToWorld; });
                     bc.dirty = true;
-                    bc.anyFaceLockToWorld = lockToWorld;
+                    // Recompute cache flag global (puede haber otras
+                    // caras todavia con lock-to-world).
+                    bc.anyFaceLockToWorld = false;
+                    for (const auto& f : bc.brush.faces) {
+                        if (f.lockToWorld) {
+                            bc.anyFaceLockToWorld = true;
+                            break;
+                        }
+                    }
                     m_editedThisFrame = true;
                     return true;
                 }
@@ -1168,7 +1206,8 @@ void InspectorPanel::onImGuiRender() {
                     h->push(std::make_unique<EditBrushUVCommand>(
                         m_ui->scene(), entityTag,
                         std::move(lockPreSnap), std::move(postSnap),
-                        std::string{"Toggle lock-to-world"}));
+                        faceMode ? std::string{"Toggle lock-to-world (cara)"}
+                                 : std::string{"Toggle lock-to-world"}));
                 }
             }
 

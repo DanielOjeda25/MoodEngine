@@ -92,7 +92,7 @@ void buildSceneWithBrushes(Scene& scene, int n) {
         // Brush local (sin transform aplicado al makeBoxBrush — el
         // transform vive en TransformComponent y se aplica al render).
         bc.brush = Csg::makeBoxBrush(glm::mat4(1.0f));
-        bc.material = 0;
+        bc.materials = {0};
         bc.dirty = true;
         e.addComponent<BrushComponent>(std::move(bc));
     }
@@ -115,7 +115,7 @@ TEST_CASE("save+load: 1 box brush preserva 6 caras con normales canonicas") {
 
     BrushComponent bc;
     bc.brush = Csg::makeBoxBrush(glm::mat4(1.0f));
-    bc.material = 0;
+    bc.materials = {0};
     bc.dirty = true;
     e.addComponent<BrushComponent>(std::move(bc));
 
@@ -284,8 +284,8 @@ TEST_CASE("applyEntitiesToScene: brush re-cargado produce buildBrushMesh con 24 
     sceneRestored.forEach<BrushComponent>(
         [&](Entity, BrushComponent& bc2) {
             const Csg::BrushMeshData mesh = Csg::buildBrushMesh(bc2.brush);
-            CHECK(mesh.vertices.size() == 24);
-            CHECK(mesh.indices.size() == 36);
+            CHECK(mesh.totalVertexCount() == 24);
+            CHECK(mesh.totalIndexCount() == 36);
             found = true;
         });
     CHECK(found);

@@ -13,6 +13,22 @@ enum class EditorMode {
     Play,
 };
 
+/// @brief F2H17: sub-modo del Editor Mode estilo Blender. Aplica
+///        SOLO cuando EditorMode == Editor; en Play Mode siempre
+///        es Object implicito.
+///
+///        Toggle con teclas:
+///        - `1` (vertex), `2` (edge): RESERVADAS, no implementadas
+///          todavia. Reservadas explicitamente para no romper la
+///          mental model del dev cuando lleguen.
+///        - `3`: Face Mode.
+///        - `Esc`: vuelve a Object Mode.
+enum class EditorSubMode {
+    Object,  // Default: pickea brushes enteros, gizmo de transform.
+    Face,    // F2H17: pickea caras individuales del brush activo.
+    // Vertex, Edge — futuros.
+};
+
 /// @brief Acciones de proyecto que la UI solicita y EditorApplication atiende.
 enum class ProjectAction {
     None,

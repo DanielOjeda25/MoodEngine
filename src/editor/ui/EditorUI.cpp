@@ -105,7 +105,7 @@ void EditorUI::draw(bool& requestQuit) {
     }
 
     // Status bar inferior: BeginViewportSideBar con ImGuiDir_Down.
-    m_statusBar.draw(m_mode);
+    m_statusBar.draw(m_mode, m_subMode);
 
     if (m_dockspace.begin()) {
         m_menuBar.draw(*this, requestQuit);

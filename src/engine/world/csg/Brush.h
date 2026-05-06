@@ -22,6 +22,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include <optional>
 #include <vector>
 
 namespace Mood::Csg {
@@ -79,5 +80,34 @@ Brush makeBoxBrush(const glm::mat4& worldFromLocal,
 ///        es degenerado (< 4 caras o no produce vertices validos)
 ///        devuelve una AABB no-valida (min == max).
 AABB computeBrushAabb(const Brush& brush);
+
+/// @brief F2H17: devuelve el poligono de UNA cara del brush en
+///        WORLD space (vertices transformados por worldMatrix). El
+///        orden de los vertices NO esta garantizado CCW; el caller
+///        debe ordenar si necesita render. Vacio si la cara es
+///        invalida (faceIndex fuera de rango o cara degenerada).
+///
+///        Usado por el outline render del face mode (E2H17 Bloque D)
+///        y por pickFace internamente.
+std::vector<glm::vec3> collectFaceWorldPolygon(const Brush& brush,
+                                                  u32 faceIndex,
+                                                  const glm::mat4& worldMatrix = glm::mat4(1.0f));
+
+/// @brief F2H17: ray-cast contra los polígonos individuales de cada
+///        cara del brush en world space. Devuelve el INDICE de la
+///        cara mas cercana al rayOrigin, o nullopt si el rayo no
+///        toca ninguna cara.
+///
+///        Algoritmo: para cada cara, compute el poligono local
+///        (intersectThreePlanes filtrando puntos del brush), lo
+///        transforma a world via worldMatrix, lo triangula con fan
+///        desde el centroide, y aplica ray-triangle (Moller-Trumbore)
+///        a cada triangulo. Trackea el `t` minimo positivo.
+///
+///        Usado por el viewport picking en Face Mode (F2H17).
+std::optional<u32> pickFace(const Brush& brush,
+                              const glm::vec3& rayOrigin,
+                              const glm::vec3& rayDir,
+                              const glm::mat4& worldMatrix = glm::mat4(1.0f));
 
 } // namespace Mood::Csg

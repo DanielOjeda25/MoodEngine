@@ -43,9 +43,46 @@ struct BrushMeshVertex {
     u32 materialIndex;
 };
 
-struct BrushMeshData {
+/// @brief F2H17: un submesh es el grupo de vertices/indices que
+///        comparten el mismo materialSlot. `buildBrushMesh`
+///        agrupa las caras del brush por `face.materialIndex`
+///        y produce un submesh por slot distinto.
+struct BrushSubmeshData {
     std::vector<BrushMeshVertex> vertices;
-    std::vector<u32> indices;  // triangulos: 3 indices por triangulo
+    std::vector<u32> indices;
+    u32 materialSlot = 0;  // index dentro de bc.materials
+};
+
+struct BrushMeshData {
+    std::vector<BrushSubmeshData> submeshes;
+
+    /// @brief Helper: total de vertices sumados sobre todos los
+    ///        submeshes. Util para tests que solo necesitan el count.
+    usize totalVertexCount() const {
+        usize n = 0;
+        for (const auto& s : submeshes) n += s.vertices.size();
+        return n;
+    }
+
+    /// @brief Helper: total de indices sumados sobre todos los
+    ///        submeshes (3 por triangulo).
+    usize totalIndexCount() const {
+        usize n = 0;
+        for (const auto& s : submeshes) n += s.indices.size();
+        return n;
+    }
+
+    /// @brief Helper: junta todos los vertices de todos los submeshes
+    ///        en un solo vector. Usado por tests que iteran "los
+    ///        vertices del mesh" sin importar la submesh.
+    std::vector<BrushMeshVertex> allVertices() const {
+        std::vector<BrushMeshVertex> out;
+        out.reserve(totalVertexCount());
+        for (const auto& s : submeshes) {
+            for (const auto& v : s.vertices) out.push_back(v);
+        }
+        return out;
+    }
 };
 
 /// @brief Construye la mesh triangulada del brush. Si el brush es
@@ -62,15 +99,14 @@ struct BrushMeshData {
 BrushMeshData buildBrushMesh(const Brush& brush,
                               const glm::mat4& worldMatrix = glm::mat4(1.0f));
 
-/// @brief Convierte el BrushMeshData (vertices+indices) al layout
-///        interleaved que consume el shader PBR del motor:
+/// @brief F2H17: convierte UN submesh al layout interleaved que
+///        consume el shader PBR del motor:
 ///          pos.xyz (3), color.rgb (3), uv.xy (2), normal.xyz (3) = 11 floats.
 ///        Expande los indices: cada vertice del triangulo aparece
 ///        duplicado en el buffer (no usamos EBOs en este path,
 ///        igual que createCubeMesh). El color se setea en blanco
 ///        (1,1,1) para que el `albedoTint` del material domine
 ///        (mismo patron que createSphereMesh).
-///        Resultado: `vertices.size() == indices.size() * 11`.
-std::vector<f32> brushMeshDataToInterleaved(const BrushMeshData& data);
+std::vector<f32> brushSubmeshToInterleaved(const BrushSubmeshData& sub);
 
 } // namespace Mood::Csg

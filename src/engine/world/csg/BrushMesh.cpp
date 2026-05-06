@@ -115,6 +115,12 @@ BrushMeshData buildBrushMesh(const Brush& brush,
         return out;  // brush degenerado
     }
 
+    // F2H17: agrupar caras por materialIndex. submeshIndex[slot] da
+    // el index del submesh en `out.submeshes` (o -1 si todavia no
+    // se creo). Asi caras dispersas con el mismo slot van al mismo
+    // submesh sin importar el orden.
+    std::vector<i32> slotToSubmesh;
+
     for (usize f = 0; f < brush.faces.size(); ++f) {
         std::vector<glm::vec3> faceVerts = collectFaceVertices(brush, f);
         if (faceVerts.size() < 3) {
@@ -123,66 +129,69 @@ BrushMeshData buildBrushMesh(const Brush& brush,
 
         const BrushFace& face = brush.faces[f];
         const glm::vec3 normal = face.plane.normal;
-        const u32 materialIndex = face.materialIndex;
+        const u32 slot = face.materialIndex;
+
+        // Asegurar que existe un submesh para este slot.
+        if (slot >= slotToSubmesh.size()) {
+            slotToSubmesh.resize(slot + 1, -1);
+        }
+        if (slotToSubmesh[slot] < 0) {
+            BrushSubmeshData sub;
+            sub.materialSlot = slot;
+            out.submeshes.push_back(std::move(sub));
+            slotToSubmesh[slot] = static_cast<i32>(out.submeshes.size() - 1);
+        }
+        BrushSubmeshData& submesh = out.submeshes[slotToSubmesh[slot]];
 
         sortFaceVerticesCCW(faceVerts, normal);
 
-        // F2H15: UV computacion con params per-cara.
-        // - Si lockToWorld: proyectar p_world sobre los ejes
-        //   tangentes (textura "fija" al mundo).
-        // - Si no: proyectar p_local (textura sigue al brush).
-        // - Aplicar rotation, scale y offset.
         const f32 cosR = std::cos(face.uvRotation);
         const f32 sinR = std::sin(face.uvRotation);
 
-        const u32 baseIndex = static_cast<u32>(out.vertices.size());
+        const u32 baseIndex = static_cast<u32>(submesh.vertices.size());
         for (const auto& p : faceVerts) {
             BrushMeshVertex v;
             v.position = p;
             v.normal = normal;
 
-            // Punto a usar para la proyeccion UV.
             const glm::vec3 pForUV = face.lockToWorld
                 ? glm::vec3(worldMatrix * glm::vec4(p, 1.0f))
                 : p;
 
             const f32 uRaw = glm::dot(pForUV, face.uAxis);
             const f32 vRaw = glm::dot(pForUV, face.vAxis);
-            // Rotacion 2D antes de scale + offset.
             const f32 uRot = cosR * uRaw - sinR * vRaw;
             const f32 vRot = sinR * uRaw + cosR * vRaw;
             v.uv = glm::vec2(uRot * face.uvScale.x + face.uvOffset.x,
                              vRot * face.uvScale.y + face.uvOffset.y);
-            v.materialIndex = materialIndex;
-            out.vertices.push_back(v);
+            v.materialIndex = slot;
+            submesh.vertices.push_back(v);
         }
 
-        // Fan-triangulate desde baseIndex: triangulos
-        // (baseIndex, baseIndex + i, baseIndex + i + 1) con i en [1, n-2].
         const u32 n = static_cast<u32>(faceVerts.size());
         for (u32 i = 1; i + 1 < n; ++i) {
-            out.indices.push_back(baseIndex);
-            out.indices.push_back(baseIndex + i);
-            out.indices.push_back(baseIndex + i + 1);
+            submesh.indices.push_back(baseIndex);
+            submesh.indices.push_back(baseIndex + i);
+            submesh.indices.push_back(baseIndex + i + 1);
         }
     }
 
     return out;
 }
 
-std::vector<f32> brushMeshDataToInterleaved(const BrushMeshData& data) {
+std::vector<f32> brushSubmeshToInterleaved(const BrushSubmeshData& sub) {
     // Layout PBR: pos(3) + color(3) + uv(2) + normal(3) = 11 floats.
     constexpr usize kFloatsPerVertex = 11;
     std::vector<f32> out;
-    out.reserve(data.indices.size() * kFloatsPerVertex);
+    out.reserve(sub.indices.size() * kFloatsPerVertex);
 
-    for (u32 idx : data.indices) {
-        if (idx >= data.vertices.size()) continue;  // brush corrupto
-        const BrushMeshVertex& v = data.vertices[idx];
+    for (u32 idx : sub.indices) {
+        if (idx >= sub.vertices.size()) continue;
+        const BrushMeshVertex& v = sub.vertices[idx];
         out.push_back(v.position.x);
         out.push_back(v.position.y);
         out.push_back(v.position.z);
-        out.push_back(1.0f);  // color blanco; albedoTint domina
+        out.push_back(1.0f);
         out.push_back(1.0f);
         out.push_back(1.0f);
         out.push_back(v.uv.x);

@@ -36,7 +36,8 @@ Entity recreateBrushEntity(Scene& scene, AssetManager* assets,
         bc.brush.faces.push_back(face);
     }
     bc.brush.localAabb = Csg::computeBrushAabb(bc.brush);
-    bc.material = (sb.materialPath.empty() || assets == nullptr)
+    bc.materials = {0};
+    bc.materials[0] = (sb.materialPath.empty() || assets == nullptr)
         ? 0u : assets->loadMaterial(sb.materialPath);
     bc.dirty = true;
     e.addComponent<BrushComponent>(std::move(bc));

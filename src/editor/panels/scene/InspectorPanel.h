@@ -31,6 +31,13 @@ public:
         return r;
     }
 
+    /// @brief F2H17: true cuando el dev esta editando UV params del
+    ///        brush (snapshot pre capturado, drag de slider en
+    ///        progreso). Usado por EditorRenderPass para ocultar
+    ///        la capa rellena del face highlight durante la edicion
+    ///        — asi se ve la textura mientras se ajusta.
+    bool isEditingBrushUV() const { return m_uvSnapshotValid; }
+
 private:
     EditorUI* m_ui = nullptr;
     AssetManager* m_assets = nullptr;

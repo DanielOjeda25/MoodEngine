@@ -62,6 +62,7 @@ add_executable(mood_tests
     test_edit_brush_uv_command.cpp
     test_set_tile_command.cpp
     test_edit_mesh_renderer_material_command.cpp
+    test_csg_pick_face.cpp
 
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/Brush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/BrushMesh.cpp

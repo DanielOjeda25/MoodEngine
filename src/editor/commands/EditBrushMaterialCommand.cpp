@@ -51,7 +51,13 @@ void EditBrushMaterialCommand::applyMaterial(MaterialAssetId mat) {
         return;
     }
     auto& bc = target.getComponent<BrushComponent>();
-    bc.material = mat;
+    // F2H17: el material global del brush ahora es el slot 0 del
+    // vector materials. Resize si hace falta.
+    if (bc.materials.empty()) {
+        bc.materials.push_back(mat);
+    } else {
+        bc.materials[0] = mat;
+    }
     bc.dirty = true;
 }
 

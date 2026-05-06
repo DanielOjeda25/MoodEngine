@@ -56,9 +56,21 @@ json serializeBrush(Entity e, const AssetManager& assets) {
     };
     // Material por path logico. Slot 0 (default sentinel) se serializa
     // como "" para que el archivo no tenga un path interno raro.
-    const std::string matPath = (bc.material == 0)
-        ? std::string{} : assets.materialPathOf(bc.material);
-    out["material"] = matPath;
+    // F2H17: serializar TODOS los slots de material como array.
+    // Back-compat v11: si solo hay 1 slot escribimos tambien el
+    // campo legacy "material" (string) para que readers v11 puedan
+    // leerlo. v12 readers prefieren "materials".
+    json materialsArr = json::array();
+    for (MaterialAssetId mid : bc.materials) {
+        materialsArr.push_back(
+            (mid == 0) ? std::string{} : assets.materialPathOf(mid));
+    }
+    out["materials"] = std::move(materialsArr);
+    // Compat v11: tambien escribir "material" como path del slot 0
+    // (puede ayudar a herramientas externas que lean v11).
+    const MaterialAssetId mat0 = bc.materials.empty() ? 0u : bc.materials[0];
+    out["material"] = (mat0 == 0)
+        ? std::string{} : assets.materialPathOf(mat0);
 
     out["faces"] = json::array();
     for (const auto& face : bc.brush.faces) {
@@ -91,6 +103,18 @@ SavedBrush parseBrush(const json& j) {
         sb.scale         = jt.value("scale",         glm::vec3(1.0f));
     }
     sb.materialPath = j.value("material", std::string{});
+    // F2H17 (v12): leer array materialPaths si existe; sino sintetizar
+    // del materialPath legacy.
+    if (j.contains("materials") && j.at("materials").is_array()) {
+        for (const auto& jm : j.at("materials")) {
+            sb.materialPaths.push_back(jm.is_string() ? jm.get<std::string>()
+                                                       : std::string{});
+        }
+    } else if (!sb.materialPath.empty()) {
+        sb.materialPaths.push_back(sb.materialPath);
+    } else {
+        sb.materialPaths.push_back(std::string{});  // 1 slot vacio (default)
+    }
     if (j.contains("faces") && j.at("faces").is_array()) {
         for (const auto& jf : j.at("faces")) {
             SavedBrushFace face;

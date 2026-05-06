@@ -19,6 +19,7 @@
 //   - EditorUI::drawBooleanOpMenu (cascade ops).
 //   - SelectionOverlay (outline visual).
 
+#include "core/Types.h"
 #include "engine/scene/core/Entity.h"
 
 #include <algorithm>
@@ -29,6 +30,11 @@ namespace Mood {
 struct SelectionSet {
     std::vector<Entity> selected;
     Entity active{};
+    /// @brief F2H17: indice de cara seleccionada del `active` cuando
+    ///        EditorSubMode == Face. -1 = ninguna cara picked. Solo
+    ///        valido cuando submode == Face Y `active` tiene
+    ///        BrushComponent. En Object Mode siempre es -1.
+    i32 activeFaceIndex = -1;
 };
 
 inline bool contains(const SelectionSet& set, Entity e) {
@@ -41,6 +47,7 @@ inline bool contains(const SelectionSet& set, Entity e) {
 inline void clear(SelectionSet& set) {
     set.selected.clear();
     set.active = Entity{};
+    set.activeFaceIndex = -1;  // F2H17
 }
 
 /// @brief Agrega `e` (si no estaba) y lo setea como active.
@@ -49,6 +56,12 @@ inline void add(SelectionSet& set, Entity e) {
     if (!static_cast<bool>(e)) return;
     if (!contains(set, e)) {
         set.selected.push_back(e);
+    }
+    // F2H17: cambiar el active resetea el faceIndex (la cara
+    // seleccionada era de OTRO brush; deja de tener sentido).
+    if (!static_cast<bool>(set.active) ||
+        set.active.handle() != e.handle()) {
+        set.activeFaceIndex = -1;
     }
     set.active = e;
 }
@@ -68,6 +81,9 @@ inline void remove(SelectionSet& set, Entity e) {
     if (wasActive) {
         set.active = set.selected.empty()
             ? Entity{} : set.selected.back();
+        // F2H17: el active cambio (o desaparecio) -> faceIndex
+        // pierde sentido.
+        set.activeFaceIndex = -1;
     }
 }
 

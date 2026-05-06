@@ -23,7 +23,7 @@ Entity makeBrushEntity(Scene& scene, const std::string& tag,
     Entity e = scene.createEntity(tag);
     BrushComponent bc;
     bc.brush = Csg::makeBoxBrush(glm::mat4(1.0f));
-    bc.material = mat;
+    bc.materials = {mat};
     e.addComponent<BrushComponent>(std::move(bc));
     return e;
 }
@@ -38,7 +38,7 @@ TEST_CASE("EditBrushMaterialCommand: execute aplica newMat") {
                                    "Asignar material a brush");
     cmd.execute();
 
-    CHECK(e.getComponent<BrushComponent>().material == 7);
+    CHECK(e.getComponent<BrushComponent>().materials[0] == 7);
     CHECK(e.getComponent<BrushComponent>().dirty);
 }
 
@@ -48,10 +48,10 @@ TEST_CASE("EditBrushMaterialCommand: undo restaura oldMat") {
 
     EditBrushMaterialCommand cmd(&scene, "Brush1", 5, 7);
     cmd.execute();
-    REQUIRE(e.getComponent<BrushComponent>().material == 7);
+    REQUIRE(e.getComponent<BrushComponent>().materials[0] == 7);
 
     cmd.undo();
-    CHECK(e.getComponent<BrushComponent>().material == 5);
+    CHECK(e.getComponent<BrushComponent>().materials[0] == 5);
 }
 
 TEST_CASE("EditBrushMaterialCommand: redo (execute tras undo)") {
@@ -62,7 +62,7 @@ TEST_CASE("EditBrushMaterialCommand: redo (execute tras undo)") {
     cmd.execute();
     cmd.undo();
     cmd.execute();
-    CHECK(e.getComponent<BrushComponent>().material == 42);
+    CHECK(e.getComponent<BrushComponent>().materials[0] == 42);
 }
 
 TEST_CASE("EditBrushMaterialCommand: tag inexistente no crashea") {

@@ -22,6 +22,7 @@
 #include "engine/render/backend/opengl/OpenGLDebugRenderer.h"
 #include "engine/scene/components/BrushComponent.h"  // F2H13
 #include "engine/scene/components/Components.h"
+#include "engine/world/csg/Brush.h"  // F2H17: collectFaceWorldPolygon
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/queries/ScenePick.h"
@@ -251,8 +252,22 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
         const glm::vec3 selColor   (0.95f, 0.95f, 0.20f); // amarillo claro (resalta sobre cielo gris-azul)
 
         const SelectionSet& set = m_ui.selectionSet();
+        // F2H17: en Face Mode con cara seleccionada, NO dibujamos
+        // el outline del brush activo (caeria encima del cyan de
+        // la cara y los pixeles se superponen perdiendo claridad).
+        // Solo se dibuja el outline de la cara seleccionada.
+        const bool faceModeWithSelectedFace =
+            (m_subMode == EditorSubMode::Face) &&
+            static_cast<bool>(set.active) &&
+            set.activeFaceIndex >= 0;
+
         for (const Entity& sel : set.selected) {
             if (!sel || !sel.hasComponent<TransformComponent>()) continue;
+            const bool isActive = static_cast<bool>(set.active)
+                && set.active.handle() == sel.handle();
+            // Skip el outline del brush active cuando hay cara seleccionada
+            // en Face Mode.
+            if (isActive && faceModeWithSelectedFace) continue;
             const auto& tf = sel.getComponent<TransformComponent>();
             const glm::mat4 model = tf.worldMatrix();
 
@@ -286,11 +301,53 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                 w[i] = glm::vec3(p);
             }
 
-            const bool isActive = static_cast<bool>(set.active)
-                && set.active.handle() == sel.handle();
             const glm::vec3& color = isActive ? activeColor : selColor;
             for (const auto& e : kEdges) {
                 dbg.drawLine(w[e[0]], w[e[1]], color);
+            }
+        }
+
+        // F2H17: highlight de cara seleccionada en Face Mode estilo
+        // Blender — capa cyan SEMI-TRANSPARENTE encima de la cara +
+        // outline cyan brillante alrededor para denotar bordes.
+        // Solo si submode == Face Y la `active` tiene BrushComponent
+        // Y activeFaceIndex >= 0.
+        if (m_subMode == EditorSubMode::Face &&
+            static_cast<bool>(set.active) &&
+            set.active.hasComponent<BrushComponent>() &&
+            set.active.hasComponent<TransformComponent>() &&
+            set.activeFaceIndex >= 0) {
+            const auto& bc = set.active.getComponent<BrushComponent>();
+            const auto& tf = set.active.getComponent<TransformComponent>();
+            const u32 faceIdx = static_cast<u32>(set.activeFaceIndex);
+            if (faceIdx < bc.brush.faces.size()) {
+                const auto poly = Csg::collectFaceWorldPolygon(
+                    bc.brush, faceIdx, tf.worldMatrix());
+                // F2H17: naranja Half-Life (más visible sobre cualquier
+                // textura que el cyan).
+                const glm::vec3 outlineColor(1.00f, 0.50f, 0.00f);
+                const glm::vec4 fillColor   (1.00f, 0.55f, 0.10f, 0.55f);
+                const usize n = poly.size();
+                if (n >= 3) {
+                    // F2H17: la capa rellena solo se dibuja cuando el dev
+                    // NO esta editando UV params — durante un drag de
+                    // slider la capa tapa la textura y dificulta ver el
+                    // efecto del cambio. El outline siempre se dibuja
+                    // para mantener visible cual cara esta seleccionada.
+                    const bool editingUV = m_ui.inspector().isEditingBrushUV();
+                    if (!editingUV) {
+                        glm::vec3 centroid(0.0f);
+                        for (const auto& v : poly) centroid += v;
+                        centroid /= static_cast<f32>(n);
+                        for (usize i = 0; i < n; ++i) {
+                            dbg.drawTriangle(centroid, poly[i],
+                                              poly[(i + 1) % n], fillColor);
+                        }
+                    }
+                    for (usize i = 0; i < n; ++i) {
+                        dbg.drawLine(poly[i], poly[(i + 1) % n], outlineColor);
+                    }
+                }
             }
         }
     }

@@ -4,12 +4,12 @@
 // y otros datos. pos/color interleaved por vertice; matriz MVP simple.
 
 layout(location = 0) in vec3 aPos;
-layout(location = 1) in vec3 aColor;
+layout(location = 1) in vec4 aColor;  // F2H17: vec4 con alpha
 
 uniform mat4 uView;
 uniform mat4 uProjection;
 
-out vec3 vColor;
+out vec4 vColor;
 
 void main() {
     vColor = aColor;

@@ -644,11 +644,13 @@ void SceneRenderer::renderScene(Scene& scene,
                         }
                     }
 
-                    if (bc.dirty || transformChangedForLock || !bc.meshCache) {
+                    if (bc.dirty || transformChangedForLock ||
+                        bc.meshCache.empty()) {
                         const Csg::BrushMeshData data =
                             Csg::buildBrushMesh(bc.brush, worldMatrix);
-                        if (data.indices.empty()) {
+                        if (data.submeshes.empty()) {
                             bc.dirty = false;
+                            bc.meshCache.clear();
                             return;  // brush degenerado: nada que dibujar
                         }
                         // Recompute cache de lock-to-world tras la rebuild.
@@ -660,59 +662,72 @@ void SceneRenderer::renderScene(Scene& scene,
                             }
                         }
                         bc.lastWorldMatrix = worldMatrix;
-                        const std::vector<f32> verts =
-                            Csg::brushMeshDataToInterleaved(data);
-                        bc.meshCache = assets.createDynamicMesh(verts, kBrushAttrs);
+                        // F2H17: 1 IMesh por submesh (1 por slot
+                        // distinto). Limpiar cache previo y crear N.
+                        bc.meshCache.clear();
+                        bc.meshCacheSlots.clear();
+                        bc.meshCache.reserve(data.submeshes.size());
+                        bc.meshCacheSlots.reserve(data.submeshes.size());
+                        for (const auto& sub : data.submeshes) {
+                            const std::vector<f32> verts =
+                                Csg::brushSubmeshToInterleaved(sub);
+                            bc.meshCache.push_back(
+                                assets.createDynamicMesh(verts, kBrushAttrs));
+                            bc.meshCacheSlots.push_back(sub.materialSlot);
+                        }
                         bc.dirty = false;
                     }
-                    if (!bc.meshCache) return;
+                    if (bc.meshCache.empty()) return;
 
                     m_pbrShader->setMat4("uModel", worldMatrix);
 
-                    // Bindeo de material. Si bc.material == 0 (sin material
-                    // asignado) usamos un look "blank brush" estilo Hammer/
-                    // TrenchBroom: gris liso, mate, sin textura. NO caer al
-                    // missing del material slot 0 — ese es warning visible
-                    // para meshes con material faltante, no para brushes
-                    // que conscientemente no tienen material todavia.
-                    // F2H14 reemplaza esto con material per-cara real.
-                    const bool useBlankLook = (bc.material == 0);
-                    const MaterialAsset* mat = useBlankLook
-                        ? nullptr : assets.getMaterial(bc.material);
+                    // F2H17: 1 draw call por submesh. meshCacheSlots[i]
+                    // da el slot de bc.materials para bc.meshCache[i].
+                    for (usize si = 0; si < bc.meshCache.size() &&
+                                        si < bc.meshCacheSlots.size(); ++si) {
+                        const u32 slot = bc.meshCacheSlots[si];
+                        const MaterialAssetId matId =
+                            (slot < bc.materials.size())
+                                ? bc.materials[slot] : 0u;
+                        const bool useBlankLook = (matId == 0);
+                        const MaterialAsset* mat = useBlankLook
+                            ? nullptr : assets.getMaterial(matId);
 
-                    const bool hasAlbedo = (mat != nullptr && mat->useAlbedoMap);
-                    glActiveTexture(GL_TEXTURE0);
-                    if (hasAlbedo) assets.getTexture(mat->albedo)->bind(0);
-                    else           dummyTex->bind(0);
-                    m_pbrShader->setInt("uHasAlbedoMap", hasAlbedo ? 1 : 0);
+                        const bool hasAlbedo = (mat != nullptr && mat->useAlbedoMap);
+                        glActiveTexture(GL_TEXTURE0);
+                        if (hasAlbedo) assets.getTexture(mat->albedo)->bind(0);
+                        else           dummyTex->bind(0);
+                        m_pbrShader->setInt("uHasAlbedoMap", hasAlbedo ? 1 : 0);
 
-                    const bool hasMR = (mat != nullptr && mat->metallicRoughness != 0);
-                    glActiveTexture(GL_TEXTURE2);
-                    if (hasMR) assets.getTexture(mat->metallicRoughness)->bind(2);
-                    else       dummyTex->bind(2);
-                    m_pbrShader->setInt("uHasMetallicRoughness", hasMR ? 1 : 0);
+                        const bool hasMR = (mat != nullptr && mat->metallicRoughness != 0);
+                        glActiveTexture(GL_TEXTURE2);
+                        if (hasMR) assets.getTexture(mat->metallicRoughness)->bind(2);
+                        else       dummyTex->bind(2);
+                        m_pbrShader->setInt("uHasMetallicRoughness", hasMR ? 1 : 0);
 
-                    const bool hasAo = (mat != nullptr && mat->ao != 0);
-                    glActiveTexture(GL_TEXTURE3);
-                    if (hasAo) assets.getTexture(mat->ao)->bind(3);
-                    else       dummyTex->bind(3);
-                    m_pbrShader->setInt("uHasAoMap", hasAo ? 1 : 0);
+                        const bool hasAo = (mat != nullptr && mat->ao != 0);
+                        glActiveTexture(GL_TEXTURE3);
+                        if (hasAo) assets.getTexture(mat->ao)->bind(3);
+                        else       dummyTex->bind(3);
+                        m_pbrShader->setInt("uHasAoMap", hasAo ? 1 : 0);
 
-                    if (mat != nullptr) {
-                        m_pbrShader->setVec3 ("uAlbedoTint",   mat->albedoTint);
-                        m_pbrShader->setFloat("uMetallicMult", mat->metallicMult);
-                        m_pbrShader->setFloat("uRoughnessMult",mat->roughnessMult);
-                        m_pbrShader->setFloat("uAoMult",       mat->aoMult);
-                    } else {
-                        // Look "blank brush": gris claro mate.
-                        m_pbrShader->setVec3 ("uAlbedoTint",   glm::vec3(0.7f));
-                        m_pbrShader->setFloat("uMetallicMult", 0.0f);
-                        m_pbrShader->setFloat("uRoughnessMult",0.85f);
-                        m_pbrShader->setFloat("uAoMult",       1.0f);
+                        if (mat != nullptr) {
+                            m_pbrShader->setVec3 ("uAlbedoTint",   mat->albedoTint);
+                            m_pbrShader->setFloat("uMetallicMult", mat->metallicMult);
+                            m_pbrShader->setFloat("uRoughnessMult",mat->roughnessMult);
+                            m_pbrShader->setFloat("uAoMult",       mat->aoMult);
+                        } else {
+                            m_pbrShader->setVec3 ("uAlbedoTint",   glm::vec3(0.7f));
+                            m_pbrShader->setFloat("uMetallicMult", 0.0f);
+                            m_pbrShader->setFloat("uRoughnessMult",0.85f);
+                            m_pbrShader->setFloat("uAoMult",       1.0f);
+                        }
+
+                        glActiveTexture(GL_TEXTURE0);
+                        if (bc.meshCache[si]) {
+                            m_renderer->drawMesh(*bc.meshCache[si], *m_pbrShader);
+                        }
                     }
-
-                    glActiveTexture(GL_TEXTURE0);
-                    m_renderer->drawMesh(*bc.meshCache, *m_pbrShader);
                 });
         }
     }

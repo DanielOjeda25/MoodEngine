@@ -80,7 +80,7 @@ TEST_CASE("subtract: B disjunto de A devuelve copia de A (1 brush)") {
     CHECK(isBrushValid(result[0]));
     // El resultado debe tener volumen ~ 1.0
     const auto mesh = buildBrushMesh(result[0]);
-    CHECK(mesh.indices.size() > 0);
+    CHECK(mesh.totalIndexCount() > 0);
 }
 
 TEST_CASE("subtract: B contiene completamente a A devuelve vacio") {
@@ -195,7 +195,7 @@ TEST_CASE("intersectOp: B contiene a A devuelve A (mod ordering)") {
     // El volumen de A ∩ B con B ⊇ A es el de A. Aprox: contar tris
     // del mesh (24/box).
     const auto mesh = buildBrushMesh(*result);
-    CHECK(mesh.indices.size() > 0);
+    CHECK(mesh.totalIndexCount() > 0);
 }
 
 TEST_CASE("intersectOp: A y B con overlap parcial devuelve brush valido") {
@@ -218,7 +218,7 @@ TEST_CASE("intersectOp: conmutatividad (A ∩ B == B ∩ A en volumen)") {
     // pero el volumen es identico).
     const auto meshAB = buildBrushMesh(*ab);
     const auto meshBA = buildBrushMesh(*ba);
-    CHECK(meshAB.vertices.size() == meshBA.vertices.size());
+    CHECK(meshAB.totalVertexCount() == meshBA.totalVertexCount());
 }
 
 TEST_CASE("intersectOp: A invalido devuelve nullopt") {

@@ -28,13 +28,14 @@ void EditorApplication::buildInitialTestMap() {
     // El piso es una entidad agregada en rebuildSceneFromMap.
     m_map = GridMap(16u, 16u, 3.0f);
     const TextureAssetId grid  = m_assetManager->loadTexture("textures/grid.png");
-    const TextureAssetId brick = m_assetManager->loadTexture("textures/brick.png");
     m_wallTextureId = grid;
 
-    m_map.setTile(m_map.width() / 2u, m_map.height() / 2u,
-                  TileType::SolidWall, brick);
-    Log::world()->info("Mapa de prueba cargado: arena_16x16 ({} tiles solidos)",
-                       m_map.solidCount());
+    // F2H17 Bloque G: el mapa nuevo arranca vacio. Antes spawneabamos
+    // un cubo brick.png en el centro como prueba del Hito 4/5; con el
+    // workflow CSG de F2H11+ ese cubo era ruido visual constante. Si
+    // se necesita un brush de prueba, el dev usa "Anadir Box Brush"
+    // del menu.
+    Log::world()->info("Mapa nuevo cargado: arena_16x16 vacia");
 }
 
 void EditorApplication::rebuildSceneFromMap() {

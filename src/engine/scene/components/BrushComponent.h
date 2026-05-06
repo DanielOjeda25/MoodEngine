@@ -24,19 +24,32 @@
 #include <glm/mat4x4.hpp>
 
 #include <memory>
+#include <vector>
 
 namespace Mood {
 
 struct BrushComponent {
     Csg::Brush brush;
-    /// @brief Material aplicado a TODAS las caras del brush en F2H11.
-    ///        F2H16 lo reemplaza con un material per-cara cuando llegue
-    ///        el face mode + selection.
-    MaterialAssetId material = 0;
-    /// @brief Mesh GPU regenerada bajo demanda. unique_ptr garantiza
-    ///        que se libera al destruir la entidad o al swap por una
-    ///        version mas nueva (cuando dirty=true).
-    std::unique_ptr<IMesh> meshCache;
+    /// @brief F2H17: slots de material per-cara. `face.materialIndex`
+    ///        de cada cara (campo de F2H11) indexea este vector.
+    ///        Default `{0}` = 1 slot con material default (look
+    ///        "blank gris"). Cuando el dev dropea texturas en Face
+    ///        Mode, se agregan slots nuevos y `face.materialIndex`
+    ///        se actualiza para apuntar al slot correspondiente.
+    ///        Antes de F2H17 era un solo `MaterialAssetId material`
+    ///        compartido por todas las caras.
+    std::vector<MaterialAssetId> materials{0};
+    /// @brief F2H17: una mesh GPU por submesh (1 por slot de
+    ///        material). Antes era una mesh unica para todo el brush.
+    ///        El SceneRenderer hace 1 draw call por entry con su
+    ///        material correspondiente. Si `dirty=true`, todo el
+    ///        vector se regenera.
+    std::vector<std::unique_ptr<IMesh>> meshCache;
+    /// @brief F2H17: paralelo a `meshCache`, contiene el material
+    ///        slot de cada submesh. `bc.materials[meshCacheSlots[i]]`
+    ///        da el MaterialAssetId a bindear cuando se dibuja
+    ///        `meshCache[i]`.
+    std::vector<u32> meshCacheSlots;
     /// @brief True si el brush cambio y la meshCache esta obsoleta.
     ///        El SceneRenderer la regenera al ver dirty=true.
     bool dirty = true;
@@ -51,6 +64,12 @@ struct BrushComponent {
     ///        mesh. Usado para detectar cambios cuando
     ///        anyFaceLockToWorld == true.
     glm::mat4 lastWorldMatrix{1.0f};
+
+    BrushComponent() = default;
+    BrushComponent(const BrushComponent&) = delete;
+    BrushComponent& operator=(const BrushComponent&) = delete;
+    BrushComponent(BrushComponent&&) = default;
+    BrushComponent& operator=(BrushComponent&&) = default;
 };
 
 } // namespace Mood

@@ -1,5 +1,6 @@
 #include "editor/application/EditorApplication.h"
 
+#include "core/Log.h"
 #include "editor/commands/EditTransformCommand.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/scene/components/BrushComponent.h"  // F2H14: rotate/scale gizmo
@@ -205,6 +206,26 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
         if (ImGui::IsKeyPressed(ImGuiKey_W, false)) m_gizmoMode = GizmoMode::Translate;
         if (ImGui::IsKeyPressed(ImGuiKey_E, false)) m_gizmoMode = GizmoMode::Rotate;
         if (ImGui::IsKeyPressed(ImGuiKey_R, false)) m_gizmoMode = GizmoMode::Scale;
+        // F2H17: tecla 3 toggle Face Mode. Esc vuelve a Object.
+        // ImGuiKey_3 es la fila superior; ImGuiKey_Keypad3 es numpad.
+        // Aceptamos ambas para no fallar segun el layout.
+        const bool key3 = ImGui::IsKeyPressed(ImGuiKey_3, false) ||
+                            ImGui::IsKeyPressed(ImGuiKey_Keypad3, false);
+        if (key3) {
+            m_subMode = (m_subMode == EditorSubMode::Face)
+                ? EditorSubMode::Object
+                : EditorSubMode::Face;
+            if (m_subMode == EditorSubMode::Object) {
+                m_ui.selectionSet().activeFaceIndex = -1;
+            }
+            Log::editor()->info("Sub-mode: {}",
+                m_subMode == EditorSubMode::Face ? "Face" : "Object");
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) &&
+            m_subMode != EditorSubMode::Object) {
+            m_subMode = EditorSubMode::Object;
+            m_ui.selectionSet().activeFaceIndex = -1;
+        }
         if (ImGui::IsKeyPressed(ImGuiKey_Period, false) &&
             selected && selected.hasComponent<TransformComponent>()) {
             const auto& tf = selected.getComponent<TransformComponent>();

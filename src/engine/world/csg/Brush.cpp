@@ -1,9 +1,11 @@
 #include "engine/world/csg/Brush.h"
 
 #include <glm/gtc/matrix_inverse.hpp>  // glm::inverseTranspose
-#include <glm/geometric.hpp>           // glm::normalize
+#include <glm/geometric.hpp>           // glm::normalize, cross, dot
 
+#include <algorithm>                   // std::sort en collectFaceWorldPolygon
 #include <cmath>                       // std::fabs
+#include <limits>                      // std::numeric_limits para pickFace
 
 namespace Mood::Csg {
 
@@ -77,6 +79,189 @@ Brush makeBoxBrush(const glm::mat4& worldFromLocal, u32 materialIndex) {
 
     b.localAabb = computeBrushAabb(b);
     return b;
+}
+
+namespace {
+
+/// @brief Recolecta los vertices del poligono de UNA cara
+///        (intersect tripletes filtrando puntos del brush + dedup).
+///        Devuelve los vertices en LOCAL space (antes de aplicar
+///        worldMatrix). Mismo algoritmo que collectFaceVertices de
+///        BrushMesh.cpp; duplicado aqui para que pickFace sea
+///        independiente del path de mesh build.
+std::vector<glm::vec3> collectFaceLocalVertices(const Brush& brush,
+                                                  usize faceIndex) {
+    std::vector<glm::vec3> verts;
+    const usize n = brush.faces.size();
+    if (faceIndex >= n) return verts;
+    const Plane& facePlane = brush.faces[faceIndex].plane;
+
+    for (usize j = 0; j < n; ++j) {
+        if (j == faceIndex) continue;
+        for (usize k = j + 1; k < n; ++k) {
+            if (k == faceIndex) continue;
+            glm::vec3 p{};
+            if (!intersectThreePlanes(facePlane, brush.faces[j].plane,
+                                       brush.faces[k].plane, p)) {
+                continue;
+            }
+            bool inside = true;
+            for (usize m = 0; m < n; ++m) {
+                if (m == faceIndex || m == j || m == k) continue;
+                if (signedDistance(brush.faces[m].plane, p) > kPlaneEpsilon) {
+                    inside = false;
+                    break;
+                }
+            }
+            if (!inside) continue;
+            bool dup = false;
+            for (const auto& existing : verts) {
+                if (std::fabs(existing.x - p.x) < kPlaneEpsilon &&
+                    std::fabs(existing.y - p.y) < kPlaneEpsilon &&
+                    std::fabs(existing.z - p.z) < kPlaneEpsilon) {
+                    dup = true;
+                    break;
+                }
+            }
+            if (!dup) verts.push_back(p);
+        }
+    }
+    return verts;
+}
+
+/// @brief Ray-triangle intersection (Moller-Trumbore). Devuelve
+///        `t` positivo si hit, -1 si no.
+f32 rayTriangle(const glm::vec3& origin, const glm::vec3& dir,
+                  const glm::vec3& v0, const glm::vec3& v1,
+                  const glm::vec3& v2) {
+    constexpr f32 kEps = 1e-7f;
+    const glm::vec3 edge1 = v1 - v0;
+    const glm::vec3 edge2 = v2 - v0;
+    const glm::vec3 h = glm::cross(dir, edge2);
+    const f32 a = glm::dot(edge1, h);
+    if (a > -kEps && a < kEps) return -1.0f;  // ray paralelo
+    const f32 f = 1.0f / a;
+    const glm::vec3 s = origin - v0;
+    const f32 u = f * glm::dot(s, h);
+    if (u < 0.0f || u > 1.0f) return -1.0f;
+    const glm::vec3 q = glm::cross(s, edge1);
+    const f32 v = f * glm::dot(dir, q);
+    if (v < 0.0f || u + v > 1.0f) return -1.0f;
+    const f32 t = f * glm::dot(edge2, q);
+    if (t < kEps) return -1.0f;  // detras del origen
+    return t;
+}
+
+} // namespace
+
+std::vector<glm::vec3> collectFaceWorldPolygon(const Brush& brush,
+                                                  u32 faceIndex,
+                                                  const glm::mat4& worldMatrix) {
+    std::vector<glm::vec3> localVerts =
+        collectFaceLocalVertices(brush, faceIndex);
+    if (localVerts.size() < 3) return {};
+
+    // Transformar a world.
+    std::vector<glm::vec3> worldVerts;
+    worldVerts.reserve(localVerts.size());
+    for (const auto& p : localVerts) {
+        worldVerts.push_back(
+            glm::vec3(worldMatrix * glm::vec4(p, 1.0f)));
+    }
+
+    // Ordenar CCW alrededor del centroide para que el render
+    // de lineas (i, i+1) cierre el poligono. Reusa el algoritmo
+    // de BrushMesh.cpp::sortFaceVerticesCCW pero aplicado a la
+    // normal world-transformed.
+    glm::vec3 centroid(0.0f);
+    for (const auto& v : worldVerts) centroid += v;
+    centroid /= static_cast<f32>(worldVerts.size());
+
+    if (faceIndex >= brush.faces.size()) return {};
+    // Normal en world space (transformada por la inversa-transpuesta).
+    const glm::mat3 normalMatrix =
+        glm::inverseTranspose(glm::mat3(worldMatrix));
+    const glm::vec3 worldNormal =
+        glm::normalize(normalMatrix * brush.faces[faceIndex].plane.normal);
+
+    // Tangent basis para sortear por angulo.
+    const glm::vec3 helper =
+        (std::fabs(worldNormal.x) > 0.9f)
+            ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
+    const glm::vec3 uAxis = glm::normalize(glm::cross(helper, worldNormal));
+    const glm::vec3 vAxis = glm::normalize(glm::cross(worldNormal, uAxis));
+
+    std::sort(worldVerts.begin(), worldVerts.end(),
+              [&](const glm::vec3& a, const glm::vec3& b) {
+        const glm::vec3 da = a - centroid;
+        const glm::vec3 db = b - centroid;
+        const f32 ang_a = std::atan2(glm::dot(da, vAxis), glm::dot(da, uAxis));
+        const f32 ang_b = std::atan2(glm::dot(db, vAxis), glm::dot(db, uAxis));
+        return ang_a < ang_b;
+    });
+
+    return worldVerts;
+}
+
+std::optional<u32> pickFace(const Brush& brush,
+                              const glm::vec3& rayOrigin,
+                              const glm::vec3& rayDir,
+                              const glm::mat4& worldMatrix) {
+    if (brush.faces.size() < 4) return std::nullopt;
+
+    f32 bestT = std::numeric_limits<f32>::max();
+    i32 bestFace = -1;
+
+    // F2H17: para evitar pickear caras "del otro lado" del brush
+    // (back-facing), transformamos cada normal a world y descartamos
+    // las caras cuya normal apunte LEJOS de la camara (mismo sentido
+    // que el rayo). Esto matchea el behavior de Blender / Hammer.
+    const glm::mat3 normalMatrix =
+        glm::inverseTranspose(glm::mat3(worldMatrix));
+
+    for (usize fi = 0; fi < brush.faces.size(); ++fi) {
+        // Skip back-faces.
+        const glm::vec3 worldNormal =
+            glm::normalize(normalMatrix * brush.faces[fi].plane.normal);
+        if (glm::dot(worldNormal, rayDir) > 0.0f) {
+            continue;  // back-face: la normal apunta hacia donde mira el rayo
+        }
+        std::vector<glm::vec3> localVerts =
+            collectFaceLocalVertices(brush, fi);
+        if (localVerts.size() < 3) continue;
+
+        // Transformar vertices a world.
+        std::vector<glm::vec3> worldVerts;
+        worldVerts.reserve(localVerts.size());
+        for (const auto& p : localVerts) {
+            worldVerts.push_back(
+                glm::vec3(worldMatrix * glm::vec4(p, 1.0f)));
+        }
+
+        // Centroide para fan-triangulation.
+        glm::vec3 centroid(0.0f);
+        for (const auto& v : worldVerts) centroid += v;
+        centroid /= static_cast<f32>(worldVerts.size());
+
+        // Triangular en abanico desde el centroide. Cada par
+        // (i, i+1) consecutivo forma un triangulo con centroide.
+        // Esto evita asumir que los vertices estan CCW-ordenados;
+        // el algoritmo funciona con cualquier ordering convexo.
+        const usize n = worldVerts.size();
+        for (usize i = 0; i < n; ++i) {
+            const glm::vec3& v0 = centroid;
+            const glm::vec3& v1 = worldVerts[i];
+            const glm::vec3& v2 = worldVerts[(i + 1) % n];
+            const f32 t = rayTriangle(rayOrigin, rayDir, v0, v1, v2);
+            if (t > 0.0f && t < bestT) {
+                bestT = t;
+                bestFace = static_cast<i32>(fi);
+            }
+        }
+    }
+
+    if (bestFace < 0) return std::nullopt;
+    return static_cast<u32>(bestFace);
 }
 
 AABB computeBrushAabb(const Brush& brush) {

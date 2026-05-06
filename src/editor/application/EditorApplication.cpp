@@ -10,10 +10,12 @@
 #include "engine/render/backend/opengl/OpenGLMesh.h"
 #include "engine/render/backend/opengl/OpenGLShader.h"
 #include "engine/render/backend/opengl/OpenGLTexture.h"
+#include "engine/scene/components/BrushComponent.h"  // F2H17: pickFace
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/queries/ScenePick.h"
+#include "engine/world/csg/Brush.h"  // F2H17: Csg::pickFace
 #include "engine/scene/queries/ViewportPick.h"
 #include "engine/scene/serialization/PrefabSerializer.h"
 #include "engine/scene/serialization/ProjectSerializer.h"
@@ -435,6 +437,9 @@ int EditorApplication::run() {
 
         const f32 fps = m_fpsCounter.tick(dtD);
         m_ui.setFps(fps);
+        // F2H17: sync sub-mode al UI cada frame para statusbar e
+        // InspectorPanel.
+        m_ui.setSubMode(m_subMode);
         MOOD_PROFILE_PLOT("FPS", fps);
         MOOD_PROFILE_PLOT("FrameMs", static_cast<f32>(dtD * 1000.0));
         if (m_scene) {
@@ -579,33 +584,81 @@ int EditorApplication::run() {
             const float aspect = viewportAspect();
             const glm::mat4 view = m_editorCamera.viewMatrix();
             const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
-            const ScenePickResult hit = pickEntity(*m_scene, view, projection,
-                                                    glm::vec2(click.ndcX, click.ndcY),
-                                                    m_assetManager.get());
+
+            // F2H17: en Face Mode, intentar pickFace contra el brush
+            // active ANTES del pickEntity. Si pega, solo actualiza
+            // activeFaceIndex sin tocar la seleccion. Si NO pega o
+            // no hay brush active, fallback al picking de Object Mode.
+            bool faceModeHandled = false;
+            if (m_subMode == EditorSubMode::Face) {
+                SelectionSet& selSet = m_ui.selectionSet();
+                if (static_cast<bool>(selSet.active) &&
+                    selSet.active.hasComponent<BrushComponent>() &&
+                    selSet.active.hasComponent<TransformComponent>()) {
+                    auto& bc = selSet.active.getComponent<BrushComponent>();
+                    auto& t = selSet.active.getComponent<TransformComponent>();
+                    const glm::mat4 invVP =
+                        glm::inverse(projection * view);
+                    const glm::vec4 nearH = invVP *
+                        glm::vec4(click.ndcX, click.ndcY, -1.0f, 1.0f);
+                    const glm::vec4 farH = invVP *
+                        glm::vec4(click.ndcX, click.ndcY, 1.0f, 1.0f);
+                    const glm::vec3 nearW = glm::vec3(nearH) / nearH.w;
+                    const glm::vec3 farW = glm::vec3(farH) / farH.w;
+                    const glm::vec3 origin = nearW;
+                    const glm::vec3 dir = glm::normalize(farW - nearW);
+                    const auto faceHit = Csg::pickFace(
+                        bc.brush, origin, dir, t.worldMatrix());
+                    if (faceHit.has_value()) {
+                        selSet.activeFaceIndex =
+                            static_cast<i32>(*faceHit);
+                        Log::editor()->info(
+                            "Face Mode: selected face {} of brush '{}'",
+                            *faceHit,
+                            selSet.active.hasComponent<TagComponent>()
+                                ? selSet.active.getComponent<TagComponent>().name
+                                : std::string{"(sin tag)"});
+                        faceModeHandled = true;
+                    }
+                    // Sin face hit: cae al picking de Object para
+                    // permitir cambiar de brush activo.
+                }
+            }
+
+            ScenePickResult hit{};
+            if (!faceModeHandled) {
+                hit = pickEntity(*m_scene, view, projection,
+                                  glm::vec2(click.ndcX, click.ndcY),
+                                  m_assetManager.get());
+            }
             // F2H13: aplicar Shift / Ctrl semantics igual que en Hierarchy.
             //   Plain click   -> replaceWithSingle.
             //   Shift+click   -> toggle.
             //   Ctrl+click    -> add (que ademas setea active).
             // Click en vacio (no hit) sin modifier -> clear.
             //                  con modifier         -> no-op (preserva).
-            const Uint8* keys = SDL_GetKeyboardState(nullptr);
-            const bool keyShift = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
-            const bool keyCtrl  = keys[SDL_SCANCODE_LCTRL]  || keys[SDL_SCANCODE_RCTRL];
-            SelectionSet& set = m_ui.selectionSet();
-            if (hit) {
-                if (keyShift) {
-                    toggle(set, hit.entity);
-                } else if (keyCtrl) {
-                    add(set, hit.entity);
-                } else {
-                    replaceWithSingle(set, hit.entity);
+            // F2H17: si Face Mode capturo el click (faceModeHandled),
+            // saltear toda la logica de seleccion de entidad.
+            if (!faceModeHandled) {
+                const Uint8* keys = SDL_GetKeyboardState(nullptr);
+                const bool keyShift = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+                const bool keyCtrl  = keys[SDL_SCANCODE_LCTRL]  || keys[SDL_SCANCODE_RCTRL];
+                SelectionSet& set = m_ui.selectionSet();
+                if (hit) {
+                    if (keyShift) {
+                        toggle(set, hit.entity);
+                    } else if (keyCtrl) {
+                        add(set, hit.entity);
+                    } else {
+                        replaceWithSingle(set, hit.entity);
+                    }
+                    if (hit.entity.hasComponent<TagComponent>()) {
+                        Log::editor()->info("Click-select: '{}'",
+                            hit.entity.getComponent<TagComponent>().name);
+                    }
+                } else if (!keyShift && !keyCtrl) {
+                    clear(set);
                 }
-                if (hit.entity.hasComponent<TagComponent>()) {
-                    Log::editor()->info("Click-select: '{}'",
-                        hit.entity.getComponent<TagComponent>().name);
-                }
-            } else if (!keyShift && !keyCtrl) {
-                clear(set);
             }
         }
 

@@ -11,6 +11,7 @@
 #include <glad/gl.h>
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #include <vector>
 
@@ -32,6 +33,15 @@ public:
     void drawAabb(const AABB& box,
                   const glm::vec3& color = glm::vec3(1.0f, 0.8f, 0.1f));
 
+    /// @brief F2H17: encola un triangulo relleno con alpha blending.
+    ///        Usado por el highlight de cara seleccionada en Face Mode
+    ///        (capa cyan semi-transparente sobre la cara). Se dibuja
+    ///        con depth-test less-equal (no escribe depth) para que
+    ///        no oculte los outlines superpuestos.
+    void drawTriangle(const glm::vec3& a, const glm::vec3& b,
+                       const glm::vec3& c,
+                       const glm::vec4& color);
+
     /// @brief Sube los vertices acumulados a la GPU, los dibuja con GL_LINES
     ///        y limpia el buffer de CPU. Llamar una vez por frame, al final
     ///        de la escena.
@@ -43,14 +53,20 @@ public:
 private:
     struct Vertex {
         glm::vec3 pos;
-        glm::vec3 color;
+        glm::vec4 color;  // F2H17: vec4 con alpha (lineas usan alpha=1)
     };
 
-    std::vector<Vertex> m_cpu;
+    std::vector<Vertex> m_cpu;       // lineas (GL_LINES)
+    std::vector<Vertex> m_cpuTris;   // F2H17: triangulos rellenos
 
     GLuint m_vao = 0;
     GLuint m_vbo = 0;
     GLsizeiptr m_vboCapacityBytes = 0;
+
+    // F2H17: buffers paralelos para triangulos rellenos.
+    GLuint m_vaoTris = 0;
+    GLuint m_vboTris = 0;
+    GLsizeiptr m_vboTrisCapacityBytes = 0;
 
     GLuint m_program = 0;
     GLint m_uView = -1;

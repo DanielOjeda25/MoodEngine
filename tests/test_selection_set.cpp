@@ -256,6 +256,62 @@ TEST_CASE("invariante: sin duplicados") {
     CHECK(s.selected.size() == 2);
 }
 
+// ============================================================
+// F2H17: activeFaceIndex
+// ============================================================
+
+TEST_CASE("SelectionSet: activeFaceIndex default es -1") {
+    SelectionSet s;
+    CHECK(s.activeFaceIndex == -1);
+}
+
+TEST_CASE("clear: resetea activeFaceIndex a -1") {
+    TestScene t(1);
+    SelectionSet s;
+    add(s, t.e[0]);
+    s.activeFaceIndex = 3;
+    clear(s);
+    CHECK(s.activeFaceIndex == -1);
+}
+
+TEST_CASE("add con entity distinta resetea activeFaceIndex") {
+    TestScene t(2);
+    SelectionSet s;
+    add(s, t.e[0]);
+    s.activeFaceIndex = 5;
+    add(s, t.e[1]);  // active cambia
+    CHECK(s.activeFaceIndex == -1);
+}
+
+TEST_CASE("add con misma entity preserva activeFaceIndex") {
+    TestScene t(1);
+    SelectionSet s;
+    add(s, t.e[0]);
+    s.activeFaceIndex = 2;
+    add(s, t.e[0]);  // re-add: active no cambia
+    CHECK(s.activeFaceIndex == 2);
+}
+
+TEST_CASE("remove del active resetea activeFaceIndex") {
+    TestScene t(2);
+    SelectionSet s;
+    add(s, t.e[0]);
+    add(s, t.e[1]);  // active = e1
+    s.activeFaceIndex = 4;
+    remove(s, t.e[1]);  // active cambia a e0
+    CHECK(s.activeFaceIndex == -1);
+}
+
+TEST_CASE("remove de no-active preserva activeFaceIndex") {
+    TestScene t(2);
+    SelectionSet s;
+    add(s, t.e[0]);
+    add(s, t.e[1]);  // active = e1
+    s.activeFaceIndex = 4;
+    remove(s, t.e[0]);  // e0 no era active
+    CHECK(s.activeFaceIndex == 4);
+}
+
 TEST_CASE("determinismo: misma secuencia produce mismo estado") {
     TestScene t(3);
 

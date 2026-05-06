@@ -84,7 +84,20 @@ OpenGLDebugRenderer::OpenGLDebugRenderer() {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                           reinterpret_cast<void*>(offsetof(Vertex, pos)));
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          reinterpret_cast<void*>(offsetof(Vertex, color)));
+    glEnableVertexAttribArray(1);
+    glBindVertexArray(0);
+
+    // F2H17: VAO/VBO separados para triangulos rellenos.
+    glGenVertexArrays(1, &m_vaoTris);
+    glGenBuffers(1, &m_vboTris);
+    glBindVertexArray(m_vaoTris);
+    glBindBuffer(GL_ARRAY_BUFFER, m_vboTris);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          reinterpret_cast<void*>(offsetof(Vertex, pos)));
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                           reinterpret_cast<void*>(offsetof(Vertex, color)));
     glEnableVertexAttribArray(1);
     glBindVertexArray(0);
@@ -95,16 +108,30 @@ OpenGLDebugRenderer::OpenGLDebugRenderer() {
 OpenGLDebugRenderer::~OpenGLDebugRenderer() {
     if (m_vbo != 0) glDeleteBuffers(1, &m_vbo);
     if (m_vao != 0) glDeleteVertexArrays(1, &m_vao);
+    if (m_vboTris != 0) glDeleteBuffers(1, &m_vboTris);
+    if (m_vaoTris != 0) glDeleteVertexArrays(1, &m_vaoTris);
     if (m_program != 0) glDeleteProgram(m_program);
 }
 
 void OpenGLDebugRenderer::drawLine(const glm::vec3& a, const glm::vec3& b,
                                    const glm::vec3& color) {
-    m_cpu.push_back({a, color});
-    m_cpu.push_back({b, color});
+    // Lineas siempre con alpha 1.0.
+    const glm::vec4 c4(color, 1.0f);
+    m_cpu.push_back({a, c4});
+    m_cpu.push_back({b, c4});
+}
+
+void OpenGLDebugRenderer::drawTriangle(const glm::vec3& a,
+                                         const glm::vec3& b,
+                                         const glm::vec3& c,
+                                         const glm::vec4& color) {
+    m_cpuTris.push_back({a, color});
+    m_cpuTris.push_back({b, color});
+    m_cpuTris.push_back({c, color});
 }
 
 void OpenGLDebugRenderer::drawAabb(const AABB& box, const glm::vec3& color) {
+    // (sin cambios funcionales — drawLine convierte vec3 a vec4 internamente)
     const glm::vec3& n = box.min;
     const glm::vec3& x = box.max;
     // 8 vertices del cubo
@@ -124,39 +151,75 @@ void OpenGLDebugRenderer::drawAabb(const AABB& box, const glm::vec3& color) {
 }
 
 void OpenGLDebugRenderer::flush(const glm::mat4& view, const glm::mat4& projection) {
-    if (m_cpu.empty()) return;
+    if (m_cpu.empty() && m_cpuTris.empty()) return;
 
     glUseProgram(m_program);
     glUniformMatrix4fv(m_uView,       1, GL_FALSE, glm::value_ptr(view));
     glUniformMatrix4fv(m_uProjection, 1, GL_FALSE, glm::value_ptr(projection));
 
-    glBindVertexArray(m_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+    // F2H17: triangulos rellenos primero (con alpha blending), despues
+    // las lineas (que llevan el outline encima del fill). Asi el cyan
+    // semi-transparente NO oculta el outline cyan brillante.
+    if (!m_cpuTris.empty()) {
+        glBindVertexArray(m_vaoTris);
+        glBindBuffer(GL_ARRAY_BUFFER, m_vboTris);
+        const GLsizeiptr trisBytes =
+            static_cast<GLsizeiptr>(m_cpuTris.size() * sizeof(Vertex));
+        if (trisBytes > m_vboTrisCapacityBytes) {
+            m_vboTrisCapacityBytes = trisBytes * 2;
+            glBufferData(GL_ARRAY_BUFFER, m_vboTrisCapacityBytes,
+                          nullptr, GL_DYNAMIC_DRAW);
+        }
+        glBufferSubData(GL_ARRAY_BUFFER, 0, trisBytes, m_cpuTris.data());
 
-    const GLsizeiptr bytes = static_cast<GLsizeiptr>(m_cpu.size() * sizeof(Vertex));
-    if (bytes > m_vboCapacityBytes) {
-        // Re-aloca el VBO a la nueva capacidad (con algo de margen).
-        m_vboCapacityBytes = bytes * 2;
-        glBufferData(GL_ARRAY_BUFFER, m_vboCapacityBytes, nullptr, GL_DYNAMIC_DRAW);
+        // Alpha blending para que la capa cyan se transparente.
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        // Depth test less-equal: el highlight cae encima de la
+        // geometria cuando coplanar (face del brush), pero queda
+        // ocluido si hay otra cosa adelante.
+        GLint prevDepthFunc = GL_LESS;
+        glGetIntegerv(GL_DEPTH_FUNC, &prevDepthFunc);
+        glDepthFunc(GL_LEQUAL);
+        // No escribir al depth buffer (asi los outlines de linea
+        // que se dibujan despues no chocan con el fill).
+        GLboolean prevDepthMask = GL_TRUE;
+        glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+        glDepthMask(GL_FALSE);
+
+        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(m_cpuTris.size()));
+
+        glDepthMask(prevDepthMask);
+        glDepthFunc(prevDepthFunc);
+        glDisable(GL_BLEND);
     }
-    glBufferSubData(GL_ARRAY_BUFFER, 0, bytes, m_cpu.data());
 
-    // Lineas 1px se pierden contra fondos texturados; pedimos 3px (F2H13:
-    // antes 2px, el dev reporto que el outline de seleccion era poco
-    // visible). La spec Core Profile solo garantiza 1.0, pero la
-    // mayoria de drivers (incluido el Intel Iris Xe) soportan widths
-    // mayores. Si falla, cae a 1.0 sin error.
-    GLfloat prevWidth = 1.0f;
-    glGetFloatv(GL_LINE_WIDTH, &prevWidth);
-    glLineWidth(3.0f);
+    if (!m_cpu.empty()) {
+        glBindVertexArray(m_vao);
+        glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
 
-    glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(m_cpu.size()));
+        const GLsizeiptr bytes = static_cast<GLsizeiptr>(m_cpu.size() * sizeof(Vertex));
+        if (bytes > m_vboCapacityBytes) {
+            m_vboCapacityBytes = bytes * 2;
+            glBufferData(GL_ARRAY_BUFFER, m_vboCapacityBytes, nullptr, GL_DYNAMIC_DRAW);
+        }
+        glBufferSubData(GL_ARRAY_BUFFER, 0, bytes, m_cpu.data());
 
-    glLineWidth(prevWidth);
+        // Lineas 1px se pierden contra fondos texturados; pedimos 3px
+        // (F2H13: antes 2px, dev reporto outline poco visible).
+        GLfloat prevWidth = 1.0f;
+        glGetFloatv(GL_LINE_WIDTH, &prevWidth);
+        glLineWidth(3.0f);
+
+        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(m_cpu.size()));
+
+        glLineWidth(prevWidth);
+    }
 
     glBindVertexArray(0);
 
     m_cpu.clear();
+    m_cpuTris.clear();
 }
 
 } // namespace Mood

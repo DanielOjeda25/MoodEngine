@@ -102,6 +102,12 @@ public:
     void setHistoryStack(HistoryStack* h) { m_history = h; }
     HistoryStack* historyStack() const { return m_history; }
 
+    /// @brief F2H17: sub-modo del Editor (Object / Face). Sincronizado
+    ///        por EditorApplication cada frame para que StatusBar y
+    ///        InspectorPanel sepan el estado.
+    void setSubMode(EditorSubMode m) { m_subMode = m; }
+    EditorSubMode subMode() const { return m_subMode; }
+
     /// @brief Entidad seleccionada por el panel Hierarchy (compartida con
     ///        el Inspector). En F2H13 esto devuelve la `active` del
     ///        SelectionSet — la mayoria de los callsites del editor
@@ -436,6 +442,7 @@ private:
     std::vector<IPanel*> m_panels;
 
     EditorMode m_mode = EditorMode::Editor;
+    EditorSubMode m_subMode = EditorSubMode::Object;  // F2H17
     bool m_togglePlayRequested = false;
 
     ProjectAction m_projectAction = ProjectAction::None;

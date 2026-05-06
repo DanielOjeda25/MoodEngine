@@ -78,11 +78,11 @@ TEST_CASE("makeCylinderBrush: isBrushValid + buildBrushMesh produce geometria") 
     const Brush b = makeCylinderBrush(glm::mat4(1.0f), 16);
     REQUIRE(isBrushValid(b));
     const BrushMeshData mesh = buildBrushMesh(b);
-    CHECK(mesh.indices.size() > 0);
+    CHECK(mesh.totalIndexCount() > 0);
     // Centroide debe estar cerca del origen (cilindro simetrico).
     glm::vec3 centroid(0.0f);
-    for (const auto& v : mesh.vertices) centroid += v.position;
-    centroid /= static_cast<f32>(mesh.vertices.size());
+    for (const auto& v : mesh.allVertices()) centroid += v.position;
+    centroid /= static_cast<f32>(mesh.allVertices().size());
     CHECK(centroid.x == doctest::Approx(0.0f).epsilon(0.05f));
     CHECK(centroid.y == doctest::Approx(0.0f).epsilon(0.05f));
     CHECK(centroid.z == doctest::Approx(0.0f).epsilon(0.05f));
@@ -157,11 +157,11 @@ TEST_CASE("makeSphereBrush: las 12 normales son unitarias") {
 TEST_CASE("makeSphereBrush: buildBrushMesh produce geometria simetrica") {
     const Brush b = makeSphereBrush(glm::mat4(1.0f));
     const BrushMeshData mesh = buildBrushMesh(b);
-    CHECK(mesh.indices.size() > 0);
+    CHECK(mesh.totalIndexCount() > 0);
     // Centroide cerca del origen (esfera centrada).
     glm::vec3 centroid(0.0f);
-    for (const auto& v : mesh.vertices) centroid += v.position;
-    centroid /= static_cast<f32>(mesh.vertices.size());
+    for (const auto& v : mesh.allVertices()) centroid += v.position;
+    centroid /= static_cast<f32>(mesh.allVertices().size());
     CHECK(glm::length(centroid) < 0.05f);
 }
 
@@ -202,7 +202,7 @@ TEST_CASE("makePyramidBrush: cima en (0, 0.5, 0)") {
     const BrushMeshData mesh = buildBrushMesh(b);
     // Debe haber un vertice (la cima) cerca de (0, 0.5, 0).
     bool foundApex = false;
-    for (const auto& v : mesh.vertices) {
+    for (const auto& v : mesh.allVertices()) {
         if (std::fabs(v.position.x) < k_eps &&
             std::fabs(v.position.y - 0.5f) < k_eps &&
             std::fabs(v.position.z) < k_eps) {

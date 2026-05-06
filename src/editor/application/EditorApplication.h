@@ -319,6 +319,10 @@ private:
     EditorCamera m_editorCamera{45.0f, 30.0f, 30.0f};
     FpsCamera m_playCamera{glm::vec3(-4.5f, 1.6f, 7.5f), -90.0f, 0.0f};
     EditorMode m_mode = EditorMode::Editor;
+    /// @brief F2H17: sub-modo del Editor estilo Blender. Toggle con
+    ///        tecla 3 (Face). 1 (vertex) y 2 (edge) reservadas para
+    ///        hitos futuros. Esc vuelve a Object Mode.
+    EditorSubMode m_subMode = EditorSubMode::Object;
 
     // Dimensiones del AABB del jugador (0.6 x 1.8 x 0.6 m). Centrado en la
     // posicion de la camara FPS. Escala SI realista: una persona promedio.

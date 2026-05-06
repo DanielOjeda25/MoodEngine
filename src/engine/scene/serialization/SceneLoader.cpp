@@ -279,8 +279,18 @@ void applyEntitiesToScene(const SavedMap& saved,
         }
         // Material por path logico. "" significa "sin material"
         // (slot 0 = look blank gris).
-        bc.material = sb.materialPath.empty()
-            ? 0u : assets.loadMaterial(sb.materialPath);
+        // F2H17: cargar todos los slots de material desde
+        // materialPaths. Si esta vacio (mapas v10 puros sin nada),
+        // crear 1 slot default 0.
+        bc.materials.clear();
+        for (const auto& path : sb.materialPaths) {
+            const MaterialAssetId id = path.empty()
+                ? 0u : assets.loadMaterial(path);
+            bc.materials.push_back(id);
+        }
+        if (bc.materials.empty()) {
+            bc.materials.push_back(0);
+        }
         bc.dirty = true;
         e.addComponent<BrushComponent>(std::move(bc));
     }

@@ -626,17 +626,52 @@ void EditorApplication::processViewportTextureDrop() {
             const MaterialAssetId newMat =
                 m_assetManager->createMaterialFromTexture(texId);
             auto& bc = brushHit.entity.getComponent<BrushComponent>();
-            const MaterialAssetId oldMat = bc.material;
             const std::string tag =
                 brushHit.entity.hasComponent<TagComponent>()
                     ? brushHit.entity.getComponent<TagComponent>().name
                     : std::string{"(sin tag)"};
 
-            // F2H16: empujar comando undoable. El comando aplica el
-            // cambio (lo hace ahora con execute() implicito al push,
-            // o se aplica aca y solo se push para undo).
-            // Usamos el patron: aplicar primero, push despues.
-            bc.material = newMat;
+            // F2H17: si Face Mode + cara seleccionada del MISMO brush,
+            // asignar material a esa cara (agregar slot si no existe).
+            // Sino, comportamiento global F2H16 (slot 0).
+            const SelectionSet& selSet = m_ui.selectionSet();
+            const bool faceMode =
+                m_subMode == EditorSubMode::Face &&
+                static_cast<bool>(selSet.active) &&
+                selSet.active.handle() == brushHit.entity.handle() &&
+                selSet.activeFaceIndex >= 0 &&
+                static_cast<u32>(selSet.activeFaceIndex) < bc.brush.faces.size();
+
+            if (faceMode) {
+                // Buscar si newMat ya esta en bc.materials. Si si,
+                // reusar slot. Si no, agregar slot nuevo.
+                u32 slot = 0;
+                bool found = false;
+                for (u32 i = 0; i < bc.materials.size(); ++i) {
+                    if (bc.materials[i] == newMat) {
+                        slot = i; found = true; break;
+                    }
+                }
+                if (!found) {
+                    slot = static_cast<u32>(bc.materials.size());
+                    bc.materials.push_back(newMat);
+                }
+                bc.brush.faces[selSet.activeFaceIndex].materialIndex = slot;
+                bc.dirty = true;
+                m_ui.setSelectedEntity(brushHit.entity);
+                Log::editor()->info(
+                    "Drop textura id={} -> brush '{}' cara {} (slot {})",
+                    drop.textureId, tag,
+                    selSet.activeFaceIndex, slot);
+                markDirty();
+                return;
+            }
+
+            // Object Mode: asignar a slot 0 (material "global" del brush).
+            const MaterialAssetId oldMat = bc.materials.empty()
+                ? 0u : bc.materials[0];
+            if (bc.materials.empty()) bc.materials.push_back(newMat);
+            else bc.materials[0] = newMat;
             bc.dirty = true;
             m_history.push(std::make_unique<EditBrushMaterialCommand>(
                 m_scene.get(), tag, oldMat, newMat,
@@ -881,10 +916,44 @@ void EditorApplication::processViewportMaterialDrop() {
     // CSG no tienen MeshRendererComponent.
     if (hit.entity.hasComponent<BrushComponent>()) {
         auto& bc = hit.entity.getComponent<BrushComponent>();
-        const MaterialAssetId oldMat = bc.material;
-        bc.material = matId;
+
+        // F2H17: si Face Mode + cara seleccionada del mismo brush,
+        // asignar material a esa cara. Sino, slot 0 (Object Mode).
+        const SelectionSet& selSet = m_ui.selectionSet();
+        const bool faceMode =
+            m_subMode == EditorSubMode::Face &&
+            static_cast<bool>(selSet.active) &&
+            selSet.active.handle() == hit.entity.handle() &&
+            selSet.activeFaceIndex >= 0 &&
+            static_cast<u32>(selSet.activeFaceIndex) < bc.brush.faces.size();
+
+        if (faceMode) {
+            u32 slot = 0;
+            bool found = false;
+            for (u32 i = 0; i < bc.materials.size(); ++i) {
+                if (bc.materials[i] == matId) {
+                    slot = i; found = true; break;
+                }
+            }
+            if (!found) {
+                slot = static_cast<u32>(bc.materials.size());
+                bc.materials.push_back(matId);
+            }
+            bc.brush.faces[selSet.activeFaceIndex].materialIndex = slot;
+            bc.dirty = true;
+            m_ui.setSelectedEntity(hit.entity);
+            Log::editor()->info(
+                "Drop material id {} -> brush '{}' cara {} (slot {})",
+                drop.materialId, tagName, selSet.activeFaceIndex, slot);
+            markDirty();
+            return;
+        }
+
+        const MaterialAssetId oldMat = bc.materials.empty()
+            ? 0u : bc.materials[0];
+        if (bc.materials.empty()) bc.materials.push_back(matId);
+        else bc.materials[0] = matId;
         bc.dirty = true;
-        // F2H16: push command undoable.
         m_history.push(std::make_unique<EditBrushMaterialCommand>(
             m_scene.get(), tagName, oldMat, matId,
             "Asignar material a brush"));

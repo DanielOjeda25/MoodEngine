@@ -202,7 +202,16 @@ struct SavedBrush {
     glm::vec3 position{0.0f};
     glm::vec3 rotationEuler{0.0f};
     glm::vec3 scale{1.0f};
-    std::string materialPath;            // vacio = sin material (id 0)
+    /// @brief F2H11 (v11): material singular global. Preserved como
+    ///        slot 0 cuando se carga.
+    std::string materialPath;
+    /// @brief F2H17 (v12): slots de material per-cara. Cada
+    ///        `face.materialIndex` indexea este array. Si esta
+    ///        vacio (mapas v11 sin el campo), el loader sintetiza
+    ///        `materialPaths = [materialPath]`. Si v12 con materialPaths
+    ///        no-vacio, materialPath se ignora (el slot 0 es
+    ///        materialPaths[0]).
+    std::vector<std::string> materialPaths;
     std::vector<SavedBrushFace> faces;
 };
 

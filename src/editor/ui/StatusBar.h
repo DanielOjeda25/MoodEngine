@@ -14,7 +14,7 @@ class StatusBar {
 public:
     /// @brief Dibuja la status bar. Se posiciona pegada al borde inferior de
     ///        la viewport principal.
-    void draw(EditorMode mode);
+    void draw(EditorMode mode, EditorSubMode subMode = EditorSubMode::Object);
 
     void setFps(f32 fps) { m_fps = fps; }
     void setMessage(std::string msg) { m_message = std::move(msg); }

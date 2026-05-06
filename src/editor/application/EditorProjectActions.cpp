@@ -768,7 +768,7 @@ Entity spawnBrushEntity(Scene& scene,
 
     BrushComponent bc;
     bc.brush = std::move(brush);
-    bc.material = 0;
+    bc.materials = {0};  // F2H17: 1 slot con material default
     bc.dirty = true;
     e.addComponent<BrushComponent>(std::move(bc));
 
@@ -856,8 +856,14 @@ SavedBrush snapshotBrush(Entity e, const AssetManager& assets) {
     }
     if (e.hasComponent<BrushComponent>()) {
         const auto& bc = e.getComponent<BrushComponent>();
-        sb.materialPath = (bc.material == 0)
-            ? std::string{} : assets.materialPathOf(bc.material);
+        // F2H17: serializar todos los slots de material.
+        const MaterialAssetId mat0 = bc.materials.empty() ? 0u : bc.materials[0];
+        sb.materialPath = (mat0 == 0) ? std::string{}
+                                       : assets.materialPathOf(mat0);
+        for (MaterialAssetId mid : bc.materials) {
+            sb.materialPaths.push_back(
+                (mid == 0) ? std::string{} : assets.materialPathOf(mid));
+        }
         for (const auto& f : bc.brush.faces) {
             SavedBrushFace sf;
             sf.normal        = f.plane.normal;
@@ -1052,8 +1058,10 @@ void EditorApplication::handleBooleanOp(EditorUI::BooleanOpRequestKind kind) {
         }
 
         const auto& bcA = brushA.getComponent<BrushComponent>();
-        const std::string heritedMatPath = (bcA.material == 0)
-            ? std::string{} : m_assetManager->materialPathOf(bcA.material);
+        const MaterialAssetId heritedMat = bcA.materials.empty()
+            ? 0u : bcA.materials[0];
+        const std::string heritedMatPath = (heritedMat == 0)
+            ? std::string{} : m_assetManager->materialPathOf(heritedMat);
 
         std::vector<SavedBrush> resultSnaps;
         resultSnaps.reserve(resultBrushes.size());
@@ -1099,8 +1107,19 @@ void EditorApplication::handleBooleanOp(EditorUI::BooleanOpRequestKind kind) {
                 bc.brush.faces.push_back(face);
             }
             bc.brush.localAabb = Csg::computeBrushAabb(bc.brush);
-            bc.material = sb.materialPath.empty()
-                ? 0u : m_assetManager->loadMaterial(sb.materialPath);
+            // F2H17: cargar slots de material. Si materialPaths esta
+            // vacio (caso del recreate sin info), fallback al
+            // materialPath singular como slot 0.
+            bc.materials.clear();
+            if (!sb.materialPaths.empty()) {
+                for (const auto& path : sb.materialPaths) {
+                    bc.materials.push_back(
+                        path.empty() ? 0u : m_assetManager->loadMaterial(path));
+                }
+            } else {
+                bc.materials.push_back(sb.materialPath.empty()
+                    ? 0u : m_assetManager->loadMaterial(sb.materialPath));
+            }
             bc.dirty = true;
             e.addComponent<BrushComponent>(std::move(bc));
         }

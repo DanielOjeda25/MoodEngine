@@ -5,7 +5,7 @@
 
 namespace Mood {
 
-void StatusBar::draw(EditorMode mode) {
+void StatusBar::draw(EditorMode mode, EditorSubMode subMode) {
     // Usamos BeginViewportSideBar para que ImGui reserve la franja inferior
     // del viewport principal ANTES del dockspace. Asi el Asset Browser no se
     // superpone con la status bar. Requiere llamarse antes de Dockspace::begin
@@ -24,6 +24,14 @@ void StatusBar::draw(EditorMode mode) {
             ImGui::Text("FPS: %.1f", static_cast<double>(m_fps));
             ImGui::Separator();
             ImGui::TextUnformatted(mode == EditorMode::Play ? "Play Mode" : "Editor Mode");
+            // F2H17: sub-modo (Face / Object) en color distinto.
+            if (mode == EditorMode::Editor && subMode != EditorSubMode::Object) {
+                ImGui::SameLine();
+                const char* subLabel = (subMode == EditorSubMode::Face)
+                    ? " | Face Mode (3)" : " | Sub-mode";
+                ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.10f, 1.0f),
+                                     "%s", subLabel);
+            }
             ImGui::Separator();
             ImGui::TextUnformatted(m_message.c_str());
             // F2H16: "Ultimo: <command name>" Blender-style. Solo se
