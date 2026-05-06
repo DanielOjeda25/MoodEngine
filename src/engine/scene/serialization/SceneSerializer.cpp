@@ -62,11 +62,21 @@ json serializeBrush(Entity e, const AssetManager& assets) {
 
     out["faces"] = json::array();
     for (const auto& face : bc.brush.faces) {
-        out["faces"].push_back({
+        json jf = {
             {"normal",        face.plane.normal},
             {"distance",      face.plane.distance},
             {"materialIndex", face.materialIndex},
-        });
+        };
+        // F2H15: UV params per-cara (v11). Siempre escribimos los
+        // 6 campos para que el round-trip sea exacto. Faces v10
+        // sin estos campos se leen con defaults en parseBrush.
+        jf["uAxis"]       = face.uAxis;
+        jf["vAxis"]       = face.vAxis;
+        jf["uvOffset"]    = face.uvOffset;
+        jf["uvScale"]     = face.uvScale;
+        jf["uvRotation"]  = face.uvRotation;
+        jf["lockToWorld"] = face.lockToWorld;
+        out["faces"].push_back(std::move(jf));
     }
     return out;
 }
@@ -87,6 +97,19 @@ SavedBrush parseBrush(const json& j) {
             face.normal        = jf.value("normal", glm::vec3(0, 1, 0));
             face.distance      = jf.value("distance", 0.0f);
             face.materialIndex = jf.value("materialIndex", 0u);
+            // F2H15: UV params (v11). Faces v10 caen a los defaults
+            // del struct (uAxis/vAxis canonicos +X/+Y, scale 1,
+            // offset 0, rotation 0, lockToWorld false). El loader
+            // recomputa uAxis/vAxis auto desde la normal si los
+            // que llegan son los default canonicos — eso garantiza
+            // que faces v10 cargan con el mismo tangent basis que
+            // las primitivas generan en F2H15.
+            face.uAxis       = jf.value("uAxis",      face.uAxis);
+            face.vAxis       = jf.value("vAxis",      face.vAxis);
+            face.uvOffset    = jf.value("uvOffset",   face.uvOffset);
+            face.uvScale     = jf.value("uvScale",    face.uvScale);
+            face.uvRotation  = jf.value("uvRotation", face.uvRotation);
+            face.lockToWorld = jf.value("lockToWorld", face.lockToWorld);
             sb.faces.push_back(face);
         }
     }

@@ -9,6 +9,7 @@
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/scene/serialization/TilePersistence.h"
 
+#include <cmath>     // F2H15: std::fabs para detectar defaults canonicos
 #include <utility>
 #include <vector>
 
@@ -241,9 +242,41 @@ void applyEntitiesToScene(const SavedMap& saved,
             face.plane.normal   = sf.normal;
             face.plane.distance = sf.distance;
             face.materialIndex  = sf.materialIndex;
+            // F2H15: UV params per-cara. Si son los defaults
+            // canonicos (uAxis=+X, vAxis=+Y) significa que el JSON
+            // viene de v10 sin los campos UV (parseBrush los dejo
+            // en default) — recomputar tangent basis auto desde
+            // la normal para mantener consistencia visual con las
+            // primitivas que generan brushes en F2H15.
+            const bool uvDefaultCanonical =
+                std::fabs(sf.uAxis.x - 1.0f) < 1e-4f &&
+                std::fabs(sf.uAxis.y) < 1e-4f &&
+                std::fabs(sf.uAxis.z) < 1e-4f &&
+                std::fabs(sf.vAxis.x) < 1e-4f &&
+                std::fabs(sf.vAxis.y - 1.0f) < 1e-4f &&
+                std::fabs(sf.vAxis.z) < 1e-4f;
+            if (uvDefaultCanonical) {
+                Csg::defaultTangentBasis(face.plane.normal,
+                                          face.uAxis, face.vAxis);
+            } else {
+                face.uAxis = sf.uAxis;
+                face.vAxis = sf.vAxis;
+            }
+            face.uvOffset    = sf.uvOffset;
+            face.uvScale     = sf.uvScale;
+            face.uvRotation  = sf.uvRotation;
+            face.lockToWorld = sf.lockToWorld;
             bc.brush.faces.push_back(face);
         }
         bc.brush.localAabb = Csg::computeBrushAabb(bc.brush);
+        // F2H15: recompute cache de lock-to-world.
+        bc.anyFaceLockToWorld = false;
+        for (const auto& f : bc.brush.faces) {
+            if (f.lockToWorld) {
+                bc.anyFaceLockToWorld = true;
+                break;
+            }
+        }
         // Material por path logico. "" significa "sin material"
         // (slot 0 = look blank gris).
         bc.material = sb.materialPath.empty()

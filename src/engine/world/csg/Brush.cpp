@@ -3,7 +3,23 @@
 #include <glm/gtc/matrix_inverse.hpp>  // glm::inverseTranspose
 #include <glm/geometric.hpp>           // glm::normalize
 
+#include <cmath>                       // std::fabs
+
 namespace Mood::Csg {
+
+void defaultTangentBasis(const glm::vec3& normal,
+                          glm::vec3& outUAxis,
+                          glm::vec3& outVAxis) {
+    // Elegir un helper axis (Y o X) segun donde apunta la normal.
+    // Si la normal es casi paralela a Y, usar X como helper para
+    // evitar cross product con magnitud cercana a cero.
+    const glm::vec3 helper =
+        (std::fabs(normal.y) > 0.9f)
+            ? glm::vec3(1.0f, 0.0f, 0.0f)
+            : glm::vec3(0.0f, 1.0f, 0.0f);
+    outUAxis = glm::normalize(glm::cross(helper, normal));
+    outVAxis = glm::normalize(glm::cross(normal, outUAxis));
+}
 
 namespace {
 
@@ -54,6 +70,8 @@ Brush makeBoxBrush(const glm::mat4& worldFromLocal, u32 materialIndex) {
         BrushFace face;
         face.plane = transformPlane(localPlane, worldFromLocal, normalMatrix);
         face.materialIndex = materialIndex;
+        // F2H15: tangent basis canonico desde la normal world.
+        defaultTangentBasis(face.plane.normal, face.uAxis, face.vAxis);
         b.faces.push_back(face);
     }
 

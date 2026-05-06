@@ -19,21 +19,38 @@
 #include "core/math/Plane.h"
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include <vector>
 
 namespace Mood::Csg {
 
+/// @brief F2H15: ejes tangentes ortonormales canonicos derivados
+///        de la normal de un plano. Estables: depende solo de
+///        la normal (mismo input -> mismo output). Usado por las
+///        primitivas para inicializar los UV params de cada cara.
+///        Algoritmo: elegir un helper axis (X o Y segun donde
+///        apunta la normal); uAxis = normalize(cross(helper, n));
+///        vAxis = normalize(cross(n, uAxis)).
+void defaultTangentBasis(const glm::vec3& normal,
+                          glm::vec3& outUAxis,
+                          glm::vec3& outVAxis);
+
 struct BrushFace {
     Plane plane;
     u32 materialIndex = 0;
-    // Placeholders para F2H14 (UV editor con lock-to-world):
-    //   glm::vec3 uAxis;
-    //   glm::vec3 vAxis;
-    //   glm::vec2 uvOffset;
-    //   glm::vec2 uvScale;
-    //   f32 uvRotation;
-    //   bool lockToWorld;
+    // F2H15: UV params per-cara. Defaults razonables (ejes
+    // canonicos +X/+Y, scale unitario, sin offset, sin rotacion,
+    // lock-to-world apagado). Las primitivas (makeBoxBrush, etc.)
+    // sobrescriben uAxis/vAxis con defaultTangentBasis(normal) al
+    // construirse para que las UVs salgan alineadas con la cara.
+    glm::vec3 uAxis{1.0f, 0.0f, 0.0f};
+    glm::vec3 vAxis{0.0f, 1.0f, 0.0f};
+    glm::vec2 uvOffset{0.0f, 0.0f};
+    glm::vec2 uvScale{1.0f, 1.0f};
+    f32 uvRotation = 0.0f;        // radianes
+    bool lockToWorld = false;
 };
 
 struct Brush {

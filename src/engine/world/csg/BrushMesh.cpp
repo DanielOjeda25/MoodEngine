@@ -107,7 +107,8 @@ void sortFaceVerticesCCW(std::vector<glm::vec3>& verts,
 
 } // namespace
 
-BrushMeshData buildBrushMesh(const Brush& brush) {
+BrushMeshData buildBrushMesh(const Brush& brush,
+                               const glm::mat4& worldMatrix) {
     BrushMeshData out;
 
     if (brush.faces.size() < 4) {
@@ -120,21 +121,38 @@ BrushMeshData buildBrushMesh(const Brush& brush) {
             continue;  // cara degenerada (no produce poligono)
         }
 
-        const glm::vec3 normal = brush.faces[f].plane.normal;
-        const u32 materialIndex = brush.faces[f].materialIndex;
+        const BrushFace& face = brush.faces[f];
+        const glm::vec3 normal = face.plane.normal;
+        const u32 materialIndex = face.materialIndex;
 
         sortFaceVerticesCCW(faceVerts, normal);
 
-        glm::vec3 uAxis, vAxis;
-        buildTangentBasis(normal, uAxis, vAxis);
+        // F2H15: UV computacion con params per-cara.
+        // - Si lockToWorld: proyectar p_world sobre los ejes
+        //   tangentes (textura "fija" al mundo).
+        // - Si no: proyectar p_local (textura sigue al brush).
+        // - Aplicar rotation, scale y offset.
+        const f32 cosR = std::cos(face.uvRotation);
+        const f32 sinR = std::sin(face.uvRotation);
 
-        // Agregar vertices a la mesh y memorizar sus indices base.
         const u32 baseIndex = static_cast<u32>(out.vertices.size());
         for (const auto& p : faceVerts) {
             BrushMeshVertex v;
             v.position = p;
             v.normal = normal;
-            v.uv = glm::vec2(glm::dot(p, uAxis), glm::dot(p, vAxis));
+
+            // Punto a usar para la proyeccion UV.
+            const glm::vec3 pForUV = face.lockToWorld
+                ? glm::vec3(worldMatrix * glm::vec4(p, 1.0f))
+                : p;
+
+            const f32 uRaw = glm::dot(pForUV, face.uAxis);
+            const f32 vRaw = glm::dot(pForUV, face.vAxis);
+            // Rotacion 2D antes de scale + offset.
+            const f32 uRot = cosR * uRaw - sinR * vRaw;
+            const f32 vRot = sinR * uRaw + cosR * vRaw;
+            v.uv = glm::vec2(uRot * face.uvScale.x + face.uvOffset.x,
+                             vRot * face.uvScale.y + face.uvOffset.y);
             v.materialIndex = materialIndex;
             out.vertices.push_back(v);
         }

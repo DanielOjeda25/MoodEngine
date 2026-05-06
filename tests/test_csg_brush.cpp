@@ -354,6 +354,121 @@ TEST_CASE("brushMeshDataToInterleaved: mesh vacia produce vector vacio") {
     CHECK(flat.empty());
 }
 
+// ============================================================
+// F2H15: defaultTangentBasis + UV params + lockToWorld
+// ============================================================
+
+TEST_CASE("defaultTangentBasis: ejes ortogonales unitarios y ortogonales a la normal") {
+    const glm::vec3 normals[6] = {
+        { 1, 0, 0}, {-1, 0, 0},
+        { 0, 1, 0}, { 0,-1, 0},
+        { 0, 0, 1}, { 0, 0,-1},
+    };
+    for (const auto& n : normals) {
+        glm::vec3 u, v;
+        defaultTangentBasis(n, u, v);
+        CHECK(glm::length(u) == doctest::Approx(1.0f).epsilon(k_eps));
+        CHECK(glm::length(v) == doctest::Approx(1.0f).epsilon(k_eps));
+        CHECK(std::fabs(glm::dot(u, n)) < k_eps);
+        CHECK(std::fabs(glm::dot(v, n)) < k_eps);
+        CHECK(std::fabs(glm::dot(u, v)) < k_eps);
+    }
+}
+
+TEST_CASE("defaultTangentBasis: estable (misma normal -> mismos ejes)") {
+    glm::vec3 u1, v1, u2, v2;
+    defaultTangentBasis(glm::normalize(glm::vec3(0.5f, 0.7f, 0.3f)), u1, v1);
+    defaultTangentBasis(glm::normalize(glm::vec3(0.5f, 0.7f, 0.3f)), u2, v2);
+    CHECK(glm::length(u1 - u2) < k_eps);
+    CHECK(glm::length(v1 - v2) < k_eps);
+}
+
+TEST_CASE("makeBoxBrush: cada cara tiene uAxis/vAxis no-cero") {
+    const Brush b = makeBoxBrush(glm::mat4(1.0f));
+    for (const auto& face : b.faces) {
+        CHECK(glm::length(face.uAxis) == doctest::Approx(1.0f).epsilon(k_eps));
+        CHECK(glm::length(face.vAxis) == doctest::Approx(1.0f).epsilon(k_eps));
+    }
+}
+
+TEST_CASE("buildBrushMesh: uvScale=2 duplica las UVs vs scale=1") {
+    Brush b = makeBoxBrush(glm::mat4(1.0f));
+    const BrushMeshData mesh1 = buildBrushMesh(b);
+
+    for (auto& face : b.faces) face.uvScale = glm::vec2(2.0f);
+    const BrushMeshData mesh2 = buildBrushMesh(b);
+
+    REQUIRE(mesh1.vertices.size() == mesh2.vertices.size());
+    // Para cada vertex, mesh2.uv = mesh1.uv * 2.
+    for (usize i = 0; i < mesh1.vertices.size(); ++i) {
+        CHECK(mesh2.vertices[i].uv.x ==
+              doctest::Approx(mesh1.vertices[i].uv.x * 2.0f).epsilon(k_eps));
+        CHECK(mesh2.vertices[i].uv.y ==
+              doctest::Approx(mesh1.vertices[i].uv.y * 2.0f).epsilon(k_eps));
+    }
+}
+
+TEST_CASE("buildBrushMesh: uvOffset desplaza las UVs") {
+    Brush b = makeBoxBrush(glm::mat4(1.0f));
+    const BrushMeshData mesh1 = buildBrushMesh(b);
+
+    const glm::vec2 off(0.5f, -0.25f);
+    for (auto& face : b.faces) face.uvOffset = off;
+    const BrushMeshData mesh2 = buildBrushMesh(b);
+
+    REQUIRE(mesh1.vertices.size() == mesh2.vertices.size());
+    for (usize i = 0; i < mesh1.vertices.size(); ++i) {
+        CHECK(mesh2.vertices[i].uv.x ==
+              doctest::Approx(mesh1.vertices[i].uv.x + off.x).epsilon(k_eps));
+        CHECK(mesh2.vertices[i].uv.y ==
+              doctest::Approx(mesh1.vertices[i].uv.y + off.y).epsilon(k_eps));
+    }
+}
+
+TEST_CASE("buildBrushMesh: lockToWorld=true cambia UVs al transformar") {
+    Brush b = makeBoxBrush(glm::mat4(1.0f));
+    for (auto& face : b.faces) face.lockToWorld = true;
+
+    const glm::mat4 identity(1.0f);
+    const glm::mat4 translated = glm::translate(glm::mat4(1.0f),
+                                                  glm::vec3(10.0f, 0.0f, 0.0f));
+
+    const BrushMeshData mesh1 = buildBrushMesh(b, identity);
+    const BrushMeshData mesh2 = buildBrushMesh(b, translated);
+
+    REQUIRE(mesh1.vertices.size() == mesh2.vertices.size());
+    REQUIRE(mesh1.vertices.size() > 0);
+
+    // Con lockToWorld, las UVs cambian segun la posicion world.
+    // No requerimos que CADA vertex difiera, pero al menos uno debe.
+    bool anyDifferent = false;
+    for (usize i = 0; i < mesh1.vertices.size(); ++i) {
+        if (std::fabs(mesh1.vertices[i].uv.x - mesh2.vertices[i].uv.x) > k_eps ||
+            std::fabs(mesh1.vertices[i].uv.y - mesh2.vertices[i].uv.y) > k_eps) {
+            anyDifferent = true;
+            break;
+        }
+    }
+    CHECK(anyDifferent);
+}
+
+TEST_CASE("buildBrushMesh: lockToWorld=false ignora worldMatrix") {
+    Brush b = makeBoxBrush(glm::mat4(1.0f));
+    // Default lockToWorld=false. Las UVs deben ser identicas
+    // independientemente del worldMatrix pasado.
+    const BrushMeshData mesh1 = buildBrushMesh(b, glm::mat4(1.0f));
+    const BrushMeshData mesh2 = buildBrushMesh(b,
+        glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 5.0f, -3.0f)));
+
+    REQUIRE(mesh1.vertices.size() == mesh2.vertices.size());
+    for (usize i = 0; i < mesh1.vertices.size(); ++i) {
+        CHECK(mesh1.vertices[i].uv.x ==
+              doctest::Approx(mesh2.vertices[i].uv.x).epsilon(k_eps));
+        CHECK(mesh1.vertices[i].uv.y ==
+              doctest::Approx(mesh2.vertices[i].uv.y).epsilon(k_eps));
+    }
+}
+
 TEST_CASE("buildBrushMesh: box rotada produce mesh cerrada (centroide dentro de AABB)") {
     const glm::mat4 R = glm::rotate(glm::mat4(1.0f), glm::radians(30.0f),
                                      glm::vec3(0, 1, 0));

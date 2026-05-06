@@ -66,8 +66,17 @@ namespace Mood {
 // guarda {tag, transform, material (path logico), faces[{normal,
 // distance, materialIndex}]}. Archivos v9 sin `brushes` se leen
 // igual (lista vacia). El campo `material` por-brush en F2H11 es
-// global; F2H14 lo movera a per-cara con UV editor (otro bump).
-constexpr int k_MoodmapFormatVersion = 10;
+// global; F2H16 lo movera a per-cara con face mode (otro bump).
+// v11 (F2H15): cada `face` en `brushes[].faces[]` gana 6 campos
+// opcionales para texturizado per-cara: `uAxis`, `vAxis` (vec3),
+// `uvOffset`, `uvScale` (vec2), `uvRotation` (rad), `lockToWorld`
+// (bool). Las UVs se computan en `buildBrushMesh` desde estos
+// params; lockToWorld permite que la textura "quede fija al mundo"
+// en lugar de seguir al brush. Faces v10 sin estos campos cargan
+// con defaults sensatos (uAxis/vAxis auto desde la normal, scale
+// 1, offset 0, rotation 0, lockToWorld false) — comportamiento
+// visual identico a F2H14.
+constexpr int k_MoodmapFormatVersion = 11;
 constexpr int k_MoodprojFormatVersion = 1;
 
 /// @brief Verifica que la version declarada en un archivo sea legible.

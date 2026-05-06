@@ -626,13 +626,40 @@ void SceneRenderer::renderScene(Scene& scene,
             };
             scene.forEach<TransformComponent, BrushComponent>(
                 [&](Entity, TransformComponent& t, BrushComponent& bc) {
-                    if (bc.dirty || !bc.meshCache) {
+                    const glm::mat4 worldMatrix = t.worldMatrix();
+                    // F2H15: si alguna cara tiene lockToWorld=true,
+                    // el rebuild de mesh debe hacerse cada vez que
+                    // el transform cambia (las UVs world dependen
+                    // de la posicion world). Detectar via cache.
+                    bool transformChangedForLock = false;
+                    if (bc.anyFaceLockToWorld) {
+                        const glm::mat4& last = bc.lastWorldMatrix;
+                        for (int col = 0; col < 4 && !transformChangedForLock; ++col) {
+                            for (int row = 0; row < 4 && !transformChangedForLock; ++row) {
+                                if (std::fabs(worldMatrix[col][row] - last[col][row])
+                                    > Mood::kPlaneEpsilon) {
+                                    transformChangedForLock = true;
+                                }
+                            }
+                        }
+                    }
+
+                    if (bc.dirty || transformChangedForLock || !bc.meshCache) {
                         const Csg::BrushMeshData data =
-                            Csg::buildBrushMesh(bc.brush);
+                            Csg::buildBrushMesh(bc.brush, worldMatrix);
                         if (data.indices.empty()) {
                             bc.dirty = false;
                             return;  // brush degenerado: nada que dibujar
                         }
+                        // Recompute cache de lock-to-world tras la rebuild.
+                        bc.anyFaceLockToWorld = false;
+                        for (const auto& f : bc.brush.faces) {
+                            if (f.lockToWorld) {
+                                bc.anyFaceLockToWorld = true;
+                                break;
+                            }
+                        }
+                        bc.lastWorldMatrix = worldMatrix;
                         const std::vector<f32> verts =
                             Csg::brushMeshDataToInterleaved(data);
                         bc.meshCache = assets.createDynamicMesh(verts, kBrushAttrs);
@@ -640,7 +667,7 @@ void SceneRenderer::renderScene(Scene& scene,
                     }
                     if (!bc.meshCache) return;
 
-                    m_pbrShader->setMat4("uModel", t.worldMatrix());
+                    m_pbrShader->setMat4("uModel", worldMatrix);
 
                     // Bindeo de material. Si bc.material == 0 (sin material
                     // asignado) usamos un look "blank brush" estilo Hammer/

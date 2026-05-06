@@ -358,6 +358,132 @@ TEST_CASE("save: brushes y entidades viven en arrays separados (sin doble-persis
     std::filesystem::remove(path, ec);
 }
 
+// ============================================================
+// F2H15: UV params per-cara (v11)
+// ============================================================
+
+TEST_CASE("save+load: UV params per-cara preservados (v11)") {
+    TestAssets ta;
+    Scene scene;
+    GridMap map(4, 4, 1.0f);
+
+    Entity e = scene.createEntity("Brush_UV");
+    BrushComponent bc;
+    bc.brush = Csg::makeBoxBrush(glm::mat4(1.0f));
+    REQUIRE(bc.brush.faces.size() == 6);
+    // Modificar UV params en cada cara para diferenciarlos.
+    for (u32 i = 0; i < 6; ++i) {
+        bc.brush.faces[i].uvScale     = glm::vec2(1.0f + i * 0.25f);
+        bc.brush.faces[i].uvOffset    = glm::vec2(i * 0.1f, i * 0.2f);
+        bc.brush.faces[i].uvRotation  = static_cast<f32>(i) * 0.1f;
+        bc.brush.faces[i].lockToWorld = (i % 2 == 0);
+    }
+    e.addComponent<BrushComponent>(std::move(bc));
+
+    const auto path = uniqueTempMap();
+    SceneSerializer::save(map, "uv", &scene, *ta.mgr, path);
+
+    auto loaded = SceneSerializer::load(path, *ta.mgr);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->brushes.size() == 1);
+
+    const auto& sb = loaded->brushes[0];
+    REQUIRE(sb.faces.size() == 6);
+
+    // Map: normal -> face para matching robusto al orden.
+    auto findByMaterialIndex = [&](u32 mat) -> const SavedBrushFace* {
+        for (const auto& f : sb.faces) {
+            if (f.materialIndex == mat) return &f;
+        }
+        return nullptr;
+    };
+
+    // Como los UV params no estan correlacionados con materialIndex,
+    // verificamos que existe AL MENOS una cara con cada uvRotation
+    // distinto en [0, 0.1, 0.2, ..., 0.5].
+    for (u32 i = 0; i < 6; ++i) {
+        const f32 expectedRot = static_cast<f32>(i) * 0.1f;
+        bool found = false;
+        for (const auto& f : sb.faces) {
+            if (std::fabs(f.uvRotation - expectedRot) < k_eps) {
+                found = true;
+                break;
+            }
+        }
+        CHECK(found);
+    }
+
+    // Verificar que al menos 3 caras tienen lockToWorld=true.
+    int lockedCount = 0;
+    for (const auto& f : sb.faces) {
+        if (f.lockToWorld) ++lockedCount;
+    }
+    CHECK(lockedCount == 3);
+
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
+
+TEST_CASE("load: mapa v10 sin UV params carga con defaults sensatos") {
+    TestAssets ta;
+    const auto path = uniqueTempMap();
+    {
+        // .moodmap v10: brushes con faces SIN uAxis/vAxis/uvOffset/etc.
+        std::ofstream out(path);
+        out << R"({
+            "version": 10,
+            "name": "v10_legacy",
+            "width": 2,
+            "height": 2,
+            "tileSize": 1.0,
+            "tiles": [
+                {"type": "empty", "texture": ""},
+                {"type": "empty", "texture": ""},
+                {"type": "empty", "texture": ""},
+                {"type": "empty", "texture": ""}
+            ],
+            "entities": [],
+            "brushes": [
+                {
+                    "tag": "Old_Brush",
+                    "transform": {
+                        "position": [0, 0, 0],
+                        "rotationEuler": [0, 0, 0],
+                        "scale": [1, 1, 1]
+                    },
+                    "material": "",
+                    "faces": [
+                        {"normal": [1, 0, 0], "distance": -0.5, "materialIndex": 0},
+                        {"normal": [-1, 0, 0], "distance": -0.5, "materialIndex": 0},
+                        {"normal": [0, 1, 0], "distance": -0.5, "materialIndex": 0},
+                        {"normal": [0, -1, 0], "distance": -0.5, "materialIndex": 0},
+                        {"normal": [0, 0, 1], "distance": -0.5, "materialIndex": 0},
+                        {"normal": [0, 0, -1], "distance": -0.5, "materialIndex": 0}
+                    ]
+                }
+            ]
+        })";
+    }
+    auto loaded = SceneSerializer::load(path, *ta.mgr);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->brushes.size() == 1);
+    const auto& sb = loaded->brushes[0];
+    REQUIRE(sb.faces.size() == 6);
+    // Faces v10 tienen UV defaults: scale=(1,1), offset=(0,0),
+    // rotation=0, lockToWorld=false.
+    for (const auto& f : sb.faces) {
+        CHECK(f.uvScale.x == doctest::Approx(1.0f));
+        CHECK(f.uvScale.y == doctest::Approx(1.0f));
+        CHECK(f.uvOffset.x == doctest::Approx(0.0f));
+        CHECK(f.uvOffset.y == doctest::Approx(0.0f));
+        CHECK(f.uvRotation == doctest::Approx(0.0f));
+        CHECK_FALSE(f.lockToWorld);
+    }
+
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
+
 TEST_CASE("save+load: materialIndex per-cara preservado") {
     TestAssets ta;
     Scene scene;

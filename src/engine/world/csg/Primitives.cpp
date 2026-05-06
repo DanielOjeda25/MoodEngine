@@ -58,6 +58,7 @@ Brush buildPrismaticBrush(const glm::mat4& worldFromLocal,
         BrushFace face;
         face.plane = transformPlane(localPlane, worldFromLocal, normalMatrix);
         face.materialIndex = materialIndex;
+        defaultTangentBasis(face.plane.normal, face.uAxis, face.vAxis);
         b.faces.push_back(face);
     }
 
@@ -67,8 +68,10 @@ Brush buildPrismaticBrush(const glm::mat4& worldFromLocal,
     BrushFace topFace, bottomFace;
     topFace.plane = transformPlane(topLocal, worldFromLocal, normalMatrix);
     topFace.materialIndex = materialIndex;
+    defaultTangentBasis(topFace.plane.normal, topFace.uAxis, topFace.vAxis);
     bottomFace.plane = transformPlane(bottomLocal, worldFromLocal, normalMatrix);
     bottomFace.materialIndex = materialIndex;
+    defaultTangentBasis(bottomFace.plane.normal, bottomFace.uAxis, bottomFace.vAxis);
     b.faces.push_back(topFace);
     b.faces.push_back(bottomFace);
 
@@ -132,6 +135,7 @@ Brush makeSphereBrush(const glm::mat4& worldFromLocal,
         BrushFace face;
         face.plane = transformPlane(localPlane, worldFromLocal, normalMatrix);
         face.materialIndex = materialIndex;
+        defaultTangentBasis(face.plane.normal, face.uAxis, face.vAxis);
         b.faces.push_back(face);
     }
 
@@ -178,6 +182,7 @@ Brush makePyramidBrush(const glm::mat4& worldFromLocal,
         BrushFace face;
         face.plane = transformPlane(localPlane, worldFromLocal, normalMatrix);
         face.materialIndex = materialIndex;
+        defaultTangentBasis(face.plane.normal, face.uAxis, face.vAxis);
         b.faces.push_back(face);
     }
 
@@ -186,6 +191,7 @@ Brush makePyramidBrush(const glm::mat4& worldFromLocal,
     BrushFace baseFace;
     baseFace.plane = transformPlane(baseLocal, worldFromLocal, normalMatrix);
     baseFace.materialIndex = materialIndex;
+    defaultTangentBasis(baseFace.plane.normal, baseFace.uAxis, baseFace.vAxis);
     b.faces.push_back(baseFace);
 
     b.localAabb = computeBrushAabb(b);

@@ -41,6 +41,7 @@
 #include "engine/scripting/exposed/ExposedProperty.h"
 #include "engine/world/grid/GridMap.h"
 
+#include <glm/vec2.hpp>  // F2H15: SavedBrushFace.uvOffset/uvScale
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
@@ -172,15 +173,22 @@ struct SavedEntity {
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
 };
 
-/// @brief F2H11: copia persistida de una BrushFace. Solo guarda lo
-///        suficiente para reconstruir el plano: normal (unitaria) +
-///        distance (forma `dot(n,p) + d = 0`). El material por cara
-///        viene en F2H14; en F2H11 todas las caras tienen el mismo
-///        materialIndex que se completa con 0 si no esta presente.
+/// @brief F2H11+F2H15: copia persistida de una BrushFace. Guarda el
+///        plano + materialIndex (F2H11) + UV params per-cara (F2H15).
+///        Faces v10 sin UV params se leen con defaults sensatos
+///        (uAxis/vAxis auto desde la normal en SceneLoader).
 struct SavedBrushFace {
     glm::vec3 normal{0.0f, 1.0f, 0.0f};
     f32       distance = 0.0f;
     u32       materialIndex = 0;
+    // F2H15: UV params. Si todos son default y el JSON no los
+    // tiene, no se escriben (campos opcionales).
+    glm::vec3 uAxis{1.0f, 0.0f, 0.0f};
+    glm::vec3 vAxis{0.0f, 1.0f, 0.0f};
+    glm::vec2 uvOffset{0.0f, 0.0f};
+    glm::vec2 uvScale{1.0f, 1.0f};
+    f32       uvRotation = 0.0f;
+    bool      lockToWorld = false;
 };
 
 /// @brief F2H11: copia persistida de un BrushComponent. La AABB no se

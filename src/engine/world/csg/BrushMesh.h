@@ -17,13 +17,18 @@
 // correcto y robusto, todo el resto (booleanos en F2H12, primitivas
 // en F2H13, etc.) se construye encima sin sufrir.
 //
-// UV en F2H11: proyeccion planar trivial (mapear U, V al par de
-// ejes mundiales mas perpendiculares a la normal de la cara). En
-// F2H14 se reemplaza por UVs reales con lock-to-world.
+// UV F2H15: cada cara guarda UV params (uAxis, vAxis, uvOffset,
+// uvScale, uvRotation, lockToWorld). Las UVs se computan en el
+// build de la mesh proyectando cada vertex sobre los ejes
+// tangentes de su cara y aplicando los params. Si lockToWorld
+// esta activo, la posicion world (post-transform) se usa para
+// la proyeccion en lugar de la local — la textura "queda fija"
+// al mundo y no se deforma al mover el brush.
 
 #include "core/Types.h"
 #include "engine/world/csg/Brush.h"
 
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -47,7 +52,15 @@ struct BrushMeshData {
 ///        degenerado (< 4 caras o caras que no producen poligono
 ///        valido) la mesh resultante puede tener menos vertices /
 ///        ningun indice — el llamador debe chequear `data.indices.size()`.
-BrushMeshData buildBrushMesh(const Brush& brush);
+///
+///        @param worldMatrix F2H15: matriz local->world del brush.
+///                Cuando alguna cara tiene `lockToWorld=true`, el
+///                vertex se transforma por esta matriz ANTES de
+///                proyectar sobre los ejes tangentes. Si todas las
+///                caras tienen `lockToWorld=false`, la matriz se
+///                ignora y el caller puede pasar identity.
+BrushMeshData buildBrushMesh(const Brush& brush,
+                              const glm::mat4& worldMatrix = glm::mat4(1.0f));
 
 /// @brief Convierte el BrushMeshData (vertices+indices) al layout
 ///        interleaved que consume el shader PBR del motor:

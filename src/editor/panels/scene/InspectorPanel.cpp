@@ -1073,6 +1073,63 @@ void InspectorPanel::onImGuiRender() {
         }
 
         ImGui::Separator();
+
+        // --- F2H15: UV editor (aplica a todas las caras del brush) ---
+        // F2H16 agregara seleccion de cara individual + UV editor
+        // per-cara. En F2H15 los widgets editan los params de TODAS
+        // las caras a la vez (UI fixed defaults).
+        ImGui::TextDisabled("UV (Brush)");
+
+        // Tomamos la cara 0 como "representante" para mostrar los
+        // valores actuales. En F2H15 todas las caras tienen los mismos
+        // params despues de cualquier edicion del UI.
+        if (!bc.brush.faces.empty()) {
+            auto& face0 = bc.brush.faces[0];
+
+            glm::vec2 uvScale = face0.uvScale;
+            if (ImGui::DragFloat2("uv scale##uvbrush", &uvScale.x,
+                                    0.05f, 0.01f, 100.0f)) {
+                for (auto& f : bc.brush.faces) f.uvScale = uvScale;
+                bc.dirty = true;
+            }
+
+            f32 uvRotDeg = glm::degrees(face0.uvRotation);
+            if (ImGui::DragFloat("uv rotation (deg)##uvbrush",
+                                    &uvRotDeg, 1.0f, -360.0f, 360.0f)) {
+                const f32 uvRotRad = glm::radians(uvRotDeg);
+                for (auto& f : bc.brush.faces) f.uvRotation = uvRotRad;
+                bc.dirty = true;
+            }
+
+            glm::vec2 uvOffset = face0.uvOffset;
+            if (ImGui::DragFloat2("uv offset##uvbrush", &uvOffset.x,
+                                    0.05f)) {
+                for (auto& f : bc.brush.faces) f.uvOffset = uvOffset;
+                bc.dirty = true;
+            }
+
+            bool lockToWorld = face0.lockToWorld;
+            if (ImGui::Checkbox("lock to world##uvbrush", &lockToWorld)) {
+                for (auto& f : bc.brush.faces) f.lockToWorld = lockToWorld;
+                bc.dirty = true;
+                // Recompute cache flag — el SceneRenderer tambien lo
+                // actualizara en el proximo frame, pero hacerlo aqui
+                // mantiene el Inspector consistente sin esperar.
+                bc.anyFaceLockToWorld = lockToWorld;
+            }
+
+            // Conteo informativo de caras con lock-to-world (util
+            // cuando F2H16 permita per-cara y haya mezcla).
+            u32 lockedCount = 0;
+            for (const auto& f : bc.brush.faces) {
+                if (f.lockToWorld) ++lockedCount;
+            }
+            ImGui::TextDisabled("%u/%u caras con lock-to-world",
+                                  lockedCount,
+                                  static_cast<u32>(bc.brush.faces.size()));
+        }
+
+        ImGui::Separator();
     }
 
     ImGui::End();

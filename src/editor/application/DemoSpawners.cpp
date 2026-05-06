@@ -17,6 +17,7 @@
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
+#include "engine/scene/components/BrushComponent.h"  // F2H15: drop sobre brushes
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -607,11 +608,39 @@ void EditorApplication::processViewportTextureDrop() {
     const float aspect = viewportAspect();
     const glm::mat4 view = m_editorCamera.viewMatrix();
     const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
+
+    // F2H15: prioridad 1 — si hay un BrushComponent bajo el cursor,
+    // asignar la textura al brush (crear material wrapper). Esto
+    // evita que el drop sobre un brush genere un tile-pared en el
+    // grid de abajo.
+    const auto texId = static_cast<TextureAssetId>(drop.textureId);
+    if (m_scene && m_assetManager) {
+        ScenePickResult brushHit = pickEntity(*m_scene, view, projection,
+            glm::vec2(drop.ndcX, drop.ndcY),
+            m_assetManager.get());
+        if (brushHit && brushHit.entity.hasComponent<BrushComponent>()) {
+            const MaterialAssetId matId =
+                m_assetManager->createMaterialFromTexture(texId);
+            auto& bc = brushHit.entity.getComponent<BrushComponent>();
+            bc.material = matId;
+            bc.dirty = true;
+            m_ui.setSelectedEntity(brushHit.entity);
+            Log::editor()->info(
+                "Drop textura id={} -> brush '{}' (material {})",
+                drop.textureId,
+                brushHit.entity.hasComponent<TagComponent>()
+                    ? brushHit.entity.getComponent<TagComponent>().name
+                    : std::string{"(sin tag)"},
+                matId);
+            markDirty();
+            return;
+        }
+    }
+
     const TilePickResult hit = pickTile(m_map, mapWorldOrigin(), view, projection,
                                         glm::vec2(drop.ndcX, drop.ndcY));
     if (!hit.hit) return;
 
-    const auto texId = static_cast<TextureAssetId>(drop.textureId);
     // Mantener el GridMap sincronizado (physics + serializer).
     m_map.setTile(hit.tileX, hit.tileY, TileType::SolidWall, texId);
     // Edit localizado en la Scene (preserva handles + seleccion).
@@ -813,12 +842,31 @@ void EditorApplication::processViewportMaterialDrop() {
         Log::editor()->info("Drop material: no hay entidad bajo el cursor");
         return;
     }
+
+    const auto matId = static_cast<MaterialAssetId>(drop.materialId);
+
+    // F2H15: si la entidad bajo el cursor tiene BrushComponent,
+    // asignar el material al brush (no al MeshRenderer). Brushes
+    // CSG no tienen MeshRendererComponent.
+    if (hit.entity.hasComponent<BrushComponent>()) {
+        auto& bc = hit.entity.getComponent<BrushComponent>();
+        bc.material = matId;
+        bc.dirty = true;
+        m_ui.setSelectedEntity(hit.entity);
+        const std::string tagName = hit.entity.hasComponent<TagComponent>()
+            ? hit.entity.getComponent<TagComponent>().name
+            : std::string{"(sin tag)"};
+        Log::editor()->info("Drop material id {} -> brush '{}'",
+                              drop.materialId, tagName);
+        markDirty();
+        return;
+    }
+
     if (!hit.entity.hasComponent<MeshRendererComponent>()) {
         Log::editor()->info("Drop material: la entidad no tiene MeshRenderer");
         return;
     }
 
-    const auto matId = static_cast<MaterialAssetId>(drop.materialId);
     auto& mr = hit.entity.getComponent<MeshRendererComponent>();
     if (mr.materials.empty()) {
         mr.materials.push_back(matId);
