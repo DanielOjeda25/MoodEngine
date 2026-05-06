@@ -3423,6 +3423,97 @@ Switching axis cuando la normal está cerca del eje Y evita cross product con ma
 - F2H17 (face mode) revela que la API "todo per-brush" del UV editor de F2H15 confunde al dev — refactorear UI a "cara seleccionada activa".
 - Schema v11 tiene back-compat issues reportados por el dev (proyectos viejos cargan con UVs raras).
 
+## 2026-05-06: HistoryStack Blender-style — wireup, no refactor (F2H16)
+
+**Contexto:** sexto hito de sub-fase 2.2. Hito intermedio de "limpieza de deudas" entre F2H15 (UV editor) y F2H17 (Face Mode estilo Hammer). Insertado en el roadmap por feedback del dev: "importé cilindro, lo escalé, lo elevé, le puse 1ra textura, 2da textura, arrastré textura al suelo creando cubo, Ctrl+Z me devolvió al cilindro antes de elevarlo".
+
+### Decisión 1 — Mantener command pattern, NO refactor a snapshot pattern
+
+**Contexto:** Blender internamente usa snapshot pattern (memcpy del estado relevante tras cada "operator"). MoodEngine desde Hito 27 usa command pattern (`ICommand` con `execute()/undo()`). El dev preguntó "como lo hace blender? me gusta el sistema, podemos copiarlo" — pregunta legítima.
+
+**Decisión:** mantener command pattern. NO refactor a snapshot.
+
+**Razones:**
+
+- **Behaviour observable es idéntico**: lo que el user **ve** en Blender (drag de slider = 1 step, "Last Operator" en UI, Ctrl+Z granular por intención) es 100% reproducible con command pattern. La diferencia es interna.
+- **Refactor a snapshot pattern es sprint propio sin valor agregado real**: requeriría serializar todo el state del scene/brushes a memoria/disco tras cada acción, escalable mal con el motor actual.
+- **Command pattern de MoodEngine ya es testeable y robusto**: el Hito 27 + 32 ya estableció el patrón con `pushEditIfDone`, snapshots por tag (no handles), invariantes tested en `test_history_stack.cpp`.
+- **F6 "tweak last operator" de Blender** (parametrizar el último operator post-hoc) sería scope grande propio. Diferido si emerge.
+
+**Trade-off:** los devs C++ que vienen de Blender pueden esperar snapshot pattern al leer el código. Mitigación: documentar en `Command.h` que el patrón es "Blender-style en behaviour, command-pattern en implementación".
+
+### Decisión 2 — Auditoría exhaustiva como Bloque B
+
+**Contexto:** la deuda no era 1 bug — eran ~8 deudas acumuladas desde Hito 5 hasta F2H15. Implementar sin auditoría llevaría a "fix this fix that" cíclico cuando emerjan más casos.
+
+**Decisión:** delegar Bloque B completo a un subagente con prompt específico ("audit MoodEngine editor for mutations of Scene/GridMap/BrushComponent/MeshRenderer that DON'T push commands"). Output: lista concreta con file:line + categoría + comando propuesto.
+
+**Razones:**
+
+- **Cobertura sistémica**: el subagente buscó por `setTile`, `bc.material =`, `mr.materials`, etc. Pillar todo de una vez evita el bug de "fix uno, descubrir tres más".
+- **Documentado en plan**: la lista vive en `PLAN_HITO_F2H16.md` y queda como referencia. Si emerge un futuro caso similar, se compara contra esa lista.
+- **Patrón aplicable**: cualquier futuro hito de "deudas técnicas" puede usar el mismo approach (auditoría con subagente + lista concreta + plan + ejecutar).
+
+### Decisión 3 — Captura por tag, no por handle EnTT
+
+**Decisión:** `EditBrushMaterialCommand`, `EditBrushUVCommand`, `EditMeshRendererMaterialCommand` capturan `std::string entityTag` y buscan la entidad por tag en `execute()/undo()`. NO capturan `Entity` handle.
+
+**Razones:**
+
+- **Robustez ante delete/recreate del HistoryStack**: si un comando previo fue `DeleteEntityCommand → undo → recreate`, el handle EnTT cambió. Capturar por tag sobrevive a esto. Mismo patrón que `BooleanOpCommand` de F2H12.
+- **Tags son estables**: garantizado por convenciones del editor (Brush_Box_NN, etc.) + UI que evita duplicados de tag al spawnear.
+- **Costo: O(N) lookup** por aplicación del comando. Negligible para ~100 entidades típicas.
+
+**Trade-off:** si dos entidades tienen el mismo tag (por bug anterior a F2H8), el comando opera sobre la primera encontrada. Aceptable porque el bug ya fue arreglado y la convención de "tag único" es invariante del editor.
+
+### Decisión 4 — Granularidad por intención del user (drag = 1 command)
+
+**Decisión:** los sliders del UV editor pushean **1 comando al soltar** (`IsItemDeactivatedAfterEdit`), no por cada frame del drag. El checkbox lockToWorld es push instantáneo.
+
+**Razones:**
+
+- **Mental model del user**: el user no piensa "moví el slider 100 px"; piensa "cambié el scale de 1 a 3". Granularidad por intención.
+- **Stack legible**: 1 acción = 1 entrada en el undo stack. Sin spam de "Editar UV scale" × 100.
+- **Patrón ya existing**: `pushEditIfDone` del Hito 32. F2H16 extiende a UV editor con helper local `captureSnapshotIfActivated()` + `pushCommandIfChanged(label)`.
+- **`snapshotsEqual` evita ruido**: si el user clickea un slider pero no lo mueve, snapshot pre = snapshot post → no se pushea comando. Sin entradas vacías en el stack.
+
+### Decisión 5 — StatusBar Blender-style "Último: <name>" sin timeout
+
+**Decisión:** la statusbar muestra "Último: <command name>" persistente, refrescado cada frame leyendo `historyStack->undoName()`. Sin timeout (no se borra después de N segundos).
+
+**Razones:**
+
+- **Info útil constante**: el user siempre quiere saber qué Ctrl+Z va a deshacer, no solo en los 5 segundos post-acción.
+- **Implementación trivial**: un getter ya existente (`undoName()` del Hito 27) + un setter en `StatusBar` + sincronización en `EditorUI::draw`. ~10 LOC.
+- **No bloquea otros mensajes**: la statusbar tiene FPS, modo, message libre — el "Último: ..." va al final con su propio Separator. Cero conflicto.
+
+**Trade-off:** si la barra se llena visualmente con un command de nombre muy largo, puede empujar otros elementos. Mitigación: nombres concisos en convención (ej. "Editar UV scale" en lugar de "Modificar el parametro UV scale del BrushComponent del brush activo").
+
+### Decisión 6 — `snapshotsEqual` con tolerancia kPlaneEpsilon
+
+**Decisión:** la función `snapshotsEqual(a, b)` compara los UV params componente a componente con tolerancia `kPlaneEpsilon = 1e-4f`.
+
+**Razones:**
+
+- **Float exact equality es frágil**: un drag de slider que termina en el mismo valor numérico puede tener un epsilon de diferencia por float math.
+- **Reusa la tolerancia ya estandarizada**: `kPlaneEpsilon` de F2H11 es la tolerancia geométrica del motor. Mismo orden de magnitud para UVs.
+- **No spam**: con tolerancia bit-exact, cualquier wiggle del slider creaba commands ruidosos.
+
+### Decisión 7 — Diferir tweak-last-operator (F6 de Blender)
+
+**Decisión:** NO implementar "F6 panel" de Blender (ajustar params del último operator post-hoc).
+
+**Razones:**
+
+- **Scope grande propio**: requiere parametrizar cada comando con sus params editables, panel UI dedicado, integración con el statusbar.
+- **No urgente**: el user pidió "como hace Blender" pero no pidió F6 explícitamente. El behaviour de drag = 1 command + Ctrl+Z granular ya cubre 95% del flow Blender.
+- **Diferido a hito propio si emerge**: en el plan post-Fase 2.2, posiblemente como UX polish.
+
+**Revisar si:**
+- El user pide F6 explícitamente al usar el editor en flow real.
+- El statusbar "Último: ..." se llena demasiado visualmente con comandos largos — limitar a N caracteres con ellipsis.
+- Emergen NUEVOS handlers que mutan state sin command (probable en F2H17 face mode con material per-cara) — auditar en Bloque B de cada hito posterior.
+
 
 
 

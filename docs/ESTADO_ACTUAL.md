@@ -6,7 +6,49 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H15 cerrado: Texturizado por cara + UV editor (lock-to-world).**
+**🚀 Fase 2 — F2H16 cerrado: Limpieza HistoryStack (deudas de undo/redo).**
+Tag: `v1.7.0-fase2-hito16`.
+Verificado automático: suite doctest **552/8158** verde (+21 cases vs F2H15). Verificado por el dev a ojo: spawn brush → escalar → mover → 2 texturas → drop al suelo → cambiar UV → Ctrl+Z varias veces revierte CADA paso en orden inverso (antes saltaba). Statusbar muestra "Último: <comando>" Blender-style.
+
+**Cambio importante**: limpia toda la deuda de undo/redo acumulada desde Hito 5 hasta F2H15. Approach **Blender-style** sin refactor: el command pattern del Hito 27 ya era Blender-style en behaviour (drag completo = 1 command, nombres humano-legibles); solo faltaba **wireup** en handlers que mutaban state sin push.
+
+**Decisión clave**: **mantener command pattern, NO snapshot pattern**. Blender internamente usa snapshot global del state, pero el behaviour observable (granularidad por intención del user, drag = 1 step, "Last Operator" en UI) es idéntico. Refactor a snapshot pattern habría sido sprint propio sin valor agregado real.
+
+**Implementación (7 bloques A-G, ~700 LOC + 21 tests):**
+
+- **Bloque B — Auditoría exhaustiva** del editor para identificar deudas. Subagente recorrió el código y produjo lista concreta:
+  - DemoSpawners.cpp:625-626 — Drop textura sobre brush.
+  - DemoSpawners.cpp:645 — `setTile` (drop textura sobre tile del grid).
+  - DemoSpawners.cpp:853-854 — Drop material sobre brush.
+  - DemoSpawners.cpp:871-874 — Drop material sobre MeshRenderer.
+  - InspectorPanel.cpp:1090-1118 — 4 widgets del UV editor (uvScale, uvRotation, uvOffset, lockToWorld).
+
+- **Bloque C — Comandos nuevos para brushes**:
+  - `EditBrushMaterialCommand` (snapshot pre/post de `bc.material`, captura por tag).
+  - `EditBrushUVCommand` con `BrushUVSnapshot` capturando los 6 UV params (uAxes, vAxes, uvOffsets, uvScales, uvRotations, lockToWorlds) de TODAS las caras. Helper `captureBrushUV(brush)` + `applyBrushUV(brush, snap)` + `snapshotsEqual(a, b)` para evitar push spurio cuando el user clickea un slider sin mover.
+
+- **Bloque D — Comandos nuevos para tiles + meshes**:
+  - `SetTileCommand` (snapshot pre/post de `(TileType, TextureAssetId)` por (x,y) + sync callback `void(x, y, texture)` que el editor pasa como `&EditorApplication::updateTileEntity`).
+  - `EditMeshRendererMaterialCommand` (slot 0 del `mr.materials`; resize si el slot no existe).
+
+- **Bloque E — Wireup**:
+  - `processViewportTextureDrop`: caso brush pushea `EditBrushMaterialCommand`; caso tile pushea `SetTileCommand` (con `updateTileEntity` como sync).
+  - `processViewportMaterialDrop`: caso brush → `EditBrushMaterialCommand`; caso MeshRenderer → `EditMeshRendererMaterialCommand`.
+  - UV editor del Inspector: helper `captureSnapshotIfActivated()` + `pushCommandIfChanged(label)` reusable entre los 3 DragFloat. Checkbox lockToWorld es push instantáneo (capture pre + post + push en un solo frame).
+  - **StatusBar Blender-style**: `EditorUI::draw` cada frame llama `m_statusBar.setLastCommand(historyStack->undoName())`. Aparece como "**Último: <name>**" después del FPS y modo. Sin timeout — refleja siempre el tope del undo stack.
+
+- **Bloque F — Tests**: 4 archivos nuevos (`test_edit_brush_material_command.cpp`, `test_edit_brush_uv_command.cpp`, `test_set_tile_command.cpp`, `test_edit_mesh_renderer_material_command.cpp`) con 21 cases que cubren round-trip (execute → undo → estado igual al pre; execute → undo → execute → estado igual al post), tag inexistente sin crash, slot vacío con resize, snapshot con tamaño diferente saltea, name() devuelve label.
+
+- **Bloque G — cierre**: este documento + HITOS + DECISIONS + tag `v1.7.0-fase2-hito16`.
+
+**Pendientes conocidos** (memoria del proyecto):
+- **Face Mode estilo Hammer** (project_pending_face_mode.md): selección visual de cara individual + UV per-cara real. **Próximo hito (F2H17)** — el dev pidió explícitamente "lo quiero igual que el hammer".
+- **Reorganización de menús** (project_pending_menu_org.md): `Archivo > Mapa` está acumulando items.
+- **Drops adicionales** que pueden quedar sin command si emergen (ScriptComponent path edit desde drop, etc.) — auditar en cada hito futuro que agregue handlers.
+
+**Próximo paso**: **F2H17 = Face Mode estilo Hammer**. Sub-modo del editor con selección visual de cara individual (raycast contra polígono de cara, no AABB del brush), outline de cara seleccionada distinto al outline del brush, Inspector con UV params SOLO de la cara seleccionada, material per-cara real, comandos undoable (extensión de `EditBrushUVCommand` con índice de cara). Después F2H18 (compilación brush → mesh estática unificada — era F2H17 antes del rerouting de F2H16 limpieza).
+
+### F2H15 (anterior, ya cerrado)
 Tag: `v1.6.0-fase2-hito15`.
 Verificado automático: suite doctest **531/8074** verde (+9 cases vs F2H14). Verificado por el dev a ojo: spawn brush, asignar material por drag&drop desde AssetBrowser (ahora detecta el brush bajo el cursor en lugar de crear un tile-pared en el grid), cambiar uvScale → textura escala, toggle lockToWorld + mover brush con el gizmo → textura queda fija al mundo, save/close/reopen → UV params persisten.
 
