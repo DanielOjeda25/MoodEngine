@@ -220,7 +220,36 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
     // proyecto. Si el array esta vacio (proyecto recien creado o pre-F2H7),
     // setWorkspaces({}) cae a los 4 defaults.
     m_ui.workspaceManager().setWorkspaces(m_project->workspaces);
-    m_ui.requestWorkspaceSwitch(0);  // siempre arranca en el primer workspace
+
+    // F2H22 polish: al cargar un proyecto SIEMPRE arrancar en Modelar
+    // (workspace 0) con layout limpio + visibility default. Antes el
+    // editor recordaba el ultimo workspace + el ultimo layout (via
+    // imgui.ini global) y dejaba ventanas flotantes / panels en
+    // posiciones raras del estado previo. El dev pidio explicitamente
+    // "que siempre se quede en Modelar layout, sin ventanas flotantes,
+    // todo fijo en una posicion facil de comenzar a familiarizarse".
+    //
+    // No usamos requestWorkspaceSwitch porque chequea
+    // `target == activeIndex` y returna early (setWorkspaces ya dejo
+    // active en 0); aplicamos el flow manualmente:
+    //   1) Setear active=0 (Modelar).
+    //   2) Setear el nombre en el Dockspace para el dispatcher.
+    //   3) Aplicar visibility default del workspace.
+    //   4) Si workspace 0 tiene iniLayout custom guardado en .moodproj,
+    //      cargarlo (pisa el imgui.ini global). Si esta vacio, cargar
+    //      string "" para limpiar el state previo + pedir rebuild
+    //      con DockBuilder.
+    m_ui.workspaceManager().setActiveByIndex(0);
+    const auto& ws0 = m_ui.workspaceManager().activeWorkspace();
+    m_ui.dockspace().setActiveWorkspaceName(ws0.name);
+    m_ui.applyDefaultVisibilityForWorkspace(ws0.name);
+    if (ws0.iniLayout.empty()) {
+        ImGui::LoadIniSettingsFromMemory("", 0);
+        m_ui.dockspace().requestRebuildForCurrentWorkspace();
+    } else {
+        ImGui::LoadIniSettingsFromMemory(ws0.iniLayout.c_str(),
+                                          ws0.iniLayout.size());
+    }
 
     syncMapsSnapshot();  // F2H8: poblar el menu "Archivo > Mapa".
 

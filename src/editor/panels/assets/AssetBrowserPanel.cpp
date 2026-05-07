@@ -245,6 +245,7 @@ void AssetBrowserPanel::onImGuiRender() {
 
     if (!m_scanned) rescan();
 
+    // Header global: boton Recargar.
     if (ImGui::Button("Recargar")) {
         rescan();
         // El reupload a GPU de las texturas cambiadas lo maneja
@@ -252,95 +253,94 @@ void AssetBrowserPanel::onImGuiRender() {
         // ImGui pueda estar a punto de usar.
         m_reloadRequested = true;
     }
-    ImGui::SameLine();
-    ImGui::TextDisabled("%zu texturas", m_entries.size());
-    ImGui::Separator();
 
-    // Grid de miniaturas. Columnas calculadas segun el ancho disponible del
-    // panel para que se reacomode al redimensionar.
-    const float avail = ImGui::GetContentRegionAvail().x;
-    const float cell = k_thumbSize + 12.0f;
-    int cols = std::max(1, static_cast<int>(avail / cell));
+    // F2H22: tabs por categoria — antes eran CollapsingHeaders apilados
+    // verticalmente, lo que con muchos meshes inflaba el panel a varios
+    // viewports de altura. Cada tab tiene scroll interno (BeginChild) si
+    // su contenido excede el alto disponible.
+    if (ImGui::BeginTabBar("##asset_tabs", ImGuiTabBarFlags_None)) {
 
-    for (size_t i = 0; i < m_entries.size(); ++i) {
-        const Entry& e = m_entries[i];
-        ITexture* tex = m_assetManager->getTexture(e.id);
-        if (tex == nullptr) continue;
+        // ============================================================
+        // TAB: Texturas (con grid de miniaturas)
+        // ============================================================
+        if (ImGui::BeginTabItem("Texturas")) {
+            ImGui::TextDisabled("%zu texturas", m_entries.size());
+            ImGui::BeginChild("##texturas_scroll", ImVec2(0.0f, 0.0f), false);
 
-        ImGui::PushID(static_cast<int>(i));
-        ImGui::BeginGroup();
+            const float avail = ImGui::GetContentRegionAvail().x;
+            const float cell = k_thumbSize + 12.0f;
+            int cols = std::max(1, static_cast<int>(avail / cell));
 
-        // Flip V (0,1)-(1,0): OpenGL textures cargadas con flip vertical se
-        // veen invertidas en ImGui (que asume origen arriba-izquierda).
-        const bool isSelected = m_selected.has_value() && *m_selected == e.logicalPath;
-        if (isSelected) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.75f, 1.0f));
-        }
-        if (ImGui::ImageButton("##thumb", tex->handle(),
-                               ImVec2(k_thumbSize, k_thumbSize),
-                               ImVec2(0, 1), ImVec2(1, 0))) {
-            m_selected = e.logicalPath;
-            Log::assets()->info("AssetBrowserPanel: seleccionado '{}'", e.logicalPath);
-        }
-        if (isSelected) ImGui::PopStyleColor();
+            for (size_t i = 0; i < m_entries.size(); ++i) {
+                const Entry& e = m_entries[i];
+                ITexture* tex = m_assetManager->getTexture(e.id);
+                if (tex == nullptr) continue;
 
-        // Drag source: arrastrar una miniatura permite soltarla sobre el
-        // Viewport para asignarla como textura de un tile. Payload = id de
-        // la textura (u32); el consumidor lo castea a TextureAssetId.
-        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-            ImGui::SetDragDropPayload("MOOD_TEXTURE_ASSET", &e.id, sizeof(e.id));
-            // Preview del payload: miniatura + nombre.
-            ImGui::Image(tex->handle(), ImVec2(48.0f, 48.0f),
-                         ImVec2(0, 1), ImVec2(1, 0));
-            ImGui::SameLine();
-            ImGui::TextUnformatted(e.displayName.c_str());
-            ImGui::EndDragDropSource();
-        }
+                ImGui::PushID(static_cast<int>(i));
+                ImGui::BeginGroup();
 
-        // Nombre de archivo, truncado si no entra en el ancho del thumb.
-        const float textW = ImGui::CalcTextSize(e.displayName.c_str()).x;
-        if (textW <= k_thumbSize) {
-            ImGui::TextUnformatted(e.displayName.c_str());
-        } else {
-            // Mostrar "abc.." + tooltip con el nombre completo.
-            std::string truncated = e.displayName;
-            while (!truncated.empty() &&
-                   ImGui::CalcTextSize((truncated + "..").c_str()).x > k_thumbSize) {
-                truncated.pop_back();
+                const bool isSelected = m_selected.has_value() &&
+                                          *m_selected == e.logicalPath;
+                if (isSelected) {
+                    ImGui::PushStyleColor(ImGuiCol_Button,
+                                            ImVec4(0.25f, 0.45f, 0.75f, 1.0f));
+                }
+                if (ImGui::ImageButton("##thumb", tex->handle(),
+                                        ImVec2(k_thumbSize, k_thumbSize),
+                                        ImVec2(0, 1), ImVec2(1, 0))) {
+                    m_selected = e.logicalPath;
+                    Log::assets()->info(
+                        "AssetBrowserPanel: seleccionado '{}'", e.logicalPath);
+                }
+                if (isSelected) ImGui::PopStyleColor();
+
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                    ImGui::SetDragDropPayload("MOOD_TEXTURE_ASSET",
+                                                &e.id, sizeof(e.id));
+                    ImGui::Image(tex->handle(), ImVec2(48.0f, 48.0f),
+                                  ImVec2(0, 1), ImVec2(1, 0));
+                    ImGui::SameLine();
+                    ImGui::TextUnformatted(e.displayName.c_str());
+                    ImGui::EndDragDropSource();
+                }
+
+                const float textW = ImGui::CalcTextSize(e.displayName.c_str()).x;
+                if (textW <= k_thumbSize) {
+                    ImGui::TextUnformatted(e.displayName.c_str());
+                } else {
+                    std::string truncated = e.displayName;
+                    while (!truncated.empty() &&
+                            ImGui::CalcTextSize((truncated + "..").c_str()).x > k_thumbSize) {
+                        truncated.pop_back();
+                    }
+                    ImGui::Text("%s..", truncated.c_str());
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("%s", e.displayName.c_str());
+                    }
+                }
+
+                ImGui::EndGroup();
+                ImGui::PopID();
+
+                if (static_cast<int>((i + 1) % cols) != 0) {
+                    ImGui::SameLine();
+                }
             }
-            ImGui::Text("%s..", truncated.c_str());
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s", e.displayName.c_str());
-            }
+
+            ImGui::EndChild();
+            ImGui::EndTabItem();
         }
 
-        ImGui::EndGroup();
-        ImGui::PopID();
-
-        if (static_cast<int>((i + 1) % cols) != 0) {
-            ImGui::SameLine();
-        }
-    }
-
-    // --- Sección Meshes (Hito 10 Bloque 5) ---
-    // Puesta justo despues de las texturas para que los modelos importados
-    // queden a la vista sin scroll. Lista plana (sin thumbnails todavia)
-    // con metadata resuelta por assimp. Cada item es arrastrable al
-    // Viewport para spawnear una entidad con `MeshRendererComponent`.
-    if (!m_meshEntries.empty()) {
-        ImGui::Dummy(ImVec2(0.0f, 8.0f));
-        ImGui::Separator();
-        if (ImGui::CollapsingHeader("Meshes", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ============================================================
+        // TAB: Meshes
+        // ============================================================
+        if (ImGui::BeginTabItem("Meshes")) {
+            ImGui::TextDisabled("%zu meshes", m_meshEntries.size());
+            ImGui::BeginChild("##meshes_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& me : m_meshEntries) {
                 MeshAsset* asset = m_assetManager->getMesh(me.id);
                 ImGui::PushID(me.logicalPath.c_str());
-                // Selectable para habilitar drag source; no cambia seleccion
-                // global del panel (esa la usa el flow de texturas).
                 ImGui::Selectable(me.displayName.c_str(), false);
-                // Drag source INMEDIATAMENTE despues del Selectable:
-                // BeginDragDropSource opera sobre el ultimo item, y si se llama
-                // tras el `SameLine + TextDisabled` siguiente se asociaria al
-                // texto gris (que no es draggeable).
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
                     ImGui::SetDragDropPayload("MOOD_MESH_ASSET", &me.id, sizeof(me.id));
                     ImGui::TextUnformatted(me.displayName.c_str());
@@ -354,22 +354,22 @@ void AssetBrowserPanel::onImGuiRender() {
                 }
                 ImGui::PopID();
             }
+            ImGui::EndChild();
+            ImGui::EndTabItem();
         }
-    }
 
-    // --- Sección Prefabs (Hito 14 Bloque 4) ---
-    // Pegada a Meshes porque ambos son "fuentes de geometria/entidades
-    // arrastrables al viewport". Drag payload `"MOOD_PREFAB_ASSET"` (u32 id);
-    // EditorApplication consume al soltar y crea una entidad copia.
-    if (!m_prefabEntries.empty()) {
-        ImGui::Dummy(ImVec2(0.0f, 8.0f));
-        ImGui::Separator();
-        if (ImGui::CollapsingHeader("Prefabs", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ============================================================
+        // TAB: Prefabs
+        // ============================================================
+        if (ImGui::BeginTabItem("Prefabs")) {
+            ImGui::TextDisabled("%zu prefabs", m_prefabEntries.size());
+            ImGui::BeginChild("##prefabs_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& pe : m_prefabEntries) {
                 ImGui::PushID(pe.logicalPath.c_str());
                 ImGui::Selectable(pe.displayName.c_str(), false);
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                    ImGui::SetDragDropPayload("MOOD_PREFAB_ASSET", &pe.id, sizeof(pe.id));
+                    ImGui::SetDragDropPayload("MOOD_PREFAB_ASSET",
+                                                &pe.id, sizeof(pe.id));
                     ImGui::TextUnformatted(pe.displayName.c_str());
                     ImGui::EndDragDropSource();
                 }
@@ -377,24 +377,22 @@ void AssetBrowserPanel::onImGuiRender() {
                 ImGui::TextDisabled("(prefab)");
                 ImGui::PopID();
             }
+            ImGui::EndChild();
+            ImGui::EndTabItem();
         }
-    }
 
-    // --- Seccion Materiales (Hito 17 Bloque 4) ---
-    // Lista los `.material` JSON de assets/materials/ con drag payload
-    // `MOOD_MATERIAL_ASSET` (u32 id). Drop sobre el viewport asigna el
-    // material al primer slot del MeshRenderer de la entidad bajo el
-    // cursor (handler en EditorApplication).
-    if (!m_materialEntries.empty()) {
-        ImGui::Dummy(ImVec2(0.0f, 8.0f));
-        ImGui::Separator();
-        if (ImGui::CollapsingHeader("Materiales", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ============================================================
+        // TAB: Materiales
+        // ============================================================
+        if (ImGui::BeginTabItem("Materiales")) {
+            ImGui::TextDisabled("%zu materiales", m_materialEntries.size());
+            ImGui::BeginChild("##materiales_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& me : m_materialEntries) {
                 ImGui::PushID(me.logicalPath.c_str());
                 ImGui::Selectable(me.displayName.c_str(), false);
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
                     ImGui::SetDragDropPayload("MOOD_MATERIAL_ASSET",
-                                               &me.id, sizeof(me.id));
+                                                &me.id, sizeof(me.id));
                     ImGui::TextUnformatted(me.displayName.c_str());
                     ImGui::EndDragDropSource();
                 }
@@ -402,31 +400,27 @@ void AssetBrowserPanel::onImGuiRender() {
                 ImGui::TextDisabled("(material)");
                 ImGui::PopID();
             }
+            ImGui::EndChild();
+            ImGui::EndTabItem();
         }
-    }
 
-    // --- Seccion Scripts (Hito 22 Bloque 1) ---
-    // Lista los `.lua` de assets/scripts/. Drag payload `MOOD_SCRIPT_ASSET`
-    // contiene el path logico como string fijo (k_payloadBufSize bytes).
-    // Drop sobre una entidad asigna ScriptComponent con ese path
-    // (handler en EditorApplication).
-    if (!m_scriptEntries.empty()) {
-        ImGui::Dummy(ImVec2(0.0f, 8.0f));
-        ImGui::Separator();
-        if (ImGui::CollapsingHeader("Scripts", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ============================================================
+        // TAB: Scripts
+        // ============================================================
+        if (ImGui::BeginTabItem("Scripts")) {
+            ImGui::TextDisabled("%zu scripts", m_scriptEntries.size());
+            ImGui::BeginChild("##scripts_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& se : m_scriptEntries) {
                 ImGui::PushID(se.logicalPath.c_str());
                 ImGui::Selectable(se.displayName.c_str(), false);
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                    // Payload: path logico como buffer fijo. Lo recibe
-                    // ViewportPanel y lo pasa a EditorApplication.
                     constexpr int kPayloadBufSize = 256;
                     char buf[kPayloadBufSize] = {0};
                     const auto n = std::min(se.logicalPath.size(),
                                               static_cast<size_t>(kPayloadBufSize - 1));
                     std::memcpy(buf, se.logicalPath.data(), n);
                     ImGui::SetDragDropPayload("MOOD_SCRIPT_ASSET",
-                                               buf, kPayloadBufSize);
+                                                buf, kPayloadBufSize);
                     ImGui::TextUnformatted(se.displayName.c_str());
                     ImGui::EndDragDropSource();
                 }
@@ -434,16 +428,16 @@ void AssetBrowserPanel::onImGuiRender() {
                 ImGui::TextDisabled("(%u lineas)", se.lineCount);
                 ImGui::PopID();
             }
+            ImGui::EndChild();
+            ImGui::EndTabItem();
         }
-    }
 
-    // --- Sección Audio (Hito 9 Bloque 4) ---
-    // Por ahora solo texto: path lógico + duracion + canales. Drag & drop a
-    // entidades viene en hitos posteriores (Hito 10+).
-    if (!m_audioEntries.empty()) {
-        ImGui::Dummy(ImVec2(0.0f, 8.0f));
-        ImGui::Separator();
-        if (ImGui::CollapsingHeader("Audio", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ============================================================
+        // TAB: Audio
+        // ============================================================
+        if (ImGui::BeginTabItem("Audio")) {
+            ImGui::TextDisabled("%zu clips", m_audioEntries.size());
+            ImGui::BeginChild("##audio_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& ae : m_audioEntries) {
                 AudioClip* clip = m_assetManager->getAudio(ae.id);
                 if (clip == nullptr) continue;
@@ -454,7 +448,11 @@ void AssetBrowserPanel::onImGuiRender() {
                                      clip->sampleRate(),
                                      clip->channels());
             }
+            ImGui::EndChild();
+            ImGui::EndTabItem();
         }
+
+        ImGui::EndTabBar();
     }
 
     ImGui::End();

@@ -14,9 +14,11 @@ namespace {
 ///        der, Asset Browser + Console abajo, Viewport central.
 void buildLayoutWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockMain = dockspaceId;
-    // F2H22: franja delgada para la Toolbar (60px aprox = 0.05).
+    // F2H22: franja para la Toolbar — ~100px en viewport 1280.
+    // Botones de 72x36 (Mover/Rotar/Escala/Box/Cilindro/Cara) caben con
+    // padding lateral.
     ImGuiID dockToolbar = ImGui::DockBuilderSplitNode(
-        dockMain, ImGuiDir_Left, 0.05f, nullptr, &dockMain);
+        dockMain, ImGuiDir_Left, 0.08f, nullptr, &dockMain);
     ImGuiID dockLeft = ImGui::DockBuilderSplitNode(
         dockMain, ImGuiDir_Left, 0.18f, nullptr, &dockMain);
     ImGuiID dockRight = ImGui::DockBuilderSplitNode(
