@@ -74,6 +74,14 @@ public:
     ///        No-op si no hay switch pendiente.
     void applyPendingWorkspaceSwitch();
 
+    /// @brief F2H22: setea `visible` de cada panel segun el workspace
+    ///        de destino. Solo se aplica al primer activado del
+    ///        workspace (cuando `iniLayout` esta vacio) o tras un
+    ///        reset manual del layout. Si el dev abre un panel "extra"
+    ///        en algun workspace, esa decision persiste en su
+    ///        iniLayout custom y este metodo NO la sobreescribe.
+    void applyDefaultVisibilityForWorkspace(const std::string& name);
+
     /// @brief Acceso al panel Asset Browser para inyectarle el AssetManager
     ///        desde EditorApplication y leer la seleccion actual.
     AssetBrowserPanel& assetBrowser() { return m_assetBrowser; }

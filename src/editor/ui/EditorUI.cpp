@@ -44,11 +44,18 @@ EditorUI::EditorUI() {
     m_panels = {&m_viewport, &m_hierarchy, &m_inspector, &m_assetBrowser,
                 &m_console, &m_luaApi, &m_performanceHud,
                 &m_scriptEditor, &m_materialEditor};
-    m_scriptEditor.visible   = false; // por defecto oculto; togglear en menu Ver
-    m_materialEditor.visible = false; // Hito 42: idem.
 
-    // F2H7: el dockspace arranca apuntando al workspace default (Layout).
-    m_dockspace.setActiveWorkspaceName(m_workspaceManager.activeWorkspace().name);
+    // F2H7: el dockspace arranca apuntando al workspace default
+    // (F2H22: Modelar, era Layout).
+    const std::string& initialWs = m_workspaceManager.activeWorkspace().name;
+    m_dockspace.setActiveWorkspaceName(initialWs);
+    // F2H22: aplicar visibility default del workspace inicial. Antes
+    // los panels arrancaban con sus visible default del header, lo
+    // cual mostraba Console/LuaApi en Modelar — ruido visual no
+    // deseado. Esto sigue respetando el iniLayout custom del dev
+    // cuando el .moodproj se cargue (setWorkspaces + applyPendingSwitch
+    // toman over despues).
+    applyDefaultVisibilityForWorkspace(initialWs);
 }
 
 void EditorUI::applyPendingWorkspaceSwitch() {
@@ -83,12 +90,81 @@ void EditorUI::applyPendingWorkspaceSwitch() {
         ImGui::LoadIniSettingsFromMemory(nextWs.iniLayout.c_str(),
                                           nextWs.iniLayout.size());
     } else {
-        // Workspace nunca activado en este proyecto: el Dockspace
-        // construira el layout default segun el nombre.
+        // F2H22: workspace nunca activado en este proyecto. Dos cosas:
+        // - aplicar visibility default (qué panels se muestran).
+        // - pedir rebuild del Dockspace para que dockee los panels
+        //   visibles segun el builder del workspace.
+        applyDefaultVisibilityForWorkspace(nextWs.name);
         m_dockspace.requestRebuildForCurrentWorkspace();
     }
 
     Log::editor()->info("[workspace] switched to '{}'", nextWs.name);
+}
+
+void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
+    // F2H22: cada workspace muestra solo los panels relevantes a su
+    // tarea. El resto sigue accesible desde menu Ver pero no se rendea
+    // por default — reduce ruido visual al primer activado del workspace.
+    //
+    // Las visibilidades de aqui son el state INICIAL — si el dev abre
+    // un panel "extra" en, por ejemplo, Modelar, esa decision persiste
+    // en su iniLayout (que se captura al cambiar de workspace) y la
+    // proxima vez que vuelva a Modelar, ese panel sigue abierto.
+    //
+    // Solo se llama cuando iniLayout esta vacio (primer activado o reset).
+
+    // Los nombres de panel matchean el `IPanel::name()`.
+    auto setVisible = [&](const char* panelName, bool v) {
+        for (IPanel* p : m_panels) {
+            if (std::string_view(p->name()) == panelName) {
+                p->visible = v;
+                return;
+            }
+        }
+    };
+
+    if (name == "Programar") {
+        setVisible("Viewport",        true);
+        setVisible("Hierarchy",       true);
+        setVisible("Inspector",       true);
+        setVisible("Asset Browser",   false);
+        setVisible("Console",         true);
+        setVisible("Lua API",         true);
+        setVisible("Performance",     false);
+        setVisible("Script Editor",   true);
+        setVisible("Material Editor", false);
+    } else if (name == "Optimizar") {
+        setVisible("Viewport",        true);
+        setVisible("Hierarchy",       false);
+        setVisible("Inspector",       false);
+        setVisible("Asset Browser",   false);
+        setVisible("Console",         true);
+        setVisible("Lua API",         false);
+        setVisible("Performance",     true);
+        setVisible("Script Editor",   false);
+        setVisible("Material Editor", false);
+    } else if (name == "Materiales") {
+        setVisible("Viewport",        true);
+        setVisible("Hierarchy",       false);
+        setVisible("Inspector",       true);
+        setVisible("Asset Browser",   true);
+        setVisible("Console",         false);
+        setVisible("Lua API",         false);
+        setVisible("Performance",     false);
+        setVisible("Script Editor",   false);
+        setVisible("Material Editor", true);
+    } else {
+        // "Modelar" (default) — flow general de mapping.
+        setVisible("Viewport",        true);
+        setVisible("Hierarchy",       true);
+        setVisible("Inspector",       true);
+        setVisible("Asset Browser",   true);
+        setVisible("Console",         false);
+        setVisible("Lua API",         false);
+        setVisible("Performance",     false);
+        setVisible("Script Editor",   false);
+        setVisible("Material Editor", false);
+    }
 }
 
 void EditorUI::draw(bool& requestQuit) {

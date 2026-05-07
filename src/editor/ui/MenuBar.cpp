@@ -195,6 +195,13 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Restablecer layout del workspace activo")) {
+                // F2H22: el reset re-aplica tanto el dock layout (via
+                // DockBuilder en el proximo frame) como la visibility
+                // default de los panels — sin esto, los panels que el
+                // dev abrio en su iniLayout custom quedaban visibles
+                // tras el reset.
+                ui.applyDefaultVisibilityForWorkspace(
+                    ui.workspaceManager().activeWorkspace().name);
                 ui.dockspace().requestResetToDefault();
                 Log::editor()->info("Layout restablecido al default");
             }
