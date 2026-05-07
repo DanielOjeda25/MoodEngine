@@ -25,7 +25,10 @@
 //   - Node graph (estilo Substance/UE) — feature mayor, hito propio
 //     (probable F2H23 tras 4-viewport Hammer).
 
+#include "core/Types.h"
 #include "editor/panels/IPanel.h"
+
+#include <glm/vec3.hpp>
 
 namespace Mood {
 
@@ -60,12 +63,25 @@ private:
     MaterialPreviewRenderer* m_preview = nullptr;
     bool m_editedThisFrame = false;
     /// Index del combo (offset dentro de la lista de materiales del AM).
-    /// 0 = primer material registrado. -1 = ninguno seleccionado al inicio.
-    int m_selectedMatIdx = 0;
+    /// -1 = sin seleccionar todavia (la primera vez que el panel se abre,
+    /// elegimos el primer material no-sentinel — slot 0 es magenta
+    /// deliberado y __runtime#/__tex# son sentinels).
+    int m_selectedMatIdx = -1;
     /// F2H21: feedback transitorio del boton Guardar (verde/rojo). Cuenta
     /// frames restantes para mostrar el mensaje.
     int m_saveStatusFrames = 0;
     bool m_saveStatusOk = false;
+
+    /// F2H21 polish: tracking del estado entre frames para emitir logs
+    /// solo en eventos discretos (cambio de material, drag soltado de
+    /// slider, drop de textura, click de boton). Sin spam por frame.
+    int m_lastLoggedMatIdx = -1;
+    /// Valor pre-drag de cada slider/color, capturado al `IsItemActivated`
+    /// y consumido al `IsItemDeactivatedAfterEdit` para loguear el delta.
+    f32 m_metallicPreDrag = 0.0f;
+    f32 m_roughnessPreDrag = 0.0f;
+    f32 m_aoPreDrag = 0.0f;
+    glm::vec3 m_tintPreDrag{1.0f};
 };
 
 } // namespace Mood

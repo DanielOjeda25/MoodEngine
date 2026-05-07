@@ -17,6 +17,7 @@
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
 
+#include <chrono>
 #include <stdexcept>
 
 namespace Mood {
@@ -121,7 +122,18 @@ void MaterialPreviewRenderer::renderPreview(const MaterialAsset& mat,
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
 
-    // ---- Camara fija frontal ----
+    // ---- Camara fija frontal + rotacion lenta del modelo ----
+    // F2H21 polish: el dev pidio "que se vea 3D" — rotamos la esfera
+    // lentamente sobre Y para que muestre todas las caras. Tiempo
+    // absoluto del clock monotonico (sin dt acumulado en miembro);
+    // velocidad ~22 grados/segundo (1 vuelta cada ~16s).
+    const auto now = std::chrono::steady_clock::now();
+    const f64 tSec = std::chrono::duration<f64>(
+        now.time_since_epoch()).count();
+    const f32 angle = static_cast<f32>(tSec) * 0.4f;
+    const glm::mat4 model =
+        glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f));
+
     const f32 aspect = static_cast<f32>(m_width) / static_cast<f32>(m_height);
     const glm::vec3 camPos(0.0f, 0.0f, 2.5f);
     const glm::mat4 view = glm::lookAt(camPos,
@@ -129,7 +141,6 @@ void MaterialPreviewRenderer::renderPreview(const MaterialAsset& mat,
                                         glm::vec3(0.0f, 1.0f, 0.0f));
     const glm::mat4 projection =
         glm::perspective(glm::radians(30.0f), aspect, 0.1f, 100.0f);
-    const glm::mat4 model(1.0f);
 
     // ---- Bind SSBOs vacios para el path Forward+ del shader ----
     m_pointLightsSsbo->bind(2);
@@ -155,7 +166,11 @@ void MaterialPreviewRenderer::renderPreview(const MaterialAsset& mat,
     m_pbrShader->setMat4("uProjection", projection);
     m_pbrShader->setMat4("uModel", model);
     m_pbrShader->setVec3("uCameraPos", camPos);
-    m_pbrShader->setVec3("uAmbient", glm::vec3(0.05f));
+    // F2H21 polish: ambient mas alto (0.20) para que la mitad de la esfera
+    // que NO recibe la directional no se vea totalmente negra. El IBL
+    // (cuando esta cargado) cubre esto correctamente, pero con IBL off
+    // el fallback escalar necesita un piso mas vivo.
+    m_pbrShader->setVec3("uAmbient", glm::vec3(0.20f));
 
     // Texture units (constantes — los samplers del shader).
     m_pbrShader->setInt("uAlbedoMap",         0);

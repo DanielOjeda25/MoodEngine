@@ -1,5 +1,6 @@
 #include "editor/panels/assets/MaterialEditorPanel.h"
 
+#include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/preview/MaterialPreviewRenderer.h"
 #include "engine/render/resources/MaterialAsset.h"
@@ -56,8 +57,18 @@ void MaterialEditorPanel::onImGuiRender() {
             labels.back() = "<sin path>";
         }
     }
+    // F2H21: la primera vez que el panel se abre (m_selectedMatIdx=-1),
+    // arrancamos en el primer material NO sentinel (slot 0 es el default
+    // magenta deliberado; mostrarlo by default desconcierta al dev).
+    // Si todos son sentinels (raro), caemos al slot 0.
     if (m_selectedMatIdx < 0 || m_selectedMatIdx >= static_cast<int>(matCount)) {
         m_selectedMatIdx = 0;
+        for (int i = 0; i < static_cast<int>(matCount); ++i) {
+            if (isPersistablePath(labels[i])) {
+                m_selectedMatIdx = i;
+                break;
+            }
+        }
     }
 
     if (ImGui::BeginCombo("Material",
@@ -72,6 +83,14 @@ void MaterialEditorPanel::onImGuiRender() {
         ImGui::EndCombo();
     }
 
+    // F2H21 tracking: log al cambiar el material seleccionado.
+    if (m_selectedMatIdx != m_lastLoggedMatIdx) {
+        Log::editor()->info(
+            "[material-editor] seleccionado material '{}'",
+            labels[m_selectedMatIdx]);
+        m_lastLoggedMatIdx = m_selectedMatIdx;
+    }
+
     const MaterialAssetId matId = static_cast<MaterialAssetId>(m_selectedMatIdx);
     MaterialAsset* mat = m_assets->getMaterial(matId);
     if (mat == nullptr) {
@@ -82,43 +101,132 @@ void MaterialEditorPanel::onImGuiRender() {
 
     ImGui::Separator();
 
-    // --- F2H21: layout 2 columnas (controles | preview) ---
-    // Con preview renderer disponible y panel suficientemente ancho,
-    // dividimos en 2 columnas. Si el panel es angosto o no hay preview,
-    // caemos a una sola columna (legacy layout).
-    const bool showPreview = (m_preview != nullptr) &&
-                             (ImGui::GetContentRegionAvail().x >= 540.0f);
+    // --- F2H21: layout adaptativo segun ancho del panel ---
+    // Modos:
+    //   - 2 columnas (>= 540px): controles izq | preview der.
+    //   - Vertical (panel angosto): preview ARRIBA, controles abajo.
+    //   - Sin preview (m_preview == nullptr): solo controles.
+    enum class LayoutMode { TwoColumns, Vertical, ControlsOnly };
+    const f32 availWidth = ImGui::GetContentRegionAvail().x;
+    LayoutMode layout = LayoutMode::ControlsOnly;
+    if (m_preview != nullptr) {
+        layout = (availWidth >= 540.0f) ? LayoutMode::TwoColumns
+                                         : LayoutMode::Vertical;
+    }
 
-    if (showPreview) {
+    // Helper interno: dibuja el preview con la esfera. Compartido entre
+    // los dos layouts que muestran preview.
+    auto drawPreviewBlock = [&]() {
+        m_preview->renderPreview(*mat, *m_assets);
+        const GLuint texId = m_preview->outputTextureId();
+        if (texId != 0) {
+            // ImTextureID = ImU64 en esta version de ImGui — cast directo
+            // de GLuint a ImU64 (no reinterpret entre integers).
+            // ImVec2 uv0 = (0, 1) y uv1 = (1, 0) para flippear vertical
+            // (ImGui asume top-left origin pero OpenGL FBO tiene
+            // bottom-left origin).
+            const f32 size = static_cast<f32>(m_preview->width());
+            // Centrar horizontalmente en modo vertical.
+            const f32 avail = ImGui::GetContentRegionAvail().x;
+            if (avail > size) {
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                                       (avail - size) * 0.5f);
+            }
+            ImGui::Image(
+                static_cast<ImTextureID>(texId),
+                ImVec2(size, size),
+                ImVec2(0.0f, 1.0f),
+                ImVec2(1.0f, 0.0f));
+        } else {
+            ImGui::TextDisabled("(preview no disponible)");
+        }
+    };
+
+    // En modo Vertical, el preview va PRIMERO (arriba).
+    if (layout == LayoutMode::Vertical) {
+        ImGui::TextUnformatted("Preview");
+        drawPreviewBlock();
+        ImGui::Separator();
+    }
+
+    if (layout == LayoutMode::TwoColumns) {
         ImGui::Columns(2, "##material_editor_cols", false);
         ImGui::SetColumnWidth(0, ImGui::GetWindowContentRegionMax().x - 280.0f);
     }
 
-    // ===== Columna izquierda: controles =====
+    // ===== Controles (siempre se dibujan; en TwoColumns van en col izq) =====
 
     // --- Sliders escalares ---
+    // Patron F2H21 tracking: capturamos el valor PRE al `IsItemActivated`
+    // (primer frame del drag) y logueamos el delta al `IsItemDeactivatedAfterEdit`
+    // (cuando el dev suelta). Sin esto el log spamearia con cada frame.
     if (ImGui::ColorEdit3("albedo tint", &mat->albedoTint.x,
                             ImGuiColorEditFlags_NoInputs)) {
         m_editedThisFrame = true;
     }
+    if (ImGui::IsItemActivated()) m_tintPreDrag = mat->albedoTint;
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        Log::editor()->info(
+            "[material-editor] albedo_tint: ({:.2f},{:.2f},{:.2f}) -> ({:.2f},{:.2f},{:.2f})",
+            m_tintPreDrag.x, m_tintPreDrag.y, m_tintPreDrag.z,
+            mat->albedoTint.x, mat->albedoTint.y, mat->albedoTint.z);
+    }
+
     if (ImGui::SliderFloat("metallic",  &mat->metallicMult,  0.0f, 1.0f, "%.2f")) {
         m_editedThisFrame = true;
     }
+    if (ImGui::IsItemActivated()) m_metallicPreDrag = mat->metallicMult;
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        Log::editor()->info(
+            "[material-editor] metallic: {:.2f} -> {:.2f}",
+            m_metallicPreDrag, mat->metallicMult);
+    }
+
     if (ImGui::SliderFloat("roughness", &mat->roughnessMult, 0.04f, 1.0f, "%.2f")) {
         m_editedThisFrame = true;
     }
+    if (ImGui::IsItemActivated()) m_roughnessPreDrag = mat->roughnessMult;
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        Log::editor()->info(
+            "[material-editor] roughness: {:.2f} -> {:.2f}",
+            m_roughnessPreDrag, mat->roughnessMult);
+    }
+
     if (ImGui::SliderFloat("ao",        &mat->aoMult,        0.0f, 1.0f, "%.2f")) {
         m_editedThisFrame = true;
+    }
+    if (ImGui::IsItemActivated()) m_aoPreDrag = mat->aoMult;
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        Log::editor()->info(
+            "[material-editor] ao: {:.2f} -> {:.2f}",
+            m_aoPreDrag, mat->aoMult);
     }
 
     ImGui::Separator();
 
     // --- Texture slots con drop targets ---
+    // Layout por slot: boton principal (drop target) que ocupa el ancho
+    // del panel menos espacio para el "X" de clear a la derecha.
     auto textureSlot = [&](const char* label, TextureAssetId& slotRef) {
-        const std::string current = m_assets->pathOf(slotRef);
-        const std::string btnLabel = std::string(label) + ": " +
-            (current.empty() ? "<vacio>" : current);
-        ImGui::Button(btnLabel.c_str(), ImVec2(-FLT_MIN, 0));
+        // Slot vacio = id 0. `pathOf(0)` devuelve "textures/missing.png"
+        // (el path del fallback) — NO un string vacio. Usamos el id
+        // directo como criterio.
+        const bool empty = (slotRef == 0);
+        const std::string path = m_assets->pathOf(slotRef);
+        const std::string btnLabel = empty
+            ? std::string(label) + ": (vacio - drop textura aqui)"
+            : std::string(label) + ": " + path;
+
+        // Reservar 28 px a la derecha para el boton "X". -FLT_MIN tomaba
+        // todo el ancho y el "X" se salia del panel — el dev no lo veia.
+        const f32 clearBtnW = 28.0f;
+        const f32 mainBtnW = ImGui::GetContentRegionAvail().x - clearBtnW
+                              - ImGui::GetStyle().ItemSpacing.x;
+        ImGui::Button(btnLabel.c_str(), ImVec2(mainBtnW, 0));
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s\n(drop textura desde Asset Browser)",
+                                empty ? "<sin textura>" : path.c_str());
+        }
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* p =
                     ImGui::AcceptDragDropPayload("MOOD_TEXTURE_ASSET")) {
@@ -131,22 +239,46 @@ void MaterialEditorPanel::onImGuiRender() {
                         // Inspector y de loadMaterial).
                         mat->useAlbedoMap = true;
                     }
+                    // F2H21 tracking.
+                    Log::editor()->info(
+                        "[material-editor] drop sobre slot '{}': '{}'",
+                        label, m_assets->pathOf(slotRef));
                 }
             }
             ImGui::EndDragDropTarget();
         }
         ImGui::SameLine();
         std::string clearId = std::string("X##clear_") + label;
-        if (ImGui::SmallButton(clearId.c_str())) {
+        // Boton "X" siempre visible. Deshabilitado cuando el slot ya esta
+        // vacio (no tiene nada que limpiar).
+        if (empty) ImGui::BeginDisabled();
+        if (ImGui::Button(clearId.c_str(),
+                            ImVec2(clearBtnW, 0))) {
             slotRef = 0;
             if (label == std::string("albedo")) {
                 mat->useAlbedoMap = false;
             }
             m_editedThisFrame = true;
+            // F2H21 tracking.
+            Log::editor()->info(
+                "[material-editor] slot '{}' limpiado (slot=0)", label);
+        }
+        if (empty) ImGui::EndDisabled();
+        if (ImGui::IsItemHovered() && !empty) {
+            ImGui::SetTooltip("Quitar textura del slot '%s'", label);
         }
     };
 
-    ImGui::TextUnformatted("Texture slots (drop desde Asset Browser)");
+    ImGui::Spacing();
+    ImGui::TextUnformatted("Texture slots");
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "Cada slot acepta drag-and-drop de una textura desde el panel\n"
+            "Asset Browser. El boton 'X' a la derecha vacia el slot.");
+    }
+
     textureSlot("albedo",             mat->albedo);
     textureSlot("metallic_roughness", mat->metallicRoughness);
     textureSlot("normal",             mat->normal);
@@ -161,13 +293,16 @@ void MaterialEditorPanel::onImGuiRender() {
         ImGui::BeginDisabled();
     }
     if (ImGui::Button("Guardar (.material)", ImVec2(-FLT_MIN, 0))) {
+        // F2H21 tracking: log de la accion + resultado.
+        Log::editor()->info(
+            "[material-editor] click Guardar: '{}'", matPath);
         const bool ok = m_assets->saveMaterial(matId);
         m_saveStatusOk = ok;
         m_saveStatusFrames = 120;  // ~2 segundos a 60 FPS
     }
     if (!canSave) {
         ImGui::EndDisabled();
-        ImGui::TextDisabled("(material runtime / sentinel — no persistible)");
+        ImGui::TextDisabled("(material runtime / sentinel - no persistible)");
     }
     if (m_saveStatusFrames > 0) {
         const ImVec4 color = m_saveStatusOk
@@ -181,30 +316,14 @@ void MaterialEditorPanel::onImGuiRender() {
         --m_saveStatusFrames;
     }
 
-    // ===== Columna derecha: preview =====
-    if (showPreview) {
+    // ===== Columna derecha: preview (solo en TwoColumns) =====
+    if (layout == LayoutMode::TwoColumns) {
         ImGui::NextColumn();
 
         ImGui::TextUnformatted("Preview");
         ImGui::Separator();
 
-        m_preview->renderPreview(*mat, *m_assets);
-        const GLuint texId = m_preview->outputTextureId();
-        if (texId != 0) {
-            // ImTextureID = ImU64 en esta version de ImGui — cast directo
-            // de GLuint a ImU64 (no reinterpret entre integers).
-            // ImVec2 uv0 = (0, 1) y uv1 = (1, 0) para flippear vertical
-            // (ImGui asume top-left origin pero OpenGL FBO tiene
-            // bottom-left origin).
-            ImGui::Image(
-                static_cast<ImTextureID>(texId),
-                ImVec2(static_cast<f32>(m_preview->width()),
-                       static_cast<f32>(m_preview->height())),
-                ImVec2(0.0f, 1.0f),
-                ImVec2(1.0f, 0.0f));
-        } else {
-            ImGui::TextDisabled("(preview no disponible)");
-        }
+        drawPreviewBlock();
 
         ImGui::Columns(1);
     }
