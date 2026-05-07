@@ -280,3 +280,94 @@ TEST_CASE("createMaterial: cada llamada genera un slot distinto") {
     CHECK(m1->metallicMult == doctest::Approx(1.0f));
     CHECK(m2->metallicMult == doctest::Approx(0.0f));
 }
+
+// ============================================================
+// F2H21: saveMaterial — persistencia del material editado
+// ============================================================
+
+TEST_CASE("saveMaterial: round-trip - load, modify, save, reload") {
+    const std::string name = uniqueName("save_roundtrip");
+    const std::string logical = writeMaterial(name, R"({
+        "albedo_tint": [1.0, 1.0, 1.0],
+        "metallic": 0.0,
+        "roughness": 0.5,
+        "ao": 1.0
+    })");
+
+    AssetManager am("assets", nullFactory());
+    const MaterialAssetId id = am.loadMaterial(logical);
+    REQUIRE(id != am.missingMaterialId());
+
+    // Modificar todos los campos.
+    MaterialAsset* mat = am.getMaterial(id);
+    REQUIRE(mat != nullptr);
+    mat->albedoTint    = glm::vec3(0.42f, 0.69f, 0.13f);
+    mat->metallicMult  = 0.88f;
+    mat->roughnessMult = 0.17f;
+    mat->aoMult        = 0.66f;
+
+    REQUIRE(am.saveMaterial(id));
+
+    // Releer en un AssetManager nuevo (forzar lectura de disco).
+    AssetManager am2("assets", nullFactory());
+    MaterialAsset* reloaded = am2.getMaterial(am2.loadMaterial(logical));
+    REQUIRE(reloaded != nullptr);
+    CHECK(reloaded->albedoTint.x   == doctest::Approx(0.42f));
+    CHECK(reloaded->albedoTint.y   == doctest::Approx(0.69f));
+    CHECK(reloaded->albedoTint.z   == doctest::Approx(0.13f));
+    CHECK(reloaded->metallicMult   == doctest::Approx(0.88f));
+    CHECK(reloaded->roughnessMult  == doctest::Approx(0.17f));
+    CHECK(reloaded->aoMult         == doctest::Approx(0.66f));
+
+    std::filesystem::remove(std::filesystem::path("assets") / "materials" / name);
+}
+
+TEST_CASE("saveMaterial: id 0 (default) rechazado") {
+    AssetManager am("assets", nullFactory());
+    // Slot 0 = default material — sentinel "__default_material".
+    CHECK_FALSE(am.saveMaterial(0));
+}
+
+TEST_CASE("saveMaterial: id fuera de rango rechazado") {
+    AssetManager am("assets", nullFactory());
+    CHECK_FALSE(am.saveMaterial(99999));
+}
+
+TEST_CASE("saveMaterial: createMaterial (path runtime sentinel) rechazado") {
+    AssetManager am("assets", nullFactory());
+    MaterialAsset proto{};
+    const MaterialAssetId id = am.createMaterial(proto);
+    // createMaterial usa key sintetica `__runtime#<id>` — no persistible.
+    CHECK_FALSE(am.saveMaterial(id));
+}
+
+TEST_CASE("saveMaterial: campos de textura ausentes en JSON cuando slot=0") {
+    const std::string name = uniqueName("save_no_textures");
+    const std::string logical = writeMaterial(name, R"({
+        "metallic": 0.5
+    })");
+
+    AssetManager am("assets", nullFactory());
+    const MaterialAssetId id = am.loadMaterial(logical);
+    REQUIRE(am.saveMaterial(id));
+
+    // Leer el JSON resultante en raw — los campos albedo/normal/etc.
+    // NO deben aparecer (slot = 0). Lectura en un scope cerrado para
+    // que el ifstream se destruya antes del remove (Windows: el remove
+    // falla con handle abierto).
+    const auto fs = std::filesystem::path("assets") / "materials" / name;
+    std::string content;
+    {
+        std::ifstream in(fs);
+        content.assign((std::istreambuf_iterator<char>(in)),
+                          std::istreambuf_iterator<char>());
+    }
+    CHECK(content.find("\"albedo\"") == std::string::npos);
+    CHECK(content.find("\"normal\"") == std::string::npos);
+    CHECK(content.find("\"metallic_roughness\"") == std::string::npos);
+    // metallic / roughness / ao SI estan (escalares siempre).
+    CHECK(content.find("\"metallic\"") != std::string::npos);
+
+    std::error_code ec;
+    std::filesystem::remove(fs, ec);
+}
