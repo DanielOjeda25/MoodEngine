@@ -3630,5 +3630,57 @@ Switching axis cuando la normal está cerca del eje Y evita cross product con ma
 **Revisar si:**
 - Algún test o demo asume que el mapa default tiene contenido — verificar (tests pasaron 567/567 sin tocar nada, OK).
 
+## 2026-05-06: Reorg de menús del editor — top-level Mapa + Brush (F2H18)
+
+**Contexto:** el menú `Archivo > Mapa` mezclaba file ops del proyecto (Nuevo, Abrir mapa, Guardar como) con geometría (Añadir Brush ▶, Boolean ▶). Spawn de un brush exigía 4 clicks con jerarquía no obvia. Ítem 1 del backlog `PENDIENTES.md` post-F2H17. F2H18 lo cubre como hito propio antes que F2H19+ acumulen más items en `Archivo > Mapa`.
+
+### Decisión 1 — Promover `Mapa` y `Brush` a top-level
+
+**Decisión:** dos menús nuevos top-level. `Mapa` toma los 5 file ops del mapa actual; `Brush` toma `Añadir ▶` (7 primitivas) + `Boolean ▶` (subtract/union/intersect via `drawBooleanOpMenu`). `Archivo` queda solo con file ops del proyecto + Empaquetar + Nuevo Script + Guardar prefab + Salir.
+
+**Razones:**
+- **Flatten**: spawn de brush pasa de 4 clicks a 3. Geometría es la operación dominante en mapping; merece top-level.
+- **Separación de dominios**: file ops del proyecto y file ops del mapa son cosas distintas. Mezclarlas en `Archivo` confunde porque "Guardar" guarda el proyecto, no el mapa, pero `Mapa > Guardar como` guarda el mapa.
+- **Cero refactor funcional**: los `requestProjectAction(...)` calls quedan idénticos. Solo se reubica el `MenuItem` que dispara cada acción.
+- **Habilitación condicional preservada**: ambos top-levels deshabilitados sin proyecto activo (mismo behavior que el submenu anterior).
+
+**Alternativas descartadas:**
+- Mantener todo bajo `Archivo > Mapa`: el ítem 1 de PENDIENTES era específicamente esa queja.
+- Toolbar lateral con iconos (Hammer-style): scope propio mucho más grande; el dev pidió "mejora a futuro" pero F2H18 era el quick-win de reorg.
+- Renombre `Brush → Geometría`: diferido. Hoy todo el mapping es CSG-brush; el día que entren shapes no-brush (mesh import procedural, etc.) se renombra.
+
+**Revisar si:**
+- Entran shapes no-brush al editor → renombre a `Geometría`.
+- El dev pide atajos rápidos por keyboard (Ctrl+B = Box, etc.) — hito propio.
+
+### Decisión 2 — Demos a submenu `Ayuda > Demos ▶`
+
+**Decisión:** los 13 items "Agregar X demo" + `Stress test poligonos ▶` que vivían top-level en `Ayuda` se agruparon bajo submenu `Ayuda > Demos ▶`. `Ayuda` queda con solo "Acerca de" + el submenu Demos.
+
+**Razones:**
+- **Los demos no son ayuda al usuario**: nombre no engaña pero pollutea visualmente. Algo como "Agregar particulas de fuego demo" no es help-content; es validación rápida de features.
+- **Tampoco merecen top-level**: son secundarios al flow de mapping serio. Quien usa el editor en producción rara vez los toca.
+- **Submenu de Ayuda**: agrupación obvia para "cosas raras del editor que no son del flow principal". Si emergen más, caben acá sin ensanchar la barra.
+- **Stress test dentro del mismo Demos**: es un demo más (de poligonos masivos para benchmark) — no necesita su propio nivel.
+
+**Alternativas descartadas:**
+- Top-level `Demos`: demasiada visibilidad para algo de uso ocasional.
+- Quitar los demos del editor: el dev los usa para validar regresiones rápidas. Mantenerlos accesibles, solo escondidos.
+- Panel separado: ortogonal y diferido — los demos hoy son menu items rápidos, no necesitan UI dedicada.
+
+**Revisar si:**
+- Los demos crecen a >25 items → considerar agruparlos por categoría dentro de `Demos ▶` (Audio / Gameplay / Render / Stress).
+
+### Decisión 3 — Sin tests nuevos
+
+**Decisión:** F2H18 no agrega tests. Validación es 100% visual con el editor.
+
+**Razones:**
+- **El menú es UI puro de ImGui**: cero lógica testeable. Los `requestProjectAction(...)` ya están cubiertos por los tests del dispatcher en `EditorApplication`.
+- **Mock de ImGui sería overkill**: testear que `BeginMenu("Mapa")` se llama antes que `EndMenu()` no agrega valor real.
+- **Suite confirma cero regresión**: 567/8182 verde con el código nuevo — los tests existentes ya son la red de seguridad de que ningún `requestProjectAction` cambió de signature.
+
+**Revisar si:**
+- Aparecen tests de UI snapshot (raros en C++ con ImGui). Improbable.
 
 

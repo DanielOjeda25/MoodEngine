@@ -9,27 +9,16 @@
 
 ---
 
-## Post-F2H17 (2026-05-06)
+## Post-F2H18 (2026-05-06)
 
-### 1. Reorganización de menús `Archivo > Mapa`
+### ~~1. Reorganización de menús `Archivo > Mapa`~~ — RESUELTO en F2H18
 
-**Qué:** el menú `Archivo > Mapa` acumuló items mezclando file ops (Nuevo,
-Guardar, Guardar como, Cargar) con geometría (Añadir Brush > Box/Cylinder/...,
-Boolean > Subtract/Union/Intersect). Crece sin estructura clara.
-
-**Por qué duele:** items dispares en el mismo nivel; añadir features nuevas
-empuja la lista a ser inutilizable.
-
-**Idea de solución:** separar en dos menús top-level: `Archivo` (solo file
-ops) y `Mapa` o `Brush` (geometría + booleanos). Alternativa: dejar
-`Archivo > Mapa` solo con file ops y mover geometría a un menú propio
-`Geometría` o a la toolbar del viewport (Hammer-style).
-
-**Cuándo:** hito propio. Tocarlo aislado para no mezclar con feature work.
-
-**Referencias:**
-- `src/editor/application/EditorMenuBar.cpp` (handler del menú).
-- `src/editor/application/EditorProjectActions.cpp` (acciones).
+Cerrado en F2H18 (tag `v1.9.0-fase2-hito18`): `Mapa` y `Brush` se
+promovieron a top-level. Demos agrupados bajo `Ayuda > Demos ▶`.
+Mejoras de UX adicionales mencionadas por el dev ("a futuro haremos
+mejoras") quedan disponibles si emergen: toolbar lateral con iconos
+de brush (Hammer-style), atajos de teclado (Ctrl+B = Box, etc.),
+renombre `Brush → Geometría` cuando entren shapes no-brush.
 
 ---
 

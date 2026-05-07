@@ -6,7 +6,34 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H17 cerrado: Face Mode estilo Hammer + Material per-cara.**
+**🚀 Fase 2 — F2H18 cerrado: Reorg de menús del editor.**
+Tag: `v1.9.0-fase2-hito18`.
+Verificado automático: suite doctest **567/8182** verde sin cambios (UI puro). Verificado por el dev a ojo: barra superior `Archivo | Mapa | Brush | Editar | Ver | Ayuda | [tabs] | Play`; `Mapa` y `Brush` deshabilitados sin proyecto; spawn de brush en 3 clicks (`Brush → Añadir → Box`); demos agrupados bajo `Ayuda > Demos ▶`.
+
+**Cambio importante**: F2H18 es un hito de UX puro que toma el ítem 1 del backlog `PENDIENTES.md` post-F2H17. Cero cambios funcionales — los `requestProjectAction(...)` calls quedan idénticos; solo se reubica **dónde** se renderiza cada `MenuItem` en `MenuBar.cpp`. Antes de que F2H19+ acumulen más items en `Archivo > Mapa`, atacar la deuda.
+
+**Decisiones clave**:
+- **Top-level `Mapa`**: file ops del mapa actual (Nuevo / Abrir / Guardar como / default / Eliminar). Antes era `Archivo > Mapa`.
+- **Top-level `Brush`**: geometría (`Añadir ▶` + `Boolean ▶`). Antes anidado en `Archivo > Mapa > Añadir Brush` con 4 niveles de profundidad.
+- **`Brush` no `Geometría`**: nombre conservado por consistencia con la convención del repo (CSG `Brush`). Renombre diferido para cuando emerjan shapes no-brush.
+- **Demos en submenu `Ayuda > Demos ▶`** (no top-level): son útiles para validar features rápidamente, pero no merecen visibilidad top-level vs el flow de mapping serio. Stress test queda dentro como un demo más.
+- **Sin tests nuevos**: el menú es UI puro de ImGui sin lógica testeable; validación visual con el editor.
+
+**Implementación (Bloques A-C + G):**
+
+- **Bloque A — Plan**: explorar `MenuBar.cpp` actual, mapear items viejos → nuevos, decisiones de top-level vs submenu, scope explícito (qué NO entra: toolbar lateral, atajos nuevos, renombre `Brush → Geometría`).
+- **Bloque B — Implementación**: editar `src/editor/ui/MenuBar.cpp`, sacar el bloque `Mapa` de dentro de `Archivo`, agregar 2 top-levels (`Mapa`, `Brush`), agrupar demos en `Ayuda > Demos`. `ui.drawBooleanOpMenu()` se mueve sin tocar su impl.
+- **Bloque C — Build + suite + validación visual**: build editor + tests, suite **567/8182** verde, validación visual ✅ (dev confirmó "va bien, a futuro haremos mejoras").
+- **Bloque G — cierre**: este documento + HITOS + DECISIONS + tag `v1.9.0-fase2-hito18` + tachar ítem 1 de `PENDIENTES.md`.
+
+**Pendientes conocidos** (memoria + `PENDIENTES.md`):
+- **Limpieza HistoryStack residual** (PENDIENTES.md ítem 2): drops/widgets sin push tras F2H17 multi-material. **Próximo hito (F2H19)**.
+- **Mejoras UX adicionales del menú** (deferidas, mencionadas por el dev: "a futuro haremos mejoras"): toolbar lateral con iconos de brush (Hammer-style), atajos de teclado (Ctrl+B para Box, etc.), renombre `Brush → Geometría` cuando entren shapes no-brush.
+- **Vertex / Edge mode** (teclas 1, 2 reservadas en F2H17). Diferido si emerge necesidad.
+
+**Próximo paso**: **F2H19 = limpieza HistoryStack residual**. Auditar handlers que mutan estado sin push al stack tras la introducción de multi-material en F2H17 (drops Face Mode con slots nuevos, widgets per-cara nuevos en Inspector). Mismo approach que F2H16 (subagente recorre el editor → lista concreta → comandos nuevos mínimos → wireup en handlers).
+
+### F2H17 (anterior, ya cerrado)
 Tag: `v1.8.0-fase2-hito17`.
 Verificado automático: suite doctest **567/8182** verde (+15 cases vs F2H16). Verificado por el dev a ojo: spawn brush → tecla **3** entra a Face Mode → click en una cara muestra outline naranja Half-Life + fill semi-transparente → drop de textura sobre cara → solo esa cara cambia, las demás conservan la anterior → save/reopen → slots de material persisten (schema v12). Drop en Object Mode (no Face Mode) sigue asignando a slot 0 (todo el brush).
 
