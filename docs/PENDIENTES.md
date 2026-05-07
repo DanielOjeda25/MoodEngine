@@ -9,6 +9,37 @@
 
 ---
 
+## Post-F2H20 (2026-05-07)
+
+### Activos
+
+- **F2H22 candidato — 4-viewport Hammer-style layout** (charlado con el
+  dev tras cerrar F2H20). Workspace nuevo "Hammer" con dockspace en 4
+  cuadrantes: 1 perspectiva 3D + 3 ortográficas (top / front / side) en
+  wireframe (`glPolygonMode(GL_LINE)` + grid 2D + crosshair). Drag-edit
+  de brushes / vertices entre vistas con grid snap. Multi-cámara: 4
+  framebuffers (o uno reutilizado con N renders) + shadow pass /
+  light grid compartido para mitigar el ~4× costo CPU del frame.
+  Decisión de prioridad: **arrancar inmediatamente después de F2H21**
+  (material editor) — flow CSG queda sólido como herramienta antes de
+  meterse en física avanzada o features visuales. Si emerge presión de
+  "demo bonito" antes que "workflow cómodo", postponer a sub-fase 2.7.
+
+### Diferidos no urgentes (mencionar al dev si se acercan al scope)
+
+- **Runtime-load de mesh compilada en `MoodPlayer`** (deuda de F2H20):
+  player carga la mesh estática unificada en lugar de los brushes
+  individuales — habilita "brushes solo en el editor" del plan original
+  F2H14. Schema bump del `.moodmap` con `compiledMesh` opcional. Hito
+  futuro si emerge necesidad de loading time.
+- **Cull de overlap parcial** (deuda F2H20): clipping general
+  polígono-polígono. Diferido si emerge necesidad real con mapas
+  grandes.
+- **F6 panel estilo Blender** (tweak last operator post-hoc) — diferido
+  desde F2H16.
+- **Vertex / Edge mode** (teclas 1, 2 reservadas en F2H17).
+- **Multi-selección de caras** (Shift+click sobre múltiples caras).
+
 ## Post-F2H19 (2026-05-07)
 
 **Backlog vacío** — F2H18 cerró la reorganización de menús; F2H19 cerró la
