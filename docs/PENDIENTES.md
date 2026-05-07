@@ -9,39 +9,40 @@
 
 ---
 
-## Post-F2H21 (2026-05-07)
+## Post-F2H22 (2026-05-07)
 
 ### Activos
 
-- **F2H22 candidato — 4-viewport Hammer-style layout** (charlado con el
-  dev tras cerrar F2H20). Workspace nuevo "Hammer" con dockspace en 4
-  cuadrantes: 1 perspectiva 3D + 3 ortográficas (top / front / side) en
-  wireframe (`glPolygonMode(GL_LINE)` + grid 2D + crosshair). Drag-edit
-  de brushes / vertices entre vistas con grid snap. Multi-cámara: 4
-  framebuffers (o uno reutilizado con N renders) + shadow pass /
-  light grid compartido para mitigar el ~4× costo CPU del frame.
-  Decisión de prioridad: **arrancar inmediatamente después de F2H21**
-  (material editor) — flow CSG queda sólido como herramienta antes de
-  meterse en física avanzada o features visuales. Si emerge presión de
-  "demo bonito" antes que "workflow cómodo", postponer a sub-fase 2.7.
+- **F2H23 — 4-viewport Hammer-style layout** (era F2H22 candidato post-F2H20;
+  el rework UX se priorizó en F2H22 tras feedback del dev). Workspace nuevo
+  "Hammer" con dockspace en 4 cuadrantes: 1 perspectiva 3D + 3 ortográficas
+  (top / front / side) en wireframe (`glPolygonMode(GL_LINE)` + grid 2D +
+  crosshair). Drag-edit de brushes / vertices entre vistas con grid snap.
+  Multi-cámara: 4 framebuffers (o uno reutilizado con N renders) + shadow
+  pass / light grid compartido para mitigar el ~4× costo CPU del frame.
+  Reusa la infra de workspaces de F2H7+F2H22 — el Hammer entra como un
+  workspace más con su propio `buildHammerWorkspace` en `Dockspace.cpp`.
 
-- **Pase de polish UX general del editor** (charlado con el dev tras
-  cerrar F2H21: *"a futuro deberemos mejorar toda la UI para hacerla más
-  fácil de entender"*). Los descubrimientos de F2H21 (Texture slots
-  vacíos mostrando "missing.png" en vez de "<vacio>", botón X cortado
-  fuera del panel, tooltips ausentes) son síntoma de un patrón general
-  en muchos panels. Candidatos identificados a auditar:
+- **Iconos image-based del Toolbar** (deuda explícita F2H22): la toolbar
+  actual usa labels en castellano (`Mover`/`Rotar`/`Escala`/etc.) tras
+  feedback del dev *"no tenemos iconos para usar para gizmo, en blender
+  es como esto..."*. Iconos verdaderos requieren mergear FontAwesome o
+  similar al init de ImGui (~5-10 LOC + binario de la font). Bajo
+  riesgo, alto impacto visual. Probable hito chico o sub-bloque de un
+  hito UX futuro.
+
+- **Pase de polish UX general continuo** (charlado tras F2H21+F2H22):
+  F2H22 atacó workspaces (renames + visibility default + arranque
+  limpio), Toolbar (componente nuevo) y AssetBrowser (tabs + scroll
+  fijo). Quedan otros panels pendientes de auditoría:
   - Inspector: descubribilidad de drop targets (texturas, materiales,
     scripts, prefabs).
-  - AssetBrowser: filtros / hover preview / drag hints.
   - Hierarchy: feedback visual de selección múltiple.
-  - StatusBar: layout y colores informativos.
   - Console: filtrado por categoría con colores.
-  Approach esperado: subagente recorre cada panel buscando
-  inconsistencias de UX (label confuso, slot vacío indistinguible de
-  asignado, accion sin feedback, etc.) → lista priorizada → fixes
-  acotados sin refactor profundo. Mismo patrón que F2H16 / F2H19.
-  Probable hito propio (F2H23+ tras 4-viewport).
+  - StatusBar: layout y colores informativos.
+  Approach: subagente recorre cada panel buscando inconsistencias de UX
+  → lista priorizada → fixes acotados sin refactor profundo. Mismo
+  patrón que F2H16 / F2H19. Hito propio si emerge presión.
 
 - **Node-graph del Material Editor** (deuda explícita de F2H21 acotado):
   el plan F2 original F2H17 incluía node-graph con shader runtime

@@ -3855,3 +3855,49 @@ Total ~ 1-2 semanas de hito grande.
 - El dev pide preview en el Inspector también (mini-preview inline cuando hay material seleccionado).
 - Algún material concreto (water shader, vegetation) necesita node graph — abrir hito propio.
 - El polish UX general del editor (mencionado por el dev tras F2H21: *"a futuro deberemos mejorar toda la UI para hacerla más fácil de entender"*) emerge como prioritario antes del 4-viewport — re-priorizar.
+
+## 2026-05-07: F2H22 — UX rework (workspaces orientados a tareas + visibility default + Toolbar + AssetBrowser tabs), adelantado vs sub-fase 2.7
+
+**Contexto:** El plan F2 original tenía la sub-fase 2.7 (UI/UX final del editor, F2H41-F2H44, ~6+ meses) para el polish ergonómico. Tras feedback explícito del dev al cerrar F2H21 (*"a futuro deberemos mejorar toda la UI para hacerla más fácil de entender"*) reafirmado al arrancar (*"mientras quede bien ordenado"*), F2H22 adelanta parte de ese scope. El 4-viewport Hammer-style layout (era F2H22 candidato charlado tras F2H20) se mueve a F2H23 — el workflow va primero, las features visuales después.
+
+**Decisión:** **F2H22 ataca 4 fricciones específicas** identificadas en uso real, no un rewrite UX completo. Scope acotado, ~1 día de trabajo.
+
+1. **Renames de workspaces a tareas**: `Layout → Modelar`, `Scripting → Programar`, `Profile → Optimizar`, `Materials → Materiales`. Los nombres viejos no comunicaban "esto es para hacer X".
+2. **Visibility default por workspace**: cada workspace solo muestra los panels relevantes a su tarea. Antes todos los panels estaban dockeados en todos los workspaces (solo cambiaba dónde) — ruido visual.
+3. **Toolbar lateral nueva**: panel `Tools` con 6 botones para gizmo modes + brushes + face mode toggle. Tools críticos descubribles al ojo, no escondidos en menús.
+4. **AssetBrowser refactoreado a tabs**: 6 tabs (Texturas/Meshes/Prefabs/Materiales/Scripts/Audio) reemplazan los CollapsingHeaders apilados. La lista de meshes ya no infla el panel.
+
+**Por qué no un rewrite completo:**
+- **Lo que funciona, no se toca**: el sistema F2H7 de workspaces con `WorkspaceManager` + `Dockspace` + `iniLayout` per-workspace es sólido. F2H22 es **aditivo** (rename de strings + nuevo método de visibility + nuevo panel + refactor del onImGuiRender del AssetBrowser) — sin tocar la arquitectura.
+- **El feedback del dev es iterativo**: durante la validación visual surgieron 3 fricciones más (toolbar flotante al cargar proyecto, lista de meshes exagerada, iconos abstrusos). Resueltas en bloque F polish, sin abrir hitos nuevos.
+
+**Cómo se implementa:**
+
+- `WorkspaceManager` con helper `migrateWorkspaceName(oldName)` aplicado en `setWorkspaces` — los `.moodproj` viejos cargan con nombres nuevos preservando `iniLayout` intacto. Sin pérdida de configuración.
+- `Dockspace::buildLayoutForWorkspace` con dispatcher que acepta nombres nuevos como primary + viejos como alias defensivo (defensa en profundidad si la migración no se aplicó).
+- `EditorUI::applyDefaultVisibilityForWorkspace(name)` setea `panel->visible` por workspace. Llamado desde 3 sitios:
+  1. Ctor de EditorUI (arranque inicial).
+  2. `applyPendingWorkspaceSwitch` cuando el workspace de destino tiene `iniLayout` vacío (primer activado en este proyecto).
+  3. MenuBar "Restablecer layout" (re-aplica visibility + dock layout default).
+- `editor/ui/Toolbar.{h,cpp}` (~110 LOC) panel ImGui nuevo (categoría Scene). Botones de 72×36 con texto en castellano (no letras T/R/S — el dev confirmó que no quedaban claras). Cada botón emite request al EditorUI; EditorApplication consume cada frame en `run()`. Sin acoplamiento directo al EditorApplication. La franja del Dockspace en Modelar reservó 8% del ancho para anclar el Tools a la izquierda del Hierarchy.
+- `AssetBrowserPanel::onImGuiRender` reescrito a `BeginTabBar` + 6 `BeginTabItem`. Cada tab: counter de items + `BeginChild` con scroll interno. Drag&drop preservado (mismos payloads).
+
+**Polish post-validación (3 iteraciones)**:
+1. Toolbar flotante al primer arranque + ventanas flotantes vacías en el centro: causa = `imgui.ini` global persistente del último uso. Fix: en `tryOpenProjectPath`, siempre `setActiveByIndex(0)` + `applyDefaultVisibilityForWorkspace("Modelar")` + `LoadIniSettingsFromMemory("")` cuando workspace 0 sin iniLayout custom + `requestRebuildForCurrentWorkspace()`. Antes el editor recordaba el último estado; ahora siempre arranca limpio en Modelar al cargar proyecto.
+2. Iconos del Toolbar abstrusos: dev pidió iconos visuales tipo Blender. Compromiso: labels en castellano (`Mover`/`Rotar`/`Escala`/`Box`/`Cilindro`/`Cara`) + tooltips. FontAwesome / IcoMoon image-based anotado como pendiente futuro (requiere mergear font binaria al init de ImGui — ~5-10 LOC + binario).
+3. Lista de meshes exagerada: 84 entries (Kenney Survival Pack 82 + 4 sueltos) sobrecargaba el tab Meshes. Fix: eliminar `assets/meshes/kenney_survival/` del repo. Quedan 5 demos básicos (CesiumMan/Fox/cube_mtl/pyramid). *"Más adelante los usuarios podrán descargar sus meshes"*.
+
+**Suite resultante:** **610/8357** (+3 cases / +16 asserts en `test_workspace_manager.cpp`). Tests cubren: migración de los 4 nombres viejos completos, mezcla nombres nuevos+viejos (solo migra los viejos), preservación de nombres custom no reconocidos.
+
+**Validación visual end-to-end del dev:** confirmó funcionamiento — tabs de workspace en castellano, cada workspace con sus panels relevantes, Toolbar lateral en Modelar con labels claros, AssetBrowser con 6 tabs scrolleables, editor arranca siempre limpio en Modelar. Pidió cerrar el hito.
+
+**Alternativas descartadas:**
+- **Rewrite UX completo del editor** (estilo Unreal/Unity): scope masivo. Sub-fase 2.7 original lo cubre cuando el motor esté maduro. F2H22 ataca solo las fricciones identificadas en uso real.
+- **Rename de strings sin back-compat**: rompe los `.moodproj` existentes con nombres viejos. Migración aplicada en `setWorkspaces`.
+- **Iconos image-based en F2H22**: scope extra (font binaria + integración + diseño). Diferido — labels en castellano cubren "saber qué hace cada botón".
+- **Eliminar `kenney_survival` solo del AssetBrowser** (filter UI): hack — los archivos seguirían en el repo inflándolo. Mejor borrar de raíz, dejar 5 demos, y que los usuarios traigan sus meshes (cuando F2H8+ habilite drag-drop import o similar).
+
+**Revisar si:**
+- El dev pide deshabilitar la migración (workspaces con nombres custom que coinciden con los viejos). Improbable — los 4 nombres viejos son hardcoded del editor F2H7.
+- El dev pide que el editor recuerde el último workspace al cerrar/abrir (en lugar de siempre Modelar). Compromiso entre "predecible" y "respetar el flow del dev". Si emerge, agregar toggle en preferencias del proyecto.
+- El polish UX general continuo identifica más fricciones (Inspector / Hierarchy / Console / StatusBar). Hito propio cuando emerja presión.

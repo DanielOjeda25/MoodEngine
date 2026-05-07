@@ -6,6 +6,47 @@
 
 ## 1. ¿Dónde estamos?
 
+**🚀 Fase 2 — F2H22 cerrado: Reorganización UX del editor (workspaces orientados a tareas + visibility default + Toolbar lateral + AssetBrowser tabs).**
+Tag: `v1.13.0-fase2-hito22`.
+Verificado automático: suite doctest **610/8357** verde (+3 cases / +16 asserts vs F2H21). Verificado por el dev a ojo: tabs de workspace en castellano `Modelar | Programar | Optimizar | Materiales`; cada workspace muestra solo los panels relevantes (Modelar = Viewport+Hierarchy+Inspector+AssetBrowser+Tools; resto sin panels ajenos); Toolbar lateral con botones legibles `Mover/Rotar/Escala/Box/Cilindro/Cara` + tooltips; AssetBrowser reorganizado en 6 tabs internos (Texturas/Meshes/Prefabs/Materiales/Scripts/Audio) con scroll fijo en cada uno (antes la lista de ~84 meshes inflaba el panel). Editor arranca siempre limpio en Modelar al cargar un proyecto (descarta state previo de ImGui).
+
+**Cambio importante**: F2H22 **adelanta el scope** del plan F2 original (sub-fase 2.7 UI/UX final del editor, ~6+ meses) tras feedback explícito del dev post-F2H21 (*"a futuro deberemos mejorar toda la UI para hacerla más fácil de entender"*) reafirmado al arrancar el hito (*"mientras quede bien ordenado"*). El 4-viewport Hammer-style layout (era F2H22 candidato charlado tras F2H20) se mueve a **F2H23** — el rework de workflow va primero.
+
+**Decisiones clave**:
+- **Workspaces como tareas, no categorías**: cada workspace tiene un nombre que describe **qué hacés ahí**, no qué contenido muestra. `Layout` no comunicaba "edición de mapas"; `Modelar` sí.
+- **Visibility por workspace**: cada workspace solo deja visibles los panels relevantes a su tarea por default. El resto sigue accesible vía menú Ver. Reduce el ruido visual al primer activado del workspace.
+- **Persistencia respeta customización del dev**: el `iniLayout` del workspace activo se captura en cada switch (auto-save). Si el dev abre un panel "extra" en Modelar (ej. Console), persiste en SU `iniLayout` para ese workspace. La visibility default solo aplica al primer activado o tras reset manual.
+- **Back-compat estricto del `.moodproj`**: nombres viejos (`Layout/Scripting/Profile/Materials`) se migran al cargar a los nuevos preservando `iniLayout` intacto. Sin pérdida de configuración.
+- **Toolbar con texto, no iconos image-based**: usa palabras cortas en castellano (`Mover` / `Rotar` / `Escala` / `Box` / `Cilindro` / `Cara`) en lugar de letras solas (T/R/S) — el dev al validar confirmó que las letras no le quedaban claras. Iconos verdaderos con FontAwesome anotados como pendiente futuro.
+- **AssetBrowser en tabs**: 6 tabs reemplazan los CollapsingHeaders apilados verticalmente. Cada tab tiene scroll interno con counter de items. La lista de meshes ya no infla el panel.
+- **Arranque siempre en Modelar al cargar proyecto**: en `tryOpenProjectPath` se setea active=0 + visibility default + `LoadIniSettingsFromMemory("")` si no hay iniLayout custom + `requestRebuildForCurrentWorkspace`. Antes el editor recordaba el último workspace y dejaba ventanas flotantes del state previo de ImGui (`imgui.ini` global persistente).
+- **Limpieza assets/meshes/**: pack `kenney_survival` (82 meshes externos) eliminado del repo. *"Más adelante los usuarios podrán descargar sus meshes"*. Quedan 5 archivos demo (CesiumMan/Fox/cube_mtl/pyramid).
+
+**Implementación (Bloques A-F + G):**
+
+- **Bloque A — Plan F2H22**: documento del hito con scope de 4 cambios + back-compat + tradeoffs.
+- **Bloque B — Renames + back-compat**: `WorkspaceManager` con helper `migrateWorkspaceName(oldName)` aplicado en `setWorkspaces`. `Dockspace::buildLayoutForWorkspace` con dispatcher que acepta nombres nuevos como primary + viejos como alias.
+- **Bloque C — Visibility default por workspace**: nuevo `EditorUI::applyDefaultVisibilityForWorkspace(name)` con maps por workspace. Llamado desde 3 sitios (ctor + applyPendingWorkspaceSwitch + reset). El `Tools` panel sigue la misma lógica (visible solo en Modelar).
+- **Bloque D — Toolbar lateral**: nuevo panel `editor/ui/Toolbar.{h,cpp}` (~110 LOC) con 6 botones + helper `toolButton`. Ancho ajustado del split del Dockspace a 0.08 (~100px) para acomodar los labels más largos. EditorApplication consume requests cada frame.
+- **Bloque E — Tests**: extender `test_workspace_manager.cpp` con tests del rename existentes actualizados + 3 nuevos para migración: nombres viejos completos → nuevos, mezcla viejos+nuevos, preservación de nombres custom no reconocidos.
+- **Bloque F — Validación visual + polish post-feedback**:
+  - Iteración 1: dev observó toolbar flotante + ventanas flotantes vacías al cargar proyecto. Fix: arranque siempre en Modelar con `LoadIniSettingsFromMemory("")` + visibility default + rebuild del Dockspace.
+  - Iteración 2: dev pidió iconos visuales tipo Blender. Compromiso: labels en castellano (`Mover`/`Rotar`/`Escala`...) + tooltips. FontAwesome anotado como pendiente.
+  - Iteración 3: dev observó lista de 84 meshes "exagerada". Fix: AssetBrowser refactoreado a 6 tabs con scroll interno + eliminación del pack `kenney_survival` (82 meshes) del repo.
+- **Bloque G — cierre**: este documento + HITOS + DECISIONS + tag `v1.13.0-fase2-hito22` + PENDIENTES.md actualizado con F2H23 (4-viewport) + iconos image-based como pendiente futuro.
+
+**Pendientes conocidos** (memoria + `PENDIENTES.md`):
+- **F2H23 — 4-viewport Hammer-style layout** (era F2H22 candidato tras F2H20, ahora siguiente hito).
+- **Iconos image-based** (FontAwesome / IcoMoon): el toolbar usa labels en castellano; iconos verdaderos requieren mergear una font icon-pack al init de ImGui. Pendiente nice-to-have.
+- **Pase de polish UX general continuo**: F2H22 atacó workspaces + AssetBrowser + Toolbar; siguen Inspector / Hierarchy / Console / StatusBar para otra ronda si emerge necesidad.
+- **Node-graph del Material Editor** (deuda explícita F2H21): hito futuro F2H24+.
+- **Runtime-load mesh compilada en MoodPlayer** (deuda F2H20).
+- **Cull overlap parcial** (deuda F2H20).
+- **F6 panel Blender / Vertex/Edge mode / Multi-selección de caras**: heredado.
+
+**Próximo paso**: **F2H23 — 4-viewport Hammer-style layout**. Workspace nuevo "Hammer" con dockspace en 4 cuadrantes: 1 perspectiva 3D + 3 ortográficas top/front/side en wireframe (`glPolygonMode(GL_LINE)` + grid 2D + crosshair) + drag-edit entre vistas con grid snap. Tradeoff: ~4× costo CPU del frame con cuatro viewports — mitigar con shadow pass / light grid compartido.
+
+### F2H21 (anterior, ya cerrado)
 **🚀 Fase 2 — F2H21 cerrado: Material Editor con preview esférico + Save .material.**
 Tag: `v1.12.0-fase2-hito21`.
 Verificado automático: suite doctest **607/8341** verde (+5 cases / +18 asserts vs F2H20). Verificado por el dev a ojo: panel **Material Editor** con esfera 3D rotando lentamente a la derecha (o arriba en layout vertical si el dock es angosto), cambio del dropdown de material refresca la esfera al instante (oro_pulido dorado brillante, caucho_negro mate, etc.), sliders de metallic/roughness/ao y color picker albedoTint refrescan la esfera en vivo, drop de textura sobre slots albedo/metallic_roughness/normal/ao funciona, botón "X" limpia el slot, botón **Guardar (.material)** persiste cambios al JSON original (probado con `acero_pulido.material` roughness 0.20 → 0.16, reabre con valor persistido).
