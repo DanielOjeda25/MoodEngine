@@ -311,6 +311,7 @@ add_library(mood_engine_lib STATIC
     src/engine/world/csg/Brush.cpp
     src/engine/world/csg/BrushMesh.cpp
     src/engine/world/csg/BrushOps.cpp
+    src/engine/world/csg/CompileMap.cpp
     src/engine/world/csg/Primitives.cpp
 
     src/systems/animation/AnimationSystem.cpp
