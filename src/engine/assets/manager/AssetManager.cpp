@@ -674,4 +674,70 @@ std::string AssetManager::materialPathOf(MaterialAssetId id) const {
     return m_materialPaths[id];
 }
 
+bool AssetManager::saveMaterial(MaterialAssetId id) {
+    if (id == 0 || id >= m_materials.size()) {
+        Log::assets()->warn("saveMaterial: id {} fuera de rango", id);
+        return false;
+    }
+    const std::string& logicalPath = m_materialPaths[id];
+    if (logicalPath.empty() ||
+        logicalPath == k_defaultMaterialPath ||
+        logicalPath.rfind("__tex#", 0) == 0 ||
+        logicalPath.rfind("__runtime#", 0) == 0) {
+        Log::assets()->warn(
+            "saveMaterial: path logico '{}' es sentinel interno, no persistible",
+            logicalPath);
+        return false;
+    }
+    const auto fs = m_vfs.resolve(logicalPath);
+    if (fs.empty()) {
+        Log::assets()->warn(
+            "saveMaterial: VFS no resuelve '{}' (proyecto cerrado?)",
+            logicalPath);
+        return false;
+    }
+
+    const MaterialAsset* mat = m_materials[id].get();
+    if (mat == nullptr) {
+        Log::assets()->warn("saveMaterial: material id {} sin instancia", id);
+        return false;
+    }
+
+    nlohmann::json j;
+    // Texturas: solo escribir el campo si el slot esta asignado (id != 0).
+    // Esto preserva el contrato del loader (campo ausente = sin textura).
+    if (mat->albedo != 0 && mat->useAlbedoMap) {
+        j["albedo"] = pathOf(mat->albedo);
+    }
+    if (mat->metallicRoughness != 0) {
+        j["metallic_roughness"] = pathOf(mat->metallicRoughness);
+    }
+    if (mat->normal != 0) {
+        j["normal"] = pathOf(mat->normal);
+    }
+    if (mat->ao != 0) {
+        j["ao"] = pathOf(mat->ao);
+    }
+
+    j["albedo_tint"] = nlohmann::json::array({
+        mat->albedoTint.x, mat->albedoTint.y, mat->albedoTint.z});
+    j["metallic"]  = mat->metallicMult;
+    j["roughness"] = mat->roughnessMult;
+    j["ao"]        = mat->aoMult;
+
+    std::ofstream out(fs);
+    if (!out.is_open()) {
+        Log::assets()->warn(
+            "saveMaterial: no se pudo abrir '{}' para escritura",
+            fs.generic_string());
+        return false;
+    }
+    out << j.dump(2) << '\n';
+    out.flush();
+
+    Log::assets()->info("saveMaterial: '{}' escrito ({} bytes)",
+                         logicalPath, j.dump().size());
+    return true;
+}
+
 } // namespace Mood

@@ -1,6 +1,7 @@
 #include "editor/panels/assets/MaterialEditorPanel.h"
 
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/render/preview/MaterialPreviewRenderer.h"
 #include "engine/render/resources/MaterialAsset.h"
 
 #include <imgui.h>
@@ -9,6 +10,21 @@
 #include <vector>
 
 namespace Mood {
+
+namespace {
+
+// Sentinels que NO se persisten via saveMaterial (mismos que asume
+// AssetManager::saveMaterial). Si el path lógico cae en alguno, el
+// botón Guardar queda deshabilitado.
+bool isPersistablePath(const std::string& p) {
+    if (p.empty()) return false;
+    if (p == "__default_material") return false;
+    if (p.rfind("__tex#", 0) == 0) return false;
+    if (p.rfind("__runtime#", 0) == 0) return false;
+    return true;
+}
+
+} // namespace
 
 void MaterialEditorPanel::onImGuiRender() {
     if (!visible) return;
@@ -32,9 +48,6 @@ void MaterialEditorPanel::onImGuiRender() {
     }
 
     // --- Combo de materiales ---
-    // Construimos labels al vuelo. La lista cambia rara vez (solo al
-    // cargar un mapa o al spawnear una entidad nueva), no vale la pena
-    // cachear.
     std::vector<std::string> labels;
     labels.reserve(matCount);
     for (MaterialAssetId i = 0; i < matCount; ++i) {
@@ -69,9 +82,21 @@ void MaterialEditorPanel::onImGuiRender() {
 
     ImGui::Separator();
 
+    // --- F2H21: layout 2 columnas (controles | preview) ---
+    // Con preview renderer disponible y panel suficientemente ancho,
+    // dividimos en 2 columnas. Si el panel es angosto o no hay preview,
+    // caemos a una sola columna (legacy layout).
+    const bool showPreview = (m_preview != nullptr) &&
+                             (ImGui::GetContentRegionAvail().x >= 540.0f);
+
+    if (showPreview) {
+        ImGui::Columns(2, "##material_editor_cols", false);
+        ImGui::SetColumnWidth(0, ImGui::GetWindowContentRegionMax().x - 280.0f);
+    }
+
+    // ===== Columna izquierda: controles =====
+
     // --- Sliders escalares ---
-    // Mismo set que el Inspector. Sin pushEditIfDone (sin undo en este
-    // panel — Fase 2). El dev espera ver el cambio en vivo.
     if (ImGui::ColorEdit3("albedo tint", &mat->albedoTint.x,
                             ImGuiColorEditFlags_NoInputs)) {
         m_editedThisFrame = true;
@@ -89,8 +114,6 @@ void MaterialEditorPanel::onImGuiRender() {
     ImGui::Separator();
 
     // --- Texture slots con drop targets ---
-    // Reusa el payload `MOOD_TEXTURE_ASSET` del AssetBrowser. Cada slot
-    // es un boton "Drop aqui" que muestra el path actual.
     auto textureSlot = [&](const char* label, TextureAssetId& slotRef) {
         const std::string current = m_assets->pathOf(slotRef);
         const std::string btnLabel = std::string(label) + ": " +
@@ -102,15 +125,23 @@ void MaterialEditorPanel::onImGuiRender() {
                 if (p->DataSize == sizeof(TextureAssetId)) {
                     slotRef = *static_cast<const TextureAssetId*>(p->Data);
                     m_editedThisFrame = true;
+                    if (label == std::string("albedo")) {
+                        // Drop sobre albedo activa el sample del shader
+                        // automaticamente (consistente con el patron del
+                        // Inspector y de loadMaterial).
+                        mat->useAlbedoMap = true;
+                    }
                 }
             }
             ImGui::EndDragDropTarget();
         }
-        // Boton "limpiar" a la derecha en la misma linea.
         ImGui::SameLine();
         std::string clearId = std::string("X##clear_") + label;
         if (ImGui::SmallButton(clearId.c_str())) {
             slotRef = 0;
+            if (label == std::string("albedo")) {
+                mat->useAlbedoMap = false;
+            }
             m_editedThisFrame = true;
         }
     };
@@ -122,9 +153,61 @@ void MaterialEditorPanel::onImGuiRender() {
     textureSlot("ao",                 mat->ao);
 
     ImGui::Separator();
-    ImGui::TextDisabled(
-        "Para preview: asigna este material a una entidad del viewport.\n"
-        "Preview esferico dedicado: pendiente Fase 2.");
+
+    // --- F2H21: boton Guardar + feedback ---
+    const std::string& matPath = labels[m_selectedMatIdx];
+    const bool canSave = isPersistablePath(matPath);
+    if (!canSave) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Guardar (.material)", ImVec2(-FLT_MIN, 0))) {
+        const bool ok = m_assets->saveMaterial(matId);
+        m_saveStatusOk = ok;
+        m_saveStatusFrames = 120;  // ~2 segundos a 60 FPS
+    }
+    if (!canSave) {
+        ImGui::EndDisabled();
+        ImGui::TextDisabled("(material runtime / sentinel — no persistible)");
+    }
+    if (m_saveStatusFrames > 0) {
+        const ImVec4 color = m_saveStatusOk
+            ? ImVec4(0.4f, 0.95f, 0.4f, 1.0f)
+            : ImVec4(0.95f, 0.4f, 0.4f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, color);
+        ImGui::TextUnformatted(m_saveStatusOk
+            ? "Guardado OK"
+            : "Guardar fallo (ver log)");
+        ImGui::PopStyleColor();
+        --m_saveStatusFrames;
+    }
+
+    // ===== Columna derecha: preview =====
+    if (showPreview) {
+        ImGui::NextColumn();
+
+        ImGui::TextUnformatted("Preview");
+        ImGui::Separator();
+
+        m_preview->renderPreview(*mat, *m_assets);
+        const GLuint texId = m_preview->outputTextureId();
+        if (texId != 0) {
+            // ImTextureID = ImU64 en esta version de ImGui — cast directo
+            // de GLuint a ImU64 (no reinterpret entre integers).
+            // ImVec2 uv0 = (0, 1) y uv1 = (1, 0) para flippear vertical
+            // (ImGui asume top-left origin pero OpenGL FBO tiene
+            // bottom-left origin).
+            ImGui::Image(
+                static_cast<ImTextureID>(texId),
+                ImVec2(static_cast<f32>(m_preview->width()),
+                       static_cast<f32>(m_preview->height())),
+                ImVec2(0.0f, 1.0f),
+                ImVec2(1.0f, 0.0f));
+        } else {
+            ImGui::TextDisabled("(preview no disponible)");
+        }
+
+        ImGui::Columns(1);
+    }
 
     ImGui::End();
 }

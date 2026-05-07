@@ -114,6 +114,16 @@ public:
     ///        se cuentan.
     FrameStats frameStats() const;
 
+    /// @brief F2H21: handles del IBL del SceneRenderer para que el
+    ///        `MaterialPreviewRenderer` use el mismo prefilter /
+    ///        irradiance / brdfLut sin duplicar la carga de disco.
+    ///        Pueden devolver nullptr si la carga del IBL fallo en el
+    ///        ctor (try/catch silencioso) — en ese caso el preview cae
+    ///        a ambient escalar.
+    OpenGLCubemapTexture* iblIrradiance() const { return m_iblIrradiance.get(); }
+    OpenGLCubemapTexture* iblPrefilter() const  { return m_iblPrefilter.get(); }
+    ITexture*             iblBrdfLut() const    { return m_iblBrdfLut.get(); }
+
 private:
     std::unique_ptr<IRenderer> m_renderer;
     std::unique_ptr<OpenGLFramebuffer> m_sceneFb;     // HDR RGBA16F

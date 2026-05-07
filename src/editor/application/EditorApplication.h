@@ -29,6 +29,7 @@ namespace Mood {
 
 class IFramebuffer;
 class IMesh;
+class MaterialPreviewRenderer;
 class SceneRenderer;
 class ScriptSystem;
 class AudioDevice;
@@ -256,6 +257,12 @@ private:
     // panel cada frame, y agrega su debug 3D entre `renderScene` y
     // `endFrame`.
     std::unique_ptr<SceneRenderer> m_sceneRenderer;
+
+    /// @brief F2H21: renderer del preview esferico del Material Editor.
+    ///        FBO 256x256 off-screen + reusa shader PBR + IBL del
+    ///        SceneRenderer. Inyectado al MaterialEditorPanel. Solo
+    ///        dibuja si el panel esta visible (cost ~0 cuando cerrado).
+    std::unique_ptr<MaterialPreviewRenderer> m_materialPreview;
 
     std::unique_ptr<ScriptSystem> m_scriptSystem;
     std::unique_ptr<AudioDevice> m_audioDevice;

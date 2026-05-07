@@ -3,6 +3,7 @@
 #include "core/Log.h"
 #include "core/Profiler.h"
 #include "core/math/AABB.h"
+#include "engine/render/preview/MaterialPreviewRenderer.h"
 #include "engine/render/rhi/IRenderer.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
@@ -209,6 +210,17 @@ EditorApplication::EditorApplication() {
     m_ui.inspector().setAssetManager(m_assetManager.get());
     m_ui.materialEditor().setAssetManager(m_assetManager.get());  // Hito 42
 
+    // F2H21: preview esferico off-screen del Material Editor. Se crea
+    // post SceneRenderer para inyectarle el IBL compartido. Si la carga
+    // del IBL del SceneRenderer fallo (try/catch silencioso en su ctor),
+    // los handles seran nullptr y el preview cae a ambient escalar.
+    m_materialPreview = std::make_unique<MaterialPreviewRenderer>(256u, 256u);
+    m_materialPreview->setIblTextures(
+        m_sceneRenderer->iblIrradiance(),
+        m_sceneRenderer->iblPrefilter(),
+        m_sceneRenderer->iblBrdfLut());
+    m_ui.materialEditor().setPreviewRenderer(m_materialPreview.get());
+
     buildInitialTestMap();
     rebuildSceneFromMap();
     updateWindowTitle();
@@ -277,6 +289,10 @@ EditorApplication::~EditorApplication() {
     m_particleSystem.reset();
     m_physicsWorld.reset();
     m_assetManager.reset(); // dueño de texturas y meshes (incluido el cubo fallback)
+    // F2H21: preview tiene refs (no-owning) a las IBL textures del
+    // SceneRenderer. Liberar ANTES del SceneRenderer para evitar
+    // dangling pointers en el dtor del preview.
+    m_materialPreview.reset();
     // SceneRenderer destruye en orden inverso al ctor todos sus recursos
     // GL (FBs, shaders, IBL textures, debug renderer, etc.).
     m_sceneRenderer.reset();

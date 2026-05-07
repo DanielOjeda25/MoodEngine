@@ -18,16 +18,19 @@
 //   - Sin preview esferico dedicado: el dev ve el cambio asignando el
 //     material a una entidad del viewport. Documentado.
 //
-// V2 (Fase 2 — pendiente):
-//   - Preview esferico off-screen en un FBO chico dentro del panel.
-//   - Node graph (estilo Substance/UE) — feature mayor, hito propio.
-//   - Save As .material desde el panel.
+// V2 (F2H21 cerrado):
+//   - Preview esferico off-screen en un FBO 256x256 dentro del panel.
+//   - Save .material desde el panel (boton "Guardar").
+// V3 (pendiente):
+//   - Node graph (estilo Substance/UE) — feature mayor, hito propio
+//     (probable F2H23 tras 4-viewport Hammer).
 
 #include "editor/panels/IPanel.h"
 
 namespace Mood {
 
 class AssetManager;
+class MaterialPreviewRenderer;
 
 class MaterialEditorPanel : public IPanel {
 public:
@@ -39,6 +42,11 @@ public:
     ///        ids de texturas dropeadas. Non-owning.
     void setAssetManager(AssetManager* am) { m_assets = am; }
 
+    /// @brief F2H21: inyecta el preview renderer (lo crea
+    ///        EditorApplication una vez). Non-owning. Si null, el panel
+    ///        omite la columna de preview.
+    void setPreviewRenderer(MaterialPreviewRenderer* p) { m_preview = p; }
+
     /// @brief True si el usuario edito un campo este frame. EditorApplication
     ///        lo consume para markDirty().
     bool consumeEditedFlag() {
@@ -49,10 +57,15 @@ public:
 
 private:
     AssetManager* m_assets = nullptr;
+    MaterialPreviewRenderer* m_preview = nullptr;
     bool m_editedThisFrame = false;
     /// Index del combo (offset dentro de la lista de materiales del AM).
     /// 0 = primer material registrado. -1 = ninguno seleccionado al inicio.
     int m_selectedMatIdx = 0;
+    /// F2H21: feedback transitorio del boton Guardar (verde/rojo). Cuenta
+    /// frames restantes para mostrar el mensaje.
+    int m_saveStatusFrames = 0;
+    bool m_saveStatusOk = false;
 };
 
 } // namespace Mood

@@ -286,6 +286,21 @@ public:
     ///        tienen path interno tipo `"__tex#<id>"`.
     std::string materialPathOf(MaterialAssetId id) const;
 
+    /// @brief F2H21: serializa el material `id` al path logico con el que
+    ///        fue cargado (mismo schema que `loadMaterial` lee). Usa el
+    ///        VFS para resolver al path FS. Sobreescribe el archivo
+    ///        existente. Devuelve true si la escritura fue OK.
+    ///
+    ///        Falla con false (sin escribir) si:
+    ///        - El material no existe (id fuera de rango).
+    ///        - El path es un sentinel interno (`__default_material`,
+    ///          `__tex#<id>`, `__runtime#<id>`) — esos no se persisten.
+    ///        - VFS no resuelve el path (proyecto no abierto / path
+    ///          fuera del VFS root).
+    ///        - Error de I/O al escribir.
+    ///        En todos los casos loguea al canal `assets` con el motivo.
+    bool saveMaterial(MaterialAssetId id);
+
     /// @brief Cantidad de materiales cacheados (incluye slot 0).
     usize materialCount() const { return m_materials.size(); }
 
