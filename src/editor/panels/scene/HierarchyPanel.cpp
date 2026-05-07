@@ -2,13 +2,36 @@
 
 #include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/ui/EditorUI.h"
+#include "engine/scene/components/BrushComponent.h"  // F2H23: icono brush
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 
 #include <imgui.h>
 
+#include <cstdio>
+
 namespace Mood {
+
+namespace {
+
+// F2H23: icono ASCII por tipo de entidad. Sirve como hint visual rapido
+// del tipo (Mesh / Luz / Audio / Brush / Script / Trigger / Empty)
+// sin requerir una font icon-pack. El orden de checks define la
+// prioridad — entidades multi-componente toman el primer match.
+const char* entityIconStr(Entity e) {
+    if (e.hasComponent<MeshRendererComponent>())     return "[M]";
+    if (e.hasComponent<BrushComponent>())             return "[B]";
+    if (e.hasComponent<LightComponent>())             return "[L]";
+    if (e.hasComponent<AudioSourceComponent>())       return "[A]";
+    if (e.hasComponent<ScriptComponent>())            return "[S]";
+    if (e.hasComponent<TriggerComponent>())           return "[T]";
+    if (e.hasComponent<CameraComponent>())            return "[C]";
+    if (e.hasComponent<ParticleEmitterComponent>())   return "[P]";
+    return "[ ]";  // entidad sin componentes visibles (rare)
+}
+
+} // namespace
 
 void HierarchyPanel::onImGuiRender() {
     if (!visible) return;
@@ -37,6 +60,22 @@ void HierarchyPanel::onImGuiRender() {
 
     SelectionSet& set = m_ui->selectionSet();
     const auto totalCount = static_cast<int>(m_entries.size());
+
+    // F2H23: hint de shortcuts arriba de la lista. Texto chico gris para
+    // no robar foco visual; tooltip al hover por si el dev quiere ver
+    // el detalle de cada modifier.
+    ImGui::TextDisabled("Click=sel | Shift+Click=toggle | Ctrl+Click=anadir");
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "Click            -> reemplazar seleccion (single).\n"
+            "Shift+Click      -> toggle (anadir si no esta, quitar si esta).\n"
+            "Ctrl+Click       -> anadir a la seleccion actual.\n"
+            "\n"
+            "Iconos al inicio del nombre:\n"
+            "[M]=Mesh  [B]=Brush  [L]=Luz  [A]=Audio\n"
+            "[S]=Script  [T]=Trigger  [C]=Camera  [P]=Particles");
+    }
+    ImGui::Separator();
 
     // F2H13: detectar modifiers para Shift+click (toggle) y
     // Ctrl+click (add). Plain click = replaceWithSingle.
@@ -75,7 +114,13 @@ void HierarchyPanel::onImGuiRender() {
                     ImVec4(1.00f, 0.65f, 0.20f, 1.00f));
             }
 
-            if (ImGui::Selectable(entry.tag->name.c_str(), isInSelection,
+            // F2H23: prefijo con icono del tipo de entidad para
+            // distinguir Mesh/Luz/Audio/Brush/etc. de un vistazo.
+            // Buffer chico — los nombres tipicos son <50 chars + "[X] ".
+            char labelBuf[80];
+            std::snprintf(labelBuf, sizeof(labelBuf), "%s %s",
+                            entityIconStr(e), entry.tag->name.c_str());
+            if (ImGui::Selectable(labelBuf, isInSelection,
                                     ImGuiSelectableFlags_AllowDoubleClick)) {
                 if (keyShift) {
                     toggle(set, e);
@@ -95,7 +140,19 @@ void HierarchyPanel::onImGuiRender() {
     clipper.End();
 
     ImGui::Separator();
-    ImGui::TextDisabled("%d entidades", totalCount);
+    // F2H23: warning visual si la escena tiene >5000 entidades (limite
+    // donde el panel empieza a sentirse pesado pese a F2H5 ListClipper —
+    // el cuello restante es scene iter en otros sistemas, ver F2H5
+    // PERFORMANCE.md). Color amarillo no rojo, no es error.
+    if (totalCount > 5000) {
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                                ImVec4(1.00f, 0.85f, 0.25f, 1.00f));
+        ImGui::Text("%d entidades (lista grande - puede impactar perf)",
+                     totalCount);
+        ImGui::PopStyleColor();
+    } else {
+        ImGui::TextDisabled("%d entidades", totalCount);
+    }
 
     ImGui::End();
 }
