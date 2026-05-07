@@ -12,14 +12,29 @@ Workspace& dummyWorkspace() {
 }
 
 std::vector<Workspace> defaultWorkspaces() {
+    // F2H22: nombres orientados a TAREAS, no a categorias de panels.
+    // Cada workspace describe que hace el dev ahi, no que contiene.
     // Los iniLayout vacios fuerzan que la primera activacion pase
     // por DockBuilder para construir el layout default.
     return {
-        Workspace{"Layout",    {}},
-        Workspace{"Scripting", {}},
-        Workspace{"Profile",   {}},
-        Workspace{"Materials", {}},
+        Workspace{"Modelar",    {}},
+        Workspace{"Programar",  {}},
+        Workspace{"Optimizar",  {}},
+        Workspace{"Materiales", {}},
     };
+}
+
+/// @brief F2H22: migra nombres viejos del workspace (F2H7 originales)
+///        al esquema F2H22 orientado a tareas. Si el nombre es
+///        actualmente reconocido como nuevo, se preserva tal cual.
+///        El `iniLayout` se conserva intacto (la migracion es solo
+///        del label).
+std::string migrateWorkspaceName(const std::string& oldName) {
+    if (oldName == "Layout")    return "Modelar";
+    if (oldName == "Scripting") return "Programar";
+    if (oldName == "Profile")   return "Optimizar";
+    if (oldName == "Materials") return "Materiales";
+    return oldName;  // ya nuevo o custom — preservar.
 }
 
 } // namespace
@@ -32,6 +47,11 @@ void WorkspaceManager::setWorkspaces(std::vector<Workspace> workspaces) {
         // Defensivo: nunca dejar la lista vacia.
         m_workspaces = defaultWorkspaces();
     } else {
+        // F2H22: aplicar migracion de nombres viejos -> nuevos antes de
+        // aceptar. Preserva iniLayout intacto.
+        for (auto& ws : workspaces) {
+            ws.name = migrateWorkspaceName(ws.name);
+        }
         m_workspaces = std::move(workspaces);
     }
     m_activeIndex = 0;

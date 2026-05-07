@@ -50,7 +50,7 @@ private:
     bool m_buildAttempted = false;
     bool m_resetRequested = false;
     bool m_rebuildRequested = false;
-    std::string m_activeWorkspaceName{"Layout"};
+    std::string m_activeWorkspaceName{"Modelar"};  // F2H22: default nuevo
 };
 
 } // namespace Mood

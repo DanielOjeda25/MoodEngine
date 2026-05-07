@@ -99,12 +99,17 @@ void buildMaterialsWorkspace(ImGuiID dockspaceId) {
 }
 
 /// @brief Dispatcher: elige el builder segun el nombre del workspace
-///        activo. Default = Layout para nombres desconocidos.
+///        activo. F2H22: nombres nuevos en español orientados a tareas
+///        (Modelar / Programar / Optimizar / Materiales). Acepta tambien
+///        los nombres viejos (Layout / Scripting / Profile / Materials)
+///        como alias defensivo, aunque la migracion en
+///        `WorkspaceManager::setWorkspaces` los reemplaza al cargar.
+///        Default = Modelar para nombres desconocidos.
 void buildLayoutForWorkspace(const std::string& name, ImGuiID dockspaceId) {
-    if      (name == "Scripting") buildScriptingWorkspace(dockspaceId);
-    else if (name == "Profile")   buildProfileWorkspace(dockspaceId);
-    else if (name == "Materials") buildMaterialsWorkspace(dockspaceId);
-    else                          buildLayoutWorkspace(dockspaceId);
+    if      (name == "Programar"  || name == "Scripting") buildScriptingWorkspace(dockspaceId);
+    else if (name == "Optimizar"  || name == "Profile")   buildProfileWorkspace(dockspaceId);
+    else if (name == "Materiales" || name == "Materials") buildMaterialsWorkspace(dockspaceId);
+    else                                                    buildLayoutWorkspace(dockspaceId);
 }
 
 void rebuildLayout(ImGuiID dockspaceId, const ImVec2& size,
