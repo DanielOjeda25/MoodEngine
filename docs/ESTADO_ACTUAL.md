@@ -6,7 +6,39 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H18 cerrado: Reorg de menús del editor.**
+**🚀 Fase 2 — F2H19 cerrado: Limpieza HistoryStack residual.**
+Tag: `v1.10.0-fase2-hito19`.
+Verificado automático: suite doctest **582/8219** verde (+15 cases / +37 asserts vs F2H18). Verificado por el dev a ojo: drop de textura/material sobre cara en Face Mode + Ctrl+Z revierte correctamente (quita el slot huérfano, restaura `face.materialIndex`); drop de `.lua` sobre entidad sin script + Ctrl+Z remueve el ScriptComponent; drop sobre entidad con script previo + Ctrl+Z restaura el path anterior. StatusBar muestra `Último: <comando>`.
+
+**Cambio importante**: F2H19 cierra deuda técnica acumulada — ítem 2 del backlog `PENDIENTES.md`. Approach **wireup, no refactor**: command pattern preservado, captura por tag, granularidad Blender-style (drop = 1 command). Auditoría con subagente fue clave: detectó **2 regresiones reales de F2H17** (los path Face Mode de los drops) que el dev no había percibido todavía, más una deuda pre-F2H17 (drop de script).
+
+**Decisiones clave**:
+- **Auditoría primero, scope cerrado tras Bloque B**: en vez de predecir las deudas desde el plan inicial, subagente recorre el editor real y produce lista concreta. F2H16 hizo lo mismo. Resultado: 3 deudas con prio ≥ media confirmadas, 2 BAJA descartadas (acciones de menú Mapa, toggles de modo/selección — alineadas con convención Blender/Unity).
+- **`EditBrushFaceMaterialCommand` captura el vector `materials` completo** pre+post, no solo el slot afectado. Razón: el drop puede agregar slot via `push_back` y el undo debe restaurar el tamaño exacto, sino quedan slots huérfanos tras varios undo/redo.
+- **`EditScriptComponentCommand` con flag `hadComponent`**: distingue 2 sub-casos en undo (entidad sin componente → remover; entidad con componente → restaurar path). Edge case "alguien removió el componente entre execute y undo" se cubre recreando el componente con oldPath.
+- **Captura por tag, no handle EnTT**: mismo patrón post-F2H16 — robusto al delete/recreate del HistoryStack.
+- **No exposed props snapshot**: el drop de script reemplaza el script entero, las overrides del script anterior dejan de aplicar (son por nombre+default del script). Si el undo restaura el path viejo, las overrides se redescubren al re-cargar via mtime check.
+
+**Implementación (Bloques A-G):**
+
+- **Bloque A — Plan F2H19** con scope provisional + filosofía wireup-no-refactor.
+- **Bloque B — Auditoría exhaustiva** (subagente recorre `src/editor/` buscando mutaciones sin push). Resultado: 3 ALTA+MEDIA confirmadas, 2 BAJA descartadas. Subagente verificó también que el UV editor del Inspector en Face Mode (post-F2H17) sí pushea correctamente — no hay regresión ahí.
+- **Bloque C — Comandos nuevos**: `EditBrushFaceMaterialCommand` (h+cpp ~85 LOC) cubre drops Face Mode de textura y material; `EditScriptComponentCommand` (h+cpp ~95 LOC) cubre drop de `.lua`.
+- **Bloque D — Wireup** en `DemoSpawners.cpp`: 3 sitios (drop textura Face Mode, drop material Face Mode, drop script). Capturas pre + apply + push.
+- **Bloque E — Tests**: 2 archivos nuevos (`test_edit_brush_face_material_command.cpp` con 8 cases, `test_edit_script_component_command.cpp` con 9 cases) cubriendo round-trip, redo, slot reuse vs push_back, tag inexistente, faceIndex fuera de rango, componente removido entre execute y undo.
+- **Bloque F — Build + suite + validación visual**: 582/8219 verde, dev confirmó "ya pasaron los 3" (drop textura, drop material, drop script).
+- **Bloque G — cierre**: este documento + HITOS + DECISIONS + tachar ítem 2 de `PENDIENTES.md` + tag `v1.10.0-fase2-hito19`.
+
+**Pendientes conocidos** (memoria + `PENDIENTES.md`):
+- Tras F2H19, `PENDIENTES.md` queda **vacío**. Buena oportunidad para limpiar el archivo o dejarlo como placeholder.
+- **Mejoras UX adicionales del menú** (deferidas en F2H18, mencionadas por el dev: "a futuro haremos mejoras"): toolbar lateral con iconos de brush (Hammer-style), atajos de teclado (Ctrl+B = Box, etc.), renombre `Brush → Geometría` cuando entren shapes no-brush.
+- **Vertex / Edge mode** (teclas 1, 2 reservadas en F2H17). Diferido si emerge necesidad.
+- **Multi-selección de caras** (Shift+click sobre múltiples caras). Diferido.
+- **F6 panel de Blender** (tweak last operator post-hoc). Diferido desde F2H16.
+
+**Próximo paso**: **F2H20 = compilación brush → mesh estática unificada al guardar el mapa**. Take all brushes, weld vertices coplanares, cull caras internas (entre dos brushes adyacentes), fusionar por material slot. El resultado es una mesh navegable y exportable como `.obj`. Era F2H17 antes del rerouting que metió Face Mode primero, y se postergó otra vez en F2H18-F2H19 por deuda de UX/HistoryStack.
+
+### F2H18 (anterior, ya cerrado)
 Tag: `v1.9.0-fase2-hito18`.
 Verificado automático: suite doctest **567/8182** verde sin cambios (UI puro). Verificado por el dev a ojo: barra superior `Archivo | Mapa | Brush | Editar | Ver | Ayuda | [tabs] | Play`; `Mapa` y `Brush` deshabilitados sin proyecto; spawn de brush en 3 clicks (`Brush → Añadir → Box`); demos agrupados bajo `Ayuda > Demos ▶`.
 

@@ -3683,4 +3683,76 @@ Switching axis cuando la normal está cerca del eje Y evita cross product con ma
 **Revisar si:**
 - Aparecen tests de UI snapshot (raros en C++ con ImGui). Improbable.
 
+## 2026-05-07: HistoryStack residual — auditoría con subagente + 2 comandos nuevos (F2H19)
+
+**Contexto:** F2H17 introdujo multi-material rendering con `BrushComponent.materials` vector y drops que distinguen Object Mode (slot 0) vs Face Mode (slot existente o nuevo). El path Face Mode quedó **sin push al HistoryStack**: solo el path Object Mode estaba cubierto por `EditBrushMaterialCommand` (hard-coded a slot 0). Más una deuda pre-F2H17: drop de `.lua` sobre entidad mutaba `ScriptComponent.path` o agregaba el componente sin command. Item 2 del backlog `PENDIENTES.md` post-F2H18.
+
+### Decisión 1 — Auditoría con subagente antes del scope
+
+**Decisión:** Bloque B del hito = subagente (`general-purpose`) recorre `src/editor/` buscando mutaciones sin push. Scope cerrado tras la auditoría, no antes.
+
+**Razones:**
+- **Predecir desde el plan inicial subestima**: F2H16 anticipó "2-3 deudas", encontró 8. F2H19 anticipó "regresiones de F2H17", confirmó 2 ALTA + descubrió 1 MEDIA pre-F2H17 que no estaba en el radar.
+- **El subagente lee código real, no asume**: verifica que `EditBrushMaterialCommand` está hard-coded a slot 0 (comentario explícito en el .cpp), que el UV editor del Inspector sí pushea correctamente, etc. Sin el subagente uno predice más por miedo o duplica trabajo.
+- **Reporte estructurado por archivo:línea + prio**: facilita decidir scope (ALTA / MEDIA → entran; BAJA → confirmar con dev).
+- **Misma técnica usada en F2H16 con éxito** — patrón validado.
+
+**Alternativas descartadas:**
+- Yo recorrer manualmente: aprox 30+ archivos del editor; el contexto principal se llena de file reads sin valor de razonamiento.
+- Predecir desde memoria: los detalles concretos (archivo:línea) se pierden y los pendientes derivan a hipótesis.
+
+**Revisar si:**
+- El subagente reporta deudas falsas (sobre-flagging). En este hito 0 falsos positivos — los 5 hallazgos eran todos válidos, solo discrepamos en prio.
+
+### Decisión 2 — `EditBrushFaceMaterialCommand` captura el vector `materials` completo
+
+**Decisión:** el comando snapshotea `oldMaterials` y `newMaterials` (`std::vector<MaterialAssetId>` completos), no solo el slot afectado por el drop.
+
+**Razones:**
+- **El drop puede crear slot nuevo via `push_back`**: si `newMat` no estaba en `bc.materials`, el handler hace `materials.push_back(newMat)` y `face.materialIndex = nuevo_index`. Si el undo solo revirtiera `face.materialIndex` sin tocar el vector, quedaría un slot huérfano (material no usado por ninguna cara).
+- **Tras varios undo/redo el vector divergiría**: cada execute agrega slot, cada undo no lo quita → `materials.size()` crece sin volverse atrás. Snapshot completo garantiza shape exacto en cualquier dirección.
+- **Costo despreciable**: vector de N MaterialAssetId (u32) — N raramente > 4. Copia de 16 bytes en peor caso típico.
+- **Robusto a casos edge**: dos drops del mismo material en caras distintas; un drop, undo, drop diferente, undo de nuevo, etc. Snapshot completo cubre todo.
+
+**Alternativas descartadas:**
+- Solo snapshot de `(faceIndex, oldFaceMatIndex, newFaceMatIndex)` + flag "did_push_back": agrega complejidad, multiple paths en undo según el flag. La captura completa del vector es estructuralmente más simple.
+- Restar/agregar por delta sobre `materials`: requiere reaplicar reglas del handler en undo — duplica lógica.
+
+**Revisar si:**
+- N (slots por brush) supera ~32 con frecuencia → snapshot grande, considerar diff. Improbable: typical brushes tienen ≤4 materiales distintos.
+
+### Decisión 3 — `EditScriptComponentCommand` con flag `hadComponent` y edge case de re-creación
+
+**Decisión:** snapshot del comando incluye `bool hadComponent` que distingue 2 sub-casos en `undo()`:
+- `!hadComponent` → undo remueve el componente (drop lo agregó).
+- `hadComponent` → undo restaura `path` previo. Si alguien removió el componente entre execute y undo, lo recrea con `oldPath`.
+
+**Razones:**
+- **Drop de script tiene 2 semánticas distintas**: agregar componente nuevo vs reemplazar path. El undo correspondiente difiere fundamentalmente — sin el flag, el comando tendría que inferirlo y podría equivocarse si el state cambió externamente.
+- **Edge case real**: el dev podría remover el ScriptComponent desde el Inspector (botón Remove) entre el drop y el Ctrl+Z. Si undo asume "componente está ahí" crashearía. Recrear con oldPath es la decisión menos sorprendente.
+- **No snapshot de exposed props (`overrides`/`exposedProps`)**: el flow normal es "drop reemplaza el script entero"; las overrides del script anterior dejan de aplicar (son por nombre+default del script). Si el undo restaura el path viejo, las overrides se redescubren al re-cargar via mtime check.
+
+**Alternativas descartadas:**
+- Comando que infiera el flag desde state: frágil, distintos resultados según orden de operaciones.
+- Reusar `EditPropertyCommand<std::string>` con setter custom: no cubre el caso "agregar componente si no existía" — distinto path en setter de get-or-add que en setter de assign.
+
+**Revisar si:**
+- El dev pide undo de Inspector edits sobre `overrides` (Hito 24 deuda) → comando dedicado `EditScriptOverrideCommand` con snapshot del map de overrides; ortogonal a este.
+
+### Decisión 4 — Items BAJA fuera de scope (alineado con Blender/Unity)
+
+**Decisión:** acciones del menú `Mapa` (Nuevo / Abrir / Guardar como / Set default / Eliminar) y toggles de modo/selección Face NO pushean al stack. Quedan fuera de F2H19.
+
+**Razones:**
+- **Convención de la industria**: Blender, Unity, Godot no hacen undo de "abrir mapa" ni de "cambiar de modo de edición" ni de "cambiar la selección". Son operaciones a nivel proyecto/UI, no edición del modelo.
+- **Semantica del HistoryStack**: representa edits del scene (state persistido). Cargar otro mapa reemplaza el scene entero — el stack debería **resetearse** al cambiar de mapa, no acumular un "undo open map".
+- **Seleccion**: Ctrl+Z después de hacer click en una cara debería deshacer la EDICIÓN previa, no la selección. Imitar Blender aquí.
+
+**Alternativas descartadas:**
+- Stack separado para selección/modo: complica la UX (qué Ctrl+Z deshace qué) sin valor real.
+
+**Revisar si:**
+- El dev pide explícitamente undo de "abrir mapa" o de selección. Improbable — el feedback ya validó que pasaron los 3 fixes core.
+
+
 

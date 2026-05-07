@@ -9,40 +9,35 @@
 
 ---
 
-## Post-F2H18 (2026-05-06)
+## Post-F2H19 (2026-05-07)
 
-### ~~1. Reorganización de menús `Archivo > Mapa`~~ — RESUELTO en F2H18
+**Backlog vacío** — F2H18 cerró la reorganización de menús; F2H19 cerró la
+limpieza de HistoryStack residual (auditoría con subagente confirmó que
+los items BAJA quedan fuera de scope alineado con la convención
+Blender/Unity).
 
-Cerrado en F2H18 (tag `v1.9.0-fase2-hito18`): `Mapa` y `Brush` se
-promovieron a top-level. Demos agrupados bajo `Ayuda > Demos ▶`.
-Mejoras de UX adicionales mencionadas por el dev ("a futuro haremos
-mejoras") quedan disponibles si emergen: toolbar lateral con iconos
-de brush (Hammer-style), atajos de teclado (Ctrl+B = Box, etc.),
-renombre `Brush → Geometría` cuando entren shapes no-brush.
+### Histórico resuelto
 
----
+- ~~Reorganización de menús `Archivo > Mapa`~~ — resuelto en F2H18
+  (`v1.9.0-fase2-hito18`). Mejoras adicionales (toolbar lateral con
+  iconos Hammer-style, atajos Ctrl+B, renombre `Brush → Geometría`)
+  diferidas si emergen.
+- ~~Limpieza HistoryStack residual~~ — resuelto en F2H19
+  (`v1.10.0-fase2-hito19`). 2 comandos nuevos
+  (`EditBrushFaceMaterialCommand`, `EditScriptComponentCommand`) +
+  wireup en 3 sitios. Items BAJA descartados explícitamente
+  (acciones del menú Mapa, toggles de modo/selección).
 
-### 2. Limpieza HistoryStack residual
+### Diferidos no urgentes (mencionar al dev si se acercan al scope)
 
-**Qué:** después de F2H16 (limpieza HistoryStack — drops + UV editor) y de
-F2H17 (multi-material), quedan acciones del editor que mutan estado **sin
-push al HistoryStack** y por tanto no son undoable con Ctrl+Z.
+Estos NO están en el backlog activo pero quedan registrados para que
+emerjan si el dev los pide:
 
-**Sospechosos identificados** (auditar al arrancar el hito):
-- Drop de material/textura **en Face Mode** sobre una cara: F2H17 wireó la
-  lógica del slot pero no auditó si el push al stack sigue funcionando para
-  el caso multi-slot. Posible regresión.
-- Cambio del slot activo de una cara desde el Inspector (si ese widget
-  emerge como parte del polish de F2H17).
-- Cualquier mutación nueva añadida en F2H18+ sin command explícito.
-
-**Cuándo:** hito propio post-F2H17 antes de que la deuda crezca otra vez.
-Mismo approach que F2H16: subagente recorre el editor, produce lista
-concreta, comandos nuevos mínimos, wireup en handlers.
-
-**Referencias:**
-- `docs/DECISIONS.md` entry 2026-05-06 "HistoryStack Blender-style — wireup,
-  no refactor (F2H16)" — patrón a reusar.
-- `src/editor/application/DemoSpawners.cpp` — handlers de drop.
-- `src/editor/panels/scene/InspectorPanel.cpp` — UV editor + futuros widgets
-  per-cara.
+- **F6 panel estilo Blender** (tweak last operator post-hoc) —
+  diferido desde F2H16.
+- **Vertex / Edge mode** (teclas 1, 2 reservadas en F2H17). Sub-feature
+  avanzada no típica de mapping FPS.
+- **Multi-selección de caras** (Shift+click sobre múltiples caras del
+  mismo brush) — diferido desde F2H17.
+- **Undo de exposed property overrides** del ScriptComponent (deuda
+  Hito 24) — comando dedicado si emerge.
