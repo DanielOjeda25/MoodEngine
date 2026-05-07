@@ -34,6 +34,25 @@ void pushEditIfDone(InspectorEditTracker& tracker, EditorUI* ui, Entity e,
     trackPropertyEdit<T>(tracker, current, e, *h, std::move(setter), label);
 }
 
+// F2H23: helper estandar de ImGui samples — texto gris "(?)" con tooltip
+// al hover. Sirve para descubribilidad sin inflar el panel con texto.
+// Llamar INMEDIATAMENTE despues del widget que se quiere documentar.
+void helpMarker(const char* desc) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", desc);
+    }
+}
+
+// F2H23: detecta si el dev tiene un drag activo de tipo `type` (ej.
+// "MOOD_TEXTURE_ASSET"). Sirve para cambiar el color de los botones
+// drop-target (que el dev sepa "este boton acepta lo que arrastras").
+bool isDragActiveOfType(const char* type) {
+    const ImGuiPayload* p = ImGui::GetDragDropPayload();
+    return p != nullptr && p->IsDataType(type);
+}
+
 } // namespace
 
 void InspectorPanel::onImGuiRender() {
@@ -74,7 +93,7 @@ void InspectorPanel::onImGuiRender() {
     // --- TagComponent ---
     if (e.hasComponent<TagComponent>()) {
         auto& tag = e.getComponent<TagComponent>();
-        ImGui::TextDisabled("Tag");
+        ImGui::SeparatorText("Tag");
         char buf[256];
         std::snprintf(buf, sizeof(buf), "%s", tag.name.c_str());
         if (ImGui::InputText("##tag", buf, sizeof(buf))) {
@@ -97,10 +116,13 @@ void InspectorPanel::onImGuiRender() {
     // ocultarlos evita confundir al usuario con controles sin efecto.
     if (e.hasComponent<TransformComponent>()) {
         auto& t = e.getComponent<TransformComponent>();
-        ImGui::TextDisabled("Transform");
+        // F2H23: SeparatorText agrupa visualmente cada componente (antes
+        // era TextDisabled + Separator separados; menos claro).
+        ImGui::SeparatorText("Transform");
         if (ImGui::DragFloat3("position##tr", &t.position.x, 0.05f)) {
             m_editedThisFrame = true;
         }
+        helpMarker("Posicion en metros (X derecha, Y arriba, Z atras).");
         pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.position,
             [](Entity& en, const glm::vec3& v) {
                 en.getComponent<TransformComponent>().position = v;
@@ -119,6 +141,7 @@ void InspectorPanel::onImGuiRender() {
             if (ImGui::DragFloat3("rotation (deg)##tr", &t.rotationEuler.x, 0.5f)) {
                 m_editedThisFrame = true;
             }
+            helpMarker("Rotacion en grados Euler (X, Y, Z) — orden YXZ.");
             pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.rotationEuler,
                 [](Entity& en, const glm::vec3& v) {
                     en.getComponent<TransformComponent>().rotationEuler = v;
@@ -128,13 +151,13 @@ void InspectorPanel::onImGuiRender() {
             if (ImGui::DragFloat3("scale##tr", &t.scale.x, 0.05f, 0.01f, 100.0f)) {
                 m_editedThisFrame = true;
             }
+            helpMarker("Escala (rango 0.01-100). 1.0 = tamano original.");
             pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.scale,
                 [](Entity& en, const glm::vec3& v) {
                     en.getComponent<TransformComponent>().scale = v;
                 },
                 "Escalar entidad (Inspector)");
         }
-        ImGui::Separator();
     }
 
     // --- MeshRendererComponent ---
@@ -144,7 +167,7 @@ void InspectorPanel::onImGuiRender() {
     // entra en Bloque 5 (drag & drop desde AssetBrowser).
     if (e.hasComponent<MeshRendererComponent>()) {
         auto& mr = e.getComponent<MeshRendererComponent>();
-        ImGui::TextDisabled("MeshRenderer");
+        ImGui::SeparatorText("MeshRenderer");
         if (m_assets != nullptr) {
             ImGui::Text("mesh: %s (id %u)",
                          m_assets->meshPathOf(mr.mesh).c_str(), mr.mesh);
@@ -251,8 +274,17 @@ void InspectorPanel::onImGuiRender() {
             // (MaterialAssetId == u32) con setter que indexa el slot via
             // captura por valor. Si no hay history disponible, fallback
             // a asignacion directa.
+            // F2H23: highlight visual del drop target cuando el dev
+            // tiene un drag activo de textura — color verde claro para
+            // que el ojo encuentre rapido los slots aceptables.
+            const bool dragTex = isDragActiveOfType("MOOD_TEXTURE_ASSET");
+            if (dragTex) {
+                ImGui::PushStyleColor(ImGuiCol_Button,
+                                        ImVec4(0.20f, 0.55f, 0.25f, 1.0f));
+            }
             ImGui::Button("Drop textura para reemplazar material",
                             ImVec2(-FLT_MIN, 0));
+            if (dragTex) ImGui::PopStyleColor();
             if (ImGui::BeginDragDropTarget()) {
                 if (const ImGuiPayload* p =
                         ImGui::AcceptDragDropPayload("MOOD_TEXTURE_ASSET")) {
@@ -291,7 +323,7 @@ void InspectorPanel::onImGuiRender() {
     // --- CameraComponent ---
     if (e.hasComponent<CameraComponent>()) {
         auto& cam = e.getComponent<CameraComponent>();
-        ImGui::TextDisabled("Camera");
+        ImGui::SeparatorText("Camera");
         if (ImGui::DragFloat("fov (deg)##cam", &cam.fovDeg, 0.1f, 1.0f, 179.0f)) {
             m_editedThisFrame = true;
         }
@@ -324,7 +356,7 @@ void InspectorPanel::onImGuiRender() {
     // direction (directional) + enabled.
     if (e.hasComponent<LightComponent>()) {
         auto& lt = e.getComponent<LightComponent>();
-        ImGui::TextDisabled("Light");
+        ImGui::SeparatorText("Light");
 
         if (ImGui::Checkbox("enabled##lt", &lt.enabled)) m_editedThisFrame = true;
 
@@ -394,7 +426,7 @@ void InspectorPanel::onImGuiRender() {
     // EditorApplication). Cambios en vivo via DragFloat / Combo.
     if (e.hasComponent<EnvironmentComponent>()) {
         auto& env = e.getComponent<EnvironmentComponent>();
-        ImGui::TextDisabled("Environment");
+        ImGui::SeparatorText("Environment");
 
         ImGui::TextDisabled("Skybox: %s (asset catalog futuro)",
                              env.skyboxPath.c_str());
@@ -471,7 +503,7 @@ void InspectorPanel::onImGuiRender() {
     // limpio de globals.
     if (e.hasComponent<ScriptComponent>()) {
         auto& sc = e.getComponent<ScriptComponent>();
-        ImGui::TextDisabled("Script");
+        ImGui::SeparatorText("Script");
         char buf[512];
         std::snprintf(buf, sizeof(buf), "%s", sc.path.c_str());
         if (ImGui::InputText("path##sc", buf, sizeof(buf))) {
@@ -584,7 +616,7 @@ void InspectorPanel::onImGuiRender() {
     // si se recarga el proyecto, o al destruir/recrear el body manualmente.
     if (e.hasComponent<RigidBodyComponent>()) {
         auto& rb = e.getComponent<RigidBodyComponent>();
-        ImGui::TextDisabled("RigidBody");
+        ImGui::SeparatorText("RigidBody");
 
         const char* typeNames[] = {"Static", "Kinematic", "Dynamic"};
         int typeIdx = static_cast<int>(rb.type);
@@ -673,7 +705,7 @@ void InspectorPanel::onImGuiRender() {
     // nuevo en el próximo update (util para preview sin entrar a Play Mode).
     if (e.hasComponent<AudioSourceComponent>()) {
         auto& asrc = e.getComponent<AudioSourceComponent>();
-        ImGui::TextDisabled("AudioSource");
+        ImGui::SeparatorText("AudioSource");
 
         // Lista de clips del manager como combo. Si aun no hay assets manager
         // inyectado, mostrar solo el id crudo.
@@ -758,7 +790,7 @@ void InspectorPanel::onImGuiRender() {
     // el frame 0.
     if (e.hasComponent<AnimatorComponent>()) {
         auto& anim = e.getComponent<AnimatorComponent>();
-        ImGui::TextDisabled("Animator");
+        ImGui::SeparatorText("Animator");
 
         // Necesitamos el MeshAsset para listar los clips. Lo resolvemos
         // via MeshRenderer (mismo flujo que el AnimationSystem).
@@ -1022,7 +1054,7 @@ void InspectorPanel::onImGuiRender() {
     // halfExtents se persiste en el .moodmap; playerInside es runtime.
     if (e.hasComponent<TriggerComponent>()) {
         auto& tc = e.getComponent<TriggerComponent>();
-        ImGui::TextDisabled("Trigger");
+        ImGui::SeparatorText("Trigger");
         if (ImGui::DragFloat3("halfExtents##trig", &tc.halfExtents.x,
                                 0.05f, 0.01f, 100.0f)) {
             m_editedThisFrame = true;
