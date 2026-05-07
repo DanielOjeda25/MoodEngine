@@ -15,29 +15,31 @@ TEST_CASE("WorkspaceManager: ctor crea 4 defaults con activo = 0") {
     WorkspaceManager m;
     CHECK(m.count() == 4u);
     CHECK(m.activeIndex() == 0);
-    CHECK(m.activeWorkspace().name == "Layout");
+    // F2H22: nombres orientados a tareas (era Layout / Scripting /
+    // Profile / Materials).
+    CHECK(m.activeWorkspace().name == "Modelar");
     // Los iniLayout estan vacios — DockBuilder los construye al activar.
     for (const auto& w : m.workspaces()) {
         CHECK(w.iniLayout.empty());
     }
 }
 
-TEST_CASE("WorkspaceManager: nombres de los 4 defaults") {
+TEST_CASE("WorkspaceManager: nombres de los 4 defaults (F2H22)") {
     WorkspaceManager m;
-    CHECK(m.workspaces()[0].name == "Layout");
-    CHECK(m.workspaces()[1].name == "Scripting");
-    CHECK(m.workspaces()[2].name == "Profile");
-    CHECK(m.workspaces()[3].name == "Materials");
+    CHECK(m.workspaces()[0].name == "Modelar");
+    CHECK(m.workspaces()[1].name == "Programar");
+    CHECK(m.workspaces()[2].name == "Optimizar");
+    CHECK(m.workspaces()[3].name == "Materiales");
 }
 
 TEST_CASE("WorkspaceManager: setActiveByIndex valida cambia el activo") {
     WorkspaceManager m;
     m.setActiveByIndex(2);
     CHECK(m.activeIndex() == 2);
-    CHECK(m.activeWorkspace().name == "Profile");
+    CHECK(m.activeWorkspace().name == "Optimizar");
     m.setActiveByIndex(0);
     CHECK(m.activeIndex() == 0);
-    CHECK(m.activeWorkspace().name == "Layout");
+    CHECK(m.activeWorkspace().name == "Modelar");
 }
 
 TEST_CASE("WorkspaceManager: setActiveByIndex out-of-bounds es no-op") {
@@ -94,7 +96,64 @@ TEST_CASE("WorkspaceManager: setWorkspaces con vector vacio cae a defaults") {
     m.setWorkspaces({});
     CHECK(m.count() == 4u);
     CHECK(m.activeIndex() == 0);
-    CHECK(m.activeWorkspace().name == "Layout");
+    CHECK(m.activeWorkspace().name == "Modelar");
+}
+
+// ============================================================
+// F2H22: migración de nombres viejos (Layout/Scripting/Profile/
+// Materials) -> nuevos (Modelar/Programar/Optimizar/Materiales)
+// ============================================================
+
+TEST_CASE("WorkspaceManager: setWorkspaces migra nombres viejos a nuevos") {
+    WorkspaceManager m;
+    std::vector<Workspace> oldNamed = {
+        Workspace{"Layout",    "ini1"},
+        Workspace{"Scripting", "ini2"},
+        Workspace{"Profile",   "ini3"},
+        Workspace{"Materials", "ini4"},
+    };
+    m.setWorkspaces(std::move(oldNamed));
+
+    REQUIRE(m.count() == 4u);
+    CHECK(m.workspaces()[0].name == "Modelar");
+    CHECK(m.workspaces()[1].name == "Programar");
+    CHECK(m.workspaces()[2].name == "Optimizar");
+    CHECK(m.workspaces()[3].name == "Materiales");
+
+    // El iniLayout se preserva intacto — la migracion es solo del label.
+    CHECK(m.workspaces()[0].iniLayout == "ini1");
+    CHECK(m.workspaces()[1].iniLayout == "ini2");
+    CHECK(m.workspaces()[2].iniLayout == "ini3");
+    CHECK(m.workspaces()[3].iniLayout == "ini4");
+}
+
+TEST_CASE("WorkspaceManager: setWorkspaces con mezcla viejos/nuevos") {
+    WorkspaceManager m;
+    std::vector<Workspace> mixed = {
+        Workspace{"Modelar",   "a"},  // ya nuevo
+        Workspace{"Scripting", "b"},  // viejo -> Programar
+        Workspace{"Optimizar", "c"},  // ya nuevo
+        Workspace{"Materials", "d"},  // viejo -> Materiales
+    };
+    m.setWorkspaces(std::move(mixed));
+
+    CHECK(m.workspaces()[0].name == "Modelar");
+    CHECK(m.workspaces()[1].name == "Programar");
+    CHECK(m.workspaces()[2].name == "Optimizar");
+    CHECK(m.workspaces()[3].name == "Materiales");
+}
+
+TEST_CASE("WorkspaceManager: setWorkspaces preserva nombres custom no reconocidos") {
+    WorkspaceManager m;
+    std::vector<Workspace> custom = {
+        Workspace{"MiCustom",  "x"},
+        Workspace{"Otro",      "y"},
+    };
+    m.setWorkspaces(std::move(custom));
+
+    REQUIRE(m.count() == 2u);
+    CHECK(m.workspaces()[0].name == "MiCustom");
+    CHECK(m.workspaces()[1].name == "Otro");
 }
 
 TEST_CASE("WorkspaceManager: captureCurrentLayout en idx invalido es no-op") {
