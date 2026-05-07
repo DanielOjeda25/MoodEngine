@@ -3796,3 +3796,62 @@ Switching axis cuando la normal está cerca del eje Y evita cross product con ma
 - El dev reporta que la mesh exportada no corresponde visualmente (probable bug de UV o normal transform).
 - El dev pide cargar la mesh compilada en runtime (abrir hito propio nivel 2 o 3).
 - El cull de overlap parcial empieza a ser pedido en validación (mapas grandes con muchos brushes pegados parcialmente).
+
+## 2026-05-07: F2H21 — Material Editor con preview esférico, scope MVP vs node-graph del plan F2H17 original
+
+**Contexto:** El plan F2 original entrada F2H17 agrupaba "Material editor con node-graph (visual)" — node-graph + nodos básicos (TextureSample, ColorConstant, ScalarConstant, Multiply, Add, Mix, Output) + preview esférico + persistencia, todo en un solo hito. F2H18 original era el follow-up "Shader graph runtime compilation" (genera GLSL en runtime + cache por hash). Tras evaluar el costo:
+
+- Node graph visual implementado a mano: ~500-700 LOC de UI ImGui.
+- Compilación runtime del graph a GLSL + cache por hash: ~300-500 LOC.
+- Refactor de `SceneRenderer` para shaders custom por material: cada graph distinto = shader distinto, rompe el batching de F2H4 + risk de regresión.
+
+Total ~ 1-2 semanas de hito grande.
+
+**Decisión:** **F2H21 entrega solo el componente de mayor valor inmediato — preview esférico off-screen — sin pagar el costo del node graph.** El dev ve sus cambios de tint / sliders / drop de texturas en una esfera dedicada en el mismo panel sin tener que asignar el material a una entidad del viewport. El node graph queda anotado en PENDIENTES.md como hito futuro si emerge necesidad real (probable F2H24+).
+
+**Por qué MVP:**
+- El preview esférico es ~80% del valor visual del plan original con ~20% del scope.
+- Sin refactor del SceneRenderer: F2H21 solo agrega un componente lateral, riesgo de regresión casi cero.
+- Reusa el shader PBR del repo en lugar de un shader custom: trade-off es setear los uniforms del Forward+ aunque no haya point lights (SSBOs vacíos con count=0).
+
+**Implementación:**
+
+- `engine/render/preview/MaterialPreviewRenderer.{h,cpp}` (~330 LOC):
+  - FBO LDR 256x256 + depth.
+  - Reusa `pbr.vert` + `pbr.frag` + `assets.primitiveSphereId()`.
+  - Cámara fija frontal + rotación lenta automática del modelo sobre Y a ~22 deg/s — el plan original era cámara fija pero el dev al validar pidió rotación. Tiempo del clock monotónico, sin estado interno acumulado.
+  - 1 directional light fija desde 3/4 + IBL inyectado del SceneRenderer (no duplica disk-load). Si IBL no disponible, cae a `uAmbient = 0.20` (subido del 0.05 original tras feedback "mitad oscura demasiado negra").
+  - SSBOs vacíos para Forward+ bindings 2/3/4: el shader requiere los binds aunque uTilesX=1/uTilesY=1 deshabiliten el iter.
+  - Sin shadow + bind dummy 2D al slot uShadowMap (algunos drivers validan sampler2DShadow aún en branches no tomados).
+
+- `AssetManager::saveMaterial(MaterialAssetId id)` (~70 LOC):
+  - Serializa al path lógico con el mismo schema que `loadMaterial` lee.
+  - Solo escribe campos de textura cuando slot != 0 (preserva contrato del loader).
+  - Rechaza ids fuera de rango y sentinels (`__default_material`, `__tex#<id>`, `__runtime#<id>`), VFS sin resolve, errores de I/O.
+
+- `MaterialEditorPanel` reescrito con polish post-validación:
+  - **Layout adaptativo**: >=540px → 2 columnas (controles izq | preview der); <540px → vertical (preview ARRIBA, controles abajo).
+  - **Selección inicial del primer no-sentinel**: slot 0 magenta sigue accesible vía dropdown pero no es default.
+  - **Texture slots con descubribilidad** (3 fixes que emergieron al validar):
+    - Botón "X" reservando 28px a la derecha (antes -FLT_MIN cortaba el X fuera del panel).
+    - Slots vacíos con label "(vacio - drop textura aquí)" (antes mostraban path "textures/missing.png" del fallback y confundían).
+    - Tooltips + header "(?)" explicativo.
+  - **Botón Guardar** con feedback verde/rojo durante 120 frames.
+  - **Logs de tracking discretos** (`IsItemActivated` pre, `IsItemDeactivatedAfterEdit` log delta) — sin spam por frame. Mismo patrón F2H16 Inspector.
+
+- `EditorApplication`: `m_materialPreview` creado post-`m_sceneRenderer` con IBL inyectado, destruido **antes** del SceneRenderer en el dtor (refs no-owning a textures que el scene manage).
+
+**Suite resultante:** **607/8341** (+5 cases / +18 asserts en `test_material_serializer.cpp`). **Bug fix Windows-specific**: el test que leía el JSON resultante mantenía un `ifstream` con handle abierto al hacer `std::filesystem::remove` → crash silencioso (exit 9, doctest summary cortado); arreglado leyendo en scope cerrado y usando overload con `std::error_code`.
+
+**Validación visual end-to-end del dev**: confirmó funcionamiento — esfera rotando, dropdown actualiza la esfera, sliders refrescan en vivo, drop de textura desde AssetBrowser activa `useAlbedoMap=true` automáticamente, click Guardar persiste el `.material` (probado con `acero_pulido.material` roughness 0.20 → 0.16). Reformat JSON por `nlohmann json::dump(2)` con keys alfabéticas y floats con precisión máxima — tradeoff aceptado.
+
+**Alternativas descartadas:**
+- **Node graph completo en F2H21** (scope original del plan): 1-2 semanas. Diferido.
+- **Shader simplificado para preview**: duplica código del PBR sin ganar mucho.
+- **Orbit cam con mouse**: nice-to-have anotado en PENDIENTES.md.
+- **Schema bump del `.material`**: conservar el actual; cuando emerja node graph, ahí sí campo `graph` opcional.
+
+**Revisar si:**
+- El dev pide preview en el Inspector también (mini-preview inline cuando hay material seleccionado).
+- Algún material concreto (water shader, vegetation) necesita node graph — abrir hito propio.
+- El polish UX general del editor (mencionado por el dev tras F2H21: *"a futuro deberemos mejorar toda la UI para hacerla más fácil de entender"*) emerge como prioritario antes del 4-viewport — re-priorizar.

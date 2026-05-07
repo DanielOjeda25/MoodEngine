@@ -6,6 +6,44 @@
 
 ## 1. ¿Dónde estamos?
 
+**🚀 Fase 2 — F2H21 cerrado: Material Editor con preview esférico + Save .material.**
+Tag: `v1.12.0-fase2-hito21`.
+Verificado automático: suite doctest **607/8341** verde (+5 cases / +18 asserts vs F2H20). Verificado por el dev a ojo: panel **Material Editor** con esfera 3D rotando lentamente a la derecha (o arriba en layout vertical si el dock es angosto), cambio del dropdown de material refresca la esfera al instante (oro_pulido dorado brillante, caucho_negro mate, etc.), sliders de metallic/roughness/ao y color picker albedoTint refrescan la esfera en vivo, drop de textura sobre slots albedo/metallic_roughness/normal/ao funciona, botón "X" limpia el slot, botón **Guardar (.material)** persiste cambios al JSON original (probado con `acero_pulido.material` roughness 0.20 → 0.16, reabre con valor persistido).
+
+**Cambio importante**: F2H21 cierra **el componente de mayor valor inmediato del plan F2H17 original** sin pagar el costo del scope completo (node graph visual + shader runtime compilation). El plan agrupaba 3 features en un solo hito (~1-2 semanas con refactor del SceneRenderer); la decisión de scope fue entregar **preview esférico + Save .material + UX polish** en F2H21 (~1 día) y dejar el node graph como hito futuro si emerge necesidad real (probable F2H24+ tras 4-viewport).
+
+**Decisiones clave**:
+- **Scope MVP, no node graph**: el preview esférico cubre el ~80% del valor visual (el dev ve sus cambios de material en una esfera dedicada sin asignar a entidad del viewport) con ~20% del scope (no hay refactor del SceneRenderer ni shaders custom por material). Node graph queda anotado en `PENDIENTES.md` para hito propio.
+- **Reusa shader PBR del repo, no shader nuevo**: el `MaterialPreviewRenderer` linkea `pbr.{vert,frag}` igual que el `SceneRenderer`, evitando duplicación. Trade-off: hay que setear los uniforms del Forward+ aunque no haya point lights en el preview (SSBOs vacíos con count=0). El alternativo (shader simplificado para preview) duplicaba código sin ganar mucho.
+- **IBL inyectado del SceneRenderer**: el preview reusa los handles `irradiance` / `prefilter` / `brdfLut` del SceneRenderer en lugar de cargar disk de nuevo. Trade-off: el preview se destruye antes que el SceneRenderer en `EditorApplication::~EditorApplication` para evitar dangling refs.
+- **Rotación lenta automática**: el plan original era cámara fija; el dev al validar pidió "que se vea 3D". Rotación sobre Y a ~22°/s (1 vuelta cada ~16s) — suficiente para apreciar el material desde varios ángulos sin marear.
+- **Layout adaptativo del panel**: ≥540px → 2 columnas (controles izq | preview der); <540px → vertical (preview ARRIBA, controles abajo). Antes solo se mostraba el preview en >=540 y caía a "sin preview" si angosto — el dev no veía la esfera con dock vertical estándar.
+- **Selección inicial del primer material no-sentinel**: slot 0 (`__default_material`) es magenta deliberado como warning para entidades sin material asignado; mostrarlo como default en el panel desconcertaba al dev. F2H21 arranca seleccionando el primer material persistible (`acero_pulido` u otro real).
+- **Texture slots con descubribilidad UX**: 3 fixes que emergieron al validar — botón "X" reservando 28px a la derecha (antes -FLT_MIN cortaba el X fuera del panel), slots vacíos con label `"(vacio - drop textura aquí)"` (antes mostraban el path "textures/missing.png" del fallback y confundían si estaban asignados o vacíos), tooltips informativos en cada elemento.
+- **Logs de tracking discretos**: estilo F2H16 patrón Inspector con `IsItemActivated`/`IsItemDeactivatedAfterEdit` — log al **soltar** el slider, no por frame del drag. Sin spam. Cubrir cambio de material / sliders / drops / clears / Guardar.
+- **`AssetManager::saveMaterial`**: serializa el material al mismo schema que `loadMaterial` lee (campos opcionales solo si slot ≠ 0 — preserva contrato del loader). Rechaza sentinels (`__default_material`, `__tex#<id>`, `__runtime#<id>`).
+
+**Implementación (Bloques A-E + G):**
+
+- **Bloque A — Plan F2H21** con scope MVP justificado vs el plan F2H17 original.
+- **Bloque B — `MaterialPreviewRenderer`** (~330 LOC) con FBO LDR 256×256 + reusa shader PBR del repo + cámara fija frontal + rotación lenta automática + 1 directional + IBL inyectado + SSBOs vacíos para Forward+ + ambient escalar como fallback.
+- **Bloque C — Integración en `MaterialEditorPanel` + `AssetManager::saveMaterial`**: layout 2 columnas (con detection de panel ancho), inyección desde `EditorApplication`, botón Guardar con feedback verde/rojo, deshabilitado para sentinels.
+- **Bloque D — Tests** (`tests/test_material_serializer.cpp` +5 cases / +18 asserts): round-trip load-modify-save-reload, sentinels rechazados (default + createMaterial), campos de textura ausentes en JSON cuando slot=0. Bug fix Windows-specific: ifstream con handle abierto al hacer `std::filesystem::remove` → crash silencioso; arreglado leyendo en scope cerrado.
+- **Bloque E — Polish post-validación**: rotación automática + uAmbient subido a 0.20 + layout adaptativo (vertical fallback cuando angosto) + selección inicial primer no-sentinel + texture slots con botón X visible + slots vacíos con label claro + tooltips + logs de tracking.
+- **Bloque G — cierre**: este documento + HITOS + DECISIONS + tag `v1.12.0-fase2-hito21` + PENDIENTES.md actualizado con node-graph del Material Editor como hito futuro + pase de polish UX general anotado tras feedback del dev (*"a futuro deberemos mejorar toda la UI para hacerla más fácil de entender"*).
+
+**Pendientes conocidos** (memoria + `PENDIENTES.md`):
+- **F2H22 — 4-viewport Hammer-style layout** (charlado, anotado): próximo hito.
+- **Pase de polish UX general del editor** (charlado tras F2H21): patrón de descubribilidad (Inspector / AssetBrowser / Hierarchy / StatusBar / Console). Probable hito propio F2H23+.
+- **Node-graph del Material Editor** (deuda explícita F2H21): hito futuro si emerge necesidad. Probable F2H24+.
+- **Runtime-load mesh compilada en MoodPlayer** (deuda F2H20).
+- **Cull overlap parcial** (deuda F2H20).
+- **F6 panel Blender / Vertex/Edge mode / Multi-selección de caras**: deuda heredada.
+- **Preview esférico con interacción mouse** (orbit/zoom): nice-to-have F2H21.
+
+**Próximo paso**: **F2H22 — 4-viewport Hammer-style layout** (workspace nuevo "Hammer" con dockspace en 4 cuadrantes: 1 perspectiva 3D + 3 ortográficas top/front/side en wireframe + grid + crosshair + drag-edit entre vistas con grid snap). Charlado con el dev como el feature de "ergonomía del workflow CSG" que cierra la sub-fase 2.2 antes de meterse en física avanzada o features visuales.
+
+### F2H20 (anterior, ya cerrado)
 **🚀 Fase 2 — F2H20 cerrado: Compilación brush → mesh estática unificada + export OBJ.**
 Tag: `v1.11.0-fase2-hito20`.
 Verificado automático: suite doctest **602/8323** verde (+20 cases / +104 asserts vs F2H19). Verificado por el dev a ojo: spawn 2 boxes con materiales distintos → menú **Mapa > Compilar mapa (stats)** muestra dialog con stats correctos (`Brushes: 2`, `Caras totales: 12`, `Triangulos finales: 24`, `Submeshes: 2`); menú **Mapa > Exportar OBJ...** abre file dialog, escribe `.obj` + `.mtl` al destino elegido (probado con `Desktop/test/test.obj`), editor cierra limpiamente.

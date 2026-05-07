@@ -9,7 +9,7 @@
 
 ---
 
-## Post-F2H20 (2026-05-07)
+## Post-F2H21 (2026-05-07)
 
 ### Activos
 
@@ -25,6 +25,37 @@
   meterse en física avanzada o features visuales. Si emerge presión de
   "demo bonito" antes que "workflow cómodo", postponer a sub-fase 2.7.
 
+- **Pase de polish UX general del editor** (charlado con el dev tras
+  cerrar F2H21: *"a futuro deberemos mejorar toda la UI para hacerla más
+  fácil de entender"*). Los descubrimientos de F2H21 (Texture slots
+  vacíos mostrando "missing.png" en vez de "<vacio>", botón X cortado
+  fuera del panel, tooltips ausentes) son síntoma de un patrón general
+  en muchos panels. Candidatos identificados a auditar:
+  - Inspector: descubribilidad de drop targets (texturas, materiales,
+    scripts, prefabs).
+  - AssetBrowser: filtros / hover preview / drag hints.
+  - Hierarchy: feedback visual de selección múltiple.
+  - StatusBar: layout y colores informativos.
+  - Console: filtrado por categoría con colores.
+  Approach esperado: subagente recorre cada panel buscando
+  inconsistencias de UX (label confuso, slot vacío indistinguible de
+  asignado, accion sin feedback, etc.) → lista priorizada → fixes
+  acotados sin refactor profundo. Mismo patrón que F2H16 / F2H19.
+  Probable hito propio (F2H23+ tras 4-viewport).
+
+- **Node-graph del Material Editor** (deuda explícita de F2H21 acotado):
+  el plan F2 original F2H17 incluía node-graph con shader runtime
+  compilation. F2H21 entregó solo preview esférico + Save (~80% del
+  valor visual con ~20% del scope). Cuando emerja necesidad de
+  materiales complejos (Mix entre 2 texturas, Multiply de máscaras,
+  emissive, etc.), abrir hito propio con: tipos de nodo (TextureSample,
+  ColorConstant, ScalarConstant, Multiply, Add, Mix, Output con pins
+  Albedo/Metallic/Roughness/Normal/AO), conexiones por drag, GLSL
+  compilado runtime con cache por hash del grafo, persistencia
+  `.material` extendida. Riesgo: refactor del SceneRenderer para
+  shaders custom por material (cada grafo distinto = shader distinto,
+  rompe batching de F2H4). Probable F2H24+ si emerge necesidad.
+
 ### Diferidos no urgentes (mencionar al dev si se acercan al scope)
 
 - **Runtime-load de mesh compilada en `MoodPlayer`** (deuda de F2H20):
@@ -39,6 +70,9 @@
   desde F2H16.
 - **Vertex / Edge mode** (teclas 1, 2 reservadas en F2H17).
 - **Multi-selección de caras** (Shift+click sobre múltiples caras).
+- **Preview esférico del Material Editor con interacción de mouse**
+  (orbit cam, zoom): F2H21 dejó rotación automática lenta. Nice-to-have
+  si emerge en uso real.
 
 ## Post-F2H19 (2026-05-07)
 
