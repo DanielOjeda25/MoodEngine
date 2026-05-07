@@ -514,6 +514,9 @@ int EditorApplication::run() {
             case ProjectAction::AddWedgeBrush:           handleAddWedgeBrush();            break;
             case ProjectAction::AddPrismTriangularBrush: handleAddPrismTriangularBrush();  break;
             case ProjectAction::AddPrismHexagonalBrush:  handleAddPrismHexagonalBrush();   break;
+            // F2H20: compilacion brush -> mesh estatica + export OBJ.
+            case ProjectAction::CompileMap:              handleCompileMap();               break;
+            case ProjectAction::ExportObj:               handleExportObj();                break;
             case ProjectAction::None:           break;
         }
         // F2H8: open map request (con payload del path).

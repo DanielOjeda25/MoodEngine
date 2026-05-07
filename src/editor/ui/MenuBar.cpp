@@ -104,6 +104,14 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                     ui.requestProjectAction(ProjectAction::DeleteCurrentMap);
                 }
             }
+            // F2H20: compilacion brush -> mesh estatica + export OBJ.
+            ImGui::Separator();
+            if (ImGui::MenuItem("Compilar mapa (stats)")) {
+                ui.requestProjectAction(ProjectAction::CompileMap);
+            }
+            if (ImGui::MenuItem("Exportar OBJ...")) {
+                ui.requestProjectAction(ProjectAction::ExportObj);
+            }
             ImGui::EndMenu();
         }
 

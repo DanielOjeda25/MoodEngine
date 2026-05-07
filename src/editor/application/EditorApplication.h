@@ -158,6 +158,15 @@ private:
     void handleAddPrismTriangularBrush();
     void handleAddPrismHexagonalBrush();
 
+    /// @brief F2H20: compila los brushes del mapa actual a una mesh
+    ///        estatica unificada (weld + cull caras internas + merge
+    ///        por material) y muestra dialog con stats.
+    void handleCompileMap();
+
+    /// @brief F2H20: corre `handleCompileMap` y escribe `.obj` + `.mtl`
+    ///        al destino elegido por `pfd::save_file`.
+    void handleExportObj();
+
     /// @brief F2H13: aplica una operacion booleana en cascada sobre
     ///        el SelectionSet. La `active` es el "tool brush" B; las
     ///        demas selected son las A's. Para cada A: aplica

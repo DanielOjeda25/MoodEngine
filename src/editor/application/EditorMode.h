@@ -52,6 +52,9 @@ enum class ProjectAction {
     AddWedgeBrush,
     AddPrismTriangularBrush,
     AddPrismHexagonalBrush,
+    // F2H20: compilacion brush -> mesh estatica + export OBJ.
+    CompileMap,
+    ExportObj,
 };
 
 } // namespace Mood
