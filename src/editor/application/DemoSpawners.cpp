@@ -20,7 +20,9 @@
 #include "engine/scene/components/BrushComponent.h"  // F2H15: drop sobre brushes
 #include "engine/scene/components/Components.h"
 #include "editor/commands/EditBrushMaterialCommand.h"           // F2H16
+#include "editor/commands/EditBrushFaceMaterialCommand.h"       // F2H19
 #include "editor/commands/EditMeshRendererMaterialCommand.h"     // F2H16
+#include "editor/commands/EditScriptComponentCommand.h"          // F2H19
 #include "editor/commands/SetTileCommand.h"                       // F2H16
 #include "editor/commands/HistoryStack.h"                          // F2H16
 #include "engine/scene/core/Entity.h"
@@ -643,8 +645,14 @@ void EditorApplication::processViewportTextureDrop() {
                 static_cast<u32>(selSet.activeFaceIndex) < bc.brush.faces.size();
 
             if (faceMode) {
+                // F2H19: snapshot pre + push EditBrushFaceMaterialCommand.
                 // Buscar si newMat ya esta en bc.materials. Si si,
                 // reusar slot. Si no, agregar slot nuevo.
+                const u32 faceIdx = static_cast<u32>(selSet.activeFaceIndex);
+                std::vector<MaterialAssetId> oldMaterials = bc.materials;
+                const u32 oldFaceMatIndex =
+                    bc.brush.faces[faceIdx].materialIndex;
+
                 u32 slot = 0;
                 bool found = false;
                 for (u32 i = 0; i < bc.materials.size(); ++i) {
@@ -656,13 +664,20 @@ void EditorApplication::processViewportTextureDrop() {
                     slot = static_cast<u32>(bc.materials.size());
                     bc.materials.push_back(newMat);
                 }
-                bc.brush.faces[selSet.activeFaceIndex].materialIndex = slot;
+                bc.brush.faces[faceIdx].materialIndex = slot;
                 bc.dirty = true;
+
+                std::vector<MaterialAssetId> newMaterials = bc.materials;
+                m_history.push(std::make_unique<EditBrushFaceMaterialCommand>(
+                    m_scene.get(), tag, faceIdx,
+                    std::move(oldMaterials), oldFaceMatIndex,
+                    std::move(newMaterials), slot,
+                    "Asignar textura a cara"));
+
                 m_ui.setSelectedEntity(brushHit.entity);
                 Log::editor()->info(
                     "Drop textura id={} -> brush '{}' cara {} (slot {})",
-                    drop.textureId, tag,
-                    selSet.activeFaceIndex, slot);
+                    drop.textureId, tag, faceIdx, slot);
                 markDirty();
                 return;
             }
@@ -928,6 +943,12 @@ void EditorApplication::processViewportMaterialDrop() {
             static_cast<u32>(selSet.activeFaceIndex) < bc.brush.faces.size();
 
         if (faceMode) {
+            // F2H19: snapshot pre + push EditBrushFaceMaterialCommand.
+            const u32 faceIdx = static_cast<u32>(selSet.activeFaceIndex);
+            std::vector<MaterialAssetId> oldMaterials = bc.materials;
+            const u32 oldFaceMatIndex =
+                bc.brush.faces[faceIdx].materialIndex;
+
             u32 slot = 0;
             bool found = false;
             for (u32 i = 0; i < bc.materials.size(); ++i) {
@@ -939,12 +960,20 @@ void EditorApplication::processViewportMaterialDrop() {
                 slot = static_cast<u32>(bc.materials.size());
                 bc.materials.push_back(matId);
             }
-            bc.brush.faces[selSet.activeFaceIndex].materialIndex = slot;
+            bc.brush.faces[faceIdx].materialIndex = slot;
             bc.dirty = true;
+
+            std::vector<MaterialAssetId> newMaterials = bc.materials;
+            m_history.push(std::make_unique<EditBrushFaceMaterialCommand>(
+                m_scene.get(), tagName, faceIdx,
+                std::move(oldMaterials), oldFaceMatIndex,
+                std::move(newMaterials), slot,
+                "Asignar material a cara"));
+
             m_ui.setSelectedEntity(hit.entity);
             Log::editor()->info(
                 "Drop material id {} -> brush '{}' cara {} (slot {})",
-                drop.materialId, tagName, selSet.activeFaceIndex, slot);
+                drop.materialId, tagName, faceIdx, slot);
             markDirty();
             return;
         }
@@ -1004,12 +1033,19 @@ void EditorApplication::processViewportScriptDrop() {
         return;
     }
 
-    // Asignar ScriptComponent. Si la entidad ya tenia uno, lo
-    // sobreescribimos (replace path). entt permite get-or-emplace via
-    // emplace_or_replace, pero la API de Entity no lo expone — usamos
-    // hasComponent + addComponent / get.
+    // F2H19: snapshot pre + apply + push EditScriptComponentCommand.
+    // Si la entidad ya tenia ScriptComponent, capturamos su path para
+    // que undo lo restaure. Si no tenia, undo remueve el componente.
     const std::string fullPath = std::string("assets/") + drop.scriptPath;
-    if (hit.entity.hasComponent<ScriptComponent>()) {
+    const std::string tagName = hit.entity.hasComponent<TagComponent>()
+        ? hit.entity.getComponent<TagComponent>().name
+        : std::string{"(sin tag)"};
+    const bool hadComponent = hit.entity.hasComponent<ScriptComponent>();
+    std::string oldPath;
+    if (hadComponent) {
+        oldPath = hit.entity.getComponent<ScriptComponent>().path;
+    }
+    if (hadComponent) {
         auto& sc = hit.entity.getComponent<ScriptComponent>();
         sc.path      = fullPath;
         sc.loaded    = false; // forzar recarga via mtime check
@@ -1017,11 +1053,12 @@ void EditorApplication::processViewportScriptDrop() {
     } else {
         hit.entity.addComponent<ScriptComponent>(fullPath);
     }
+    m_history.push(std::make_unique<EditScriptComponentCommand>(
+        m_scene.get(), tagName, hadComponent,
+        std::move(oldPath), fullPath,
+        "Asignar script a entidad"));
     m_ui.setSelectedEntity(hit.entity);
 
-    const std::string tagName = hit.entity.hasComponent<TagComponent>()
-        ? hit.entity.getComponent<TagComponent>().name
-        : std::string{"(sin tag)"};
     Log::editor()->info("Drop script '{}' -> entidad '{}'",
                          drop.scriptPath, tagName);
     markDirty();
