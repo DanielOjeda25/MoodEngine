@@ -407,6 +407,7 @@ add_executable(MoodEditor
     src/editor/ui/MenuBar.cpp
     src/editor/ui/StatusBar.cpp
     src/editor/ui/Dockspace.cpp
+    src/editor/ui/Toolbar.cpp
     src/editor/commands/HistoryStack.cpp
     src/editor/commands/EditTransformCommand.cpp
     src/editor/commands/DeleteEntityCommand.cpp

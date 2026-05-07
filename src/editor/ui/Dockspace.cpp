@@ -7,11 +7,16 @@ namespace Mood {
 
 namespace {
 
-/// @brief Layout default del workspace "Layout" — el de trabajo general.
-///        Hierarchy izq, Inspector der, Asset Browser + Console abajo,
-///        Viewport central.
+/// @brief Layout default del workspace "Modelar" (era "Layout") — el de
+///        trabajo general. F2H22: agregamos una franja angosta a la
+///        IZQUIERDA del Hierarchy para la `Toolbar` (gizmo modes +
+///        primitivas brush + face mode). Resto: Hierarchy izq, Inspector
+///        der, Asset Browser + Console abajo, Viewport central.
 void buildLayoutWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockMain = dockspaceId;
+    // F2H22: franja delgada para la Toolbar (60px aprox = 0.05).
+    ImGuiID dockToolbar = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Left, 0.05f, nullptr, &dockMain);
     ImGuiID dockLeft = ImGui::DockBuilderSplitNode(
         dockMain, ImGuiDir_Left, 0.18f, nullptr, &dockMain);
     ImGuiID dockRight = ImGui::DockBuilderSplitNode(
@@ -21,6 +26,7 @@ void buildLayoutWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockBottomRight = ImGui::DockBuilderSplitNode(
         dockBottom, ImGuiDir_Right, 0.45f, nullptr, &dockBottom);
 
+    ImGui::DockBuilderDockWindow("Tools",         dockToolbar);  // F2H22
     ImGui::DockBuilderDockWindow("Hierarchy",     dockLeft);
     ImGui::DockBuilderDockWindow("Viewport",      dockMain);
     ImGui::DockBuilderDockWindow("Inspector",     dockRight);

@@ -508,6 +508,19 @@ int EditorApplication::run() {
             }
         }
 
+        // F2H22: requests del Toolbar lateral.
+        const int gizmoReq = m_ui.consumeGizmoModeRequest();
+        if (gizmoReq >= 0 && gizmoReq <= 2) {
+            m_gizmoMode = static_cast<GizmoMode>(gizmoReq);
+        }
+        if (m_ui.consumeToggleFaceModeRequest()) {
+            m_subMode = (m_subMode == EditorSubMode::Face)
+                ? EditorSubMode::Object
+                : EditorSubMode::Face;
+            Log::editor()->info("[toolbar] sub-mode -> {}",
+                m_subMode == EditorSubMode::Face ? "Face" : "Object");
+        }
+
         // 2.25) Acciones de proyecto (Archivo > Nuevo / Abrir / Guardar / ...).
         switch (m_ui.consumeProjectAction()) {
             case ProjectAction::NewProject:   handleNewProject();   break;

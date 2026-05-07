@@ -43,7 +43,8 @@ void EditorUI::pruneMissingRecents() {
 EditorUI::EditorUI() {
     m_panels = {&m_viewport, &m_hierarchy, &m_inspector, &m_assetBrowser,
                 &m_console, &m_luaApi, &m_performanceHud,
-                &m_scriptEditor, &m_materialEditor};
+                &m_scriptEditor, &m_materialEditor, &m_toolbar};
+    m_toolbar.setEditorUi(this);  // F2H22: la toolbar emite requests a UI
 
     // F2H7: el dockspace arranca apuntando al workspace default
     // (F2H22: Modelar, era Layout).
@@ -133,6 +134,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Performance",     false);
         setVisible("Script Editor",   true);
         setVisible("Material Editor", false);
+        setVisible("Tools",           false);  // F2H22: tools no aplican aqui
     } else if (name == "Optimizar") {
         setVisible("Viewport",        true);
         setVisible("Hierarchy",       false);
@@ -143,6 +145,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Performance",     true);
         setVisible("Script Editor",   false);
         setVisible("Material Editor", false);
+        setVisible("Tools",           false);
     } else if (name == "Materiales") {
         setVisible("Viewport",        true);
         setVisible("Hierarchy",       false);
@@ -153,8 +156,9 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Performance",     false);
         setVisible("Script Editor",   false);
         setVisible("Material Editor", true);
+        setVisible("Tools",           false);
     } else {
-        // "Modelar" (default) — flow general de mapping.
+        // "Modelar" (default) — flow general de mapping. Tools visible.
         setVisible("Viewport",        true);
         setVisible("Hierarchy",       true);
         setVisible("Inspector",       true);
@@ -164,6 +168,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Performance",     false);
         setVisible("Script Editor",   false);
         setVisible("Material Editor", false);
+        setVisible("Tools",           true);  // F2H22: visible solo aqui
     }
 }
 

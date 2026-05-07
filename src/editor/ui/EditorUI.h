@@ -8,6 +8,7 @@
 #include "editor/application/EditorMode.h"
 #include "editor/ui/MenuBar.h"
 #include "editor/ui/StatusBar.h"
+#include "editor/ui/Toolbar.h"
 #include "editor/commands/HistoryStack.h"
 #include "editor/panels/assets/AssetBrowserPanel.h"
 #include "editor/panels/debug/ConsolePanel.h"
@@ -81,6 +82,26 @@ public:
     ///        en algun workspace, esa decision persiste en su
     ///        iniLayout custom y este metodo NO la sobreescribe.
     void applyDefaultVisibilityForWorkspace(const std::string& name);
+
+    /// @brief F2H22: la Toolbar lateral pide al EditorApplication que
+    ///        cambie el gizmo mode (0 = Translate, 1 = Rotate, 2 = Scale).
+    ///        EditorApplication::run() consume cada frame y aplica al
+    ///        `m_gizmoMode` interno. -1 = sin request.
+    void requestGizmoMode(int mode) { m_gizmoModeRequested = mode; }
+    int consumeGizmoModeRequest() {
+        const int r = m_gizmoModeRequested;
+        m_gizmoModeRequested = -1;
+        return r;
+    }
+
+    /// @brief F2H22: la Toolbar pide togglear Face/Object sub-mode.
+    ///        EditorApplication consume y flippa `m_subMode`.
+    void requestToggleFaceMode() { m_toggleFaceModeRequested = true; }
+    bool consumeToggleFaceModeRequest() {
+        const bool r = m_toggleFaceModeRequested;
+        m_toggleFaceModeRequested = false;
+        return r;
+    }
 
     /// @brief Acceso al panel Asset Browser para inyectarle el AssetManager
     ///        desde EditorApplication y leer la seleccion actual.
@@ -440,6 +461,7 @@ private:
     PerformanceHudPanel m_performanceHud;  // F2H2
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     MaterialEditorPanel m_materialEditor;  // Hito 42
+    Toolbar m_toolbar;  // F2H22: tools de edicion (gizmo modes + brushes + face)
     SelectionSet m_selectionSet;  // F2H13: reemplaza m_selectedEntity
     Scene* m_scene = nullptr;  // F2H12: non-owning, set by EditorApplication
 
@@ -491,6 +513,11 @@ private:
     /// `-1` = no hay switch pendiente. Otra valor = index objetivo, lo aplica
     /// `applyPendingWorkspaceSwitch()` antes de `NewFrame`.
     int m_pendingWorkspaceSwitch{-1};
+
+    /// F2H22: requests del Toolbar lateral. EditorApplication consume
+    /// cada frame en `run()`.
+    int  m_gizmoModeRequested = -1;     // -1 = sin request, 0/1/2 = T/R/S
+    bool m_toggleFaceModeRequested = false;
 };
 
 } // namespace Mood
