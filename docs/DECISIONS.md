@@ -3756,3 +3756,43 @@ Switching axis cuando la normal está cerca del eje Y evita cross product con ma
 
 
 
+
+
+## 2026-05-07: F2H20 — compilación brush → mesh + export OBJ on-demand, sin persistencia ni runtime-load
+
+**Contexto:** El plan original `PLAN_FASE2.md` entrada F2H14 ("Compilación brush → mesh optimizada") sugería: "al guardar el mapa, todos los brushes se compilan a una mesh estática unificada con caras internas eliminadas, vertices soldados, e índices generados. Esta mesh es lo que se renderiza en runtime. Brushes individuales solo existen en el editor." Tras el rerouting (Face Mode primero en F2H17, reorg menús F2H18, cleanup HistoryStack F2H19), F2H20 toma el ítem. Hay tres niveles de scope posibles:
+
+1. **MVP**: helper puro `compileMap` + export OBJ + UI menu, sin tocar el formato `.moodmap` ni el runtime del MoodPlayer.
+2. **Persistencia**: agregar `compiledMesh` al `.moodmap` JSON con schema bump (back-compat aditiva). Editor sigue usando brushes; runtime puede usar la mesh compilada si el campo está disponible.
+3. **Two-paths**: editor carga brushes (edición), MoodPlayer carga **solo** la mesh compilada (sin código CSG en el runtime). Cumple el plan original al 100%.
+
+**Decisión:** **Nivel 1 (MVP)** para F2H20. La compilación es una **vista derivada** del scene actual, accesible desde 2 menu items en `Mapa`:
+- "Compilar mapa (stats)" → `pfd::message` con stats (brushes / faces totales / culled / triángulos / vertices pre-weld / unique / submeshes).
+- "Exportar OBJ..." → `pfd::save_file` + `compileMap` + `writeObj` → `.obj` + `.mtl` lateral.
+
+**Por qué MVP:**
+- **Cumple el caso de uso real principal**: el dev quiere ver el resultado de cull/weld + exportar a Blender / MeshLab para iteración. Eso lo cubre el MVP completo.
+- **Persistencia infla el `.moodmap`** sin beneficio inmediato (vertex data es ~50 bytes/vertex en JSON; un mapa típico de 200 brushes con 5K vertices = 250 KB extra). Si emerge necesidad de loading time en `MoodPlayer`, abrir un hito futuro con schema bump claro.
+- **Two-paths duplica complejidad**: editor + player con lógicas distintas para leer el mismo formato; refactor del `SceneLoader`. Beneficio (dependency cero del runtime + load time mejorado) es real pero no urgente — los brushes se compilan rápido al cargar (`buildBrushMesh` per-brush; ~2-5 ms para mapas típicos en debug).
+- **No two-paths en F2H20 mantiene la suite verde sin tocar code paths críticos**: el MoodPlayer no cambia, no hay risk de regresión.
+
+**Cómo se implementa el MVP:**
+- `engine/world/csg/CompileMap.{h,cpp}` (puro, testeable sin GL): tipos `BrushSource` / `CompiledVertex` / `CompiledSubmesh` / `CompiledMap` / `CompileStats`. Funciones `collectFaces` (por cada cara: polígono local via duplicación del helper privado de `BrushMesh.cpp`, ordenado CCW, transformado a world), `markInternalFaces` (pareja exhaustiva i<j buscando antiparalelos + `polygonsMatch` ignorando orden de vertices), `compileMap` (paso 1 descubre paths en orden, paso 2 triangula con builders paralelos + spatial hash celda eps en world). El weld matchea **position + UV + normal** — vertices coincidentes en posición pero con UV/normal distintas se mantienen separados (split estilo OBJ flat shading). El `BrushSource.materialPaths` lleva un path lógico por slot (resolución `MaterialAssetId → string` via `AssetManager::materialPathOf`); agrupación final por path lógico, no MaterialAssetId, para reproducibilidad entre sesiones.
+- **Cull pareja-exacta, no overlap parcial**: dos caras se cullean solo si los polígonos coinciden vértice-a-vértice ±eps (orden libre — uno con CCW y el otro con CW visto desde la primera normal) + `dot(n_i, n_j) < -0.9999`. Cubre el caso típico (cubos pegados); overlap parcial (caras que comparten solo PARTE) requiere clipping general — diferido si emerge necesidad.
+- **UV preservation respeta `lockToWorld`** igual que `buildBrushMesh`: si false, transforma vertex world → local con `inverse(worldMatrix)` antes del proyectado sobre `uAxis`/`vAxis`. Si true, la posición world es input al UV calc directamente.
+- `engine/world/csg/MapExportObj.{h,cpp}`: `writeObj(compiled, path)` produce `.obj` (mtllib + o + v/vn/vt globales + bloques `usemtl` por submesh + caras `f a/a/a` con índices 1-based + offset acumulado entre submeshes) y `.mtl` lateral (1 newmtl por path distinto, material vacío `""` → `_default` con `Kd 0.8 0.8 0.8`). `sanitizeMtlName` reemplaza no-alfanumérico (excepto `_.-/`) por `_` (formato MTL no tolera espacios en `newmtl`).
+
+**Suite resultante:** **602/8323** (+20 cases / +104 asserts vs F2H19). Tests cubren empty / 1 box (12 tris / 24 verts) / 2 separados misma material / materiales distintos (orden estable) / 2 pegados con cull (20 tris) / brush degenerado / `markInternalFaces` aislado en 3 escenarios / weld global / contenido del `.obj` con `mtllib`/`o`/`v`/`vn`/`vt`/`f`/`usemtl` correctos / indices 1-based con offset entre submeshes (`f 25/...` en el segundo).
+
+**Validación visual del dev:** spawn 2 brushes → "Compilar mapa" mostró stats coherentes en dialog → "Exportar OBJ..." escribió a `Desktop/test/test.obj` (2 submeshes, 24 tris) → editor cerró limpiamente.
+
+**Alternativas descartadas:**
+- **Persistir la compilación en `.moodmap`** (nivel 2): infla el archivo sin beneficio inmediato. Schema bump v12 → v13 con back-compat aditiva era doable; la decisión fue no agregar ese peso hasta que emerja un caso de uso real.
+- **Cargar la mesh compilada en `MoodPlayer`** (nivel 3): refactor del `SceneLoader` con dos branches (editor vs player). Riesgo de regresión + dos paths a mantener. Diferido.
+- **Cull por overlap parcial via clipping general**: complejo, requiere intersección polígono-polígono. El caso simple cubre el 80% (cubos pegados); el resto puede esperar.
+- **Schema versionado del OBJ con `MoodEngine F2H20` en el header**: ya está el comentario `# MoodEngine F2H20 — compiled map`. Si el dev necesita validación más estricta del export, agregar checksum o version explícita en hito futuro.
+
+**Revisar si:**
+- El dev reporta que la mesh exportada no corresponde visualmente (probable bug de UV o normal transform).
+- El dev pide cargar la mesh compilada en runtime (abrir hito propio nivel 2 o 3).
+- El cull de overlap parcial empieza a ser pedido en validación (mapas grandes con muchos brushes pegados parcialmente).

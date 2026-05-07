@@ -6,7 +6,44 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H19 cerrado: Limpieza HistoryStack residual.**
+**🚀 Fase 2 — F2H20 cerrado: Compilación brush → mesh estática unificada + export OBJ.**
+Tag: `v1.11.0-fase2-hito20`.
+Verificado automático: suite doctest **602/8323** verde (+20 cases / +104 asserts vs F2H19). Verificado por el dev a ojo: spawn 2 boxes con materiales distintos → menú **Mapa > Compilar mapa (stats)** muestra dialog con stats correctos (`Brushes: 2`, `Caras totales: 12`, `Triangulos finales: 24`, `Submeshes: 2`); menú **Mapa > Exportar OBJ...** abre file dialog, escribe `.obj` + `.mtl` al destino elegido (probado con `Desktop/test/test.obj`), editor cierra limpiamente.
+
+**Cambio importante**: F2H20 cumple el ítem original `PLAN_FASE2.md` "F2H14 Compilación brush → mesh optimizada" (rerouting trasladó al final de sub-fase 2.2). **Scope MVP, no two-paths**: NO modifica `SceneLoader` ni el runtime de `MoodPlayer` — el plan original sugería que el runtime cargue la mesh compilada en lugar de los brushes, pero se difiere a un hito futuro si emerge necesidad real. F2H20 entrega la compilación **como vista derivada** del scene actual + export OBJ, suficiente para que el dev itere y exporte el mapa a Blender / MeshLab.
+
+**Decisiones clave**:
+- **No persistir la compilación**: nada nuevo en `.moodmap`. La compilación es **on-demand** desde el menú; corre rápido (~1ms para mapas típicos). Sin two-paths editor/player.
+- **Cull simple, pareja-exacta**: dos caras se cullea solo si los polígonos coinciden vértice-a-vértice ±eps + normales antiparalelas. Overlap parcial entre brushes que comparten solo PARTE de una cara NO se cullea (queda toda la cara). Mejora futura si emerge necesidad real (clipping de polígonos general).
+- **Weld global con position+UV+normal**: el spatial hash matchea los 3 — vertices en la misma posición con UV o normal distintas se mantienen separados (mismo split que OBJ flat shading). Una box producirá 24 vertices únicos, no 8: cada esquina geométrica está en 3 caras con normales distintas.
+- **Agrupación por `materialPath` lógico** (no `MaterialAssetId`): reproducible entre sesiones. Resuelve via `AssetManager::materialPathOf()`. Material vacío `""` → `_default` en el `.mtl` con `Kd 0.8 0.8 0.8` (sin map_Kd).
+- **OBJ + MTL lateral**: formato estándar interoperable. Vértices con `v` / `vn` / `vt`; caras `f a/a/a` con índices 1-based + offset acumulado entre submeshes (cuando hay N submeshes, el segundo arranca en offset 25 si el primero tiene 24 verts). Material vacío del compiled escribe `usemtl _default`.
+
+**Implementación (Bloques A-G):**
+
+- **Bloque A — Plan F2H20** con scope MVP explícito (no persistencia, no runtime-load, cull simple pareja-exacta).
+- **Bloque B — Compilador puro** `engine/world/csg/CompileMap.{h,cpp}` (~330 LOC). Tipos: `BrushSource` (input), `CompiledVertex` / `CompiledSubmesh` / `CompiledMap` (output), `CompileStats`, `RawBrushFace` (intermedio). Funciones: `collectFaces` (recolecta polígonos en world CCW + UV params), `markInternalFaces` (pareja exhaustiva i<j buscando antiparalelos + `polygonsMatch` ignorando orden), `compileMap` (paso 1 descubre paths en orden, paso 2 triangula con builders paralelos + spatial hash), `collectBrushSourcesFromScene` (helper de conveniencia que itera Scene.forEach BrushComponent + TransformComponent + resuelve material slots a path lógico). UVs respetan `lockToWorld` igual que `buildBrushMesh`.
+- **Bloque E — Tests** (avanzado antes de C/D para validar lógica antes de cablear UI). `tests/test_compile_map.cpp` (14 cases / 69 asserts): empty, 1 box → 12 tris / 24 verts unique, 2 separados (mismo material) → 1 submesh / 48 verts, 2 separados (materiales distintos) → 2 submeshes orden estable, 2 pegados (cara compartida) → 2 culled / 20 tris (independiente del material), brush degenerado < 4 caras → omitido, `markInternalFaces` aislado: pareja exacta antiparalela ✅, mismo brush no se cullea consigo mismo, polígonos distintos antiparalelos no matchean, weld global colapsa vertices ≤ epsilon.
+- **Bloques C+D — Export OBJ + UI**:
+  - `engine/world/csg/MapExportObj.{h,cpp}` (~150 LOC). `writeObj(compiled, path)` escribe `.obj` y `.mtl` lateral. `sanitizeMtlName` preserva alfanumérico + `_.-/`, sustituye el resto por `_` (formato MTL no tolera espacios en `newmtl`). Crea directorios padre. Auto-añade extensión `.obj` si falta.
+  - `ProjectAction::CompileMap` / `ProjectAction::ExportObj` nuevos en `EditorMode.h`.
+  - `MenuBar.cpp` agrega 2 items en submenu `Mapa` separados por `ImGui::Separator`.
+  - `EditorApplication::handleCompileMap`: corre `compileMap` y muestra `pfd::message` con stats formatear (`formatCompileStats`).
+  - `EditorApplication::handleExportObj`: pide destino con `pfd::save_file` (default `<currentMap>.obj` en project root) + corre compile + writeObj + dialog success o error.
+  - `tests/test_map_export_obj.cpp` (6 cases / 35 asserts): 1 box → archivos creados con mtllib/o/v/vn/vt/f/usemtl coherentes, 2 boxes con materiales distintos → 2 newmtl + 2 usemtl, material vacío → `_default` con `Kd 0.8 0.8 0.8`, path sin extensión auto-añade `.obj`, 0 brushes → archivos vacíos pero válidos, indices 1-based con offset entre submeshes.
+- **Bloque F — Validación visual**: dev probó flujo end-to-end. Spawn 2 brushes con materiales distintos → "Compilar mapa" mostró stats correctos en dialog → "Exportar OBJ..." pidió destino, escribió `Desktop/test/test.obj` (2 submeshes, 24 tris) → editor cerró limpiamente. Log line `[F2H20 compile]` registra el dump de stats.
+- **Bloque G — cierre**: este documento + HITOS + DECISIONS + tag `v1.11.0-fase2-hito20`.
+
+**Pendientes conocidos** (memoria + `PENDIENTES.md`):
+- **Runtime-load de mesh compilada en `MoodPlayer`** (diferido del scope original de F2H14): que el player cargue la compilada en vez de los brushes individuales para ahorrar el rebuild de meshes per-brush. Habilita "brushes solo en el editor". Hito futuro si emerge necesidad de performance.
+- **Cull de overlap parcial** (caras que comparten solo parte): clipping de polígonos general. Diferido si emerge necesidad real al hacer mapas grandes con muchos brushes pegados parcialmente.
+- **F6 panel Blender-style** (tweak last operator post-hoc) — diferido desde F2H16.
+- **Vertex / Edge mode** (teclas 1, 2 reservadas en F2H17). Diferido.
+- **Multi-selección de caras** (Shift+click sobre múltiples caras). Diferido.
+
+**Próximo paso**: **F2H21 — sub-fase 2.3 (renderer + materiales next-gen)**. Plan original `PLAN_FASE2.md` lo abre con material editor con node-graph visual (panel dedicado + grafo + nodos básicos: TextureSample/ColorConstant/ScalarConstant/Multiply/Add/Mix/Normal/Output + preview esférico + persistencia `.material`). Confirmar con el dev si arrancamos por ahí o si tomamos algún hito de la sub-fase 2.4 (física avanzada) por delante.
+
+### F2H19 (anterior, ya cerrado)
 Tag: `v1.10.0-fase2-hito19`.
 Verificado automático: suite doctest **582/8219** verde (+15 cases / +37 asserts vs F2H18). Verificado por el dev a ojo: drop de textura/material sobre cara en Face Mode + Ctrl+Z revierte correctamente (quita el slot huérfano, restaura `face.materialIndex`); drop de `.lua` sobre entidad sin script + Ctrl+Z remueve el ScriptComponent; drop sobre entidad con script previo + Ctrl+Z restaura el path anterior. StatusBar muestra `Último: <comando>`.
 
@@ -36,7 +73,7 @@ Verificado automático: suite doctest **582/8219** verde (+15 cases / +37 assert
 - **Multi-selección de caras** (Shift+click sobre múltiples caras). Diferido.
 - **F6 panel de Blender** (tweak last operator post-hoc). Diferido desde F2H16.
 
-**Próximo paso**: **F2H20 = compilación brush → mesh estática unificada al guardar el mapa**. Take all brushes, weld vertices coplanares, cull caras internas (entre dos brushes adyacentes), fusionar por material slot. El resultado es una mesh navegable y exportable como `.obj`. Era F2H17 antes del rerouting que metió Face Mode primero, y se postergó otra vez en F2H18-F2H19 por deuda de UX/HistoryStack.
+**Próximo paso después de F2H19** (ya superado en F2H20): **F2H20 = compilación brush → mesh estática unificada al guardar el mapa**. Take all brushes, weld vertices coplanares, cull caras internas (entre dos brushes adyacentes), fusionar por material slot. El resultado es una mesh navegable y exportable como `.obj`. Era F2H17 antes del rerouting que metió Face Mode primero, y se postergó otra vez en F2H18-F2H19 por deuda de UX/HistoryStack. **Cerrado en F2H20** (`v1.11.0-fase2-hito20`); ver banner arriba.
 
 ### F2H18 (anterior, ya cerrado)
 Tag: `v1.9.0-fase2-hito18`.
