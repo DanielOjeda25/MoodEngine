@@ -54,4 +54,20 @@ ScenePickResult pickEntity(Scene& scene,
                             const glm::vec2& ndc,
                             const AssetManager* assets = nullptr);
 
+/// @brief F2H28 Bloque F: variante "ray pre-armado". Itera la escena con
+///        el mismo broadphase de `pickEntity` (mesh AABB / brush AABB /
+///        icon sphere) pero sin desproyectar el ndc — el caller pasa
+///        `origin` + `dir` directos. Util para picking ortografico
+///        (rayos paralelos) y para tests que arman rayos sinteticos sin
+///        montar mat4 de camara.
+///
+///        `dir` debe estar normalizado para que `result.distance` sea
+///        comparable entre llamadas (el ray-AABB y ray-sphere asumen
+///        magnitud unitaria implicitamente para reportar `t` como
+///        distancia metrica).
+ScenePickResult pickEntityFromRay(Scene& scene,
+                                   const glm::vec3& origin,
+                                   const glm::vec3& dir,
+                                   const AssetManager* assets = nullptr);
+
 } // namespace Mood

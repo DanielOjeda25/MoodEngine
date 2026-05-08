@@ -17,6 +17,7 @@
 #include "core/Profiler.h"
 #include "editor/commands/HistoryStack.h"
 #include "editor/panels/debug/PerformanceHudPanel.h"
+#include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28 Bloque F: click-select desde ortos
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/render/backend/opengl/OpenGLShader.h"
@@ -304,6 +305,71 @@ int EditorApplication::run() {
                         replaceWithSingle(set, hit.entity);
                         Log::editor()->info("[viewport] click replace '{}'",
                                               entityName);
+                    }
+                } else if (!keyShift && !keyCtrl) {
+                    clear(set);
+                }
+            }
+        }
+
+        // 2.4b) F2H28 Bloque F: click-select desde los 3 viewports
+        //       ortograficos del workspace "Editor de mapas". Solo se
+        //       consume si el panel reporta `pending=true` — el panel
+        //       ignora drags (umbral 4 px) asi que el filtro ya esta
+        //       hecho. Reusa pickEntityFromRay con un rayo paralelo:
+        //         origin = camera.worldFromNdc(...) - forwardAxis * 1024
+        //         dir    = camera.forwardAxis()
+        //       El offset de 1024 unidades atras del plano del view
+        //       garantiza que el origen quede afuera de cualquier
+        //       brush razonable; el rayAABB intersecta hacia adentro
+        //       del frustum orto. La seleccion va al SelectionSet
+        //       global -> los 4 viewports muestran el outline al frame
+        //       siguiente sin codigo extra.
+        if (m_mode == EditorMode::Editor && m_scene) {
+            OrthoViewportPanel* orthoPanels[3] = {
+                &m_ui.orthoTop(),
+                &m_ui.orthoFront(),
+                &m_ui.orthoSide(),
+            };
+            const Uint8* keys = SDL_GetKeyboardState(nullptr);
+            const bool keyShift = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+            const bool keyCtrl  = keys[SDL_SCANCODE_LCTRL]  || keys[SDL_SCANCODE_RCTRL];
+            for (OrthoViewportPanel* op : orthoPanels) {
+                const auto orthoClick = op->consumeClickSelect();
+                if (!orthoClick.pending) continue;
+                const u32 oW = op->desiredWidth();
+                const u32 oH = op->desiredHeight();
+                if (oW == 0 || oH == 0) continue;
+                const f32 oAspect = static_cast<f32>(oW) / static_cast<f32>(oH);
+                const auto& cam = op->camera();
+                const glm::vec3 origin = cam.worldFromNdc(orthoClick.ndcX,
+                                                          orthoClick.ndcY,
+                                                          oAspect)
+                                       - cam.forwardAxis() * 1024.0f;
+                const glm::vec3 dir = cam.forwardAxis();
+                const ScenePickResult hit = pickEntityFromRay(
+                    *m_scene, origin, dir, m_assetManager.get());
+
+                SelectionSet& set = m_ui.selectionSet();
+                if (hit) {
+                    const std::string entityName =
+                        hit.entity.hasComponent<TagComponent>()
+                            ? hit.entity.getComponent<TagComponent>().name
+                            : std::string{"(sin tag)"};
+                    if (keyShift) {
+                        add(set, hit.entity);
+                        Log::editor()->info(
+                            "[ortho:{}] Shift+click ADD '{}' (selected={})",
+                            cam.label(), entityName, set.selected.size());
+                    } else if (keyCtrl) {
+                        toggle(set, hit.entity);
+                        Log::editor()->info(
+                            "[ortho:{}] Ctrl+click TOGGLE '{}' (selected={})",
+                            cam.label(), entityName, set.selected.size());
+                    } else {
+                        replaceWithSingle(set, hit.entity);
+                        Log::editor()->info("[ortho:{}] click replace '{}'",
+                                              cam.label(), entityName);
                     }
                 } else if (!keyShift && !keyCtrl) {
                     clear(set);
