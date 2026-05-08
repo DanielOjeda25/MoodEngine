@@ -401,6 +401,12 @@ add_executable(MoodEditor
     src/editor/application/EditorOverlay.cpp
     src/editor/application/EditorPlayMode.cpp
     src/editor/application/EditorProjectActions.cpp
+    src/editor/application/EditorProjectActions_FileIO.cpp
+    src/editor/application/EditorProjectActions_Package.cpp
+    src/editor/application/EditorProjectActions_Map.cpp
+    src/editor/application/EditorProjectActions_Brush.cpp
+    src/editor/application/EditorProjectActions_Boolean.cpp
+    src/editor/application/EditorProjectActions_Compile.cpp
     src/editor/application/EditorRenderPass.cpp
     src/editor/application/EditorScene.cpp
     src/editor/ui/EditorUI.cpp
