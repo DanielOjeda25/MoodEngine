@@ -6,8 +6,8 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H24 cerrado: Reorganización interna del código (split de los 5 archivos críticos >800 LOC en partials por dominio).**
-Tag: `v1.15.0-fase2-hito24`.
+**🚀 Fase 2 — F2H24 cerrado + Bloque C extendido: Reorganización interna del código (5 CRÍTICOS >800 LOC + 4 ALTO 700-780 LOC partidos en partials por dominio).**
+Tags: `v1.15.0-fase2-hito24` (cierre inicial 5 CRÍTICOS) + `v1.15.1-fase2-hito24-bloque-c` (extendido 4 ALTO tras pedido del dev *"esa deuda chica podes hacerla ahora"*).
 Verificado automático: suite doctest **610/8359** verde después de cada Bloque B.X (validación incremental). Verificado por LOC: ningún partial supera 500 LOC; los 5 archivos CRÍTICOS originales (5784 LOC totales) reorganizados en 1 núcleo + N partials cada uno.
 
 **Distribución LOC final** (núcleo + partials, 5 CRÍTICOS):
@@ -19,8 +19,12 @@ Verificado automático: suite doctest **610/8359** verde después de cada Bloque
 | `DemoSpawners.cpp` | 1188 | 41 | 4 (+ Internal.h) | 399 |
 | `PlayerApplication.cpp` | 1160 | 111 | 3 | 484 |
 | `EditorApplication.cpp` | 826 | 173 | 2 | 435 |
+| `SceneRenderer.cpp` | 776 | 242 | 1 (+_Render 590) | 590 |
+| `MeshLoader.cpp` | 767 | 279 | 3 (+ Internal.h) | 213 |
+| `EditorOverlay.cpp` | 745 | 310 | 1 (+ Internal.h) | 460 |
+| `AssetManager.cpp` | 743 | 256 | 5 | 276 |
 
-**Cambio importante**: F2H24 cumple el pedido explícito del dev al cerrar F2H23 (*"creo que hay archivos demasiado grandes que te cuesta arreglar"*). Refactor puramente estructural — ningún cambio funcional, ningún cambio de API pública. El editor y el player arrancan idénticos al usuario final. Los 4 archivos ALTO (700-780 LOC: `SceneRenderer`, `MeshLoader`, `EditorOverlay`, `AssetManager`) quedan en `PENDIENTES.md` como deuda chica.
+**Cambio importante**: F2H24 cumple el pedido explícito del dev al cerrar F2H23 (*"creo que hay archivos demasiado grandes que te cuesta arreglar"*) + extendido tras pedido posterior *"esa deuda chica podes hacerla ahora"* para cubrir los 4 ALTO 700-780 LOC. Refactor puramente estructural — ningún cambio funcional, ningún cambio de API pública. El editor y el player arrancan idénticos al usuario final. Los 4 archivos ALTO (700-780 LOC: `SceneRenderer`, `MeshLoader`, `EditorOverlay`, `AssetManager`) quedan en `PENDIENTES.md` como deuda chica.
 
 **Decisiones clave**:
 - **Split por dominio funcional con archivos parciales de la misma clase**: cada partial implementa métodos privados de la clase declarada en el header. Patrón ya usado pre-F2H24 (`EditorApplication.cpp` ya tenía `EditorProjectActions.cpp` + `DemoSpawners.cpp` + `EditorOverlay.cpp` + `EditorPlayMode.cpp` + `EditorRenderPass.cpp` + `EditorScene.cpp` desde Hito 16); F2H24 lo extiende a los 5 CRÍTICOS de Fase 2.
@@ -39,13 +43,13 @@ Verificado automático: suite doctest **610/8359** verde después de cada Bloque
 - **Bloque B.3 — DemoSpawners.cpp**: 1188 LOC → núcleo 41 + 4 partials + Internal.h. Tag intermedio: `dba4aa7`.
 - **Bloque B.4 — PlayerApplication.cpp**: 1160 LOC → núcleo 111 + 3 partials. Tag intermedio: `01a80ae`.
 - **Bloque B.5 — EditorApplication.cpp**: 826 LOC → núcleo 173 + 2 partials. Tag intermedio: `9abc38b`.
-- **Bloque C — split de ALTO**: skipped por presupuesto. 4 archivos en PENDIENTES.md.
+- **Bloque C extendido — split de ALTO 700-780 LOC** (atacado tras pedido del dev): C.1 AssetManager 743→256+5 partials, C.2 EditorOverlay 745→310+_Gizmo 460+Internal.h, C.3 MeshLoader 767→279+_Skeleton 184+_Geometry 213+_Animation 68+Internal.h, C.4 SceneRenderer 776→242+_Render 590 (deuda chica aceptada: frame loop monolítico bajo hard cap). Tag `v1.15.1-fase2-hito24-bloque-c` tras el cierre.
 - **Bloque D — validación**: suite 610/8359 verde tras cada Bloque B.X; build OK Debug; cap soft 500 respetado en todos los partials nuevos.
 - **Bloque E — cierre**: este documento + HITOS + DECISIONS + PENDIENTES + tag `v1.15.0-fase2-hito24`.
 
 **Pendientes conocidos** (memoria + `PENDIENTES.md`):
 - **F2H25 — 4-viewport Hammer-style layout** (próximo, heredado de F2H22→F2H23→F2H24 candidato): workspace nuevo "Hammer" con dockspace en 4 cuadrantes.
-- **Split de archivos ALTO (700-780 LOC)** (deuda chica F2H24): `SceneRenderer.cpp` (776), `MeshLoader.cpp` (767), `EditorOverlay.cpp` (745), `AssetManager.cpp` (743). Bajo el hard cap pero sobre el soft cap. Hito futuro chico si emerge necesidad.
+- **Split de archivos ALTO** — **CERRADO en Bloque C extendido tag `v1.15.1`**. Quedan documentadas las 4 splits + la deuda chica residual en `SceneRenderer_Render.cpp` (590 LOC, sobre soft 500 pero bajo hard 800 — frame loop monolítico).
 - **Iconos image-based del Toolbar** (deuda explícita F2H22): FontAwesome / IcoMoon. Hito chico futuro.
 - **CompoundCommand para batch undo** (deuda parcial cerrada en F2H23 con MultiEditTransformCommand).
 - **Pase de polish UX continuo (siguiente ronda)**.

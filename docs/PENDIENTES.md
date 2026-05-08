@@ -23,24 +23,16 @@
   Reusa la infra de workspaces de F2H7+F2H22 — el Hammer entra como un
   workspace más con su propio `buildHammerWorkspace` en `Dockspace.cpp`.
 
-- **Split de archivos ALTO 700-780 LOC** (deuda chica F2H24): Bloque C de
-  F2H24 fue skipped por presupuesto. Quedan 4 archivos sobre el soft-cap
-  500 LOC pero bajo el hard-cap 800 LOC, todos con potencial de split por
-  dominio:
-  - `src/engine/render/scene_renderer/SceneRenderer.cpp` (776 LOC) —
-    candidato a split por pase (shadow / forward / IBL / debug draw /
-    post-process).
-  - `src/engine/assets/loaders/MeshLoader.cpp` (767 LOC) — candidato a
-    split por formato (OBJ vs glTF / Assimp shared logic).
-  - `src/editor/application/EditorOverlay.cpp` (745 LOC) — candidato a
-    split por overlay (gizmo / grid / debug draw / icons + halos de
-    selección).
-  - `src/engine/assets/manager/AssetManager.cpp` (743 LOC) — candidato a
-    split por tipo de asset (texture / mesh / audio / material / prefab).
-  Approach: igual que F2H24 — refactor puramente estructural sin cambios
-  funcionales ni de API pública, validación incremental con suite verde
-  tras cada split. Hito chico futuro si emerge presión (estos 4 están
-  bajo el hard-cap, así que no son críticos).
+- **Split fino de `SceneRenderer_Render.cpp`** (deuda chica residual de
+  Bloque C extendido del F2H24): el archivo quedó en 590 LOC tras el
+  split, sobre el soft-cap 500 pero bajo hard-cap 800. El frame loop
+  (renderScene) es una unidad cohesiva con muchas variables locales
+  compartidas entre pases — partir más fino requeriría extraer métodos
+  privados con muchas dependencias como parámetros sin aportar
+  legibilidad. Si emerge presión (ej. agregar pases nuevos lo lleva
+  cerca del hard-cap), candidato a método privado por pase: shadow
+  bind / Forward+ SSBO upload / PBR static instanced / PBR skinned /
+  brushes CSG / particulas. Diferido.
 
 - **Iconos image-based del Toolbar** (deuda explícita F2H22): la toolbar
   actual usa labels en castellano (`Mover`/`Rotar`/`Escala`/etc.) tras
