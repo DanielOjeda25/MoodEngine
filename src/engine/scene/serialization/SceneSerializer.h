@@ -215,12 +215,48 @@ struct SavedBrush {
     std::vector<SavedBrushFace> faces;
 };
 
+/// @brief F2H26: submesh de la mesh estatica precompilada del mapa.
+///        `vertices` es interleaved con 11 floats por vertice
+///        (pos.xyz + color.rgb + uv.xy + normal.xyz) — el mismo
+///        layout que `Csg::brushSubmeshToInterleaved` produce, asi el
+///        SceneRenderer reusa el shader PBR estandar y los IMesh se
+///        crean con el mismo `kPbrAttrs` que los brushes runtime.
+///        Indices ya estan expandidos (sin EBO; cada vertex aparece
+///        repetido por triangulo). `materialPath` es el path logico
+///        del material (mismo formato que SavedBrush.materialPaths).
+struct SavedCompiledSubmesh {
+    std::string materialPath;
+    std::vector<f32> vertices;  // interleaved 11 floats per vertex
+};
+
+/// @brief F2H26: la mesh estatica precompilada de TODO el mapa,
+///        producida por `Csg::compileMap` al guardar. Cada submesh
+///        agrupa caras con el mismo material. El Player la usa
+///        directamente; el Editor la escribe pero la ignora para
+///        render (sigue editando los `BrushComponent`).
+struct SavedCompiledMesh {
+    std::vector<SavedCompiledSubmesh> submeshes;
+};
+
 struct SavedMap {
     std::string name;
     GridMap map;
     std::vector<SavedEntity> entities;
     std::vector<SavedBrush> brushes;     // F2H11
+    /// @brief F2H26: opcional. Si presente, el Player la prefiere
+    ///        sobre los brushes individuales. Mapas v12 (sin compile)
+    ///        leen este campo como nullopt.
+    std::optional<SavedCompiledMesh> compiledMesh;
 };
+
+/// @brief F2H26: construye un `SavedCompiledMesh` a partir de los
+///        brushes presentes en la scene actual. Llama internamente a
+///        `Csg::collectBrushSourcesFromScene` + `Csg::compileMap` y
+///        convierte cada submesh al layout PBR interleaved (11 floats
+///        por vertex). El editor lo usa antes de `SceneSerializer::save`
+///        para persistir la mesh compilada en el `.moodmap`.
+SavedCompiledMesh buildSavedCompiledMeshFromScene(Scene& scene,
+                                                    AssetManager& assets);
 
 class SceneSerializer {
 public:
@@ -229,10 +265,15 @@ public:
     ///        `assets.pathOf(id)` / `assets.meshPathOf(id)`.
     ///        `scene` puede ser null (tests / flujos legacy que solo manejan
     ///        tiles): en ese caso `entities` queda vacio en el JSON.
+    /// @param compiledMesh F2H26: opcional. Si no es null, se persiste
+    ///        bajo `compiledMesh` en el JSON. El Player la usa al cargar
+    ///        para skipear el procesamiento CSG. El editor lo construye
+    ///        via `Csg::compileMap` antes de llamar a save.
     /// @throws std::runtime_error si no se puede abrir el archivo para escritura.
     static void save(const GridMap& map, const std::string& name,
                      const Scene* scene, const AssetManager& assets,
-                     const std::filesystem::path& path);
+                     const std::filesystem::path& path,
+                     const SavedCompiledMesh* compiledMesh = nullptr);
 
     /// @brief Carga un mapa desde JSON. Las texturas y meshes se reabren via
     ///        `assets.loadTexture(...)` / `assets.loadMesh(...)` — si fallan,

@@ -83,8 +83,11 @@ void EditorApplication::handleSaveMapAs() {
         : relPath;
 
     try {
+        // F2H26: persistir mesh compilada junto con los brushes.
+        auto compiledMesh = buildSavedCompiledMeshFromScene(*m_scene, *m_assetManager);
         SceneSerializer::save(m_map, outPath.stem().generic_string(),
-                                m_scene.get(), *m_assetManager, outPath);
+                                m_scene.get(), *m_assetManager, outPath,
+                                &compiledMesh);
     } catch (const std::exception& e) {
         Log::editor()->warn("Guardar mapa como fallo: {}", e.what());
         pfd::message("MoodEngine", std::string("Error: ") + e.what(),

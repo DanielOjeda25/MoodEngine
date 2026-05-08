@@ -2,12 +2,16 @@
 
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/resources/MeshAsset.h"
+#include "engine/render/rhi/IRenderer.h"            // F2H26: VertexAttribute
 #include "engine/scene/components/BrushComponent.h"   // F2H11
+#include "engine/scene/components/CompiledMeshComponent.h"  // F2H26
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/scene/serialization/TilePersistence.h"
+
+#include "core/Log.h"
 
 #include <cmath>     // F2H15: std::fabs para detectar defaults canonicos
 #include <utility>
@@ -216,9 +220,46 @@ Entity applyOneEntity(const SavedEntity& se,
 
 void applyEntitiesToScene(const SavedMap& saved,
                           Scene& scene,
-                          AssetManager& assets) {
+                          AssetManager& assets,
+                          bool useCompiledMesh) {
     for (const auto& se : saved.entities) {
         applyOneEntity(se, scene, assets);
+    }
+
+    // F2H26: si el caller pidio usar la mesh compilada Y el savedMap la
+    // tiene, crear UNA entity "WorldCompiledMesh" con
+    // CompiledMeshComponent y SKIPEAR el spawn de brushes individuales.
+    // Pensado para el MoodPlayer ("brushes solo en el editor"). El
+    // formato persistido es el mismo que `Csg::brushSubmeshToInterleaved`
+    // produce: 11 floats por vertex (pos+color+uv+normal), sin EBO.
+    if (useCompiledMesh && saved.compiledMesh.has_value()) {
+        const auto& cm = *saved.compiledMesh;
+        Entity worldMesh = scene.createEntity("WorldCompiledMesh");
+        // Transform default identity (la mesh ya esta en world space).
+        CompiledMeshComponent comp;
+        comp.meshes.reserve(cm.submeshes.size());
+        comp.materials.reserve(cm.submeshes.size());
+        const std::vector<VertexAttribute> kCompiledAttrs = {
+            {0, 3}, {1, 3}, {2, 2}, {3, 3}  // pos, color, uv, normal
+        };
+        for (const auto& sub : cm.submeshes) {
+            if (sub.vertices.empty()) {
+                comp.meshes.push_back(nullptr);
+                comp.materials.push_back(0);
+                continue;
+            }
+            comp.meshes.push_back(
+                assets.createDynamicMesh(sub.vertices, kCompiledAttrs));
+            const MaterialAssetId matId = sub.materialPath.empty()
+                ? 0u : assets.loadMaterial(sub.materialPath);
+            comp.materials.push_back(matId);
+        }
+        worldMesh.addComponent<CompiledMeshComponent>(std::move(comp));
+        Log::engine()->info(
+            "SceneLoader: usando compiledMesh ({} submeshes, brushes "
+            "individuales NO spawneados)",
+            cm.submeshes.size());
+        return;
     }
 
     // F2H11: aplicar brushes CSG. Cada SavedBrush -> nueva entidad con

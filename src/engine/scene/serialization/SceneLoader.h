@@ -36,9 +36,20 @@ namespace SceneLoader {
 ///        Hace upgrades de back-compat: paths v6 (texturas en lugar de
 ///        materials) los envuelve en wrappers; tonemap/fogMode strings
 ///        viejos se mapean a los enums actuales.
+///
+/// @param useCompiledMesh F2H26: si `true` Y `saved.compiledMesh` esta
+///        presente, NO se crean los `BrushComponent` individuales; en
+///        su lugar se crea UNA entidad "WorldCompiledMesh" con
+///        `CompiledMeshComponent` que sube la mesh estatica al GPU.
+///        Pensado para el MoodPlayer ("brushes solo en el editor"). El
+///        editor pasa `false` (default) y sigue cargando los brushes
+///        individuales para edicion. Si el flag es `true` pero el
+///        SavedMap no tiene `compiledMesh` (mapa v12 legacy), se cae
+///        al path normal de cargar brushes individuales.
 void applyEntitiesToScene(const SavedMap& saved,
                           Scene& scene,
-                          AssetManager& assets);
+                          AssetManager& assets,
+                          bool useCompiledMesh = false);
 
 /// @brief Aplica UNA `SavedEntity` al scene. Devuelve la Entity creada.
 ///        Util para Hito 27 DeleteEntityCommand::undo: recrear una

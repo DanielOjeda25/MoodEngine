@@ -87,7 +87,11 @@ void EditorApplication::handleNewProject() {
 
     const auto mapPath = created->root / created->defaultMap;
     std::filesystem::create_directories(mapPath.parent_path());
-    SceneSerializer::save(m_map, created->name, m_scene.get(), *m_assetManager, mapPath);
+    // F2H26: persistir tambien la mesh compilada para que el Player
+    // la cargue directo en lugar de procesar brushes.
+    auto compiledMesh = buildSavedCompiledMeshFromScene(*m_scene, *m_assetManager);
+    SceneSerializer::save(m_map, created->name, m_scene.get(), *m_assetManager,
+                          mapPath, &compiledMesh);
 
     m_project = std::move(created);
     m_currentMapPath = m_project->defaultMap;
@@ -213,8 +217,11 @@ void EditorApplication::handleSave() {
     const auto mapPath = m_project->root / m_currentMapPath;
     std::filesystem::create_directories(mapPath.parent_path());
     try {
+        // F2H26: persistir mesh compilada junto con los brushes.
+        auto compiledMesh = buildSavedCompiledMeshFromScene(*m_scene, *m_assetManager);
         SceneSerializer::save(m_map, m_currentMapPath.stem().generic_string(),
-                              m_scene.get(), *m_assetManager, mapPath);
+                              m_scene.get(), *m_assetManager, mapPath,
+                              &compiledMesh);
 
         // F2H7: capturar el ini ImGui actual al workspace activo + copiar
         // todos los workspaces al Project antes de serializar.

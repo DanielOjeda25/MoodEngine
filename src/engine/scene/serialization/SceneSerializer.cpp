@@ -9,6 +9,7 @@
 #include "engine/scene/serialization/EntitySerializer.h"
 #include "engine/scene/serialization/JsonHelpers.h"
 #include "engine/scene/serialization/TilePersistence.h"
+#include "engine/world/csg/CompileMap.h"  // F2H26: buildSavedCompiledMeshFromScene
 #include "engine/world/grid/GridMap.h"
 
 #include <nlohmann/json.hpp>
@@ -93,6 +94,26 @@ json serializeBrush(Entity e, const AssetManager& assets) {
     return out;
 }
 
+/// @brief F2H26: serializa un SavedCompiledSubmesh a JSON. Layout
+///        PBR de 11 floats por vertex; indices ya expandidos.
+json serializeCompiledSubmesh(const SavedCompiledSubmesh& sub) {
+    json out;
+    out["materialPath"] = sub.materialPath;
+    out["vertices"]     = sub.vertices;
+    return out;
+}
+
+/// @brief F2H26: parsea un SavedCompiledSubmesh desde JSON. No tira si
+///        falta el array; devuelve un submesh vacio.
+SavedCompiledSubmesh parseCompiledSubmesh(const json& j) {
+    SavedCompiledSubmesh sub;
+    sub.materialPath = j.value("materialPath", std::string{});
+    if (j.contains("vertices") && j.at("vertices").is_array()) {
+        sub.vertices = j.at("vertices").get<std::vector<f32>>();
+    }
+    return sub;
+}
+
 SavedBrush parseBrush(const json& j) {
     SavedBrush sb;
     sb.tag = j.value("tag", std::string{});
@@ -144,7 +165,8 @@ SavedBrush parseBrush(const json& j) {
 
 void SceneSerializer::save(const GridMap& map, const std::string& name,
                            const Scene* scene, const AssetManager& assets,
-                           const std::filesystem::path& path) {
+                           const std::filesystem::path& path,
+                           const SavedCompiledMesh* compiledMesh) {
     json j;
     j["version"]  = k_MoodmapFormatVersion;
     j["name"]     = name;
@@ -211,6 +233,17 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             if (!e.hasComponent<TransformComponent>()) return;
             j["brushes"].push_back(serializeBrush(e, assets));
         });
+    }
+
+    // F2H26: persistir mesh compilada si el caller la suministra. El
+    // Player la usa al cargar para saltarse el procesamiento CSG.
+    if (compiledMesh != nullptr) {
+        json jcm;
+        jcm["submeshes"] = json::array();
+        for (const auto& sub : compiledMesh->submeshes) {
+            jcm["submeshes"].push_back(serializeCompiledSubmesh(sub));
+        }
+        j["compiledMesh"] = std::move(jcm);
     }
 
     std::ofstream out(path);
@@ -287,18 +320,57 @@ std::optional<SavedMap> SceneSerializer::load(const std::filesystem::path& path,
             }
         }
 
+        // F2H26: mesh compilada (campo nuevo en v13; opcional). Si no
+        // existe, mapas v12 siguen leyendo igual (Player cae al
+        // fallback de procesar brushes en runtime).
+        std::optional<SavedCompiledMesh> compiledMesh;
+        if (j.contains("compiledMesh") && j.at("compiledMesh").is_object()) {
+            const auto& jcm = j.at("compiledMesh");
+            SavedCompiledMesh cm;
+            if (jcm.contains("submeshes") && jcm.at("submeshes").is_array()) {
+                for (const auto& js : jcm.at("submeshes")) {
+                    cm.submeshes.push_back(parseCompiledSubmesh(js));
+                }
+            }
+            compiledMesh = std::move(cm);
+        }
+
         Log::assets()->info(
-            "Mapa cargado: {} ({} tiles solidos, {} entidades, {} brushes)",
+            "Mapa cargado: {} ({} tiles solidos, {} entidades, {} brushes{})",
             path.generic_string(), map.solidCount(), entities.size(),
-            brushes.size());
+            brushes.size(),
+            compiledMesh.has_value() ? ", compiledMesh" : "");
         return SavedMap{name, std::move(map), std::move(entities),
-                         std::move(brushes)};
+                         std::move(brushes), std::move(compiledMesh)};
     } catch (const std::exception& e) {
         Log::assets()->warn(
             "SceneSerializer::load: falla semantica en '{}': {}",
             path.generic_string(), e.what());
         return std::nullopt;
     }
+}
+
+SavedCompiledMesh buildSavedCompiledMeshFromScene(Scene& scene,
+                                                    AssetManager& assets) {
+    // F2H26: pipeline editor -> compiledMesh persistido. Pasos:
+    //   1) Collect: itera la scene -> vector<BrushSource>.
+    //   2) Compile: aplica F2H20 (cull exacto) + F2H25 (cull overlap
+    //      parcial) + weld global. Resultado: 1 submesh por path
+    //      logico de material, vertices+indices CCW.
+    //   3) Convert: cada CompiledSubmesh al layout PBR interleaved
+    //      (11 floats por vertex, sin EBO).
+    SavedCompiledMesh out;
+    auto sources = Csg::collectBrushSourcesFromScene(scene, assets);
+    if (sources.empty()) return out;
+    auto compiled = Csg::compileMap(sources);
+    out.submeshes.reserve(compiled.submeshes.size());
+    for (const auto& sub : compiled.submeshes) {
+        SavedCompiledSubmesh saved;
+        saved.materialPath = sub.materialPath;
+        saved.vertices = Csg::compiledSubmeshToInterleaved(sub);
+        out.submeshes.push_back(std::move(saved));
+    }
+    return out;
 }
 
 } // namespace Mood

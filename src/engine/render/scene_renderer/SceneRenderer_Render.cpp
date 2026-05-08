@@ -35,6 +35,7 @@
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/rhi/RendererTypes.h"
 #include "engine/scene/components/BrushComponent.h"
+#include "engine/scene/components/CompiledMeshComponent.h"  // F2H26
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -564,6 +565,70 @@ void SceneRenderer::renderScene(Scene& scene,
                         glActiveTexture(GL_TEXTURE0);
                         if (bc.meshCache[si]) {
                             m_renderer->drawMesh(*bc.meshCache[si], *m_pbrShader);
+                        }
+                    }
+                });
+        }
+    }
+
+    // F2H26: pase de mesh compilada del mapa. Solo se dibuja en
+    // MoodPlayer (el editor sigue usando BrushComponent). 1 IMesh por
+    // submesh; 1 draw call por submesh con su material correspondiente.
+    // La mesh esta en world space — uModel = identity. No hay rebuild
+    // dynamic ni dirty flag (la mesh es estatica desde el load).
+    {
+        bool hasAnyCompiled = false;
+        scene.forEach<CompiledMeshComponent>([&](Entity, CompiledMeshComponent&) {
+            hasAnyCompiled = true;
+        });
+        if (hasAnyCompiled) {
+            MOOD_PROFILE_SCOPE("PBR::compiledMeshPass");
+            applyShaderUniforms(*m_pbrShader);
+            const glm::mat4 identity(1.0f);
+            scene.forEach<CompiledMeshComponent>(
+                [&](Entity, CompiledMeshComponent& cm) {
+                    if (cm.meshes.empty()) return;
+                    m_pbrShader->setMat4("uModel", identity);
+                    for (usize si = 0; si < cm.meshes.size(); ++si) {
+                        const MaterialAssetId matId =
+                            (si < cm.materials.size()) ? cm.materials[si] : 0u;
+                        const bool useBlankLook = (matId == 0);
+                        const MaterialAsset* mat = useBlankLook
+                            ? nullptr : assets.getMaterial(matId);
+
+                        const bool hasAlbedo = (mat != nullptr && mat->useAlbedoMap);
+                        glActiveTexture(GL_TEXTURE0);
+                        if (hasAlbedo) assets.getTexture(mat->albedo)->bind(0);
+                        else           dummyTex->bind(0);
+                        m_pbrShader->setInt("uHasAlbedoMap", hasAlbedo ? 1 : 0);
+
+                        const bool hasMR = (mat != nullptr && mat->metallicRoughness != 0);
+                        glActiveTexture(GL_TEXTURE2);
+                        if (hasMR) assets.getTexture(mat->metallicRoughness)->bind(2);
+                        else       dummyTex->bind(2);
+                        m_pbrShader->setInt("uHasMetallicRoughness", hasMR ? 1 : 0);
+
+                        const bool hasAo = (mat != nullptr && mat->ao != 0);
+                        glActiveTexture(GL_TEXTURE3);
+                        if (hasAo) assets.getTexture(mat->ao)->bind(3);
+                        else       dummyTex->bind(3);
+                        m_pbrShader->setInt("uHasAoMap", hasAo ? 1 : 0);
+
+                        if (mat != nullptr) {
+                            m_pbrShader->setVec3 ("uAlbedoTint",   mat->albedoTint);
+                            m_pbrShader->setFloat("uMetallicMult", mat->metallicMult);
+                            m_pbrShader->setFloat("uRoughnessMult",mat->roughnessMult);
+                            m_pbrShader->setFloat("uAoMult",       mat->aoMult);
+                        } else {
+                            m_pbrShader->setVec3 ("uAlbedoTint",   glm::vec3(0.7f));
+                            m_pbrShader->setFloat("uMetallicMult", 0.0f);
+                            m_pbrShader->setFloat("uRoughnessMult",0.85f);
+                            m_pbrShader->setFloat("uAoMult",       1.0f);
+                        }
+
+                        glActiveTexture(GL_TEXTURE0);
+                        if (cm.meshes[si]) {
+                            m_renderer->drawMesh(*cm.meshes[si], *m_pbrShader);
                         }
                     }
                 });

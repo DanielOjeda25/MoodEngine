@@ -181,7 +181,12 @@ bool PlayerApplication::tryLoadGameManifest() {
 
     m_map = std::move(savedMap->map);
     rebuildSceneFromMap();
-    SceneLoader::applyEntitiesToScene(*savedMap, *m_scene, *m_assetManager);
+    // F2H26: pasar useCompiledMesh=true para que el Player use la mesh
+    // estatica unificada del .moodmap (si existe) en lugar de procesar
+    // los brushes CSG individuales en runtime. Habilita "brushes solo
+    // en el editor" del plan original F2H14.
+    SceneLoader::applyEntitiesToScene(*savedMap, *m_scene, *m_assetManager,
+                                       /*useCompiledMesh=*/true);
     m_currentMapPath = mapRel;  // Hito 38 B: para que SaveLoad lo persista.
     // Hito 40 G: char controller windows del proyecto.
     m_coyoteWindowSec     = loaded->coyoteWindowSec;

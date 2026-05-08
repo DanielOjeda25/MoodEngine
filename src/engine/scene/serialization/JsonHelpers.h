@@ -76,7 +76,15 @@ namespace Mood {
 // desde F2H11) ahora indexea ese array. Mapas v11 con `material`
 // singular se cargan sintetizando `materials = [material]` (back-
 // compat aditiva: comportamiento visual identico a F2H15).
-constexpr int k_MoodmapFormatVersion = 12;
+// v13 (F2H26): nuevo campo opcional top-level `compiledMesh` con la
+// mesh estatica unificada que produce `compileMap` (vertices + indices
+// por submesh). El MoodPlayer la usa para skipear el procesamiento
+// CSG de los brushes individuales en runtime ("brushes solo en el
+// editor" del plan original F2H14). El editor la escribe al guardar
+// pero NO la usa para render; sigue editando los `BrushComponent`.
+// Mapas v12 sin `compiledMesh` se leen como v12 (Player cae al
+// fallback de procesar brushes en runtime).
+constexpr int k_MoodmapFormatVersion = 13;
 constexpr int k_MoodprojFormatVersion = 1;
 
 /// @brief Verifica que la version declarada en un archivo sea legible.
