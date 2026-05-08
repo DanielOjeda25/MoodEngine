@@ -24,6 +24,7 @@
 #include "engine/scene/core/Entity.h"  // F2H28: lista de selected en orto.
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>  // F2H28 Bloque E: panOffset en renderOrthoView.
 #include <glm/vec3.hpp>
 
 #include <array>
@@ -108,6 +109,8 @@ public:
                          AssetManager& assets,
                          const glm::mat4& view,
                          const glm::mat4& projection,
+                         glm::vec2 panOffset,
+                         f32 worldHeight,
                          u32 panelWidth,
                          u32 panelHeight,
                          usize idx,
@@ -167,11 +170,18 @@ private:
     std::unique_ptr<IShader> m_pbrInstancedShader; // F2H4: variante instanced
     std::unique_ptr<IShader> m_pbrSkinnedShader;   // PBR + LBS skinning
     std::unique_ptr<IShader> m_wireframeOrthoShader;  // F2H28: vista orto.
+    std::unique_ptr<IShader> m_grid2dShader;          // F2H28 Bloque E: grid orto.
 
     // F2H28: 3 FBOs LDR para Top/Front/Side del workspace "Editor de
     // mapas". Resize a demanda en renderOrthoView. Vacios cuando el
     // workspace activo no es el de mapas (no se renderizan).
     std::array<std::unique_ptr<OpenGLFramebuffer>, 3> m_orthoFbs;
+
+    // F2H28 Bloque E: VAO trivial para el grid2d shader (fullscreen
+    // triangle sin VBO; el .vert genera posiciones desde gl_VertexID,
+    // pero OpenGL Core Profile exige un VAO bound para glDrawArrays).
+    // Tipo `unsigned int` para no leakear glad al header publico.
+    unsigned int m_grid2dVao = 0;
 
     // F2H4: VBO para subir las matrices model como atributo de instancia
     // (locations 5-8) cada frame antes del draw instanced.

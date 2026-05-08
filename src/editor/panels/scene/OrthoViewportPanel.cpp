@@ -36,14 +36,15 @@ void OrthoViewportPanel::onImGuiRender() {
             imageMin = ImGui::GetItemRectMin();
             imageSize = ImGui::GetItemRectSize();
         } else {
-            // Placeholder: rect gris claro (mismo color del fondo orto
-            // del Bloque D para que el dev intuya como va a quedar).
+            // Placeholder: rect negro (mismo color del fondo orto del
+            // Bloque D para que el dev intuya como va a quedar). Texto
+            // gris claro arriba para que se lea sobre el negro.
             ImDrawList* dl = ImGui::GetWindowDrawList();
             const ImVec2 panelPos = ImGui::GetCursorScreenPos();
             dl->AddRectFilled(panelPos,
                               ImVec2(panelPos.x + avail.x,
                                      panelPos.y + avail.y),
-                              IM_COL32(200, 200, 200, 255));
+                              IM_COL32(0, 0, 0, 255));
             imageMin = panelPos;
             imageSize = avail;
             // Reservar espacio para que la ventana no colapse.
@@ -53,7 +54,7 @@ void OrthoViewportPanel::onImGuiRender() {
             const ImVec2 textSize = ImGui::CalcTextSize(placeholder);
             dl->AddText(ImVec2(panelPos.x + (avail.x - textSize.x) * 0.5f,
                                panelPos.y + (avail.y - textSize.y) * 0.5f),
-                        IM_COL32(80, 80, 80, 255), placeholder);
+                        IM_COL32(180, 180, 180, 255), placeholder);
         }
 
         // Label arriba-izq estilo Hammer ("top (xz)" en Hammer original

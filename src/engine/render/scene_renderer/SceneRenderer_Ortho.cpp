@@ -32,17 +32,32 @@ namespace Mood {
 
 namespace {
 
-// Paleta F2H28 opcion A confirmada por el dev:
+// Paleta F2H28 opcion A + ajuste por pedido del dev (fondo negro):
 //   - Wireframe regular: celeste GMod #6CC1E5 (108, 193, 229).
 //   - Brush seleccionado: naranja saturado #FF9933 (255, 153, 51).
-//   - Fondo: gris claro #C8C8C8 (200, 200, 200).
+//   - Fondo: NEGRO (0, 0, 0). Cambio sobre el plan original — el
+//     dev pidio negro porque resalta mejor el wireframe celeste.
+//   - Grid menor (cada uSnapStep): gris oscuro (40, 40, 40) para que
+//     sea visible sobre negro pero no compita con el wireframe.
+//   - Grid mayor (cada uSnapStep * 8): naranja Valve #F58220
+//     (245, 130, 32) — convencion Hammer para destacar la grilla
+//     gruesa que el dev usa como referencia de escala.
 constexpr glm::vec3 k_wireframeColor{108.0f / 255.0f,
                                       193.0f / 255.0f,
                                       229.0f / 255.0f};
 constexpr glm::vec3 k_selectedColor {255.0f / 255.0f,
                                       153.0f / 255.0f,
                                        51.0f / 255.0f};
-constexpr float k_clearGray = 200.0f / 255.0f;
+// F2H28 Bloque E: snap default 16 unidades. F2H28 Bloque G expone esto
+// como state editable + atajo Ctrl++/Ctrl+-; aca queda hardcodeado.
+constexpr float k_defaultSnapStep = 16.0f;
+constexpr glm::vec3 k_gridBgColor   {0.0f, 0.0f, 0.0f};
+constexpr glm::vec3 k_gridMinorColor{40.0f / 255.0f,
+                                      40.0f / 255.0f,
+                                      40.0f / 255.0f};
+constexpr glm::vec3 k_gridMajorColor{245.0f / 255.0f,
+                                      130.0f / 255.0f,
+                                       32.0f / 255.0f};
 
 bool entityIsSelected(Entity e, const std::vector<Entity>& selected) {
     if (!e) return false;
@@ -63,6 +78,8 @@ void SceneRenderer::renderOrthoView(Scene& scene,
                                      AssetManager& assets,
                                      const glm::mat4& view,
                                      const glm::mat4& projection,
+                                     glm::vec2 panOffset,
+                                     f32 worldHeight,
                                      u32 panelWidth,
                                      u32 panelHeight,
                                      usize idx,
@@ -90,9 +107,34 @@ void SceneRenderer::renderOrthoView(Scene& scene,
     glViewport(0, 0, static_cast<GLint>(panelWidth),
                      static_cast<GLint>(panelHeight));
 
-    // Clear gris claro (fondo Hammer-style).
-    glClearColor(k_clearGray, k_clearGray, k_clearGray, 1.0f);
+    // Clear negro (cambio del dev sobre el plan original gris).
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // F2H28 Bloque E: grid 2D background. Fullscreen triangle con
+    // depth write OFF para que las lineas del wireframe (que vienen
+    // despues con depth test ON sobre depth buffer limpio) ganen el
+    // depth fight y se dibujen encima.
+    if (m_grid2dShader) {
+        MOOD_PROFILE_SCOPE("OrthoView::grid");
+        const f32 aspect = static_cast<f32>(panelWidth) /
+                            static_cast<f32>(panelHeight);
+        glDisable(GL_DEPTH_TEST);
+        glDepthMask(GL_FALSE);
+        m_grid2dShader->bind();
+        m_grid2dShader->setVec2 ("uPanOffset",   panOffset);
+        m_grid2dShader->setFloat("uWorldHeight", worldHeight);
+        m_grid2dShader->setFloat("uAspect",      aspect);
+        m_grid2dShader->setFloat("uSnapStep",    k_defaultSnapStep);
+        m_grid2dShader->setVec3 ("uBgColor",     k_gridBgColor);
+        m_grid2dShader->setVec3 ("uMinorColor",  k_gridMinorColor);
+        m_grid2dShader->setVec3 ("uMajorColor",  k_gridMajorColor);
+        glBindVertexArray(m_grid2dVao);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glBindVertexArray(0);
+        glDepthMask(GL_TRUE);
+        glEnable(GL_DEPTH_TEST);
+    }
 
     // Modo wireframe: lineas en lugar de triangulos. Disable cull para
     // que las caras se vean desde ambos lados. Depth test ON para que

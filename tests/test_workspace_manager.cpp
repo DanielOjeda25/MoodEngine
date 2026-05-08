@@ -11,6 +11,10 @@
 // F2H23: schema reducido a 3 workspaces (Layout/Programar/Materiales).
 // El workspace "Optimizar"/"Profile" fue eliminado — los entries
 // obsoletos del .moodproj se filtran al cargar.
+//
+// F2H28: agregado "Editor de mapas" como 4to workspace (4-viewport
+// estilo Hammer). Los tests actualizados a count() == 4u y con la
+// linea "Editor de mapas" como ultimo nombre default.
 
 #include <doctest/doctest.h>
 
@@ -18,12 +22,11 @@
 
 using namespace Mood;
 
-TEST_CASE("WorkspaceManager: ctor crea 3 defaults con activo = 0") {
+TEST_CASE("WorkspaceManager: ctor crea 4 defaults con activo = 0") {
     WorkspaceManager m;
-    CHECK(m.count() == 3u);
+    CHECK(m.count() == 4u);
     CHECK(m.activeIndex() == 0);
-    // F2H23: 3 workspaces en castellano (era 4 en F2H22; Optimizar
-    // eliminado).
+    // F2H28: 4 workspaces (era 3 en F2H23; "Editor de mapas" agregado).
     CHECK(m.activeWorkspace().name == "Layout");
     // Los iniLayout estan vacios — DockBuilder los construye al activar.
     for (const auto& w : m.workspaces()) {
@@ -31,11 +34,12 @@ TEST_CASE("WorkspaceManager: ctor crea 3 defaults con activo = 0") {
     }
 }
 
-TEST_CASE("WorkspaceManager: nombres de los 3 defaults (F2H23)") {
+TEST_CASE("WorkspaceManager: nombres de los 4 defaults (F2H28)") {
     WorkspaceManager m;
     CHECK(m.workspaces()[0].name == "Layout");
     CHECK(m.workspaces()[1].name == "Programar");
     CHECK(m.workspaces()[2].name == "Materiales");
+    CHECK(m.workspaces()[3].name == "Editor de mapas");
 }
 
 TEST_CASE("WorkspaceManager: setActiveByIndex valida cambia el activo") {
@@ -64,6 +68,7 @@ TEST_CASE("WorkspaceManager: captureCurrentLayout actualiza solo el activo") {
     CHECK(m.workspaces()[0].iniLayout.empty());
     CHECK(m.workspaces()[1].iniLayout == "layout-A");
     CHECK(m.workspaces()[2].iniLayout.empty());
+    CHECK(m.workspaces()[3].iniLayout.empty()); // F2H28: Editor de mapas
 }
 
 TEST_CASE("WorkspaceManager: switching preserva los iniLayouts") {
@@ -85,7 +90,7 @@ TEST_CASE("WorkspaceManager: setWorkspaces con vector vacio cae a defaults") {
     WorkspaceManager m;
     m.setActiveByIndex(2);
     m.setWorkspaces({});
-    CHECK(m.count() == 3u);
+    CHECK(m.count() == 4u);
     CHECK(m.activeIndex() == 0);
     CHECK(m.activeWorkspace().name == "Layout");
 }
@@ -97,7 +102,7 @@ TEST_CASE("WorkspaceManager: setWorkspaces con vector vacio cae a defaults") {
 // -> F2H23: Layout/Programar/Materiales (Optimizar eliminado).
 // ============================================================
 
-TEST_CASE("WorkspaceManager: setWorkspaces migra nombres F2H7 a F2H23") {
+TEST_CASE("WorkspaceManager: setWorkspaces migra nombres F2H7 a F2H28") {
     WorkspaceManager m;
     std::vector<Workspace> oldNamed = {
         Workspace{"Layout",    "ini1"},
@@ -107,19 +112,22 @@ TEST_CASE("WorkspaceManager: setWorkspaces migra nombres F2H7 a F2H23") {
     };
     m.setWorkspaces(std::move(oldNamed));
 
-    // Resultado: 3 workspaces (Profile/Optimizar filtrado).
-    REQUIRE(m.count() == 3u);
+    // F2H28: Profile/Optimizar filtrado + "Editor de mapas" completado
+    // por defaults -> 4 workspaces totales.
+    REQUIRE(m.count() == 4u);
     CHECK(m.workspaces()[0].name == "Layout");
     CHECK(m.workspaces()[1].name == "Programar");
     CHECK(m.workspaces()[2].name == "Materiales");
+    CHECK(m.workspaces()[3].name == "Editor de mapas");
 
-    // iniLayout preservado para los 3 sobrevivientes.
+    // iniLayout preservado para los 3 que vinieron del .moodproj viejo.
     CHECK(m.workspaces()[0].iniLayout == "ini1");
     CHECK(m.workspaces()[1].iniLayout == "ini2");
     CHECK(m.workspaces()[2].iniLayout == "ini4");  // Materials -> Materiales
+    CHECK(m.workspaces()[3].iniLayout.empty());     // Editor de mapas: default vacio
 }
 
-TEST_CASE("WorkspaceManager: setWorkspaces migra nombres F2H22 a F2H23") {
+TEST_CASE("WorkspaceManager: setWorkspaces migra nombres F2H22 a F2H28") {
     WorkspaceManager m;
     std::vector<Workspace> f2h22Named = {
         Workspace{"Modelar",    "a"},
@@ -129,39 +137,44 @@ TEST_CASE("WorkspaceManager: setWorkspaces migra nombres F2H22 a F2H23") {
     };
     m.setWorkspaces(std::move(f2h22Named));
 
-    REQUIRE(m.count() == 3u);
+    // F2H28: + "Editor de mapas" completado por defaults.
+    REQUIRE(m.count() == 4u);
     CHECK(m.workspaces()[0].name == "Layout");      // Modelar -> Layout
     CHECK(m.workspaces()[1].name == "Programar");
     CHECK(m.workspaces()[2].name == "Materiales");
+    CHECK(m.workspaces()[3].name == "Editor de mapas");
 
     CHECK(m.workspaces()[0].iniLayout == "a");
     CHECK(m.workspaces()[1].iniLayout == "b");
     CHECK(m.workspaces()[2].iniLayout == "d");
+    CHECK(m.workspaces()[3].iniLayout.empty());
 }
 
 TEST_CASE("WorkspaceManager: setWorkspaces con set incompleto completa con defaults") {
-    // F2H23: si el .moodproj solo trae 1 o 2 workspaces validos, el
-    // manager completa con defaults para garantizar los 3 estandar.
+    // F2H28: si el .moodproj solo trae 1-3 workspaces validos, el manager
+    // completa con defaults para garantizar los 4 estandar.
     WorkspaceManager m;
     std::vector<Workspace> partial = {
         Workspace{"Layout", "x"},
     };
     m.setWorkspaces(std::move(partial));
 
-    REQUIRE(m.count() == 3u);
+    REQUIRE(m.count() == 4u);
     CHECK(m.workspaces()[0].name == "Layout");
     CHECK(m.workspaces()[0].iniLayout == "x");
-    // Programar + Materiales agregados con iniLayout vacio.
+    // Programar + Materiales + "Editor de mapas" agregados con iniLayout vacio.
     CHECK(m.workspaces()[1].name == "Programar");
     CHECK(m.workspaces()[1].iniLayout.empty());
     CHECK(m.workspaces()[2].name == "Materiales");
     CHECK(m.workspaces()[2].iniLayout.empty());
+    CHECK(m.workspaces()[3].name == "Editor de mapas");
+    CHECK(m.workspaces()[3].iniLayout.empty());
 }
 
 TEST_CASE("WorkspaceManager: setWorkspaces filtra nombres custom no reconocidos") {
-    // F2H23: entradas con nombres que no son ni F2H7 ni F2H22 ni F2H23
+    // F2H28: entradas con nombres que no son ni F2H7 ni F2H22 ni F2H23/F2H28
     // se descartan (no mapean a ningun workspace estandar). El manager
-    // completa con los 3 defaults.
+    // completa con los 4 defaults.
     WorkspaceManager m;
     std::vector<Workspace> custom = {
         Workspace{"MiCustom",  "x"},
@@ -169,10 +182,11 @@ TEST_CASE("WorkspaceManager: setWorkspaces filtra nombres custom no reconocidos"
     };
     m.setWorkspaces(std::move(custom));
 
-    REQUIRE(m.count() == 3u);
+    REQUIRE(m.count() == 4u);
     CHECK(m.workspaces()[0].name == "Layout");
     CHECK(m.workspaces()[1].name == "Programar");
     CHECK(m.workspaces()[2].name == "Materiales");
+    CHECK(m.workspaces()[3].name == "Editor de mapas");
 }
 
 TEST_CASE("WorkspaceManager: captureCurrentLayout en idx invalido es no-op") {
@@ -181,10 +195,10 @@ TEST_CASE("WorkspaceManager: captureCurrentLayout en idx invalido es no-op") {
     // crashea si pasara.
     WorkspaceManager m;
     // Forzar un estado con un solo workspace via custom — el filtro
-    // F2H23 lo descarta y completa con defaults; el manager queda
-    // con los 3 estandar igual.
+    // F2H23 lo descarta y completa con defaults; F2H28 garantiza los
+    // 4 estandar (Layout/Programar/Materiales/Editor de mapas).
     m.setWorkspaces({Workspace{"Solo", ""}});
-    REQUIRE(m.count() == 3u);
+    REQUIRE(m.count() == 4u);
     m.setActiveByIndex(0);
     m.captureCurrentLayout("dato");
     CHECK(m.workspaces()[0].iniLayout == "dato");

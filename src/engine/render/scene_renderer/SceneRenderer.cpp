@@ -44,6 +44,8 @@
 #include "systems/render/ShadowPass.h"
 #include "systems/render/SkyboxRenderer.h"
 
+#include <glad/gl.h>  // F2H28 Bloque E: glGenVertexArrays / glDeleteVertexArrays
+
 #include <array>
 #include <stdexcept>
 #include <string>
@@ -96,6 +98,20 @@ SceneRenderer::SceneRenderer()
         fb = std::make_unique<OpenGLFramebuffer>(
             1280u, 720u, OpenGLFramebuffer::Format::LDR);
     }
+
+    // F2H28 Bloque E: shader del grid 2D + VAO trivial para el
+    // fullscreen triangle. Tolera fallo de carga: si el shader no
+    // compila, el render orto skipea el grid pass pero sigue pintando
+    // el wireframe sobre fondo negro.
+    try {
+        m_grid2dShader = std::make_unique<OpenGLShader>(
+            "shaders/grid2d.vert", "shaders/grid2d.frag");
+    } catch (const std::exception& e) {
+        Log::render()->warn("Grid2dShader no disponible: {}. Vista orto sin grid.",
+                             e.what());
+        m_grid2dShader.reset();
+    }
+    glGenVertexArrays(1, &m_grid2dVao);
 
     // F2H4: VBO recyclable para subir las matrices model cada frame.
     m_instanceBuffer = std::make_unique<OpenGLInstanceBuffer>();
@@ -198,7 +214,9 @@ SceneRenderer::~SceneRenderer() {
     m_shadowPass.reset();
     m_postProcess.reset();
     m_debugRenderer.reset();
-    // F2H28: tirar FBOs orto + shader wireframe antes del contexto GL.
+    // F2H28: tirar FBOs orto + shaders orto antes del contexto GL.
+    if (m_grid2dVao != 0) glDeleteVertexArrays(1, &m_grid2dVao);
+    m_grid2dShader.reset();
     for (auto& fb : m_orthoFbs) fb.reset();
     m_wireframeOrthoShader.reset();
     m_pbrSkinnedShader.reset();

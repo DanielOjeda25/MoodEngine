@@ -93,8 +93,10 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
             const glm::mat4 oView = op->camera().viewMatrix();
             const glm::mat4 oProj = op->camera().projMatrix(oAspect);
             m_sceneRenderer->renderOrthoView(*m_scene, *m_assetManager,
-                                              oView, oProj, oW, oH, i,
-                                              selected);
+                                              oView, oProj,
+                                              op->camera().panOffset,
+                                              op->camera().worldHeight,
+                                              oW, oH, i, selected);
             // Conectar el FBO al panel ANTES del proximo onImGuiRender.
             op->setFramebuffer(m_sceneRenderer->orthoFb(i));
         }
