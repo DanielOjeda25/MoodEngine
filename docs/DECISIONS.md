@@ -11,6 +11,119 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-08: F2H29 — Block tool + drag-edit en ortos (descope tarde, paquete polish a F2H30)
+
+**Problema:** F2H29 plan original (escrito al cerrar F2H28) prometía 3 bloques de edición en ortos: drag-edit (Bloque B), block tool (Bloque C), vertex/edge edit (Bloque D). Tras implementar y validar B+C, el dev probó el flujo y emergió scope nuevo: gizmo rotate no proporcional al brush (bug pre-existente F2H13), pedido de atajos Blender-style `S/R/G` modal con cursor + línea punteada, pedido de "pincel" poligonal (clicks sobre vertices del grid hasta cerrar mesh — feature distinta del Bloque D vertex/edge edit).
+
+**Decisión:** **descopear el Bloque D + cerrar F2H29 con B+C** + crear F2H30 como paquete polish unificado que junta:
+1. Vertex/edge edit (Bloque D diferido).
+2. Brush poligonal "pincel" (feature nueva).
+3. Gizmo rotate proporcional al AABB del brush (bug pre-existente).
+4. Atajos Blender `G` / `R` / `S` modal (feature nueva).
+
+Razones:
+- F2H29 ya entrega valor completo y validado por el dev: drag-edit funciona, block tool funciona, gizmo en posición correcta, preview en 4 vistas. El dev puede modelar mapas básicos sin Inspector.
+- Bloque D (vertex/edge edit) tiene **alta superficie de bugs** (mover vertice = mutar 3 planos + validar `isBrushValid` post + revertir si rompe) y **bajo valor inmediato** vs. los 3 pedidos polish que el dev hizo explícitamente.
+- Los 4 ítems forman un hito coherente de UX-polish del editor de mapas. Splittear más fino agrega ceremonia sin separar dominios reales.
+- Decisión explícitamente confirmada por el dev: *"si el ctrl y funciona, y me gusta ese plan siguelo"*.
+
+**Alternativas descartadas:**
+- **Forzar Bloque D ahora**: scope creep, rompería el commit de validación incremental con un bloque alto-riesgo. Descartado.
+- **Hito separado por cada feature nueva** (F2H30 vertex, F2H31 brush poligonal, F2H32 gizmo, F2H33 atajos): ceremonia sin valor; las 4 features comparten dominio (manipulación de geometría en orto + atajos del editor) y se validan juntas.
+
+---
+
+**Sub-decisión 1 — DragState pulse-style en `OrthoViewportPanel`:**
+
+El panel emite 2 estructuras al caller:
+- `DragState { active, justEnded, ndcStart, ndcCur }` — `active=true` mientras LMB-down + delta > 4 px, `justEnded=true` un frame al soltar.
+- `ClickSelect { pending, ndc }` — sólo dispara si delta < 4 px.
+
+Mutuamente excluyentes: drag o click, nunca ambos en el mismo frame.
+
+**Razones:** preserva el flow del Bloque F de F2H28 (click-select sin tocar) + agrega drag sin nuevo conflicto. La struct `DragState` separa `active` (continuo durante el drag) de `justEnded` (pulso) — el caller usa `active` para mover en vivo y `justEnded` para pushear el command.
+
+---
+
+**Sub-decisión 2 — Snap al delta, no a posición absoluta (drag-edit):**
+
+```
+pos_new = startPos + round((cur_world - start_world) / snap) * snap
+```
+
+vs. la alternativa:
+```
+pos_new = round((startPos + delta) / snap) * snap
+```
+
+**Razones:** la 1ra fórmula preserva el offset original del brush respecto al grid (si arrancó desalineado, sigue desalineado pero se mueve en pasos de `snap`). La 2da forzaría al brush a alinearse al grid global en cada move, desplazándolo bruscamente al primer drag. Convención Hammer.
+
+**Block tool usa la opuesta**: snap a las ESQUINAS del rectángulo dibujado (no al delta). Razón: el brush nuevo arranca alineado al grid, lo cual ES lo deseado (no preserva offset previo porque no había brush previo).
+
+---
+
+**Sub-decisión 3 — `pickEntityFromRay` como helper público en ScenePick:**
+
+Bloque B necesitaba pick orto con rayo paralelo. 3 approaches:
+1. Duplicar el loop forEach. Descartado: drift garantizado.
+2. Refactor con functor que arma el rayo. Descartado: API rara.
+3. **Extraer helper público** `pickEntityFromRay(scene, origin, dir, assets)` y hacer que `pickEntity` perspective sea wrapper que arma el rayo con `invVP * (ndc, ±1)` y delega. **Elegido.**
+
+**Razones:** los tests existentes de `pickEntity` siguen verde sin cambios. El helper queda reusable para futuros picking sintéticos (Lua raycast, vertex picking en F2H30, etc).
+
+---
+
+**Sub-decisión 4 — Preview AABB en 4 vistas via debugRenderer:**
+
+Plan original especulaba con preview "AABB cyan via debugRenderer durante drag — visible en perspectiva 3D" y mencionaba que en los 2 ortos extra **NO** aparecería (renderOrthoView no usa debugRenderer). El dev al validar pidió ver el preview en los 3 ortos también: *"creo que deberia haber un boton que active la capacidad de dibujar y que se vea en el wireframe porque seguramente van a crear en el wireframe y luego acomodar en el 3d"*.
+
+**Decisión:** la sesión `OrthoBlockToolSession` guarda `previewMin/Max`. `EditorRenderPass.cpp` re-encola el AABB en `debugRenderer` ANTES de cada `renderOrthoView`. `renderOrthoView` flushea el debugRenderer al final con sus matrices. Cada flush limpia la cola → cada vista renderiza su set queue-eado.
+
+**Razones:** reusa la infra del debug renderer existente (shader + VAO ya cargados). Cero código nuevo de líneas/shaders. Costo: 1 drawAabb call extra por orto + 1 flush extra → trivial.
+
+**Alternativas descartadas:**
+- **Overlay 2D en ImGui drawlist en el panel orto fuente**: solo aparece en 1 orto, no resuelve el pedido del dev.
+- **Mesh de líneas dedicado**: requiere shader + VBO transient. Overkill para 1 AABB.
+
+---
+
+**Sub-decisión 5 — Color celeste GMod para preview (no cyan):**
+
+Plan original usaba cyan `(0.2, 0.9, 1.0)` para el preview AABB (copy-paste de los drop highlights del editor). Dev al validar: *"porque es cyan? no controlabamos colores de valve y celeste garry'smod?"*.
+
+**Decisión:** preview en celeste GMod `(108, 193, 229)` — mismo RGB que el wireframe regular del orto (`k_wireframeColor` en `SceneRenderer_Ortho.cpp`). Visualmente coherente: lo que el dev ve mientras dibuja es el mismo color que tendrá el brush al materializarse.
+
+---
+
+**Sub-decisión 6 — `spawnBoxBrushAt` rebasea brush a local space (fix de origen):**
+
+Bug detectado en validación: el block tool spawneaba el brush con `tf.position = (0, 1, 0)` (hardcoded en `spawnBrushEntity`) pero la geometría tenía la translation baked-in (porque el block tool pasaba `T(center) * S(dims)` directo a `makeBoxBrush`). Resultado: gizmo en `(0, 1, 0)` y mesh visible lejos.
+
+**Decisión:** `spawnBoxBrushAt` descompone el transform en `center + dims`, construye el brush con sólo `S(dims)` (local space), y override `tf.position = center` post-spawn.
+
+**Razones:** mismo problema y misma fix que F2H12 boolean ops resolvió con `snapshotResultWorld` (rebase planos a local space tras computar centroid). Sin esta fix, drag-edit del brush spawneado se rompe (gizmo no agarrable).
+
+---
+
+**Sub-decisión 7 — Welcome modal fix lateral en `EditorUI` ctor:**
+
+Bug pre-existente reportado por dev al validar F2H29: la pantalla Welcome modal mostraba panels en posiciones stale (residuo del último workspace de la sesión previa via `imgui_layout_v2.ini` auto-loadeado).
+
+**Decisión:** `EditorUI` ctor llama ahora `m_dockspace.requestRebuildForCurrentWorkspace()` después de `applyDefaultVisibilityForWorkspace(initialWs)`. El primer frame ignora el ini stale y construye fresh.
+
+**Razones:** sin proyecto cargado no hay personalización del dev para esta sesión. Cuando carga proyecto, `setWorkspaces` restaura los iniLayout custom del `.moodproj` y este rebuild queda overriden — sin pérdida real.
+
+**Alternativa descartada:** hide del dockspace mientras Welcome está activo. Más invasivo (cambia el flow de render principal); fix actual es 1 línea.
+
+---
+
+**Condiciones de revisión:**
+- Si el descope tardío del Bloque D resulta ser un patrón repetido (más hitos splitteados a mitad de implementación), revisar el alcance de los planes iniciales — quizás están siendo demasiado ambiciosos. Por ahora 1 caso aislado; aceptable.
+- Si F2H30 (gizmo polish + atajos Blender + brush poligonal + vertex/edge) emerge como hito grande (>1 semana), considerar splittear: F2H30 = vertex/edge + brush poligonal; F2H31 = gizmo polish + atajos Blender.
+- El cambio de paleta a celeste GMod (no cyan) deja documentado el principio: usar paleta del workspace (Valve+GMod) para overlays del workspace mismo. Si emerge necesidad de overlays con colores nuevos (ej. preview de boolean op), agregar al `paleta del workspace` consciente.
+
+---
+
 ## 2026-05-08: F2H28 — Editor de mapas 4-viewport (split en 2 hitos, fondo negro, snap solo de display)
 
 **Problema:** F2H28 originalmente quería entregar **todo** el editor estilo Hammer en un solo hito: layout 4-viewport + render orto wireframe + grid 2D + click-select + block tool (dibujar rectángulo en orto → crear brush) + drag-edit (mover brushes desde orto con grid snap) + vertex/edge edit. Estimación: ~12 bloques con bugs cruzados (cada feature de edición depende del render + selection + grid; un bug en un layer rompe los otros).

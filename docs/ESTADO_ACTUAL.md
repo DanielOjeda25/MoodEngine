@@ -6,40 +6,50 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H28 cerrado: Editor de mapas 4-viewport (MVP visual + select + grid).**
-Tag: `v1.18.0-fase2-hito28`.
-Verificado automático: suite doctest **622/8413** verde (+10 asserts del 4to workspace). Verificado por dev: workspace "Editor de mapas" muestra 4 cuadrantes (Top/Front/Side wireframe + perspectiva 3D), grid 2D sobre fondo negro con líneas mayores cada 8×snap en naranja Valve, click-select cross-viewport funciona (clickear en cualquier orto refleja la selección en las 4 vistas + Inspector), Ctrl++/Ctrl+- cicla snap [1, 2, 4, 8, 16, 32, 64, 128] con label "Grid: Nu" arriba-derecha de cada panel.
+**🚀 Fase 2 — F2H29 cerrado: Block tool + drag-edit en ortos.**
+Tag: `v1.19.0-fase2-hito29`.
+Verificado por dev: drag-edit funciona (click sobre brush + drag → mueve con snap, Ctrl+Z/Y), block tool funciona (click-drag en empty space → preview celeste en 4 vistas + spawn al soltar), origen del brush en su centro (gizmo en posición correcta), Welcome modal limpio al arranque.
 
-**Cambio importante**: F2H28 entrega los 4 fundamentos del editor estilo Valve Hammer: layout multi-viewport, render orto wireframe con grid 2D, click-select cross-viewport. **NO** entra el drag-edit ni el block tool — esos quedan para F2H29 (decisión documentada en el plan: split en 2 hitos para no romper todo de una). El snap setting expone el valor en UI pero no lo aplica al desplazamiento real todavía.
+**Cambio importante**: F2H29 entrega 2 de los 3 bloques planeados (B drag-edit + C block tool). Bloque D (vertex/edge edit) **diferido a F2H30** tras feedback del dev al validar — apareció scope nuevo de polish UX (gizmo rotate proporcional, atajos Blender S/R/G, brush poligonal "pincel") que tiene mayor valor inmediato y forma un hito coherente. Decisión validada explícitamente por dev: *"me gusta ese plan siguelo"*.
 
-**F2H27 (F6 panel "Adjust Last Operation") fue intentado y descartado** durante implementación. La versión "F6-light" (overlay flotante con sliders Position/Rotation/Scale del último brush) resultó redundante con el Inspector. El F6 real de Blender requiere parametrizar todos los comandos con metadata de "params editables" — scope de hito propio. Diferido sin tag.
+**Decisiones clave de F2H29:**
+- **DragState pulse-style** en `OrthoViewportPanel`: `active` durante el drag, `justEnded` un frame al soltar. Click puro (< 4 px) sigue siendo `ClickSelect` (no se rompe el flow del Bloque F de F2H28).
+- **Snap al delta, no a posición absoluta**: `pos = startPos + round((cur - start) / snap) * snap` — preserva el offset original del brush respecto al grid si arrancó desalineado. Convención Hammer.
+- **`pickEntityFromRay` extraído** como helper público en `ScenePick`: el orto picking usa rayos paralelos (`origin = worldFromNdc(...) - forwardAxis * 1024`, `dir = forwardAxis`) reusando el mismo broadphase mesh AABB / brush AABB / icon sphere del perspective. `pickEntity` perspective ahora es wrapper.
+- **Block tool: snap a las esquinas, no al delta**: el rectángulo dibujado se snappea por esquinas (no por movement) para que el brush quede alineado al grid global. Altura default = `snap * 4` sobre el eje perpendicular del view.
+- **Preview en 4 vistas via debug renderer**: la sesión guarda `previewMin/Max`; `EditorRenderPass` re-encola el AABB en el `debugRenderer` antes de cada `renderOrthoView`; `renderOrthoView` flushea el debugRenderer al final con sus matrices. Cada flush limpia la cola, así cada vista renderiza su set queue-eado.
+- **Color celeste GMod** `(108, 193, 229)` para el preview por pedido del dev — paleta Valve+GMod consistente.
+- **Fix de origen del brush en block tool**: descomponer el transform en `T(center) * S(dims)`; construir el brush con solo `S(dims)` (local space) y override `tf.position = center`. Sin esto, el gizmo aparecía lejos del mesh (mismo bug que F2H12 boolean ops resolvió con `snapshotResultWorld`).
+- **Fix lateral Welcome modal**: `EditorUI` ctor llama `requestRebuildForCurrentWorkspace()` para que el ini auto-loadeado de la sesión previa no muestre windows en posiciones stale.
+- **Bloque D diferido a F2H30**: vertex/edge edit + brush poligonal + gizmo polish + atajos Blender forman paquete coherente de UX-polish.
 
-**Decisiones clave de F2H28:**
-- **Workspace orientado a tarea con label castellano "Editor de mapas"** (no "Hammer") alineado con la convención F2H22; internamente seguimos hablando del estilo Hammer como inspiración técnica.
-- **Layout 2x2 dockspace**: top-left Top (XZ), top-right Viewport (perspectiva 3D existente), bottom-left Front (XY), bottom-right Side (ZY). Convención Y-up del engine; los nombres de eje en mayúsculas y el sufijo `(plano)` en cada label distinguen las 3 ortos.
-- **`OrthoCamera` como struct puro** (en `editor/panels/scene/`, no en `engine/`) — pan/zoom en coords locales right/up, view + proj computadas on-demand. Eligió no almacenar matrices cacheadas: trivial costo (6 mat4/frame) vs. complejidad de invalidación.
-- **3 FBOs LDR** pre-creados al ctor del SceneRenderer (1280x720) + resize a demanda en `renderOrthoView`. ~30 MB extra. El render orto usa GL puro (bypassa el RHI) porque corre DESPUÉS del `endFrame()` del frame perspectivo — reusa el `meshCache` hidratado por el `brushPass` perspectivo (no regenera mesh).
-- **Fondo NEGRO** (cambio sobre el plan original que decía gris claro `#C8C8C8`) — pedido del dev *"resalta mejor el wireframe celeste"*. Grid menor `(40,40,40)`, grid mayor naranja Valve `#F58220`, wireframe celeste GMod `#6CC1E5`, selected naranja saturado `#FF9933`.
-- **Grid 2D como shader fullscreen** (no geometría) con AA via `fwidth(worldXY/spacing)` — grosor estable a cualquier zoom.
-- **Refactor `pickEntity` → helper `pickEntityFromRay`** en ScenePick para que el orto picking use rayos paralelos (`origin = worldFromNdc(...) - forwardAxis*1024`, `dir = forwardAxis`) sin duplicar el broadphase.
-- **Snap step solo de display** en F2H28 — `m_hammerSnapStep` en EditorApplication, `Ctrl + +` / `Ctrl + -` cicla `[1, 2, 4, 8, 16, 32, 64, 128]`, label "Grid: Nu" arriba-derecha. F2H29 lo aplica al drag-edit.
-- **Skip total del render orto si workspace ≠ "Editor de mapas"** — guard en `EditorRenderPass.cpp` evita pagar el ~3x costo CPU en otros workspaces.
+**Implementación (F2H29 Bloques A-C + E en 4 commits):**
 
-**Implementación (F2H28 Bloques A-G en 4 commits feat):**
+- **Bloque A (commit `7728a89`)**: plan archivado en [`archive/plans/PLAN_HITO_F2H29.md`](archive/plans/PLAN_HITO_F2H29.md).
+- **Bloque B (commit `6036c19`)**: drag-edit con `DragState` + `OrthoDragSession` + `pickEntityFromRay`. Push de `MultiEditTransformCommand` al soltar.
+- **Bloque C + Welcome fix (commit `6781aa0`)**: block tool con `OrthoBlockToolSession` + preview celeste GMod en 4 vistas + `spawnBoxBrushAt` con rebasing a local space + `EditorUI` ctor con rebuild fresh del dockspace.
+- **Bloque E (este commit)**: docs + tag.
 
-- **Bloque A — Plan**: archivado en [`archive/plans/PLAN_HITO_F2H28.md`](archive/plans/PLAN_HITO_F2H28.md).
-- **Bloques B-D (commit `44ea100`)** — scaffolding (heredado del pull): WorkspaceManager + Dockspace + OrthoCamera + OrthoViewportPanel + SceneRenderer_Ortho + shaders wireframe_ortho.
-- **Bloque E (commit `8a66233`)** — grid 2D: shaders nuevos `grid2d.{vert,frag}` + cambio fondo gris→negro + `m_grid2dShader` + `m_grid2dVao` + `panOffset`/`worldHeight` en firma `renderOrthoView` + fix lateral tests workspace count 3→4.
-- **Bloque F (commit `6036c19`)** — click-select cross-viewport: refactor `ScenePick` con `pickEntityFromRay` + bloque 2.4b en `EditorApplication_Run` con consume de los 3 ortos + Maya-style Shift/Ctrl modifiers + logs prefijados.
-- **Bloque G (commit `cf8d4e5`)** — snap setting: `m_hammerSnapStep` + handler Ctrl++/Ctrl+- en processEvents + setter en panel + label "Grid: Nu" arriba-derecha + sincronización via EditorRenderPass.
-
-**Pendientes conocidos** (post-F2H28):
-- **F2H29 — Block tool + drag-edit + vertex edit en ortos** (continuación natural; el snap step que F2H28 expone se aplica al delta del drag).
-- **Multi-selección de caras** (Shift+click sobre múltiples caras del mismo brush) — sub-bloque de F2H29 si emerge.
-- **Validación full del Player** con compiledMesh: deuda menor heredada de F2H26 (path implementado pero no probado end-to-end con `MoodPlayer.exe`).
+**Pendientes conocidos** (post-F2H29):
+- **F2H30 — Polish gizmo + atajos Blender + brush poligonal + vertex/edge edit** (paquete polish UX, próximo).
+- **Validación full del Player** con compiledMesh: deuda menor heredada de F2H26.
+- **Multi-selección de caras** (Shift+click sobre múltiples caras del mismo brush) — diferida a F2H30 si emerge naturalmente.
 - Los demás items del backlog "Activos sin orden definido" siguen vivos: split fino de `SceneRenderer_Render.cpp`, iconos Toolbar, polish UX panels, node-graph Material Editor.
 
-**Próximo paso**: **F2H29 — Block tool + drag-edit + vertex edit**. Continuación natural de F2H28: implementar las 3 features de edición que quedaron explícitamente afuera. El snap step expuesto en F2H28 se aplica al delta del drag (`pos = round(pos / snap) * snap`).
+**Próximo paso**: **F2H30 — Polish UX del gizmo + atajos Blender + brush poligonal + vertex/edge edit**. Paquete coherente de polish que junta:
+1. Vertex/edge edit en ortos (Bloque D diferido de F2H29).
+2. Brush poligonal "pincel": clicks sucesivos sobre vertices del grid hasta cerrar mesh (feature nueva).
+3. Gizmo rotate proporcional al AABB del brush (bug pre-existente F2H13).
+4. Atajos Blender-style `G` (grab) / `R` (rotate) / `S` (scale) modal con cursor + línea punteada al centro + Esc para cancelar (feature nueva).
+
+### F2H28 (anterior, ya cerrado)
+
+**🚀 F2H28: Editor de mapas 4-viewport (MVP visual + select + grid).**
+Tag: `v1.18.0-fase2-hito28`.
+
+**Decisiones clave de F2H28:** workspace "Editor de mapas" (label castellano, no "Hammer") como 4to default + dockspace 2x2 (Top XZ / Viewport / Front XY / Side ZY) + 3 FBOs LDR + render orto wireframe (color flat celeste GMod / naranja selected) sobre fondo NEGRO (cambio dev sobre plan original gris) + grid 2D shader fullscreen con AA via `fwidth` (menor `(40,40,40)`, mayor naranja Valve `#F58220`) + refactor `pickEntity` → helper `pickEntityFromRay` para rayos paralelos del orto + snap step `m_hammerSnapStep` cycleable Ctrl++/Ctrl+- con label "Grid: Nu" arriba-derecha.
+
+**F2H27 (F6 panel) fue descartado** durante implementación — redundante con Inspector; F6-real es scope grande propio.
 
 ### F2H25 + F2H26 (anteriores, ya cerrados)
 

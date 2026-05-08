@@ -9,30 +9,36 @@
 
 ---
 
-## Post-F2H28 (2026-05-08)
+## Post-F2H29 (2026-05-08)
 
 ### Próximo a atacar
 
-- **F2H29 — Block tool + drag-edit + vertex edit en ortos**.
-  Continuación natural de F2H28 (que entregó layout + render + grid +
-  click-select pero dejó las 3 features de edición afuera por scope).
-  - **Block tool**: en una vista orto, click-drag dibuja un rectángulo
-    de selección que al soltar crea un Box brush con esas dimensiones
-    + altura default sobre el eje perpendicular. Preview en vivo en las
-    otras 2 ortos + perspectiva durante el drag.
-  - **Drag-edit**: clickear y arrastrar un brush ya existente desde
-    cualquier orto lo mueve sobre el plano de esa vista (eje
-    perpendicular intacto). Snap aplica al delta `pos = round(pos /
-    snap) * snap` usando el `m_hammerSnapStep` que F2H28 ya expone.
-    Update en vivo en las otras 3 vistas. Push de
-    `MultiEditTransformCommand` al soltar (mismo patrón F2H23 iter 5).
-  - **Vertex/edge edit**: teclas `1` / `2` (reservadas en F2H17)
-    activan sub-modos en el orto. Click sobre un vertex/edge del brush
-    lo selecciona + drag lo mueve con snap. Triangulación se regenera
-    al soltar.
-  - **Multi-selección de caras** (Shift+click sobre múltiples caras del
-    mismo brush) entra como sub-bloque si el flow naturalmente lo
-    demanda durante el vertex edit.
+- **F2H30 — Polish del gizmo + atajos Blender + brush poligonal + vertex/edge edit**.
+  Paquete polish UX que junta el Bloque D diferido de F2H29 + 3
+  features nuevas pedidas por el dev tras validar F2H29:
+  - **Vertex/edge edit en ortos** (Bloque D diferido). Teclas `1` /
+    `2` activan sub-modos. Click sobre vertex/edge del brush lo
+    selecciona + drag lo mueve con snap. La mesh se regenera al
+    soltar. Mover vertex = trasladar 3 planos adyacentes; mover edge =
+    trasladar 2; validar `isBrushValid` post + revert si falla.
+    `EditBrushGeometryCommand` nuevo captura `vector<Plane>` pre/post.
+  - **Brush poligonal "pincel"**: clicks sucesivos sobre vertices del
+    grid en una orto, cierra con doble-click (o tecla Enter) creando
+    un brush prismático con esa base poligonal + altura default.
+    Feature nueva pedida por dev: *"mas adelante tendremos la
+    capacidad de ir creando como si fuera un pincel, siguiendo el
+    grid claro, hasta cerrar el mesh?"*.
+  - **Gizmo rotate proporcional al AABB del brush** (bug pre-existente
+    F2H13). El radio del anillo es fijo, queda en posición rara
+    dentro/fuera del mesh cuando el brush es muy grande/chico. Fix
+    chico (~10 LOC en `EditorOverlay_Gizmo.cpp`).
+  - **Atajos Blender-style** `G` (grab) / `R` (rotate) / `S` (scale)
+    modal con cursor + línea punteada al centro del objeto + Esc para
+    cancelar. Feature nueva pedida por dev:
+    *"con la letra S escalamos, como shortcut, blender estira una
+    linea punteada hasta el cursor en su pocision y ahi se puede
+    escalar"*. Es un modal interaction model distinto al gizmo de
+    flechas — duplica la UX, no la reemplaza.
 
 ### Activos sin orden definido (siguiente ola, post-Hammer)
 
@@ -99,8 +105,14 @@
   (orbit cam, zoom): F2H21 dejó rotación automática lenta. Nice-to-have
   si emerge en uso real.
 
-## Post-F2H28 (2026-05-08) — histórico resuelto
+## Post-F2H29 (2026-05-08) — histórico resuelto
 
+- ~~Drag-edit + block tool en ortos~~ — resuelto en F2H29
+  (`v1.19.0-fase2-hito29`). DragState pulse-style en panel +
+  OrthoDragSession con MultiEditTransformCommand + OrthoBlockToolSession
+  con preview celeste GMod en 4 vistas + spawnBoxBrushAt con rebasing
+  a local space. Vertex/edge edit (Bloque D original) diferido a F2H30
+  como paquete polish unificado con 3 features nuevas (ver DECISIONS).
 - ~~4-viewport Hammer-style layout~~ — resuelto en F2H28
   (`v1.18.0-fase2-hito28`) bajo el label "Editor de mapas". Workspace
   nuevo registrado como 4to default + dockspace 2x2 + 3 ortos
