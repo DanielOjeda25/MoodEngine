@@ -1,0 +1,1604 @@
+# Detalle de hitos cerrados — Fase 1 (Hito 0 → Hito 42)
+
+> **Archivo separado en F2H26 cierre (2026-05-08)**. Las sub-secciones
+> detalladas de cada hito de la Fase 1 vivían originalmente en
+> `docs/HITOS.md` y se separaron porque ese archivo se hizo demasiado
+> largo (>1700 LOC) para editar/leer eficientemente. La tabla "Estado"
+> del roadmap general sigue en `docs/HITOS.md`; este archivo conserva
+> los **detalles** cerrados de cada hito de Fase 1: objetivo, criterios
+> cumplidos, siguiente paso planificado en su momento, y pendientes
+> menores detectados durante el hito.
+>
+> Para hitos en curso o cerrados de **Fase 2**, ver `docs/HITOS.md`.
+
+---
+
+## Hito 1 — Shell del editor
+
+**Objetivo:** ventana SDL2 con contexto OpenGL 4.5 + Dear ImGui docking + logging + estructura completa de carpetas.
+
+**Criterios de aceptación:** ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 11.2.
+
+**Siguiente paso tras completarlo:** Hito 2 — inicializar GLAD, escribir un shader básico, dibujar un triángulo al viewport (render a textura que ImGui muestra en el panel Viewport).
+
+### Pendientes menores detectados en Hito 1
+
+- ~~Solapamiento visual entre paneles al arrancar (layout inicial del dockspace).~~ Resuelto en Hito 2 con `DockBuilder` (`Dockspace.cpp`), respeta `imgui.ini` si existe.
+
+## Hito 2 — Primer triángulo con OpenGL
+
+**Objetivo:** dejar de ser shell vacío y dibujar geometría propia (triángulo RGB) en el panel Viewport, con pipeline de render real: GLAD + RHI abstracto + backend OpenGL + shaders propios + framebuffer offscreen.
+
+**Criterios de aceptación:** ver `PLAN_HITO2.md` (todos cumplidos: automáticos + visuales + resize del panel + default layout sin superposiciones).
+
+**Siguiente paso tras completarlo:** Hito 3 — cubo texturizado con cámara. Agregar stb_image (textura), matrices de modelo/vista/proyección con GLM, cámara FPS controlable con WASD + ratón en Play Mode, cámara orbital en Editor Mode. Empezar a usar doctest para testear matemática.
+
+### Pendientes menores detectados en Hito 2
+
+- ~~Debug context de OpenGL (`GL_ARB_debug_output`).~~ Resuelto post-cierre Hito 6: `Window` pide `SDL_GL_CONTEXT_DEBUG_FLAG` en builds Debug, `EditorApplication` engancha `glDebugMessageCallback` y rutea a `Log::render()`.
+- **Dual máquina (laptop Iris Xe + desktop NVIDIA GTX 1660).** Ya documentado como gotcha en `ESTADO_ACTUAL.md` sección 5; no es un pendiente de código.
+- **DPI awareness**: fuentes/widgets no escalan entre monitores con distinta densidad. **Trigger:** Hito 15+ (UI polish).
+- **Shader hot-reload**: útil cuando los shaders crezcan. **Trigger:** Hito 11 (iluminación Phong/Blinn-Phong) o Hito 17 (PBR).
+
+## Hito 3 — Cubo texturizado con cámara
+
+**Objetivo:** pipeline 3D completo: matrices MVP, texturas con stb_image, dos cámaras (orbital / FPS) con entradas reales, modos Editor/Play, y primer target de tests con doctest.
+
+**Criterios de aceptación cumplidos:** cubo rotando con textura en Viewport, resize sin distorsión, toggle Play/Stop con Esc para salir, botón verde/rojo en menu bar, tests pasando (10 casos, 37 asserciones).
+
+**Siguiente paso tras completarlo:** Hito 4 — Mundo grid + colisiones AABB. Mapa definido como grid 2D renderizado como cubos 3D (modo "Wolfenstein simulado"), colisiones AABB propias para que el jugador no atraviese paredes, debug rendering básico (líneas, cajas).
+
+### Pendientes menores detectados en Hito 3
+
+- ~~FPS counter en la status bar no se visualiza claramente en todos los layouts.~~ Resuelto 2026-04-23: `StatusBar` usa `ImGui::BeginViewportSideBar(ImGuiDir_Down)` y se dibuja antes del dockspace para que el viewport recorte su work area antes de que los paneles docked lo consuman.
+
+## Hito 4 — Mundo grid + colisiones AABB
+
+**Objetivo:** primer "mundo" jugable. Mapa definido como grid 2D de tiles renderizado como cubos 3D, colisiones AABB propias que impiden atravesar paredes (con slide en esquinas), y debug rendering para visualizar las AABBs.
+
+**Criterios de aceptación cumplidos:**
+- Viewport muestra sala 8×8 con bordes sólidos y columna central (29 paredes).
+- En Play Mode, WASD mueve y no atraviesa paredes; slide diagonal funciona.
+- Tecla `F1` togglea debug draw (AABBs de tiles en amarillo + AABB del jugador en verde en Play).
+- Log del canal `world`: `Mapa cargado: prueba_8x8 (29 tiles solidos)`.
+- Cierre limpio, exit 0. Suite de tests: 30 casos, 159 asserciones.
+
+**Siguiente paso tras completarlo:** Hito 5 — Asset Browser + gestión de texturas. AssetManager, VFS inicial, texturas por tile desde el editor, textura fallback rosa-negro, consola in-game. Antes de empezar, aplicar la convención de escala realista postergada del Hito 4 (ver `docs/PLAN_HITO5.md`).
+
+### Pendientes menores detectados en Hito 4
+
+- ~~Convención de escala 1 unidad = 1 m SI.~~ Resuelto en Hito 5 Bloque 0.
+- ~~`GridRenderer` inline en EditorApplication.~~ Resuelto en Hito 6 Bloque 0.
+- ~~Face culling (`GL_CULL_FACE`).~~ Resuelto post-cierre Hito 6: activado en `OpenGLRenderer::init()` con winding CCW.
+- **Desacoplar `wallHeight` de `tileSize` en `GridMap`**: hoy el cubo es `scale(tileSize)` en los 3 ejes. **Trigger:** cuando aparezcan salas con altura distinta del ancho de tile (Hito 13+ con prefabs más ricos).
+- **Extraer `IDebugRenderer` abstracto**: `OpenGLDebugRenderer` es concreto. **Trigger:** cuando se agregue un segundo backend de render (Vulkan/DirectX) — no está en el roadmap cercano.
+- **`mood_core` como static lib compartida con `mood_tests`**: `tests/CMakeLists.txt` recompila 10 .cpp en la actualidad. **Trigger medible:** cuando ese número pase de 15, o el build del target `mood_tests` exceda los 15 segundos sostenidos.
+- **Tests de `FpsCamera::computeMoveDelta` directos**: hoy lo testeo via `move`. **Trigger:** cuando cambie la lógica interna de strafe/yaw.
+
+## Hito 5 — Asset Browser + gestión de texturas
+
+**Objetivo:** pasar de "motor que carga una textura hardcoded" a motor con catálogo de assets consultable desde el editor. AssetManager con cache, VFS sandbox, textura fallback, texturas por tile, Asset Browser con miniaturas reales, Console in-game.
+
+**Criterios de aceptación cumplidos:**
+- Convención de escala 1 unit = 1 m SI adoptada (Bloque 0, arrastrado del Hito 4).
+- Textura `missing.png` (chequered rosa/negro) cargada en slot 0 del `AssetManager`; cualquier fallo de carga cae ahí.
+- `VFS` rechaza `..`, `.`, paths absolutos y leading `/`/`\`; `AssetManager` lo usa para resolver paths lógicos.
+- `AssetBrowserPanel` muestra miniaturas reales de los PNG de `assets/textures/` con click-to-select.
+- Paredes del mapa renderizadas con 2 texturas distintas (grid.png en borde, brick.png en columna central).
+- `ConsolePanel` acoplado al inferior-derecho, muestra todos los logs del `LogRingSink` coloreados por nivel con filtro por canal.
+- Tests: suite 35/179 (+5 para VFS).
+
+**Siguiente paso tras completarlo:** Hito 6 — Serialización de proyectos y mapas (`.moodproj` + `.moodmap`). Antes, el drag & drop desde Asset Browser a tile del viewport y el refactor `GridRenderer`, ambos arrastrados del Hito 5.
+
+### Pendientes del Hito 5 (todos resueltos o con condición de disparo clara)
+
+- ~~Tests de `AssetManager`.~~ Resueltos en Hito 6 Bloque 0 (factory inyectable + `MockTexture`, 7 casos).
+- ~~Drag & drop Asset Browser → tile del viewport.~~ Resuelto en Hito 6 Bloque 0 (`ViewportPick` + `BeginDragDropTarget`).
+- ~~Extraer `GridRenderer` de `EditorApplication`.~~ Resuelto en Hito 6 Bloque 0 (`src/systems/GridRenderer.{h,cpp}`).
+- ~~Menú "Restablecer layout".~~ Resuelto en Hito 6 Bloque 0 (`Ver > Restablecer layout`).
+- ~~Color configurable del AABB del jugador en debug draw.~~ El objetivo real (distinguir visualmente player de tiles) ya está cumplido: tiles amarillos, player verde. "Configurable vía UI" no tiene caso de uso sin panel de Settings; si se quiere cambiar, se edita la constante en `EditorApplication::renderSceneToViewport`. Cerrado.
+- ~~Hot-reload del `AssetBrowserPanel`.~~ Resuelto post-cierre de Hito 6: `AssetManager::reloadChanged()` compara mtime y re-invoca la factory. El botón "Recargar" dispara el reupload al GPU entre frames (safe: no destruye handles mid-draw).
+- **Tracy profiler**: no es un pendiente olvidado, es una **integración planificada con condición de disparo explícita**. El doc técnico sección 9.3 y 9.5 establece "no pre-optimizar, introducir complejidad sólo cuando aparece el problema concreto". Tracy entra cuando los frames se vuelvan medibles como pesados — objetivos concretos: escenas complejas del Hito 11 (iluminación) o Hito 17 (PBR). Hasta entonces no aporta valor.
+
+## Hito 6 — Serialización de proyectos y mapas
+
+**Objetivo:** persistir el estado del editor en disco (`.moodproj` + `.moodmap`) con JSON versionado. Ciclo completo desde el menú Archivo: nuevo, abrir, guardar, cerrar.
+
+**Criterios de aceptación cumplidos:**
+- `Archivo > Nuevo Proyecto` abre diálogo nativo (portable-file-dialogs), crea estructura `<root>/maps/`, `<root>/textures/`, `<root>/<name>.moodproj` y guarda el estado actual del editor como `maps/default.moodmap`.
+- `Archivo > Abrir Proyecto` filtra `*.moodproj` y carga el mapa default.
+- `Archivo > Guardar` (Ctrl+S) escribe ambos archivos; grayado si no hay proyecto.
+- `Archivo > Cerrar proyecto` vuelve al mapa de prueba hardcodeado.
+- Título dinámico `MoodEngine Editor - <name>` con `*` si hay cambios sin guardar.
+- Versionado: `k_MoodmapFormatVersion = 1`, `k_MoodprojFormatVersion = 1`. Cargar versión futura falla con mensaje claro.
+- Tests: 61 casos / 281 asserciones (+6 JSON helpers, +6 SceneSerializer, +7 ProjectSerializer, +7 AssetManager con factory mock).
+- Bonus (Bloque 0): `GridRenderer` extraído, `ViewportPick` + hover cyan, drag & drop Asset Browser→tile, pan estilo Blender (middle-drag), `Ver > Restablecer layout`, debug lines 2 px, tests AssetManager.
+
+**Siguiente paso tras completarlo:** Hito 7 — Entidades, componentes, jerarquía. Integrar EnTT detrás de una fachada (`Entity`, `Scene`), panel Hierarchy (árbol de entidades), Inspector funcional editando componentes. Componentes básicos: `Transform`, `MeshRenderer`, `Camera`, `Light`.
+
+### Pendientes menores detectados en Hito 6
+
+- ~~Bloque 5 (editor state persistence).~~ Resuelto post-cierre: `.mood/editor_state.json` con último proyecto + `debugDraw`; reabre al arrancar.
+- ~~Diálogo de confirmación al descartar cambios sin guardar.~~ Resuelto: `confirmDiscardChanges()` con `pfd::message` yes/no/cancel; disparado desde Cerrar / Abrir / Nuevo.
+- **"Guardar como" completo** (hoy duplica vía Nuevo Proyecto). **Trigger:** cuando haya proyectos con ≥2 mapas en la práctica (polish).
+- **UI multi-mapa por proyecto**: el schema `.moodproj` ya soporta `maps[]` pero el editor abre siempre `defaultMap`. **Trigger:** mismo que arriba.
+- **Hot-reload de `.moodmap` editado externamente**: por ahora ignoramos cambios en disco del archivo abierto. **Trigger:** cuando se integre un editor externo tipo Tiled o similar.
+- **Tests E2E editor↔serialization**: los serializers están testeados con mocks a bajo nivel. **Trigger:** Hito 10+ (assimp + meshes reales).
+
+## Hito 7 — Entidades, componentes, jerarquía
+
+**Objetivo:** infraestructura ECS (Scene + Entity facade sobre EnTT) + paneles Hierarchy e Inspector funcionales. La sala de prueba existe como escena de 29 entidades (una por tile sólido).
+
+**Criterios de aceptación cumplidos:**
+- EnTT 3.13.2 via CPM, integrada en MoodEditor + mood_tests.
+- `Scene` + `Entity` + `Components.h` (Tag / Transform / MeshRenderer / Camera / Light) — EnTT escondido detrás de la fachada.
+- `rebuildSceneFromMap` mantiene la scene sincronizada con el `GridMap` (llamada en buildInitialTestMap / tryOpenProjectPath / drop / close).
+- `HierarchyPanel` (panel izquierdo 18% del dockspace default) lista las entidades por Tag. Click selecciona.
+- `InspectorPanel` reescrito: secciones por componente con widgets ImGui (InputText, DragFloat3, ColorEdit3, Combo). Edición ephemeral por el alcance del hito.
+- Tests: +8 casos / +24 asserciones para Scene + Entity. Suite total: 71 casos / 322 asserciones.
+
+**Siguiente paso tras completarlo:** Hito 8 — Scripting con Lua. Integrar Lua 5.4 + sol2 como binding C++. `ScriptComponent` con path al `.lua`. API mínima expuesta: transform, input, log, spawn/destroy entity. Hot-reload de scripts al detectar mtime.
+
+### Pendientes menores detectados en Hito 7
+
+- **RenderSystem sobre Scene** (iterar entidades en vez del grid). **Trigger:** Hito 10 (assimp) o Hito 11 (iluminación por entidad). **Update Hito 8:** se agregó un pase scene-driven mínimo para dibujar el rotador demo; la migración completa sigue diferida.
+- **Scene authoritative + persistencia de ediciones del Inspector.** **Trigger:** mismo.
+- **Jerarquía padre-hijo** (ChildrenComponent). **Trigger:** Hito 14 (prefabs).
+- **Drag & reparent en Hierarchy.** **Trigger:** mismo.
+- **Drop ECS-based** (editar MeshRendererComponent en vez de GridMap.setTile). **Trigger:** Scene authoritative.
+- **Undo/Redo del Inspector.** **Trigger:** Hito 22.
+
+## Hito 8 — Scripting con Lua
+
+**Objetivo:** permitir que entidades tengan comportamiento en Lua 5.4 sin reiniciar el editor. `ScriptComponent` con path al `.lua`, API mínima a C++ (Transform + Log), hot-reload por mtime, demo visible.
+
+**Criterios de aceptación cumplidos:**
+- Lua 5.4.5 vía `walterschell/Lua` (target `lua_static`) + sol2 v3.3.0, linkeados a MoodEditor y mood_tests.
+- `ScriptComponent { path, loaded, lastError }` en `Components.h`; serialización diferida (el `.moodmap` no guarda entidades Scene-authoritative todavía).
+- `ScriptSystem` con mapa `entt::entity → unique_ptr<sol::state>` (islas aisladas). `clear()` lo vacía al rebuildear la scene.
+- `LuaBindings`: `Entity.tag`/`.transform`, `TransformComponent.position`/`.rotationEuler`/`.scale`, `log.info`/`log.warn`. Libs habilitadas: base, math, string (sin io/os/package).
+- Hot-reload con throttle 0.5 s: detecta cambio de mtime y re-ejecuta `safe_script_file` sobre el mismo `sol::state` (preserva globals). Log canal `script`: `Recargado '…'`.
+- Inspector: sección ScriptComponent con `InputText` del path + botón Recargar + `lastError` en rojo. Editar path o clickear Recargar → reset duro del state.
+- Demo: `Ayuda > Agregar rotador demo` spawnea una entidad con `rotator.lua` (+45°/s en Y) visible y rotando en el viewport. Pase scene-driven agregado en `renderSceneToViewport` (filtra tiles por prefijo `Tile_` para evitar overdraw).
+- Canal de log `script` registrado en `Log.{h,cpp}`.
+- Tests: `test_lua.cpp` (smoke sol2) + `test_lua_bindings.cpp` (script muta Transform, hot-reload re-ejecuta, script roto deja `lastError`). Suite total: 74/330.
+
+**Siguiente paso tras completarlo:** Hito 9 — Audio básico con miniaudio. AudioClip asset, AudioSourceComponent, reproducción desde Lua (sumar `audio.play(...)` a la API expuesta). Base para posicional 3D.
+
+### Pendientes menores detectados en Hito 8
+
+- **`Input` bindings en Lua.** **Trigger:** primer script de gameplay que necesite teclado/mouse (proyecto Wolfenstein-like).
+- **`scene:createEntity` / `scene:destroyEntity` desde Lua.** **Trigger:** primer script que necesite spawn/despawn runtime (proyectiles, enemigos).
+- **Acceso a más componentes desde Lua** (`MeshRenderer`, `Camera`). **Trigger:** cuando un script real lo pida.
+- **Debugger de Lua** (mobdebug o similar). **Trigger:** cuando los scripts crezcan más allá de `print`.
+- **Persistencia de `ScriptComponent` en `.moodmap`.** **Trigger:** Scene authoritative (Hito 10+).
+- **Leak de mtimes viejos al cambiar path en caliente.** Negligible hoy (pocos paths). **Trigger:** >100 paths distintos.
+
+## Hito 9 — Audio básico
+
+**Objetivo:** dotar al motor de reproducción de audio posicional sin ceremonia. `miniaudio` como backend, `AudioClip` como segundo tipo de asset, `AudioSourceComponent` integrado al ECS, `AudioSystem` que maneja listener + playback, demo visible con atenuación 3D.
+
+**Criterios de aceptación cumplidos:**
+- `miniaudio` v0.11.21 vendored single-header, target INTERFACE + `miniaudio_impl.cpp`.
+- `AudioDevice` null-safe: si falla init (CI, hardware roto) queda en mute; el motor sigue corriendo. Log `audio: AudioDevice inicializado (sample_rate=48000, channels=2)`.
+- `AudioClip`: inspección no-blocking de metadata (duración, sr, canales) con `ma_decoder`.
+- `AssetManager` extendido con tabla paralela de audio (id 0 = missing.wav silencio 100 ms). Factoría inyectable para tests sin hardware.
+- `AudioSourceComponent { clip, volume, loop, playOnStart, is3D, handle, started }` en `Components.h`.
+- `AudioSystem::update` dispara playOnStart (guard `started`), sincroniza posición 3D cada frame. `clear()` antes de `rebuildSceneFromMap`.
+- `InspectorPanel`: combo de clips + sliders + toggles + botón Reproducir (preview).
+- `AssetBrowserPanel`: sección "Audio" colapsable con path + duración + sr + canales.
+- Demo: `Ayuda > Agregar audio source demo` spawnea entidad con `beep.wav` (440 Hz 0.5 s) loop + 3D en `(-10, 1.5, -10)`. En Play Mode, acercarse con WASD sube el volumen por atenuación 3D de miniaudio.
+- Canal log `audio` registrado.
+- Tests: `test_audio.cpp` (6 casos: AudioDevice null-safe, AssetManager loadAudio cachea + cae a missing, getAudio nunca null, AudioSystem marca started, clear() vacía activeSoundCount, is3D actualiza posición). Suite total: 83 casos / 346 asserciones.
+
+**Siguiente paso tras completarlo:** Hito 10 — Importación de modelos 3D con assimp. Lectura de `.obj`/`.gltf`, `MeshAsset` como tercer tipo de asset, `MeshRendererComponent` mejorado (material + multi-mesh), primer escenario no-grid.
+
+### Pendientes menores detectados en Hito 9
+
+- **Persistencia de `AudioSourceComponent` en `.moodmap`.** **Trigger:** Scene authoritative (igual que `ScriptComponent`, Hito 10+).
+- **Drag & drop de audio** desde AssetBrowser a entidades. Hoy solo texturas. **Trigger:** misma ventana de feature polish UX.
+- **Lua bindings de audio** (`audio.play("audio/beep.wav")`). **Trigger:** primer script que lo necesite.
+- **Streaming de música** (clips largos). Hoy todo en RAM. **Trigger:** música de fondo >1 min.
+- **Listener múltiple / configurable** (hoy = cámara activa). **Trigger:** cámaras cinematográficas.
+- **Reverb / filters / effects.** **Trigger:** polish post-Hito 15.
+- **`AudioSystem` tracking explícito de handles por entidad** (hoy `clear()` llama `stopAll()`). **Trigger:** segundo sistema que emita sonidos (UI clicks, etc.).
+
+## Hito 10 — Importación de modelos 3D
+
+**Objetivo:** romper el límite "todo es un cubo". Importar OBJ/glTF/FBX via assimp, integrarlos al Scene como `MeshAsset`+`MeshRenderer`, migrar el render a scene-driven, persistir entidades no-tile en el `.moodmap`.
+
+**Criterios de aceptación cumplidos:**
+- `assimp v5.4.3` como static lib vía CPM, solo con importers OBJ + glTF + FBX habilitados (~30 MB menos de binario).
+- `MeshAsset` como tercer tipo de asset (`Texture` + `AudioClip` + `MeshAsset`); `MeshLoader::loadMeshWithAssimp` con flags `Triangulate | GenNormals | FlipUVs | CalcTangentSpace` y expansión de índices a vértices planos (matchea `glDrawArrays` sin EBO).
+- `AssetManager` extendido con `MeshAssetId` (u32, slot 0 = cubo primitivo fallback) + `MeshFactory` inyectable (default `NullMesh` stub para tests sin GL).
+- `MeshRendererComponent` refactorizado de `IMesh* + TextureAssetId` a `MeshAssetId + vector<TextureAssetId>`. Helper `materialOrMissing(i)`.
+- Render unificado a un solo loop scene-driven (`Scene::forEach<Transform, MeshRenderer>` iterando submeshes). `GridRenderer` eliminado (dead code tras la migración).
+- Drop de textura ahora usa `updateTileEntity(x, y, tex)` (edit in-place) en vez de `rebuildSceneFromMap`: preserva la selección del Hierarchy.
+- AssetBrowser con sección "Meshes" (encima de Audio) que lista `.obj/.gltf/.glb/.fbx` de `assets/meshes/`. Drag payload `"MOOD_MESH_ASSET"`; drop al Viewport spawnea entidad `Mesh_<path>` en el tile bajo el cursor.
+- `SceneSerializer` v2: schema nuevo con sección `entities` (filtrada por prefijo de tag `Tile_*`, solo MeshRenderer en este hito); archivos v1 se siguen leyendo con `entities=[]`. `SavedMap` extendido con `SavedEntity` + `SavedMeshRenderer`.
+- `EditorApplication::tryOpenProjectPath` aplica entidades persistidas tras `rebuildSceneFromMap`. Round-trip verificado end-to-end: drag pyramid x3 → Ctrl+S → Cerrar → Abrir → 3 entidades vuelven idénticas.
+- Tests: +8 casos / +34 asserciones (5 en `test_mesh_asset.cpp`, 2 en `test_scene_serializer.cpp`, test CMakeLists con `WORKING_DIRECTORY`). Suite total 90/380.
+- `assets/meshes/pyramid.obj` como mesh sample escrito a mano (5 verts / 6 tris / UVs por cara). `.gitignore` fix: `!assets/meshes/*.obj` para evitar colisión con `*.obj` de objetos MSVC.
+
+**Siguiente paso tras completarlo:** Hito 11 — Iluminación Phong/Blinn-Phong. Activar `LightComponent` (era placeholder del Hito 7), shader con normales, directional + point lights, demos de una escena iluminada. Plan en `docs/PLAN_HITO11.md`.
+
+### Pendientes menores detectados en Hito 10
+
+- **Preview 3D de meshes en el AssetBrowser** (thumbnails renderizados). El usuario lo pidió durante Bloque 5; requiere FB por mesh + mini-pipeline offscreen. **Trigger:** polish post-Hito 11 o cuando los meshes importados se vuelvan numerosos.
+- **EBO / `OpenGLIndexedMesh`.** Hoy el loader expande índices a vértices planos (x1.8 RAM típico). **Trigger:** primer mesh importado con >50k vértices.
+- **Hot-reload de meshes.** Análogo al de texturas (Hito 5). **Trigger:** iteración artística con archivos editados externamente.
+- **Drop de mesh reemplaza entidad existente** (vs siempre spawnear nueva). **Trigger:** cuando aparezca el caso de uso "cambiarle el mesh a X".
+- **Serializar `Script`/`Audio` components.** Fuera de scope hasta Scene authoritative. **Trigger:** Hito 14 (prefabs).
+- **Materiales reales** (color, normal map, metallic/roughness). Hoy solo texture por submesh. **Trigger:** Hito 17 (PBR).
+- **Drag & drop de audio** (arrastrado desde Hito 9). **Trigger:** Scene authoritative.
+- **Light components funcionales.** **Trigger:** Hito 11.
+
+## Hito 11 — Iluminación Phong / Blinn-Phong
+
+**Objetivo:** que la escena deje de ser "unlit" (textura directa) y pase a iluminarse con Blinn-Phong forward. `LightComponent` (placeholder desde Hito 7) pasa a ser real, con soporte para 1 directional + N point lights.
+
+**Criterios de aceptación cumplidos:**
+- Vertex layout extendido a stride 11 (pos+color+uv+normal). `createCubeMesh` genera normales planas; `MeshLoader` (assimp) preserva las normales que `aiProcess_GenNormals` calcula.
+- `shaders/lit.{vert,frag}`: Blinn-Phong (ambient + diffuse + specular). Soporta hasta `MAX_POINT_LIGHTS=8` con atenuación cuadrática suave hasta `radius`. 1 directional via `uDirectional`.
+- `LightComponent { type, color, intensity, radius, direction, enabled }` real. Sliders en Inspector se reflejan en vivo.
+- `src/systems/LightSystem.{h,cpp}` recolecta lights del Scene cada frame y sube uniforms (cache de `glGetUniformLocation` en `OpenGLShader` evita el costo).
+- Demo `Ayuda > Agregar luz puntual demo` spawnea entidad con Light Point en (0,4,0). Sala 8x8 muestra sombreado real con caras frente/atrás distinguibles.
+- Persistencia: `SavedLight` en `SceneSerializer` con type/color/intensity/radius/direction/enabled. `k_MoodmapFormatVersion` 2 → 3 (v2 sin campo `light` se carga igual).
+- Tests: 7 nuevos en `test_lighting.cpp` + 1 round-trip de Light en `test_scene_serializer.cpp`. Suite 98/428 (+8 vs Hito 10).
+
+**Siguiente paso tras completarlo:** Hito 12 — Física con Jolt. Reemplazar el `PhysicsSystem` propio (AABB vs grid del Hito 4) por Jolt Physics: rigid bodies, colliders convexos, gravedad, capsule controllers, integración con `Transform`. Plan en `docs/PLAN_HITO12.md`.
+
+### Pendientes menores detectados en Hito 11
+
+- **Hot-reload de shaders** (Bloque 6): diferido. **Trigger:** Hito 16 (shadows) o Hito 17 (PBR) — momento natural cuando los shaders crezcan.
+- **Preview 3D de meshes en AssetBrowser**: re-arrastrado desde Hito 10. **Trigger:** asset humano lo pide.
+- **Normal mapping**: opcional en plan, no entró. **Trigger:** Hito 17 (PBR).
+- **`uNormalMatrix` precalculado en CPU**: hoy es por-vertex en GLSL. **Trigger:** frametimes que dolieren con muchos draws (Hito 18).
+- **Múltiples directional lights / SpotLight**: fuera de scope del hito. **Trigger:** mapa real que lo pida.
+- **Atenuación con falloff exponente configurable**: hoy cuadrática hardcoded. **Trigger:** feedback visual.
+- **Persistencia de `AudioSource`**: sigue arrastrándose desde Hito 9. **Trigger:** Scene authoritative completo (Hito 14+).
+
+## Hito 12 — Física con Jolt
+
+**Objetivo:** reemplazar el `PhysicsSystem` casero AABB-vs-grid del Hito 4 por Jolt Physics: rigid bodies con gravedad real, colliders variados, ECS integration.
+
+**Criterios de aceptación cumplidos:**
+- `JoltPhysics v5.2.0` via CPM (runtime `/MDd` forzado, targets auxiliares off).
+- `src/engine/physics/PhysicsWorld.{h,cpp}`: wrapper RAII con layers Static/Moving, API para createBody/step/setPosition/addForce.
+- `RigidBodyComponent { type, shape, halfExtents, mass, bodyId }` en `Components.h`.
+- `EditorApplication::updateRigidBodies` materializa bodies + stepea en Play Mode + sync body → Transform.
+- Tiles sólidos ahora tienen `RigidBodyComponent(Static)` automático; el mapa es colisionable en Jolt.
+- Demo `Ayuda > Agregar caja física demo` spawnea entidad Dynamic que cae por gravedad.
+- Persistencia: `SavedRigidBody` en `.moodmap` (pose NO se guarda; Jolt authoritative runtime). `k_MoodmapFormatVersion` 3 → 4.
+- Canal de log `physics`. Tests: round-trip RigidBody (99 casos / 442 asserciones total).
+
+**Siguiente paso tras completarlo:** Hito 13 — Gizmos y selección. Manipuladores 3D sobre entidad seleccionada (translate/rotate/scale), ray-casting click-to-select en el viewport. Plan en `docs/PLAN_HITO13.md`.
+
+### Pendientes menores detectados en Hito 12
+
+- **CharacterController de Jolt** (Bloque 4): diferido — el jugador sigue con `moveAndSlide` AABB del Hito 4. Se re-pospuso en Hito 13; **trigger** pasa a un hito de gameplay específico.
+- **`F2` debug draw de Jolt**: diferido junto con CharacterController. Requiere implementar `JPH::DebugRenderer` → `OpenGLDebugRenderer`.
+- **`test_physics.cpp`**: diferido para evitar arrastrar Jolt (~40 MB static lib) a `mood_tests`. **Trigger:** lógica C++ no trivial que lo necesite.
+- **Rotación del body → Transform.rotationEuler**: hoy solo sync de posición. **Trigger:** colisiones que hagan rodar cajas.
+- **Shape `MeshFromAsset`** (Box/Sphere/Capsule solo por ahora). **Trigger:** colisiones precisas para modelos importados.
+- **Triggers/sensors** para gameplay/scripts. **Trigger:** Hito 14+.
+- Pendientes Hito 11 (hot-reload shaders, preview 3D, normal mapping, multi-directional, persistencia Audio) siguen en tracker.
+
+## Hito 13 — Gizmos y selección
+
+**Objetivo:** hacer el editor usable con el mouse sobre la escena 3D. Click-to-select con raycast + gizmos 3D (translate/rotate/scale) operados en screen-space sobre la entidad seleccionada.
+
+**Criterios de aceptación cumplidos:**
+- `src/engine/scene/ScenePick.{h,cpp}`: `pickEntity(scene, view, projection, ndc)` retorna la entidad más cercana al rayo. Ray-AABB (slab test) para meshes, ray-sphere (radio 0.6m) para Light/AudioSource sin mesh.
+- `ViewportPanel`: captura click izquierdo con threshold 4px (click vs drag) + callback `setOverlayDraw` para dibujar sobre la imagen con `ImDrawList`.
+- Overlay en `EditorApplication`: iconos 2D (círculos) para Light (amarillo) y AudioSource (cian), con halo azul si están seleccionados. Gizmo de Translate (3 flechas axis), Rotate (3 anillos 48-seg), Scale (3 líneas + cuadrados + **cuadrado blanco central** uniform). Color RGB por eje.
+- Drag gizmo: `closestParam` 3D-line vs 3D-line para translate/scale-axis; delta angular 2D alrededor del centro del gizmo para rotate (con sign por `dot(axis, cam_to_origin)`).
+- Hotkeys `W/E/R` cambian modo, respetan `ImGui::WantTextInput`.
+- Inspector esconde scale/rotation si la entidad no tiene `MeshRendererComponent` (pedido del dev: no tiene sentido escalar una luz).
+- Overlays ocultos en Play Mode (iconos + gizmos son andamios de edición).
+- Tests: `tests/test_picking.cpp` con 7 casos (scene vacía, ray central, light por esfera, más cercano gana, rayo al cielo, entidad detrás, sin Transform). 106/106 suite verde.
+
+**Siguiente paso tras completarlo:** Hito 14 — Prefabs. Definir un formato `.moodprefab` reusable (entidad + componentes + hijos), instanciación en escena desde el AssetBrowser, override local de propiedades por instancia. Plan en `docs/PLAN_HITO14.md`.
+
+### Pendientes menores detectados en Hito 13
+
+- **Shift+click multi-selección + rectangle select**: diferido. **Trigger:** Hito 14+.
+- **Snap to grid** en drag de gizmo: diferido. **Trigger:** Hito 15 (skybox/polish) o cuando haga ruido.
+- **Esc cancela drag sin commit**: requiere staging del valor previo → alineado con undo/redo (Hito 22).
+- **Label visual del modo activo (W/E/R)**: las formas se distinguen solas; si aparece demanda, se agrega.
+- **Parent-space vs world-space toggle**: siempre world por ahora.
+- **Handles 2D** (plano para mover en 2 ejes): diferido; con 3 axis + uniform alcanza.
+- **Tests de math de gizmo (closestParam, project)**: diferidos a un hito de tests de UI.
+- **Picking contra malla real** (no AABB conservativa): requiere `MeshFromAsset` + BVH, alineado con Hito 11/Jolt.
+- Pendientes Hito 12 (CharacterController, body-rotation sync, `MeshFromAsset`) siguen arrastrándose.
+
+## Hito 14 — Prefabs
+
+**Objetivo:** sistema de prefabs reusables. Guardar una entidad con sus componentes como `.moodprefab`, instanciar copias via drag desde el AssetBrowser al Viewport, mantener override local por instancia (modificarla no toca el prefab base), persistir el link `prefabPath` en el `.moodmap` para futuras features de revert/apply.
+
+**Criterios de aceptación cumplidos:**
+- Schema `.moodprefab` v1 (`{version, name?, root: SavedEntity, children: [...]}`). Reusa `SavedEntity` del Hito 10/11/12 (Mesh + Light + RigidBody).
+- `engine/serialization/EntitySerializer.{h,cpp}` extraído del `SceneSerializer` para que el helper Component<->JSON viva en un solo lugar; ambos formatos lo comparten.
+- `engine/serialization/PrefabSerializer.{h,cpp}` con `save(Entity, name, AssetManager&, path)` y `load(path) -> optional<SavedPrefab>`.
+- `AssetManager` extendido con `PrefabAssetId` (slot 0 = vacío fallback) + `loadPrefab` + `getPrefab` + `prefabPathOf` + `prefabCount`. Pattern espejo del catálogo de meshes.
+- `PrefabLinkComponent` (string-only) marca a una entidad como instancia de un prefab. `EntitySerializer` lo lee/escribe como `prefab_path`.
+- `EditorUI::request/consumeSavePrefabRequest` + ítem de menú `Archivo > Guardar como prefab…` (grayado sin selección; **NO** requiere proyecto activo: los prefabs son globales del repo).
+- `AssetBrowserPanel` con sección "Prefabs" entre Meshes y Audio. Drag payload `MOOD_PREFAB_ASSET`. `ViewportPanel::PrefabDrop` + `consumePrefabDrop` análogos al flow de mesh.
+- `EditorApplication::handlePrefabDrop` instancia copiando Transform/Mesh/Light/RigidBody (resolviendo paths a ids), agrega `PrefabLinkComponent` y selecciona la nueva entidad. Tag con sufijo numérico.
+- `tryOpenProjectPath` reaplica `PrefabLinkComponent` cuando una `SavedEntity` viene con `prefabPath` no vacío al cargar el `.moodmap`.
+- Schema bump: `k_MoodmapFormatVersion` 4 → 5. Backward-compat: archivos v4 sin `prefab_path` se siguen leyendo (campo opcional).
+- Tests: `test_prefab_serializer.cpp` (5 casos round-trip + 2 de `AssetManager::loadPrefab`). Suite total **113 / 493** (antes 106 / 454).
+- Sample asset: `assets/prefabs/sample_light.moodprefab` para validar el flow sin pasar por el dialog.
+
+**Fix reactivo del smoke test (incluido en el hito):**
+- `pfd::save_file` para prefabs no mostraba el diálogo en Windows si el `default_path` tenía forward slashes (de `generic_string()`) o caracteres inválidos en el filename (tags como `Mesh_meshes/pyramid.obj_1` con `/`). `handleNewProject` no tenía el bug porque pasa solo el directorio; el handler de prefab pasa `dir + filename`. Fix: sanitizar el filename + usar `string()` (separadores nativos) en lugar de `generic_string()`.
+
+**Siguiente paso tras completarlo:** Hito 15 — Skybox, fog, post-procesado. Cubemap textures, fog exponencial/lineal, primer pase de post-procesado (tonemapping placeholder + bloom toggle). Plan en `docs/PLAN_HITO15.md`.
+
+### Pendientes menores detectados en Hito 14
+
+- **Propagación bidireccional prefab ↔ instancia** (revert / apply overrides). El link queda persistido pero la UX de "actualizar prefab desde instancia" o "reset overrides" no existe. **Trigger:** hito dedicado o cuando aparezca un workflow real iterativo sobre prefabs.
+- **Nested prefabs** (un prefab que contiene otro prefab como entity hija). Bloqueado por la falta de `ParentComponent`/`ChildrenComponent` en el ECS. **Trigger:** post-Hito 14, junto con la jerarquía padre/hijo en `TransformComponent`.
+- **Drop de prefab sobre entidad existente reemplaza componentes**. **Trigger:** workflow real "swap mesh by prefab" sobre N props.
+- **Prefab variants** (Unity-style). **Trigger:** si la cantidad de prefabs casi-iguales se vuelve inmanejable.
+- **Thumbnails 3D del prefab en el AssetBrowser**. Pendiente arrastrado desde Hito 10 (también pedido para meshes). **Trigger:** polish post-Hito 17 cuando los preview tengan más utilidad estética.
+- **Lua bindings** (`scene.instantiate("prefabs/x.moodprefab")`). **Trigger:** primer script gameplay que necesite spawn dinámico.
+- **Undo/Redo** del spawn de prefab. **Trigger:** Hito 22.
+
+## Hito 15 — Skybox, fog y post-procesado
+
+**Objetivo:** convertir el viewport en una escena 3D moderna. Skybox de cubemap detrás de todo, fog uniforme distance-based, render target HDR + post-process pass con tonemapping y gamma. Todo configurable en runtime via un `EnvironmentComponent` serializable.
+
+**Criterios de aceptación cumplidos:**
+- `tools/gen_sky_cubemap.py` genera 6 PNG de un cielo gradient en `assets/skyboxes/sky_day/`. Reproducible con Pillow.
+- `OpenGLCubemapTexture` (Wrapper de `GL_TEXTURE_CUBE_MAP`) + `SkyboxRenderer` (cubo unitario con depth=1 truc). Render LEQUAL para que la escena escriba encima.
+- `engine/render/Fog.h` (header-only): 4 modos (Off / Linear / Exp / Exp2), testeable sin GL. `lit.frag` extendido con uniforms + replica de la matemática.
+- `OpenGLFramebuffer` con enum `Format {LDR, HDR}`. RGBA16F para el scene FB; RGBA8 para el LDR final que ImGui muestra.
+- `PostProcessPass`: fullscreen triangle desde `gl_VertexID` (sin VBO). Aplica `2^exposure` + tonemap (None / Reinhard / ACES Narkowicz) + gamma 1/2.2.
+- `EnvironmentComponent` (skybox / fog / exposure / tonemap) editable desde Inspector. `applyEnvironmentFromScene` resetea a defaults + aplica el primer Environment, llamado cada frame y al cargar proyecto.
+- Schema bump: `k_MoodmapFormatVersion` 5 → 6. Backward-compat con archivos sin `environment`.
+- Tests: `test_fog.cpp` (6 casos numéricos) + extensión de `test_scene_serializer.cpp` con round-trip de Environment. Suite total **120 / 530** (antes 113 / 493).
+
+**Polish reactivo del hito (no en plan original):**
+- Memoria nueva `feedback_no_autoopen_project.md`: el editor NUNCA auto-abre el último proyecto. `loadEditorState` ya no llama a `tryOpenProjectPath`. El Welcome modal aparece SIEMPRE al arrancar.
+- Welcome modal con UX de gestión de recientes: botón "Limpiar inexistentes" + botón "X" por entrada + indicador rojo `(no existe)`.
+
+**Siguiente paso tras completarlo:** Hito 16 — Shadow mapping. Shadow map de la directional light principal + sample en el lit shader. Plan en `docs/PLAN_HITO16.md`.
+
+### Pendientes menores detectados en Hito 15
+
+- **Catálogo de skyboxes** (per-proyecto). Hoy se carga `sky_day` fijo al iniciar; `EnvironmentComponent.skyboxPath` se persiste pero no se aplica. **Trigger:** ≥2 skyboxes en el repo.
+- **Bloom** en post-process. **Trigger:** highlights HDR apagados sin él (PBR).
+- **Anti-aliasing** (MSAA o FXAA). **Trigger:** jaggies visibles.
+- **Skybox procedural** (atmospheric scattering). **Trigger:** demo de ciclo día/noche.
+- **`ICubemapTexture` abstracta**. **Trigger:** segundo consumidor de cubemaps (IBL Hito 17).
+
+## Hito 16 — Shadow mapping
+
+**Objetivo:** sombras dinámicas para la directional light principal con shadow map depth-only + PCF 3×3 hardware. Toggle por luz vía `castShadows`, persistido en `.moodmap` y `.moodprefab`.
+
+**Criterios de aceptación cumplidos:**
+- `OpenGLShadowMap` (FBO depth-only 2048×2048, `GL_DEPTH_COMPONENT24`, `GL_COMPARE_REF_TO_TEXTURE` + `GL_LEQUAL`, border depth=1 para que muestras fuera del frustum sean "iluminadas").
+- `shaders/shadow_depth.{vert,frag}` (vert con `uLightSpace * uModel * pos`, frag vacío).
+- `ShadowPass` (recorre `Scene::forEach<Transform, MeshRenderer>` con front-face culling para reducir peter-panning).
+- `lit.{vert,frag}` extendido: uniform `uLightSpace`, `vLightSpacePos` interpolado, `sampleShadow()` con PCF 3×3 sobre `sampler2DShadow` (36 muestras efectivas con hardware PCF de 4 taps).
+- `LightComponent.castShadows` (solo Directional). Checkbox en el Inspector + round-trip en `.moodmap` (campo `cast_shadows` opcional, default false → archivos viejos compatibles sin bump de versión).
+- `engine/render/ShadowMath.h`: helper puro (sin GL) con `computeShadowMatrices(lightDir, sceneCenter, sceneRadius)`. Refactor de `ShadowPass` para usarlo. Permite testear el cálculo de matrices.
+- Tests nuevos: `test_shadow_proj.cpp` (5 casos: centro NDC, bounding sphere dentro del frustum, fallback de zero-dir, normalización idempotente, `chooseLightUp`). Extensión de `test_scene_serializer` con round-trip de `castShadows`. Suite total **125 / 580**.
+- Demo "Ayuda > Agregar demo de sombras": piso plano 20×20 + columna 1×4×1 + sol oblicuo con `castShadows=true`. Smoke test visual confirmado.
+
+**Bloque 0.5: refactor de `EditorApplication.cpp`** (preventivo ante crecimiento del archivo, pedido del dev). Pasó de **2011 → 1154 líneas (-43%)**:
+- `editor/EditorRenderPass.cpp` — `renderSceneToViewport` + `applyEnvironmentFromScene`.
+- `editor/EditorProjectActions.cpp` — handlers de Nuevo/Abrir/Guardar/Cerrar proyecto + `tryOpenProjectPath` + `loadEditorState`/`saveEditorState`.
+- `editor/DemoSpawners.cpp` — handlers `processSpawn*Request` + drops del viewport.
+
+**Polish reactivo del hito (no en plan original):**
+- `k_defaultAmbient` bajado de 0.18 a 0.08: las sombras se notan recién con un ambient más bajo.
+- Cubo cyan del hover de tile **solo aparece durante drag de asset** (textura/mesh/prefab). Antes se mostraba siempre que el cursor estuviera sobre la imagen — UX ruidosa.
+- Iconos de luces estilo Blender en el viewport overlay: anillo + dots para Point, core + 8 rayos para Sun, con línea proyectada hacia donde apunta `direction`.
+- Tecla `.` "frame selected" estilo Blender: re-centra el target de la `EditorCamera` y ajusta el radius para que la entidad seleccionada entre en cuadro. Mantiene yaw/pitch.
+- Outline OBB naranja (12 aristas vía `OpenGLDebugRenderer`) para la entidad seleccionada con mesh — sigue rotación y escala.
+
+**Siguiente paso tras completarlo:** Hito 17 — PBR (metallic-roughness workflow, IBL básico desde el cubemap del skybox). Plan en `docs/PLAN_HITO17.md`.
+
+### Pendientes menores detectados en Hito 16
+
+- **Cascaded Shadow Maps (CSM)** para escenas grandes. Hoy 1 sola cascada con bounding sphere fijo del mapa. **Trigger:** mundos > 50 m de extensión donde la resolución del shadow map se note pixelada.
+- **Sombras de point lights** (cubemap depth, 6 caras). **Trigger:** demos con interiores donde la directional no alcanza.
+- **Soft shadows / VSM / PCSS** para sombras con penumbra realista. **Trigger:** post-PBR.
+- **Bias por geometría** (slope-scale bias) para reducir peter-panning sin front-face culling. **Trigger:** si front-face culling rompe sombras de geometría no-cerrada (planos, sprites).
+- **AABB del MeshAsset** para outlines más precisos en meshes no centrados en `[-0.5, 0.5]³`. Hoy el outline asume cubo unitario. **Trigger:** primer mesh importado con bounds atípicos.
+
+## Hito 17 — PBR (Physically Based Rendering)
+
+**Objetivo:** reemplazar el shading Blinn-Phong por PBR metallic-roughness con IBL básico desde el cubemap del skybox. Materiales editables en runtime via Inspector + sliders, persistibles en `.material` JSON. Showcase 3×3 esferas (metallic × roughness) verificable en una sola toma.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — datos + serialización:*
+- `engine/render/MaterialAsset.h`: 4 slots de textura (albedo, MR packed, normal, AO) + 4 escalares fallback (`albedoTint`, `metallic`, `roughness`, `ao`). Convención glTF para MR packed (R=AO, G=rough, B=metal).
+- `AssetManager` extendido con catálogo `MaterialAssetId` (slot 0 = default mate dieléctrico) + `loadMaterial(.material JSON)` + `loadMaterialFromTexture` (wrapper auto para back-compat) + `createMaterial(prototype)` (helper runtime sin tocar disco).
+- `MeshRendererComponent.materials`: `vector<TextureAssetId>` → `vector<MaterialAssetId>`.
+- Bump `k_MoodmapFormatVersion` 6 → 7. Upgrader detecta extensión: `.material` se carga como material, otra cosa se trata como textura y se envuelve en wrapper.
+
+*Bloque 2 — shaders:*
+- `shaders/pbr.{vert,frag}` reemplazan a `lit.{vert,frag}`. Cook-Torrance con GGX (Trowbridge-Reitz) + Smith-Schlick + Fresnel-Schlick. Energy conservation explicita (`kS = F`, `kD = (1-kS)*(1-metallic)`).
+- Shadow factor del Hito 16 multiplica solo el término directo del directional (no el IBL).
+
+*Bloque 3 — IBL:*
+- `tools/bake_brdf_lut.py`: tabla universal 256×256 (RG = scale/bias del split-sum de Karis), 1024 samples Hammersley/texel.
+- `tools/bake_ibl.py`: irradiance 32×32 (cosine-weighted, 2048 samples) + prefilter mip chain 5 niveles (128→8) con GGX importance sampling. Lento offline (~94s), runtime cero.
+- Assets pre-bakeados en `assets/ibl/sky_day/` y `assets/ibl/brdf_lut.png`.
+- `OpenGLCubemapTexture` extendido con mip chain + flag `sRgb`. Los cubemaps de color (skybox + IBL) se cargan como `GL_SRGB8_ALPHA8` para que GL haga el decode automático y no haya doble-gamma con el post-process.
+- IBL split-sum aplicado en `pbr.frag` (irradiance unit 4, prefilter unit 5, BRDF LUT unit 6). Fallback a `uAmbient` escalar si los assets no están.
+
+*Bloque 4 — Inspector + UX:*
+- InspectorPanel con sliders en vivo de `albedoTint` (ColorEdit3), `metallic`, `roughness`, `ao` por slot del MeshRenderer. Editar muta el `MaterialAsset` in-place; el render del frame siguiente lo ve.
+- AssetBrowser nueva sección "Materiales" lista los `.material` JSON. Drag payload `MOOD_MATERIAL_ASSET`.
+- ViewportPanel con `enum AssetDragKind { None, Texture, Mesh, Prefab, Material }` para distinguir highlights: cubo cyan (drag a tile) vs OBB amarillo (drag a entidad).
+- Drop de material vía `pickEntity` reasigna el primer slot del MeshRenderer.
+- 5 `.material` samples en `assets/materials/` (oro_pulido, cobre_rugoso, plastico_azul, acero_pulido, caucho_negro).
+
+*Bloque 5 — demo + tests:*
+- `createSphereMesh()` en PrimitiveMeshes (UV sphere, 32 segs). `AssetManager::primitiveSphereId()` reservado en el ctor.
+- "Ayuda > Agregar esferas PBR de prueba" spawnea un grid 3×3: eje X = metallic (0.0/0.5/1.0), eje Y = roughness (0.05/0.5/1.0).
+- `engine/render/PbrMath.h`: helpers puros C++ (Fresnel-Schlick, GGX, Smith) compartidos con el shader.
+- Tests nuevos: `test_pbr_brdf.cpp` (8 casos: F0 dieléctrico vs metálico, Fresnel a 0/90°/intermedios, GGX max y monotonía, Smith en [0,1] y NdotL=0). `test_material_serializer.cpp` (7 casos: round-trip, defaults faltantes, cache, archivo inexistente, JSON inválido, paths de textura, createMaterial slots distintos). Suite total **144 / 649**.
+
+**Polish reactivo del hito:**
+- `fix(editor): "Nuevo Proyecto" crea su propia carpeta` — antes contaminaba el directorio padre con `maps/` y `textures/` sueltas; ahora `<dir>/<name>/` con todo adentro (Unity/Godot convention).
+- LightSystem deja de subir `uSpecularStrength`/`uShininess` (eran del Blinn-Phong, ya no aplican).
+
+**Siguiente paso tras completarlo:** Hito 18 — Deferred / Forward+. Plan en `docs/PLAN_HITO18.md`.
+
+### Pendientes menores detectados en Hito 17
+
+- **HDR cubemaps reales** (`.hdr` Radiance RGBE). Hoy los cubemaps son PNG 8-bit LDR — los reflejos especulares no tienen rango dinámico real. **Trigger:** cuando aparezca un skybox con highlights >1.0 que ameriten el rango.
+- **Normal mapping**: el shader `pbr.frag` no samplea el slot `normal` aún (los meshes actuales no traen tangentes). **Trigger:** primer mesh importado con normal map, o agregar tangentes a `createCubeMesh`/`createSphereMesh`.
+- **AO sample real desde MR packed (canal R)**: hoy el shader respeta solo `uAoMap` separado y `uAoMult` escalar. **Trigger:** materiales glTF importados con AO en el R del MR packed.
+- **Renderer de equirectangular → cubemap** para que el dev pueda dropear un `.hdr` panorámico y se convierta en cubemap automáticamente. **Trigger:** integración con HDR sources externos.
+- **Editor de grafo de materiales** (substance-style). **Trigger:** Hito 23 (es un hito dedicado).
+- **Multi-submesh material assignment desde drag**: hoy el drop de material asigna SOLO al primer slot. **Trigger:** primer mesh con submeshes que necesite materiales distintos.
+
+## Hito 18 — Forward+ (renderer escalable a muchas luces)
+
+**Objetivo:** subir el cap de point lights por escena de 8 (uniform array) a 256+ (SSBO) y cullear por tile en CPU para que el shader procese SOLO las luces que afectan a cada fragment. Migra el path de iluminación del PBR del forward simple del Hito 17 a Forward+ tile-based.
+
+**Decisión Forward+ vs Deferred:** Forward+. Mantiene compatibilidad con el HDR + post-process actual, no requiere G-buffer extra de memoria y funciona bien con MSAA cuando aparezca. Deferred queda como Hito 18.5 si Forward+ no escala (no esperado para los tamaños de escena del proyecto).
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — LightGrid CPU:*
+- `engine/render/LightGrid.h/.cpp`: tile size 16×16, AABB del bounding sphere de cada luz proyectado a screen-space (8 esquinas), prefix-sum de counts → flat array de indices. CPU-only, testeable.
+- `projectSphereToTileRange()` helper puro maneja casos: luz delante (caso normal), luz detrás (descarta), luz parcial cruzando la cámara (marca todo el viewport).
+- Convención de coords matchea `gl_FragCoord` (origen abajo-izquierda).
+
+*Bloque 2 — GPU upload via SSBO:*
+- `engine/render/opengl/OpenGLSSBO.h/.cpp`: wrapper RAII de `GL_SHADER_STORAGE_BUFFER`. `upload()` reusa storage si capacidad alcanza (`glBufferSubData`); crece con `glBufferData GL_DYNAMIC_DRAW`.
+- 3 SSBOs por frame: PointLight (binding 2), TileLightList (binding 3), uint indices (binding 4). Layout std430 con padding explícito en C++ (`PointLightStd430` 48 bytes, matchea el `struct PointLight` de GLSL).
+
+*Bloque 3 — Shader + integración:*
+- `pbr.frag` reemplaza el `uniform PointLight uPointLights[8]` por `layout(std430, binding=2) buffer PointLightBuffer`. Loop por tile: `gl_FragCoord / 16` → tileIdx → lookup en `uTiles[]` → loop sobre `uLightIndices[offset, offset+count)`.
+- `LightSystem::bindUniforms` deja de subir `uPointLights[].position`/etc. via `glUniform`; el bindeo lo hace `EditorRenderPass` con los SSBOs.
+- `k_MaxPointLights` 8 → 256 (sigue habiendo cap por seguridad pero es 32× más alto).
+
+*Bloque 4 — Demo + tests:*
+- "Ayuda > Agregar stress test 64 luces" spawnea grid 8×8 de point lights con colores procedurales HSV (hue rotando, saturation 0.85, value 1.0). Cobertura ~17.5×17.5 m, intensidad 1.2, radius 3.5 m.
+- `tests/test_light_grid.cpp` (9 casos): luz centrada, luz detrás de cámara, luz lateral fuera de frustum, luz que cruza la cámara, dimensiones de tile correctas, tile no-vacio cuando luz visible, offsets prefix-sum válidos, viewport 0×0 no crashea, luces fuera del frustum no aparecen en el flat array. Suite total **162 / 5109**.
+
+**Polish reactivo del hito:**
+- **`EnvironmentComponent.iblIntensity`** (slider [0..2], default 1.0) en el Inspector. Persistido en `.moodmap` solo si != 1.0 (no ensucia archivos viejos). Resuelve el caso "el cubemap es muy claro y ahoga las point lights" — útil cuando el dev quiere que las luces directas dominen sobre el ambient IBL.
+- Log diagnóstico one-shot del LightGrid (`LightGrid: N point lights -> M tiles, K no-vacios, T asignaciones`) cuando cambia la cantidad de luces. Diagnóstico de regresión sin spamear el log cada frame.
+
+**Siguiente paso tras completarlo:** Hito 19 — Animación esquelética. Plan en `docs/PLAN_HITO19.md`.
+
+### Pendientes menores detectados en Hito 18
+
+- **Compute shader culling** del LightGrid (mover de CPU a GPU). Hoy CPU-side es ≤1ms con 64 luces; ~5ms con 256 luces empieza a doler. **Trigger:** demo con >100 luces o menos cap se vuelve aceptable bajo profile.
+- **Cluster por profundidad (Forward++ / Z-bins)**: en escenas con luces apiladas en profundidad, todas caen en los mismos tiles XY pero a distancias muy distintas. **Trigger:** primer artista que arme una escena con muchas luces dispuestas verticalmente.
+- **AABB tighter para light culling**: hoy se proyectan 8 esquinas del AABB world-space del bounding sphere. La sphere proyectada es una elipse, no un AABB; eso da false positives en grazing. **Trigger:** profile que muestre 2-3× más asignaciones de las esperadas.
+- **MSAA dentro del scene FB HDR**: Forward+ lo soporta trivialmente (deferred no). **Trigger:** jaggies visibles en geometría angular.
+- **Sombras de point lights** (cubemap depth, 6 caras por luz). Sigue del Hito 16. **Trigger:** primera escena interior con un solo point light que necesite sombra.
+
+## Hito 19 — Animación esquelética
+
+**Objetivo:** cargar y reproducir animaciones desde `.glb`/`.gltf` (assimp ya integrado desde Hito 10). Skinning lineal (LBS) 4 huesos por vértice, interpolación lineal entre keyframes, un único clip activo por entidad.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — datos puros:*
+- `engine/animation/Skeleton.h`: `Bone { name, parent, inverseBind, localBindTransform }`. Helper libre `computeSkinningMatrices(skel, localPose, out)` (O(N) sin recursión por garantía de orden topológico). Constante `k_maxBonesPerSkeleton = 128` matchea el shader.
+- `engine/animation/AnimationClip.h`: `BoneTrack` con keyframes pos/rot/scale. Sample con clamp al primer/último key + LERP interno. Quaternions con sign-flip si `dot(q0,q1) < 0` (evita el "long way around"). `evaluate(t, skel, out)` cae al `localBindTransform` para huesos sin track.
+- `MeshAsset` extendido con `optional<Skeleton>` + `vector<AnimationClip>` + `aabbMin/aabbMax` del bind pose.
+
+*Bloque 0+2 — carga assimp:*
+- `MeshLoader.cpp` reescrito: stride 19 (pos+color+uv+normal+boneIds+boneWeights). Construye un único `Skeleton` por `MeshAsset` aglutinando `aiBone` de todos los `aiMesh` con topo sort por jerarquía de `aiNode`. Top-4 influencias por vértice renormalizadas. Parsea `aiAnimation` → `AnimationClip` con conversión ticks → segundos. Calcula AABB acumulando min/max de positions.
+- Flag `aiProcess_LimitBoneWeights` agregado al import.
+
+*Bloque 3 — shader:*
+- `shaders/pbr_skinned.vert`: LBS 4 huesos con `uniform mat4 uBoneMatrices[128]`. Reusa `pbr.frag` (recibe `vWorldPos`/`vWorldNormal` ya skinneados). Defensivo: si `sum(weights) < 1e-4` cae al pipeline no-skinneado (mesh sin esqueleto compartiendo el shader).
+- Switch en `EditorRenderPass`: dos pases. Pase A estático con `m_pbrShader` skipea entidades con `SkeletonComponent`. Pase B skin bindea `m_pbrSkinnedShader` solo si hay alguna entidad skinneada y sube `uBoneMatrices[i]` por entidad. Lambda `applyShaderUniforms` evita duplicar setup.
+
+*Bloque 4 — sistema + componentes:*
+- `AnimatorComponent { clipName, time, speed, playing, loop }` y `SkeletonComponent { skinningMatrices }` en `Components.h`.
+- `systems/AnimationSystem.{h,cpp}`: avanza time con loop/clamp, evalúa el clip activo, compone matrices skinning. Entrada en `run()` paso 3.55 (entre Script y Audio).
+- InspectorPanel: combo de clips poblado desde el MeshAsset, sliders speed, checkboxes playing/loop, botón Reset.
+
+*Bloque 5 — demo + tests:*
+- `assets/meshes/Fox.glb` (162 KB, CC0, glTF Sample Assets de Khronos). 3 clips: Survey/Walk/Run.
+- "Ayuda > Agregar personaje animado" spawnea Fox con escala 0.01.
+- `tests/test_animation.cpp`: 12 casos. Suite total **165 / 5172** (antes Hito 18 cerrado: 153 / 5109).
+
+**Siguiente paso tras completarlo:** Hito 20 — UI del juego con RmlUi. Plan en `docs/PLAN_HITO20.md`.
+
+### Pendientes menores detectados en Hito 19
+
+- **Persistencia del `AnimatorComponent`/`SkeletonComponent` en `.moodmap`/`.moodprefab`**: hoy no se serializan. El esqueleto vive en el MeshAsset (siempre lo recarga el AssetManager) pero el clip activo y el time del Animator se pierden al guardar. **Trigger:** primer dev que se queje de "abrir el proyecto y la animación arranca de cero" o que necesite un setup específico de animación al cargar.
+- **SLERP en quaternions**: hoy LERP normalizado. Ok para keyframes densos (Mixamo, glTF Sample); con keyframes muy separados puede dar twisting visible. **Trigger:** animación con artifacts notorios.
+- **Blend de animaciones / state machines**: un único clip activo por entidad. Sin blend ni transiciones suaves. **Trigger:** Hito dedicado (post-20).
+- **Compute skinning en GPU** (transform feedback / compute shader): hoy las matrices se componen en CPU (`AnimationSystem`) y se suben como uniforms. Para >5 personajes empezaría a notarse. **Trigger:** profile con muchos personajes.
+- **Inverse Kinematics**: cero IK. Personajes pisan literalmente lo que dice el clip, sin foot planting ni grasping de objetos. **Trigger:** demo de gameplay que lo necesite.
+- **Vertex Animation Textures** (alternativa a skinning para crowds): si aparece la necesidad de cientos de personajes animados. **Trigger:** RPG con NPCs masivos.
+- **AnimationEvent** (callbacks por timeline — "footstep en t=0.3"): permitiría disparar audio / partículas en frames específicos. **Trigger:** primer feature de gameplay que lo necesite.
+- **Persistencia del path del `.glb` con esqueleto en `.moodmap`**: hoy `MeshRendererComponent` solo guarda el path del mesh; el esqueleto y los clips se reconstruyen al cargar el MeshAsset. Aceptable mientras un mesh tenga UN esqueleto canónico.
+
+---
+
+## Hito 20 — UI del juego (HUD + menú de pausa)
+
+**Objetivo:** una capa de UI in-game distinguible de la UI del editor (Dear ImGui). HUD con HP/Ammo/crosshair visibles solo en Play Mode, menú de pausa con Esc, y bindings desde Lua para que los scripts puedan mutar el HUD.
+
+**Cambio de plan a mitad del hito:** el plan original era integrar **RmlUi** (HTML/CSS-like) como librería separada. Tras Bloques 1-3 funcionando, el layout responsive de RmlUi mostró bugs persistentes (vw/vh, dp, percentage clamps — el panel no escalaba consistentemente con el viewport). Se decidió abandonar RmlUi y reemplazarlo con **drawlist de Dear ImGui** sobre el callback `OverlayDraw` que ya tenía `ViewportPanel` para el editor. Trade-off: perder el lenguaje declarativo HTML/CSS, ganar simplicidad y un solo motor de UI. Documentado en `DECISIONS.md`. Para casos donde un día se quiera HTML/CSS (menús complejos con animaciones de transición), se puede reintroducir como un layer adicional sin romper el actual.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 4 — HUD + pausa via ImGui drawlist:*
+- HUD en Play Mode: bloques HP / AMMO + crosshair (cruz con outline) — `EditorApplication::drawGameOverlay`. Posición adaptativa al tamaño del viewport (esquinas con padding fijo de 24 px).
+- Menú de pausa: overlay oscuro 50% + panel centrado 50% del ancho con clamp [320, 520] px + 3 botones (Continuar / Opciones / Salir al editor). Hit-testing con `ImGui::IsMouseHoveringRect` + `IsMouseClicked`.
+- Esc togglea pausa; `updateCameras` early-return cuando `paused=true` para congelar gameplay.
+- Borrado completo de `RmlUi::Core` + FreeType + assets `.rml`/`.rcss` + shaders `ui.{vert,frag}` + `src/engine/ui/{RmlRenderer,RmlSystem,UiLayer}.{h,cpp}` (~1000 líneas).
+- Bug fix encontrado en el smoke test: `ViewportPanel` resetea `m_imageHovered=false` al inicio del frame y solo lo setea DESPUÉS de invocar el overlay callback. El check de hover de los botones que combinaba `IsMouseHoveringRect && imageHovered()` daba siempre false. Removido el `&& imageHovered()` — `IsMouseHoveringRect` solo es suficiente porque el clip rect del viewport ya limita el área.
+
+*Refactor: partición de `EditorApplication.cpp`:*
+- `EditorApplication.cpp` había crecido a 1514 líneas (lifecycle + ctor con lambda gigante + scene methods + play mode methods + overlay del juego). Repartido en 4 archivos parciales (~500 líneas/cada uno) que comparten el mismo header — convención ya usada en este módulo (`DemoSpawners.cpp`, `EditorProjectActions.cpp`, `EditorRenderPass.cpp`):
+  - `EditorApplication.cpp` (652 líneas): ctor + dtor + `processEvents` + `run()` + `beginFrame/endFrame` + `mapWorldOrigin` + `markDirty` + `updateWindowTitle`.
+  - `EditorOverlay.cpp` (516 líneas, nuevo): `drawEditorOverlay` con iconos (Light/Audio), halo de selección, gizmo translate/rotate/scale, hotkeys W/E/R/Period.
+  - `EditorPlayMode.cpp` (212 líneas, nuevo): `enterPlayMode/exitPlayMode/updateCameras/drawGameOverlay`.
+  - `EditorScene.cpp` (192 líneas, nuevo): `buildInitialTestMap`, `rebuildSceneFromMap`, `updateRigidBodies`, `updateTileEntity`, `deleteSelectedEntity`.
+- Soft target: ~500 líneas/`.cpp`, hard cap ~800.
+
+*Bloque 5 — bindings Lua + GameState:*
+- `engine/game/GameState.{h,cpp}` (nuevo): singleton-namespace con `HudState& hud()`, `bool& paused()`, `reset()`. Estado proceso-global accesible desde C++ y desde Lua.
+- Tabla `hud` registrada en `LuaBindings.cpp` con setters `setHp/setAmmo/setPaused` + getters `getHp/getAmmo/getPaused`. Cualquier script con `ScriptComponent` puede mutar el HUD del juego.
+- `EditorApplication` migrado a leer/escribir `GameState::hud()` y `GameState::paused()` (eliminados los miembros propios `m_hud`/`m_paused`).
+- `exitPlayMode` llama `GameState::reset()` para volver a defaults al salir de Play.
+- `assets/scripts/hud_demo.lua` (nuevo): script demo que setea HP=75/Ammo=12 al entrar a Play, drena 1 HP/s y al llegar a 0 fuerza pausa via `hud.setPaused(true)`. Spawneable desde "Ayuda > Agregar HUD demo".
+- Bug fix detectado en smoke test: cuando un script Lua flippeaba `paused=true`, el menú aparecía pero el cursor seguía oculto (relative mouse mode). Fix centralizado en `updateCameras`: detecta la transición del flag y llama a `SDL_SetRelativeMouseMode` en un único lugar — así Lua, Esc y el botón "Continuar" pasan por el mismo camino. El handler de Esc y el botón "Continuar" pasan a solo flippear el flag.
+
+*Bonus fix — Delete vía SDL:*
+- La tecla `Delete/Backspace` para borrar entidad seleccionada se procesaba con `ImGui::IsKeyPressed` dentro del overlay callback. Dependía del foco del panel y a veces no disparaba. Migrado a evento SDL en `processEvents` (igual que Esc / F1 / Ctrl+S). La lógica de borrado (filtro de tiles + cleanup de Jolt body + destroy + log + markDirty) se extrajo al método público `deleteSelectedEntity` en `EditorScene.cpp`.
+
+*Bloque 6 — tests:*
+- `tests/test_game_state.cpp`: 6 casos cubriendo defaults, mutación C++, reset, hud.setHp/setAmmo/setPaused desde Lua, hud.getHp/getAmmo/getPaused desde Lua, dos scripts compartiendo el mismo singleton.
+- Fix incidental en `tests/test_lighting.cpp`: el mock `RecordingShader` no overrideaba `setVec2` (agregado a `IShader` en Bloque 4 al integrar lo que iba a ser RmlUi y quedó). Sin esto `mood_tests` no compilaba.
+- Suite total **171 / 5188** (antes Hito 19 cerrado: 165 / 5172).
+
+**Siguiente paso tras completarlo:** Hito 21 — Empaquetado standalone (build distribuible del juego sin editor). Plan en `docs/PLAN_HITO21.md`.
+
+### Pendientes menores detectados en Hito 20
+
+- **Botón "Opciones" del menú de pausa**: hoy solo loguea `aún no implementado`. **Trigger:** cuando haya un sistema de settings persistido (volumen, resolución, control mapping).
+- **Animaciones de transición del menú de pausa** (fade, slide): hoy aparece/desaparece instantáneo. **Trigger:** primera versión "vendible" donde la presentación importe; o cuando se quiera reintroducir RmlUi para ese caso específico.
+- **Persistencia de HUD entre sesiones**: hoy `GameState::reset()` al `exitPlayMode` lo lleva a defaults; los scripts setean valores cada vez. **Trigger:** primera vez que un dev quiera "save game" con HP/Ammo persistidos.
+- **HUD escalable a más de HP/Ammo**: hoy 2 bloques fijos. Si crece a 5+ stats vale la pena hacer el HUD data-driven (lista de bloques desde Lua). **Trigger:** primer juego que necesite +3 stats simultáneos.
+- **Tests del flujo Esc → menú → click "Continuar"**: hoy verificado solo con smoke test manual. ImGui no es trivialmente testable en headless, pero `GameState::paused()` y `deleteSelectedEntity` (extraído justo para esto) sí podrían tener tests headless. **Trigger:** primer regression bug del menú.
+
+---
+
+## Hito 21 — Empaquetado standalone (MoodPlayer + PackageBuilder)
+
+**Objetivo:** producir un build distribuible del juego (binario + assets) ejecutable por un usuario final sin Visual Studio. Hasta este hito todo vivía como `MoodEditor.exe`; ahora el editor puede generar un paquete autocontenido con un `MoodPlayer.exe` separado que carga el proyecto indicado en un `game.json`.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — scaffold MoodPlayer:*
+- Nuevo target `MoodPlayer.exe` con `src/player/PlayerApplication.{h,cpp}` + `src/player/main.cpp`. Esqueleto mínimo: ventana SDL 1280x720 + GL 4.5 + ImGui inicializado (sin paneles, `io.IniFilename = nullptr`), Esc cierra. Sin escena todavía.
+- Listas de fuentes duplicadas en CMake; preparó la base para el refactor del Bloque 3.
+
+*Bloque 2 — `SceneRenderer` extraído:*
+- Pipeline de render (FBs HDR/LDR, shaders PBR estático + skinneado, skybox, shadow pass, post-process, IBL, light grid + 3 SSBOs, debug renderer, environment cache, last view/projection) movido de `EditorApplication` a `engine/render/SceneRenderer`. Editor pasó de ~25 miembros de render a uno solo (`unique_ptr<SceneRenderer>`).
+- API por frame: caller pasa scene + assets + view + projection + aspect + cameraPos + tamaño del panel a `renderScene(...)`. SceneRenderer pinta sky + escena + lit al scene FB pero deja el FB bindeado para que el caller agregue debug 3D propio via `debugRenderer()`. Cuando llama a `endFrame()`, flushea el debug y aplica post-process al viewport FB.
+- `EditorRenderPass.cpp` queda como orquestador thin (camera dispatch + overlay 3D editor-side). Helper `viewportAspect()` unifica los 5 callsites con la fórmula `m_viewportFb->w/h`.
+- Cleanup incidental: `m_defaultShader` eliminado (dead code desde Hito 17).
+
+*Bonus fix arrastrado del Hito 19:* drop de mesh al viewport ahora aterriza al ras del piso (y=0) calculando `yFloorOffset = -autoScale * aabbMin.y`. Antes con autoScale del Hito 19 el zorro flotaba 1.5m sobre el piso (la celda center y).
+
+*Bloque 3 — PlayerApplication completo:*
+- Fase A: PlayerApplication carga un mapa de prueba placeholder (sala 8x8 con grid+brick) y lo renderiza con SceneRenderer + FpsCamera. WASD + mouse para moverse; las paredes bloquean por moveAndSlide. Esc cierra.
+- Fase B: agregados ScriptSystem + AudioDevice + AudioSystem + AnimationSystem + PhysicsWorld al loop. Tiles del placeholder ganan RigidBodyComponent::Static.
+- HUD del juego + menú de pausa extraídos a `engine/game/GameOverlay::draw(...)` como free function compartida entre editor y player. Parametrizada por `exitButtonLabel` + `onExitRequested` callback (editor → `exitPlayMode()`, player → `m_running = false`).
+- Esc togglea `GameState::paused()`. Sync de cursor con `SDL_SetRelativeMouseMode` centralizado en `updateCamera` detectando la transición del flag.
+- Refactor de CMake: extraída `mood_engine_lib` (static lib) con todo `core/`/`platform/`/`engine/`/`systems/`. Editor y player linkean contra ella y agregan solo sus `.cpp` específicos. Dependencias del motor (SDL2, glm, EnTT, Lua, Jolt, etc.) son `PUBLIC` — los consumidores las heredan.
+
+*Bloque 4 — `game.json` + carga del proyecto:*
+- `engine/game/GameManifest`: schema v1 (`version`, `name`, `project`, `default_map`).
+- `PlayerApplication::tryLoadGameManifest`: lee `<exe_dir>/game.json` (vía `SDL_GetBasePath()`, no working dir), resuelve el `.moodproj` relativo al manifest, llama `ProjectSerializer::load` + `SceneSerializer::load`, aplica al scene via `SceneLoader::applyEntitiesToScene`. Si cualquier paso falla, fallback al mapa de prueba.
+- `engine/serialization/SceneLoader::applyEntitiesToScene` (nuevo): extracción de las ~85 líneas que aplican mesh/material upgrader v6/v7 + light + rigidbody + environment + prefab link de un `SavedMap` a una Scene. Editor (`tryOpenProjectPath`) y player la comparten.
+- Tras cargar, ctor pide a SceneRenderer `applyEnvironmentFromScene(*scene)` para que la primera frame ya muestre fog/exposure/tonemap correctos.
+
+*Bloque 5 — `PackageBuilder` + acción "Empaquetar proyecto":*
+- `engine/packaging/PackageBuilder::build`: dado un Project + destDir + engineExeDir, copia MoodPlayer.exe + SDL2*.dll + `assets/` + `shaders/` + el directorio del proyecto a `<destDir>/<projectName>/project/` y genera `game.json`.
+- V1 simple: copia `assets/` y `shaders/` enteras (sin filtrar por refs). Más grande de lo necesario pero predecible.
+- Safety check: refuse si `destDir` está adentro del project root (o viceversa) — sin esto, elegir como destino la carpeta del proyecto provoca recursión infinita en `std::filesystem::copy`. Comparación con `weakly_canonical` + prefix match con separador.
+- Item nuevo en `Archivo > Empaquetar proyecto...`. Si hay cambios sin guardar ofrece guardar primero. Abre `pfd::select_folder`, llama al packager, muestra MessageBox con resultado. `SDL_GetBasePath()` resuelve dónde vive `MoodPlayer.exe`. `#ifdef NDEBUG` distingue Debug (`SDL2d.dll`) de Release (`SDL2.dll`).
+- Smoke test: paquete con 88 archivos + game.json válido. Doble-click en `MoodPlayer.exe` empaquetado abre la sala con Fox + pyramid persistidos, Esc abre el menú de pausa, "Salir del juego" cierra limpio.
+
+*Bloque 6 — tests:*
+- `tests/test_package_builder.cpp`: 8 casos headless. Arman engineExeDir + project mock en directorios temporales y verifican el output. Cubren build feliz (layout completo + game.json válido), recursión bloqueada (dest dentro del project, dest = project root), engineExeDir inexistente, shaders/ faltante (error fatal), assets/ faltante (warning, no error), project name vacío, isDebug=false copia SDL2.dll en lugar de SDL2d.dll.
+- Suite total **179/5221** (antes Hito 20 cerrado: 171/5188).
+
+**Siguiente paso tras completarlo:** Hito 22 (TBD). Plan en `docs/PLAN_HITO22.md` con candidatos.
+
+### Pendientes menores detectados en Hito 21
+
+- **Filtrado de assets en el packager**: hoy V1 copia `assets/` entero (~5-10 MB de overhead típico). Para juegos con muchas texturas/mallas/audios sin usar, walker que indexe refs reales de scripts + serializadores ahorraría peso. **Trigger:** primer dev que reporte "el paquete pesa X MB y solo uso Y%".
+- **Build Release del player**: el packager soporta `isDebug=false` y copia `SDL2.dll`, pero el flujo actual del editor solo compila Debug. Falta agregar un preset `windows-msvc-release` y que `Empaquetar proyecto...` ofrezca elegir Debug/Release. **Trigger:** primer paquete que vaya a manos de usuarios finales.
+- **`mood_engine_lib` como lib compartida**: hoy es `STATIC`. Si dos targets (editor + player) crecen mucho, podría tener sentido `SHARED` para dedup en disco. **Trigger:** tamaño de binarios que moleste.
+- **Persistencia del Animator (clip activo + time)**: pendiente arrastrado del Hito 19. Empaquetar un proyecto con un Fox.glb funciona — pero el clip activo y el time se resetean al abrir el player. Sin esto, no se puede congelar una pose o un punto específico de animación al cargar. **Trigger:** primer juego donde el setup inicial de animación importa al cargar.
+- **Botón "Opciones" del menú de pausa**: arrastra del Hito 20. Sin un sistema de settings persistido el botón loguea "no implementado".
+- **Test E2E del flujo completo**: hoy `test_package_builder` cubre la lógica del packager pura, pero no se prueba el ciclo "editor → empaquetar → ejecutar player → cargar proyecto". **Trigger:** primer regression del flujo end-to-end (ej. game.json schema cambia y el player no lo lee).
+- **CI build**: el smoke test corre solo localmente. Un GitHub Action que compile editor + player + corra mood_tests sería el sello automático antes de mergear. **Trigger:** primera vez que un PR rompe `main`.
+
+---
+
+## Hito 22 — Workflow de scripting Lua (UX en el editor)
+
+**Objetivo:** cerrar el gap UX que tenía el motor entre "Lua corre" (Hito 8) y "el dev escribe scripts cómodo". La infra estaba: `ScriptComponent`, hot-reload por mtime, bindings, Inspector con InputText. Lo que faltaba: scripts en el Asset Browser, drop a entidades, "Nuevo Script" desde menú, doc panel.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — Scripts en Asset Browser:*
+- `AssetBrowserPanel` escanea `assets/scripts/*.lua` con metadata de line count. Sección colapsable nueva entre Materiales y Audio. Drag source con payload `MOOD_SCRIPT_ASSET` (string buffer 256 bytes con el path lógico — los scripts no pasan por AssetManager, los carga ScriptSystem on-demand).
+
+*Bloque 2 — Drop al viewport:*
+- `ViewportPanel::AssetDragKind::Script` + `consumeScriptDrop()` con NDC del cursor + path del script. `BeginDragDropTarget` acepta el nuevo payload.
+- `EditorApplication::processViewportScriptDrop`: pickEntity → si la entidad ya tiene `ScriptComponent` reemplaza el path + fuerza `loaded=false` (recarga vía mtime); si no, `addComponent`. Path persistido como `assets/<path_logico>` para mantener consistencia con los demos manualmente spawneados.
+- Highlight visual: extiende el flow de Material drop — `dragKind == Script` también activa el OBB amarillo sobre la entidad bajo el cursor.
+
+*Bloque 3 — "Nuevo Script..." en menú:*
+- `Archivo > Nuevo Script...` abre `pfd::save_file` con default name + filtro `*.lua`. Si el usuario elige un path fuera de `assets/scripts/`, redirige el archivo a esa carpeta (sino el AssetManager no lo encuentra).
+- Prompt para sobreescribir si existe.
+- Template mínimo: comentario con bindings disponibles + `function onUpdate(self, dt) end`.
+- `assetBrowser().rescan()` post-create — el script aparece sin reabrir editor.
+
+*Bloque 4 — Panel "Lua API":*
+- Nuevo `LuaApiPanel` registrado en `EditorUI::m_panels`. Tabs `self`/`hud`/`log`/`Lifecycle` con signature en color cian + descripción + snippet de uso en gris. Lista hardcoded — sumar manual al agregar bindings nuevos.
+
+*Bloque 5 (stretch) — Mini editor in-place:*
+- **Deferido al Hito 23.** Los 4 bloques anteriores ya entregan el grueso del workflow; el dev sigue editando en VS Code y el hot-reload del ScriptSystem levanta los cambios al guardar. `ImGuiColorTextEdit` como nueva dep CPM se evalúa cuando se retome.
+
+*Bonus fix arrastrado del Hito 19:*
+- `SceneLoader::applyEntitiesToScene` detecta meshes con esqueleto + clips y auto-agrega `AnimatorComponent` + `SkeletonComponent` con defaults razonables (clipName="" → primer clip, playing=true, loop=true). Sin esto, un Fox.glb guardado en `.moodmap` reaparecía en bind pose porque esos componentes no están en el schema del `SavedEntity`. Editor + MoodPlayer (que reusa `SceneLoader`) heredan el fix.
+
+*Bloque 6 — tests:*
+- `tests/test_scene_loader.cpp`: 3 casos headless. Mesh con skeleton gana Animator/Skeleton; mesh sin skeleton no; back-compat de paths v6 (texturas en lugar de `.material`) los envuelve en wrapper sin caer al missing.
+- Suite total **182/5234** (antes Hito 21 cerrado: 179/5221).
+
+**Siguiente paso tras completarlo:** Hito 23 (TBD). Plan en `docs/PLAN_HITO23.md` con candidatos. Si se sigue scripting, retomar el mini editor in-place.
+
+### Pendientes menores detectados en Hito 22
+
+- **Mini editor de código in-place**: deferido como Bloque 5 stretch. Punto de arranque natural si el Hito 23 sigue scripting. Necesita evaluar `ImGuiColorTextEdit` (license, tamaño de la dep CPM).
+- **Lista del LuaApiPanel hardcoded**: sumar manualmente al agregar bindings nuevos. Si llegan a 50+, vale la pena introspección automática vía sol2 (no trivial — sol2 no expone metadata estructurada). **Trigger:** primer dev que reporta "el panel quedó desactualizado".
+- **Drop a Hierarchy items**: hoy solo Viewport. Si el usuario quiere asignar script a una Light/Audio sin mesh visible, hoy tiene que clickearla y editarla en el Inspector. **Trigger:** primer pedido específico.
+- **Persistencia opcional del Animator (clipName / time)**: el auto-add usa defaults. Si el dev necesita clipName="Walk" guardado por entidad, hay que extender `SavedEntity` con un campo opcional `animator: { clipName, playing, loop }`.
+- **"Nuevo Script" abre el editor externo del usuario**: hoy crea el archivo y deja al dev hacer alt-tab. Una mejora UX sería invocar `start <path>` (Windows) tras crear, para que el editor default lo abra automáticamente. **Trigger:** primer usuario que diga "tuve que ir a buscar el archivo".
+
+---
+
+## Hito 23 — AI / pathfinding básico
+
+**Objetivo:** primer eslabón de "el motor puede sostener un juego". Hasta el Hito 22 había render + scripts + física + packaging — pero nada que el jugador pueda enfrentar. Este hito agrega A\* sobre GridMap, `NavAgentComponent` + `NavSystem`, y un demo de enemigo que persigue al jugador. Sin esto, todo lo anterior era plumbing — con un enemigo que persigue, el motor recién muestra que puede hacer un juego.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — A\* sobre GridMap:*
+- `engine/world/Pathfinding::findPath(map, start, goal)` — función pura. 4-connected (sin diagonales) + heurística Manhattan. Retorna vector de TileCoord; vacío si no hay path. Sin corner-cutting drama.
+- 6 tests headless: sala vacía 8x8, muro al medio (bordea), sin path posible, start==goal, fuera del grid, goal sólido.
+
+*Bloque 2 — NavAgent + NavSystem:*
+- `NavAgentComponent { target, speed, active, path, pathIndex, repathAccumulator, lastPathTarget }`. Estado interno (path / accumulators) NO se persiste — runtime-only.
+- `systems/NavSystem`: por frame, recompute path con throttle 0.5s o si target se aleja > 1m del último path. Steering 4-conn en plano XZ (Y constante). Colisión vía `moveAndSlide` igual que el player. Avanza waypoint cuando dist < tileSize/2. Cuando llega al final, queda quieto.
+- Cableado en EditorApplication: corre solo en Play Mode. Antes del update, se settea `nav.target = m_playCamera.position()` para que enemigos persigan al jugador.
+
+*Bloque 3 — Demo enemigo + fix de orientación general:*
+- "Ayuda > Agregar enemigo demo" spawnea un CesiumMan con NavAgent + Animator (clip default playing). Sin RigidBody — NavSystem ya hace moveAndSlide.
+- **Fix arrastrado del Hito 19:** `MeshAsset::importRotationEuler` extraído del `mTransformation` del rootNode de assimp. glTF Y-up nativos (Fox) traen `(0,0,0)`; Z-up convertidos por glTF (CesiumMan, BrainStem, etc.) traen `(-90, 0, 0)`. `processViewportMeshDrop` y `processSpawnEnemyDemoRequest` aplican esta rotación al spawn — cualquier `.glb` arrastrado al viewport queda parado, sin hardcodear por modelo.
+- Helper `rotatedAabbWorldY(aabbMin, aabbMax, eulerDeg)` calcula el rango world-Y del AABB después de aplicar la rotación de import. Usado para autoscale (altura visual real, no axis crudo) + floor offset (anclar pies a y=0).
+- Asset nuevo: `assets/meshes/CesiumMan.glb` (438 KB, CC0 de Khronos glTF Sample Assets, humanoide bipédo con clip de caminata).
+
+*Bloque 4 — F1 debug del path:*
+- `drawEditorScene3DOverlay` con `m_debugDraw == true` itera entidades con NavAgentComponent y dibuja el path actual como polyline cyan entre centros de tiles. Waypoint actual (`path[pathIndex]`) marcado con AABB chiquito brillante. Útil para ver si el agente está atascado o si recomputa cuando debería.
+
+*Bloque 5 — MoodPlayer integration:*
+- `PlayerApplication` agrega `m_navSystem` y lo invoca con el mismo patrón que el editor: actualiza target a `m_playCamera.position()` y llama `update`. Skipea cuando `GameState::paused()`. Un proyecto empaquetado con un enemigo persistido corre el comportamiento NavAgent al ejecutar el `MoodPlayer.exe` — sin código extra del dev.
+
+*Bloque 6 — tests:*
+- `tests/test_pathfinding.cpp` (6 casos del Bloque 1).
+- `tests/test_nav_system.cpp` (4 casos): agente avanza al target, llega y se queda quieto, target inalcanzable no se mueve, agente inactive no se mueve.
+- Suite total **192/5283** (antes Hito 22 cerrado: 182/5234).
+
+**Siguiente paso tras completarlo:** Hito 24 (TBD). Plan en `docs/PLAN_HITO24.md`.
+
+### Pendientes menores detectados en Hito 23
+
+- **Rotación del NavAgent hacia su movimiento**: hoy el enemigo camina sin girar — siempre mira en su dirección original. El user lo reportó como "se mueve robóticamente, es un detalle". Fix corto: en `NavSystem::update`, después de calcular `dir` en XZ, setear `tf.rotationEuler.y = atan2(...)`. La fórmula depende del axis "forward" del modelo; para CesiumMan post-importRotation (-90 X) seguramente es `atan2(-dir.z, dir.x)`. **Trigger:** rendering aceptable hoy, polish para Hito 24.
+- **Persistencia del NavAgent en `.moodmap`**: V1 NO se persiste (runtime tactico). Si el dev necesita que el enemigo demo "viva" entre cierres del editor, extender `SavedEntity` con `nav_agent: { speed }` (los flags + path se recomputan al runtime). **Trigger:** primer dev que pida "guardar el enemigo en el mapa".
+- **Re-pathfind cuando el path se vuelve inválido**: hoy el throttle es 0.5s + delta target. Si un muro aparece in-the-middle (futuro: tile editor en runtime), el path queda inválido hasta el próximo recompute. Mitigación: invalidar al cambiar GridMap. **Trigger:** primer feature que mute tiles en runtime.
+- **Asset pack realista para tests físicos**: el dev mencionó querer modelos/mapas más realistas (al estilo Source) para probar físicas en escenarios variados. Se descartó Source por legales + formatos turbios. Alternativas viables: Quaternius (CC0), Sketchfab (CC0/CC-BY), Polyhaven (CC0), Mixamo. Plan: en algún hito posterior, descargar 3-5 props (cajas, barriles, mobiliario) + 1-2 personajes humanoides para enriquecer los demos.
+- **Diagonales (8-connected)**: V1 4-conn produce paths visiblemente "boxy". 8-conn con check de corner-cutting daría rutas más naturales. **Trigger:** primera escena donde se note el zigzag.
+- **Performance del A\***: 64 nodos (mapa 8x8) es trivial. Si el GridMap escala a 64x64 (4096 nodos), priority_queue empieza a notarse. Mitigaciones: pool de nodos, jump point search. **Trigger:** profile con frame drops por NavSystem.
+
+## Hito 24 — Exposed properties Lua
+
+**Objetivo:** hacer scripts Lua **reusables como componentes**. Hasta el Hito 23 un script tenía constantes hardcoded (`local DEG_PER_SEC = 45.0`); para 3 entidades rotando a velocidades distintas se necesitaban 3 archivos `.lua` o un parámetro editable per-entity. Este hito agrega la segunda opción: el script declara `local speed = engine.exposed("speed", 45.0)` y el Inspector renderiza un campo "speed" por entidad, persistido en `.moodmap`.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — `engine.exposed` binding + descubrimiento:*
+- `engine/scripting/ExposedProperty.{h,cpp}`: `enum ExposedType { Number, Bool, String, Vec3 }` + `using ExposedValue = std::variant<f32, bool, std::string, glm::vec3>` + `struct ExposedProperty { name, type, defaultValue }`.
+- `ScriptComponent` extendido con `std::vector<ExposedProperty> exposedProps` (descubierto al cargar) + `std::unordered_map<std::string, ExposedValue> overrides` (editable). `exposedProps` NO se persiste; se redescubre cada carga.
+- `LuaBindings::setupLuaBindings(state, entity, &sc)` — la firma gana un `ScriptComponent*` opcional (nullptr en tests headless). `engine.exposed(name, default)` infiere tipo del Lua default, registra metadata + devuelve el override si existe, sino el default.
+
+*Bloque 2 — Inspector dinámico:*
+- `InspectorPanel`: sub-sección "Exposed properties" en el ScriptComponent. Por cada prop renderiza el widget según tipo (DragFloat / Checkbox / InputText / DragFloat3 / ColorEdit3 si el nombre contiene "color"). Botón "Reset" por prop borra el override y vuelve al default del script.
+- Edits disparan `sc.loaded = false` para forzar reload del chunk top-level con el nuevo override.
+
+*Bloque 3 — Aplicar overrides en runtime:*
+- `ScriptSystem` clear de `exposedProps` antes de cada (re)load — un script que removió un `engine.exposed` entre reloads no deja la prop fantasma en el Inspector. Hot-reload por mtime sigue funcionando: los overrides viven en `ScriptComponent`, no en `sol::state`.
+- `assets/scripts/rotator.lua` reescrito: `local speed = engine.exposed("speed", 45.0)`.
+
+*Bloque 4 — Persistencia en `.moodmap`:*
+- `SavedEntity` gana `SavedScript` opcional con `{path + overrides}`. Schema: `"script": { "path": "...", "overrides": { name: value, ... } }`.
+- `EntitySerializer` serializa/deserializa con tipos number/bool/string/vec3 (vec3 como array `[x,y,z]`). Tipos no soportados (objetos, etc.) loguean warning y se skipean.
+- `SceneLoader::applyEntitiesToScene` adjunta el ScriptComponent + overrides; el script se carga perezosamente cuando `ScriptSystem` corre.
+- `k_MoodmapFormatVersion` 7 → 8. Archivos v7 sin `script` se leen igual.
+- **Fix arrastrado**: el filtro de `SceneSerializer::save` solo persistía entidades con MeshRenderer/Light/RigidBody/Environment; ahora también con Script (path no-vacío). Sin esto el round-trip de un rotator quedaba incompleto.
+
+*Bloque 5 — tests + cierre:*
+- `tests/test_exposed_properties.cpp` (8 casos): registro de metadata, override gana sobre default, dedupe por nombre, inferencia de tipos por bool/string/vec3, tipo no soportado se skipea, override de vec3 llega como tabla {x,y,z}, round-trip completo en `.moodmap`, ScriptComponent sin path no se serializa.
+- Suite total **200/5287** (antes Hito 23 cerrado: 192/5283).
+
+**Polish reactivo cerrado en el mismo tag:**
+- **Mapa de prueba 16x16 con suelo plano + columna central**: antes el demo arena tenía cubos perimetrales con backface-culling visualmente molestos. Ahora el editor + MoodPlayer usan un mapa 16x16 con sólo la columna brick central + un quad escalado como suelo.
+- **Skybox equirectangular**: `SkyboxRenderer` gana modo equirect (sampler2D con atan2/asin spherical mapping) además del cubemap original. Evita seams en los polos del cubemap. Asset nuevo: `assets/skyboxes/sky_kloofendal.png` (1.1 MB, kloofendal_43d_clear de Polyhaven CC0, tonemapeado a LDR via `tools/hdr_to_equirect_png.py` con `--exposure 0.4` para preservar detalle de nubes). Shader nuevo `shaders/skybox_equirect.frag` (con la fórmula `v = 0.5 + lat/PI` para compensar el flip-Y de stbi en `OpenGLTexture`).
+
+**Siguiente paso tras completarlo:** Hito 25 — Hot-reload de shaders. Plan en `docs/PLAN_HITO25.md`.
+
+### Pendientes menores detectados en Hito 24
+
+- **Reload spam durante edición del Inspector**: cada frame de DragFloat dispara `sc.loaded = false` → re-ejecuta el chunk top-level → log "Cargado '...'" se imprime ~10 veces por drag. Mitigación: throttle del flag (set sólo al soltar el drag con `IsItemDeactivatedAfterEdit`) o suprimir el log de reload cuando es triggered por override. **Trigger:** dev se queja del spam, o el reload tiene side effects que impactan rendimiento.
+- **Inferencia de tipo para `nil` default**: `engine.exposed("foo", nil)` no tiene tipo. Hoy se loguea warning y devuelve nil; la prop no se registra. Si el dev quiere "valor opcional", la API necesitaría un tercer arg explícito de tipo: `engine.exposed("foo", nil, "string")`.
+- ~~**Sync manual de shaders al iterar**: editar `shaders/*.{vert,frag}` no surte efecto al relanzar el editor — CMake los copia a `build/debug/Debug/shaders/` sólo en build time. Workaround: `cp shaders/<file> build/debug/Debug/shaders/<file>`. **Mitigación apropiada:** symlink al copy step, o un hot-reload de shaders. **Trigger:** próxima sesión con iteraciones intensas de shader.~~ **Resuelto en Hito 25** con `OpenGLShader::tickHotReload` (mtime + recompile en vivo).
+- **Sync de IBL a equirect**: `SceneRenderer.cpp` usa `SkyboxRenderer::Equirect` para el sky pero el IBL bake (`tools/bake_ibl.py`) sigue usando `assets/skyboxes/sky_day/` cubemap. La iluminación PBR no refleja el kloofendal nuevo. **Trigger:** dev nota que las esferas PBR reflejan un cielo distinto al visible.
+
+## Hito 25 — Hot-reload de shaders + polish del sistema de materiales
+
+**Objetivo:** cerrar el ciclo de iteración de shaders sin tener que reiniciar el editor (sufrido durante el polish del Hito 24 con la costura del skybox), y completar el polish del sistema de materiales que reveló dos bugs UX al revisar el render: (1) entidades sin material renderean blanco puro en lugar del patrón missing visible; (2) editar el albedoTint de un cubo contagia a todos los demás que comparten material cacheado.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — Hot-reload de shaders (G):*
+- `OpenGLShader` guarda `m_vertexPath` + `m_fragmentPath` + `mtime` de la última compilación exitosa. Auto-registro en `s_allShaders` (vector estático) en el ctor; auto-baja en el dtor. Single-thread, sin mutex.
+- `OpenGLShader::tryReloadIfChanged()`: si algún archivo cambió en disco, llama al builder helper `buildProgram()` (extraído del ctor para reuso); en éxito tira el `glDeleteProgram` viejo, swapea, invalida la cache de uniforms (las locations pueden diferir si el set de uniforms activos cambió). En fallo loguea el GL error y mantiene el program previo — el render no se rompe.
+- `OpenGLShader::tickHotReload(dt)`: throttle 500 ms acumulando dt; cada vez que se vacía itera todos los shaders vivos. Llamado una vez por frame desde `EditorApplication::run()`.
+- Para `mtime` desaparecido (file_time_type epoch): se trata como "sin cambios" y no spamea errores — cubre el caso de editores de texto que borran y reescriben el archivo en dos pasos.
+
+*Polish del sistema de materiales (cerrado en el mismo tag):*
+- **Costura del skybox equirect**: `shaders/skybox_equirect.frag` cambia `texture()` por `textureLod(..., 0.0)`. En la costura (u salta de 1 a 0) las derivadas `dFdx(u)` son enormes y el sampler elegía un mip bajísimo (1×1 px), produciendo una línea vertical borrosa visible en el cielo. Forzar mip 0 elimina el problema; el skybox no se beneficia de mipmaps porque su cobertura angular por píxel es ~constante.
+- **Default material visible como warning**: `MaterialAsset` gana flag `useAlbedoMap` (antes el renderer chequeaba `mat->albedo != 0`, lo cual confundía "sin textura" con "este es el material default"). El default lo tiene en `true` con `albedo=0` para que sample explícitamente `missing.png` (patrón magenta/negro). Materiales tint-puro de archivo (oro_pulido, plastico_azul) inferieren `useAlbedoMap = j.contains("albedo")` — siguen funcionando como antes.
+- **Material instance único por entidad**: nuevo `AssetManager::createMaterialFromTexture(texId)` (sin cache, idéntico body al `loadMaterialFromTexture` cacheado pero cada call genera un slot nuevo). Migrados a este path: tiles + floor de `EditorScene::rebuildSceneFromMap` y `PlayerApplication::rebuildSceneFromMap`, los 3 spawners de `DemoSpawners` (rotador, caja física, demo-sombras), `updateTileEntity` (drop de textura), y `SceneLoader` (cada entidad persistida con texture-path obtiene su propio instance). El sentinel `__runtime_tex#<N>` se persiste como el path de la textura subyacente (mismo round-trip que `__tex#<N>` del cacheado). Editar el albedoTint de un cubo no contagia jamás.
+
+**Suite total:** 206/5309 (antes Hito 24 cerrado: 200/5287). Tests nuevos en `test_material_serializer`: 6 cases del flag `useAlbedoMap` y del helper `createMaterialFromTexture` (ids distintos por llamada, edición no muta al hermano, sentinel correcto).
+
+**Verificación funcional del hot-reload (smoke test programático):**
+- Editor lanzado en background, modificación de comentario en `shaders/skybox_equirect.frag` → `[render] [info] Hot-reload OK: shaders/skybox.vert + shaders/skybox_equirect.frag` aparece en el log a los ~6 s.
+- Inyección de syntax error → `[render] [warning] Hot-reload fallo en ... (se mantiene el shader previo)` — el editor sigue corriendo sin romper render.
+- Restauración del shader original → `Hot-reload OK` recovery sin tener que reiniciar.
+
+**Siguiente paso tras completarlo:** Hito 26 (TBD). Plan en `docs/PLAN_HITO26.md` con candidatos.
+
+### Pendientes menores detectados en Hito 25
+
+- **Hot-reload no incluye al MoodPlayer**: el wire-up `tickHotReload` está sólo en `EditorApplication::run`. El Player ships con shaders bundleados al paquete; tiene poco sentido hot-reloadear ahí. **Trigger:** dev quiere debuggear shaders dentro del Player corriendo (poco probable).
+- **Encoding del log de error de GL**: `glGetShaderInfoLog` en NVIDIA devuelve a veces caracteres no-UTF-8 que spdlog imprime como `???` y similares. Es pre-existente (también en compile inicial); el hot-reload sólo lo expone más seguido. **Trigger:** dev quiere errores de shader legibles → forzar conversión a UTF-8 o filtrar.
+- **Tests del recompile real (sin GL)**: `tryReloadIfChanged` no se cubre con tests automáticos porque requiere contexto OpenGL. Smoke test programático del manual quedó documentado arriba. **Trigger:** infra de tests con GL headless (poco probable a corto plazo).
+- **Polish del NavAgent (rotación + persistencia)**: deferido por el dev — "es problema para más adelante cuando ya tenga personajes de verdad". Sigue siendo candidato A del próximo hito.
+
+## Hito 26 — Asset pipeline: extracción de texturas + asset pack Kenney + IBL bakeable
+
+**Objetivo:** cerrar el ciclo "drop un .glb al editor → se ve con su textura". Hasta ahora `MeshLoader` solo extraía geometría, así que cualquier modelo importado salía con el material default (chequer magenta tras el polish del Hito 25). Además, sumar un asset pack real (Kenney Survival Kit, ~80 props) para que el dev pueda armar escenas tipo Source sin tener que modelar a mano. Bonus: cerrar el pendiente del Hito 24 sobre IBL desincronizado del nuevo skybox equirect.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — IBL bakeable desde equirect (candidato G):*
+- `tools/bake_ibl.py` extiende su entrada para aceptar PNG equirectangular además del cubemap directorio. Si arg es archivo `.png/.jpg`, lo carga con el mapping `atan2/asin` del shader `skybox_equirect.frag` (mismo `v=0.5+lat/PI`). Las funciones de bake (irradiance + 5 mips de prefilter) ahora reciben un `sampler` callable en vez del cubemap directo, así el resto del flujo es agnóstico a la fuente.
+- `assets/ibl/sky_kloofendal/` regenerado desde `sky_kloofendal.png` (~41s sobre 32×32 irradiance + 5 mips prefilter, 184 KB de salida). `SceneRenderer` apunta al nuevo path: las esferas PBR ahora reflejan el mismo cielo que el `SkyboxRenderer` muestra.
+
+*Bloque 2 — Asset Browser recursivo:*
+- `AssetBrowserPanel` cambia de `directory_iterator` a `recursive_directory_iterator` para `assets/meshes/`. Display name usa el path relativo (`"kenney_survival/barrel.glb"`) para distinguir entre packs. Logical paths siguen siendo `meshes/<rel>` resueltos por VFS sin cambios.
+
+*Bloque 3 — Extracción de texturas embedded + external (candidato E):*
+- `MeshAsset` gana `materialAlbedoTextures` (size = `scene->mNumMaterials`). El `MeshLoader` extrae el albedo de cada material referenciado: paths `*N` (embedded en glTF) van por `aiScene::GetEmbeddedTexture` + `loadEmbeddedTexture`; paths externos se resuelven contra la carpeta del archivo (`meshes/kenney_survival/Textures/colormap.png` para un .glb en `meshes/kenney_survival/`).
+- `OpenGLTexture` gana ctor desde memoria (`stbi_load_from_memory`). Los dos ctors comparten el helper `uploadDecoded`. Mismo flip vertical que el ctor por path para consistencia.
+- `AssetManager` gana `TextureMemoryFactory` + `loadEmbeddedTexture(cacheKey, bytes)` — cacheado por key (típicamente `<glb_path>#<embeddedName>`). Wire-up de la factory real (con `OpenGLTexture` from-memory) en `EditorApplication` y `PlayerApplication`.
+- Helper `AssetManager::createMaterialsForMesh(meshId)` arma el vector de `MaterialAssetId` para un `MeshRendererComponent`: cada submesh recibe un material instance con la textura del archivo (`createMaterialFromTexture`), o cae al default-clone si no se pudo extraer (warning visible). Migrados spawn paths de Fox, CesiumMan, y drop genérico al viewport.
+
+*Bloque 4 — Fix del UV flip + autoscale bidireccional:*
+- **Removido `aiProcess_FlipUVs`**: el `OpenGLTexture` ya hace `stbi_set_flip_vertically_on_load(true)`. El doble flip cancelaba en texturas simétricas (grid, brick) pero rompía palette swatches como el `colormap.png` de Kenney (cada UV terminaba en pixel ~negro). Tras el fix, los Kenney props se ven con sus colores reales (madera, metal, tela).
+- **Autoscale bidireccional al drop**: además de bajar meshes >3m a ~1.5m (Fox importado en cm), ahora subimos meshes <1m a ~1.5m. Sin esto los Kenney barriles (~30 cm) quedaban invisibles en un mundo con tiles de 3m.
+
+*Bloque 5 — Asset pack Kenney Survival Kit:*
+- `assets/meshes/kenney_survival/` con 80 GLBs CC0 + License.txt + `Textures/colormap.png` (palette 512×512 compartido). 1.5 MB total. Categorías: barrels/boxes/chests, structures (floor/wall/roof/fence), vegetation (trees/grass/rocks), tools (axe/hammer/pickaxe/shovel), crafting (workbench/campfire/signpost/bedroll), resources (planks/stone/wood). Kenney es CC0 — el editor + MoodPlayer pueden redistribuirlos sin restricciones.
+
+*Bloque 6 — Tests + cierre:*
+- 6 tests nuevos en `test_asset_manager.cpp`: `loadEmbeddedTexture` sin factory cae a missing, con factory mock cachea por key + devuelve ids distintos, buffer vacío cae a missing, `createMaterialsForMesh` para missing-mesh devuelve clone único del default, dos llamadas devuelven materiales distintos (clave anti-contagio del Hito 25), id inválido cae al missing-mesh seguro.
+- Suite total **212/5326** (antes Hito 25 cerrado: 206/5309).
+- `.gitignore` extendido con `__pycache__/` + `*.pyc` (cache de Python que se generaba al importar `tools/bake_ibl.py` y se commiteaba accidentalmente).
+
+**Verificación visual:**
+- `Ayuda > Agregar personaje animado` (Fox.glb): ahora aparece naranja/blanco con su textura embedded real (antes chequer magenta tras Hito 25).
+- `Ayuda > Agregar enemigo demo` (CesiumMan.glb): idem, skin real.
+- Drag de `kenney_survival/barrel.glb` al viewport: aparece a ~1.5m de altura (autoscale up), color madera del colormap (no negro). Idem para los 80 props.
+- Drop de la misma textura sobre 2 entidades: cada una recibe instance único — editar el albedoTint de una NO contagia (heredado del Hito 25, validado en este hito por los nuevos tests).
+
+**Siguiente paso tras completarlo:** Hito 27 (TBD). Plan en `docs/PLAN_HITO27.md`.
+
+### Pendientes menores detectados en Hito 26
+
+- **PackageBuilder smart-pack**: identificado en este hito al sumar 1.5 MB de Kenney. Hoy `PackageBuilder` copia `assets/` entero al package final del juego — si el `.moodmap` solo usa 3 de los 80 props, los 77 restantes igual viajan. Anotado como candidato H del Hito 27. **Trigger:** primer juego con > 5 MB de assets sin usar; o cuando algún demo packageado pese > 50 MB.
+- **Texturas embedded raw (mHeight > 0)**: `extractAlbedo` solo soporta texturas embedded comprimidas (PNG/JPG con `mHeight=0`). Las raw RGBA inline en glTF se loguean como warning y caen al missing. No vimos un caso real todavía. **Trigger:** modelo CC0 que use embedded raw.
+- **Encoding del log de error de mesh loader**: similar al de shaders, assimp puede devolver mensajes con caracteres no-UTF-8 que spdlog imprime mal. Pre-existente. **Trigger:** modelo .glb con error de import + dev necesita leer el mensaje.
+- **Inspector no permite cambiar la textura de un material**: hoy el albedo se setea solo al spawn (vía `createMaterialsForMesh`). Si el dev quiere cambiar la textura de un cubo dropeado, no hay UI — tiene que reasignar el material. **Trigger:** dev pide "drop texture sobre material slot del Inspector".
+- **Modelos .obj con .mtl**: el path resolution funciona para .glb (carpeta del archivo). Para .obj con .mtl, assimp parsea el .mtl que puede referenciar texturas con paths relativos también. No probado. **Trigger:** primer .obj importado que tenga textura referenciada por .mtl.
+
+## Hito 27 — Undo/Redo en el editor
+
+**Objetivo:** recuperar la deuda más grande del roadmap original (Hito 22 que se postergó). Hasta este hito, cualquier acción del editor — mover el gizmo, borrar una entidad — era irreversible. Sin Ctrl+Z el editor no era una herramienta seria. Cubrimos las dos mutaciones de mayor impacto: edits de Transform via gizmo y delete de entidades. Spawn/create commands quedan diferidos al próximo hito.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — Infra HistoryStack:*
+- `ICommand` (interfaz pura `execute()` / `undo()` / `name()`) en `src/editor/commands/Command.h`.
+- `HistoryStack` con deque `m_undo` + `m_redo`. `push(cmd)` ejecuta + agrega + LIMPIA `m_redo` (convención estándar). Cap `k_maxSize=100` con eviction del más viejo. `clear()` para vaciado al cambiar/cerrar proyecto. Logs al canal `editor` en cada `push`/`undo`/`redo`.
+- 10 tests headless (`test_history_stack.cpp`): estado inicial vacío, push ejecuta + guarda, undo revierte + mueve a redo, redo re-ejecuta, no-op cuando vacío, push tras undo limpia redo, cap eviction tira el más viejo, null push es no-op, clear vacía ambos, ciclo execute/undo varias veces preserva estado.
+
+*Bloque 2 — EditTransformCommand (gizmo drag):*
+- Captura `(entity, field, before, after)`. `Field` enum cubre Position / Rotation / Scale.
+- `execute()` aplica `after`, `undo()` aplica `before`. `isNoOp()` detecta `before == after` para no spamear el history con clicks-sin-drag.
+- Resiliente: si la entidad fue destruida entre push y undo (`registry.valid(handle) == false`), no-op silencioso con warning. No crashea jamás.
+- Wire-up en `EditorOverlay`: `GizmoDragState` gana `field` (u8) + `entity`, set en drag-start de los 3 modos (translate/rotate/scale). Helper `EditorApplication::finalizeGizmoDrag()` llamado en drag-end: captura el final, revierte al `before`, push (que reaplica via `execute()`) — así un solo comando cubre el drag completo en lugar de 60 micro-edits por frame.
+- 8 tests (`test_edit_transform_command.cpp`): cada Field aplica al campo correcto sin tocar otros, undo revierte, isNoOp, entidad destruida es no-op, ciclo via HistoryStack, name() incluye tag.
+
+*Bloque 3 — Hotkeys + menú Editar:*
+- `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z` bound en el SDL event loop, sólo en Editor Mode + sin `WantTextInput` activo (no piso edits del Inspector).
+- `MenuBar > Editar > Deshacer / Rehacer` ahora reactivo: muestra `"Deshacer 'Mover Cubo'"` / `"Rehacer 'Eliminar Fox'"` con el name del comando activo. Deshabilitado cuando `canUndo`/`canRedo` es `false`.
+- `EditorUI` gana `setHistoryStack()` + `historyStack()`. `EditorApplication` inyecta `&m_history` al setup. `m_history.clear()` en `rebuildSceneFromMap` (handles invalidados al cambiar proyecto).
+
+*Bloque 4 — DeleteEntityCommand:*
+- Captura `SavedEntity` snapshot via `EntitySerializer::serializeEntityToJson` + `parseEntityFromJson` ANTES del primer `execute()`. Así el undo recrea la entidad completa con todos sus componentes (mesh, material, light, rigidbody, animator, script, prefab link).
+- `execute()` destruye la entidad e invoca callback opcional `BodyCleanup` para limpieza del Jolt body. Diseño desacoplado: `BodyCleanup = std::function<void(u32)>` (vs un `PhysicsWorld*` directo) — los tests pasan `{}` y queda no-op, sin arrastrar Jolt al test target.
+- `undo()` recrea la entidad via `SceneLoader::applyOneEntity` (split nuevo del `applyEntitiesToScene` de loop) y guarda el nuevo handle para que un siguiente redo destruya el correcto.
+- Caveat documentado: el handle EnTT cambia al recrear (versionado). Comandos previos del history que apuntaban al handle viejo quedan no-op silenciosos. Aceptable v1.
+- Refactor `EditorApplication::deleteSelectedEntity` para empujar el comando en lugar de borrar directo.
+- `Entity` gana `scene()` getter público (necesario para los commands).
+- 7 tests (`test_delete_entity_command.cpp`): execute destruye, undo recrea con tag/transform correctos, ciclo execute/undo/redo, BodyCleanup se invoca con bodyId si hay RigidBody (y NO se invoca si no hay), default `BodyCleanup` vacío no crashea con RigidBody, integración via HistoryStack, name() incluye tag.
+
+*Bloque 5 — Cierre:*
+- Suite total **238/5409** (antes Hito 26 cerrado: 212/5326 → +26 tests del Hito 27 entre HistoryStack + EditTransform + DeleteEntity).
+
+**Verificación visual:**
+- Drag de gizmo (W/E/R) sobre una entidad → soltar → Ctrl+Z revierte el drag completo (no 60 micro-edits). El menú `Editar` muestra `"Deshacer 'Mover MiEntidad'"`.
+- Delete sobre Fox.glb (con animator + skeleton) → Ctrl+Z lo recrea con animación intacta.
+- Delete sobre CajaFisica (Jolt rigidbody dynamic) → Ctrl+Z la recrea con `bodyId=0` que se rematerializa al siguiente frame de `updateRigidBodies`. Cae correctamente.
+- Cambio de proyecto: el history se vacía (`Ctrl+Z` no trae entidades de la sesión anterior).
+
+**Siguiente paso tras completarlo:** Hito 28 (TBD). Plan en `docs/PLAN_HITO28.md`.
+
+### Pendientes menores detectados en Hito 27
+
+- **`CreateEntityCommand` (spawns + drops undoables)**: hoy un Ctrl+Z DESPUÉS de spawnear desde el menú "Ayuda" o de un drop al viewport NO destruye la entidad recién creada. Falta wrappear los ~10 spawn paths (`processSpawnRotator`, `processSpawnEnemyDemo`, `processViewportMeshDrop`, etc.) para que pusheen un comando. Diseño: análogo a `DeleteEntityCommand` pero invertido — `execute()` ejecuta el spawn original (vía thunk callback) y captura el snapshot resultante; `undo()` destruye; `redo()` recrea desde snapshot. **Trigger:** próximo hito de polish editor.
+- **Autoscale agresivo en drop**: meshes chicos (Kenney barriles ~0.27m) reciben scale ~5.4x para llegar a ~1.5m. Visualmente se ven "gruesos" comparados al world. TODO ya anotado en `DemoSpawners.cpp`. **Mitigación apropiada:** metadata por asset pack (cm/m/inch), o un slider "scale al drop" en el viewport en lugar de autoscale agresivo. **Trigger:** dev se queja del look de los Kenney.
+- **Handle remap en HistoryStack tras delete-undo**: el `entt::entity` cambia al recrear (versionado). Comandos previos del history que apuntaban al handle viejo quedan no-op. UX se siente raro si el dev hace: edit transform → delete → undo (recrea) → undo (intenta revertir el edit pero el handle está stale → no-op silencioso). **Mitigación:** un mapa "old handle → new handle" en `HistoryStack` actualizado por `DeleteEntityCommand::undo`. **Trigger:** dev nota el comportamiento.
+- **Comandos para edits del Inspector**: hoy `albedoTint`/`metallic`/`roughness`/`ao` en el Inspector mutan el Material directo, sin pasar por el history. Ctrl+Z no los deshace. **Trigger:** dev pide undo de edits de material.
+- **Comandos para drops de textura/material/script**: similar — `processViewportTextureDrop` muta `MeshRendererComponent.materials` sin command. **Trigger:** combo con el anterior.
+- **Tests de integración del finalizeGizmoDrag**: el helper de drag-end no tiene cobertura headless porque depende de SDL events. Smoke test manual cubrió los 3 casos (translate/rotate/scale). **Trigger:** infra de mock SDL.
+
+## Hito 28 — Editor polish: undo/redo de spawns, autoscale al drop, mini editor de scripts
+
+**Objetivo:** cerrar pendientes acumulados del workflow del editor que aparecieron al usar los hitos 26 y 27. NO es un salto de feature de gameplay — es polish puro de editor. Tras este hito el roadmap vuelve a features de gameplay (particle system, character controller, raycasts/triggers).
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque G — Autoscale al drop respeta escala nativa:*
+- `DemoSpawners.cpp`: nueva lógica bidireccional (commit `6931146`). Si el AABB rotado tiene altura > 3m → downscale a 1.5m (Fox.glb cm-units). Si < 0.1m → upscale a 1.5m. Entre 0.1m y 3m: SIN autoscale (Kenney barriles 0.27m, props normales, cubos respetan authoring).
+
+*Bloque F — Mini editor de scripts in-place (sin nueva dep):*
+- `ScriptEditorPanel` (commit `45a99d0`): editor in-place con `ImGui::InputTextMultiline`. Sin `ImGuiColorTextEdit` (evitamos la dep). Autosave on Lose Focus. Hot-reload del `ScriptSystem` levanta los cambios automáticamente.
+
+*Bloque A (parcial) — `CreateEntityCommand` para spawns + drops:*
+- `CreateEntityCommand`: simétrico a `DeleteEntityCommand` (snapshot vía `EntitySerializer` + recreate vía `SceneLoader::applyOneEntity`). Discriminador "primer push vs redo" basado en validez de los handles `m_alive` (en lugar de un flag, robusto frente a ciclos de tests). 11 spawn paths + 2 viewport drops cableados a través del helper `pushCreatedEntities`.
+- 8 tests nuevos (`test_create_entity_command.cpp`): noop primer push, undo/redo con transform preservado, multi-entidad (5 entidades en un comando), ciclo iterativo, BodyCleanup invocado, lista vacía no-op, integración con HistoryStack, name() devuelve label.
+- Suite total **246/5431** (antes Hito 27 cerrado: 238/5409).
+
+**Bonus fix arrastrado:** `processSpawnRotatorRequest` no llamaba `markDirty()`. El nuevo helper `pushCreatedEntities` lo arregla automáticamente porque siempre marca dirty al pushear.
+
+**Lo que NO se cubrió (re-asignado a "pendientes menores"):** `InspectorEditCommand` (51 widgets en 511 líneas — implementarlos uno-a-uno saldría del scope sin un patrón genérico nuevo) y los drops modificadores (texture/material/script).
+
+**Siguiente paso tras completarlo:** Hito 29 — Particle system. Plan en `docs/PLAN_HITO29.md`. Vuelta a features de gameplay tras 4 hitos consecutivos de polish editor (25 hot-reload, 26 asset pipeline, 27 undo/redo gizmo+delete, 28 spawn undoables + autoscale + script editor).
+
+### Pendientes menores detectados en Hito 28
+
+- **InspectorEditCommand** (genérico): 51 widgets en 511 líneas requieren un patrón templado (ej. `PropertyEditCommand<T>` con setter/getter + `IsItemActivated`/`IsItemDeactivatedAfterEdit`). Coste medio por el patrón base + bajo por widget. **Trigger:** dev se queja de que Ctrl+Z después de mover un slider del Inspector no funciona.
+- **Commands para drops modificadores**: `processViewportTextureDrop`/`MaterialDrop`/`ScriptDrop` mutan componentes sin pasar por history. Patrón: capturar el componente entero antes y reemplazarlo. **Trigger:** combo con el anterior.
+- **Handle remap en HistoryStack** (arrastrado del Hito 27): edit→delete→undo→undo deja el segundo undo no-op silencioso. **Trigger:** dev nota el comportamiento.
+
+## Hito 29 — Particle system
+
+**Objetivo:** sistema de partículas CPU usable desde el editor + persistible. Cubre los efectos visuales más comunes (fuego, humo, sparks, polvo). Vuelve a features de gameplay tras 4 hitos de polish editor; estaba como Hito 24 en el roadmap macro original.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — `ParticleSystem` headless:*
+- `ParticleEmitterComponent` (POD) con SoA per-emisor: positions / velocities / ages / lifetimes / alive (`u8`). Lazy alloc al primer update; `rngState` per-emisor (xorshift64*) para spawn random determinista.
+- `systems/ParticleSystem::update(scene, dt)`: avanza vivas (age, pos += vel*dt, vel.y += -9.81*gravityFactor*dt), mata las que cumplen lifetime, spawnea floor(rate*dt) reciclando slots libres con accumulator fraccional.
+- 9 tests headless: tasa de emisión, expiry por lifetime, gravedad calculada con dt=1, pool full sin crash, pause via emitting=false, spawn position = transform, lazy alloc, dt<=0 noop, reciclaje de slots.
+
+*Bloque 2 — Render con billboards instanciados:*
+- `OpenGLParticleRenderer`: draw call instanced sin VBO de quad (`gl_VertexID 0..5` forma 2 triangles). VBO dinámico per-instance (divisor=1) con center/size/color, orphan + glBufferSubData con growth 2x.
+- `shaders/particle.{vert,frag}`: vertex calcula billboard alineado a la cámara via `right`/`up` extraídos del view matrix. Fragment muestrea texture, modula por color, descarta alpha < 0.01.
+- Por emisor: bind textura (o missing), set blend per-emisor (additive=true → SRC_ALPHA,ONE; default SRC_ALPHA,ONE_MINUS_SRC_ALPHA), draw `n*6` vertices instanciados. Depth write OFF dentro del scope, restaurado al volver.
+- `SceneRenderer` integra el renderer entre el PBR pass (estático + skinneado) y el debug renderer; partículas se ocluyen por geometría opaca pero se mezclan entre sí. ParticleSystem cableado al loop del Editor (siempre activo) y MoodPlayer (pause-aware).
+
+*Bloque 3 — UI Inspector + spawner demo + textura:*
+- `assets/textures/particle_fire.png` (64×64 RGBA, falloff radial blanco en alpha) generado por `tools/gen_particle_textures.py` (Pillow). El color final lo controla colorStart/colorEnd; la textura aporta solo la forma.
+- `processSpawnFireParticlesRequest`: spawnea entidad "Fuego" en (0, 0.5, 0) con preset (rate=60, lifetime=1–1.5s, vel +Y, color naranja→rojo transparente, additive blend, gravityFactor=-0.05 para chispas que suben). Cableado a `pushCreatedEntities` para que sea undoable (Hito 28 A).
+- Menu item "Ayuda > Agregar particulas de fuego demo".
+- Inspector: nueva sección "Particle Emitter" con DragFloat / DragFloat3 / DragFloatRange2 / ColorEdit4 / Checkbox / DragInt. Cambiar maxParticles vacía la pool (re-aloca lazy en el próximo update). Display de count vivas / cap.
+
+*Bloque 4 — Persistencia en `.moodmap`:*
+- `SavedParticleEmitter` con la configuración editable; estado runtime (positions/ages/rngState) NO se persiste — la simulación arranca limpia al cargar. Texture path lógico (no el id volátil).
+- `EntitySerializer` serializa/deserializa el bloque `particle_emitter`; `SceneLoader::applyOneEntity` re-resuelve la textura via `loadTexture(texturePath)`.
+- `k_MoodmapFormatVersion` 8 → 9. Archivos v8 sin `particle_emitter` cargan igual.
+
+*Bloque 5 — tests + cierre:*
+- `tests/test_particle_system.cpp` extendido con 2 tests de round-trip en `.moodmap` (con textura + sin textura).
+- Suite total **257/5476** (antes Hito 28 cerrado: 246/5431).
+
+**Siguiente paso tras completarlo:** Hito 30 (TBD). Plan en `docs/PLAN_HITO30.md`.
+
+### Pendientes menores detectados en Hito 29
+
+- **Sorting de partículas por depth**: V1 NO sortea, lo que produce artifacts si dos emisores semitransparentes se superponen. Mitigación: sort back-to-front antes del upload. **Trigger:** dev nota el problema en una escena con varios emisores.
+- **Partículas attached al emisor (local space)**: hoy las partículas se quedan donde se spawnearon (world). Para humo que sigue una entidad en movimiento, agregar flag `localSpace` al componente que multiplique las posiciones por `tf.worldMatrix()` en el render. **Trigger:** dev quiere humo siguiendo un personaje.
+- **GPU compute para emisores grandes**: `glBufferSubData` con > 10k partículas/frame puede saturar. Si aparece un demo demandante, evaluar `glMapBufferRange` con buffers persistent-mapped o un compute shader para la simulación. **Trigger:** profile con frame drops por particle upload.
+- **Curva de color/size con ramp**: V1 = lerp lineal entre start y end. Para efectos no-monótonos (chispa que crece y achica) hace falta un gradient/curva. **Trigger:** dev pide control más fino.
+- **Emisión por shape**: hoy las partículas spawnean exactamente en `tf.position` con velocidad random en un cubo. Cono / esfera / disco como shape de emisión amplía la expresividad. **Trigger:** dev pide formas.
+
+## Hito 30 — Player Character Controller con Jolt
+
+**Objetivo:** reemplazar el `moveAndSlide` AABB del Hito 4 (que usaba el player en Play Mode) por `JPH::CharacterVirtual` de Jolt. Es el último gran agujero entre el motor actual y "puede ser un FPS de verdad" — sin esto el jugador no salta, no hace crouch, y la física del player corría desconectada de los `RigidBody` del Hito 12.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — API en `PhysicsWorld` para `CharacterVirtual`:*
+- `createCharacter(initialPos, halfHeight, radius)` → handle u32 estable. Devuelve 0 si falla.
+- `setCharacterMovement(id, desired)` — el caller setea desired = (vx, vy_impulse, vz). Step interno acumula gravedad en Y si NOT OnGround; suma desired.y como impulse.
+- `characterPosition(id)` / `setCharacterPosition(id, pos)` — lectura/teleport (resetea velocity).
+- `isCharacterOnGround(id)` — gating de salto y reset de gravedad acumulada.
+- `setCharacterShape(id, halfHeight, radius)` → bool. Penetration check; rechaza con techo bajo. Para crouch.
+- `destroyCharacter(id)` idempotente.
+- 7 tests headless en `test_character_controller.cpp`: create/destroy, count, position pre-step, mover X 30 frames, gravity sin floor, OnGround sobre static body, teleport.
+
+*Bloque 2 — Cablear al Player + Editor (Play branch):*
+- `PlayerApplication` y `EditorPlayMode` reemplazan `moveAndSlide` por character. Lazy create al primer frame de Play / arranque del player en la pos de la cámara − eyeOffset.
+- WASD → velocidad horizontal m/s relativa a `fwdFlat` de la cámara (sin afectar el pitch). Speed = 4 m/s walking.
+- Post-step: `m_playCamera.setPosition(charPos + eyeOffset)`. eyeOffset = halfHeight + radius − 0.2.
+- `exitPlayMode` destruye el char y resetea state.
+- `FpsCamera::setPosition` para teleport limpio (lo usa el sync).
+
+*Bloque 3 — Salto + crouch:*
+- **SPACE** = salto (vy = 5.5 m/s, ~1.5m de altura). Gated por `isCharacterOnGround` + cooldown 0.2s anti-hold + no-crouching. Implementado pasando `desired.y` como impulse.
+- **LCtrl** mantenido = crouch (capsule total 1.0m vs 1.8m). Walk speed reduce a 2 m/s.
+- Soltar LCtrl restaura standing si no hay techo. Si Jolt rechaza el SetShape (penetration con techo), el caller revierte la pos y mantiene crouched hasta liberar espacio.
+- `setCharacterShape` NO mueve el centro de la capsule — el caller ajusta pos manualmente ±0.4m (k_centerDelta = standHalf − crouchHalf) para mantener la base al ras del piso. Stand up sube primero el centro, intenta SetShape, revierte si falla.
+
+*Bloque 4 — tests + cierre:*
+- Tests del Bloque 1 cubren la API headless.
+- Suite total **264/5494** (antes Hito 29: 257/5476).
+- Smoke confirmado por dev: WASD funciona como antes, paredes bloquean, caja física se empuja (slide alto por fricción default baja — pendiente menor), salto alcanza ~1.5m, crouch baja la cámara sin caer abruptamente, soltar LCtrl restaura.
+
+**Cambios visibles en gameplay:** primer hito post-Hito 4 que cambia cómo el player se siente. La capsule física empuja `RigidBody::Dynamic`, así que cajas físicas reaccionan al jugador (antes el player era "fantasma" para Jolt). Lo opuesto también: el char respeta steep slopes (max 50°) y se desliza en pendientes vs el AABB que ignoraba slopes.
+
+**Siguiente paso tras completarlo:** Hito 31 (TBD). Plan en `docs/PLAN_HITO31.md`.
+
+### Pendientes menores detectados en Hito 30
+
+- **Fricción del player vs Dynamic bodies**: la caja física se desliza demasiado al ser empujada por el char. Mitigación: subir `mFriction` del `BodyCreationSettings` cuando se cree un Dynamic, o aplicar damping. **Trigger:** dev quiere props que se queden quietos al ser tocados levemente.
+- **Animación del crouch (interpolación de altura)**: hoy el cambio es instantáneo (1 frame). Para feedback más natural, lerp la altura del centro y el eyeOffset durante ~0.2s. **Trigger:** polish visual.
+- **`moveAndSlide` AABB sigue compilado** en `PhysicsSystem.cpp` por los tests del Hito 4 (`test_collision.cpp`). Se podría eliminar si esos tests también migran a `CharacterVirtual`. **Trigger:** dev quiere remover dead code.
+- **Doble jump / coyote time**: V1 sin window de gracia ni jumps en aire. Se puede agregar un `m_coyoteTime` que permita saltar dentro de 0.1s de haber dejado el piso. **Trigger:** feedback de gameplay.
+- ~~**Headbob + camera shake**: el sync `setPosition` directo se ve "rígido" sin animación de paso. Agregar offset sinusoidal pequeño al eyeOffset cuando hay velocidad horizontal. **Trigger:** polish visual.~~ **Resuelto en Hito 31 D**.
+
+## Hito 31 — Polish del feel: char controller + particles
+
+**Objetivo:** scope chico — pulir el feel de los dos sistemas grandes recién terminados (char controller del Hito 30 + particles del Hito 29) ahora que están en uso real. Cinco fixes baratos pero visibles. NavAgent polish quedó descartado permanentemente por decisión del dev ("no me interesa").
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque D — Polish del char controller (Hito 30):*
+- **Friction**: `mFriction` default de Jolt (0.2) → 0.5 en `PhysicsWorld::createBody`. La caja física demo ya no resbala kilómetros al ser empujada por el char; se siente como madera-sobre-madera.
+- **Crouch lerp visual**: nuevo `m_crouchVisualT` que avanza hacia 0/1 (standing/crouched) a 5/s (~200ms transición). El shape de Jolt sigue cambiando instant (predictible para physics) pero el eye Y de la cámara interpola con `glm::mix` entre `k_eyeStanding=0.7` y `k_eyeCrouched=0.3`. Antes: snap brusco al pulsar Ctrl.
+- **Headbob**: `m_headbobTime` acumula `dt` SOLO cuando el player camina horizontal Y está on-ground. Eye Y suma `sin(t * 5*2π) * 0.04` (5 Hz, amplitud 4 cm). Da feel sutil de "pasos" sin exagerar; cuando el player se detiene, queda en el último offset hasta que vuelva a moverse.
+- Aplicado simétrico en `EditorApplication::updatePlayMode` + `EditorScene::syncCamera` y `PlayerApplication::updateInput` + `updateRigidBodies` para paridad de feel entre Editor Play Mode y MoodPlayer standalone.
+
+*Bloque F — Polish de particles (Hito 29):*
+- **`localSpace` flag** (default `false`): cuando `true`, posiciones/velocidades se almacenan en el espacio local del emisor. `ParticleSystem` spawnea en `(0,0,0)` en vez de `tf.position`; el renderer suma el `tf.position` antes del upload al VBO. Resultado: cuando la entidad emisora se mueve, las partículas la SIGUEN (humo en una chimenea que viaja, sparks pegadas a un personaje). Default `false` preserva comportamiento original. Solo tomamos translation del entity, no rotation/scale — los billboards igual siempre miran a la cámara.
+- **Sort back-to-front**: tras compactar las partículas vivas en `m_cpu`, si `!em.additive` AND `size>1`, sort por view-space Z ascendente (más negativo = más lejos = se dibuja primero). Así el blend `GL_SRC_ALPHA / GL_ONE_MINUS_SRC_ALPHA` produce el resultado correcto. Skipeamos el sort para `additive` porque el blend es commutativo.
+- Persistencia: `bool localSpace` en `SavedParticleEmitter`; serializer/loader lo leen/escriben como `"local_space"` en el JSON. Schema retro-compat — archivos viejos sin el campo lo leen como `false`.
+- Inspector: checkbox `localSpace##pe` al lado de `additive` en la sección ParticleEmitter.
+
+*Cierre:*
+- 1 test nuevo: `test_particle_system.cpp > "SceneSerializer: localSpace default false se preserva al round-trip"` (retro-compat) + bump del test existente para cubrir `localSpace=true` round-trip.
+- Suite total **265/5499** (antes Hito 30: 264/5494).
+
+**Verificación visual del dev:**
+- Caja física empujada por el char ya no se desliza interminablemente — se queda quieta a los 2-3m post-empuje.
+- Crouch al pulsar Ctrl baja la cámara con transición visible (no snap).
+- Caminar en modo Play se siente con "pasos" (sin marear; amplitud 4cm es discreta).
+- Emisor de fuego con `localSpace=true` movido por gizmo: las partículas siguen al emisor (antes "se quedaban atrás" como rastro).
+- Humo (alpha blend) se ve correctamente layered tras el sort — no más "halos cuadrados" donde dos partículas se intersecan.
+
+**Siguiente paso tras completarlo:** Hito 32 (TBD). Plan en `docs/PLAN_HITO32.md`.
+
+### Pendientes menores detectados en Hito 31
+
+- **Sort por view-Z usa solo el centro de la partícula**: para partículas grandes que ocluyen a múltiples más chicas, podría haber edge cases donde el sort por centro no representa bien la profundidad. Mitigación futura: bucket por Z + sort dentro del bucket. **Trigger:** dev nota artifacts visibles con partículas muy grandes y mezcladas.
+- **`localSpace` no propaga rotación/scale del emisor**: solo translation. Si el dev quiere sparks que roten con un personaje, falta multiplicar las posiciones por la rotación del transform. **Trigger:** dev pide sparks orientadas.
+- **Headbob no escala con velocidad**: amplitud fija al 100%. Cuando el char está en crouch (velocidad 2 m/s vs walk 4 m/s), el bob se siente "rápido" para la velocidad. Podría escalar `bobAmp *= speed/k_walkSpeed`. **Trigger:** dev nota disonancia.
+- **Crouch lerp no afecta al ground check**: durante la transición visual el char ya está en su shape final en Jolt. Si el dev espera "agacharse poco a poco para pasar bajo un obstáculo", el char puede colisionar instant. Aceptable v1 (la transición es 200ms). **Trigger:** dev intenta el caso de uso.
+- **Friction 0.5 hardcoded para todos los Dynamic**: cada body se beneficiaría de un valor distinto (madera 0.5, hielo 0.05, goma 0.8). Exponer `friction` en `RigidBodyComponent`. **Trigger:** dev pide control per-body.
+
+## Hito 32 — Cerrar deudas del editor (InspectorEditCommand + handle remap)
+
+**Objetivo:** sacarse las deudas acumuladas en hitos previos antes de abordar features pesados (raycasts, save/load, UI menu). El dev pidió scope chico-medio cerrando lo más visible: undo/redo de los sliders del Inspector (deuda Hito 27/28) + handle remap del HistoryStack (deuda Hito 27).
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque D — InspectorEditCommand:*
+- Nuevo `EditPropertyCommand<T>` (templado en el tipo del valor) en `src/editor/commands/`. Constructor captura `(entity, before, after, setter, label)`. `setter` es una `std::function<void(Entity&, const T&)>` — cada callsite del Inspector captura el path al campo via lambda (componente + miembro), evitando fragilidad ante destruction de la entidad.
+- Helper `trackPropertyEdit<T>` en `editor/panels/InspectorEditTracker.h`: detecta drag-end con `ImGui::IsItemActivated()` (snapshot before) + `ImGui::IsItemDeactivatedAfterEdit()` (capture after, revertir, push command). Mismo patrón que `EditTransformCommand` para gizmo. Resultado: un drag de 60 frames produce UN solo comando, no 60 micro-edits.
+- `InspectorEditTracker` con `std::variant<f32, glm::vec3, glm::vec4, bool, std::string>` para el snapshot pre-edit. Solo un widget puede estar activo a la vez en ImGui — un buffer alcanza.
+- Wire-up de los widgets más editados (9 de los 51 del Inspector): Tag name (string), Transform position/rotation/scale (vec3), Material albedoTint (vec3) + metallic/roughness/ao (f32). El resto sigue el mismo patrón — documentado como pendiente para futuros hitos.
+
+*Bloque "Compactación de comandos" — automático:*
+- Sin trabajo extra. La detección con `IsItemDeactivatedAfterEdit` ya garantiza un comando por gesto. El "30 entradas por slider arrastrado" del Hito 27 desapareció por construcción.
+
+*Bloque "Handle remap en HistoryStack":*
+- `ICommand` gana virtual `onEntityRemap(entt::entity oldH, entt::entity newH)` con default no-op.
+- `HistoryStack::remapEntityInStack(oldH, newH)` itera ambos deques y notifica a cada comando.
+- `EditTransformCommand`, `EditPropertyCommand`, `CreateEntityCommand` overridan para patchear su `m_entity` interna.
+- `DeleteEntityCommand` recibe opcionalmente un `HistoryStack*` en el ctor; al hacer undo (recrear entidad), llama `m_history->remapEntityInStack(m_originalHandle, m_alive.handle())`. Sin esto, el flujo `edit→delete→undo→undo` dejaba el segundo undo silencioso porque `registry.valid(oldHandle)` fallaba.
+
+*Cierre:*
+- 6 tests nuevos en `test_edit_property_command.cpp`: execute/undo/isNoOp para `<f32>` y `<glm::vec3>`, `onEntityRemap` patchea handle, `HistoryStack::remapEntityInStack` propaga a EditTransformCommand, no-op cuando oldH==newH.
+- Suite total **271/5512** (antes Hito 31 cerrado: 265/5499).
+
+**Verificación visual del dev:**
+- Editar transform position en Inspector → Ctrl+Z revierte el drag completo.
+- Editar `albedoTint` con ColorEdit3 → Ctrl+Z restaura el color anterior.
+- Editar `metallic` slider → Ctrl+Z restaura el valor numérico previo.
+- Renombrar entidad en el Tag input → Ctrl+Z restaura el nombre.
+- Flujo `edit→delete→undo→undo` ahora funciona: el primer undo recrea, el segundo revierte el edit.
+
+**Siguiente paso tras completarlo:** Hito 33 (TBD). Plan en `docs/PLAN_HITO33.md`.
+
+### Pendientes menores detectados en Hito 32
+
+- **42 widgets restantes del Inspector sin wire-up de undo**: Light (color, intensity, radius, direction, castShadows, enabled), Camera (fov, near, far), AudioSource (volume, loop, etc.), ParticleEmitter (rate, lifetime, velocityMin/Max, sizes, colors, gravity, max, emitting, additive, localSpace), Animator (clipName, speed, playing, loop), NavAgent (speed, active), Environment (skybox, fog params, exposure, tonemap, IBL intensity), RigidBody (type, shape, mass, halfExtents). Patrón uniforme — wire-up mecánico siguiendo el `pushEditIfDone<T>` ya cableado. **Trigger:** dev se queja de que un widget específico no es undoable.
+- **Inspector drop de textura sobre material slot**: NO se hizo en este hito (era candidato pero quedó fuera por scope). Pendiente del Hito 26. **Trigger:** combo con cualquier hito visual.
+- **`std::variant` del tracker no incluye `int`/`u32`**: si en el futuro se agregan widgets `DragInt` (ej. maxParticles del ParticleEmitter), agregar al variant. Hoy ningún wire-up usa int. **Trigger:** wire-up de widgets numéricos enteros.
+- **Compactación cross-frame para sliders externos al Inspector**: si aparece un slider en otra parte del UI que mute estado per-frame sin `IsItemDeactivatedAfterEdit`, podría seguir spammeando el history. No vimos casos. **Trigger:** dev nota spike en undo stack durante un drag.
+
+## Hito 33 — Raycasts + triggers expuestos a Lua
+
+**Objetivo:** habilitar gameplay scriptable real (FPS con armas hitscan + zonas detectoras). Combo natural post Hito 30 (char controller) + 31 (polish): raycast desde Lua para line-of-sight + `TriggerComponent` con dispatch al ScriptSystem para kill volumes / checkpoints / puertas automáticas.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque 1 — `PhysicsWorld::raycast`:*
+- Nueva struct `RaycastHit { hit, point, normal, distance, bodyId }` + método `raycast(origin, direction, maxDistance)` en `PhysicsWorld`.
+- Implementación via `JPH::NarrowPhaseQuery::CastRay` + `BodyLockRead` para extraer la normal en el punto de impacto. Direction puede no estar normalizada (se escala internamente por `maxDistance`). Characters virtuales son ghost para queries (consistente con Hito 30).
+
+*Bloque 2 — Lua bindings + `ScriptSystem::dispatchEvent`:*
+- `physics.raycast(origin_table, dir_table, maxDist)` registrado en `LuaBindings`. Devuelve tabla Lua `{hit, point, normal, distance, bodyId}` (origin/dir como tablas 1-indexadas, convención Hito 24).
+- `ScriptSystem::update` propaga `PhysicsWorld*` opcional → tests headless siguen pasando con `nullptr`.
+- Nuevo `dispatchEvent(entity, eventName)` que busca el sol::state de la entidad y llama la función global por nombre via `sol::protected_function`. Miss silencioso si el script no la define; errores van al canal `script` (mismo flujo que `onUpdate`).
+
+*Bloque 3 — `TriggerComponent` + `TriggerSystem`:*
+- Nuevo componente `TriggerComponent { halfExtents, playerInside }` (último flag runtime, no persistido).
+- `TriggerSystem` stateless: cada frame lee `physics.characterPosition(playerCharId)` y AABB-testea contra cada trigger. En flank-changes false→true / true→false dispatcha `on_trigger_enter` / `on_trigger_exit` al script de la entidad.
+- Wireado en `EditorApplication` (solo `EditorMode::Play`) + `PlayerApplication` (siempre).
+
+*Bloque 4 — Persistencia + Inspector + spawner demo:*
+- `SavedTrigger { halfExtents }` opcional en `SavedEntity`. `EntitySerializer` y `SceneLoader` cubren round-trip. Sin bump de schema mayor — campo nuevo opcional (back-compat con archivos pre-Hito 33).
+- Inspector: sección "Trigger" con `DragFloat3 halfExtents` undoable via `pushEditIfDone<glm::vec3>` (patrón Hito 32) + readout `playerInside`.
+- Menú "Ayuda > Agregar trigger demo" spawnea entidad en (0, 1, 0) con `halfExtents=(1,1,1)` + script `assets/scripts/trigger_demo.lua` (loguea enter/exit a `log.info`).
+
+*Bloque 5 — Tests + cierre:*
+- 5 tests nuevos en `test_raycast.cpp` (hit/miss/maxDistance/dirección no-normalizada/primer body en path).
+- 5 tests nuevos en `test_trigger_system.cpp` (flank true / flank false / charId=0 / dispatch via side-effect en `GameState::hud()` / no-double-dispatch sin flank).
+- Suite total **281/5535** (antes Hito 32 cerrado: 271/5512).
+
+**Verificación visual del dev:**
+- "Ayuda > Agregar trigger demo" spawnea entidad en (0, 1, 0) con halfExtents 1×1×1.
+- Inspector muestra sección "Trigger" con DragFloat3 + undo via Ctrl+Z + readout `playerInside`.
+- En Play Mode, caminar al centro del trigger imprime `[script] [info] [trigger] player entro`; al salir, `[trigger] player salio`.
+- Save/cerrar/reabrir el proyecto preserva `halfExtents` editado.
+
+**Siguiente paso tras completarlo:** Hito 34 (TBD). Plan en `docs/PLAN_HITO34.md`.
+
+### Pendientes menores detectados en Hito 33
+
+- **Triggers no detectan dynamic bodies**: solo el char del jugador es el "actor" detectable. Cajas físicas o NPCs entrando/saliendo no disparan callback. Patrón a extender: loop adicional sobre `RigidBodyComponent`. **Trigger:** primer demo que requiera detectar otra cosa.
+- ~~**Raycast sin filtro de layer/tag**: pega contra cualquier body. Sin "ignore self" ni "solo enemies".~~ Resuelto parcialmente en Hito 34 B con `ignoredBodyId` opcional (cubre "ignore self"). Filtro por layer/tag genérico sigue abierto pero sin trigger concreto.
+- **Trigger AABB axis-aligned no respeta rotation**: aceptado por simplicidad. Si aparece caso (puerta rotada), bumpea a OBB. **Trigger:** demo lo requiere.
+- **Sin `on_trigger_stay`**: solo enter/exit. Si un script necesita tick mientras dentro, consultar `playerInside` desde su `onUpdate`. **Trigger:** demo pide tick continuo.
+
+## Hito 34 — Cerrar deudas chicas (friction + raycast filtrable + coyote/jump buffer + headbob velocity + 7 widgets undo)
+
+**Objetivo:** sacar deudas chicas acumuladas en hitos 30-33 antes de meterse en features pesados (save/load, main menu). Mismo patrón que Hito 32 (cerrar deudas del editor): scope chico-medio, 5 bloques de bajo coste, todos visibles al usar el motor.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Friction per-body:*
+- Nuevo campo `RigidBodyComponent::friction = 0.5f` (default heredado del hardcode anterior).
+- `PhysicsWorld::createBody` recibe `friction` como param opcional con default 0.5.
+- Persistencia en `.moodmap` opcional: el campo solo se escribe si difiere del default 0.5 (back-compat con archivos viejos, sin bump de schema mayor).
+- Inspector con slider `DragFloat [0, 2]` undoable via `pushEditIfDone<f32>`.
+
+*Bloque B — Raycast con `ignoredBodyId`:*
+- `PhysicsWorld::raycast(origin, dir, maxDist, ignoredBodyId=0)` — default 0 = sin filtro (cero impacto en callers existentes del Hito 33).
+- Implementación con `JPH::BodyFilter` subclase local (`IgnoreOneBodyFilter`) — descarta el body en el broad/narrow phase, así que un wall detrás del body ignorado SÍ se detecta.
+- Lua: `physics.raycast(o, d, maxDist [, ignoredBodyId])` con 4to argumento como `sol::optional<u32>`. Scripts existentes con 3 args siguen funcionando.
+
+*Bloque C — Coyote time + jump buffer:*
+- Coyote window 100ms (saltar después de dejar el suelo, ej. correr off platform).
+- Jump buffer 150ms (apretar SPACE antes de aterrizar igual gatilla cuando el char toca el suelo).
+- Detección de flanco `up→down` de SPACE (ya no hold) para evitar buffer auto-recargándose.
+- Cooldown de 0.2s del Hito 30 se mantiene como anti-double-jump.
+- Lógica idéntica en `EditorPlayMode` y `PlayerApplication`.
+
+*Bloque D — Headbob amp escalado con velocity:*
+- Nuevo `m_horizSpeed01` per-frame normalizado contra `k_walkSpeed`.
+- Amplitud del bob = `k_bobAmp * m_horizSpeed01`. Caminando full-speed = bob completo (4cm); crouched (~50% speed) = bob sutil; quieto = sin bob.
+- Paridad editor/player.
+
+*Bloque E — Wire-up undo de 7 widgets selectos del Inspector:*
+- Cableado `pushEditIfDone<T>` en LightComponent (color, intensity, radius), RigidBodyComponent (halfExtents, mass), ParticleEmitterComponent (emitRate, gravityFactor).
+- Plus el friction del Bloque A = 8 widgets nuevos undoables en este hito.
+- Total Inspector: 9 (Hito 32) + 8 (Hito 34) = 17 widgets cableados; ~30 quedan como pendiente.
+
+*Bloque F — Tests + cierre:*
+- 2 tests en `test_scene_serializer.cpp`: friction custom round-trip (0.05 hielo) + friction default no-persiste-en-JSON (back-compat verificado leyendo el JSON crudo).
+- 3 tests en `test_raycast.cpp`: `ignoredBodyId` saltea body cercano (pega al de atrás), `ignoredBodyId` del único body devuelve miss, `ignoredBodyId == 0` (default) no filtra.
+- Suite total **286/5555** (antes Hito 33 cerrado: 281/5535).
+
+**Verificación visual del dev:**
+- Caja física empujada contra superficie de friction 0.05 (hielo) sigue resbalando lejos; misma caja sobre 0.5 default se detiene en pocos metros.
+- Saltar 50ms después de correr off platform sigue gatillando el salto (coyote OK).
+- Apretar SPACE 100ms antes de aterrizar igual hace que el char salte al touchdown (buffer OK).
+- Headbob al correr full-speed se siente igual; al caminar crouched la amplitud baja notablemente; quieto = sin bob.
+- Editar light color/intensity/radius o rigid body mass/halfExtents → Ctrl+Z revierte.
+
+**Siguiente paso tras completarlo:** Hito 35 (TBD). Plan en `docs/PLAN_HITO35.md`.
+
+### Pendientes menores detectados en Hito 34
+
+- **Setter runtime de friction**: hoy el cambio del slider del Inspector se aplica al re-materializar el body (próximo entrar a Play Mode). Editar friction durante Play no afecta el body activo. **Trigger:** dev demuestra con tweaks en vivo.
+- **Coyote/jump buffer windows hardcoded**: 100ms y 150ms son constantes globales. No configurables per-proyecto ni per-character. **Trigger:** demo con varios personajes con feel distinto.
+- **Filtro de raycast por layer/tag genérico**: solo `ignoredBodyId`. Sin "solo enemies" o "ignore static". **Trigger:** demo lo necesita.
+- **Tests headless de coyote/jump buffer y headbob velocity**: requieren mockear input + multiples frames + Jolt physics activo, overhead alto sin valor proporcional. Verificación visual del dev por ahora.
+- ~~**30 widgets restantes del Inspector sin undo**: heredado de Hito 32. Patrón uniforme.~~ Cubierto en gran parte por Hito 35 B (23 widgets más cableados). Quedan ~10 estructurales (combos, paths, ranges, DragInt) — criterio: solo escalares/vectores puros van con `pushEditIfDone<T>`.
+
+## Hito 35 — Cerrar deudas viejas (drop textura material + 23 widgets undo + obj+mtl fix path)
+
+**Objetivo:** seguir cerrando deudas antiguas no atacadas (Hito 26 + 32) tras barrer las chicas en Hito 34. Mismo patrón: scope chico, bloques de bajo coste. Bonus: validar `.obj`+`.mtl` descubrió un bug latente del Hito 26 que también se fixeó.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Drop textura sobre material slot del Inspector:*
+- Botón "Drop textura para reemplazar material" debajo de cada material slot del MeshRenderer en el Inspector.
+- Acepta payload `MOOD_TEXTURE_ASSET` (existente del AssetBrowser, Hito 26).
+- Drop genera material instance único via `AssetManager::createMaterialFromTexture(texId)` (anti-contagio del Hito 25) y lo asigna al slot correspondiente.
+- Sin undo del cambio estructural por ahora — pendiente menor.
+
+*Bloque B — Wire-up undo de 23 widgets restantes:*
+- Camera (3): fovDeg, nearPlane, farPlane.
+- Environment (6): fogColor, fogLinearStart, fogLinearEnd, fogDensity, exposure, iblIntensity.
+- AudioSource (4): volume, loop, playOnStart, is3D.
+- Animator (3): speed, playing, loop.
+- ParticleEmitter (7): emitting, additive, localSpace, velocityMin, velocityMax, colorStart, colorEnd.
+- Total acumulado Inspector con undo: 9 (Hito 32) + 8 (Hito 34) + 23 (Hito 35) = **40 widgets**.
+
+*Bloque C — Validar `.obj`+`.mtl`:*
+- Creados `assets/meshes/cube_mtl.obj` + `cube_mtl.mtl` con `map_Kd ../textures/brick.png` (textura externa al directorio del mesh).
+- Test headless `AssetManager::loadMesh carga .obj con .mtl y resuelve textura albedo`: verifica que al menos un material extrae albedo no-missing.
+- **Bug latente del Hito 26 fixeado**: `MeshLoader::extractAlbedo` construía paths con `..` segmentos sin normalizar — el VFS los rechazaba como leak silenciosamente. Fix: `lexically_normal()` antes de `loadTexture`. Aplica a CUALQUIER mesh con texturas en paths que escapen su carpeta.
+
+*Bloque D — Cierre:*
+- 1 test nuevo en `test_mesh_asset.cpp`. Suite total **287/5561** (antes Hito 34 cerrado: 286/5555).
+- Tag `v0.35.0-hito35`.
+
+**Verificación visual del dev:**
+- Drag de textura del AssetBrowser sobre el slot del Inspector reemplaza el material; otras entidades que compartían el material original NO se ven afectadas.
+- Editar fov/near/far, fog/exposure/IBL, audio volume/loop/etc, animator speed/playing/loop, todos los toggles + colores + velocities de partículas → Ctrl+Z revierte cada uno.
+- Drop de un `.obj` con `.mtl` muestra textura correcta (antes caía a missing).
+
+**Siguiente paso tras completarlo:** Hito 36 (TBD). Plan en `docs/PLAN_HITO36.md`.
+
+### Pendientes menores detectados en Hito 35
+
+- ~~**Undo del drop de textura sobre material slot**: cambio estructural (asigna nuevo MaterialAssetId), no se trackea en HistoryStack hoy. Requeriría comando dedicado `ReplaceMaterialCommand`.~~ Resuelto en Hito 36 A reusando `EditPropertyCommand<u32>` (sin clase nueva).
+- **~10 widgets estructurales restantes del Inspector**: combos type/shape (cambian schema del body), paths de assets (re-resolvibles), DragFloatRange2 (toca dos floats). Criterio: solo escalares/vectores puros van con `pushEditIfDone<T>`. **Trigger:** dev pide un widget específico undoable.
+- ~~**`std::variant` del tracker no incluye `int`/`u32`**: heredado de Hito 32. Necesario para wire-up de `maxParticles` y similares.~~ Resuelto en Hito 36 B agregando `u32` al variant + cableando `maxParticles`.
+
+## Hito 36 — Cerrar lo que arrastra (undo drop textura + maxParticles undoable + on_trigger_stay)
+
+**Objetivo:** quinto hito seguido cerrando deudas. Los últimos pendientes barribles del scope previo, así el próximo hito empieza con piso limpio. 3 bloques de bajo coste.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Undo del drop de textura sobre material slot:*
+- El handler del drop en `InspectorPanel` ahora empuja un `EditPropertyCommand<u32>` (MaterialAssetId == u32) al HistoryStack.
+- Setter captura `slotIndex` por valor y muta `mr.materials[slotIndex]`.
+- Reusamos el comando templado existente — sin clase nueva (`ReplaceMaterialCommand` propuesto en plan, descartado por ser overengineering).
+- Fallback a asignación directa si no hay history disponible.
+
+*Bloque B — `u32` en variant del `InspectorEditTracker` + undo de `maxParticles`:*
+- Agregado `u32` al `std::variant<...>` del tracker. Cero impacto en call sites existentes.
+- Cableado `pushEditIfDone<u32>` en el slider DragInt de `ParticleEmitterComponent::maxParticles`.
+- El setter del comando reaplica el cleanup completo de la pool runtime (alive/positions/velocities/ages/lifetimes/aliveCount). Sin esto, undo dejaría índices stale ≥ la nueva capacidad.
+
+*Bloque C — `on_trigger_stay` callback per-frame:*
+- `TriggerSystem::update` dispatcha `on_trigger_stay` cada frame que `playerInside == true` y NO hubo flank.
+- Frame del enter: dispatcha solo enter. Frames siguientes mientras adentro: stay. Frame del exit: dispatcha solo exit.
+- Scripts que no definan `on_trigger_stay` siguen funcionando — `dispatchEvent` con miss silencioso (mismo patrón Hito 33).
+
+*Bloque D — Tests + cierre:*
+- 2 tests en `test_edit_property_command.cpp`: `EditPropertyCommand<u32>` con setter que indexa slot (Bloque A) + setter complejo que limpia pool runtime (Bloque B).
+- 2 tests en `test_trigger_system.cpp`: dispatch de stay cada frame que el player sigue dentro (Bloque C) + NO dispatcha stay cuando está fuera.
+- Suite total **291/5574** (antes Hito 35 cerrado: 287/5561).
+
+**Verificación visual del dev:**
+- Drop de textura sobre material slot → Ctrl+Z restaura el material previo. Otras entidades intocadas.
+- Editar `maxParticles` → Ctrl+Z restaura el valor anterior y resetea la pool runtime.
+- Trigger demo con script que define `on_trigger_stay` loguea cada frame que el player sigue dentro.
+
+**Siguiente paso tras completarlo:** Hito 37 (TBD). Plan en `docs/PLAN_HITO37.md`.
+
+### Pendientes menores detectados en Hito 36
+
+Scope chico arrastrando = limpio. Lo que queda es de coste medio o sin trigger concreto, candidato a hitos futuros si emerge necesidad:
+- ~~**Triggers detectan dynamic bodies / NPCs** (Hito 33 origen): coste medio.~~ Resuelto en Hito 37 B con segundo loop sobre RigidBody Dynamic+Kinematic + nuevos callbacks `on_trigger_body_*(bodyId)`.
+- **Trigger AABB rotation (OBB)** (Hito 33): coste medio.
+- **DragFloatRange2 widgets undoables**: lifetime/size del ParticleEmitter — requeriría `std::pair<f32,f32>` en variant.
+- **Combos estructurales del Inspector** (type/shape/clipName): cambios de schema, no caben en `pushEditIfDone<T>`. Necesitarían comandos dedicados.
+
+## Hito 37 — Cerrar 3 medianas pendientes (PackageBuilder smart-pack + triggers/bodies + particle shapes)
+
+**Objetivo:** sexto hito seguido cerrando deudas. Las 3 medianas pendientes que arrastrábamos (Hito 26 + 33 + 29). Tras este hito, el backlog de scope chico-medio queda completamente limpio — el próximo hito puede arrancar feature visible (save/load, main menu).
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — PackageBuilder smart-pack:*
+- Nuevo `BuildConfig::smartPack` (default `true`).
+- `collectReferencedAssetPaths(project, engineAssetsDir)` escanea cada `.moodmap` del proyecto + `.material` referenciados, recolecta paths lógicos: mesh, texturas, materiales, scripts (con prefix `assets/` normalizado), particle textures, prefabs, skybox.
+- Whitelist defensiva siempre incluida: `textures/missing.png`, `audio/missing.wav`, todo `skyboxes/` recursivo.
+- `smartPack=false` mantiene el modo V1 (copy `assets/` entero) como fallback.
+
+*Bloque B — Triggers detectan dynamic bodies:*
+- `TriggerSystem::update` ahora hace dos AABB-tests por trigger: player char (Hito 33+36) + cada entidad con `RigidBodyComponent` Dynamic + Kinematic.
+- Nuevos callbacks Lua: `on_trigger_body_enter(bodyId)` / `on_trigger_body_exit(bodyId)` / `on_trigger_body_stay(bodyId)`. Reciben el `entt::entity` raw del body como número.
+- Static bodies se ignoran (no aportan flank, evitan spam).
+- Estado per-trigger en `TriggerComponent::bodiesInside` (set, no serializado). Bodies destruidos entre frames se limpian automáticamente.
+- Nueva sobrecarga `ScriptSystem::dispatchEvent(entity, eventName, u32 arg)` para args primitivos sin acoplar TriggerSystem a sol2.
+
+*Bloque C — Particle emission por shape:*
+- Nuevo enum `ParticleEmitterComponent::EmissionShape { Point, Box, Sphere, Disc }` + campo `emissionShapeSize`.
+- Sphere / Disc usan rejection sampling para uniformidad (1-2 iteraciones promedio en Sphere; ≤ 8 con fallback determinista).
+- Point default = comportamiento Hito 29.
+- Persistencia en `.moodmap` opcional (campo solo se escribe si shape != Point).
+- Inspector con combo + DragFloat condicional + undo del slider.
+
+*Bloque D — Tests + cierre:*
+- 2 tests en `test_package_builder.cpp` (walk + expansión .material).
+- 3 tests en `test_trigger_system.cpp` (body enter/exit, Static ignorado).
+- 4 tests en `test_particle_system.cpp` (Sphere dentro radio, Disc plano XZ, round-trip shape, Point no se persiste).
+- Suite total **300/5927** (antes Hito 36 cerrado: 291/5574).
+
+**Verificación visual del dev:**
+- "Empaquetar proyecto" produce paquetes con SOLO los assets referenciados — fracciones del tamaño del copy entero.
+- Caja física empujada al AABB de un trigger → script imprime `on_trigger_body_enter` con el body id; al sacarla → `on_trigger_body_exit`.
+- Particle emitter con shape `Sphere`/radius 2.0 spawnea humo distribuido en una esfera de 4m de diámetro.
+- Save/cerrar/reabrir preserva shape + size del emisor.
+
+**Siguiente paso tras completarlo:** Hito 38 (TBD). Plan en `docs/PLAN_HITO38.md`.
+
+### Pendientes menores detectados en Hito 37
+
+Backlog scope chico-medio = limpio. Lo que queda son items con coste medio sin trigger inmediato:
+- **Trigger AABB con rotation (OBB)** (Hito 33): coste medio.
+- **Particle emission shape `Cone`** (Hito 37 C): bajo, pero sin trigger inmediato.
+- **Setter runtime de friction** (Hito 34 A): bajo-medio.
+- **Filtro raycast layer/tag genérico** (Hito 34 B): bajo.
+- **DragFloatRange2 widgets undoables** + combos estructurales (Hito 32-36): heredado.
+
+## Hito 38 — Save/Load gameplay state + Main menu del MoodPlayer
+
+**Objetivo:** primer hito post-cleanup que abre demos con progresión. El `MoodPlayer` arranca con un main menu y permite save/load del state.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Save/Load del gameplay state:*
+- Nuevo módulo `engine/saving/SaveLoad.{h,cpp}` con `save(SaveData, path)` + `load(path)`.
+- Schema v1 JSON `.moodsave`: version + map_path + hud (hp/ammo) + player (position + yaw + pitch). El `.moodmap` queda intocado (level design); el `.moodsave` aparte (runtime state).
+- Defensivo: load valida version + handle JSON malformado + campos faltantes caen a defaults.
+- V1 NO persiste snapshots de Dynamic bodies ni globals Lua arbitrarios (alcance limitado por scope).
+
+*Bloque B — Main menu del MoodPlayer:*
+- Nuevo flag `m_inMainMenu = true` al arranque. Mientras true, todos los updates del juego están skipped vía guard `gameUpdating` propagado a camera/physics/scripts/animation/nav/particles.
+- `drawMainMenu()` ImGui modal centrado con 3 botones: New Game (reset GameState), Load Game (`pfd::open_file` filter `.moodsave` → apply state), Quit (close app).
+- F5 durante el juego = quicksave silencioso a `<exeDir>/quicksave.moodsave`.
+- `GameOverlay` "Salir al menu" en lugar de "Salir del juego" — Quit definitivo solo desde el main menu.
+- `MoodPlayer` ahora linkea `pfd` (portable-file-dialogs) además de `mood_engine_lib`.
+
+*Bloque C — Tests + cierre:*
+- 5 tests nuevos en `test_save_load.cpp`: round-trip básico + load de archivo inexistente + load de JSON malformado + load de versión futura + campos faltantes con defaults.
+- Suite total **305/5947** (antes Hito 37 cerrado: 300/5927).
+
+**Verificación visual del dev:**
+- Doble-click a `MoodPlayer.exe` → menu modal con New/Load/Quit.
+- "New Game" → entra al juego con char en spawn default + HUD reset.
+- "Load Game" → file dialog `.moodsave`. Eligiendo uno valido, hud + char position + camera yaw/pitch se restauran.
+- F5 → log `[engine] [info] Quicksave OK -> ...`.
+- "Salir al menu" del pause overlay → vuelve al menu sin cerrar la app.
+
+**Siguiente paso tras completarlo:** Hito 39 (polish reactivo + tag final `v1.0.0`). Plan en `docs/PLAN_HITO39.md`.
+
+### Pendientes menores detectados en Hito 38
+
+Para Hito 39 (cierre Fase 1):
+- **Cone particle shape** (Hito 37 C): completar el enum.
+- **OBB trigger** (Hito 33): rotation del Transform al test AABB.
+- **Filtro raycast layer/tag genérico** (Hito 34 B).
+- **Setter runtime de friction** (Hito 34 A).
+- Otros polish chicos que aparezcan al revisar el motor entero.
+
+## Hito 39 — Polish final + cierre Fase 1 (`v1.0.0`)
+
+**Objetivo:** cerrar los polish reactivos del Hito 37 (cone, OBB, raycast layer, friction runtime) y marcar el motor como **`v1.0.0` = fin de la Fase 1 del proyecto**. Tras este hito el dev hace recapitulación + planning de Fase 2.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Cone particle shape:*
+- Nuevo `EmissionShape::Cone` con axis +Y, altura == base radio == `emissionShapeSize`.
+- Sample con `cbrt(rand)` para uniformidad sobre el volumen del cono + disc rejection sampling con radio que decrece linealmente con la altura.
+- Persistencia + Inspector combo + serialización integradas con el patrón del Hito 37 C.
+
+*Bloque B — OBB trigger:*
+- Nueva `obbContainsWorldPoint(transform, halfExtents, worldPoint)` reemplaza el `aabbContainsPoint` previo.
+- Construye matriz solo con position + rotation (ignora scale para mantener `halfExtents` como metros directos), invierte y testea el actor en espacio local.
+- Si `rotationEuler == (0,0,0)`, resultado idéntico al AABB axis-aligned anterior — back-compat verificado por todos los tests existentes del trigger system.
+
+*Bloque C — Filtro raycast layer mask:*
+- `PhysicsWorld::raycast(..., layerMask = 0xFFFFFFFFu)` con `LayerMaskFilter` subclase de `JPH::ObjectLayerFilter`. Bit 0 = Static, bit 1 = Moving.
+- Lua: 5to argumento opcional. `physics.raycast(o, d, maxDist, ignored, mask)`.
+- `IgnoreOneBodyFilter` se hizo defensivo: chequea `m_ignoredRaw == 0` antes de comparar para combinar cleanly con layerMask sin ignored body.
+
+*Bloque D — Setter runtime de friction:*
+- `PhysicsWorld::setBodyFriction(bodyId, friction)` via `BodyInterface::SetFriction` + `ActivateBody` para que los contactos vigentes recalculen.
+- El slider del Inspector ahora aplica en vivo durante Play (no requiere re-Play).
+
+*Bloque E — Tests + cierre Fase 1:*
+- 1 test nuevo en `test_particle_system.cpp` (Cone confina partículas en el volumen).
+- 1 test nuevo en `test_trigger_system.cpp` (OBB respeta rotation 45°).
+- 1 test nuevo en `test_raycast.cpp` (layerMask filtra Static vs Moving vs nada).
+- Suite total **308/6554** (antes Hito 38 cerrado: 305/5947).
+
+**Verificación visual del dev:**
+- Particle emitter con shape `Cone` + size 2.0 spawnea humo confinado en un cono recto.
+- Trigger rotado 45° respeta su orientación — el AABB visible en debug y la detección coinciden.
+- `physics.raycast(o, d, 50, 0, 1)` desde Lua solo pega paredes/piso (Static), ignora cajas dinámicas. Mask `2` revierte el comportamiento.
+- Editar friction en el Inspector durante Play → la caja física cambia su comportamiento al instante.
+
+**Siguiente paso tras completarlo:** recapitulación del dev + Fase 2 (TBD).
+
+### Pendientes menores detectados en Hito 39 (no crítico para v1.0.0)
+
+- ~~Cone shape con direction custom: V1 hardcoded a +Y.~~ Resuelto en Hito 40 A.
+- ~~OBB Inspector preview: visualizar el OBB rotado en debug draw.~~ Resuelto en Hito 40 B.
+- ~~Layers custom: hoy solo Static/Moving.~~ Cerrado en Hito 40 C — cubierto vía TagComponent + layerMask raycast.
+- ~~Setter runtime de mass/halfExtents.~~ `setBodyHalfExtents` resuelto en Hito 40 D. `setBodyMass` queda como stub documentado (API Jolt crashea con SEH; pendiente Fase 2).
+
+## Hito 40 — Cerrar pendientes chicos/medios post-v1.0.0
+
+**Objetivo:** tras `v1.0.0` (cierre Fase 1), barrer todos los polish/deudas chicos-medios documentados antes de la recapitulación del dev. 11 de 14 bloques cerrados.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Cone particle shape con axis custom:*
+- Nuevo campo `emissionConeAxis` (vec3, default +Y).
+- Sample en +Y local + rotación Rodrigues hacia el axis target. Persistencia opcional sin bumpear schema.
+
+*Bloque B — OBB trigger preview en debug draw:*
+- En `EditorRenderPass`, cuando `m_debugDraw && m_scene`, loop sobre `TriggerComponent + TransformComponent` que dibuja las 12 aristas del cubo del trigger usando `dbg.drawLine`. Respeta rotation del Transform — el OBB se ve rotado.
+
+*Bloque C — Layers custom (decisión documentada):*
+- Cubierto vía TagComponent + layerMask. Documentado en `PhysicsWorld.h` como decisión permanente.
+
+*Bloque D — Setter runtime mass/halfExtents:*
+- `setBodyHalfExtents` via `BodyInterface::SetShape` con `inUpdateMassProperties=true`.
+- `setBodyMass` quedó como **stub documentado** — API Jolt crashea SEH; el caller usa `setBodyHalfExtents` para cambios de mass por shape recompute.
+
+*Bloque E — DragFloatRange2 undoables:*
+- Agregado `std::pair<f32, f32>` al variant del `InspectorEditTracker`. Cableados lifetime + size del ParticleEmitter.
+
+*Bloque F — Combos estructurales con undo:*
+- RigidBody type/shape, Light type vía `EditPropertyCommand<u32>`. Animator clipName vía `EditPropertyCommand<std::string>` (setter resetea time = 0).
+
+*Bloque G — Coyote/jump-buffer per-proyecto:*
+- `Project::coyoteWindowSec` + `jumpBufferWindowSec` con defaults 0.10 / 0.15. Persistencia opcional en `.moodproj`. EditorPlayMode + PlayerApplication los leen del project.
+
+*Bloque H — Sort partículas bucket-Z:*
+- `std::sort` → `std::stable_sort` con quantize a 0.10m en view-space Z. Elimina flicker entre frames con partículas a profundidad similar.
+
+*Bloque I — `localSpace` con rotation/scale del entity:*
+- El render usa `tf.worldMatrix()` completa (no solo translation) cuando `localSpace=true`. Partículas siguen la rotación del emisor.
+
+*Bloque J — Compactación cross-frame Inspector (auditado):*
+- Auditado: ningún widget escapa el patrón `IsItem*` que ya garantiza un comando por gesto. Cierre por documentación.
+
+*Bloque K — Tests headless `setBodyFriction`/`setBodyHalfExtents`:*
+- 3 tests nuevos en `test_raycast.cpp`. Suite total **312/6564** (antes Hito 39 cerrado: 308/6554).
+
+*Bloques L + M — Tests coyote/jump-buffer + headbob velocity:*
+- NO HECHOS. Requieren refactor a pure functions (lógica acoplada a SDL input). Aceptados como pendientes Fase 2.
+
+**Verificación visual del dev:**
+- F1 toggle: trigger rotado 45° muestra OBB en debug.
+- Editar `coyoteWindowSec` en `.moodproj` a 0.30 cambia el feel del salto.
+- Dos emisores de humo overlapping NO flickerea entre frames.
+- Emisor con `localSpace=true` rotado en Y → partículas en `+X local` aparecen rotadas world.
+
+**Siguiente paso:** Hitos 41 (Save/Load extendido) + 42 (Editor de materiales visual) — los 2 grandes restantes. Después: recapitulación del dev + Fase 2.
+
+### Pendientes menores detectados en Hito 40 (Fase 2)
+
+- `setBodyMass` real (no stub) — requiere versión de Jolt que exponga API sin SEH crash.
+- Tests headless de coyote/jump-buffer y headbob — requiere refactor a pure functions.
+
+## Hito 41 — Save/Load extendido: snapshots Dynamic bodies + Lua globals
+
+**Objetivo:** primer item grande del backlog post-v1.0.0. Extender Save/Load del Hito 38 A para persistir state runtime que V1 dejó afuera (snapshots de bodies dinámicos + globals Lua filtradas). Schema bumpea a v2 con back-compat de v1.
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — Snapshots de Dynamic bodies:*
+- Nueva `BodySnapshot { entityTag, position, rotationQuat, linearVel, angularVel }` en `SaveData`.
+- Save itera entidades con `RigidBodyComponent::Type::Dynamic + bodyId != 0 + tag != ""` y captura via PhysicsWorld getters.
+- Load matchea por tag (estable entre sesiones); aplica `setBodyPositionRot` + `setBodyLinearVelocity` + `setBodyAngularVelocity`.
+
+*Bloque B — Lua globals filtradas:*
+- Nueva `ScriptGlobalsSnapshot { scriptPath, globals: map<name, ExposedValue> }`.
+- `ScriptSystem::captureGlobals(entity)` filtra por tipos del `ExposedValue` variant + reserved names list.
+- `ScriptSystem::restoreGlobals(entity, map)` aplica al sol::state, o stash en `m_pendingGlobals` si el script aún no se cargó (aplica en próximo `update()`).
+
+*Bloque C — PhysicsWorld vel API:*
+- `bodyLinearVelocity` / `bodyAngularVelocity` (const, vía `GetBodyInterfaceNoLock`).
+- `setBodyLinearVelocity` / `setBodyAngularVelocity`.
+- `bodyPositionRot` / `setBodyPositionRot` con quaternion XYZW para pose completa.
+
+*Bloque D — Tests + cierre:*
+- 3 tests nuevos en `test_save_load.cpp`: round-trip de bodies + round-trip de script globals + back-compat de v1 file con schema v2 (campos nuevos vacíos).
+- Suite total **315/6591** (antes Hito 40 cerrado: 312/6564).
+
+**Verificación visual del dev:**
+- F5 (quicksave) con cajas físicas empujadas → load restaura pose + velocity exactas.
+- Script con globals (hp, alive, name, spawn_pos como vec3) → save los captura, load los restaura antes del primer onUpdate post-load.
+- Cargar `.moodsave` v1 → OK, sin bodies ni globals (back-compat).
+
+**Siguiente paso:** Hito 42 (Editor de materiales visual) — el último item grande del backlog antes de la recapitulación del dev + Fase 2.
+
+### Pendientes menores detectados en Hito 41 (Fase 2 si emerge)
+
+- Tags duplicados en saves: V1 acepta como limitación (al cargar solo aplica al primer match).
+- Vec3 en Lua globals via heurística `tabla[1..3]+size==3` — si un script usa tabla con 4 floats con uno extra, se omite. Documentado.
+- Lua tables anidadas, funciones, userdata: omitidas silenciosamente. Por design.
+
+### ✅ BUG RESUELTO — Load Game no restauraba bodies (commit `fe9dbda`)
+
+Tras testing del dev (2026-05-02), reportado: al hacer **Load Game desde el main menu, las cajas físicas NO aparecen** en sus poses guardadas — el viewport carga el mapa pero los bodies dynamic se pierden.
+
+**Causa raíz** (identificada y fixeada post-`v0.41.0-hito41`, commit `fe9dbda`):
+1. `PhysicsWorld::createBody` siempre materializaba con `Quat::sIdentity()` — rotation del Transform se ignoraba al crear el body. Aunque `applyLoadedSave` aplicara la rotation al `TransformComponent`, el body Jolt arrancaba "derecho".
+2. `applyLoadedSave` aplicaba vels al body solo si `bodyId != 0`. Si el Load corría desde el Main Menu (bodies aún no materializados), las vels del snapshot se perdían — el body al materializar arrancaba quieto.
+3. Sin warning explícito cuando un tag del save no encontraba entity en el scene → el dev no tenía pista de que sus cajas spawneadas runtime nunca llegaron al `.moodmap`.
+
+**Fixes aplicados:**
+- `PhysicsWorld::createBody` toma `rotationQuat` (default identidad). El caller (`updateRigidBodies` en Player + Editor) pasa el `t.rotationEuler` convertido a quat.
+- `RigidBodyComponent` gana `hasPendingVel` + `pendingLinearVel` + `pendingAngularVel` (runtime-only). Si `applyLoadedSave` corre con `bodyId == 0`, stash ahí. `updateRigidBodies` las aplica post-materialize y limpia.
+- Log warn por snapshot huérfano explica al dev qué hacer ("Ctrl+S en editor antes de empaquetar").
+
+**Tests headless** (`test_save_load.cpp`): 4 casos cubriendo createBody con rotation, default identidad, pendingVel aplicada, pendingVel=false. Suite **319/6613**.
+
+**Verificación visual pendiente del dev:** confirmar el flow completo Spawn → F5 → cerrar → abrir → Load Game → cajas en pose+rotation+velocidad correctas.
+
+**Fixes ya aplicados en esta sesión (post-`v0.41.0-hito41`, sin tag — work-in-progress):**
+- Cursor visible en main menu + flank-detection al salir del menú (`SDL_SetRelativeMouseMode`).
+- Sync `body→Transform` en `updateRigidBodies` ahora copia **rotation** además de position (antes solo position — Transform stale en debug draw + saves).
+- Clamp velocidades < 0.01 m/s a 0 al save (evita reactivar bodies dormidos al load → cajas drifteando lentamente).
+- `applyLoadedSave` aplica al `TransformComponent` siempre (no solo al body) — cubre el caso "load antes del primer Play" cuando bodies aún no materializados (`bodyId == 0`).
+- "New Game" recarga el mapa default desde cero: cleanup char + bodies + scripts → `tryLoadGameManifest()` → reset GameState + cámara.
+- PackageBuilder ahora pregunta confirm si carpeta destino existe (sobreescribir SI/NO).
+- Spawner "Agregar caja física demo" usa tags únicos `CajaFisica_01/02/03` (antes todos `CajaFisica` → conflicto en byTag map del load).
+- F6 = Save As con file dialog (slot custom). F5 sigue siendo quicksave.
+- Estilo del MainMenu mejorado (panel 420×360, padding generoso, título grande, botones con hover).
+- Logs detallados en `[SAVE]` y `[LOAD]` para diagnóstico.
+
+**Lo que falta auditar (próxima sesión):**
+1. **Verificar el flow completo Load Game con dev presente**: capturar logs `[LOAD] body tag='X'...` que aparecen al cargar — comparar con `[SAVE]` previos. Si los tags no coinciden o falta alguno, ahí está el bug.
+2. **Test headless del flujo simulado**: crear un test que arme `SaveData` con N bodies, `applyLoadedSave` sobre un scene con entities con tags matcheados, verificar que cada `TransformComponent` quede en la pose esperada.
+3. **Revisar que `tryLoadGameManifest` se llame antes de `applyLoadedSave`**: si Load Game se aprieta SIN haber hecho New Game antes, el flow puede ser inconsistente — el constructor del MoodPlayer ya llama tryLoadGameManifest, pero si falla y cae a `buildTestMap`, las entidades del map real nunca existen y los snapshots no encuentran sus tags.
+4. **Considerar si Load Game debe RECARGAR el mapa** antes de aplicar snapshots (mismo flujo que New Game + apply state). Hoy asume que el mapa ya está cargado — falla si difiere del save.
+
+**Punto de entrada para retomar**: `PlayerApplication::applyLoadedSave` en `src/player/PlayerApplication.cpp` + handler "Load Game" en `drawMainMenu`.
+
+**Update 2026-05-02 — bug RESUELTO** (`v0.41.1-hito41-final`): el fix profesional fue extender `PhysicsWorld::createBody` con un parámetro `rotationQuat` (default identidad) + agregar campos `hasPendingVel + pendingLinearVelocity + pendingAngularVelocity` al `RigidBodyComponent`. Cuando `applyLoadedSave` corre antes de que los bodies estén materializados (caso "Load Game desde main menu inicial"), las velocidades quedan stash en el componente. `updateRigidBodies` materializa el body en su próximo frame leyendo Transform actualizado + propagando rotation al body via `createBody` + aplicando las pending velocities. 4 tests nuevos en `test_save_load.cpp` cubren el flow completo.
+
+## Hito 42 — Editor de materiales visual (versión lite)
+
+**Objetivo:** último item grande del backlog post-`v1.0.0`. Versión lite de un editor de materiales standalone — el dev puede tweakear materiales sin requerir entidad seleccionada en el viewport. Sin preview esférico ni node-graph (esos quedan para Fase 2).
+
+**Criterios de aceptación cumplidos:**
+
+*Bloque A — `MaterialEditorPanel`:*
+- Nuevo panel dock-able registrado en `EditorUI::m_panels`. Default `visible=false` (togglear desde menú "Ver > Material Editor").
+- Combo con todos los `MaterialAsset` del AssetManager.
+- Sliders escalares idénticos al Inspector: `albedoTint` (ColorEdit3), `metallic`, `roughness`, `ao` (SliderFloat).
+- 4 drop slots para texturas (`albedo`, `metallic_roughness`, `normal`, `ao`) reusando el payload `MOOD_TEXTURE_ASSET` del AssetBrowser. Botón `X` por slot para limpiar la asignación.
+- `setAssetManager` para inyección desde `EditorApplication` post-init.
+
+*Bloque B — Integración:*
+- Registro en `EditorUI::m_panels` → menú "Ver" lo lista automáticamente.
+- `EditorApplication::initEditor` (post-init) llama `m_ui.materialEditor().setAssetManager(...)`.
+- `MaterialEditorPanel.cpp` agregado al CMakeLists del MoodEditor target.
+
+*Bloque C — Cierre:*
+- Suite total **319/6613** (sin tests nuevos — la lógica del panel es puramente UI ImGui que valida visualmente el dev).
+- Tag `v0.42.0-hito42`.
+
+**Verificación visual del dev:**
+- Menú "Ver > Material Editor" muestra/oculta el panel.
+- Combo lista todos los materiales registrados (defaults + `.material` cargados del repo).
+- Drop de textura desde el Asset Browser sobre un slot → cambio en vivo en cualquier entidad que use ese material.
+- Sliders afectan render en tiempo real.
+
+**Siguiente paso:** **🎬 RECAPITULACIÓN DEL DEV** + planning de Fase 2 (TBD).
+
+### Pendientes menores detectados en Hito 42 (Fase 2)
+
+- **Preview esférico off-screen** dentro del panel: requiere FBO chico + mini-scene + render dedicado. El dev firmó "a futuro deberemos mejorar".
+- **Node graph** (estilo Substance/UE): feature mayor con su propio hito.
+- **Save As `.material`** desde el panel para crear materiales nuevos sin tocar archivos.
+- **Undo/Redo en el panel**: el Inspector tiene undo desde Hito 32, este panel no — diff intencional para v1 lite.

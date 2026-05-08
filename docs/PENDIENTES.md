@@ -9,19 +9,23 @@
 
 ---
 
-## Post-F2H24 (2026-05-08)
+## Post-F2H26 (2026-05-08)
 
-### Activos
+### Próximo a atacar
 
-- **F2H25 — 4-viewport Hammer-style layout** (heredado, antes F2H22→F2H23→F2H24
-  candidato; sigue priorizado tras cerrar F2H24 reorg código). Workspace nuevo
-  "Hammer" con dockspace en 4 cuadrantes: 1 perspectiva 3D + 3 ortográficas
-  (top / front / side) en wireframe (`glPolygonMode(GL_LINE)` + grid 2D +
-  crosshair). Drag-edit de brushes / vertices entre vistas con grid snap.
-  Multi-cámara: 4 framebuffers (o uno reutilizado con N renders) + shadow
-  pass / light grid compartido para mitigar el ~4× costo CPU del frame.
-  Reusa la infra de workspaces de F2H7+F2H22 — el Hammer entra como un
-  workspace más con su propio `buildHammerWorkspace` en `Dockspace.cpp`.
+- **F2H28 — 4-viewport Hammer-style layout**. Workspace nuevo "Hammer"
+  con dockspace en 4 cuadrantes: 1 perspectiva 3D + 3 ortográficas
+  (top / front / side) en wireframe (`glPolygonMode(GL_LINE)` + grid 2D
+  + crosshair). Drag-edit de brushes / vertices entre vistas con grid
+  snap. Multi-cámara: 4 framebuffers (o uno reutilizado con N renders) +
+  shadow pass / light grid compartido para mitigar el ~4× costo CPU del
+  frame. Reusa la infra de workspaces de F2H7+F2H22 — el Hammer entra
+  como un workspace más con su propio `buildHammerWorkspace` en
+  `Dockspace.cpp`. **Multi-selección de caras** (Shift+click sobre
+  múltiples caras del mismo brush) entra como sub-bloque o como hito
+  satélite si el flujo Hammer naturalmente lo demanda.
+
+### Activos sin orden definido (siguiente ola, post-Hammer)
 
 - **Split fino de `SceneRenderer_Render.cpp`** (deuda chica residual de
   Bloque C extendido del F2H24): el archivo quedó en 590 LOC tras el
@@ -66,25 +70,40 @@
   compilado runtime con cache por hash del grafo, persistencia
   `.material` extendida. Riesgo: refactor del SceneRenderer para
   shaders custom por material (cada grafo distinto = shader distinto,
-  rompe batching de F2H4). Probable F2H24+ si emerge necesidad.
+  rompe batching de F2H4). Probable hito propio si emerge necesidad.
 
 ### Diferidos no urgentes (mencionar al dev si se acercan al scope)
 
-- **Runtime-load de mesh compilada en `MoodPlayer`** (deuda de F2H20):
-  player carga la mesh estática unificada en lugar de los brushes
-  individuales — habilita "brushes solo en el editor" del plan original
-  F2H14. Schema bump del `.moodmap` con `compiledMesh` opcional. Hito
-  futuro si emerge necesidad de loading time.
-- **Cull de overlap parcial** (deuda F2H20): clipping general
-  polígono-polígono. Diferido si emerge necesidad real con mapas
-  grandes.
-- **F6 panel estilo Blender** (tweak last operator post-hoc) — diferido
-  desde F2H16.
-- **Vertex / Edge mode** (teclas 1, 2 reservadas en F2H17).
-- **Multi-selección de caras** (Shift+click sobre múltiples caras).
+- **Validación full del Player con compiledMesh** (deuda menor F2H26):
+  el path `useCompiledMesh=true` está implementado y testeado a nivel
+  unitario, pero NO se probó end-to-end con `MoodPlayer.exe` cargando
+  un proyecto empaquetado. Validar al primer empaquetado real que
+  haga el dev — debe ver en logs "SceneLoader: usando compiledMesh
+  (N submeshes, brushes individuales NO spawneados)".
+- **F6 panel real estilo Blender** (intentado y descartado en F2H27):
+  el F6 con sliders de Transform fue redundante con Inspector. El F6
+  REAL ajusta params del operador (size del Box, segments del cilindro,
+  etc.) — requiere parametrizar comandos con metadata "params editables"
+  + UI dedicada + re-ejecución del comando. Hito grande propio si emerge
+  necesidad.
 - **Preview esférico del Material Editor con interacción de mouse**
   (orbit cam, zoom): F2H21 dejó rotación automática lenta. Nice-to-have
   si emerge en uso real.
+
+## Post-F2H26 (2026-05-08) — histórico resuelto
+
+- ~~Cull de overlap parcial~~ — resuelto en F2H25
+  (`v1.16.0-fase2-hito25`). BSP-style polygon clipping con 3 pre-tests
+  críticos. Stats nuevas `culledOverlapTriangles` + `splitFragments`
+  en el dialog de compile.
+- ~~Runtime-load de mesh compilada en MoodPlayer~~ — resuelto en F2H26
+  (`v1.17.0-fase2-hito26`). Schema bump v12→v13 con `compiledMesh`
+  opcional aditivo. Componente nuevo `CompiledMeshComponent` + render
+  path nuevo. Flag `useCompiledMesh` en SceneLoader (Editor=false,
+  Player=true).
+- ~~UI layout fijo por defecto~~ — resuelto en F2H25 como fix lateral
+  (`imgui.ini` → `imgui_layout_v2.ini`). Pedido del dev: "por defecto
+  la UI es fija, luego el user acomoda".
 
 ## Post-F2H19 (2026-05-07)
 
