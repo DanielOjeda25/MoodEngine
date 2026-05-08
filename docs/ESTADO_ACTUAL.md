@@ -6,46 +6,49 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H25 + F2H26 cerrados: Cull overlap parcial en CompileMap + Runtime-load de mesh compilada en MoodPlayer.**
-Tags: `v1.16.0-fase2-hito25` (cull overlap + UI layout v2 stamp) + `v1.17.0-fase2-hito26` (schema v13 + Player path).
-Verificado automático: suite doctest **622/8403** verde (+12 cases / +44 asserts vs F2H24). Verificado por dev: cilindro dentro de cubo desaparece de la mesh compilada (cull overlap funciona); `.moodmap` exportado tiene `"version": 13` + bloque `"compiledMesh"` con submeshes (62 KB persistidos).
+**🚀 Fase 2 — F2H28 cerrado: Editor de mapas 4-viewport (MVP visual + select + grid).**
+Tag: `v1.18.0-fase2-hito28`.
+Verificado automático: suite doctest **622/8413** verde (+10 asserts del 4to workspace). Verificado por dev: workspace "Editor de mapas" muestra 4 cuadrantes (Top/Front/Side wireframe + perspectiva 3D), grid 2D sobre fondo negro con líneas mayores cada 8×snap en naranja Valve, click-select cross-viewport funciona (clickear en cualquier orto refleja la selección en las 4 vistas + Inspector), Ctrl++/Ctrl+- cicla snap [1, 2, 4, 8, 16, 32, 64, 128] con label "Grid: Nu" arriba-derecha de cada panel.
 
-**Cambio importante**: F2H25 + F2H26 atacaron las 2 deudas técnicas heredadas de F2H20 (cull overlap + persistencia/runtime-load). El editor ahora produce y persiste una mesh estática unificada con 2 niveles de cull (pareja exacta + overlap parcial); el `MoodPlayer` la carga directo en lugar de procesar brushes CSG en runtime. Cumple "brushes solo en el editor" del plan F2H14 original.
+**Cambio importante**: F2H28 entrega los 4 fundamentos del editor estilo Valve Hammer: layout multi-viewport, render orto wireframe con grid 2D, click-select cross-viewport. **NO** entra el drag-edit ni el block tool — esos quedan para F2H29 (decisión documentada en el plan: split en 2 hitos para no romper todo de una). El snap setting expone el valor en UI pero no lo aplica al desplazamiento real todavía.
 
 **F2H27 (F6 panel "Adjust Last Operation") fue intentado y descartado** durante implementación. La versión "F6-light" (overlay flotante con sliders Position/Rotation/Scale del último brush) resultó redundante con el Inspector. El F6 real de Blender requiere parametrizar todos los comandos con metadata de "params editables" — scope de hito propio. Diferido sin tag.
 
-**Decisiones clave de F2H25:**
-- **Algoritmo BSP-style polygon clipping** con Sutherland-Hodgman extendido. Por cada plano del brush B: split en `above` (afuera) + `below` (sigue testeado contra los demás planos).
-- **3 pre-tests críticos** para correctitud + performance: cara entera afuera (output sin partir), cara entera adentro (descartar), polígono coplanar (saltea el plano, los OTROS deciden — sin esto el cull se equivocaba en el caso "cara coplanar con pared exterior pero sub-region central adentro de B").
-- **Stats nuevas**: `culledOverlapTriangles` (caras eliminadas enteras) + `splitFragments` (caras partidas).
-- **Trade-off conocido**: el split puede AUMENTAR el tri count (cada fragmento independiente requiere su propia triangulación). El beneficio del cull es área visible, no tri count.
-- **UI layout version stamp** (fix lateral): `imgui.ini` → `imgui_layout_v2.ini`. Ini viejo se ignora, default fresh al primer arranque.
+**Decisiones clave de F2H28:**
+- **Workspace orientado a tarea con label castellano "Editor de mapas"** (no "Hammer") alineado con la convención F2H22; internamente seguimos hablando del estilo Hammer como inspiración técnica.
+- **Layout 2x2 dockspace**: top-left Top (XZ), top-right Viewport (perspectiva 3D existente), bottom-left Front (XY), bottom-right Side (ZY). Convención Y-up del engine; los nombres de eje en mayúsculas y el sufijo `(plano)` en cada label distinguen las 3 ortos.
+- **`OrthoCamera` como struct puro** (en `editor/panels/scene/`, no en `engine/`) — pan/zoom en coords locales right/up, view + proj computadas on-demand. Eligió no almacenar matrices cacheadas: trivial costo (6 mat4/frame) vs. complejidad de invalidación.
+- **3 FBOs LDR** pre-creados al ctor del SceneRenderer (1280x720) + resize a demanda en `renderOrthoView`. ~30 MB extra. El render orto usa GL puro (bypassa el RHI) porque corre DESPUÉS del `endFrame()` del frame perspectivo — reusa el `meshCache` hidratado por el `brushPass` perspectivo (no regenera mesh).
+- **Fondo NEGRO** (cambio sobre el plan original que decía gris claro `#C8C8C8`) — pedido del dev *"resalta mejor el wireframe celeste"*. Grid menor `(40,40,40)`, grid mayor naranja Valve `#F58220`, wireframe celeste GMod `#6CC1E5`, selected naranja saturado `#FF9933`.
+- **Grid 2D como shader fullscreen** (no geometría) con AA via `fwidth(worldXY/spacing)` — grosor estable a cualquier zoom.
+- **Refactor `pickEntity` → helper `pickEntityFromRay`** en ScenePick para que el orto picking use rayos paralelos (`origin = worldFromNdc(...) - forwardAxis*1024`, `dir = forwardAxis`) sin duplicar el broadphase.
+- **Snap step solo de display** en F2H28 — `m_hammerSnapStep` en EditorApplication, `Ctrl + +` / `Ctrl + -` cicla `[1, 2, 4, 8, 16, 32, 64, 128]`, label "Grid: Nu" arriba-derecha. F2H29 lo aplica al drag-edit.
+- **Skip total del render orto si workspace ≠ "Editor de mapas"** — guard en `EditorRenderPass.cpp` evita pagar el ~3x costo CPU en otros workspaces.
 
-**Decisiones clave de F2H26:**
-- **Schema bump aditivo v12→v13**: campo `compiledMesh` opcional. Mapas v12 caen al fallback (procesar brushes en runtime).
-- **Layout PBR de 11 floats interleaved** (pos+color+uv+normal, sin EBO) — mismo formato que `brushSubmeshToInterleaved` produce para reusar shader PBR estándar.
-- **Componente nuevo `CompiledMeshComponent`** (move-only, mismo patrón que F2H17 BrushComponent) con `vector<unique_ptr<IMesh>>` + `vector<MaterialAssetId>` paralelos.
-- **Render path nuevo `compiledMeshPass`** después del `brushPass` en `SceneRenderer_Render.cpp`. uModel=identity (mesh ya en world space).
-- **Flag `useCompiledMesh`** en `SceneLoader::applyEntitiesToScene`: Player pasa `true` (skipea brushes individuales si hay compiled), Editor pasa default `false` (sigue editando brushes). Sin compiledMesh → fallback aunque el flag sea `true`.
+**Implementación (F2H28 Bloques A-G en 4 commits feat):**
 
-**Implementación (F2H25 Bloques A-G + F2H26 Bloques A-G):**
+- **Bloque A — Plan**: archivado en [`archive/plans/PLAN_HITO_F2H28.md`](archive/plans/PLAN_HITO_F2H28.md).
+- **Bloques B-D (commit `44ea100`)** — scaffolding (heredado del pull): WorkspaceManager + Dockspace + OrthoCamera + OrthoViewportPanel + SceneRenderer_Ortho + shaders wireframe_ortho.
+- **Bloque E (commit `8a66233`)** — grid 2D: shaders nuevos `grid2d.{vert,frag}` + cambio fondo gris→negro + `m_grid2dShader` + `m_grid2dVao` + `panOffset`/`worldHeight` en firma `renderOrthoView` + fix lateral tests workspace count 3→4.
+- **Bloque F (commit `6036c19`)** — click-select cross-viewport: refactor `ScenePick` con `pickEntityFromRay` + bloque 2.4b en `EditorApplication_Run` con consume de los 3 ortos + Maya-style Shift/Ctrl modifiers + logs prefijados.
+- **Bloque G (commit `cf8d4e5`)** — snap setting: `m_hammerSnapStep` + handler Ctrl++/Ctrl+- en processEvents + setter en panel + label "Grid: Nu" arriba-derecha + sincronización via EditorRenderPass.
 
-- **F2H25 Bloque B**: `splitPolygonByPlane`, `cullPolygonAgainstBrush`, `planeLocalToWorld` en `CompileMap.cpp`. `compileMap` itera caras post-cull-exacto y aplica overlap clipping. Stats nuevas en header.
-- **F2H25 Bloque C**: `test_compile_map.cpp` extendido con 5 cases F2H25 (smoke, pareja exacta no dispara overlap, brush dentro de big, russian doll, solape parcial parte caras).
-- **F2H25 lateral**: `imgui_layout_v2.ini` (1 LOC en `EditorApplication_Init.cpp`); fix de `tests/CMakeLists.txt` agregando 8 partials de F2H24 que no se incluían.
-- **F2H26 Bloque B**: schema bump v13; `SavedCompiledSubmesh`/`SavedCompiledMesh` structs; serializer/parser inline en `SceneSerializer.cpp`; `buildSavedCompiledMeshFromScene` helper público.
-- **F2H26 Bloque C**: `CompiledMeshComponent.h`; `compiledMeshPass` en SceneRenderer.
-- **F2H26 Bloque D**: SceneLoader extendido con flag `useCompiledMesh`. Si flag y compiledMesh presente → 1 entity "WorldCompiledMesh" + skipear brushes.
-- **F2H26 Bloque E**: 4 callsites de `SceneSerializer::save` en editor llaman al helper y pasan compiledMesh. PlayerApplication_Init pasa `useCompiledMesh=true`.
-- **F2H26 Bloque F**: `test_compiled_mesh_persistence.cpp` con 7 cases.
-
-**Pendientes conocidos** (post-F2H25/F2H26):
-- **F2H28 — Hammer-style 4-viewport** (top-level del backlog "Después", próximo a atacar).
-- **Validación full del Player** con compiledMesh: requiere empaquetar proyecto + correr MoodPlayer.exe. El path está implementado pero no se probó end-to-end. Anotado como deuda menor.
-- **Multi-selección de caras** (Shift+click sobre múltiples caras del mismo brush) — sub-bloque de F2H28 si emerge necesidad.
+**Pendientes conocidos** (post-F2H28):
+- **F2H29 — Block tool + drag-edit + vertex edit en ortos** (continuación natural; el snap step que F2H28 expone se aplica al delta del drag).
+- **Multi-selección de caras** (Shift+click sobre múltiples caras del mismo brush) — sub-bloque de F2H29 si emerge.
+- **Validación full del Player** con compiledMesh: deuda menor heredada de F2H26 (path implementado pero no probado end-to-end con `MoodPlayer.exe`).
 - Los demás items del backlog "Activos sin orden definido" siguen vivos: split fino de `SceneRenderer_Render.cpp`, iconos Toolbar, polish UX panels, node-graph Material Editor.
 
-**Próximo paso**: **F2H28 — 4-viewport Hammer-style layout**. Workspace nuevo "Hammer" con dockspace en 4 cuadrantes (1 perspectiva 3D + 3 ortográficas top/front/side en wireframe + grid 2D + crosshair). Drag-edit entre vistas con grid snap. Reusa la infra de workspaces de F2H7+F2H22.
+**Próximo paso**: **F2H29 — Block tool + drag-edit + vertex edit**. Continuación natural de F2H28: implementar las 3 features de edición que quedaron explícitamente afuera. El snap step expuesto en F2H28 se aplica al delta del drag (`pos = round(pos / snap) * snap`).
+
+### F2H25 + F2H26 (anteriores, ya cerrados)
+
+**🚀 F2H25 + F2H26: Cull overlap parcial en CompileMap + Runtime-load de mesh compilada en MoodPlayer.**
+Tags: `v1.16.0-fase2-hito25` (cull overlap + UI layout v2 stamp) + `v1.17.0-fase2-hito26` (schema v13 + Player path).
+
+**Decisiones clave de F2H25:** algoritmo BSP-style polygon clipping con Sutherland-Hodgman extendido + 3 pre-tests críticos (cara entera afuera/adentro/coplanar) + stats `culledOverlapTriangles` + `splitFragments` + UI layout v2 stamp (`imgui_layout_v2.ini`).
+
+**Decisiones clave de F2H26:** schema bump aditivo v12→v13 con `compiledMesh` opcional + layout PBR 11 floats interleaved + componente `CompiledMeshComponent` move-only + render path nuevo `compiledMeshPass` + flag `useCompiledMesh` en SceneLoader (Player=true, Editor=false).
 
 ### F2H24 (anterior, ya cerrado)
 

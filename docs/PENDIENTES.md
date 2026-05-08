@@ -9,21 +9,30 @@
 
 ---
 
-## Post-F2H26 (2026-05-08)
+## Post-F2H28 (2026-05-08)
 
 ### Próximo a atacar
 
-- **F2H28 — 4-viewport Hammer-style layout**. Workspace nuevo "Hammer"
-  con dockspace en 4 cuadrantes: 1 perspectiva 3D + 3 ortográficas
-  (top / front / side) en wireframe (`glPolygonMode(GL_LINE)` + grid 2D
-  + crosshair). Drag-edit de brushes / vertices entre vistas con grid
-  snap. Multi-cámara: 4 framebuffers (o uno reutilizado con N renders) +
-  shadow pass / light grid compartido para mitigar el ~4× costo CPU del
-  frame. Reusa la infra de workspaces de F2H7+F2H22 — el Hammer entra
-  como un workspace más con su propio `buildHammerWorkspace` en
-  `Dockspace.cpp`. **Multi-selección de caras** (Shift+click sobre
-  múltiples caras del mismo brush) entra como sub-bloque o como hito
-  satélite si el flujo Hammer naturalmente lo demanda.
+- **F2H29 — Block tool + drag-edit + vertex edit en ortos**.
+  Continuación natural de F2H28 (que entregó layout + render + grid +
+  click-select pero dejó las 3 features de edición afuera por scope).
+  - **Block tool**: en una vista orto, click-drag dibuja un rectángulo
+    de selección que al soltar crea un Box brush con esas dimensiones
+    + altura default sobre el eje perpendicular. Preview en vivo en las
+    otras 2 ortos + perspectiva durante el drag.
+  - **Drag-edit**: clickear y arrastrar un brush ya existente desde
+    cualquier orto lo mueve sobre el plano de esa vista (eje
+    perpendicular intacto). Snap aplica al delta `pos = round(pos /
+    snap) * snap` usando el `m_hammerSnapStep` que F2H28 ya expone.
+    Update en vivo en las otras 3 vistas. Push de
+    `MultiEditTransformCommand` al soltar (mismo patrón F2H23 iter 5).
+  - **Vertex/edge edit**: teclas `1` / `2` (reservadas en F2H17)
+    activan sub-modos en el orto. Click sobre un vertex/edge del brush
+    lo selecciona + drag lo mueve con snap. Triangulación se regenera
+    al soltar.
+  - **Multi-selección de caras** (Shift+click sobre múltiples caras del
+    mismo brush) entra como sub-bloque si el flow naturalmente lo
+    demanda durante el vertex edit.
 
 ### Activos sin orden definido (siguiente ola, post-Hammer)
 
@@ -90,8 +99,14 @@
   (orbit cam, zoom): F2H21 dejó rotación automática lenta. Nice-to-have
   si emerge en uso real.
 
-## Post-F2H26 (2026-05-08) — histórico resuelto
+## Post-F2H28 (2026-05-08) — histórico resuelto
 
+- ~~4-viewport Hammer-style layout~~ — resuelto en F2H28
+  (`v1.18.0-fase2-hito28`) bajo el label "Editor de mapas". Workspace
+  nuevo registrado como 4to default + dockspace 2x2 + 3 ortos
+  wireframe + grid 2D shader + click-select cross-viewport + snap
+  cycleable Ctrl++/Ctrl+-. Drag-edit / block tool / vertex edit
+  diferidos a F2H29 por decisión explícita de split (ver DECISIONS).
 - ~~Cull de overlap parcial~~ — resuelto en F2H25
   (`v1.16.0-fase2-hito25`). BSP-style polygon clipping con 3 pre-tests
   críticos. Stats nuevas `culledOverlapTriangles` + `splitFragments`

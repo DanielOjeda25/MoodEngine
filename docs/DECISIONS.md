@@ -11,6 +11,81 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-08: F2H28 — Editor de mapas 4-viewport (split en 2 hitos, fondo negro, snap solo de display)
+
+**Problema:** F2H28 originalmente quería entregar **todo** el editor estilo Hammer en un solo hito: layout 4-viewport + render orto wireframe + grid 2D + click-select + block tool (dibujar rectángulo en orto → crear brush) + drag-edit (mover brushes desde orto con grid snap) + vertex/edge edit. Estimación: ~12 bloques con bugs cruzados (cada feature de edición depende del render + selection + grid; un bug en un layer rompe los otros).
+
+**Decisión:** **Split explícito en 2 hitos**. F2H28 entrega los **fundamentos**: layout + render + grid + click-select + snap visual. F2H29 entrega las **3 features de edición**: block tool, drag-edit, vertex/edge edit. El snap step expuesto por F2H28 (`m_hammerSnapStep` cycleable con Ctrl++/Ctrl+-) se aplica al delta del drag en F2H29.
+
+**Razones:**
+- **Bug isolation**: el render multi-viewport + grid + click cross-viewport ya es código nuevo crítico. Sumar drag-edit (que muta el Transform del brush en vivo viendo update en las 4 vistas) duplica la superficie de bugs.
+- **MVP visual primero**: el dev puede USAR el workspace inmediatamente para navegar/seleccionar; las features de edición vienen después con esa base ya validada.
+- **Patrón ya usado**: F2H25 (cull overlap) + F2H26 (runtime-load) splittearon dos features tightly-coupled del mismo dominio CSG. Mismo approach acá.
+
+**Alternativas descartadas:**
+- **Hito grande único de 12+ bloques**: bugs cruzados retrasan todo, no hay punto intermedio para validar visualmente con el dev. Descartado.
+- **Diferir block tool a F2H30+**: los 3 (block, drag-edit, vertex) son tightly-coupled — comparten el manipulador 2D del orto + el snap. Splittear más fino agrega ceremonia sin separar dominios reales. Descartado.
+
+---
+
+**Sub-decisión 1 — Label castellano "Editor de mapas" (no "Hammer"):**
+
+Plan original llamaba al workspace "Hammer". Cambio durante implementación: alineamos con la convención F2H22 (workspaces orientados a TAREAS — "Layout", "Programar", "Materiales") y usamos label "Editor de mapas". Internamente seguimos hablando del estilo Hammer/Source como inspiración técnica, pero el dev ve el nombre de la tarea.
+
+**Razones:** consistencia con los otros 3 workspaces; "Hammer" es referencia que solo entiende quien conoce Source SDK; "Editor de mapas" describe qué hace el dev cuando entra ahí.
+
+---
+
+**Sub-decisión 2 — Fondo NEGRO en lugar de gris claro `#C8C8C8`:**
+
+Plan original especificaba paleta Valve+GMod con fondo gris claro `#C8C8C8` (mimic Hammer original). Cambio durante validación visual: dev pidió *"quiero cambiar el fondo gris por negro"* — el wireframe celeste GMod `#6CC1E5` resalta mucho mejor sobre negro que sobre gris.
+
+Ajustes acompañantes: grid menor cambió de `#7A7A7A` (visible sobre gris claro) a `(40,40,40)` (sutil sobre negro, no compite con el wireframe). Grid mayor `#F58220` (naranja Valve) preservado — pop sobre negro mejor que sobre gris.
+
+**Razones:** el plan era guess; la validación visual es la fuente de verdad. Fondo negro es la convención de muchos editores modernos (Unreal Editor wireframe, Houdini network views) y subjetivamente más cómodo para sesiones largas.
+
+---
+
+**Sub-decisión 3 — `OrthoCamera` en `editor/panels/scene/`, NO en `engine/scene/cameras/`:**
+
+Plan original sugería poner `OrthoCamera` en `engine/scene/cameras/Camera.h` (junto al `EditorCamera` orbital y `FpsCamera` del player). Decisión durante implementación: ponerlo en `editor/panels/scene/OrthoCamera.h` junto al `OrthoViewportPanel` que la usa.
+
+**Razones:**
+- `OrthoCamera` es **solo del editor** — el `MoodPlayer` no la necesita (no tiene workspace orto).
+- Acoplamiento mínimo: el SceneRenderer NO conoce `OrthoCamera` directamente (recibe `panOffset` + `worldHeight` como params plain). Si en el futuro hace falta usarla en `engine/`, mover es trivial.
+- Evita layering issues: `engine/` no debe depender de `editor/`. Si `OrthoCamera` viviera en engine y luego algún partial de engine la incluyera, romperíamos la regla.
+
+---
+
+**Sub-decisión 4 — `pickEntityFromRay` como helper público + `pickEntity` delega:**
+
+Bloque F necesitaba picking ortográfico (rayos paralelos). Tres approaches posibles:
+
+1. **Duplicar el loop**: copiar el `forEach<TransformComponent>` con AABB/sphere tests a una función nueva. Descartado: 25 líneas duplicadas, drift garantizado.
+2. **Refactor con `unproject lambda`**: pasar a `pickEntity` un functor que arma el rayo. Descartado: API rara, hard de testear.
+3. **Extraer helper público `pickEntityFromRay(scene, origin, dir, assets)`** y hacer que `pickEntity` (la versión perspective con view+proj+ndc) sea un wrapper que arma el rayo y delega. **Elegido.**
+
+**Razones:** los tests existentes de `pickEntity` siguen verde sin cambios (mismo loop interno). El nuevo helper queda público y reusable para futuros picking sintéticos (ej. raycast desde script Lua, F2H30+).
+
+---
+
+**Sub-decisión 5 — Snap step solo de display en F2H28, aplicado a drag en F2H29:**
+
+Plan original: `m_hammerSnapStep` cycleable con Ctrl++/Ctrl+- + label "Grid: Nu". Validación durante implementación: el dev preguntó *"luego habrá el snap to grid?"* — confirmando que el snap visual NO actúa sobre movements aún.
+
+**Decisión:** F2H28 expone el valor (UI + uniform del grid shader) pero NO lo aplica al delta del drag (porque drag-edit es F2H29). El handler Ctrl++/Ctrl+- vive en `EditorApplication.cpp::processEvents` con guard de workspace activo.
+
+**Razones:** mantiene F2H28 puramente visual + de selección. La aplicación al drag entra como sub-bloque natural de F2H29 (`pos = round(pos / snap) * snap`). Sin riesgo de regresión: F2H29 solo necesita LEER el valor existente.
+
+---
+
+**Condiciones de revisión:**
+- Si el costo del render orto (~3x CPU del frame perspectivo cuando workspace activo es "Editor de mapas") emerge como cuello, optimizar con frustum culling per-viewport o reducir ortos a 2 (top + frontal) configurable.
+- Si el dev pide volver al fondo gris (rechazo subjetivo del negro), revertir; los colores quedan como constantes nombradas en `SceneRenderer_Ortho.cpp` para hacer el cambio trivial.
+- Si F2H29 (drag-edit) revela que `OrthoCamera` necesita state adicional (ej. clipping plane near/far user-configurable), promoverla a `engine/` cuando ese state aparezca, NO antes.
+
+---
+
 ## 2026-05-03: Reorganización arquitectónica de `src/` por dominios (F2H1)
 
 **Problema:** post-v1.0.0 el árbol `src/engine/` era flat con 11K líneas en sub-carpetas planas (`render/`, `scene/`, `physics/`, etc.). Cualquier hito futuro de Fase 2 que aporte 3-5K líneas adicionales (CSG, dialog, quest, material node-graph) iba a contaminar más esa estructura. Antes de empezar a sumar features, reorganizar.
