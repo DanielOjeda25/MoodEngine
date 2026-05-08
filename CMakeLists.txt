@@ -410,6 +410,7 @@ add_executable(MoodEditor
     src/editor/ui/Toolbar.cpp
     src/editor/commands/HistoryStack.cpp
     src/editor/commands/EditTransformCommand.cpp
+    src/editor/commands/MultiEditTransformCommand.cpp
     src/editor/commands/DeleteEntityCommand.cpp
     src/editor/commands/CreateEntityCommand.cpp
     src/editor/commands/BooleanOpCommand.cpp

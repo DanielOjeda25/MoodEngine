@@ -665,8 +665,8 @@ int EditorApplication::run() {
             }
             // F2H13: aplicar Shift / Ctrl semantics igual que en Hierarchy.
             //   Plain click   -> replaceWithSingle.
-            //   Shift+click   -> toggle.
-            //   Ctrl+click    -> add (que ademas setea active).
+            //   Shift+click   -> ADD (Maya-style, F2H23 polish iter 3).
+            //   Ctrl+click    -> TOGGLE (Maya-style).
             // Click en vacio (no hit) sin modifier -> clear.
             //                  con modifier         -> no-op (preserva).
             // F2H17: si Face Mode capturo el click (faceModeHandled),
@@ -677,16 +677,24 @@ int EditorApplication::run() {
                 const bool keyCtrl  = keys[SDL_SCANCODE_LCTRL]  || keys[SDL_SCANCODE_RCTRL];
                 SelectionSet& set = m_ui.selectionSet();
                 if (hit) {
+                    const std::string entityName =
+                        hit.entity.hasComponent<TagComponent>()
+                            ? hit.entity.getComponent<TagComponent>().name
+                            : std::string{"(sin tag)"};
                     if (keyShift) {
-                        toggle(set, hit.entity);
-                    } else if (keyCtrl) {
                         add(set, hit.entity);
+                        Log::editor()->info(
+                            "[viewport] Shift+click ADD '{}' (selected={})",
+                            entityName, set.selected.size());
+                    } else if (keyCtrl) {
+                        toggle(set, hit.entity);
+                        Log::editor()->info(
+                            "[viewport] Ctrl+click TOGGLE '{}' (selected={})",
+                            entityName, set.selected.size());
                     } else {
                         replaceWithSingle(set, hit.entity);
-                    }
-                    if (hit.entity.hasComponent<TagComponent>()) {
-                        Log::editor()->info("Click-select: '{}'",
-                            hit.entity.getComponent<TagComponent>().name);
+                        Log::editor()->info("[viewport] click replace '{}'",
+                                              entityName);
                     }
                 } else if (!keyShift && !keyCtrl) {
                     clear(set);

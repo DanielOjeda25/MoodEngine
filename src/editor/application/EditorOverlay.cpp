@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "editor/commands/EditTransformCommand.h"
+#include "editor/commands/MultiEditTransformCommand.h"  // F2H23 iter 5
 #include "editor/selection/SelectionSet.h"  // F2H23: multi-edit del gizmo
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/scene/components/BrushComponent.h"  // F2H14: rotate/scale gizmo
@@ -23,87 +24,124 @@
 
 namespace Mood {
 
+namespace {
+
+// F2H23 iter 5: lee el campo del Transform por Field. Helper compartido
+// entre el populate inicial del gizmo (capturar startValues) y el
+// finalize (aplicar delta al final).
+glm::vec3 readTransformField(const TransformComponent& tf,
+                                EditTransformCommand::Field field) {
+    switch (field) {
+        case EditTransformCommand::Field::Position: return tf.position;
+        case EditTransformCommand::Field::Rotation: return tf.rotationEuler;
+        case EditTransformCommand::Field::Scale:    return tf.scale;
+    }
+    return glm::vec3(0.0f);
+}
+
+// F2H23 iter 5: aplica el field con clamp para Scale (que tiene rango
+// valido 0.01-100). Otros fields aplicar directo.
+void writeTransformField(TransformComponent& tf,
+                          EditTransformCommand::Field field,
+                          const glm::vec3& v) {
+    switch (field) {
+        case EditTransformCommand::Field::Position: tf.position = v; break;
+        case EditTransformCommand::Field::Rotation: tf.rotationEuler = v; break;
+        case EditTransformCommand::Field::Scale:
+            tf.scale = glm::vec3(
+                std::clamp(v.x, 0.01f, 100.0f),
+                std::clamp(v.y, 0.01f, 100.0f),
+                std::clamp(v.z, 0.01f, 100.0f));
+            break;
+    }
+}
+
+} // namespace
+
 void EditorApplication::finalizeGizmoDrag() {
     if (!m_gizmo.entity) return;
     if (!m_scene || !m_scene->registry().valid(m_gizmo.entity.handle())) return;
     if (!m_gizmo.entity.hasComponent<TransformComponent>()) return;
 
-    const auto& tf = m_gizmo.entity.getComponent<TransformComponent>();
     const auto field = static_cast<EditTransformCommand::Field>(m_gizmo.field);
-    glm::vec3 finalValue;
-    switch (field) {
-        case EditTransformCommand::Field::Position: finalValue = tf.position; break;
-        case EditTransformCommand::Field::Rotation: finalValue = tf.rotationEuler; break;
-        case EditTransformCommand::Field::Scale:    finalValue = tf.scale; break;
+    const auto& tfActive = m_gizmo.entity.getComponent<TransformComponent>();
+    const glm::vec3 finalValueActive = readTransformField(tfActive, field);
+
+    // F2H23 iter 5: si hay otherStarts (multi-edit), construimos un
+    // MultiEditTransformCommand que opera sobre todas las entidades
+    // (active + N otros). Ctrl+Z revierte el conjunto entero.
+    // Si no hay otherStarts (single-edit), seguimos con el
+    // EditTransformCommand simple.
+    if (!m_gizmo.otherStarts.empty()) {
+        std::vector<MultiEditTransformCommand::Entry> entries;
+        entries.reserve(m_gizmo.otherStarts.size() + 1);
+
+        // Active primero.
+        entries.push_back({m_gizmo.entity, m_gizmo.startValue, finalValueActive});
+
+        // Los demas: el delta es finalValueActive - startValueActive.
+        // Apply ese delta a su propio startValue para obtener el "after".
+        const glm::vec3 delta = finalValueActive - m_gizmo.startValue;
+        for (const auto& os : m_gizmo.otherStarts) {
+            if (!m_scene->registry().valid(os.entity.handle())) continue;
+            if (!os.entity.hasComponent<TransformComponent>()) continue;
+            glm::vec3 after = os.startValue + delta;
+            if (field == EditTransformCommand::Field::Scale) {
+                after = glm::vec3(
+                    std::clamp(after.x, 0.01f, 100.0f),
+                    std::clamp(after.y, 0.01f, 100.0f),
+                    std::clamp(after.z, 0.01f, 100.0f));
+            }
+            entries.push_back({os.entity, os.startValue, after});
+        }
+
+        auto cmd = std::make_unique<MultiEditTransformCommand>(
+            field, std::move(entries));
+        if (cmd->isNoOp()) {
+            // Nada movio realmente — limpiar state y salir.
+            m_gizmo.entity = Entity{};
+            m_gizmo.otherStarts.clear();
+            return;
+        }
+
+        // Revertir TODOS los transforms al startValue antes del push:
+        // execute() los va a re-aplicar. Sin esto el push hace doble-
+        // aplicacion (mismo valor pero conceptualmente raro).
+        Entity activeCopy = m_gizmo.entity;
+        writeTransformField(activeCopy.getComponent<TransformComponent>(),
+                              field, m_gizmo.startValue);
+        for (const auto& os : m_gizmo.otherStarts) {
+            if (!m_scene->registry().valid(os.entity.handle())) continue;
+            if (!os.entity.hasComponent<TransformComponent>()) continue;
+            Entity oCopy = os.entity;
+            writeTransformField(oCopy.getComponent<TransformComponent>(),
+                                  field, os.startValue);
+        }
+
+        Log::editor()->info(
+            "[gizmo multi-edit] push MultiEditTransformCommand: {} entidades, "
+            "field={}",
+            m_gizmo.otherStarts.size() + 1u, static_cast<int>(field));
+
+        m_history.push(std::move(cmd));
+        m_gizmo.entity = Entity{};
+        m_gizmo.otherStarts.clear();
+        return;
     }
 
-    // Push solo si hubo movimiento real. Click sin drag (param tocado pero
-    // sin desplazar el cursor) caeria como no-op.
+    // Single-edit (selectionSet.selected.size() == 1 al iniciar el drag).
     auto cmd = std::make_unique<EditTransformCommand>(
-        m_gizmo.entity, field, m_gizmo.startValue, finalValue);
-    if (cmd->isNoOp()) return;
-
-    // F2H23: multi-edit del gizmo. Si hay >1 entidad seleccionada, el
-    // mismo delta se aplica a las demas (estilo Maya / Blender). MVP:
-    // las "demas" NO entran al HistoryStack — solo el active. Ctrl+Z
-    // solo revierte la activa; las demas quedan con el delta aplicado.
-    // CompoundCommand para undo agrupado = deuda en PENDIENTES.md.
-    const glm::vec3 delta = finalValue - m_gizmo.startValue;
-    const SelectionSet& set = m_ui.selectionSet();
-    if (set.selected.size() > 1u) {
-        u32 affected = 0;
-        for (const Entity& other : set.selected) {
-            if (other.handle() == m_gizmo.entity.handle()) continue;
-            Entity oCopy = other;
-            if (!m_scene->registry().valid(oCopy.handle())) continue;
-            if (!oCopy.hasComponent<TransformComponent>()) continue;
-            auto& ot = oCopy.getComponent<TransformComponent>();
-            switch (field) {
-                case EditTransformCommand::Field::Position:
-                    ot.position += delta; break;
-                case EditTransformCommand::Field::Rotation:
-                    ot.rotationEuler += delta; break;
-                case EditTransformCommand::Field::Scale: {
-                    // Scale: clamp para no caer fuera del rango valido
-                    // (mismos limites que el DragFloat3 del Inspector).
-                    glm::vec3 v = ot.scale + delta;
-                    ot.scale = glm::vec3(
-                        std::clamp(v.x, 0.01f, 100.0f),
-                        std::clamp(v.y, 0.01f, 100.0f),
-                        std::clamp(v.z, 0.01f, 100.0f));
-                    break;
-                }
-            }
-            ++affected;
-        }
-        if (affected > 0u) {
-            const char* fieldName = "?";
-            switch (field) {
-                case EditTransformCommand::Field::Position: fieldName = "position"; break;
-                case EditTransformCommand::Field::Rotation: fieldName = "rotation"; break;
-                case EditTransformCommand::Field::Scale:    fieldName = "scale";    break;
-            }
-            Log::editor()->info(
-                "[gizmo multi-edit] {} delta=({:.3f},{:.3f},{:.3f}) "
-                "aplicado a {} entidad(es) extra (active via gizmo, sin undo "
-                "individual de las demas)",
-                fieldName, delta.x, delta.y, delta.z, affected);
-        }
+        m_gizmo.entity, field, m_gizmo.startValue, finalValueActive);
+    if (cmd->isNoOp()) {
+        m_gizmo.entity = Entity{};
+        return;
     }
 
-    // Importante: el HistoryStack::push llama a execute() — pero el valor
-    // ya esta aplicado en el Transform por el drag. Eso causaria una
-    // doble-aplicacion (re-asigna el mismo finalValue, no-op visualmente
-    // pero conceptualmente raro). Para evitarlo: revertimos al before
-    // antes de pushear, asi push() ejecuta y deja el estado correcto.
-    switch (field) {
-        case EditTransformCommand::Field::Position:
-            m_gizmo.entity.getComponent<TransformComponent>().position = m_gizmo.startValue; break;
-        case EditTransformCommand::Field::Rotation:
-            m_gizmo.entity.getComponent<TransformComponent>().rotationEuler = m_gizmo.startValue; break;
-        case EditTransformCommand::Field::Scale:
-            m_gizmo.entity.getComponent<TransformComponent>().scale = m_gizmo.startValue; break;
-    }
+    // Revert al before antes del push (mismo razonamiento que el
+    // MultiEdit path).
+    Entity activeCopy = m_gizmo.entity;
+    writeTransformField(activeCopy.getComponent<TransformComponent>(),
+                          field, m_gizmo.startValue);
     m_history.push(std::move(cmd));
     m_gizmo.entity = Entity{};
 }
@@ -384,6 +422,26 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
         }
 
         if (!m_gizmo.active && mouseClicked && hoverAxis >= 0 && insideViewport) {
+            // F2H23 iter 5: helper interno para popular otherStarts
+            // (snapshot de las entidades extra del SelectionSet) al
+            // iniciar cualquier drag. Usado por los 3 modos.
+            auto populateOtherStarts =
+                [&](EditTransformCommand::Field f) {
+                m_gizmo.otherStarts.clear();
+                const SelectionSet& set = m_ui.selectionSet();
+                if (set.selected.size() <= 1u) return;
+                m_gizmo.otherStarts.reserve(set.selected.size() - 1);
+                for (const Entity& other : set.selected) {
+                    if (other.handle() == selected.handle()) continue;
+                    if (!m_scene->registry().valid(other.handle())) continue;
+                    if (!other.hasComponent<TransformComponent>()) continue;
+                    Entity oCopy = other;
+                    const auto& ot = oCopy.getComponent<TransformComponent>();
+                    m_gizmo.otherStarts.push_back(
+                        {other, readTransformField(ot, f)});
+                }
+            };
+
             if (hoverAxis == 3) {
                 // Uniform scale: param = distancia 2D del mouse al centro.
                 m_gizmo.active = true;
@@ -394,6 +452,7 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                 m_gizmo.startParam = std::sqrt(dx * dx + dy * dy);
                 m_gizmo.field = static_cast<u8>(EditTransformCommand::Field::Scale);
                 m_gizmo.entity = selected;
+                populateOtherStarts(EditTransformCommand::Field::Scale);
                 m_gizmoConsumedClick = true;
             } else {
                 glm::vec3 rayOrigin, rayDir;
@@ -404,17 +463,35 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                         ? tform.position : tform.scale;
                     m_gizmo.startParam = closestParam(worldOrigin, axes[hoverAxis],
                                                        rayOrigin, rayDir);
-                    m_gizmo.field = static_cast<u8>(
-                        (effectiveMode == GizmoMode::Translate)
-                            ? EditTransformCommand::Field::Position
-                            : EditTransformCommand::Field::Scale);
+                    const auto f = (effectiveMode == GizmoMode::Translate)
+                        ? EditTransformCommand::Field::Position
+                        : EditTransformCommand::Field::Scale;
+                    m_gizmo.field = static_cast<u8>(f);
                     m_gizmo.entity = selected;
+                    populateOtherStarts(f);
                     m_gizmoConsumedClick = true;
                 }
             }
         }
 
         if (m_gizmo.active && mouseDown && m_gizmo.axis >= 0) {
+            // F2H23 iter 5: helper para aplicar el mismo delta a las
+            // otras entidades del SelectionSet en VIVO (cada frame del
+            // drag). Sin esto el dev veia que solo el active se movia
+            // y las demas saltaban al final.
+            auto applyDeltaLive = [&](const glm::vec3& delta) {
+                if (m_gizmo.otherStarts.empty()) return;
+                const auto field = static_cast<EditTransformCommand::Field>(
+                    m_gizmo.field);
+                for (const auto& os : m_gizmo.otherStarts) {
+                    if (!m_scene->registry().valid(os.entity.handle())) continue;
+                    if (!os.entity.hasComponent<TransformComponent>()) continue;
+                    Entity oCopy = os.entity;
+                    auto& ot = oCopy.getComponent<TransformComponent>();
+                    writeTransformField(ot, field, os.startValue + delta);
+                }
+            };
+
             if (m_gizmo.axis == 3) {
                 // Uniform scale: factor = 1 + (delta_pixels / k_armLen).
                 // Mover el cursor k_armLen px afuera del centro duplica
@@ -425,6 +502,21 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                 const f32 deltaPx = nowParam - m_gizmo.startParam;
                 const f32 factor = std::max(0.01f, 1.0f + deltaPx / k_armLen);
                 tform.scale = m_gizmo.startValue * factor;
+                // Multi-edit: para uniform scale el "delta" no es additive
+                // sino multiplicative — applyDelta(scale_delta) no es lo
+                // mismo. Hacemos el factor por entidad: each.scale =
+                // each.startValue * factor.
+                for (const auto& os : m_gizmo.otherStarts) {
+                    if (!m_scene->registry().valid(os.entity.handle())) continue;
+                    if (!os.entity.hasComponent<TransformComponent>()) continue;
+                    Entity oCopy = os.entity;
+                    auto& ot = oCopy.getComponent<TransformComponent>();
+                    glm::vec3 ns = os.startValue * factor;
+                    ot.scale = glm::vec3(
+                        std::clamp(ns.x, 0.01f, 100.0f),
+                        std::clamp(ns.y, 0.01f, 100.0f),
+                        std::clamp(ns.z, 0.01f, 100.0f));
+                }
                 if (m_project) markDirty();
             } else {
                 glm::vec3 rayOrigin, rayDir;
@@ -435,11 +527,26 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                         axisPoint, axes[m_gizmo.axis], rayOrigin, rayDir);
                     const f32 delta = nowParam - m_gizmo.startParam;
                     if (effectiveMode == GizmoMode::Translate) {
-                        tform.position = m_gizmo.startValue + axes[m_gizmo.axis] * delta;
+                        const glm::vec3 deltaVec = axes[m_gizmo.axis] * delta;
+                        tform.position = m_gizmo.startValue + deltaVec;
+                        applyDeltaLive(deltaVec);
                     } else {
                         glm::vec3 ns = m_gizmo.startValue;
                         ns[m_gizmo.axis] = std::max(0.01f, ns[m_gizmo.axis] + delta);
                         tform.scale = ns;
+                        // Per-axis scale multi-edit: aplicar el mismo
+                        // delta_axis a las demas (additive en el axis,
+                        // preserva los otros 2 ejes de cada entidad).
+                        for (const auto& os : m_gizmo.otherStarts) {
+                            if (!m_scene->registry().valid(os.entity.handle())) continue;
+                            if (!os.entity.hasComponent<TransformComponent>()) continue;
+                            Entity oCopy = os.entity;
+                            auto& ot = oCopy.getComponent<TransformComponent>();
+                            glm::vec3 sv = os.startValue;
+                            sv[m_gizmo.axis] = std::clamp(
+                                sv[m_gizmo.axis] + delta, 0.01f, 100.0f);
+                            ot.scale = sv;
+                        }
                     }
                     if (m_project) markDirty();
                 }
@@ -559,6 +666,21 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
             m_gizmo.startParam = startAng;
             m_gizmo.field = static_cast<u8>(EditTransformCommand::Field::Rotation);
             m_gizmo.entity = selected;
+            // F2H23 iter 5: snapshot rotacion inicial de las demas
+            // entidades del SelectionSet para multi-edit en vivo.
+            m_gizmo.otherStarts.clear();
+            const SelectionSet& set = m_ui.selectionSet();
+            if (set.selected.size() > 1u) {
+                m_gizmo.otherStarts.reserve(set.selected.size() - 1);
+                for (const Entity& other : set.selected) {
+                    if (other.handle() == selected.handle()) continue;
+                    if (!m_scene->registry().valid(other.handle())) continue;
+                    if (!other.hasComponent<TransformComponent>()) continue;
+                    Entity oCopy = other;
+                    const auto& ot = oCopy.getComponent<TransformComponent>();
+                    m_gizmo.otherStarts.push_back({other, ot.rotationEuler});
+                }
+            }
             m_gizmoConsumedClick = true;
         }
 
@@ -578,8 +700,20 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
             const glm::vec3 camPos = glm::vec3(glm::inverse(m_sceneRenderer->lastView())[3]);
             const glm::vec3 camToOrigin = worldOrigin - camPos;
             const f32 sgn = (glm::dot(axes[m_gizmo.axis], camToOrigin) > 0.0f) ? 1.0f : -1.0f;
-            nr[m_gizmo.axis] = m_gizmo.startValue[m_gizmo.axis] + sgn * deltaDeg;
+            const f32 axisDelta = sgn * deltaDeg;
+            nr[m_gizmo.axis] = m_gizmo.startValue[m_gizmo.axis] + axisDelta;
             tform.rotationEuler = nr;
+            // F2H23 iter 5: aplicar el mismo delta del eje a las
+            // entidades extra del SelectionSet (multi-edit en vivo).
+            for (const auto& os : m_gizmo.otherStarts) {
+                if (!m_scene->registry().valid(os.entity.handle())) continue;
+                if (!os.entity.hasComponent<TransformComponent>()) continue;
+                Entity oCopy = os.entity;
+                auto& ot = oCopy.getComponent<TransformComponent>();
+                glm::vec3 osr = os.startValue;
+                osr[m_gizmo.axis] = os.startValue[m_gizmo.axis] + axisDelta;
+                ot.rotationEuler = osr;
+            }
             if (m_project) markDirty();
         }
 

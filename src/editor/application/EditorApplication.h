@@ -408,6 +408,16 @@ private:
         // Entidad activa en el drag. Stack para que el undo funcione
         // aunque la seleccion cambie post-drag.
         Entity entity;
+        // F2H23 polish iter 5: multi-edit del gizmo. Snapshot de las
+        // entidades EXTRA del SelectionSet al iniciar el drag con sus
+        // startValues del Field correspondiente. Cada frame del drag
+        // aplica el mismo delta del active a todas. Vacio si solo hay
+        // una entidad seleccionada (single-edit clasico).
+        struct OtherStart {
+            Entity entity;
+            glm::vec3 startValue;
+        };
+        std::vector<OtherStart> otherStarts;
     };
     GizmoDragState m_gizmo;
 
