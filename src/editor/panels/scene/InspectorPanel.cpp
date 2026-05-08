@@ -12,6 +12,7 @@
 
 #include <imgui.h>
 
+#include <algorithm>  // F2H23: std::clamp para multi-edit scale
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -119,10 +120,42 @@ void InspectorPanel::onImGuiRender() {
         // F2H23: SeparatorText agrupa visualmente cada componente (antes
         // era TextDisabled + Separator separados; menos claro).
         ImGui::SeparatorText("Transform");
+
+        // F2H23 fix: sliders Transform mas grandes + soportan multi-edit
+        // sobre `selectionSet.selected`. Antes eran chicos y dificiles
+        // de seleccionar; ademas solo modificaban la `active` aunque
+        // hubiese N entidades seleccionadas.
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 6.0f));
+
+        // Helper: aplica un delta a TODAS las entidades del selectionSet
+        // EXCEPTO la `active` (que ya fue modificada por el DragFloat3
+        // directamente). Recibe `getter`/`setter` pq cada campo
+        // (position/rotation/scale) tiene su propio acceso al
+        // TransformComponent.
+        auto applyDeltaToSelection = [&](const glm::vec3& delta,
+                                            auto getter, auto setter) {
+            if (delta.x == 0.0f && delta.y == 0.0f && delta.z == 0.0f) return;
+            const SelectionSet& set = m_ui->selectionSet();
+            if (set.selected.size() <= 1u) return;  // nada extra para editar
+            for (const Entity& other : set.selected) {
+                if (other.handle() == e.handle()) continue;  // skip active
+                Entity oCopy = other;
+                if (!oCopy.hasComponent<TransformComponent>()) continue;
+                auto& ot = oCopy.getComponent<TransformComponent>();
+                setter(ot, getter(ot) + delta);
+            }
+        };
+
+        // --- position ---
+        const glm::vec3 prePos = t.position;
         if (ImGui::DragFloat3("position##tr", &t.position.x, 0.05f)) {
             m_editedThisFrame = true;
+            applyDeltaToSelection(t.position - prePos,
+                [](TransformComponent& tc) { return tc.position; },
+                [](TransformComponent& tc, const glm::vec3& v) { tc.position = v; });
         }
-        helpMarker("Posicion en metros (X derecha, Y arriba, Z atras).");
+        helpMarker("Posicion en metros (X derecha, Y arriba, Z atras).\n"
+                    "Multi-seleccion: el mismo delta se aplica a todas.");
         pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.position,
             [](Entity& en, const glm::vec3& v) {
                 en.getComponent<TransformComponent>().position = v;
@@ -138,25 +171,53 @@ void InspectorPanel::onImGuiRender() {
             e.hasComponent<BrushComponent>() ||  // F2H14
             e.hasComponent<TriggerComponent>();
         if (showRotScale) {
+            // --- rotation ---
+            const glm::vec3 preRot = t.rotationEuler;
             if (ImGui::DragFloat3("rotation (deg)##tr", &t.rotationEuler.x, 0.5f)) {
                 m_editedThisFrame = true;
+                applyDeltaToSelection(t.rotationEuler - preRot,
+                    [](TransformComponent& tc) { return tc.rotationEuler; },
+                    [](TransformComponent& tc, const glm::vec3& v) { tc.rotationEuler = v; });
             }
-            helpMarker("Rotacion en grados Euler (X, Y, Z) — orden YXZ.");
+            helpMarker("Rotacion en grados Euler (X, Y, Z) — orden YXZ.\n"
+                        "Multi-seleccion: el mismo delta se aplica a todas.");
             pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.rotationEuler,
                 [](Entity& en, const glm::vec3& v) {
                     en.getComponent<TransformComponent>().rotationEuler = v;
                 },
                 "Rotar entidad (Inspector)");
 
+            // --- scale ---
+            const glm::vec3 preScale = t.scale;
             if (ImGui::DragFloat3("scale##tr", &t.scale.x, 0.05f, 0.01f, 100.0f)) {
                 m_editedThisFrame = true;
+                applyDeltaToSelection(t.scale - preScale,
+                    [](TransformComponent& tc) { return tc.scale; },
+                    [](TransformComponent& tc, const glm::vec3& v) {
+                        // clamp al mismo rango que el DragFloat3.
+                        tc.scale = glm::vec3(
+                            std::clamp(v.x, 0.01f, 100.0f),
+                            std::clamp(v.y, 0.01f, 100.0f),
+                            std::clamp(v.z, 0.01f, 100.0f));
+                    });
             }
-            helpMarker("Escala (rango 0.01-100). 1.0 = tamano original.");
+            helpMarker("Escala (rango 0.01-100). 1.0 = tamano original.\n"
+                        "Multi-seleccion: el mismo delta se aplica a todas.");
             pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.scale,
                 [](Entity& en, const glm::vec3& v) {
                     en.getComponent<TransformComponent>().scale = v;
                 },
                 "Escalar entidad (Inspector)");
+        }
+
+        ImGui::PopStyleVar();  // FramePadding
+
+        // F2H23: hint de multi-seleccion. Solo aparece cuando hay >1.
+        const SelectionSet& set = m_ui->selectionSet();
+        if (set.selected.size() > 1u) {
+            ImGui::TextDisabled(
+                "(multi-edit: %zu entidades — delta aplicado a todas)",
+                set.selected.size());
         }
     }
 

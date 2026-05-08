@@ -28,18 +28,17 @@ void buildLayoutWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockBottomRight = ImGui::DockBuilderSplitNode(
         dockBottom, ImGuiDir_Right, 0.45f, nullptr, &dockBottom);
 
-    ImGui::DockBuilderDockWindow("Tools",         dockToolbar);  // F2H22
+    // F2H23: solo dockear los panels relevantes a ESTE workspace.
+    // Antes (F2H22) dockeabamos TODOS los panels en cada workspace
+    // — el dev veia "Script Editor" como tab al lado del Viewport en
+    // Modelar y se confundia. Si el dev abre un panel ajeno desde
+    // menu Ver, ImGui lo pone flotante (donde quiera) y el dev decide
+    // si acoplarlo o no — el workspace no le impone una posicion.
+    ImGui::DockBuilderDockWindow("Tools",         dockToolbar);
     ImGui::DockBuilderDockWindow("Hierarchy",     dockLeft);
     ImGui::DockBuilderDockWindow("Viewport",      dockMain);
     ImGui::DockBuilderDockWindow("Inspector",     dockRight);
     ImGui::DockBuilderDockWindow("Asset Browser", dockBottom);
-    ImGui::DockBuilderDockWindow("Console",       dockBottomRight);
-    // Otros panels van al dock central (tabs sobre el viewport) si el
-    // user los abre desde "Ver".
-    ImGui::DockBuilderDockWindow("Lua API",       dockRight);
-    ImGui::DockBuilderDockWindow("Performance",   dockRight);
-    ImGui::DockBuilderDockWindow("Script Editor", dockMain);
-    ImGui::DockBuilderDockWindow("Material Editor", dockRight);
 }
 
 /// @brief Workspace "Scripting" — Script Editor central grande, Console
@@ -53,15 +52,15 @@ void buildScriptingWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockLeftBottom = ImGui::DockBuilderSplitNode(
         dockLeft, ImGuiDir_Down, 0.50f, nullptr, &dockLeft);
 
+    // F2H23: solo panels relevantes a Programar — sin AssetBrowser /
+    // Performance / MaterialEditor (esos pertenecen a Materiales /
+    // Optimizar / Materiales respectivamente).
     ImGui::DockBuilderDockWindow("Script Editor", dockMain);
     ImGui::DockBuilderDockWindow("Console",       dockBottom);
     ImGui::DockBuilderDockWindow("Lua API",       dockBottom);   // tab al lado
     ImGui::DockBuilderDockWindow("Hierarchy",     dockLeft);
     ImGui::DockBuilderDockWindow("Inspector",     dockLeftBottom);
     ImGui::DockBuilderDockWindow("Viewport",      dockLeftBottom); // tab
-    ImGui::DockBuilderDockWindow("Asset Browser", dockBottom);
-    ImGui::DockBuilderDockWindow("Performance",   dockBottom);
-    ImGui::DockBuilderDockWindow("Material Editor", dockMain);
 }
 
 /// @brief Workspace "Profile" — Performance HUD destacado, Console grande
@@ -73,15 +72,16 @@ void buildProfileWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockBottom = ImGui::DockBuilderSplitNode(
         dockMain, ImGuiDir_Down, 0.35f, nullptr, &dockMain);
 
+    // F2H23: solo panels relevantes a Optimizar — Performance HUD +
+    // Console son los protagonistas. Hierarchy/Inspector como tab por
+    // si el dev necesita inspeccionar una entidad pesada. Resto de
+    // panels (AssetBrowser, ScriptEditor, MaterialEditor) NO se dockean.
     ImGui::DockBuilderDockWindow("Viewport",      dockMain);
     ImGui::DockBuilderDockWindow("Performance",   dockRight);
     ImGui::DockBuilderDockWindow("Hierarchy",     dockRight);    // tab
     ImGui::DockBuilderDockWindow("Inspector",     dockRight);    // tab
     ImGui::DockBuilderDockWindow("Console",       dockBottom);
     ImGui::DockBuilderDockWindow("Lua API",       dockBottom);   // tab
-    ImGui::DockBuilderDockWindow("Asset Browser", dockBottom);   // tab
-    ImGui::DockBuilderDockWindow("Script Editor", dockMain);
-    ImGui::DockBuilderDockWindow("Material Editor", dockRight);
 }
 
 /// @brief Workspace "Materials" — Material Editor destacado izq, Asset
@@ -95,15 +95,16 @@ void buildMaterialsWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockRight = ImGui::DockBuilderSplitNode(
         dockMain, ImGuiDir_Right, 0.30f, nullptr, &dockMain);
 
+    // F2H23: solo panels relevantes a Materiales — Material Editor
+    // protagonista, AssetBrowser para arrastrar texturas, Viewport para
+    // preview con la entidad seleccionada, Inspector + Hierarchy para
+    // contexto. Console / LuaApi / Performance / ScriptEditor NO se
+    // dockean.
     ImGui::DockBuilderDockWindow("Material Editor", dockLeft);
     ImGui::DockBuilderDockWindow("Asset Browser",   dockBottom);
     ImGui::DockBuilderDockWindow("Viewport",        dockMain);
     ImGui::DockBuilderDockWindow("Inspector",       dockRight);
     ImGui::DockBuilderDockWindow("Hierarchy",       dockLeft);    // tab
-    ImGui::DockBuilderDockWindow("Console",         dockBottom);  // tab
-    ImGui::DockBuilderDockWindow("Lua API",         dockBottom);  // tab
-    ImGui::DockBuilderDockWindow("Performance",     dockRight);   // tab
-    ImGui::DockBuilderDockWindow("Script Editor",   dockMain);    // tab
 }
 
 /// @brief Dispatcher: elige el builder segun el nombre del workspace
