@@ -124,9 +124,11 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         }
     };
 
+    // F2H23 polish: panel Hierarchy renombrado a "Escena". Los nombres
+    // de panel matchean el `IPanel::name()` actualizado.
     if (name == "Programar") {
         setVisible("Viewport",        true);
-        setVisible("Hierarchy",       true);
+        setVisible("Escena",          true);  // F2H23: era Hierarchy
         setVisible("Inspector",       true);
         setVisible("Asset Browser",   false);
         setVisible("Console",         true);
@@ -134,21 +136,10 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Performance",     false);
         setVisible("Script Editor",   true);
         setVisible("Material Editor", false);
-        setVisible("Tools",           false);  // F2H22: tools no aplican aqui
-    } else if (name == "Optimizar") {
-        setVisible("Viewport",        true);
-        setVisible("Hierarchy",       false);
-        setVisible("Inspector",       false);
-        setVisible("Asset Browser",   false);
-        setVisible("Console",         true);
-        setVisible("Lua API",         false);
-        setVisible("Performance",     true);
-        setVisible("Script Editor",   false);
-        setVisible("Material Editor", false);
         setVisible("Tools",           false);
     } else if (name == "Materiales") {
         setVisible("Viewport",        true);
-        setVisible("Hierarchy",       false);
+        setVisible("Escena",          false);
         setVisible("Inspector",       true);
         setVisible("Asset Browser",   true);
         setVisible("Console",         false);
@@ -158,9 +149,12 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Material Editor", true);
         setVisible("Tools",           false);
     } else {
-        // "Modelar" (default) — flow general de mapping. Tools visible.
+        // "Layout" (default) — flow general de mapping. Tools visible.
+        // Console explicitamente FALSE (pedido del dev: "no quiero
+        // Console abajo en Layout"). El dev puede abrirla desde Ver
+        // y persiste en su iniLayout custom.
         setVisible("Viewport",        true);
-        setVisible("Hierarchy",       true);
+        setVisible("Escena",          true);
         setVisible("Inspector",       true);
         setVisible("Asset Browser",   true);
         setVisible("Console",         false);
@@ -168,7 +162,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Performance",     false);
         setVisible("Script Editor",   false);
         setVisible("Material Editor", false);
-        setVisible("Tools",           true);  // F2H22: visible solo aqui
+        setVisible("Tools",           true);
     }
 }
 

@@ -1,5 +1,6 @@
 #include "editor/panels/scene/InspectorPanel.h"
 
+#include "core/Log.h"  // F2H23: log de multi-edit
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/audio/clips/AudioClip.h"
@@ -133,16 +134,26 @@ void InspectorPanel::onImGuiRender() {
         // (position/rotation/scale) tiene su propio acceso al
         // TransformComponent.
         auto applyDeltaToSelection = [&](const glm::vec3& delta,
-                                            auto getter, auto setter) {
+                                            auto getter, auto setter,
+                                            const char* opName) {
             if (delta.x == 0.0f && delta.y == 0.0f && delta.z == 0.0f) return;
             const SelectionSet& set = m_ui->selectionSet();
             if (set.selected.size() <= 1u) return;  // nada extra para editar
+            u32 affected = 0;
             for (const Entity& other : set.selected) {
                 if (other.handle() == e.handle()) continue;  // skip active
                 Entity oCopy = other;
                 if (!oCopy.hasComponent<TransformComponent>()) continue;
                 auto& ot = oCopy.getComponent<TransformComponent>();
                 setter(ot, getter(ot) + delta);
+                ++affected;
+            }
+            if (affected > 0u) {
+                Log::editor()->info(
+                    "[inspector multi-edit] {} delta=({:.3f},{:.3f},{:.3f}) "
+                    "aplicado a {} entidad(es) extra (active fue editada por "
+                    "el slider directamente)",
+                    opName, delta.x, delta.y, delta.z, affected);
             }
         };
 
@@ -152,7 +163,8 @@ void InspectorPanel::onImGuiRender() {
             m_editedThisFrame = true;
             applyDeltaToSelection(t.position - prePos,
                 [](TransformComponent& tc) { return tc.position; },
-                [](TransformComponent& tc, const glm::vec3& v) { tc.position = v; });
+                [](TransformComponent& tc, const glm::vec3& v) { tc.position = v; },
+                "position");
         }
         helpMarker("Posicion en metros (X derecha, Y arriba, Z atras).\n"
                     "Multi-seleccion: el mismo delta se aplica a todas.");
@@ -177,7 +189,8 @@ void InspectorPanel::onImGuiRender() {
                 m_editedThisFrame = true;
                 applyDeltaToSelection(t.rotationEuler - preRot,
                     [](TransformComponent& tc) { return tc.rotationEuler; },
-                    [](TransformComponent& tc, const glm::vec3& v) { tc.rotationEuler = v; });
+                    [](TransformComponent& tc, const glm::vec3& v) { tc.rotationEuler = v; },
+                    "rotation");
             }
             helpMarker("Rotacion en grados Euler (X, Y, Z) — orden YXZ.\n"
                         "Multi-seleccion: el mismo delta se aplica a todas.");
@@ -199,7 +212,8 @@ void InspectorPanel::onImGuiRender() {
                             std::clamp(v.x, 0.01f, 100.0f),
                             std::clamp(v.y, 0.01f, 100.0f),
                             std::clamp(v.z, 0.01f, 100.0f));
-                    });
+                    },
+                    "scale");
             }
             helpMarker("Escala (rango 0.01-100). 1.0 = tamano original.\n"
                         "Multi-seleccion: el mismo delta se aplica a todas.");

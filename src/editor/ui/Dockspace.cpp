@@ -7,11 +7,13 @@ namespace Mood {
 
 namespace {
 
-/// @brief Layout default del workspace "Modelar" (era "Layout") — el de
-///        trabajo general. F2H22: agregamos una franja angosta a la
-///        IZQUIERDA del Hierarchy para la `Toolbar` (gizmo modes +
-///        primitivas brush + face mode). Resto: Hierarchy izq, Inspector
-///        der, Asset Browser + Console abajo, Viewport central.
+/// @brief Layout default del workspace "Layout" — el de trabajo general
+///        (mapping CSG + edicion de entidades). F2H22 lo renombro a
+///        "Modelar"; F2H23 polish lo revierte a "Layout" (pedido del
+///        dev). F2H22 agrego una franja angosta a la IZQUIERDA del
+///        Hierarchy para la `Toolbar` (gizmo modes + primitivas brush +
+///        face mode). Resto: Hierarchy(Escena) izq, Inspector der,
+///        Asset Browser abajo, Viewport central.
 void buildLayoutWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockMain = dockspaceId;
     // F2H22: franja para la Toolbar — ~100px en viewport 1280.
@@ -35,7 +37,7 @@ void buildLayoutWorkspace(ImGuiID dockspaceId) {
     // menu Ver, ImGui lo pone flotante (donde quiera) y el dev decide
     // si acoplarlo o no — el workspace no le impone una posicion.
     ImGui::DockBuilderDockWindow("Tools",         dockToolbar);
-    ImGui::DockBuilderDockWindow("Hierarchy",     dockLeft);
+    ImGui::DockBuilderDockWindow("Escena",     dockLeft);
     ImGui::DockBuilderDockWindow("Viewport",      dockMain);
     ImGui::DockBuilderDockWindow("Inspector",     dockRight);
     ImGui::DockBuilderDockWindow("Asset Browser", dockBottom);
@@ -58,30 +60,9 @@ void buildScriptingWorkspace(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("Script Editor", dockMain);
     ImGui::DockBuilderDockWindow("Console",       dockBottom);
     ImGui::DockBuilderDockWindow("Lua API",       dockBottom);   // tab al lado
-    ImGui::DockBuilderDockWindow("Hierarchy",     dockLeft);
+    ImGui::DockBuilderDockWindow("Escena",     dockLeft);
     ImGui::DockBuilderDockWindow("Inspector",     dockLeftBottom);
     ImGui::DockBuilderDockWindow("Viewport",      dockLeftBottom); // tab
-}
-
-/// @brief Workspace "Profile" — Performance HUD destacado, Console grande
-///        para logs, viewport central para validar visual.
-void buildProfileWorkspace(ImGuiID dockspaceId) {
-    ImGuiID dockMain = dockspaceId;
-    ImGuiID dockRight = ImGui::DockBuilderSplitNode(
-        dockMain, ImGuiDir_Right, 0.25f, nullptr, &dockMain);
-    ImGuiID dockBottom = ImGui::DockBuilderSplitNode(
-        dockMain, ImGuiDir_Down, 0.35f, nullptr, &dockMain);
-
-    // F2H23: solo panels relevantes a Optimizar — Performance HUD +
-    // Console son los protagonistas. Hierarchy/Inspector como tab por
-    // si el dev necesita inspeccionar una entidad pesada. Resto de
-    // panels (AssetBrowser, ScriptEditor, MaterialEditor) NO se dockean.
-    ImGui::DockBuilderDockWindow("Viewport",      dockMain);
-    ImGui::DockBuilderDockWindow("Performance",   dockRight);
-    ImGui::DockBuilderDockWindow("Hierarchy",     dockRight);    // tab
-    ImGui::DockBuilderDockWindow("Inspector",     dockRight);    // tab
-    ImGui::DockBuilderDockWindow("Console",       dockBottom);
-    ImGui::DockBuilderDockWindow("Lua API",       dockBottom);   // tab
 }
 
 /// @brief Workspace "Materials" — Material Editor destacado izq, Asset
@@ -104,19 +85,20 @@ void buildMaterialsWorkspace(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("Asset Browser",   dockBottom);
     ImGui::DockBuilderDockWindow("Viewport",        dockMain);
     ImGui::DockBuilderDockWindow("Inspector",       dockRight);
-    ImGui::DockBuilderDockWindow("Hierarchy",       dockLeft);    // tab
+    ImGui::DockBuilderDockWindow("Escena",       dockLeft);    // tab
 }
 
 /// @brief Dispatcher: elige el builder segun el nombre del workspace
-///        activo. F2H22: nombres nuevos en español orientados a tareas
-///        (Modelar / Programar / Optimizar / Materiales). Acepta tambien
-///        los nombres viejos (Layout / Scripting / Profile / Materials)
-///        como alias defensivo, aunque la migracion en
+///        activo. F2H23: 3 workspaces — Layout / Programar / Materiales.
+///        Acepta nombres viejos (F2H7 originales: Scripting/Materials;
+///        F2H22: Modelar) como alias defensivo, aunque la migracion en
 ///        `WorkspaceManager::setWorkspaces` los reemplaza al cargar.
-///        Default = Modelar para nombres desconocidos.
+///        El workspace "Optimizar"/"Profile" fue eliminado en F2H23 —
+///        si llega un name asi (no deberia tras la migracion), cae al
+///        layout default de Layout.
+///        Default = Layout para nombres desconocidos.
 void buildLayoutForWorkspace(const std::string& name, ImGuiID dockspaceId) {
     if      (name == "Programar"  || name == "Scripting") buildScriptingWorkspace(dockspaceId);
-    else if (name == "Optimizar"  || name == "Profile")   buildProfileWorkspace(dockspaceId);
     else if (name == "Materiales" || name == "Materials") buildMaterialsWorkspace(dockspaceId);
     else                                                    buildLayoutWorkspace(dockspaceId);
 }

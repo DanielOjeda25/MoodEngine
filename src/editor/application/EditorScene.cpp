@@ -26,7 +26,12 @@ void EditorApplication::buildInitialTestMap() {
     // muros perimetrales — esos quedaban como una hilera de cubos
     // dentados que se veian feo. El skybox cubre el horizonte.
     // El piso es una entidad agregada en rebuildSceneFromMap.
-    m_map = GridMap(16u, 16u, 3.0f);
+    // F2H23 polish: mapa default 8x8 con tileSize=1.5 = Floor de 12x12m.
+    // Antes era 16x16 con tileSize=3 = Floor de 48m, lo que hacia que un
+    // brush primitivo 1x1x1m se viera diminuto al lado del piso. Mas
+    // chico = mejor escala visual con los brushes default. El dev puede
+    // agrandar el mapa desde el Inspector si lo necesita.
+    m_map = GridMap(8u, 8u, 1.5f);
     const TextureAssetId grid  = m_assetManager->loadTexture("textures/grid.png");
     m_wallTextureId = grid;
 

@@ -39,7 +39,10 @@ void collectHierarchyEntries(Scene& scene, std::vector<HierarchyEntry>& out);
 class HierarchyPanel : public IPanel {
 public:
     void onImGuiRender() override;
-    const char* name() const override { return "Hierarchy"; }
+    // F2H23: nombre visual "Escena" (mas descriptivo + consistencia
+    // castellano). La clase sigue llamandose HierarchyPanel por compat
+    // con la jerga interna del codigo + iniLayout existente del dev.
+    const char* name() const override { return "Escena"; }
 
     /// @brief Inyectado por `EditorApplication` en el ctor. Non-owning.
     void setScene(Scene* scene) { m_scene = scene; }

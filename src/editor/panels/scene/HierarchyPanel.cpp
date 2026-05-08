@@ -1,5 +1,6 @@
 #include "editor/panels/scene/HierarchyPanel.h"
 
+#include "core/Log.h"  // F2H23: log de selection
 #include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/ui/EditorUI.h"
 #include "engine/scene/components/BrushComponent.h"  // F2H23: icono brush
@@ -10,6 +11,7 @@
 #include <imgui.h>
 
 #include <cstdio>
+#include <string>
 
 namespace Mood {
 
@@ -124,8 +126,18 @@ void HierarchyPanel::onImGuiRender() {
                                     ImGuiSelectableFlags_AllowDoubleClick)) {
                 if (keyShift) {
                     toggle(set, e);
+                    Log::editor()->info(
+                        "[escena] toggle '{}' (selected={}, active={})",
+                        entry.tag->name, set.selected.size(),
+                        static_cast<bool>(set.active)
+                            ? std::to_string(static_cast<u32>(set.active.handle()))
+                            : std::string("none"));
                 } else if (keyCtrl) {
                     add(set, e);
+                    Log::editor()->info(
+                        "[escena] add '{}' (selected={}, active={})",
+                        entry.tag->name, set.selected.size(),
+                        static_cast<u32>(set.active.handle()));
                 } else {
                     replaceWithSingle(set, e);
                 }
