@@ -305,3 +305,107 @@ TEST_CASE("collectFaces: 1 box produce 6 raw faces con world normal y poligono C
         CHECK(std::fabs(glm::length(f.worldNormal) - 1.0f) < 1e-3f);
     }
 }
+
+// ============================================================
+// F2H25 — Cull de overlap parcial
+// ============================================================
+
+TEST_CASE("compileMap F2H25: 2 brushes disjuntos no disparan cull de overlap") {
+    // Smoke: el path de overlap NO debe activarse cuando los brushes
+    // estan separados. Stats nuevas deben quedar en 0.
+    std::vector<BrushSource> sources = {
+        boxSourceAt(glm::vec3(-3.0f, 0.0f, 0.0f), 1.0f, "tex/red"),
+        boxSourceAt(glm::vec3( 3.0f, 0.0f, 0.0f), 1.0f, "tex/blue"),
+    };
+    auto compiled = compileMap(sources, k_eps);
+    CHECK(compiled.stats.culledOverlapTriangles == 0u);
+    CHECK(compiled.stats.splitFragments == 0u);
+    CHECK(compiled.stats.totalTriangles == 24u);  // 12 + 12
+}
+
+TEST_CASE("compileMap F2H25: pareja exacta cara-contra-cara NO produce overlap stats") {
+    // Cuando F2H20 cullea las dos caras paralelas perfectas con
+    // markInternalFaces, las 10 caras sobrevivientes NO deberian
+    // dispararar el cull overlap (los volumenes solo se tocan en un
+    // plano, sin solapamiento de volumen). Verificamos que F2H25
+    // queda en 0 mientras F2H20 sigue funcionando.
+    BrushSource a;
+    a.brush = makeBoxBrush(glm::mat4(1.0f));
+    a.worldMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(-0.5f, 0.0f, 0.0f));
+    a.materialPaths.push_back("tex/grid");
+    BrushSource b;
+    b.brush = makeBoxBrush(glm::mat4(1.0f));
+    b.worldMatrix = glm::translate(glm::mat4(1.0f), glm::vec3( 0.5f, 0.0f, 0.0f));
+    b.materialPaths.push_back("tex/grid");
+
+    auto compiled = compileMap({a, b}, k_eps);
+    CHECK(compiled.stats.culledInternalFaces == 2u);   // F2H20 sigue funcionando
+    CHECK(compiled.stats.culledOverlapTriangles == 0u); // F2H25 NO dispara
+    CHECK(compiled.stats.splitFragments == 0u);
+    CHECK(compiled.stats.totalTriangles == 20u);        // 10 caras x 2 tris
+}
+
+TEST_CASE("compileMap F2H25: brush chico totalmente dentro de brush grande se cullea entero") {
+    // Box A: 4x4x4 (size=4) en origen. Ocupa [-2, 2]^3.
+    // Box B: 1x1x1 (size=1) en origen. Ocupa [-0.5, 0.5]^3, totalmente
+    // adentro de A. Las 6 caras de B deben culleadas por overlap (12 tris
+    // descartados); las 6 caras de A se conservan enteras.
+    auto a = boxSourceAt(glm::vec3(0.0f), 4.0f, "tex/big");
+    auto b = boxSourceAt(glm::vec3(0.0f), 1.0f, "tex/small");
+
+    auto compiled = compileMap({a, b}, k_eps);
+    // F2H20 (cull exacto) no aplica: las caras no son coincidentes.
+    CHECK(compiled.stats.culledInternalFaces == 0u);
+    // F2H25: los 12 triangulos de B se descartan (B esta dentro de A).
+    CHECK(compiled.stats.culledOverlapTriangles == 12u);
+    // Las caras de A no se parten (las caras de A NO estan dentro de B).
+    CHECK(compiled.stats.splitFragments == 0u);
+    // Solo quedan las 6 caras de A = 12 tris.
+    CHECK(compiled.stats.totalTriangles == 12u);
+}
+
+TEST_CASE("compileMap F2H25: dos brushes con solape parcial parten caras") {
+    // A: box centro (0,0,0), size=2. Ocupa [-1,1]^3.
+    // B: box centro (1.5, 0, 0), size=1. Ocupa x[1,2], y[-0.5,0.5], z[-0.5,0.5].
+    // La cara +X de A (en x=1) coincide con el plano -X de B (tambien
+    // en x=1) — son COPLANARES pero los rectangulos NO matchean
+    // (2x2 vs 1x1) → cull exacto NO aplica. El cull overlap parcial:
+    //   - La cara -X de B (1x1, coplanar al plano +X de A) cae
+    //     enteramente DENTRO de A => descartada entera (2 tris culled).
+    //   - La cara +X de A (2x2) se parte en 4 fragmentos rectangulares
+    //     alrededor del cuadrado central que toca B => splitFragments=3.
+    BrushSource a;
+    a.brush = makeBoxBrush(glm::mat4(1.0f));
+    a.worldMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(2.0f));
+    a.materialPaths.push_back("tex/A");
+    BrushSource b;
+    b.brush = makeBoxBrush(glm::mat4(1.0f));
+    glm::mat4 mb = glm::translate(glm::mat4(1.0f), glm::vec3(1.5f, 0.0f, 0.0f));
+    mb = glm::scale(mb, glm::vec3(1.0f));
+    b.worldMatrix = mb;
+    b.materialPaths.push_back("tex/B");
+
+    auto compiled = compileMap({a, b}, k_eps);
+    // Al menos una cara descartada entera por overlap (la -X de B,
+    // dentro de A).
+    CHECK(compiled.stats.culledOverlapTriangles > 0u);
+    // Al menos un split (la cara +X de A, parcialmente cubierta por B).
+    CHECK(compiled.stats.splitFragments > 0u);
+    // La mesh final no esta vacia.
+    CHECK(compiled.stats.totalTriangles > 0u);
+}
+
+TEST_CASE("compileMap F2H25: brush 1 dentro de brush 0 cullea las 6 caras del interior") {
+    // Caso "Russian doll" — variante del test anterior pero con la
+    // forma reciproca. Verifica que no importa el orden de los
+    // brushes en la lista: el cull mira global.
+    auto small = boxSourceAt(glm::vec3(0.0f), 0.5f, "tex/small");
+    auto big   = boxSourceAt(glm::vec3(0.0f), 3.0f, "tex/big");
+
+    auto compiled = compileMap({small, big}, k_eps);
+    CHECK(compiled.stats.culledOverlapTriangles == 12u);  // todo `small` desaparece
+    CHECK(compiled.stats.splitFragments == 0u);
+    CHECK(compiled.stats.totalTriangles == 12u);            // solo `big`
+    REQUIRE(compiled.submeshes.size() == 1u);                // submesh "tex/big"
+    CHECK(compiled.submeshes[0].materialPath == "tex/big");
+}

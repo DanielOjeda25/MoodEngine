@@ -47,6 +47,7 @@ Thumbs.db
 
 # Estado de runtime
 imgui.ini
+imgui_layout_*.ini
 .mood/
 
 # Python (bytecode generado al importar tools/*.py)

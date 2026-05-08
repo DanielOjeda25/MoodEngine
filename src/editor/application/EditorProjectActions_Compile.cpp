@@ -23,17 +23,20 @@ namespace {
 /// @brief Construye el mensaje de stats que se muestra en el dialog
 ///        de "Compilar mapa" + en el OK de "Exportar OBJ".
 std::string formatCompileStats(const Csg::CompileStats& s) {
-    char buf[512];
+    char buf[768];
     std::snprintf(buf, sizeof(buf),
-        "Brushes:               %u  (omitidos: %u)\n"
-        "Caras totales:         %u\n"
-        "Caras internas culled: %u\n"
-        "Triangulos finales:    %u\n"
-        "Vertices pre-weld:     %u\n"
-        "Vertices unicos:       %u\n"
+        "Brushes:                %u  (omitidos: %u)\n"
+        "Caras totales:          %u\n"
+        "Caras internas culled:  %u\n"
+        "Tris culled (overlap):  %u\n"
+        "Fragmentos partidos:    %u\n"
+        "Triangulos finales:     %u\n"
+        "Vertices pre-weld:      %u\n"
+        "Vertices unicos:        %u\n"
         "Submeshes (materiales): %u",
         s.sourceBrushes, s.brushesSkipped,
         s.sourceFaces, s.culledInternalFaces,
+        s.culledOverlapTriangles, s.splitFragments,
         s.totalTriangles,
         s.totalVerticesPreWeld, s.totalVerticesUnique,
         s.submeshCount);

@@ -66,6 +66,7 @@ add_executable(mood_tests
     test_edit_script_component_command.cpp
     test_csg_pick_face.cpp
     test_compile_map.cpp
+    test_compiled_mesh_persistence.cpp
     test_map_export_obj.cpp
 
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/Brush.cpp
@@ -110,7 +111,15 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/SceneLoader.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/VFS.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Audio.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Material.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Mesh.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Prefab.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Texture.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Animation.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Geometry.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Skeleton.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/cache/LodCache.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/primitives/PrimitiveMeshes.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/EntitySerializer.cpp

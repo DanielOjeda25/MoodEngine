@@ -53,6 +53,176 @@ void sortVerticesCcw(std::vector<glm::vec3>& verts, const glm::vec3& normal) {
     });
 }
 
+/// @brief F2H25: transforma un Plane local a world. Usa los 3 puntos
+///        del plano local: el "punto sobre el plano" mas cercano al
+///        origen es `-d * n`. Lo transformamos por worldMatrix para
+///        obtener un punto del plano en world. La normal se transforma
+///        con la inversa-transpuesta del 3x3 (resistente a non-uniform
+///        scale).
+Plane planeLocalToWorld(const Plane& localPlane, const glm::mat4& worldMatrix) {
+    const glm::vec3 pLocal = -localPlane.distance * localPlane.normal;
+    const glm::vec3 pWorld = glm::vec3(worldMatrix * glm::vec4(pLocal, 1.0f));
+    const glm::mat3 normalMat =
+        glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
+    const glm::vec3 nWorld = glm::normalize(normalMat * localPlane.normal);
+    Plane out;
+    out.normal = nWorld;
+    out.distance = -glm::dot(nWorld, pWorld);
+    return out;
+}
+
+/// @brief F2H25: divide un poligono convexo CCW por un plano. Output:
+///        - `above`: parte del lado positivo (signedDistance > 0).
+///        - `below`: parte del lado negativo (signedDistance < 0).
+///        Vertices exactamente sobre el plano (|d| < eps) se incluyen
+///        en AMBOS lados — necesario para que el clipping cierre el
+///        polígono. Si TODOS los vertices estan en el plano (poligono
+///        coplanar), evitamos duplicarlo: solo lo emitimos en `above`
+///        para que el cull lo trate como exterior (el cull exacto de
+///        F2H20 ya deberia haber agarrado el caso pareja perfecta).
+///        Si `above` o `below` queda con < 3 vertices, se vacia
+///        (poligono degenerado).
+void splitPolygonByPlane(const std::vector<glm::vec3>& poly,
+                          const Plane& plane,
+                          f32 eps,
+                          std::vector<glm::vec3>& above,
+                          std::vector<glm::vec3>& below) {
+    above.clear();
+    below.clear();
+    const usize n = poly.size();
+    if (n < 3) return;
+
+    // Caso especial: TODOS los vertices estan en el plano => poligono
+    // coplanar. El plano NO separa nada — emitimos en `below` para que
+    // los OTROS planos del brush decidan si la cara cae adentro o
+    // afuera. Si emitieramos en `above`, la cara entera saldria
+    // prematuramente como output sin ser testeada por los demas
+    // planos, perdiendo el cull cuando la sub-region adentro de B
+    // existe (caso "cara coplanar con pared exterior pero la sub-area
+    // central esta dentro del volumen de B").
+    bool allOnPlane = true;
+    for (const auto& v : poly) {
+        if (std::fabs(signedDistance(plane, v)) >= eps) {
+            allOnPlane = false;
+            break;
+        }
+    }
+    if (allOnPlane) {
+        below = poly;
+        return;
+    }
+
+    for (usize i = 0; i < n; ++i) {
+        const glm::vec3& a = poly[i];
+        const glm::vec3& b = poly[(i + 1) % n];
+        const f32 da = signedDistance(plane, a);
+        const f32 db = signedDistance(plane, b);
+
+        // Vertice actual: clasificar.
+        if (da > eps) {
+            above.push_back(a);
+        } else if (da < -eps) {
+            below.push_back(a);
+        } else {
+            // Sobre el plano (±eps): contribuye a ambos sub-poligonos.
+            above.push_back(a);
+            below.push_back(a);
+        }
+
+        // Segmento (a,b) cruza el plano? (signos opuestos > eps).
+        if ((da > eps && db < -eps) || (da < -eps && db > eps)) {
+            const f32 t = da / (da - db);
+            const glm::vec3 cross = a + t * (b - a);
+            above.push_back(cross);
+            below.push_back(cross);
+        }
+    }
+
+    if (above.size() < 3) above.clear();
+    if (below.size() < 3) below.clear();
+}
+
+/// @brief F2H25: devuelve los fragmentos de `poly` que estan AFUERA del
+///        brush definido por `brushPlanesWorld` (ya transformados a
+///        world). Convencion: las normales de los planos del brush
+///        apuntan hacia AFUERA del brush (igual que en F2H11). Entonces
+///        signedDistance > 0 => afuera del brush respecto a ese plano.
+///
+///        Algoritmo:
+///        1. Pre-test "toda la cara afuera": si existe algun plano del
+///           brush donde TODOS los vertices tienen signedDistance > eps,
+///           la cara entera esta en exterior(B). Devolver `[poly]` sin
+///           partir. ESTO ES CRITICO: sin este pre-test, el BSP loop
+///           parte la cara en N trozos contiguos cuya union ES la cara
+///           entera — se contaria como "split" sin overlap real.
+///        2. Pre-test "toda la cara adentro": si TODOS los vertices
+///           tienen signedDistance ≤ eps en TODOS los planos, la cara
+///           esta totalmente en interior(B). Devolver vacio.
+///        3. Caso parcial: BSP iterativo. Para cada plano, divide cada
+///           fragmento "candidato a estar adentro" en above (afuera del
+///           plano = afuera del brush por ese plano = output) y below
+///           (adentro del plano, sigue siendo testeado contra los
+///           proximos). Lo que sobrevive en `inside` tras todos los
+///           planos esta dentro del brush => descartar.
+std::vector<std::vector<glm::vec3>> cullPolygonAgainstBrush(
+    const std::vector<glm::vec3>& poly,
+    const std::vector<Plane>& brushPlanesWorld,
+    f32 eps) {
+    if (poly.size() < 3) return {};
+
+    // Pre-test 1: cara entera afuera de B (algun plano la separa
+    // entera). Output sin partir.
+    for (const Plane& p : brushPlanesWorld) {
+        bool allAbove = true;
+        for (const glm::vec3& v : poly) {
+            if (signedDistance(p, v) <= eps) {
+                allAbove = false;
+                break;
+            }
+        }
+        if (allAbove) {
+            return {poly};
+        }
+    }
+
+    // Pre-test 2: cara entera adentro de B (todos vertices ≤ eps en
+    // todos los planos). Descartar.
+    bool allInside = true;
+    for (const glm::vec3& v : poly) {
+        bool vertexInside = true;
+        for (const Plane& p : brushPlanesWorld) {
+            if (signedDistance(p, v) > eps) {
+                vertexInside = false;
+                break;
+            }
+        }
+        if (!vertexInside) {
+            allInside = false;
+            break;
+        }
+    }
+    if (allInside) return {};
+
+    // Caso parcial: BSP clipping iterativo.
+    std::vector<std::vector<glm::vec3>> outsidePieces;
+    std::vector<std::vector<glm::vec3>> inside;
+    inside.push_back(poly);
+
+    for (const Plane& p : brushPlanesWorld) {
+        if (inside.empty()) break;
+        std::vector<std::vector<glm::vec3>> nextInside;
+        for (auto& piece : inside) {
+            std::vector<glm::vec3> above, below;
+            splitPolygonByPlane(piece, p, eps, above, below);
+            if (above.size() >= 3) outsidePieces.push_back(std::move(above));
+            if (below.size() >= 3) nextInside.push_back(std::move(below));
+        }
+        inside = std::move(nextInside);
+    }
+    // `inside` (lo que sobrevive) esta adentro del brush. Se descarta.
+    return outsidePieces;
+}
+
 /// @brief True si los dos sets de puntos son iguales como conjuntos
 ///        (ignorando orden) bajo `eps`. Se usa para detectar caras
 ///        internas: el mismo poligono en ambos brushes (uno con orden
@@ -295,13 +465,83 @@ CompiledMap compileMap(const std::vector<BrushSource>& sources,
         if (c) ++out.stats.culledInternalFaces;
     }
 
+    // F2H25 — CULL OVERLAP PARCIAL. Para cada cara que sobrevivio el
+    // cull exacto, clipearla contra los planos de cada otro brush. La
+    // parte que cae dentro del otro brush se descarta; la parte que
+    // queda fuera se conserva como N fragmentos. Cada fragmento hereda
+    // toda la metadata de la cara original (UV, normal, materialPath)
+    // — solo cambia `worldPolygonCcw`.
+    //
+    // Cacheamos los planos de cada brush en world space al inicio para
+    // evitar recomputarlos por cada cara. Cost O(F * B * P_avg) — F
+    // caras sobrevivientes, B brushes, P_avg planos promedio por brush.
+    std::vector<std::vector<Plane>> brushPlanesWorld(sources.size());
+    for (usize bi = 0; bi < sources.size(); ++bi) {
+        const auto& src = sources[bi];
+        brushPlanesWorld[bi].reserve(src.brush.faces.size());
+        for (const auto& bf : src.brush.faces) {
+            brushPlanesWorld[bi].push_back(
+                planeLocalToWorld(bf.plane, src.worldMatrix));
+        }
+    }
+
+    std::vector<RawBrushFace> finalFaces;
+    finalFaces.reserve(rawFaces.size());
+    for (usize i = 0; i < rawFaces.size(); ++i) {
+        if (culled[i]) continue;
+        const RawBrushFace& face = rawFaces[i];
+
+        // Inicio: el fragmento es la cara entera.
+        std::vector<std::vector<glm::vec3>> fragments;
+        fragments.push_back(face.worldPolygonCcw);
+
+        // Clip contra cada otro brush (no contra el propio).
+        for (usize bj = 0; bj < sources.size(); ++bj) {
+            if (bj == face.brushIndex) continue;
+            if (fragments.empty()) break;
+            std::vector<std::vector<glm::vec3>> nextFragments;
+            for (auto& frag : fragments) {
+                auto outside = cullPolygonAgainstBrush(
+                    frag, brushPlanesWorld[bj], weldEpsilon);
+                for (auto& f : outside) {
+                    nextFragments.push_back(std::move(f));
+                }
+            }
+            fragments = std::move(nextFragments);
+        }
+
+        // Stats:
+        // - Cara enteramente descartada (fragments empty) => suma sus
+        //   tris a culledOverlapTriangles.
+        // - Cara partida en N>1 fragmentos => suma (N-1) a splitFragments.
+        // - Cara con 1 solo fragmento (sin overlap o solo tocando borde)
+        //   => sin stats.
+        const u32 origVerts = static_cast<u32>(face.worldPolygonCcw.size());
+        const u32 origTris = origVerts >= 3 ? origVerts - 2 : 0;
+        if (fragments.empty()) {
+            out.stats.culledOverlapTriangles += origTris;
+        } else if (fragments.size() > 1) {
+            out.stats.splitFragments +=
+                static_cast<u32>(fragments.size() - 1);
+        }
+
+        // Convertir cada fragmento en un RawBrushFace heredando metadata.
+        for (auto& fragPoly : fragments) {
+            RawBrushFace rf = face;  // hereda brushIndex, faceIndex, UV, normal, etc.
+            rf.worldPolygonCcw = std::move(fragPoly);
+            finalFaces.push_back(std::move(rf));
+        }
+    }
+
+    // A partir de aca trabajamos con `finalFaces` (post-cull), no con
+    // rawFaces[culled]. finalFaces ya tiene SOLO caras/fragmentos
+    // validos — no necesita un vector culled[] paralelo.
+
     // PASO 1 — descubrir los materialPaths distintos (en orden de aparicion)
     // y contar vertices pre-weld para stats. El paso 2 hace la triangulacion
     // + weld real con builders paralelos.
     std::unordered_map<std::string, usize> pathToIndex;
-    for (usize i = 0; i < rawFaces.size(); ++i) {
-        if (culled[i]) continue;
-        const RawBrushFace& face = rawFaces[i];
+    for (const auto& face : finalFaces) {
         if (pathToIndex.find(face.materialPath) == pathToIndex.end()) {
             pathToIndex[face.materialPath] = out.submeshes.size();
             CompiledSubmesh sub;
@@ -319,10 +559,7 @@ CompiledMap compileMap(const std::vector<BrushSource>& sources,
         builders[i].out.materialPath = out.submeshes[i].materialPath;
     }
 
-    for (usize i = 0; i < rawFaces.size(); ++i) {
-        if (culled[i]) continue;
-        const RawBrushFace& face = rawFaces[i];
-
+    for (const auto& face : finalFaces) {
         const usize subIdx = pathToIndex.at(face.materialPath);
         SubmeshBuilder& b = builders[subIdx];
 
@@ -377,6 +614,31 @@ CompiledMap compileMap(const std::vector<BrushSource>& sources,
         out.stats.totalTriangles += static_cast<u32>(sub.indices.size() / 3);
     }
     out.stats.submeshCount = static_cast<u32>(out.submeshes.size());
+    return out;
+}
+
+std::vector<f32> compiledSubmeshToInterleaved(const CompiledSubmesh& sub) {
+    // Layout PBR: pos(3) + color(3) + uv(2) + normal(3) = 11 floats.
+    // Expandimos indices: cada triangulo emite sus 3 vertices.
+    constexpr usize kFloatsPerVertex = 11;
+    std::vector<f32> out;
+    out.reserve(sub.indices.size() * kFloatsPerVertex);
+
+    for (u32 idx : sub.indices) {
+        if (idx >= sub.vertices.size()) continue;
+        const CompiledVertex& v = sub.vertices[idx];
+        out.push_back(v.position.x);
+        out.push_back(v.position.y);
+        out.push_back(v.position.z);
+        out.push_back(1.0f);
+        out.push_back(1.0f);
+        out.push_back(1.0f);
+        out.push_back(v.uv.x);
+        out.push_back(v.uv.y);
+        out.push_back(v.normal.x);
+        out.push_back(v.normal.y);
+        out.push_back(v.normal.z);
+    }
     return out;
 }
 

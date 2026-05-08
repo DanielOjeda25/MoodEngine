@@ -19,11 +19,16 @@
 //   - Export OBJ desde menu `Mapa > Exportar OBJ...` (ver
 //     `MapExportObj.h`).
 //
-// Limitaciones del cull de caras internas:
-//   - Solo detecta el caso pareja-exacta (poligonos identicos +-eps,
-//     normales antiparalelas). Overlap parcial entre dos brushes que
-//     comparten solo PARTE de una cara NO se cullea — toda la cara
-//     queda. Mejora futura cuando emerja necesidad real.
+// Cull de caras (2 pasadas):
+//   1. F2H20 — pareja exacta (poligonos identicos +-eps, normales
+//      antiparalelas). Caras totalmente compartidas entre 2 brushes
+//      pegados se eliminan ambas.
+//   2. F2H25 — overlap parcial. Cada cara sobreviviente del paso 1 se
+//      clipea contra los planos de cada otro brush usando BSP-style
+//      polygon splitting (Sutherland-Hodgman extendido). La parte que
+//      cae dentro del otro brush se descarta; la parte que queda fuera
+//      se conserva (puede dividirse en N fragmentos). Reportado en
+//      stats `culledOverlapTriangles` y `splitFragments`.
 
 #include "core/Types.h"
 #include "engine/world/csg/Brush.h"
@@ -65,6 +70,24 @@ struct CompileStats {
     u32 brushesSkipped = 0;       // < 4 caras o sin caras validas
     u32 sourceFaces = 0;          // total de caras antes de cull
     u32 culledInternalFaces = 0;
+    /// @brief F2H25: triangulos descartados de caras que cayeron
+    ///        ENTERAMENTE dentro de otro brush. Cada cara descartada
+    ///        contribuye `(verts - 2)` tris (fan triangulation). NO
+    ///        cuenta los tris ahorrados por splits parciales — el BSP
+    ///        clipping subdivide la cara en N fragmentos cuya suma de
+    ///        tris puede SUPERAR el original (cada fragmento
+    ///        independiente requiere su propia triangulacion). El
+    ///        beneficio del split es menor area visible, no menor
+    ///        tri-count global.
+    u32 culledOverlapTriangles = 0;
+    /// @brief F2H25: caras que quedaron partidas en >1 fragmento por
+    ///        intersectar parcialmente con otro brush (un quad cortado
+    ///        por una pared queda en 2-3 fragmentos). Una cara que cae
+    ///        completamente adentro o completamente afuera no cuenta
+    ///        aca (cae adentro = solo culledOverlapTriangles; afuera =
+    ///        ninguna stat). Stat orientativa: si el mapa tiene N
+    ///        splits, hay overlap real entre brushes.
+    u32 splitFragments = 0;
     u32 totalTriangles = 0;
     u32 totalVerticesPreWeld = 0;
     u32 totalVerticesUnique = 0;  // post-weld
@@ -143,5 +166,15 @@ CompiledMap compileMap(const std::vector<BrushSource>& sources,
 ///        como manifestarlo en el OBJ/MTL.
 std::vector<BrushSource> collectBrushSourcesFromScene(
     Scene& scene, AssetManager& assets);
+
+/// @brief F2H26: convierte UN `CompiledSubmesh` al layout PBR interleaved
+///        (pos.xyz + color.rgb=1 + uv.xy + normal.xyz = 11 floats por
+///        vertex), expandiendo los indices (cada vertice del triangulo
+///        aparece duplicado en el output). Mismo formato que
+///        `brushSubmeshToInterleaved` para que el SceneRenderer use el
+///        shader PBR estandar y el `kPbrAttrs` de los brushes runtime.
+///        Usado por el editor al persistir la mesh compilada en
+///        `.moodmap` v13.
+std::vector<f32> compiledSubmeshToInterleaved(const CompiledSubmesh& sub);
 
 } // namespace Mood::Csg

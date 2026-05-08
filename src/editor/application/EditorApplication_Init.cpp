@@ -133,7 +133,18 @@ EditorApplication::EditorApplication() {
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    io.IniFilename = "imgui.ini";
+    // F2H25: layout version stamping. ImGui guarda window positions y
+    // dock targets en este ini. Cuando agregamos paneles nuevos al
+    // dockspace (ej. F2H22 agrego "Tools", F2H23 reorganizo columnas),
+    // los ini viejos no tienen settings para esos panels → caen como
+    // flotantes en el primer arranque post-update. Bumpear el sufijo
+    // ("_v2", "_v3", ...) hace que ImGui ignore el ini viejo y caiga
+    // al layout default que `Dockspace::buildLayoutForWorkspace`
+    // construye. Las customizaciones que el user haga DESPUES se
+    // persisten en el archivo nuevo y sobreviven entre sesiones. Solo
+    // se pierden cuando bumpeamos esta version (decision deliberada
+    // del dev: "por defecto la UI es fija, luego el user acomoda").
+    io.IniFilename = "imgui_layout_v2.ini";
 
     ImGui::StyleColorsDark();
 
