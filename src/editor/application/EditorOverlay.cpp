@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "editor/commands/EditTransformCommand.h"
+#include "editor/selection/SelectionSet.h"  // F2H23: multi-edit del gizmo
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/scene/components/BrushComponent.h"  // F2H14: rotate/scale gizmo
 #include "engine/scene/components/Components.h"
@@ -16,6 +17,7 @@
 #include <glm/geometric.hpp>
 #include <glm/matrix.hpp>
 
+#include <algorithm>  // F2H23: std::clamp para multi-edit scale
 #include <cmath>
 #include <memory>
 
@@ -40,6 +42,54 @@ void EditorApplication::finalizeGizmoDrag() {
     auto cmd = std::make_unique<EditTransformCommand>(
         m_gizmo.entity, field, m_gizmo.startValue, finalValue);
     if (cmd->isNoOp()) return;
+
+    // F2H23: multi-edit del gizmo. Si hay >1 entidad seleccionada, el
+    // mismo delta se aplica a las demas (estilo Maya / Blender). MVP:
+    // las "demas" NO entran al HistoryStack — solo el active. Ctrl+Z
+    // solo revierte la activa; las demas quedan con el delta aplicado.
+    // CompoundCommand para undo agrupado = deuda en PENDIENTES.md.
+    const glm::vec3 delta = finalValue - m_gizmo.startValue;
+    const SelectionSet& set = m_ui.selectionSet();
+    if (set.selected.size() > 1u) {
+        u32 affected = 0;
+        for (const Entity& other : set.selected) {
+            if (other.handle() == m_gizmo.entity.handle()) continue;
+            Entity oCopy = other;
+            if (!m_scene->registry().valid(oCopy.handle())) continue;
+            if (!oCopy.hasComponent<TransformComponent>()) continue;
+            auto& ot = oCopy.getComponent<TransformComponent>();
+            switch (field) {
+                case EditTransformCommand::Field::Position:
+                    ot.position += delta; break;
+                case EditTransformCommand::Field::Rotation:
+                    ot.rotationEuler += delta; break;
+                case EditTransformCommand::Field::Scale: {
+                    // Scale: clamp para no caer fuera del rango valido
+                    // (mismos limites que el DragFloat3 del Inspector).
+                    glm::vec3 v = ot.scale + delta;
+                    ot.scale = glm::vec3(
+                        std::clamp(v.x, 0.01f, 100.0f),
+                        std::clamp(v.y, 0.01f, 100.0f),
+                        std::clamp(v.z, 0.01f, 100.0f));
+                    break;
+                }
+            }
+            ++affected;
+        }
+        if (affected > 0u) {
+            const char* fieldName = "?";
+            switch (field) {
+                case EditTransformCommand::Field::Position: fieldName = "position"; break;
+                case EditTransformCommand::Field::Rotation: fieldName = "rotation"; break;
+                case EditTransformCommand::Field::Scale:    fieldName = "scale";    break;
+            }
+            Log::editor()->info(
+                "[gizmo multi-edit] {} delta=({:.3f},{:.3f},{:.3f}) "
+                "aplicado a {} entidad(es) extra (active via gizmo, sin undo "
+                "individual de las demas)",
+                fieldName, delta.x, delta.y, delta.z, affected);
+        }
+    }
 
     // Importante: el HistoryStack::push llama a execute() — pero el valor
     // ya esta aplicado en el Transform por el drag. Eso causaria una

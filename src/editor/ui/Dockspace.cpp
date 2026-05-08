@@ -21,14 +21,18 @@ void buildLayoutWorkspace(ImGuiID dockspaceId) {
     // padding lateral.
     ImGuiID dockToolbar = ImGui::DockBuilderSplitNode(
         dockMain, ImGuiDir_Left, 0.08f, nullptr, &dockMain);
-    ImGuiID dockLeft = ImGui::DockBuilderSplitNode(
-        dockMain, ImGuiDir_Left, 0.18f, nullptr, &dockMain);
+    // F2H23 polish: columna derecha unificada (Escena arriba +
+    // Inspector abajo, dividida 50/50). Antes Escena vivia en columna
+    // izquierda y consumia ancho que el dev no aprovechaba — ahora la
+    // izquierda es solo la Toolbar y el Viewport ocupa todo el ancho
+    // central. Pedido del dev: "Escena en la misma columna que
+    // Inspector, arriba, y abajo inspector".
     ImGuiID dockRight = ImGui::DockBuilderSplitNode(
-        dockMain, ImGuiDir_Right, 0.22f, nullptr, &dockMain);
+        dockMain, ImGuiDir_Right, 0.25f, nullptr, &dockMain);
+    ImGuiID dockRightBottom = ImGui::DockBuilderSplitNode(
+        dockRight, ImGuiDir_Down, 0.50f, nullptr, &dockRight);
     ImGuiID dockBottom = ImGui::DockBuilderSplitNode(
         dockMain, ImGuiDir_Down, 0.28f, nullptr, &dockMain);
-    ImGuiID dockBottomRight = ImGui::DockBuilderSplitNode(
-        dockBottom, ImGuiDir_Right, 0.45f, nullptr, &dockBottom);
 
     // F2H23: solo dockear los panels relevantes a ESTE workspace.
     // Antes (F2H22) dockeabamos TODOS los panels en cada workspace
@@ -37,9 +41,9 @@ void buildLayoutWorkspace(ImGuiID dockspaceId) {
     // menu Ver, ImGui lo pone flotante (donde quiera) y el dev decide
     // si acoplarlo o no — el workspace no le impone una posicion.
     ImGui::DockBuilderDockWindow("Tools",         dockToolbar);
-    ImGui::DockBuilderDockWindow("Escena",     dockLeft);
+    ImGui::DockBuilderDockWindow("Escena",        dockRight);        // arriba der
+    ImGui::DockBuilderDockWindow("Inspector",     dockRightBottom);  // abajo der
     ImGui::DockBuilderDockWindow("Viewport",      dockMain);
-    ImGui::DockBuilderDockWindow("Inspector",     dockRight);
     ImGui::DockBuilderDockWindow("Asset Browser", dockBottom);
 }
 

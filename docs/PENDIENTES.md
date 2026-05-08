@@ -9,11 +9,37 @@
 
 ---
 
-## Post-F2H22 (2026-05-07)
+## Post-F2H23 (2026-05-07)
 
 ### Activos
 
-- **F2H23 — 4-viewport Hammer-style layout** (era F2H22 candidato post-F2H20;
+- **F2H24 candidato — Reorganización interna del código (split de
+  archivos grandes)** (charlado con el dev tras polish iter 3 de F2H23:
+  *"creo que hay archivos demasiado grandes que te cuesta arreglar,
+  asi que mejor debemos organizar, que ningun archivo tenga demasiadas
+  lineas"*). Ataque de deuda técnica: violación del soft-cap 500 / hard-
+  cap 800 LOC por `.cpp` documentado en CLAUDE.md / memoria del proyecto.
+  Candidatos identificados (auditar con grep `wc -l`):
+  - `src/editor/panels/scene/InspectorPanel.cpp` (~1200 LOC, los 9
+    componentes en un solo archivo).
+  - `src/editor/application/EditorProjectActions.cpp` (~1100 LOC, todo
+    el pipeline de proyecto: open/save/new/package + handlers de mapa
+    + handleAddBoxBrush + handleBooleanOp).
+  - `src/editor/application/DemoSpawners.cpp` (~1100 LOC, 13 demos +
+    drop handlers).
+  - `src/editor/application/EditorApplication.cpp` (~700 LOC, ya
+    tiene partials pero `run()` quedó largo).
+  - `src/editor/panels/assets/AssetBrowserPanel.cpp` (~500 LOC, post
+    F2H22 tabs).
+  - Posibles otros (auditar con subagente).
+  Approach: subagente recorre repo con `find . -name "*.cpp" -exec wc -l
+  {} \;` ordenado, identifica los >800 LOC, y arma plan de splits
+  (InspectorPanel → InspectorTransform.cpp + InspectorMeshRenderer.cpp +
+  InspectorLight.cpp + ... ). Sin tocar la API public ni el modelo —
+  solo refactor estructural.
+
+- **F2H25 — 4-viewport Hammer-style layout** (heredado, antes F2H23 ahora
+  F2H25 tras priorizar polish UX continuo + reorg código).
   el rework UX se priorizó en F2H22 tras feedback del dev). Workspace nuevo
   "Hammer" con dockspace en 4 cuadrantes: 1 perspectiva 3D + 3 ortográficas
   (top / front / side) en wireframe (`glPolygonMode(GL_LINE)` + grid 2D +
