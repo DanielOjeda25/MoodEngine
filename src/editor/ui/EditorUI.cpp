@@ -86,16 +86,24 @@ void EditorUI::applyPendingWorkspaceSwitch() {
     m_dockspace.setActiveWorkspaceName(nextWs.name);
 
     // 3) Aplicar el layout del nuevo workspace.
+    // F2H23 polish: SIEMPRE aplicar visibility default al cambiar
+    // workspace, no solo la primera vez. Pedido del dev: "cuando me
+    // muevo entre tabs los paneles se mezclan / quedan bugeados".
+    // Aplicar default SIEMPRE da estado predecible — el dev abrir un
+    // panel ajeno temporalmente y al cambiar de workspace y volver lo
+    // encuentra cerrado. Es el sacrificio del feature de
+    // "personalizacion por workspace" a cambio de "predecible".
+    applyDefaultVisibilityForWorkspace(nextWs.name);
     if (!nextWs.iniLayout.empty()) {
         // ImGui restaura la posicion + tamano + dock state desde el ini.
+        // El visible flag de cada panel manda igual — un panel con
+        // visible=false no se renderea aunque el ini tenga su window
+        // guardada.
         ImGui::LoadIniSettingsFromMemory(nextWs.iniLayout.c_str(),
                                           nextWs.iniLayout.size());
     } else {
-        // F2H22: workspace nunca activado en este proyecto. Dos cosas:
-        // - aplicar visibility default (qué panels se muestran).
-        // - pedir rebuild del Dockspace para que dockee los panels
-        //   visibles segun el builder del workspace.
-        applyDefaultVisibilityForWorkspace(nextWs.name);
+        // Workspace nunca activado en este proyecto: rebuild via
+        // DockBuilder para construir el layout default.
         m_dockspace.requestRebuildForCurrentWorkspace();
     }
 

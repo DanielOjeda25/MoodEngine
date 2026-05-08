@@ -245,20 +245,33 @@ void AssetBrowserPanel::onImGuiRender() {
 
     if (!m_scanned) rescan();
 
-    // Header global: boton Recargar.
-    if (ImGui::Button("Recargar")) {
-        rescan();
-        // El reupload a GPU de las texturas cambiadas lo maneja
-        // EditorApplication entre frames para no borrar un GLuint que
-        // ImGui pueda estar a punto de usar.
-        m_reloadRequested = true;
+    // F2H23 polish: header compacto — boton chico "R" (recargar) a la
+    // derecha en lugar de un boton grande "Recargar" que se comia una
+    // linea entera. Tooltip explicativo al hover.
+    {
+        const float rightOffset =
+            ImGui::GetContentRegionAvail().x - 30.0f;
+        if (rightOffset > 0.0f) {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + rightOffset);
+        }
+        if (ImGui::SmallButton("R")) {
+            rescan();
+            // El reupload a GPU de las texturas cambiadas lo maneja
+            // EditorApplication entre frames para no borrar un GLuint
+            // que ImGui pueda estar a punto de usar.
+            m_reloadRequested = true;
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Recargar assets desde disco");
+        }
     }
 
     // F2H22: tabs por categoria — antes eran CollapsingHeaders apilados
     // verticalmente, lo que con muchos meshes inflaba el panel a varios
     // viewports de altura. Cada tab tiene scroll interno (BeginChild) si
     // su contenido excede el alto disponible.
-    if (ImGui::BeginTabBar("##asset_tabs", ImGuiTabBarFlags_None)) {
+    if (ImGui::BeginTabBar("##asset_tabs",
+                            ImGuiTabBarFlags_None)) {
 
         // ============================================================
         // TAB: Texturas (con grid de miniaturas)

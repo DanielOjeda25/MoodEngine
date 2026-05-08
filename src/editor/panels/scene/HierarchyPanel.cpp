@@ -65,13 +65,17 @@ void HierarchyPanel::onImGuiRender() {
 
     // F2H23: hint de shortcuts arriba de la lista. Texto chico gris para
     // no robar foco visual; tooltip al hover por si el dev quiere ver
-    // el detalle de cada modifier.
-    ImGui::TextDisabled("Click=sel | Shift+Click=toggle | Ctrl+Click=anadir");
+    // el detalle de cada modifier. F2H23 polish: Shift=add, Ctrl=toggle
+    // (convencion Maya / Hammer — pedido del dev).
+    ImGui::TextDisabled("Click=sel | Shift+Click=anadir | Ctrl+Click=toggle");
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip(
             "Click            -> reemplazar seleccion (single).\n"
-            "Shift+Click      -> toggle (anadir si no esta, quitar si esta).\n"
-            "Ctrl+Click       -> anadir a la seleccion actual.\n"
+            "Shift+Click      -> anadir entidad al set (multi-seleccion).\n"
+            "Ctrl+Click       -> toggle (anadir si no esta, quitar si esta).\n"
+            "\n"
+            "Multi-seleccion: el Inspector aplica los cambios de\n"
+            "Transform a TODAS las entidades como mismo delta.\n"
             "\n"
             "Iconos al inicio del nombre:\n"
             "[M]=Mesh  [B]=Brush  [L]=Luz  [A]=Audio\n"
@@ -124,22 +128,28 @@ void HierarchyPanel::onImGuiRender() {
                             entityIconStr(e), entry.tag->name.c_str());
             if (ImGui::Selectable(labelBuf, isInSelection,
                                     ImGuiSelectableFlags_AllowDoubleClick)) {
+                // F2H23 polish: convencion Maya / Hammer / Unreal.
+                //   Click       = replace (single).
+                //   Shift+click = ADD (entidad nueva al set, active = ella).
+                //   Ctrl+click  = TOGGLE (anadir si no esta, quitar si esta).
+                // F2H22 tenia Shift=toggle / Ctrl=add (convencion Blender).
+                // El dev pidio explicitamente "shift seleccionar ambos y
+                // de ahi mover" — convencion Maya.
                 if (keyShift) {
-                    toggle(set, e);
-                    Log::editor()->info(
-                        "[escena] toggle '{}' (selected={}, active={})",
-                        entry.tag->name, set.selected.size(),
-                        static_cast<bool>(set.active)
-                            ? std::to_string(static_cast<u32>(set.active.handle()))
-                            : std::string("none"));
-                } else if (keyCtrl) {
                     add(set, e);
                     Log::editor()->info(
-                        "[escena] add '{}' (selected={}, active={})",
-                        entry.tag->name, set.selected.size(),
-                        static_cast<u32>(set.active.handle()));
+                        "[escena] Shift+click ADD '{}' (selected={})",
+                        entry.tag->name, set.selected.size());
+                } else if (keyCtrl) {
+                    toggle(set, e);
+                    Log::editor()->info(
+                        "[escena] Ctrl+click TOGGLE '{}' (selected={})",
+                        entry.tag->name, set.selected.size());
                 } else {
                     replaceWithSingle(set, e);
+                    Log::editor()->info(
+                        "[escena] click replace '{}' (selected=1)",
+                        entry.tag->name);
                 }
             }
 

@@ -332,7 +332,12 @@ private:
     // tileSize=3 ocupa 24x24 m; diagonal ~34 m. Cam orbital con radius=30
     // deja el mapa entero en cuadro. Cam FPS en tile interior (2,6):
     // world = origen_mapa + ((2+0.5)*3, 1.6, (6+0.5)*3) = (-4.5, 1.6, 7.5).
-    EditorCamera m_editorCamera{45.0f, 30.0f, 30.0f};
+    // F2H23 polish: radio default reducido de 30m a 12m. Antes el mapa
+    // era 48x48 (16 tiles x 3m) y radio=30 daba vista de "todo el mapa
+    // desde lejos". Ahora con mapa 12x12 (8 tiles x 1.5m) un radio chico
+    // pone la camara al borde del piso, ideal para empezar a editar
+    // brushes 1m.
+    EditorCamera m_editorCamera{45.0f, 30.0f, 12.0f};
     FpsCamera m_playCamera{glm::vec3(-4.5f, 1.6f, 7.5f), -90.0f, 0.0f};
     EditorMode m_mode = EditorMode::Editor;
     /// @brief F2H17: sub-modo del Editor estilo Blender. Toggle con
