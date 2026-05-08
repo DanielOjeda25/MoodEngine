@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <utility>  // F2H29 Bloque B: std::pair en OrthoDragSession.
 #include <vector>
 
 namespace Mood {
@@ -362,6 +363,50 @@ private:
     ///        workspace activo es "Editor de mapas"; otros workspaces no
     ///        consumen el atajo.
     u32 m_hammerSnapStep = 16u;
+
+    /// @brief F2H29 Bloque B: sesion de drag-edit en orto. Una sesion =
+    ///        1 LMB-down sobre brush + drag (>4 px) + LMB-up. Captura
+    ///        las posiciones iniciales de TODAS las entidades del
+    ///        SelectionSet con TransformComponent al arrancar el drag,
+    ///        para poder pushear un MultiEditTransformCommand con el
+    ///        before/after preciso al cerrar. Solo 1 sesion activa a
+    ///        la vez (un orto a la vez); los otros ortos se ignoran
+    ///        mientras hay sesion activa.
+    struct OrthoDragSession {
+        bool active = false;
+        int  orthoIdx = -1; // 0=Top, 1=Front, 2=Side
+        std::vector<std::pair<Entity, glm::vec3>> startPositions;
+    };
+    OrthoDragSession m_orthoDragSession;
+
+    /// @brief F2H29 Bloque C: sesion de block tool en orto. Activada
+    ///        cuando el LMB-down inicia el drag en EMPTY space (sin
+    ///        brush bajo el cursor). Durante el drag dibuja un AABB
+    ///        cyan via debugRenderer (visible en perspectiva 3D); al
+    ///        soltar, si el rectangulo supera `m_hammerSnapStep` en
+    ///        ambos ejes del view, materializa un Box brush con esas
+    ///        dimensiones + altura default (`snap * 4`) sobre el eje
+    ///        perpendicular.
+    struct OrthoBlockToolSession {
+        bool active = false;
+        int  orthoIdx = -1;
+        // F2H29 Bloque C: AABB del preview cyan (en world space)
+        // computado cada frame en el run loop. EditorRenderPass lo
+        // re-encola en el debugRenderer antes de cada renderOrthoView
+        // para que el preview sea visible en los 3 ortos + perspectiva.
+        // valid=false antes del primer frame de drag (ds.ndcCur ==
+        // ds.ndcStart -> AABB degenerado).
+        glm::vec3 previewMin{0.0f};
+        glm::vec3 previewMax{0.0f};
+        bool      previewValid = false;
+    };
+    OrthoBlockToolSession m_orthoBlockSession;
+
+    /// @brief F2H29 Bloque C: spawnea un Box brush con `transform`
+    ///        especificado (en lugar del `mat4(1.0f)` que usan las
+    ///        primitivas del menu Brush > Anadir > Box). Usado por el
+    ///        block tool del workspace "Editor de mapas".
+    void spawnBoxBrushAt(const glm::mat4& transform);
 
     // Dimensiones del AABB del jugador (0.6 x 1.8 x 0.6 m). Centrado en la
     // posicion de la camara FPS. Escala SI realista: una persona promedio.

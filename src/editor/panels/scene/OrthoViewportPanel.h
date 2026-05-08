@@ -58,6 +58,36 @@ public:
         return r;
     }
 
+    /// F2H29 Bloque B: drag con LMB sobre el viewport. Una vez que el
+    /// usuario supera el umbral 4 px desde el down, `active=true` y se
+    /// mantiene hasta soltar (en ese frame `justEnded=true` y `active`
+    /// pasa a false en el frame siguiente). El caller (EditorApplication)
+    /// usa `active` para mover en vivo brushes seleccionados / dibujar
+    /// preview del block tool, y `justEnded` como pulso para pushear
+    /// el command al HistoryStack.
+    struct DragState {
+        bool  active    = false;
+        bool  justEnded = false;
+        float ndcStartX = 0.0f;
+        float ndcStartY = 0.0f;
+        float ndcCurX   = 0.0f;
+        float ndcCurY   = 0.0f;
+    };
+
+    /// Lee el estado actual del drag SIN consumirlo (`active` sigue
+    /// siendo true mientras el LMB sigue down post-umbral). El caller
+    /// usa esto cada frame para mover en vivo.
+    const DragState& dragState() const { return m_dragState; }
+
+    /// Pulso de "drag termino este frame". Devuelve el state final
+    /// (start + cur snapshot) y resetea `justEnded`. El caller pushea
+    /// el command si recibe `r.justEnded == true`.
+    DragState consumeDragEnded() {
+        DragState r = m_dragState;
+        m_dragState.justEnded = false;
+        return r;
+    }
+
 private:
     OrthoCamera m_camera;
     IFramebuffer* m_framebuffer = nullptr;
@@ -72,6 +102,7 @@ private:
     float m_leftDownY = 0.0f;
 
     ClickSelect m_pendingClick{};
+    DragState   m_dragState{};
 };
 
 } // namespace Mood

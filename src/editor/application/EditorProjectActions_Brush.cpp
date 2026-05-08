@@ -11,6 +11,8 @@
 #include "engine/world/csg/Brush.h"
 #include "engine/world/csg/Primitives.h"
 
+#include <glm/gtc/matrix_transform.hpp>  // F2H29 Bloque C: glm::scale en spawnBoxBrushAt.
+
 #include <cstdio>
 #include <string>
 
@@ -64,6 +66,37 @@ void EditorApplication::handleAddBoxBrush() {
         Csg::makeBoxBrush(glm::mat4(1.0f)),
         "Box", "Anadir Box Brush:");
     pushCreatedEntities({e}, "Anadir Box Brush");
+}
+
+void EditorApplication::spawnBoxBrushAt(const glm::mat4& transform) {
+    // F2H29 Bloque C: variante con transform custom (block tool del
+    // workspace "Editor de mapas" la usa con la matriz construida desde
+    // el rectangulo dibujado por el dev).
+    //
+    // El `transform` recibido es `T(center) * S(dims)` (sin rotacion —
+    // el block tool no rota). Si pasaramos eso directo a makeBoxBrush,
+    // los planos quedarian en world coords y el TransformComponent
+    // del entity (con position default (0,1,0)) sumaria un OFFSET
+    // visible — el gizmo aparece en (0,1,0) pero la geometria del
+    // brush queda lejos. Mismo problema que F2H12 boolean ops resolvio
+    // con `snapshotResultWorld` rebasando planos a local space.
+    //
+    // Fix: construir el brush en LOCAL space (solo con S(dims)) y
+    // override el `tf.position` con el `center`. El gizmo queda en el
+    // centro del mesh y el drag-edit funciona como se espera.
+    if (!m_scene) return;
+    const glm::vec3 center(transform[3].x, transform[3].y, transform[3].z);
+    const glm::vec3 dims(
+        glm::length(glm::vec3(transform[0])),
+        glm::length(glm::vec3(transform[1])),
+        glm::length(glm::vec3(transform[2])));
+    const glm::mat4 localScale = glm::scale(glm::mat4(1.0f), dims);
+    Entity e = spawnBrushEntity(*m_scene,
+        Csg::makeBoxBrush(localScale),
+        "Box", "Block tool Box Brush:");
+    auto& tf = e.getComponent<TransformComponent>();
+    tf.position = center;
+    pushCreatedEntities({e}, "Block tool Box Brush");
 }
 
 void EditorApplication::handleAddCylinderBrush() {

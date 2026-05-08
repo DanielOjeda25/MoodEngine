@@ -15,9 +15,13 @@
 
 #include "core/Log.h"
 #include "core/Profiler.h"
+#include "core/math/AABB.h"  // F2H29 Bloque C: AABB del block tool preview.
+#include "editor/commands/EditTransformCommand.h"  // F2H29 Bloque B: Field enum.
 #include "editor/commands/HistoryStack.h"
+#include "editor/commands/MultiEditTransformCommand.h"  // F2H29 Bloque B: drag-edit undo agrupado.
 #include "editor/panels/debug/PerformanceHudPanel.h"
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28 Bloque F: click-select desde ortos
+#include "engine/render/backend/opengl/OpenGLDebugRenderer.h"  // F2H29 Bloque C: drawAabb preview.
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/render/backend/opengl/OpenGLShader.h"
@@ -36,9 +40,11 @@
 #include "systems/scripting/ScriptSystem.h"
 
 #include <SDL.h>
+#include <glm/gtc/matrix_transform.hpp>  // F2H29 Bloque C: glm::translate / scale.
 #include <imgui.h>
 #include <portable-file-dialogs.h>
 
+#include <cmath>  // F2H29 Bloque B: std::round para snap al delta.
 #include <string>
 
 namespace Mood {
@@ -374,6 +380,260 @@ int EditorApplication::run() {
                 } else if (!keyShift && !keyCtrl) {
                     clear(set);
                 }
+            }
+        }
+
+        // 2.4c) F2H29 Bloque B: drag-edit de brushes en ortos.
+        //       Una sesion de drag = LMB-down sobre brush + drag (>4 px) +
+        //       LMB-up. Captura posiciones iniciales al arrancar, aplica
+        //       delta snappeado en vivo cada frame, y al cerrar pushea
+        //       MultiEditTransformCommand al HistoryStack para Ctrl+Z
+        //       agrupado (mismo patron que finalizeGizmoDrag perspectivo).
+        //       La sesion se mueve sobre el plano de la vista (ej. Top
+        //       cambia X/Z, Y intacto). Snap se aplica al DELTA, no a
+        //       posicion absoluta — preserva el offset original respecto
+        //       al grid si el brush arranco desalineado.
+        if (m_mode == EditorMode::Editor && m_scene) {
+            OrthoViewportPanel* orthoPanels[3] = {
+                &m_ui.orthoTop(),
+                &m_ui.orthoFront(),
+                &m_ui.orthoSide(),
+            };
+            // 1) Si NO hay sesion activa, ver si alguno arranco un drag.
+            if (!m_orthoDragSession.active) {
+                for (int i = 0; i < 3; ++i) {
+                    const auto& ds = orthoPanels[i]->dragState();
+                    if (!ds.active) continue;
+                    const u32 oW = orthoPanels[i]->desiredWidth();
+                    const u32 oH = orthoPanels[i]->desiredHeight();
+                    if (oW == 0 || oH == 0) continue;
+                    const f32 oAspect = static_cast<f32>(oW) /
+                                         static_cast<f32>(oH);
+                    const auto& cam = orthoPanels[i]->camera();
+                    // Pick brush en ndcStart con rayo paralelo (mismo
+                    // patron que el click-select del Bloque F).
+                    const glm::vec3 origin = cam.worldFromNdc(
+                        ds.ndcStartX, ds.ndcStartY, oAspect)
+                        - cam.forwardAxis() * 1024.0f;
+                    const glm::vec3 dir = cam.forwardAxis();
+                    const ScenePickResult hit = pickEntityFromRay(
+                        *m_scene, origin, dir, m_assetManager.get());
+                    if (!hit) {
+                        // F2H29 Bloque C: empty space — block tool.
+                        // Marca sesion; el handling (preview AABB +
+                        // spawn al soltar) vive en el bloque 2.4d.
+                        if (!m_orthoBlockSession.active) {
+                            m_orthoBlockSession.active = true;
+                            m_orthoBlockSession.orthoIdx = i;
+                            Log::editor()->info(
+                                "[ortho:{}] block tool START", cam.label());
+                        }
+                        continue;
+                    }
+                    // Asegurar que el brush picked este en seleccion.
+                    // Si no estaba, seleccion se reemplaza con ese brush.
+                    SelectionSet& set = m_ui.selectionSet();
+                    bool inSelection = false;
+                    for (const Entity& e : set.selected) {
+                        if (e && e.handle() == hit.entity.handle()) {
+                            inSelection = true;
+                            break;
+                        }
+                    }
+                    if (!inSelection) replaceWithSingle(set, hit.entity);
+                    // Capturar posiciones iniciales de TODAS las del set
+                    // que tengan TransformComponent.
+                    m_orthoDragSession.active = true;
+                    m_orthoDragSession.orthoIdx = i;
+                    m_orthoDragSession.startPositions.clear();
+                    for (const Entity& e : set.selected) {
+                        if (!e || !e.hasComponent<TransformComponent>()) continue;
+                        const auto& tf = e.getComponent<TransformComponent>();
+                        m_orthoDragSession.startPositions.emplace_back(
+                            e, tf.position);
+                    }
+                    Log::editor()->info(
+                        "[ortho:{}] drag-edit START ({} entidades)",
+                        cam.label(),
+                        m_orthoDragSession.startPositions.size());
+                    break; // 1 drag a la vez
+                }
+            }
+            // 2) Si hay sesion activa, aplicar delta o cerrar.
+            if (m_orthoDragSession.active) {
+                OrthoViewportPanel* op =
+                    orthoPanels[m_orthoDragSession.orthoIdx];
+                const auto ds = op->consumeDragEnded();
+                const u32 oW = op->desiredWidth();
+                const u32 oH = op->desiredHeight();
+                if (oW > 0 && oH > 0) {
+                    const f32 oAspect = static_cast<f32>(oW) /
+                                         static_cast<f32>(oH);
+                    const auto& cam = op->camera();
+                    const glm::vec3 ws = cam.worldFromNdc(
+                        ds.ndcStartX, ds.ndcStartY, oAspect);
+                    const glm::vec3 wc = cam.worldFromNdc(
+                        ds.ndcCurX, ds.ndcCurY, oAspect);
+                    glm::vec3 deltaWorld = wc - ws;
+                    // Snap al delta (Hammer convention).
+                    const f32 snap = static_cast<f32>(m_hammerSnapStep);
+                    if (snap > 0.0f) {
+                        deltaWorld.x = std::round(deltaWorld.x / snap) * snap;
+                        deltaWorld.y = std::round(deltaWorld.y / snap) * snap;
+                        deltaWorld.z = std::round(deltaWorld.z / snap) * snap;
+                    }
+                    // Aplicar delta a position en vivo.
+                    for (auto& [e, startPos] :
+                         m_orthoDragSession.startPositions) {
+                        if (!e || !e.hasComponent<TransformComponent>()) continue;
+                        auto& tf = e.getComponent<TransformComponent>();
+                        tf.position = startPos + deltaWorld;
+                    }
+                    // Si el drag termino este frame, push del command.
+                    if (ds.justEnded) {
+                        std::vector<MultiEditTransformCommand::Entry> entries;
+                        entries.reserve(
+                            m_orthoDragSession.startPositions.size());
+                        for (const auto& [e, startPos] :
+                             m_orthoDragSession.startPositions) {
+                            if (!e || !e.hasComponent<TransformComponent>()) continue;
+                            const auto& tf = e.getComponent<TransformComponent>();
+                            entries.push_back({e, startPos, tf.position});
+                        }
+                        // Revert al before antes del push para que
+                        // execute() del command no haga doble apply
+                        // (mismo patron que finalizeGizmoDrag).
+                        for (auto& [e, startPos] :
+                             m_orthoDragSession.startPositions) {
+                            if (!e || !e.hasComponent<TransformComponent>()) continue;
+                            auto& tf = e.getComponent<TransformComponent>();
+                            tf.position = startPos;
+                        }
+                        auto cmd = std::make_unique<MultiEditTransformCommand>(
+                            EditTransformCommand::Field::Position,
+                            std::move(entries));
+                        if (!cmd->isNoOp()) {
+                            Log::editor()->info(
+                                "[ortho:{}] drag-edit END push: {} ent, "
+                                "delta=({:.2f}, {:.2f}, {:.2f})",
+                                cam.label(),
+                                m_orthoDragSession.startPositions.size(),
+                                deltaWorld.x, deltaWorld.y, deltaWorld.z);
+                            m_history.push(std::move(cmd));
+                        }
+                        m_orthoDragSession.active = false;
+                        m_orthoDragSession.startPositions.clear();
+                    }
+                }
+            }
+        }
+
+        // 2.4d) F2H29 Bloque C: block tool en orto. Activa cuando el
+        //       drag arranca en empty space (sin brush bajo el cursor).
+        //       Durante el drag dibuja un AABB cyan via debugRenderer
+        //       (visible en perspectiva 3D); al soltar materializa un
+        //       Box brush si las dims superan `m_hammerSnapStep` en
+        //       ambos ejes del view. Snap aplica a las ESQUINAS (no al
+        //       delta) -> brush queda alineado al grid. La altura sobre
+        //       el eje perpendicular es default `snap * 4`.
+        if (m_mode == EditorMode::Editor && m_scene && m_orthoBlockSession.active) {
+            OrthoViewportPanel* blockOrthoPanels[3] = {
+                &m_ui.orthoTop(), &m_ui.orthoFront(), &m_ui.orthoSide(),
+            };
+            OrthoViewportPanel* op =
+                blockOrthoPanels[m_orthoBlockSession.orthoIdx];
+            const auto ds = op->consumeDragEnded();
+            const u32 oW = op->desiredWidth();
+            const u32 oH = op->desiredHeight();
+            if (oW > 0 && oH > 0) {
+                const f32 oAspect = static_cast<f32>(oW) /
+                                     static_cast<f32>(oH);
+                const auto& cam = op->camera();
+                const glm::vec3 ws = cam.worldFromNdc(
+                    ds.ndcStartX, ds.ndcStartY, oAspect);
+                const glm::vec3 wc = cam.worldFromNdc(
+                    ds.ndcCurX, ds.ndcCurY, oAspect);
+                // Snap ambas esquinas al grid (no al delta — para que
+                // el brush quede alineado al grid global).
+                const f32 snap = static_cast<f32>(m_hammerSnapStep);
+                auto snapVec3 = [snap](glm::vec3 v) {
+                    if (snap > 0.0f) {
+                        v.x = std::round(v.x / snap) * snap;
+                        v.y = std::round(v.y / snap) * snap;
+                        v.z = std::round(v.z / snap) * snap;
+                    }
+                    return v;
+                };
+                const glm::vec3 wsSnap = snapVec3(ws);
+                const glm::vec3 wcSnap = snapVec3(wc);
+                glm::vec3 minPt = glm::min(wsSnap, wcSnap);
+                glm::vec3 maxPt = glm::max(wsSnap, wcSnap);
+                // Inflar el eje perpendicular del view a `snap * 4`
+                // centrado en 0. forwardAxis tiene magnitud 1 en
+                // exactamente uno de los 3 ejes, los otros 0.
+                const f32 defaultHeight = (snap > 0.0f) ? (snap * 4.0f)
+                                                          : 4.0f;
+                const glm::vec3 perpHalf = glm::abs(cam.forwardAxis())
+                                            * (defaultHeight * 0.5f);
+                minPt -= perpHalf;
+                maxPt += perpHalf;
+                // Preview AABB cyan: lo encolamos en perspectiva
+                // (este drawAabb se flushea con view+proj de la cam
+                // 3D en endFrame) Y guardamos los puntos en la sesion
+                // para que EditorRenderPass los re-encole antes de
+                // cada renderOrthoView (el flush adentro de
+                // renderOrthoView lo dibuja con las matrices del orto).
+                m_orthoBlockSession.previewMin = minPt;
+                m_orthoBlockSession.previewMax = maxPt;
+                m_orthoBlockSession.previewValid = true;
+                if (m_sceneRenderer) {
+                    // F2H29 Bloque C: celeste GMod (mismo color del
+                    // wireframe regular en SceneRenderer_Ortho.cpp).
+                    // Coherente con la paleta Valve+GMod del workspace.
+                    const glm::vec3 gmodCelesteRGB(108.0f / 255.0f,
+                                                    193.0f / 255.0f,
+                                                    229.0f / 255.0f);
+                    m_sceneRenderer->debugRenderer().drawAabb(
+                        AABB{minPt, maxPt}, gmodCelesteRGB);
+                }
+                if (ds.justEnded) {
+                    const glm::vec3 dims = maxPt - minPt;
+                    // Validar tamano minimo en los 2 ejes del plano de
+                    // view (ignorar eje perpendicular que ya tiene
+                    // height default).
+                    const f32 widthOnRight =
+                        std::abs(glm::dot(dims, cam.rightAxis()));
+                    const f32 widthOnUp =
+                        std::abs(glm::dot(dims, cam.upAxis()));
+                    const f32 minSize = (snap > 0.0f) ? snap : 1.0f;
+                    if (widthOnRight >= minSize &&
+                        widthOnUp >= minSize) {
+                        const glm::vec3 center = 0.5f * (minPt + maxPt);
+                        glm::mat4 transform =
+                            glm::translate(glm::mat4(1.0f), center);
+                        transform = glm::scale(transform, dims);
+                        spawnBoxBrushAt(transform);
+                        Log::editor()->info(
+                            "[ortho:{}] block tool END: spawn box "
+                            "dims=({:.1f}, {:.1f}, {:.1f}) "
+                            "center=({:.1f}, {:.1f}, {:.1f})",
+                            cam.label(),
+                            dims.x, dims.y, dims.z,
+                            center.x, center.y, center.z);
+                    } else {
+                        Log::editor()->info(
+                            "[ortho:{}] block tool END: dims too small "
+                            "({:.1f} x {:.1f} < snap {:.1f}), no spawn",
+                            cam.label(),
+                            widthOnRight, widthOnUp, minSize);
+                    }
+                    m_orthoBlockSession.active = false;
+                    m_orthoBlockSession.previewValid = false;
+                }
+            } else {
+                // Panel sin tamano valido (workspace cambio mid-drag?).
+                m_orthoBlockSession.active = false;
+                m_orthoBlockSession.previewValid = false;
             }
         }
 

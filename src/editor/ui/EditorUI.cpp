@@ -64,6 +64,17 @@ EditorUI::EditorUI() {
     // cuando el .moodproj se cargue (setWorkspaces + applyPendingSwitch
     // toman over despues).
     applyDefaultVisibilityForWorkspace(initialWs);
+
+    // F2H29 fix lateral: forzar rebuild fresh del dockspace al ctor
+    // para que la `imgui_layout_v2.ini` auto-loadeada de la sesion
+    // previa NO muestre windows en posiciones stale durante la
+    // pantalla Welcome. Sin esto, el dev veia el dockspace en
+    // posiciones del ultimo workspace de la sesion previa mientras
+    // el Welcome modal pedia abrir/crear proyecto. Cuando el dev
+    // carga un proyecto, `setWorkspaces` restaura los iniLayout
+    // custom por-workspace que vienen del `.moodproj` y este rebuild
+    // queda overriden — sin perdida de personalizacion real.
+    m_dockspace.requestRebuildForCurrentWorkspace();
 }
 
 void EditorUI::applyPendingWorkspaceSwitch() {

@@ -93,6 +93,23 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
             const f32 oAspect = static_cast<f32>(oW) / static_cast<f32>(oH);
             const glm::mat4 oView = op->camera().viewMatrix();
             const glm::mat4 oProj = op->camera().projMatrix(oAspect);
+            // F2H29 Bloque C: re-encolar el preview AABB del block tool
+            // en el debugRenderer ANTES del renderOrthoView. El flush
+            // de adentro lo dibuja con las matrices del orto. Cada
+            // iteracion re-queues porque el flush limpia la cola.
+            if (m_orthoBlockSession.active &&
+                m_orthoBlockSession.previewValid && m_sceneRenderer) {
+                // F2H29 Bloque C: celeste GMod (paleta Valve+GMod
+                // del workspace; mismo RGB que el wireframe regular
+                // de los brushes en SceneRenderer_Ortho.cpp).
+                const glm::vec3 gmodCelesteRGB(108.0f / 255.0f,
+                                                193.0f / 255.0f,
+                                                229.0f / 255.0f);
+                m_sceneRenderer->debugRenderer().drawAabb(
+                    AABB{m_orthoBlockSession.previewMin,
+                         m_orthoBlockSession.previewMax},
+                    gmodCelesteRGB);
+            }
             m_sceneRenderer->renderOrthoView(*m_scene, *m_assetManager,
                                               oView, oProj,
                                               op->camera().panOffset,

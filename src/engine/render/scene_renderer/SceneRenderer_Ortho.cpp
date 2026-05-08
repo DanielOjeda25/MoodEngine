@@ -16,6 +16,7 @@
 #include "core/Log.h"
 #include "core/Profiler.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/render/backend/opengl/OpenGLDebugRenderer.h"  // F2H29 Bloque C: flush del preview AABB.
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
 #include "engine/render/backend/opengl/OpenGLShader.h"
 #include "engine/render/rhi/IMesh.h"
@@ -187,8 +188,20 @@ void SceneRenderer::renderOrthoView(Scene& scene,
             });
     }
 
-    // Restaurar state GL global.
+    // F2H29 Bloque C: flush del debugRenderer al FBO orto. Si el caller
+    // (EditorRenderPass) encolo lineas/AABBs antes del renderOrthoView,
+    // se rinden ahora con view+proj orto. Si el queue esta vacio, es
+    // no-op. Reusa el shader + VAO del debug renderer (mismo que la
+    // perspectiva), solo que el flush aca apunta al FBO actual y a las
+    // matrices orto. Cada renderOrthoView consume su queue (flush
+    // limpia), asi cada orto ve su propio set queue-eado por el caller.
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    if (m_debugRenderer) {
+        MOOD_PROFILE_SCOPE("OrthoView::debugFlush");
+        m_debugRenderer->flush(view, projection);
+    }
+
+    // Restaurar state GL global.
     glEnable(GL_CULL_FACE);
     glViewport(prevViewport[0], prevViewport[1],
                prevViewport[2], prevViewport[3]);

@@ -113,6 +113,29 @@ void OrthoViewportPanel::onImGuiRender() {
                 const ImVec2 p = ImGui::GetMousePos();
                 m_leftDownX = p.x;
                 m_leftDownY = p.y;
+                // F2H29 Bloque B: capturar NDC inicial para potencial drag.
+                // Si el LMB se mantiene + se mueve > 4 px, activamos drag.
+                mousePosToNdc(p, m_dragState.ndcStartX, m_dragState.ndcStartY);
+                m_dragState.ndcCurX = m_dragState.ndcStartX;
+                m_dragState.ndcCurY = m_dragState.ndcStartY;
+                m_dragState.active = false;
+                m_dragState.justEnded = false;
+            }
+        }
+
+        // F2H29 Bloque B: detectar transicion a drag activo + actualizar
+        // ndcCur cada frame que el LMB siga down. Se chequea siempre
+        // (no solo hovered) por si el cursor sale del panel mid-drag —
+        // la consigna del drag sigue valida hasta el LMB up.
+        if (m_leftMouseDown && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            const ImVec2 p = ImGui::GetMousePos();
+            const float dx = p.x - m_leftDownX;
+            const float dy = p.y - m_leftDownY;
+            if (!m_dragState.active && (dx*dx + dy*dy) >= 16.0f) {
+                m_dragState.active = true;
+            }
+            if (m_dragState.active) {
+                mousePosToNdc(p, m_dragState.ndcCurX, m_dragState.ndcCurY);
             }
         }
 
@@ -133,19 +156,26 @@ void OrthoViewportPanel::onImGuiRender() {
             m_panDragging = false;
         }
 
-        // Resolver click-select al soltar el LMB. Chequear siempre
-        // (no solo hovered) por si el dev mueve el mouse fuera antes
-        // de soltar — sin drag real, sigue contando como click.
+        // Resolver click-select / drag-end al soltar el LMB. Chequear
+        // siempre (no solo hovered) por si el dev mueve el mouse fuera
+        // antes de soltar — sin drag real, sigue contando como click;
+        // con drag real, sigue contando como drag-end.
         if (m_leftMouseDown && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-            const ImVec2 p = ImGui::GetMousePos();
-            const float dx = p.x - m_leftDownX;
-            const float dy = p.y - m_leftDownY;
-            const bool wasClick = (dx*dx + dy*dy) < 16.0f; // 4 px
-            if (wasClick && hovered) {
-                float ndcX = 0.0f;
-                float ndcY = 0.0f;
-                mousePosToNdc(p, ndcX, ndcY);
-                m_pendingClick = ClickSelect{true, ndcX, ndcY};
+            if (m_dragState.active) {
+                // F2H29 Bloque B: termino el drag. Pulso para que el
+                // caller pushee el command. `active=false` para que el
+                // siguiente frame deje de mover en vivo.
+                m_dragState.active = false;
+                m_dragState.justEnded = true;
+            } else {
+                // No hubo drag — caer al click-select del Bloque F.
+                const ImVec2 p = ImGui::GetMousePos();
+                if (hovered) {
+                    float ndcX = 0.0f;
+                    float ndcY = 0.0f;
+                    mousePosToNdc(p, ndcX, ndcY);
+                    m_pendingClick = ClickSelect{true, ndcX, ndcY};
+                }
             }
             m_leftMouseDown = false;
         }
