@@ -400,6 +400,10 @@ add_executable(MoodEditor
     src/editor/application/EditorApplication.cpp
     src/editor/application/EditorOverlay.cpp
     src/editor/application/EditorPlayMode.cpp
+    src/editor/application/DemoSpawners_Basic.cpp
+    src/editor/application/DemoSpawners_Stress.cpp
+    src/editor/application/DemoSpawners_Prefab.cpp
+    src/editor/application/DemoSpawners_Drop.cpp
     src/editor/application/EditorProjectActions.cpp
     src/editor/application/EditorProjectActions_FileIO.cpp
     src/editor/application/EditorProjectActions_Package.cpp
