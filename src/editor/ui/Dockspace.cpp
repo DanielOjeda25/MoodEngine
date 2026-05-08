@@ -92,8 +92,38 @@ void buildMaterialsWorkspace(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("Escena",       dockLeft);    // tab
 }
 
+/// @brief F2H28: workspace "Editor de mapas" — layout 2x2 inspirado en
+///        Valve Hammer Editor. Top-left = vista Top (XY), top-right =
+///        perspectiva 3D reusando el panel "Viewport" existente,
+///        bottom-left = Front (XZ), bottom-right = Side (YZ). Sin
+///        paneles auxiliares (Inspector/Escena) en el dockspace inicial
+///        — el dev los abre flotantes desde menu Ver si los necesita.
+///        F2H29 considerara agregar una columna lateral si emerge
+///        necesidad real.
+void buildMapEditorWorkspace(ImGuiID dockspaceId) {
+    ImGuiID dockMain = dockspaceId;
+    // 1) Split horizontal: arriba (dockMain) / abajo (dockBottom).
+    ImGuiID dockBottom = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Down, 0.50f, nullptr, &dockMain);
+    // 2) Split vertical de la mitad de arriba: izq (dockMain) / der.
+    ImGuiID dockTopRight = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Right, 0.50f, nullptr, &dockMain);
+    // 3) Split vertical de la mitad de abajo: izq (dockBottom) / der.
+    ImGuiID dockBottomRight = ImGui::DockBuilderSplitNode(
+        dockBottom, ImGuiDir_Right, 0.50f, nullptr, &dockBottom);
+
+    // F2H28: nombres alineados con la convencion Y-up de MoodEngine:
+    // Top muestra el plano XZ (cama mira -Y), Front el plano XY
+    // (cam mira -Z), Side el plano ZY (cam mira -X).
+    ImGui::DockBuilderDockWindow("Top (XZ)",    dockMain);         // top-left
+    ImGui::DockBuilderDockWindow("Viewport",    dockTopRight);     // top-right
+    ImGui::DockBuilderDockWindow("Front (XY)",  dockBottom);       // bottom-left
+    ImGui::DockBuilderDockWindow("Side (ZY)",   dockBottomRight);  // bottom-right
+}
+
 /// @brief Dispatcher: elige el builder segun el nombre del workspace
 ///        activo. F2H23: 3 workspaces — Layout / Programar / Materiales.
+///        F2H28: + "Editor de mapas" 4-viewport.
 ///        Acepta nombres viejos (F2H7 originales: Scripting/Materials;
 ///        F2H22: Modelar) como alias defensivo, aunque la migracion en
 ///        `WorkspaceManager::setWorkspaces` los reemplaza al cargar.
@@ -102,7 +132,8 @@ void buildMaterialsWorkspace(ImGuiID dockspaceId) {
 ///        layout default de Layout.
 ///        Default = Layout para nombres desconocidos.
 void buildLayoutForWorkspace(const std::string& name, ImGuiID dockspaceId) {
-    if      (name == "Programar"  || name == "Scripting") buildScriptingWorkspace(dockspaceId);
+    if      (name == "Editor de mapas")                   buildMapEditorWorkspace(dockspaceId);
+    else if (name == "Programar"  || name == "Scripting") buildScriptingWorkspace(dockspaceId);
     else if (name == "Materiales" || name == "Materials") buildMaterialsWorkspace(dockspaceId);
     else                                                    buildLayoutWorkspace(dockspaceId);
 }

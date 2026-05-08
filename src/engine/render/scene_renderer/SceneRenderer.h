@@ -20,11 +20,15 @@
 
 #include "core/Types.h"
 #include "engine/render/pipeline/Fog.h"
+#include "engine/render/rhi/IFramebuffer.h"  // F2H28: orthoFb devuelve IFramebuffer*.
+#include "engine/scene/core/Entity.h"  // F2H28: lista de selected en orto.
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
+#include <array>
 #include <memory>
+#include <vector>
 
 namespace Mood {
 
@@ -87,6 +91,35 @@ public:
     OpenGLFramebuffer& viewportFb() { return *m_viewportFb; }
     OpenGLFramebuffer& sceneFb()    { return *m_sceneFb; }
 
+    /// @brief F2H28: render wireframe ortografico al FBO indexado por
+    ///        `idx` (0=Top, 1=Front, 2=Side; convencion arbitraria del
+    ///        caller). Pinta brushes + meshes estaticos con color flat
+    ///        celeste (paleta GMod) sobre fondo gris claro; entidades
+    ///        en `selectedEntities` se redibujan en naranja Valve para
+    ///        que la seleccion sea visible. Sin shadows / IBL /
+    ///        particles / postFX — el costo extra por viewport es
+    ///        solo la geometria.
+    ///
+    ///        Llamar DESPUES de `endFrame()` del render perspectivo
+    ///        del frame, asi los `BrushComponent::meshCache` ya estan
+    ///        hidratados y se pueden reusar (no se regenera la mesh
+    ///        en este path).
+    void renderOrthoView(Scene& scene,
+                         AssetManager& assets,
+                         const glm::mat4& view,
+                         const glm::mat4& projection,
+                         u32 panelWidth,
+                         u32 panelHeight,
+                         usize idx,
+                         const std::vector<Entity>& selectedEntities = {});
+
+    /// @brief Acceso al FBO de la vista orto `idx` para que el panel
+    ///        `OrthoViewportPanel` lo muestre con `ImGui::Image`. La
+    ///        firma usa `IFramebuffer*` para que el panel (capa
+    ///        editor/) no necesite conocer el tipo concreto OpenGL.
+    ///        Devuelve nullptr si idx fuera de [0, 2].
+    IFramebuffer* orthoFb(usize idx);
+
     /// @brief Las matrices del ultimo frame (escritas por
     ///        `renderScene`). Las lee el overlay 2D del ViewportPanel
     ///        para proyectar posiciones de iconos / gizmos.
@@ -133,6 +166,12 @@ private:
     std::unique_ptr<IShader> m_pbrShader;          // PBR estatico (no instanced)
     std::unique_ptr<IShader> m_pbrInstancedShader; // F2H4: variante instanced
     std::unique_ptr<IShader> m_pbrSkinnedShader;   // PBR + LBS skinning
+    std::unique_ptr<IShader> m_wireframeOrthoShader;  // F2H28: vista orto.
+
+    // F2H28: 3 FBOs LDR para Top/Front/Side del workspace "Editor de
+    // mapas". Resize a demanda en renderOrthoView. Vacios cuando el
+    // workspace activo no es el de mapas (no se renderizan).
+    std::array<std::unique_ptr<OpenGLFramebuffer>, 3> m_orthoFbs;
 
     // F2H4: VBO para subir las matrices model como atributo de instancia
     // (locations 5-8) cada frame antes del draw instanced.

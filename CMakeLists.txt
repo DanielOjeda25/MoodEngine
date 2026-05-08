@@ -355,6 +355,7 @@ add_library(mood_engine_lib STATIC
     src/engine/render/scene_renderer/RenderBatching.cpp
     src/engine/render/scene_renderer/SceneRenderer.cpp
     src/engine/render/scene_renderer/SceneRenderer_Render.cpp
+    src/engine/render/scene_renderer/SceneRenderer_Ortho.cpp  # F2H28
 
     src/engine/assets/cache/LodCache.cpp
 
@@ -443,6 +444,7 @@ add_executable(MoodEditor
     src/editor/commands/EditMeshRendererMaterialCommand.cpp
     src/editor/commands/EditScriptComponentCommand.cpp
     src/editor/panels/scene/ViewportPanel.cpp
+    src/editor/panels/scene/OrthoViewportPanel.cpp  # F2H28
     src/editor/panels/scene/InspectorPanel.cpp
     src/editor/panels/scene/InspectorPanel_Misc.cpp
     src/editor/panels/scene/InspectorPanel_Transform.cpp

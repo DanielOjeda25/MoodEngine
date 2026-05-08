@@ -21,10 +21,15 @@ std::vector<Workspace> defaultWorkspaces() {
     // cotidiano del dev de juegos). Los iniLayout vacios fuerzan que
     // la primera activacion pase por DockBuilder para construir el
     // layout default.
+    // F2H28: agregado "Editor de mapas" para el layout 4-viewport
+    // estilo Valve Hammer Editor (mismo concepto, label propio).
+    // Los iniLayout vacios fuerzan que la primera activacion pase
+    // por DockBuilder.
     return {
-        Workspace{"Layout",     {}},
-        Workspace{"Programar",  {}},
-        Workspace{"Materiales", {}},
+        Workspace{"Layout",          {}},
+        Workspace{"Programar",       {}},
+        Workspace{"Materiales",      {}},
+        Workspace{"Editor de mapas", {}},
     };
 }
 
@@ -51,8 +56,10 @@ std::string migrateWorkspaceName(const std::string& oldName) {
 /// @brief F2H23 polish: workspaces validos del esquema actual. Para
 ///        filtrar entries del .moodproj que apuntan a workspaces
 ///        eliminados (Optimizar/Profile).
+///        F2H28: "Editor de mapas" se suma a la lista valida.
 bool isValidWorkspaceName(const std::string& name) {
-    return name == "Layout" || name == "Programar" || name == "Materiales";
+    return name == "Layout"     || name == "Programar"
+        || name == "Materiales" || name == "Editor de mapas";
 }
 
 } // namespace

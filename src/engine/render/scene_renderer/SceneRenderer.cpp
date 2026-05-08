@@ -77,6 +77,26 @@ SceneRenderer::SceneRenderer()
     m_pbrSkinnedShader = std::make_unique<OpenGLShader>(
         "shaders/pbr_skinned.vert", "shaders/pbr.frag");
 
+    // F2H28: shader wireframe orto para el workspace "Editor de mapas".
+    // Tolera fallo de carga (silencioso): el render orto detecta nullptr
+    // y no se ejecuta — el resto del editor sigue funcionando.
+    try {
+        m_wireframeOrthoShader = std::make_unique<OpenGLShader>(
+            "shaders/wireframe_ortho.vert", "shaders/wireframe_ortho.frag");
+    } catch (const std::exception& e) {
+        Log::render()->warn("WireframeOrthoShader no disponible: {}. "
+                             "Workspace 'Editor de mapas' renderizara sin wireframe.",
+                             e.what());
+        m_wireframeOrthoShader.reset();
+    }
+
+    // F2H28: 3 FBOs LDR para Top/Front/Side. Tamano inicial 1280x720;
+    // se resize a demanda al primer renderOrthoView.
+    for (auto& fb : m_orthoFbs) {
+        fb = std::make_unique<OpenGLFramebuffer>(
+            1280u, 720u, OpenGLFramebuffer::Format::LDR);
+    }
+
     // F2H4: VBO recyclable para subir las matrices model cada frame.
     m_instanceBuffer = std::make_unique<OpenGLInstanceBuffer>();
 
@@ -178,6 +198,9 @@ SceneRenderer::~SceneRenderer() {
     m_shadowPass.reset();
     m_postProcess.reset();
     m_debugRenderer.reset();
+    // F2H28: tirar FBOs orto + shader wireframe antes del contexto GL.
+    for (auto& fb : m_orthoFbs) fb.reset();
+    m_wireframeOrthoShader.reset();
     m_pbrSkinnedShader.reset();
     m_pbrInstancedShader.reset();
     m_pbrShader.reset();

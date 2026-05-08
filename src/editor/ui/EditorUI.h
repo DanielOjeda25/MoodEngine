@@ -18,6 +18,7 @@
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/assets/MaterialEditorPanel.h"  // Hito 42
 #include "editor/panels/assets/ScriptEditorPanel.h"
+#include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28
 #include "editor/panels/scene/ViewportPanel.h"
 #include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/workspace/WorkspaceManager.h"
@@ -54,6 +55,13 @@ public:
     /// @brief Acceso al panel Viewport para inyectar el framebuffer desde
     ///        EditorApplication y leer el tamano deseado.
     ViewportPanel& viewport() { return m_viewport; }
+
+    /// @brief F2H28: paneles ortograficos del workspace "Editor de mapas".
+    ///        EditorApplication los inyecta con sus FBOs respectivos al
+    ///        renderear cada vista.
+    OrthoViewportPanel& orthoTop()   { return m_orthoTop; }
+    OrthoViewportPanel& orthoFront() { return m_orthoFront; }
+    OrthoViewportPanel& orthoSide()  { return m_orthoSide; }
 
     /// @brief Acceso al dockspace. MenuBar lo usa para pedir "Restablecer
     ///        layout" cuando el usuario lo elige desde el menu Ver.
@@ -462,6 +470,13 @@ private:
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     MaterialEditorPanel m_materialEditor;  // Hito 42
     Toolbar m_toolbar;  // F2H22: tools de edicion (gizmo modes + brushes + face)
+    // F2H28: 3 paneles ortograficos del workspace "Editor de mapas".
+    // Inicializados con la vista correspondiente; arrancan invisibles
+    // (los hace visibles applyDefaultVisibilityForWorkspace cuando se
+    // activa el workspace "Editor de mapas").
+    OrthoViewportPanel m_orthoTop  {OrthoView::TopXZ};
+    OrthoViewportPanel m_orthoFront{OrthoView::FrontXY};
+    OrthoViewportPanel m_orthoSide {OrthoView::SideZY};
     SelectionSet m_selectionSet;  // F2H13: reemplaza m_selectedEntity
     Scene* m_scene = nullptr;  // F2H12: non-owning, set by EditorApplication
 

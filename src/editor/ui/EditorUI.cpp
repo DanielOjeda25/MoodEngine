@@ -43,7 +43,14 @@ void EditorUI::pruneMissingRecents() {
 EditorUI::EditorUI() {
     m_panels = {&m_viewport, &m_hierarchy, &m_inspector, &m_assetBrowser,
                 &m_console, &m_luaApi, &m_performanceHud,
-                &m_scriptEditor, &m_materialEditor, &m_toolbar};
+                &m_scriptEditor, &m_materialEditor, &m_toolbar,
+                // F2H28: paneles del workspace "Editor de mapas".
+                // Arrancan ocultos; se hacen visibles via
+                // applyDefaultVisibilityForWorkspace.
+                &m_orthoTop, &m_orthoFront, &m_orthoSide};
+    m_orthoTop.visible = false;
+    m_orthoFront.visible = false;
+    m_orthoSide.visible = false;
     m_toolbar.setEditorUi(this);  // F2H22: la toolbar emite requests a UI
 
     // F2H7: el dockspace arranca apuntando al workspace default
@@ -134,6 +141,15 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
 
     // F2H23 polish: panel Hierarchy renombrado a "Escena". Los nombres
     // de panel matchean el `IPanel::name()` actualizado.
+    // F2H28: cada rama oculta los 3 ortos (Top/Front/Side) explicitamente
+    // para que al volver a un workspace no-Hammer queden cerrados. Solo
+    // la rama "Editor de mapas" los activa.
+    auto hideOrthoPanels = [&]() {
+        setVisible("Top (XZ)",   false);
+        setVisible("Front (XY)", false);
+        setVisible("Side (ZY)",  false);
+    };
+
     if (name == "Programar") {
         setVisible("Viewport",        true);
         setVisible("Escena",          true);  // F2H23: era Hierarchy
@@ -145,6 +161,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Script Editor",   true);
         setVisible("Material Editor", false);
         setVisible("Tools",           false);
+        hideOrthoPanels();
     } else if (name == "Materiales") {
         setVisible("Viewport",        true);
         setVisible("Escena",          false);
@@ -155,6 +172,25 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Performance",     false);
         setVisible("Script Editor",   false);
         setVisible("Material Editor", true);
+        setVisible("Tools",           false);
+        hideOrthoPanels();
+    } else if (name == "Editor de mapas") {
+        // F2H28: workspace 4-viewport inspirado en Valve Hammer Editor.
+        // Viewport (perspectiva en top-right) + 3 ortos. Inspector y
+        // Escena ocultos por default — el dev los abre flotantes desde
+        // menu Ver si los necesita.
+        setVisible("Viewport",        true);
+        setVisible("Top (XZ)",        true);
+        setVisible("Front (XY)",      true);
+        setVisible("Side (ZY)",       true);
+        setVisible("Escena",          false);
+        setVisible("Inspector",       false);
+        setVisible("Asset Browser",   false);
+        setVisible("Console",         false);
+        setVisible("Lua API",         false);
+        setVisible("Performance",     false);
+        setVisible("Script Editor",   false);
+        setVisible("Material Editor", false);
         setVisible("Tools",           false);
     } else {
         // "Layout" (default) — flow general de mapping. Tools visible.
@@ -171,6 +207,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Script Editor",   false);
         setVisible("Material Editor", false);
         setVisible("Tools",           true);
+        hideOrthoPanels();
     }
 }
 

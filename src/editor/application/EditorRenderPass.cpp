@@ -71,6 +71,34 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     drawEditorScene3DOverlay(view, projection, mapWorldOrigin());
 
     m_sceneRenderer->endFrame();
+
+    // F2H28: si el workspace activo es "Editor de mapas", renderear los
+    // 3 viewports ortograficos (Top/Front/Side) con shader wireframe
+    // dedicado. Skip en otros workspaces para no pagar el ~3x costo
+    // CPU del render extra.
+    const auto& activeWs = m_ui.workspaceManager().activeWorkspace();
+    if (activeWs.name == "Editor de mapas") {
+        const std::vector<Entity>& selected = m_ui.selectionSet().selected;
+        OrthoViewportPanel* orthoPanels[3] = {
+            &m_ui.orthoTop(),
+            &m_ui.orthoFront(),
+            &m_ui.orthoSide(),
+        };
+        for (usize i = 0; i < 3; ++i) {
+            OrthoViewportPanel* op = orthoPanels[i];
+            const u32 oW = op->desiredWidth();
+            const u32 oH = op->desiredHeight();
+            if (oW == 0 || oH == 0) continue;
+            const f32 oAspect = static_cast<f32>(oW) / static_cast<f32>(oH);
+            const glm::mat4 oView = op->camera().viewMatrix();
+            const glm::mat4 oProj = op->camera().projMatrix(oAspect);
+            m_sceneRenderer->renderOrthoView(*m_scene, *m_assetManager,
+                                              oView, oProj, oW, oH, i,
+                                              selected);
+            // Conectar el FBO al panel ANTES del proximo onImGuiRender.
+            op->setFramebuffer(m_sceneRenderer->orthoFb(i));
+        }
+    }
 }
 
 void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
