@@ -9,38 +9,12 @@
 
 ---
 
-## Post-F2H23 (2026-05-07)
+## Post-F2H24 (2026-05-08)
 
 ### Activos
 
-- **F2H24 candidato — Reorganización interna del código (split de
-  archivos grandes)** (charlado con el dev tras polish iter 3 de F2H23:
-  *"creo que hay archivos demasiado grandes que te cuesta arreglar,
-  asi que mejor debemos organizar, que ningun archivo tenga demasiadas
-  lineas"*). Ataque de deuda técnica: violación del soft-cap 500 / hard-
-  cap 800 LOC por `.cpp` documentado en CLAUDE.md / memoria del proyecto.
-  Candidatos identificados (auditar con grep `wc -l`):
-  - `src/editor/panels/scene/InspectorPanel.cpp` (~1200 LOC, los 9
-    componentes en un solo archivo).
-  - `src/editor/application/EditorProjectActions.cpp` (~1100 LOC, todo
-    el pipeline de proyecto: open/save/new/package + handlers de mapa
-    + handleAddBoxBrush + handleBooleanOp).
-  - `src/editor/application/DemoSpawners.cpp` (~1100 LOC, 13 demos +
-    drop handlers).
-  - `src/editor/application/EditorApplication.cpp` (~700 LOC, ya
-    tiene partials pero `run()` quedó largo).
-  - `src/editor/panels/assets/AssetBrowserPanel.cpp` (~500 LOC, post
-    F2H22 tabs).
-  - Posibles otros (auditar con subagente).
-  Approach: subagente recorre repo con `find . -name "*.cpp" -exec wc -l
-  {} \;` ordenado, identifica los >800 LOC, y arma plan de splits
-  (InspectorPanel → InspectorTransform.cpp + InspectorMeshRenderer.cpp +
-  InspectorLight.cpp + ... ). Sin tocar la API public ni el modelo —
-  solo refactor estructural.
-
-- **F2H25 — 4-viewport Hammer-style layout** (heredado, antes F2H23 ahora
-  F2H25 tras priorizar polish UX continuo + reorg código).
-  el rework UX se priorizó en F2H22 tras feedback del dev). Workspace nuevo
+- **F2H25 — 4-viewport Hammer-style layout** (heredado, antes F2H22→F2H23→F2H24
+  candidato; sigue priorizado tras cerrar F2H24 reorg código). Workspace nuevo
   "Hammer" con dockspace en 4 cuadrantes: 1 perspectiva 3D + 3 ortográficas
   (top / front / side) en wireframe (`glPolygonMode(GL_LINE)` + grid 2D +
   crosshair). Drag-edit de brushes / vertices entre vistas con grid snap.
@@ -48,6 +22,25 @@
   pass / light grid compartido para mitigar el ~4× costo CPU del frame.
   Reusa la infra de workspaces de F2H7+F2H22 — el Hammer entra como un
   workspace más con su propio `buildHammerWorkspace` en `Dockspace.cpp`.
+
+- **Split de archivos ALTO 700-780 LOC** (deuda chica F2H24): Bloque C de
+  F2H24 fue skipped por presupuesto. Quedan 4 archivos sobre el soft-cap
+  500 LOC pero bajo el hard-cap 800 LOC, todos con potencial de split por
+  dominio:
+  - `src/engine/render/scene_renderer/SceneRenderer.cpp` (776 LOC) —
+    candidato a split por pase (shadow / forward / IBL / debug draw /
+    post-process).
+  - `src/engine/assets/loaders/MeshLoader.cpp` (767 LOC) — candidato a
+    split por formato (OBJ vs glTF / Assimp shared logic).
+  - `src/editor/application/EditorOverlay.cpp` (745 LOC) — candidato a
+    split por overlay (gizmo / grid / debug draw / icons + halos de
+    selección).
+  - `src/engine/assets/manager/AssetManager.cpp` (743 LOC) — candidato a
+    split por tipo de asset (texture / mesh / audio / material / prefab).
+  Approach: igual que F2H24 — refactor puramente estructural sin cambios
+  funcionales ni de API pública, validación incremental con suite verde
+  tras cada split. Hito chico futuro si emerge presión (estos 4 están
+  bajo el hard-cap, así que no son críticos).
 
 - **Iconos image-based del Toolbar** (deuda explícita F2H22): la toolbar
   actual usa labels en castellano (`Mover`/`Rotar`/`Escala`/etc.) tras

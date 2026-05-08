@@ -6,6 +6,56 @@
 
 ## 1. ¿Dónde estamos?
 
+**🚀 Fase 2 — F2H24 cerrado: Reorganización interna del código (split de los 5 archivos críticos >800 LOC en partials por dominio).**
+Tag: `v1.15.0-fase2-hito24`.
+Verificado automático: suite doctest **610/8359** verde después de cada Bloque B.X (validación incremental). Verificado por LOC: ningún partial supera 500 LOC; los 5 archivos CRÍTICOS originales (5784 LOC totales) reorganizados en 1 núcleo + N partials cada uno.
+
+**Distribución LOC final** (núcleo + partials, 5 CRÍTICOS):
+
+| Original | LOC original | Núcleo | Partials | Max partial |
+|---|---:|---:|---:|---:|
+| `InspectorPanel.cpp` | 1338 | 77 | 10 (+ Internal.h) | 208 |
+| `EditorProjectActions.cpp` | 1272 | 106 | 6 | 329 |
+| `DemoSpawners.cpp` | 1188 | 41 | 4 (+ Internal.h) | 399 |
+| `PlayerApplication.cpp` | 1160 | 111 | 3 | 484 |
+| `EditorApplication.cpp` | 826 | 173 | 2 | 435 |
+
+**Cambio importante**: F2H24 cumple el pedido explícito del dev al cerrar F2H23 (*"creo que hay archivos demasiado grandes que te cuesta arreglar"*). Refactor puramente estructural — ningún cambio funcional, ningún cambio de API pública. El editor y el player arrancan idénticos al usuario final. Los 4 archivos ALTO (700-780 LOC: `SceneRenderer`, `MeshLoader`, `EditorOverlay`, `AssetManager`) quedan en `PENDIENTES.md` como deuda chica.
+
+**Decisiones clave**:
+- **Split por dominio funcional con archivos parciales de la misma clase**: cada partial implementa métodos privados de la clase declarada en el header. Patrón ya usado pre-F2H24 (`EditorApplication.cpp` ya tenía `EditorProjectActions.cpp` + `DemoSpawners.cpp` + `EditorOverlay.cpp` + `EditorPlayMode.cpp` + `EditorRenderPass.cpp` + `EditorScene.cpp` desde Hito 16); F2H24 lo extiende a los 5 CRÍTICOS de Fase 2.
+- **API pública intacta**: solo `InspectorPanel.h` recibió 13 métodos privados nuevos (`renderTagSection(Entity)`, `renderTransformSection(Entity)`, etc.) para que el dispatch del `onImGuiRender` quede legible — esto es API privada, no rompe nada externo.
+- **Helpers compartidos via header interno** (`Foo_Internal.h`): namespace `Mood::detail` con `inline` functions y templates para que cada TU tenga acceso. Patrón aplicado a InspectorPanel (`pushEditIfDone` template + `helpMarker` + `isDragActiveOfType`) y DemoSpawners (`WorldYBounds` + `rotatedAabbWorldY`).
+- **Cap soft 500 / hard 800 reafirmado**: ningún partial supera 500 LOC excepto `_Frame` y `_Run` que rondan 435-484 (loops monolíticos sin sub-secciones obvias para particionar más). Aceptable.
+- **Validación incremental por Bloque B.X**: build + suite verde después de cada split antes de pasar al siguiente. Permite detectar regresiones rápido. La suite 610/8359 quedó idéntica antes y después de cada bloque (refactor sin cambios funcionales).
+- **Bloque C (split de ALTO 700-780 LOC) skipped por presupuesto**: 4 archivos movidos a `PENDIENTES.md` como deuda chica. F2H24 entregó los 5 CRÍTICOS — los ALTO son menos urgentes (todos < 800 LOC = bajo el hard cap).
+- **Errores resueltos durante el trabajo** (no requieren mención del dev pero quedan registrados): `glm/gtx/compatibility.hpp` removido del `InspectorPanel_Brush.cpp` (extensión experimental no necesaria); `APIENTRY` reemplazado por `GLAD_API_PTR` en `EditorApplication_Init.cpp` (no depende de inclusión transitiva de `<windows.h>`); `FrameStats` requiere include de `IRenderer.h` (definición completa) en `EditorApplication_Run.cpp` además de `SceneRenderer.h` (forward-decl).
+
+**Implementación (Bloques A-E):**
+
+- **Bloque A — Plan F2H24 + auditoría**: subagente recorrió `src/` con `wc -l`. Confirmé números reales con conteo directo (los del subagente eran ligeramente bajos por path antiguo). Plan documentado en `docs/archive/plans/PLAN_HITO_F2H24.md`.
+- **Bloque B.1 — InspectorPanel.cpp**: 1338 LOC → núcleo 77 + 10 partials + Internal.h. Tag intermedio: `1cce00a`.
+- **Bloque B.2 — EditorProjectActions.cpp**: 1272 LOC → núcleo 106 + 6 partials. Tag intermedio: `05e9afe`.
+- **Bloque B.3 — DemoSpawners.cpp**: 1188 LOC → núcleo 41 + 4 partials + Internal.h. Tag intermedio: `dba4aa7`.
+- **Bloque B.4 — PlayerApplication.cpp**: 1160 LOC → núcleo 111 + 3 partials. Tag intermedio: `01a80ae`.
+- **Bloque B.5 — EditorApplication.cpp**: 826 LOC → núcleo 173 + 2 partials. Tag intermedio: `9abc38b`.
+- **Bloque C — split de ALTO**: skipped por presupuesto. 4 archivos en PENDIENTES.md.
+- **Bloque D — validación**: suite 610/8359 verde tras cada Bloque B.X; build OK Debug; cap soft 500 respetado en todos los partials nuevos.
+- **Bloque E — cierre**: este documento + HITOS + DECISIONS + PENDIENTES + tag `v1.15.0-fase2-hito24`.
+
+**Pendientes conocidos** (memoria + `PENDIENTES.md`):
+- **F2H25 — 4-viewport Hammer-style layout** (próximo, heredado de F2H22→F2H23→F2H24 candidato): workspace nuevo "Hammer" con dockspace en 4 cuadrantes.
+- **Split de archivos ALTO (700-780 LOC)** (deuda chica F2H24): `SceneRenderer.cpp` (776), `MeshLoader.cpp` (767), `EditorOverlay.cpp` (745), `AssetManager.cpp` (743). Bajo el hard cap pero sobre el soft cap. Hito futuro chico si emerge necesidad.
+- **Iconos image-based del Toolbar** (deuda explícita F2H22): FontAwesome / IcoMoon. Hito chico futuro.
+- **CompoundCommand para batch undo** (deuda parcial cerrada en F2H23 con MultiEditTransformCommand).
+- **Pase de polish UX continuo (siguiente ronda)**.
+- **Node-graph del Material Editor** (deuda F2H21).
+- **Runtime-load mesh compilada en MoodPlayer** (deuda F2H20).
+- **Cull overlap parcial** (deuda F2H20).
+
+**Próximo paso**: **F2H25 — 4-viewport Hammer-style layout**. Workspace "Hammer" con 4 cuadrantes: 1 perspectiva 3D + 3 ortográficas top/front/side en wireframe + drag-edit entre vistas con grid snap. Tradeoff: ~4× costo CPU del frame — mitigar reusando shadow pass / light grid compartido. Reusa la infra de workspaces de F2H7+F2H22 con un `buildHammerWorkspace` nuevo en `Dockspace.cpp`.
+
+### F2H23 (anterior, ya cerrado)
 **🚀 Fase 2 — F2H23 cerrado: Pase polish UX continuo (Inspector / Escena / Console / StatusBar + ajustes workspaces + multi-edit Transform con undo agrupado).**
 Tag: `v1.14.0-fase2-hito23`.
 Verificado automático: suite doctest **610/8359** verde sin regresiones (UI pura — no hay tests nuevos en F2H23 más allá del schema 3-workspace del WorkspaceManager). Verificado por el dev a ojo + log: shift+click acumula selección desde Hierarchy Y desde Viewport; arrastre del gizmo en multi-selección mueve TODAS las entidades en vivo (no solo el active); Ctrl+Z agrupado revierte el conjunto entero; los 3 modos (Translate / Rotate / Scale) andan; Inspector con `(?)` tooltips y SeparatorText por componente; Console con popup de confirmación + counter de líneas filtradas; StatusBar con FPS coloreado + modo Play/Editor diferenciado por color.

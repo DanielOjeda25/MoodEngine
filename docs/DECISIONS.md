@@ -3960,3 +3960,42 @@ Total ~ 1-2 semanas de hito grande.
 - El dev pide que la customización de visibility por workspace persista entre switches: agregar toggle "modo predecible / modo customizable" en preferencias.
 - Los archivos grandes empiezan a frenar el desarrollo: F2H24 resuelve esto (split por dominio).
 - El gizmo de rotación con multi-selección revela bugs sutiles (rotación se aplica per-entity sin pivot común — esperado pero documentar si emerge confusión).
+
+## 2026-05-08: F2H24 — split de archivos críticos >800 LOC en partials por dominio (refactor estructural sin cambios funcionales ni de API pública)
+
+**Contexto:** F2H23 cerró con 5 iteraciones de polish UX donde el dev confirmó *"funciona"* pero también pidió explícitamente *"creo que hay archivos demasiado grandes que te cuesta arreglar, así que mejor debemos organizar, que ningún archivo tenga demasiadas líneas para que sea fácil de mantener"*. El cap soft 500 / hard 800 LOC por `.cpp/.h` ya estaba documentado en CLAUDE.md y en la memoria del proyecto, pero acumulamos 5 archivos CRÍTICOS >800 LOC durante Fase 1 y Fase 2: InspectorPanel.cpp 1338, EditorProjectActions.cpp 1272, DemoSpawners.cpp 1188, PlayerApplication.cpp 1160, EditorApplication.cpp 826. Total: 5784 LOC repartidos en archivos que el dev encontraba difíciles de mantener.
+
+**Decisión:** F2H24 — refactor puramente estructural. Split de los 5 CRÍTICOS en archivos parciales con sufijo descriptivo (`Foo_<Dominio>.cpp`) implementando métodos privados de la **misma clase** declarada en `Foo.h`. Helpers compartidos en header interno `Foo_Internal.h` con namespace `Mood::detail`. API pública intacta. Cero cambios funcionales — el editor y el player arrancan idénticos al usuario final. Los 4 archivos ALTO (700-780 LOC) quedan en `PENDIENTES.md` para hito futuro si emerge presión.
+
+**Razones:**
+- **Cumplir cap del proyecto** (soft 500 / hard 800 LOC). F2H24 reduce los 5 CRÍTICOS para que ningún partial supere 500 LOC excepto `_Frame` y `_Run` que rondan 435-484 (loops monolíticos sin sub-secciones obvias).
+- **Patrón ya validado en el repo**: `EditorApplication.cpp` ya tenía 6 partials desde Hito 16 (EditorProjectActions / DemoSpawners / EditorOverlay / EditorPlayMode / EditorRenderPass / EditorScene). F2H24 extiende el mismo patrón a InspectorPanel + DemoSpawners + PlayerApplication + EditorApplication.
+- **Validación incremental**: build + suite verde después de cada Bloque B.X (5 sub-bloques, 5 commits intermedios). Permite detectar regresiones por TU sin debugar todo el split al final. La suite 610/8359 quedó idéntica antes y después de cada bloque (refactor sin cambios funcionales por construcción).
+- **API pública intacta = cero riesgo de regresión externa**: solo `InspectorPanel.h` recibió 13 métodos PRIVADOS nuevos (`renderTagSection(Entity)`, etc.) para que el dispatch del `onImGuiRender` quede legible. El user-facing del editor + player + tests no ve diferencia alguna.
+- **Headers internos `Foo_Internal.h` para helpers compartidos**: alternativa al namespace anónimo (que solo es visible dentro de un único `.cpp`). Patrón limpio aplicado a InspectorPanel (`pushEditIfDone` template + `helpMarker` + `isDragActiveOfType` con `inline`) y DemoSpawners (`WorldYBounds` + `rotatedAabbWorldY` con `inline`).
+
+**Distribución LOC por archivo crítico:**
+
+- **InspectorPanel.cpp 1338 → 11 archivos**: núcleo 77 (dispatch por `hasComponent<>`) + Internal.h + 10 partials por componente (Misc 82 = Tag+Camera+Trigger; Audio 103; Physics 106; Animation 108; Script 130; Transform 141; Light 160 = Light+Environment; MeshRenderer 177; Particles 192; Brush 208).
+- **EditorProjectActions.cpp 1272 → 7 archivos**: núcleo 106 (confirmDiscardChanges + addToRecentProjects + load/saveEditorState — helpers compartidos) + _FileIO 329 (project lifecycle: new/open/save/saveAs/close/newScript) + _Package 101 (handlePackageProject único) + _Map 257 (multi-mapa: saveMapAs/newMap/openMap/setDefault/delete + sanitizeMapName + syncMapsSnapshot) + _Brush 117 (spawnBrushEntity helper + 7 handleAdd*Brush) + _Boolean 327 (snapshot helpers + buildWorldBrush + handleBooleanOp F2H12) + _Compile 108 (formatCompileStats + handleCompileMap + handleExportObj F2H20).
+- **DemoSpawners.cpp 1188 → 5 archivos + Internal.h**: núcleo 41 (pushCreatedEntities) + Internal.h (WorldYBounds + rotatedAabbWorldY) + _Basic 199 (8 demos chicos: Rotator/HUD/PhysicsBox/Environment/PointLight/AudioSource/FireParticles/Trigger) + _Stress 376 (6 demos pesados: Enemy/Shadow/PbrSpheres/LightStress/AnimatedChar/StressTris) + _Prefab 214 (SavePrefab + ViewportPrefabDrop) + _Drop 399 (4 viewport drops con Face Mode awareness: Texture/Mesh/Material/Script).
+- **PlayerApplication.cpp 1160 → 4 archivos**: núcleo 111 (mapWorldOrigin + buildTestMap + rebuildSceneFromMap) + _Init 224 (PlayerApplication ctor + tryLoadGameManifest + dtor) + _Frame 484 (processEvents + beginFrame + endFrame + updateCamera char controller + updateRigidBodies + run loop) + _SaveLoad 435 (drawMainMenu + applyLoadedSave + captureCurrentState + quickSave F5 + saveAs F6).
+- **EditorApplication.cpp 826 → 3 archivos**: núcleo 173 (updateWindowTitle + markDirty + processEvents + beginFrame + endFrame + mapWorldOrigin + viewportAspect) + _Init 275 (glDebugCallback + ctor con SDL/GL/ImGui/sistemas/inyeccion + dtor) + _Run 435 (loop principal con dispatchers de UI requests + click-to-select Maya-style + system updates physics/scripts/triggers/animation/nav/particles/audio + render).
+
+**Errores resueltos durante el trabajo (no requieren mención del dev pero quedan registrados):**
+- **`glm/gtx/compatibility.hpp` agregado por error a `InspectorPanel_Brush.cpp`**: extensión experimental de glm que requiere `GLM_ENABLE_EXPERIMENTAL` antes del include. Eliminado — no era necesario para el código del partial.
+- **`APIENTRY` undefined en `EditorApplication_Init.cpp` cuando se compilaba como TU separada**: la macro APIENTRY se define solo si `<windows.h>` se incluyó transitivamente, lo cual variaba según el orden de includes del partial. Fix definitivo: usar `GLAD_API_PTR` en lugar de `APIENTRY` para la firma del callback `glDebugCallback` — `GLAD_API_PTR` siempre lo define `glad/gl.h` (alias condicional de APIENTRY o vacío según platform). Patrón general: en partials, evitar macros que dependen de inclusión transitiva.
+- **`FrameStats` undefined en `EditorApplication_Run.cpp`**: forward-declared en `SceneRenderer.h` (donde solo se usa como tipo de retorno opaco), definición completa en `IRenderer.h`. El partial necesitaba `IRenderer.h` además de `SceneRenderer.h` para que el `FrameStats stats = m_sceneRenderer->frameStats()` compilara.
+
+**Alternativas descartadas:**
+- **Refactor profundo con extracción de clases helper**: scope masivo + cambia API. F2H24 ataca solo el problema de tamaño con cambios mínimos.
+- **Funciones libres en namespace anónimo dentro del partial** (en lugar de métodos privados de la clase): no pueden acceder a miembros privados (`m_ui`, `m_assets`, etc.). Solución vía `friend` declarations sería peor que agregar métodos privados al header.
+- **Bloque C: split de los 4 archivos ALTO (700-780 LOC)** (`SceneRenderer`, `MeshLoader`, `EditorOverlay`, `AssetManager`): skipped por presupuesto. Bajo el hard cap 800 — menos urgentes. Movidos a `PENDIENTES.md` como deuda chica.
+- **CompoundCommand genérico** para agrupar refactors en commits atómicos: F2H24 ya tiene granularidad por Bloque B.X (5 commits intermedios), suficiente para revertir si emerge regresión.
+
+**Revisar si:**
+- El dev encuentra que algún partial sigue sintiéndose grande (>500 LOC y costoso de editar): partir más fino. Candidatos probables: `_Frame` (484) y `_Run` (435).
+- Los 4 archivos ALTO movidos a PENDIENTES.md (`SceneRenderer.cpp` 776, `MeshLoader.cpp` 767, `EditorOverlay.cpp` 745, `AssetManager.cpp` 743) crecen pasada la marca 800: abrir hito chico para split de los que estén sobre el cap.
+- Aparece un caso donde la inclusión transitiva de macros varía entre TUs y rompe builds: estandarizar headers internos `Foo_Internal.h` para isolar dependencias macro-sensibles.
+- Surge necesidad de un patrón de helpers compartidos por partials además de los 5 ya hechos: codificar el patrón `Foo_Internal.h` con namespace `Mood::detail` como convención del proyecto.
+
