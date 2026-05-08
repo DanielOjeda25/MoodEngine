@@ -275,6 +275,9 @@ add_library(mood_engine_lib STATIC
     src/platform/Window.cpp
     src/platform/VFS.cpp
 
+    src/engine/assets/loaders/MeshLoader_Skeleton.cpp
+    src/engine/assets/loaders/MeshLoader_Geometry.cpp
+    src/engine/assets/loaders/MeshLoader_Animation.cpp
     src/engine/assets/manager/AssetManager.cpp
     src/engine/assets/manager/AssetManager_Texture.cpp
     src/engine/assets/manager/AssetManager_Audio.cpp
