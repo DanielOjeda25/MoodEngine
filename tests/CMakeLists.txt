@@ -77,6 +77,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/Primitives.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/EditBrushMaterialCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/EditBrushFaceMaterialCommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/commands/EditBrushGeometryCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/EditBrushUVCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/SetTileCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/EditMeshRendererMaterialCommand.cpp

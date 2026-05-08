@@ -45,11 +45,16 @@ void StatusBar::draw(EditorMode mode, EditorSubMode subMode) {
             ImGui::TextColored(modeColor, "%s",
                 mode == EditorMode::Play ? "Play Mode" : "Editor Mode");
 
-            // F2H17: sub-modo (Face / Object) en color distinto.
+            // F2H17 + F2H30: sub-modo (Vertex / Edge / Face / Object).
             if (mode == EditorMode::Editor && subMode != EditorSubMode::Object) {
                 ImGui::SameLine();
-                const char* subLabel = (subMode == EditorSubMode::Face)
-                    ? " | Face Mode (3)" : " | Sub-mode";
+                const char* subLabel = " | Sub-mode";
+                switch (subMode) {
+                    case EditorSubMode::Vertex: subLabel = " | Vertex Mode (1)"; break;
+                    case EditorSubMode::Edge:   subLabel = " | Edge Mode (2)";   break;
+                    case EditorSubMode::Face:   subLabel = " | Face Mode (3)";   break;
+                    case EditorSubMode::Object: break; // unreachable
+                }
                 ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.10f, 1.0f),
                                      "%s", subLabel);
             }

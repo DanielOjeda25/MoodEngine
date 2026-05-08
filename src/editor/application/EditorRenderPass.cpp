@@ -110,6 +110,59 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                          m_orthoBlockSession.previewMax},
                     gmodCelesteRGB);
             }
+            // F2H30 Bloque B: re-encolar markers de vertex/edge del
+            // brush active si subMode == Vertex/Edge. Sin esto el dev
+            // ve los markers solo en perspectiva pero NO en los ortos
+            // (donde justamente arrastra para editar).
+            if ((m_subMode == EditorSubMode::Vertex ||
+                 m_subMode == EditorSubMode::Edge) && m_sceneRenderer) {
+                const SelectionSet& set = m_ui.selectionSet();
+                if (set.active &&
+                    set.active.hasComponent<BrushComponent>() &&
+                    set.active.hasComponent<TransformComponent>()) {
+                    const auto& bc = set.active.getComponent<BrushComponent>();
+                    const auto& tf = set.active.getComponent<TransformComponent>();
+                    const glm::mat4 wm = tf.worldMatrix();
+                    const auto verts = Csg::enumerateBrushVertices(bc.brush);
+                    const f32 snap = static_cast<f32>(m_hammerSnapStep);
+                    const glm::vec3 markerColor(1.0f, 1.0f, 1.0f);
+                    auto& dbgR = m_sceneRenderer->debugRenderer();
+                    if (m_subMode == EditorSubMode::Vertex) {
+                        const f32 half = std::max(snap * 0.05f, 0.05f);
+                        const glm::vec3 he(half);
+                        for (const auto& v : verts) {
+                            const glm::vec3 wp = glm::vec3(
+                                wm * glm::vec4(v.localPos, 1.0f));
+                            dbgR.drawAabb(AABB{wp - he, wp + he},
+                                            markerColor);
+                        }
+                    } else {
+                        const usize nf = bc.brush.faces.size();
+                        for (u32 fi = 0; fi < static_cast<u32>(nf); ++fi) {
+                            for (u32 fj = fi + 1; fj < static_cast<u32>(nf); ++fj) {
+                                int idxA = -1, idxB = -1;
+                                for (usize v = 0; v < verts.size(); ++v) {
+                                    bool hasA = false, hasB = false;
+                                    for (u32 p : verts[v].planeIndices) {
+                                        if (p == fi) hasA = true;
+                                        if (p == fj) hasB = true;
+                                    }
+                                    if (!hasA || !hasB) continue;
+                                    if (idxA < 0) idxA = static_cast<int>(v);
+                                    else if (idxB < 0) idxB = static_cast<int>(v);
+                                    else { idxA = -1; break; }
+                                }
+                                if (idxA < 0 || idxB < 0) continue;
+                                const glm::vec3 a = glm::vec3(
+                                    wm * glm::vec4(verts[static_cast<usize>(idxA)].localPos, 1.0f));
+                                const glm::vec3 b = glm::vec3(
+                                    wm * glm::vec4(verts[static_cast<usize>(idxB)].localPos, 1.0f));
+                                dbgR.drawLine(a, b, markerColor);
+                            }
+                        }
+                    }
+                }
+            }
             m_sceneRenderer->renderOrthoView(*m_scene, *m_assetManager,
                                               oView, oProj,
                                               op->camera().panOffset,
@@ -397,6 +450,61 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                     }
                     for (usize i = 0; i < n; ++i) {
                         dbg.drawLine(poly[i], poly[(i + 1) % n], outlineColor);
+                    }
+                }
+            }
+        }
+
+        // F2H30 Bloque B: visualizacion de vertices/edges del brush
+        // active en sub-mode Vertex/Edge (estilo Blender). Sin esto el
+        // dev no sabe DONDE clickear para mover. Markers en blanco
+        // (visibles sobre cualquier fondo); tamano proporcional al
+        // snapStep para que escale con el zoom del workspace.
+        if ((m_subMode == EditorSubMode::Vertex ||
+             m_subMode == EditorSubMode::Edge) &&
+            static_cast<bool>(set.active) &&
+            set.active.hasComponent<BrushComponent>() &&
+            set.active.hasComponent<TransformComponent>()) {
+            const auto& bc = set.active.getComponent<BrushComponent>();
+            const auto& tf = set.active.getComponent<TransformComponent>();
+            const glm::mat4 wm = tf.worldMatrix();
+            const auto verts = Csg::enumerateBrushVertices(bc.brush);
+            const f32 snap = static_cast<f32>(m_hammerSnapStep);
+            const glm::vec3 markerColor(1.0f, 1.0f, 1.0f);  // blanco
+
+            if (m_subMode == EditorSubMode::Vertex) {
+                // Markers de vertex: pequenos cubos en cada esquina.
+                const f32 half = std::max(snap * 0.05f, 0.05f);
+                const glm::vec3 he(half);
+                for (const auto& v : verts) {
+                    const glm::vec3 wp = glm::vec3(
+                        wm * glm::vec4(v.localPos, 1.0f));
+                    dbg.drawAabb(AABB{wp - he, wp + he}, markerColor);
+                }
+            } else {
+                // Edge mode: lineas brillantes en cada arista (par de
+                // caras que comparten exactamente 2 vertices).
+                const usize n = bc.brush.faces.size();
+                for (u32 i = 0; i < static_cast<u32>(n); ++i) {
+                    for (u32 j = i + 1; j < static_cast<u32>(n); ++j) {
+                        int idxA = -1, idxB = -1;
+                        for (usize v = 0; v < verts.size(); ++v) {
+                            bool hasA = false, hasB = false;
+                            for (u32 p : verts[v].planeIndices) {
+                                if (p == i) hasA = true;
+                                if (p == j) hasB = true;
+                            }
+                            if (!hasA || !hasB) continue;
+                            if (idxA < 0) idxA = static_cast<int>(v);
+                            else if (idxB < 0) idxB = static_cast<int>(v);
+                            else { idxA = -1; break; }
+                        }
+                        if (idxA < 0 || idxB < 0) continue;
+                        const glm::vec3 a = glm::vec3(
+                            wm * glm::vec4(verts[static_cast<usize>(idxA)].localPos, 1.0f));
+                        const glm::vec3 b = glm::vec3(
+                            wm * glm::vec4(verts[static_cast<usize>(idxB)].localPos, 1.0f));
+                        dbg.drawLine(a, b, markerColor);
                     }
                 }
             }

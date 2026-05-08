@@ -16,6 +16,8 @@
 #include "core/Log.h"
 #include "core/Profiler.h"
 #include "core/math/AABB.h"  // F2H29 Bloque C: AABB del block tool preview.
+#include "core/math/Plane.h"  // F2H30 Bloque B: kPlaneEpsilon en validacion.
+#include "editor/commands/EditBrushGeometryCommand.h"  // F2H30 Bloque B: vertex/edge edit undo.
 #include "editor/commands/EditTransformCommand.h"  // F2H29 Bloque B: Field enum.
 #include "editor/commands/HistoryStack.h"
 #include "editor/commands/MultiEditTransformCommand.h"  // F2H29 Bloque B: drag-edit undo agrupado.
@@ -393,7 +395,10 @@ int EditorApplication::run() {
         //       cambia X/Z, Y intacto). Snap se aplica al DELTA, no a
         //       posicion absoluta — preserva el offset original respecto
         //       al grid si el brush arranco desalineado.
-        if (m_mode == EditorMode::Editor && m_scene) {
+        //       F2H30 Bloque B: solo aplica si subMode == Object — en
+        //       Vertex/Edge mode el drag lo consume el bloque 2.4e.
+        if (m_mode == EditorMode::Editor && m_scene &&
+            m_subMode == EditorSubMode::Object) {
             OrthoViewportPanel* orthoPanels[3] = {
                 &m_ui.orthoTop(),
                 &m_ui.orthoFront(),
@@ -536,7 +541,11 @@ int EditorApplication::run() {
         //       ambos ejes del view. Snap aplica a las ESQUINAS (no al
         //       delta) -> brush queda alineado al grid. La altura sobre
         //       el eje perpendicular es default `snap * 4`.
-        if (m_mode == EditorMode::Editor && m_scene && m_orthoBlockSession.active) {
+        //       F2H30 Bloque B: solo aplica si subMode == Object — en
+        //       Vertex/Edge mode no se crean brushes nuevos al drag.
+        if (m_mode == EditorMode::Editor && m_scene &&
+            m_subMode == EditorSubMode::Object &&
+            m_orthoBlockSession.active) {
             OrthoViewportPanel* blockOrthoPanels[3] = {
                 &m_ui.orthoTop(), &m_ui.orthoFront(), &m_ui.orthoSide(),
             };
@@ -634,6 +643,265 @@ int EditorApplication::run() {
                 // Panel sin tamano valido (workspace cambio mid-drag?).
                 m_orthoBlockSession.active = false;
                 m_orthoBlockSession.previewValid = false;
+            }
+        }
+
+        // 2.4e) F2H30 Bloque B: vertex/edge edit en orto. Activa cuando
+        //       subMode == Vertex/Edge AND drag-down impacta un vertex
+        //       o edge del brush ACTIVE (single brush — solo opera sobre
+        //       activeSelection.active, no multi-edit). Mueve los planos
+        //       incidentes via `d_new = d_old - dot(n_local, delta_local)`
+        //       con `delta_local = R^-1 * delta_world`. Valida
+        //       `isBrushValid` post; si rompe, revierte. Al soltar,
+        //       pushea EditBrushGeometryCommand.
+        if (m_mode == EditorMode::Editor && m_scene &&
+            (m_subMode == EditorSubMode::Vertex ||
+             m_subMode == EditorSubMode::Edge)) {
+            OrthoViewportPanel* vertOrthoPanels[3] = {
+                &m_ui.orthoTop(),
+                &m_ui.orthoFront(),
+                &m_ui.orthoSide(),
+            };
+            // 1) Si NO hay sesion activa, ver si alguno arranco un drag.
+            if (!m_orthoVertexEdit.active) {
+                Entity activeBrush = m_ui.selectionSet().active;
+                if (activeBrush && activeBrush.hasComponent<BrushComponent>()
+                    && activeBrush.hasComponent<TransformComponent>()) {
+                    for (int i = 0; i < 3; ++i) {
+                        const auto& ds = vertOrthoPanels[i]->dragState();
+                        if (!ds.active) continue;
+                        const u32 oW = vertOrthoPanels[i]->desiredWidth();
+                        const u32 oH = vertOrthoPanels[i]->desiredHeight();
+                        if (oW == 0 || oH == 0) continue;
+                        const f32 oAspect = static_cast<f32>(oW) /
+                                             static_cast<f32>(oH);
+                        const auto& cam = vertOrthoPanels[i]->camera();
+                        const glm::mat4 oView = cam.viewMatrix();
+                        const glm::mat4 oProj = cam.projMatrix(oAspect);
+                        auto& tf = activeBrush.getComponent<TransformComponent>();
+                        const glm::mat4 worldMat = tf.worldMatrix();
+                        auto& bc = activeBrush.getComponent<BrushComponent>();
+                        std::vector<u32> incident;
+                        if (m_subMode == EditorSubMode::Vertex) {
+                            auto vp = Csg::pickVertex(bc.brush, worldMat,
+                                oView, oProj, ds.ndcStartX, ds.ndcStartY);
+                            if (!vp) continue;
+                            incident = vp->planeIndices;
+                        } else { // Edge
+                            auto ep = Csg::pickEdge(bc.brush, worldMat,
+                                oView, oProj, ds.ndcStartX, ds.ndcStartY);
+                            if (!ep) continue;
+                            incident = {ep->planeA, ep->planeB};
+                        }
+                        // Hit. Capturar snapshot de planos + transform
+                        // + pivot local del vertex/edge.
+                        m_orthoVertexEdit.active = true;
+                        m_orthoVertexEdit.orthoIdx = i;
+                        m_orthoVertexEdit.brush = activeBrush;
+                        m_orthoVertexEdit.brushTag =
+                            activeBrush.getComponent<TagComponent>().name;
+                        m_orthoVertexEdit.planesBefore.clear();
+                        m_orthoVertexEdit.planesBefore.reserve(
+                            bc.brush.faces.size());
+                        for (const auto& f : bc.brush.faces) {
+                            m_orthoVertexEdit.planesBefore.push_back(f.plane);
+                        }
+                        m_orthoVertexEdit.incidentPlanes =
+                            std::move(incident);
+                        m_orthoVertexEdit.tfPosBefore = tf.position;
+                        // Recompute pivot local (vertex pos para Vertex,
+                        // midpoint para Edge). Lo recomputamos del pick
+                        // result en lugar de cachearlo arriba para
+                        // mantener el codigo simple.
+                        if (m_subMode == EditorSubMode::Vertex) {
+                            auto vp = Csg::pickVertex(bc.brush, worldMat,
+                                oView, oProj, ds.ndcStartX, ds.ndcStartY);
+                            m_orthoVertexEdit.pivotLocalStart =
+                                vp ? vp->localPos : glm::vec3(0.0f);
+                        } else {
+                            auto ep = Csg::pickEdge(bc.brush, worldMat,
+                                oView, oProj, ds.ndcStartX, ds.ndcStartY);
+                            m_orthoVertexEdit.pivotLocalStart =
+                                ep ? 0.5f * (ep->localA + ep->localB)
+                                   : glm::vec3(0.0f);
+                        }
+                        Log::editor()->info(
+                            "[ortho:{}] {}-edit START on '{}' ({} incident planes)",
+                            cam.label(),
+                            m_subMode == EditorSubMode::Vertex ? "vertex" : "edge",
+                            m_orthoVertexEdit.brushTag,
+                            m_orthoVertexEdit.incidentPlanes.size());
+                        break;
+                    }
+                }
+            }
+            // 2) Si hay sesion activa, aplicar delta o cerrar.
+            if (m_orthoVertexEdit.active) {
+                OrthoViewportPanel* op =
+                    vertOrthoPanels[m_orthoVertexEdit.orthoIdx];
+                const auto ds = op->consumeDragEnded();
+                Entity brushEnt = m_orthoVertexEdit.brush;
+                const u32 oW = op->desiredWidth();
+                const u32 oH = op->desiredHeight();
+                if (oW > 0 && oH > 0 && brushEnt &&
+                    brushEnt.hasComponent<BrushComponent>() &&
+                    brushEnt.hasComponent<TransformComponent>()) {
+                    const f32 oAspect = static_cast<f32>(oW) /
+                                         static_cast<f32>(oH);
+                    const auto& cam = op->camera();
+                    auto& tf = brushEnt.getComponent<TransformComponent>();
+                    const glm::mat4 worldMat = tf.worldMatrix();
+                    const glm::vec3 ws = cam.worldFromNdc(
+                        ds.ndcStartX, ds.ndcStartY, oAspect);
+                    const glm::vec3 wc = cam.worldFromNdc(
+                        ds.ndcCurX, ds.ndcCurY, oAspect);
+                    const glm::vec3 deltaWorld = wc - ws;
+                    // F2H30 fix#1: snap se hace en WORLD space (no local).
+                    // El grid del workspace orto vive en world, no en local
+                    // — si el brush tiene tf.position != 0, snap en local
+                    // queda desfasado. Pivot world = tf.position + R *
+                    // pivotLocalStart. Snap world pivot. Reconvertir a
+                    // delta_local via inverse(R).
+                    //
+                    // F2H30 fix#2: solo snap los ejes que el dev MUEVE
+                    // (|deltaWorld[i]| > eps). Snap todos los ejes hace
+                    // que coords no-grid-aligned salten a 0/16/etc al
+                    // primer drag aunque el dev no las haya movido.
+                    const f32 snap = static_cast<f32>(m_hammerSnapStep);
+                    const glm::vec3 pivotWorldStart = glm::vec3(
+                        worldMat *
+                        glm::vec4(m_orthoVertexEdit.pivotLocalStart, 1.0f));
+                    glm::vec3 pivotWorldNew = pivotWorldStart + deltaWorld;
+                    if (snap > 0.0f) {
+                        for (int i = 0; i < 3; ++i) {
+                            if (std::abs(deltaWorld[i]) > 1e-4f) {
+                                pivotWorldNew[i] =
+                                    std::round(pivotWorldNew[i] / snap) * snap;
+                            } else {
+                                pivotWorldNew[i] = pivotWorldStart[i];
+                            }
+                        }
+                    }
+                    const glm::vec3 effDeltaWorld =
+                        pivotWorldNew - pivotWorldStart;
+                    const glm::mat3 rotInv =
+                        glm::inverse(glm::mat3(worldMat));
+                    const glm::vec3 effDeltaLocal = rotInv * effDeltaWorld;
+                    const glm::vec3 pivotNew =
+                        m_orthoVertexEdit.pivotLocalStart + effDeltaLocal;
+                    // Aplicar: para cada plano incidente,
+                    //   d_new = d_old_before - dot(n_local, effDeltaLocal).
+                    // Reseteamos desde `before` para idempotencia (cada
+                    // frame parte del estado pre-drag).
+                    auto& bc = brushEnt.getComponent<BrushComponent>();
+                    for (usize i = 0; i < bc.brush.faces.size(); ++i) {
+                        bc.brush.faces[i].plane = m_orthoVertexEdit.planesBefore[i];
+                    }
+                    for (u32 pIdx : m_orthoVertexEdit.incidentPlanes) {
+                        if (pIdx >= bc.brush.faces.size()) continue;
+                        Plane& pl = bc.brush.faces[pIdx].plane;
+                        pl.distance -= glm::dot(pl.normal, effDeltaLocal);
+                    }
+                    // Validar: si el AABB resulta degenerada, revertir.
+                    const AABB newAabb = Csg::computeBrushAabb(bc.brush);
+                    const bool valid = newAabb.isValid() &&
+                        (newAabb.max.x - newAabb.min.x > kPlaneEpsilon) &&
+                        (newAabb.max.y - newAabb.min.y > kPlaneEpsilon) &&
+                        (newAabb.max.z - newAabb.min.z > kPlaneEpsilon);
+                    if (!valid) {
+                        // Revert.
+                        for (usize i = 0; i < bc.brush.faces.size(); ++i) {
+                            bc.brush.faces[i].plane = m_orthoVertexEdit.planesBefore[i];
+                        }
+                    } else {
+                        bc.brush.localAabb = newAabb;
+                    }
+                    bc.dirty = true;
+                    if (ds.justEnded) {
+                        // F2H30 fix: REBASEAR brush al nuevo centroide
+                        // (mismo patron que F2H12 snapshotResultWorld).
+                        // Sin rebasing, el origen del entity (gizmo) queda
+                        // en el centro VIEJO mientras la geometria se
+                        // movio. Calculamos new centroid en local, lo
+                        // restamos a cada plane.distance, y trasladamos
+                        // tf.position por R * newCentroid (preserva la
+                        // posicion world del mesh).
+                        const glm::vec3 newCentroidLocal =
+                            bc.brush.localAabb.center();
+                        for (auto& f : bc.brush.faces) {
+                            f.plane.distance += glm::dot(
+                                f.plane.normal, newCentroidLocal);
+                        }
+                        bc.brush.localAabb = Csg::computeBrushAabb(bc.brush);
+                        const glm::mat3 rotMat(worldMat);
+                        const glm::vec3 newTfPos =
+                            m_orthoVertexEdit.tfPosBefore
+                            + rotMat * newCentroidLocal;
+                        // Capturar `after` planes (post-rebase).
+                        std::vector<Plane> afterPlanes;
+                        afterPlanes.reserve(bc.brush.faces.size());
+                        for (const auto& f : bc.brush.faces) {
+                            afterPlanes.push_back(f.plane);
+                        }
+                        // Revert al before (planes + transform) antes del
+                        // push (mismo patron que MultiEditTransformCommand
+                        // drag-edit) — execute() re-aplica el after.
+                        for (usize i = 0; i < bc.brush.faces.size(); ++i) {
+                            bc.brush.faces[i].plane = m_orthoVertexEdit.planesBefore[i];
+                        }
+                        tf.position = m_orthoVertexEdit.tfPosBefore;
+                        bc.brush.localAabb = Csg::computeBrushAabb(bc.brush);
+                        auto cmd = std::make_unique<EditBrushGeometryCommand>(
+                            m_scene.get(), m_orthoVertexEdit.brushTag,
+                            m_orthoVertexEdit.planesBefore,
+                            std::move(afterPlanes),
+                            m_orthoVertexEdit.tfPosBefore,
+                            newTfPos,
+                            m_subMode == EditorSubMode::Vertex
+                                ? std::string("Mover vertex de brush")
+                                : std::string("Mover edge de brush"));
+                        if (!cmd->isNoOp()) {
+                            Log::editor()->info(
+                                "[ortho:{}] {}-edit END push on '{}' [snap={}u]\n"
+                                "  pivotLocalStart =({:.3f}, {:.3f}, {:.3f})\n"
+                                "  pivotWorldStart =({:.3f}, {:.3f}, {:.3f})\n"
+                                "  deltaWorld_raw  =({:.3f}, {:.3f}, {:.3f})\n"
+                                "  pivotWorldNew   =({:.3f}, {:.3f}, {:.3f}) [snapped]\n"
+                                "  effDeltaWorld   =({:.3f}, {:.3f}, {:.3f})\n"
+                                "  effDeltaLocal   =({:.3f}, {:.3f}, {:.3f})\n"
+                                "  newCentroidLocal=({:.3f}, {:.3f}, {:.3f})\n"
+                                "  tfPosBefore     =({:.3f}, {:.3f}, {:.3f})\n"
+                                "  tfPosAfter      =({:.3f}, {:.3f}, {:.3f})",
+                                cam.label(),
+                                m_subMode == EditorSubMode::Vertex ? "vertex" : "edge",
+                                m_orthoVertexEdit.brushTag, m_hammerSnapStep,
+                                m_orthoVertexEdit.pivotLocalStart.x,
+                                m_orthoVertexEdit.pivotLocalStart.y,
+                                m_orthoVertexEdit.pivotLocalStart.z,
+                                pivotWorldStart.x, pivotWorldStart.y, pivotWorldStart.z,
+                                deltaWorld.x, deltaWorld.y, deltaWorld.z,
+                                pivotWorldNew.x, pivotWorldNew.y, pivotWorldNew.z,
+                                effDeltaWorld.x, effDeltaWorld.y, effDeltaWorld.z,
+                                effDeltaLocal.x, effDeltaLocal.y, effDeltaLocal.z,
+                                newCentroidLocal.x, newCentroidLocal.y, newCentroidLocal.z,
+                                m_orthoVertexEdit.tfPosBefore.x,
+                                m_orthoVertexEdit.tfPosBefore.y,
+                                m_orthoVertexEdit.tfPosBefore.z,
+                                newTfPos.x, newTfPos.y, newTfPos.z);
+                            m_history.push(std::move(cmd));
+                        }
+                        m_orthoVertexEdit.active = false;
+                        m_orthoVertexEdit.brush = Entity{};
+                        m_orthoVertexEdit.planesBefore.clear();
+                        m_orthoVertexEdit.incidentPlanes.clear();
+                    }
+                } else {
+                    // Brush invalido / panel sin tamano: cerrar sesion.
+                    m_orthoVertexEdit.active = false;
+                    m_orthoVertexEdit.brush = Entity{};
+                    m_orthoVertexEdit.planesBefore.clear();
+                    m_orthoVertexEdit.incidentPlanes.clear();
+                }
             }
         }
 

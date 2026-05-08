@@ -258,21 +258,38 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
         if (ImGui::IsKeyPressed(ImGuiKey_W, false)) m_gizmoMode = GizmoMode::Translate;
         if (ImGui::IsKeyPressed(ImGuiKey_E, false)) m_gizmoMode = GizmoMode::Rotate;
         if (ImGui::IsKeyPressed(ImGuiKey_R, false)) m_gizmoMode = GizmoMode::Scale;
-        // F2H17: tecla 3 toggle Face Mode. Esc vuelve a Object.
-        // ImGuiKey_3 es la fila superior; ImGuiKey_Keypad3 es numpad.
-        // Aceptamos ambas para no fallar segun el layout.
-        const bool key3 = ImGui::IsKeyPressed(ImGuiKey_3, false) ||
-                            ImGui::IsKeyPressed(ImGuiKey_Keypad3, false);
-        if (key3) {
-            m_subMode = (m_subMode == EditorSubMode::Face)
+        // F2H17 + F2H30: teclas 1/2/3 toggle sub-modo Vertex/Edge/Face.
+        // Esc vuelve a Object. ImGuiKey_N es la fila superior;
+        // ImGuiKey_KeypadN es numpad. Aceptamos ambas para no fallar
+        // segun el layout.
+        auto toggleSubMode = [&](EditorSubMode target) {
+            m_subMode = (m_subMode == target)
                 ? EditorSubMode::Object
-                : EditorSubMode::Face;
+                : target;
             if (m_subMode == EditorSubMode::Object) {
                 m_ui.selectionSet().activeFaceIndex = -1;
             }
-            Log::editor()->info("Sub-mode: {}",
-                m_subMode == EditorSubMode::Face ? "Face" : "Object");
-        }
+            const char* label = "Object";
+            switch (m_subMode) {
+                case EditorSubMode::Vertex: label = "Vertex"; break;
+                case EditorSubMode::Edge:   label = "Edge";   break;
+                case EditorSubMode::Face:   label = "Face";   break;
+                case EditorSubMode::Object: label = "Object"; break;
+            }
+            Log::editor()->info("Sub-mode: {}", label);
+        };
+        // F2H30: tecla 1 -> Vertex Mode.
+        const bool key1 = ImGui::IsKeyPressed(ImGuiKey_1, false) ||
+                            ImGui::IsKeyPressed(ImGuiKey_Keypad1, false);
+        if (key1) toggleSubMode(EditorSubMode::Vertex);
+        // F2H30: tecla 2 -> Edge Mode.
+        const bool key2 = ImGui::IsKeyPressed(ImGuiKey_2, false) ||
+                            ImGui::IsKeyPressed(ImGuiKey_Keypad2, false);
+        if (key2) toggleSubMode(EditorSubMode::Edge);
+        // F2H17: tecla 3 -> Face Mode.
+        const bool key3 = ImGui::IsKeyPressed(ImGuiKey_3, false) ||
+                            ImGui::IsKeyPressed(ImGuiKey_Keypad3, false);
+        if (key3) toggleSubMode(EditorSubMode::Face);
         if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) &&
             m_subMode != EditorSubMode::Object) {
             m_subMode = EditorSubMode::Object;

@@ -6,6 +6,7 @@
 
 #include "core/Time.h"
 #include "core/Types.h"
+#include "core/math/Plane.h"  // F2H30 Bloque B: snapshot pre/post de planos
 #include "editor/application/EditorMode.h"
 #include "editor/ui/EditorUI.h"
 #include "editor/commands/HistoryStack.h"
@@ -23,6 +24,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <string>  // F2H30 Bloque B: brushTag en OrthoVertexEditSession.
 #include <utility>  // F2H29 Bloque B: std::pair en OrthoDragSession.
 #include <vector>
 
@@ -407,6 +409,31 @@ private:
     ///        primitivas del menu Brush > Anadir > Box). Usado por el
     ///        block tool del workspace "Editor de mapas".
     void spawnBoxBrushAt(const glm::mat4& transform);
+
+    /// @brief F2H30 Bloque B: sesion de vertex/edge edit en orto.
+    ///        Activa cuando el LMB-down en Vertex/Edge sub-mode
+    ///        impacta un vertex/edge del brush active. Captura los
+    ///        planos pre + lista de planos a mutar (3 para vertex,
+    ///        2 para edge). Cada frame aplica delta_world a los
+    ///        planos via `d_new = d_old - dot(n, delta_local)` con
+    ///        `delta_local = R^-1 * delta_world` (inverso de la
+    ///        rotacion del worldMatrix). Al soltar pushea
+    ///        EditBrushGeometryCommand.
+    struct OrthoVertexEditSession {
+        bool active = false;
+        int  orthoIdx = -1;
+        Entity brush;                    // entidad con BrushComponent
+        std::string brushTag;             // para el command (robusto a remap)
+        std::vector<Plane> planesBefore;  // snapshot de TODAS las caras
+        std::vector<u32>   incidentPlanes; // que planos mutar
+        glm::vec3 tfPosBefore{0.0f};      // snapshot del transform.position
+        // F2H30 Bloque B: pivot inicial del vertex/edge en LOCAL space
+        // del brush. Para Vertex es la posicion del vertex; para Edge
+        // es el midpoint del edge. Usado para snap ABSOLUTO al grid:
+        // pivotNew = round((pivotStart + delta_local) / snap) * snap.
+        glm::vec3 pivotLocalStart{0.0f};
+    };
+    OrthoVertexEditSession m_orthoVertexEdit;
 
     // Dimensiones del AABB del jugador (0.6 x 1.8 x 0.6 m). Centrado en la
     // posicion de la camara FPS. Escala SI realista: una persona promedio.

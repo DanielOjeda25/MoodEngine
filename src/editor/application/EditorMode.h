@@ -17,16 +17,16 @@ enum class EditorMode {
 ///        SOLO cuando EditorMode == Editor; en Play Mode siempre
 ///        es Object implicito.
 ///
-///        Toggle con teclas:
-///        - `1` (vertex), `2` (edge): RESERVADAS, no implementadas
-///          todavia. Reservadas explicitamente para no romper la
-///          mental model del dev cuando lleguen.
-///        - `3`: Face Mode.
+///        Toggle con teclas (mismo orden que Blender):
+///        - `1`: Vertex Mode (F2H30).
+///        - `2`: Edge Mode (F2H30).
+///        - `3`: Face Mode (F2H17).
 ///        - `Esc`: vuelve a Object Mode.
 enum class EditorSubMode {
     Object,  // Default: pickea brushes enteros, gizmo de transform.
+    Vertex,  // F2H30: pickea + mueve vertices del brush activo.
+    Edge,    // F2H30: pickea + mueve edges del brush activo.
     Face,    // F2H17: pickea caras individuales del brush activo.
-    // Vertex, Edge — futuros.
 };
 
 /// @brief Acciones de proyecto que la UI solicita y EditorApplication atiende.

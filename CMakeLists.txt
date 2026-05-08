@@ -439,6 +439,7 @@ add_executable(MoodEditor
     src/editor/commands/BooleanOpCommand.cpp
     src/editor/commands/EditBrushMaterialCommand.cpp
     src/editor/commands/EditBrushFaceMaterialCommand.cpp
+    src/editor/commands/EditBrushGeometryCommand.cpp
     src/editor/commands/EditBrushUVCommand.cpp
     src/editor/commands/SetTileCommand.cpp
     src/editor/commands/EditMeshRendererMaterialCommand.cpp

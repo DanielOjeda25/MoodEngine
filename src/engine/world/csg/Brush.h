@@ -110,4 +110,55 @@ std::optional<u32> pickFace(const Brush& brush,
                               const glm::vec3& rayDir,
                               const glm::mat4& worldMatrix = glm::mat4(1.0f));
 
+/// @brief F2H30 Bloque B: enumera vertices unicos del brush con sus
+///        planos incidentes. Triple loop intersectThreePlanes + filter
+///        contra otros planos + dedup por proximidad. Para vertices
+///        donde > 3 planos coinciden (ej. cilindro con cap y N caras
+///        laterales en el polo), agrega TODOS los planos al vertex
+///        unificado. Vacio para brushes degenerados (< 4 caras).
+struct BrushVertex {
+    glm::vec3 localPos{0.0f};
+    std::vector<u32> planeIndices;
+};
+std::vector<BrushVertex> enumerateBrushVertices(const Brush& brush);
+
+/// @brief F2H30 Bloque B: vertex picking de un brush en screen space
+///        (NDC). Util para Vertex Mode del editor de mapas — picking
+///        contra el grid de vertices en lugar de raycast volumetrico.
+///        Algoritmo: enumera vertices unicos del brush (triple loop
+///        intersectThreePlanes + filter + dedup), proyecta cada uno a
+///        NDC via worldMatrix * view * projection, devuelve el mas
+///        cercano dentro del `thresholdNdc` (default ~4 px en viewport
+///        720p). Tambien registra los planos incidentes para que el
+///        drag pueda mutarlos manteniendo isBrushValid.
+struct VertexPick {
+    glm::vec3 worldPos{0.0f};
+    glm::vec3 localPos{0.0f};
+    std::vector<u32> planeIndices;  // 3 para box; mas para cylinder/etc.
+};
+std::optional<VertexPick> pickVertex(const Brush& brush,
+                                       const glm::mat4& worldMatrix,
+                                       const glm::mat4& view,
+                                       const glm::mat4& projection,
+                                       f32 ndcX, f32 ndcY,
+                                       f32 thresholdNdc = 0.04f);
+
+/// @brief F2H30 Bloque B: edge picking de un brush en screen space.
+///        Edge = interseccion de exactamente 2 caras. Para cada par
+///        (i, j) de caras, encuentra vertices que esten en AMBAS;
+///        si son exactamente 2, es un edge. Proyecta endpoints a NDC,
+///        computa distancia punto-segmento. Devuelve el edge mas
+///        cercano dentro del `thresholdNdc`.
+struct EdgePick {
+    glm::vec3 worldA{0.0f}, worldB{0.0f};
+    glm::vec3 localA{0.0f}, localB{0.0f};
+    u32 planeA = 0, planeB = 0;  // los 2 planos compartidos por el edge.
+};
+std::optional<EdgePick> pickEdge(const Brush& brush,
+                                   const glm::mat4& worldMatrix,
+                                   const glm::mat4& view,
+                                   const glm::mat4& projection,
+                                   f32 ndcX, f32 ndcY,
+                                   f32 thresholdNdc = 0.04f);
+
 } // namespace Mood::Csg
