@@ -276,6 +276,11 @@ add_library(mood_engine_lib STATIC
     src/platform/VFS.cpp
 
     src/engine/assets/manager/AssetManager.cpp
+    src/engine/assets/manager/AssetManager_Texture.cpp
+    src/engine/assets/manager/AssetManager_Audio.cpp
+    src/engine/assets/manager/AssetManager_Mesh.cpp
+    src/engine/assets/manager/AssetManager_Prefab.cpp
+    src/engine/assets/manager/AssetManager_Material.cpp
     src/engine/assets/loaders/MeshLoader.cpp
     src/engine/assets/primitives/PrimitiveMeshes.cpp
     src/engine/assets/loaders/stb_impl.cpp
