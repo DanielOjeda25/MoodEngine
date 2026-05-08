@@ -3,6 +3,7 @@
 #include "editor/commands/EditBrushUVCommand.h"  // F2H16: BrushUVSnapshot
 #include "editor/panels/IPanel.h"
 #include "editor/panels/scene/InspectorEditTracker.h"
+#include "engine/scene/core/Entity.h"  // F2H24: secciones de render reciben Entity
 
 namespace Mood {
 
@@ -39,6 +40,25 @@ public:
     bool isEditingBrushUV() const { return m_uvSnapshotValid; }
 
 private:
+    // F2H24: secciones de render extraidas a archivos parciales
+    // (InspectorPanel_*.cpp). Cada una opera sobre `e` y los miembros
+    // `m_ui` / `m_assets` / `m_editTracker` / `m_editedThisFrame`.
+    // Privadas: la API publica del panel sigue siendo solo
+    // `onImGuiRender` + `consumeEditedFlag` + `isEditingBrushUV`.
+    void renderTagSection(Entity e);
+    void renderTransformSection(Entity e);
+    void renderMeshRendererSection(Entity e);
+    void renderCameraSection(Entity e);
+    void renderLightSection(Entity e);
+    void renderEnvironmentSection(Entity e);
+    void renderScriptSection(Entity e);
+    void renderRigidBodySection(Entity e);
+    void renderAudioSourceSection(Entity e);
+    void renderAnimatorSection(Entity e);
+    void renderParticleEmitterSection(Entity e);
+    void renderTriggerSection(Entity e);
+    void renderBrushSection(Entity e);
+
     EditorUI* m_ui = nullptr;
     AssetManager* m_assets = nullptr;
     bool m_editedThisFrame = false;

@@ -422,6 +422,16 @@ add_executable(MoodEditor
     src/editor/commands/EditScriptComponentCommand.cpp
     src/editor/panels/scene/ViewportPanel.cpp
     src/editor/panels/scene/InspectorPanel.cpp
+    src/editor/panels/scene/InspectorPanel_Misc.cpp
+    src/editor/panels/scene/InspectorPanel_Transform.cpp
+    src/editor/panels/scene/InspectorPanel_MeshRenderer.cpp
+    src/editor/panels/scene/InspectorPanel_Light.cpp
+    src/editor/panels/scene/InspectorPanel_Script.cpp
+    src/editor/panels/scene/InspectorPanel_Physics.cpp
+    src/editor/panels/scene/InspectorPanel_Audio.cpp
+    src/editor/panels/scene/InspectorPanel_Animation.cpp
+    src/editor/panels/scene/InspectorPanel_Particles.cpp
+    src/editor/panels/scene/InspectorPanel_Brush.cpp
     src/editor/panels/assets/AssetBrowserPanel.cpp
     src/editor/panels/debug/ConsolePanel.cpp
     src/editor/panels/scene/HierarchyPanel.cpp
