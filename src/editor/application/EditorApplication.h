@@ -355,6 +355,14 @@ private:
     ///        hitos futuros. Esc vuelve a Object Mode.
     EditorSubMode m_subMode = EditorSubMode::Object;
 
+    /// @brief F2H28 Bloque G: snap step (en world units) de los viewports
+    ///        ortograficos del workspace "Editor de mapas". Cycleable con
+    ///        Ctrl + + / Ctrl + - en valores [1, 2, 4, 8, 16, 32, 64, 128].
+    ///        Default 16 (convencion Hammer). Solo aplica cuando el
+    ///        workspace activo es "Editor de mapas"; otros workspaces no
+    ///        consumen el atajo.
+    u32 m_hammerSnapStep = 16u;
+
     // Dimensiones del AABB del jugador (0.6 x 1.8 x 0.6 m). Centrado en la
     // posicion de la camara FPS. Escala SI realista: una persona promedio.
     // El half-extent 0.3 m es muy superior al near clipping plane (0.1 m)

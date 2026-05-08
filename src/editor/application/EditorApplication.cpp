@@ -113,6 +113,36 @@ void EditorApplication::processEvents() {
                    !ImGui::GetIO().WantTextInput) {
             // Hito 27: Ctrl+Y o Ctrl+Shift+Z rehace.
             m_history.redo();
+        } else if (ev.type == SDL_KEYDOWN &&
+                   (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
+                   (ev.key.keysym.sym == SDLK_EQUALS ||
+                    ev.key.keysym.sym == SDLK_KP_PLUS ||
+                    ev.key.keysym.sym == SDLK_MINUS  ||
+                    ev.key.keysym.sym == SDLK_KP_MINUS) &&
+                   ev.key.repeat == 0 &&
+                   m_mode == EditorMode::Editor &&
+                   m_ui.workspaceManager().activeWorkspace().name
+                       == "Editor de mapas" &&
+                   !ImGui::GetIO().WantTextInput) {
+            // F2H28 Bloque G: ciclar snap step del workspace orto.
+            // Acepta Ctrl+= (= produce + con shift, pero la tecla fisica
+            // es =) Y Ctrl+ KP_PLUS / Ctrl+- / Ctrl+ KP_MINUS. Ignora
+            // el shift en la modifier mask asi Ctrl++ y Ctrl+= entran
+            // por el mismo branch.
+            static constexpr u32 k_steps[] = {1u, 2u, 4u, 8u, 16u,
+                                                32u, 64u, 128u};
+            constexpr int k_stepsCount =
+                static_cast<int>(sizeof(k_steps) / sizeof(k_steps[0]));
+            int idx = 4; // default 16
+            for (int i = 0; i < k_stepsCount; ++i) {
+                if (k_steps[i] == m_hammerSnapStep) { idx = i; break; }
+            }
+            const bool up = (ev.key.keysym.sym == SDLK_EQUALS ||
+                              ev.key.keysym.sym == SDLK_KP_PLUS);
+            if (up && idx + 1 < k_stepsCount) ++idx;
+            if (!up && idx - 1 >= 0) --idx;
+            m_hammerSnapStep = k_steps[idx];
+            Log::editor()->info("[hammer] snap step -> {}", m_hammerSnapStep);
         }
     }
 }

@@ -29,6 +29,11 @@ public:
     /// FBO al que el SceneRenderer escribe esta vista cada frame.
     void setFramebuffer(IFramebuffer* fb) { m_framebuffer = fb; }
 
+    /// F2H28 Bloque G: snap step actual (en world units) para que el
+    /// panel lo muestre como label "Grid: Nu" arriba-derecha. El state
+    /// real vive en EditorApplication; el caller lo inyecta cada frame.
+    void setSnapStep(u32 step) { m_snapStep = step; }
+
     /// Tamano deseado en pixeles. EditorApplication lo lee y resize
     /// el FBO al frame siguiente si difiere del actual.
     u32 desiredWidth() const { return m_desiredWidth; }
@@ -58,6 +63,7 @@ private:
     IFramebuffer* m_framebuffer = nullptr;
     u32 m_desiredWidth = 0;
     u32 m_desiredHeight = 0;
+    u32 m_snapStep = 16u;  // F2H28 Bloque G: solo display en label.
 
     bool m_panDragging = false;
 

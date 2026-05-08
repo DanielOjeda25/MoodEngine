@@ -48,9 +48,9 @@ constexpr glm::vec3 k_wireframeColor{108.0f / 255.0f,
 constexpr glm::vec3 k_selectedColor {255.0f / 255.0f,
                                       153.0f / 255.0f,
                                        51.0f / 255.0f};
-// F2H28 Bloque E: snap default 16 unidades. F2H28 Bloque G expone esto
-// como state editable + atajo Ctrl++/Ctrl+-; aca queda hardcodeado.
-constexpr float k_defaultSnapStep = 16.0f;
+// F2H28 Bloque G: snap se recibe como parametro de renderOrthoView
+// (state vive en EditorApplication::m_hammerSnapStep, cycleable con
+// Ctrl++/Ctrl+-).
 constexpr glm::vec3 k_gridBgColor   {0.0f, 0.0f, 0.0f};
 constexpr glm::vec3 k_gridMinorColor{40.0f / 255.0f,
                                       40.0f / 255.0f,
@@ -80,6 +80,7 @@ void SceneRenderer::renderOrthoView(Scene& scene,
                                      const glm::mat4& projection,
                                      glm::vec2 panOffset,
                                      f32 worldHeight,
+                                     f32 snapStep,
                                      u32 panelWidth,
                                      u32 panelHeight,
                                      usize idx,
@@ -125,7 +126,7 @@ void SceneRenderer::renderOrthoView(Scene& scene,
         m_grid2dShader->setVec2 ("uPanOffset",   panOffset);
         m_grid2dShader->setFloat("uWorldHeight", worldHeight);
         m_grid2dShader->setFloat("uAspect",      aspect);
-        m_grid2dShader->setFloat("uSnapStep",    k_defaultSnapStep);
+        m_grid2dShader->setFloat("uSnapStep",    snapStep);
         m_grid2dShader->setVec3 ("uBgColor",     k_gridBgColor);
         m_grid2dShader->setVec3 ("uMinorColor",  k_gridMinorColor);
         m_grid2dShader->setVec3 ("uMajorColor",  k_gridMajorColor);

@@ -79,6 +79,7 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     const auto& activeWs = m_ui.workspaceManager().activeWorkspace();
     if (activeWs.name == "Editor de mapas") {
         const std::vector<Entity>& selected = m_ui.selectionSet().selected;
+        const f32 snapStep = static_cast<f32>(m_hammerSnapStep);
         OrthoViewportPanel* orthoPanels[3] = {
             &m_ui.orthoTop(),
             &m_ui.orthoFront(),
@@ -96,9 +97,12 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                                               oView, oProj,
                                               op->camera().panOffset,
                                               op->camera().worldHeight,
+                                              snapStep,
                                               oW, oH, i, selected);
-            // Conectar el FBO al panel ANTES del proximo onImGuiRender.
+            // Conectar el FBO al panel ANTES del proximo onImGuiRender +
+            // sincronizar el snap para el label "Grid: Nu" arriba-derecha.
             op->setFramebuffer(m_sceneRenderer->orthoFb(i));
+            op->setSnapStep(m_hammerSnapStep);
         }
     }
 }

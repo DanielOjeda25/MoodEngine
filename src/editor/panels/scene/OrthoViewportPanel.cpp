@@ -5,6 +5,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <cstdio>
 
 namespace Mood {
 
@@ -62,6 +63,18 @@ void OrthoViewportPanel::onImGuiRender() {
         ImDrawList* dlText = ImGui::GetWindowDrawList();
         dlText->AddText(ImVec2(imageMin.x + 6.0f, imageMin.y + 4.0f),
                          k_orangeValve, name());
+
+        // F2H28 Bloque G: label "Grid: Nu" arriba-derecha mostrando el
+        // snap step actual. El state vive en EditorApplication; aca solo
+        // lo formateamos. Mismo color naranja que el label de la vista
+        // para consistencia visual.
+        char gridLabel[32];
+        std::snprintf(gridLabel, sizeof(gridLabel),
+                       "Grid: %uu", m_snapStep);
+        const ImVec2 gridLabelSize = ImGui::CalcTextSize(gridLabel);
+        dlText->AddText(ImVec2(imageMin.x + imageSize.x - gridLabelSize.x - 6.0f,
+                                imageMin.y + 4.0f),
+                         k_orangeValve, gridLabel);
 
         if (!hasFb) {
             ImGui::End();

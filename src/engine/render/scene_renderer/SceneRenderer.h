@@ -111,6 +111,7 @@ public:
                          const glm::mat4& projection,
                          glm::vec2 panOffset,
                          f32 worldHeight,
+                         f32 snapStep,
                          u32 panelWidth,
                          u32 panelHeight,
                          usize idx,
