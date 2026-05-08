@@ -3901,3 +3901,62 @@ Total ~ 1-2 semanas de hito grande.
 - El dev pide deshabilitar la migración (workspaces con nombres custom que coinciden con los viejos). Improbable — los 4 nombres viejos son hardcoded del editor F2H7.
 - El dev pide que el editor recuerde el último workspace al cerrar/abrir (en lugar de siempre Modelar). Compromiso entre "predecible" y "respetar el flow del dev". Si emerge, agregar toggle en preferencias del proyecto.
 - El polish UX general continuo identifica más fricciones (Inspector / Hierarchy / Console / StatusBar). Hito propio cuando emerja presión.
+
+## 2026-05-07: F2H23 — pase polish UX con 5 iteraciones de feedback en vivo + multi-edit Transform agrupado
+
+**Contexto:** Tras cerrar F2H22 (rework UX con renames de workspaces + Toolbar + AssetBrowser tabs), el dev pidió continuar el polish sobre 4 panels que F2H22 no había tocado: Inspector / Hierarchy / Console / StatusBar. F2H23 lo cubre con el patrón heredado de F2H16/F2H19 — auditoría con subagente → lista priorizada → fixes acotados.
+
+**Decisión clave:** **scope cerrado tras Bloque B** (auditoría) + **5 iteraciones de polish post-validación** durante Bloque F. Cada iteración emergió 2-3 bugs UX nuevos que el subagente no podía predecir sin uso real (tabs cruzados, panels que se mezclan al cambiar workspace, multi-edit que no funciona desde viewport, etc.). Sin abrir hitos nuevos por cada iteración — el plan F2H23 deliberadamente dejó scope acotado para permitir 5 iteraciones sin explotar.
+
+**Auditoría inicial (Bloque B):** 32 ítems totales (13 ALTA / 13 MEDIA / 6 BAJA). Scope cerrado en 17 (13 ALTA + 4 MEDIA críticos):
+
+- Inspector: helpMarker `(?)` con tooltip, SeparatorText × 9 componentes, drop targets con highlight verde durante drag activo (`isDragActiveOfType`), tooltips Transform.
+- Hierarchy: iconos ASCII por tipo `[M]/[B]/[L]/[A]/[S]/[T]/[C]/[P]`, hint shortcuts arriba con tooltip, warning >5000 entidades.
+- Console: popup confirmación Limpiar, leyenda completa de niveles con `(?)`, input filtro ancho dinámico, counter de líneas filtradas.
+- StatusBar: FPS coloreado por rango, modo Play/Editor con color, "Ultimo:" → "Ultimo comando:".
+
+**5 iteraciones de polish (las realmente importantes):**
+
+1. **Iter 1 — multi-edit Transform en Inspector + tabs cruzados**:
+   - Inspector con multi-edit: delta del active aplicado a todas las del SelectionSet usando `IsItemActivated`/`IsItemDeactivatedAfterEdit`.
+   - DragFloat3 con `FramePadding(6,6)` para clickeabilidad.
+   - Cada workspace dockea solo sus panels (Script Editor ya no aparece como tab cruzado en Layout).
+
+2. **Iter 2 — workspace Optimizar fuera + nombres + Floor**:
+   - Optimizar eliminado (era para benchmark Fase 1, no flujo cotidiano del dev). 3 workspaces ahora: Layout/Programar/Materiales.
+   - "Modelar" → "Layout" (revert F2H22, pedido explícito del dev).
+   - Hierarchy panel name() → "Escena" (más descriptivo + castellano consistente).
+   - Floor default 16×16/tile=3 → 8×8/tile=1.5 (Floor 12×12m). Antes 48×48m hacía que un brush 1m se viera diminuto.
+   - WorkspaceManager filtra workspaces obsoletos al cargar `.moodproj` viejos + completa con defaults si lista incompleta.
+
+3. **Iter 3 — bugs operacionales**:
+   - SmallButton "R" en lugar de "Recargar" grande en AssetBrowser.
+   - EditorCamera radio default 30 → 12m (consistente con Floor más chico).
+   - **Workspace switch SIEMPRE aplica visibility default** (no solo primera vez). Antes los panels "se mezclaban" al cambiar entre workspaces porque el iniLayout custom pisaba la visibility. Tradeoff aceptado: predecible > customización persistente. La customización del dev en un workspace persiste durante la sesión actual, pero al volver desde otro workspace vuelve al default.
+   - Hierarchy invierte modifiers a **Maya-style**: Shift=ADD, Ctrl=TOGGLE (antes era Blender-style Shift=toggle/Ctrl=add). Pedido del dev: *"shift seleccionar ambos y de ahí mover"*.
+
+4. **Iter 4 — layout default columna derecha**:
+   - Layout default reescrito: columna derecha unificada (Escena arriba + Inspector abajo 50/50), Viewport ocupa centro completo, Toolbar franja izquierda. Antes Escena izq + Inspector der consumían 2 columnas.
+   - `finalizeGizmoDrag` aplica delta del gizmo a todas las del SelectionSet AL SOLTAR — pero las "demás" saltaban visualmente al final, no se movían en vivo.
+
+5. **Iter 5 — los 3 bugs reales del flow viewport (la crítica)**:
+   - **(a) Drag visual no en vivo**: el dev veía solo el active moverse durante el drag y las demás saltaban al soltar. FIX: snapshot `otherStarts` (entidades extra del SelectionSet) al iniciar drag con sus startValues del Field correspondiente. Cada frame del drag aplica el delta del active a TODAS las demás en vivo. Aplica a Translate / Rotate / Scale (per-axis y uniform). Helpers `readTransformField` / `writeTransformField` (con clamp para Scale).
+   - **(b) Ctrl+Z no agrupado**: el HistoryStack solo recibía el active. FIX: nuevo `MultiEditTransformCommand` (`editor/commands/MultiEditTransformCommand.{h,cpp}`, ~95 LOC) que encapsula `vector<{Entity, before, after}>` compartiendo el mismo Field. `execute()`/`undo()` iteran y aplican. `isNoOp` si todas las entries son nearlyEqual. Resilience con `valid()` chequeo por entry. `finalizeGizmoDrag` construye el `MultiEditTransformCommand` cuando `otherStarts` no está vacío; sino fallback al `EditTransformCommand` single. Push del command revierte primero todos los transforms al `startValue` para que `execute()` re-aplique sin doble-aplicación.
+   - **(c) Shift+click en viewport no acumulaba**: el path de pickEntity en `EditorApplication::run()` ya tenía lógica F2H13 con `keyShift` y `keyCtrl` — pero usaba el orden viejo (Blender-style). FIX: invertir a Shift=ADD / Ctrl=TOGGLE para consistencia con HierarchyPanel. Logs explícitos en cada path: "[viewport] Shift+click ADD '...' (selected=N)".
+   - Validación visual end-to-end: log muestra "[viewport] Shift+click ADD 'Brush_Cyl_01' (selected=2)" + "[gizmo multi-edit] push MultiEditTransformCommand: 3 entidades, field=0/1/2" probando los 3 modos. **Dev confirmó: "funciona"**.
+
+**Suite resultante:** **610/8359** verde sin regresiones. Tests del WorkspaceManager actualizados al schema 3-default + filtro de workspace obsoleto. UI pura (Inspector / Hierarchy / Console / StatusBar) no testeable sin GL — validación visual del dev al cierre de cada iteración.
+
+**Limpieza assets:** pack `kenney_survival` (82 meshes externos) eliminado del repo. Quedan 5 demos básicos (CesiumMan/Fox/cube_mtl/pyramid). Pedido del dev: *"5 nomás, más adelante los usuarios podrán descargar sus meshes"*.
+
+**Alternativas descartadas:**
+- **Refactor profundo de los panels** (rework completo): scope masivo. F2H23 atacó solo fricciones identificadas en uso real con auditoría dirigida.
+- **MultiEdit con commits visibles solo al final** (iter 4 approach): el dev confirmó que NO funciona cuando las demás "saltan" al soltar. La versión en vivo (iter 5) es necesaria.
+- **CompoundCommand genérico** para agrupar N commands cualesquiera: scope mayor que `MultiEditTransformCommand` específico para Transform. Diferido a hito futuro si emerge necesidad de agrupar otros tipos de commands (ej. crear+mover+pintar como un solo undo).
+- **FontAwesome para iconos image-based**: deuda explícita F2H22 que F2H23 NO ataca. Hito chico futuro.
+
+**Revisar si:**
+- El dev encuentra más fricciones tras uso real prolongado (iter 6+): atender en hito propio si pasan las 3 iteraciones del polish.
+- El dev pide que la customización de visibility por workspace persista entre switches: agregar toggle "modo predecible / modo customizable" en preferencias.
+- Los archivos grandes empiezan a frenar el desarrollo: F2H24 resuelve esto (split por dominio).
+- El gizmo de rotación con multi-selección revela bugs sutiles (rotación se aplica per-entity sin pivot común — esperado pero documentar si emerge confusión).

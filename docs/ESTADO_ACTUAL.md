@@ -6,6 +6,49 @@
 
 ## 1. ¿Dónde estamos?
 
+**🚀 Fase 2 — F2H23 cerrado: Pase polish UX continuo (Inspector / Escena / Console / StatusBar + ajustes workspaces + multi-edit Transform con undo agrupado).**
+Tag: `v1.14.0-fase2-hito23`.
+Verificado automático: suite doctest **610/8359** verde sin regresiones (UI pura — no hay tests nuevos en F2H23 más allá del schema 3-workspace del WorkspaceManager). Verificado por el dev a ojo + log: shift+click acumula selección desde Hierarchy Y desde Viewport; arrastre del gizmo en multi-selección mueve TODAS las entidades en vivo (no solo el active); Ctrl+Z agrupado revierte el conjunto entero; los 3 modos (Translate / Rotate / Scale) andan; Inspector con `(?)` tooltips y SeparatorText por componente; Console con popup de confirmación + counter de líneas filtradas; StatusBar con FPS coloreado + modo Play/Editor diferenciado por color.
+
+**Cambio importante**: F2H23 cerró 5 iteraciones de polish post-feedback con el dev. Cada validación visual emergió 2-3 bugs UX nuevos que se atajaron sin abrir hito propio — patrón heredado de F2H21 (preview esférico + 3 iteraciones polish) y F2H22 (workspaces + 4 fricciones específicas). El feedback explícito al final fue **"funciona"** tras probar el flujo completo viewport+gizmo+undo.
+
+**Decisiones clave**:
+- **Approach auditoría → fixes acotados** (heredado F2H16/F2H19): subagente recorre código real → lista priorizada (13 ALTA / 13 MEDIA / 6 BAJA) → atacar solo ≥ MEDIA críticos. Sin refactor profundo — solo cambios en `onImGuiRender` de cada panel.
+- **5 iteraciones de polish** durante validación: cada una emergió bugs nuevos que el subagente no podía predecir sin uso real (tabs cruzados, panels que se mezclan al cambiar workspace, multi-edit que no funciona desde viewport, etc.). El plan F2H23 deliberadamente dejó scope acotado para permitir 5 iteraciones sin explotar el hito.
+- **3 workspaces ahora** (era 4 en F2H22): Optimizar eliminado por feedback del dev *"era para benchmark Fase 1, no flujo cotidiano"*. WorkspaceManager filtra workspaces obsoletos al cargar `.moodproj` viejos.
+- **Maya-style modifiers**: Shift+click=ADD, Ctrl+click=TOGGLE (era Blender-style Shift=toggle/Ctrl=add). Coherencia entre HierarchyPanel y viewport pickEntity. El dev fue explícito: *"shift seleccionar ambos y de ahí mover"*.
+- **Multi-edit Transform real con undo agrupado**: no MVP "delta al final" sino delta en VIVO + `MultiEditTransformCommand` que agrupa N entidades en un solo command del HistoryStack. Ctrl+Z revierte el conjunto entero — convención esperada en cualquier editor 3D moderno.
+- **Workspace switch SIEMPRE aplica visibility default**: pisaron iniLayout custom del dev pero garantiza estado predecible al cambiar entre workspaces. Tradeoff aceptado tras feedback *"los paneles se mezclan / quedan bugeados"*. Si el dev abre un panel ajeno (ej. Console en Layout), persiste solo durante la sesión actual del workspace; al volver desde otro workspace, vuelve al default.
+- **Layout default columna derecha unificada**: Escena arriba + Inspector abajo 50/50, Viewport centro completo, Toolbar franja izquierda. Antes Escena izq + Inspector der consumían 2 columnas — el viewport quedaba comprimido.
+
+**Implementación (Bloques A-G + 5 polish):**
+
+- **Bloque A — Plan F2H23** con scope provisional (concretado tras Bloque B).
+- **Bloque B — Auditoría con subagente**: 32 ítems totales, scope cerrado en 17 (13 ALTA + 4 MEDIA críticos).
+- **Bloque C — Inspector polish**: helpMarker, isDragActiveOfType, SeparatorText × 9 componentes, drop highlight verde, tooltips Transform.
+- **Bloque D — Hierarchy polish**: iconos ASCII por tipo de entidad, hint de shortcuts arriba con tooltip detallado, warning >5000 entidades.
+- **Bloque E — Console polish**: popup confirmación Limpiar, leyenda completa de niveles con `(?)`, input filtro ancho dinámico, counter de líneas filtradas.
+- **Bloque F — StatusBar polish**: FPS coloreado por rango, modo Play/Editor con color diferenciador, "Ultimo:" → "Ultimo comando:".
+- **Polish iter 1 (post-validación 1)**: multi-edit Transform en Inspector (delta a todas las del SelectionSet), DragFloat3 con FramePadding (6,6) para clickeabilidad, cada workspace dockea solo sus panels (Script Editor ya no aparece como tab cruzado en Layout), hint "(multi-edit: N entidades)" en Inspector.
+- **Polish iter 2 (post-validación 2)**: workspace Optimizar eliminado, Modelar → Layout, Hierarchy panel → "Escena", Floor 16×16/tile3 → 8×8/tile1.5 (Floor 12×12m). Logs de tracking en multi-edit + Hierarchy modifiers.
+- **Polish iter 3 (post-validación 3)**: SmallButton "R" en lugar de "Recargar" en AssetBrowser, EditorCamera radio 30 → 12m, workspace switch SIEMPRE aplica visibility default (no solo primera vez), Hierarchy invierte modifiers a Maya-style.
+- **Polish iter 4 (post-validación 4)**: Layout default columna derecha unificada (Escena arriba, Inspector abajo), `finalizeGizmoDrag` aplica delta a todas — pero saltaban al soltar (no en vivo).
+- **Polish iter 5 (post-validación 5, la crítica)**: 3 bugs reales del flow viewport — (a) drag NO en vivo: snapshot otherStarts al iniciar drag + apply delta cada frame en los 3 modos; (b) Ctrl+Z NO agrupado: nuevo `MultiEditTransformCommand` (~95 LOC); (c) Shift+click viewport NO acumulaba: invertir modifiers a Shift=ADD/Ctrl=TOGGLE en pickEntity también. Confirmado por el dev: **"funciona"**.
+- **Bloque G — cierre**: este documento + HITOS + DECISIONS + PENDIENTES + tag `v1.14.0-fase2-hito23`.
+
+**Pendientes conocidos** (memoria + `PENDIENTES.md`):
+- **F2H24 — Reorganización interna del código** (próximo, charlado tras polish iter 3): split de archivos grandes (>800 LOC) — InspectorPanel ~1200, EditorProjectActions ~1100, DemoSpawners ~1100, EditorApplication ~700 con run() largo. Refactor estructural sin tocar API pública. Subagente identifica candidatos con `wc -l`.
+- **F2H25 — 4-viewport Hammer-style layout** (heredado, antes F2H22 candidato): workspace nuevo Hammer con dockspace en 4 cuadrantes (1 perspectiva 3D + 3 ortográficas wireframe). Reusa la infra de F2H7+F2H22. Después de F2H24 (código limpio antes del feature grande).
+- **Iconos image-based del Toolbar** (deuda explícita F2H22): FontAwesome / IcoMoon. Hito chico futuro.
+- **CompoundCommand para batch undo** (deuda parcial cerrada en F2H23 con MultiEditTransformCommand): patrón generico para agrupar N commands cualesquiera. Hito futuro si emerge necesidad.
+- **Pase de polish UX continuo (siguiente ronda)**: F2H23 atacó Inspector/Hierarchy/Console/StatusBar/Workspaces; podrían quedar fricciones nuevas tras el uso real prolongado.
+- **Node-graph del Material Editor** (deuda F2H21).
+- **Runtime-load mesh compilada en MoodPlayer** (deuda F2H20).
+- **Cull overlap parcial** (deuda F2H20).
+
+**Próximo paso**: **F2H24 — Reorganización interna del código**. Pedido explícito del dev al cierre de F2H23: *"creo que hay archivos demasiado grandes que te cuesta arreglar, así que mejor debemos organizar, que ningún archivo tenga demasiadas líneas para que sea fácil de mantener"*. Approach: subagente identifica archivos >800 LOC, plan de splits por dominio (ej. InspectorPanel.cpp → InspectorTransform.cpp + InspectorMeshRenderer.cpp + InspectorLight.cpp + ... como partials). Cero cambios funcionales — solo refactor estructural.
+
+### F2H22 (anterior, ya cerrado)
 **🚀 Fase 2 — F2H22 cerrado: Reorganización UX del editor (workspaces orientados a tareas + visibility default + Toolbar lateral + AssetBrowser tabs).**
 Tag: `v1.13.0-fase2-hito22`.
 Verificado automático: suite doctest **610/8357** verde (+3 cases / +16 asserts vs F2H21). Verificado por el dev a ojo: tabs de workspace en castellano `Modelar | Programar | Optimizar | Materiales`; cada workspace muestra solo los panels relevantes (Modelar = Viewport+Hierarchy+Inspector+AssetBrowser+Tools; resto sin panels ajenos); Toolbar lateral con botones legibles `Mover/Rotar/Escala/Box/Cilindro/Cara` + tooltips; AssetBrowser reorganizado en 6 tabs internos (Texturas/Meshes/Prefabs/Materiales/Scripts/Audio) con scroll fijo en cada uno (antes la lista de ~84 meshes inflaba el panel). Editor arranca siempre limpio en Modelar al cargar un proyecto (descarta state previo de ImGui).
