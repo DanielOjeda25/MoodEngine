@@ -507,6 +507,9 @@ set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT MoodEdito
 add_executable(MoodPlayer
     src/player/main.cpp
     src/player/PlayerApplication.cpp
+    src/player/PlayerApplication_Init.cpp
+    src/player/PlayerApplication_Frame.cpp
+    src/player/PlayerApplication_SaveLoad.cpp
 )
 
 target_link_libraries(MoodPlayer PRIVATE
