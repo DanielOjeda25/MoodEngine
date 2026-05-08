@@ -303,6 +303,16 @@ private:
     void drawEditorOverlay(struct ImDrawList* dl,
                            float x0, float y0, float w, float h);
 
+    /// @brief F2H24: handles + drag-state del gizmo
+    ///        translate/rotate/scale del overlay 2D. Extraido de
+    ///        `drawEditorOverlay` para mantener cada archivo bajo el
+    ///        cap de LOC. Recibe `vp` + viewport rect + selected ya
+    ///        validado. Implementado en `EditorOverlay_Gizmo.cpp`.
+    void drawEditorOverlayGizmo(struct ImDrawList* dl,
+                                  float x0, float y0, float w, float h,
+                                  const glm::mat4& vp,
+                                  Entity selected, float osx, float osy);
+
     /// @brief Elimina la entidad actualmente seleccionada del scene.
     ///        No-op si no hay seleccion o si la entidad es un tile del
     ///        mapa (`Tile_X_Y`, vienen del GridMap y reaparecen al
