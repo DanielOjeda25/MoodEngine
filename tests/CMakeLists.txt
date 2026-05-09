@@ -97,6 +97,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scene/core/FpsCamera.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/core/Scene.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/queries/ScenePick.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/VisGroup.cpp  # F2H33
     ${CMAKE_SOURCE_DIR}/src/engine/world/grid/GridMap.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/grid/Pathfinding.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/ai/NavSystem.cpp

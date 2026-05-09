@@ -49,13 +49,17 @@ EditorUI::EditorUI() {
                 // applyDefaultVisibilityForWorkspace.
                 &m_orthoTop, &m_orthoFront, &m_orthoSide,
                 // F2H30 Bloque C: top toolbar del mismo workspace.
-                &m_mapEditorTopBar};
+                &m_mapEditorTopBar,
+                // F2H33: panel de VisGroups del mismo workspace.
+                &m_visGroupsPanel};
     m_orthoTop.visible = false;
     m_orthoFront.visible = false;
     m_orthoSide.visible = false;
     m_mapEditorTopBar.visible = false;
+    m_visGroupsPanel.visible = false;  // F2H33
     m_toolbar.setEditorUi(this);  // F2H22: la toolbar emite requests a UI
     m_mapEditorTopBar.setEditorUi(this);  // F2H30 Bloque C
+    m_visGroupsPanel.setEditorUi(this);  // F2H33
 
     // F2H7: el dockspace arranca apuntando al workspace default
     // (F2H22: Modelar, era Layout).
@@ -164,6 +168,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Front (XY)", false);
         setVisible("Side (ZY)",  false);
         setVisible("Map Tools",  false);  // F2H30 Bloque C: top toolbar
+        setVisible("Grupos",     false);  // F2H33: VisGroups panel
     };
 
     if (name == "Programar") {
@@ -202,6 +207,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Front (XY)",      true);
         setVisible("Side (ZY)",       true);
         setVisible("Map Tools",       true);
+        setVisible("Grupos",          true);  // F2H33: VisGroups panel
         setVisible("Escena",          false);
         setVisible("Inspector",       false);
         setVisible("Asset Browser",   false);

@@ -20,6 +20,7 @@
 #include "editor/panels/assets/ScriptEditorPanel.h"
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28
 #include "editor/panels/scene/ViewportPanel.h"
+#include "editor/panels/scene/VisGroupsPanel.h"  // F2H33
 #include "editor/ui/MapEditorTopBar.h"  // F2H30 Bloque C
 #include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/workspace/WorkspaceManager.h"
@@ -183,6 +184,10 @@ public:
     /// @brief F2H30 Bloque C: acceso a la top toolbar.
     MapEditorTopBar& mapEditorTopBar() { return m_mapEditorTopBar; }
 
+    /// @brief F2H33: panel de VisGroups del editor de mapas. EditorApplication
+    ///        le inyecta scene + history al crearlo.
+    VisGroupsPanel& visGroupsPanel() { return m_visGroupsPanel; }
+
     /// @brief Acceso al panel Asset Browser para inyectarle el AssetManager
     ///        desde EditorApplication y leer la seleccion actual.
     AssetBrowserPanel& assetBrowser() { return m_assetBrowser; }
@@ -208,7 +213,10 @@ public:
     ///        EditorApplication. La MenuBar lo usa para los items
     ///        "Editar > Deshacer / Rehacer" (canUndo/canRedo + name del
     ///        comando activo). nullptr antes de la inicializacion.
-    void setHistoryStack(HistoryStack* h) { m_history = h; }
+    void setHistoryStack(HistoryStack* h) {
+        m_history = h;
+        m_visGroupsPanel.setHistoryStack(h);  // F2H33
+    }
     HistoryStack* historyStack() const { return m_history; }
 
     /// @brief F2H17: sub-modo del Editor (Object / Face). Sincronizado
@@ -244,7 +252,10 @@ public:
     ///        para que MenuBar pueda iterar brushes (drawBooleanOpMenu).
     ///        EditorApplication lo setea una vez al crear/cambiar
     ///        el scene.
-    void setScene(Scene* s) { m_scene = s; }
+    void setScene(Scene* s) {
+        m_scene = s;
+        m_visGroupsPanel.setScene(s);  // F2H33
+    }
     Scene* scene() const { return m_scene; }
 
     /// @brief F2H12: dibuja el submenu "Boolean" dentro de
@@ -543,6 +554,7 @@ private:
     MaterialEditorPanel m_materialEditor;  // Hito 42
     Toolbar m_toolbar;  // F2H22: tools de edicion (gizmo modes + brushes + face)
     MapEditorTopBar m_mapEditorTopBar;  // F2H30 Bloque C: top toolbar del workspace "Editor de mapas"
+    VisGroupsPanel m_visGroupsPanel;  // F2H33: panel "Grupos"
     // F2H28: 3 paneles ortograficos del workspace "Editor de mapas".
     // Inicializados con la vista correspondiente; arrancan invisibles
     // (los hace visibles applyDefaultVisibilityForWorkspace cuando se

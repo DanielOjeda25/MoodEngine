@@ -84,7 +84,14 @@ namespace Mood {
 // pero NO la usa para render; sigue editando los `BrushComponent`.
 // Mapas v12 sin `compiledMesh` se leen como v12 (Player cae al
 // fallback de procesar brushes en runtime).
-constexpr int k_MoodmapFormatVersion = 13;
+// v14 (F2H33): nuevo array opcional top-level `visgroups` con grupos
+// planos nombrados (id + name + color + hidden). Cada SavedEntity y
+// SavedBrush gana un campo opcional `visgroupId` (uint64) que apunta
+// al id de un grupo, o 0 = "sin grupo". El editor filtra render +
+// picking de las entidades en grupos `hidden`. Mapas v13 sin
+// `visgroups` se leen como v13 (array vacio + todas las entities sin
+// componente de membership).
+constexpr int k_MoodmapFormatVersion = 14;
 constexpr int k_MoodprojFormatVersion = 1;
 
 /// @brief Verifica que la version declarada en un archivo sea legible.

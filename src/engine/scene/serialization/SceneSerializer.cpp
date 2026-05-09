@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/scene/VisGroup.h"  // F2H33: visgroupIdOf
 #include "engine/scene/components/BrushComponent.h"  // F2H11
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
@@ -91,6 +92,12 @@ json serializeBrush(Entity e, const AssetManager& assets) {
         jf["lockToWorld"] = face.lockToWorld;
         out["faces"].push_back(std::move(jf));
     }
+    // F2H33 (v14): visgroupId opcional. Solo se emite si el brush
+    // pertenece a un grupo (componente presente con groupId != 0).
+    const u64 vgId = visgroupIdOf(e);
+    if (vgId != 0) {
+        out["visgroupId"] = vgId;
+    }
     return out;
 }
 
@@ -158,6 +165,8 @@ SavedBrush parseBrush(const json& j) {
             sb.faces.push_back(face);
         }
     }
+    // F2H33 (v14): visgroupId opcional, default 0 (sin grupo).
+    sb.visgroupId = j.value("visgroupId", u64{0});
     return sb;
 }
 
@@ -244,6 +253,22 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             jcm["submeshes"].push_back(serializeCompiledSubmesh(sub));
         }
         j["compiledMesh"] = std::move(jcm);
+    }
+
+    // F2H33 (v14): array `visgroups` con los grupos planos del scene.
+    // Solo se emite si hay al menos uno — mapas sin grupos no ensucian
+    // el JSON con el array vacio.
+    if (scene != nullptr && !scene->visgroups().empty()) {
+        json jvgs = json::array();
+        for (const VisGroup& vg : scene->visgroups()) {
+            json jvg;
+            jvg["id"] = vg.id;
+            jvg["name"] = vg.name;
+            jvg["color"] = vg.color;
+            if (vg.hidden) jvg["hidden"] = true;  // omitido si false
+            jvgs.push_back(std::move(jvg));
+        }
+        j["visgroups"] = std::move(jvgs);
     }
 
     std::ofstream out(path);
@@ -335,13 +360,31 @@ std::optional<SavedMap> SceneSerializer::load(const std::filesystem::path& path,
             compiledMesh = std::move(cm);
         }
 
+        // F2H33 (v14): array `visgroups`. Mapas v13 sin el array =
+        // vector vacio (todas las entities sin membership component al
+        // aplicar al scene).
+        std::vector<VisGroup> visgroups;
+        if (j.contains("visgroups") && j.at("visgroups").is_array()) {
+            for (const auto& jvg : j.at("visgroups")) {
+                VisGroup vg;
+                vg.id     = jvg.value("id",     u64{0});
+                vg.name   = jvg.value("name",   std::string{});
+                vg.color  = jvg.value("color",  glm::vec3{0.7f, 0.7f, 0.7f});
+                vg.hidden = jvg.value("hidden", false);
+                if (vg.id != 0) visgroups.push_back(std::move(vg));
+            }
+        }
+
         Log::assets()->info(
-            "Mapa cargado: {} ({} tiles solidos, {} entidades, {} brushes{})",
+            "Mapa cargado: {} ({} tiles solidos, {} entidades, {} brushes, "
+            "{} visgroups{})",
             path.generic_string(), map.solidCount(), entities.size(),
-            brushes.size(),
+            brushes.size(), visgroups.size(),
             compiledMesh.has_value() ? ", compiledMesh" : "");
-        return SavedMap{name, std::move(map), std::move(entities),
-                         std::move(brushes), std::move(compiledMesh)};
+        SavedMap result{name, std::move(map), std::move(entities),
+                         std::move(brushes), std::move(compiledMesh),
+                         std::move(visgroups)};
+        return result;
     } catch (const std::exception& e) {
         Log::assets()->warn(
             "SceneSerializer::load: falla semantica en '{}': {}",

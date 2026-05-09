@@ -3,6 +3,7 @@
 #include "core/Log.h"  // F2H23: log de selection
 #include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/ui/EditorUI.h"
+#include "engine/scene/VisGroup.h"  // F2H33: gray-out hidden entities
 #include "engine/scene/components/BrushComponent.h"  // F2H23: icono brush
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
@@ -126,6 +127,16 @@ void HierarchyPanel::onImGuiRender() {
             char labelBuf[80];
             std::snprintf(labelBuf, sizeof(labelBuf), "%s %s",
                             entityIconStr(e), entry.tag->name.c_str());
+            // F2H33: si la entidad pertenece a un VisGroup hidden, mostrar
+            // el label en gris claro para que el dev sepa que esta oculta
+            // en viewport (sino se sorprende: "click en X y no la veo
+            // resaltada en el editor"). El click sigue funcionando — la
+            // entidad existe, solo el render + picking la skipean.
+            const bool grayedHidden = isEntityHiddenByVisGroup(*m_scene, e);
+            if (grayedHidden) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.55f, 0.55f, 0.55f, 1.0f));
+            }
             if (ImGui::Selectable(labelBuf, isInSelection,
                                     ImGuiSelectableFlags_AllowDoubleClick)) {
                 // F2H23 polish: convencion Maya / Hammer / Unreal.
@@ -153,6 +164,9 @@ void HierarchyPanel::onImGuiRender() {
                 }
             }
 
+            if (grayedHidden) {
+                ImGui::PopStyleColor();
+            }
             if (pushedColor) {
                 ImGui::PopStyleColor(3);
             }

@@ -54,9 +54,15 @@ void applyEntitiesToScene(const SavedMap& saved,
 /// @brief Aplica UNA `SavedEntity` al scene. Devuelve la Entity creada.
 ///        Util para Hito 27 DeleteEntityCommand::undo: recrear una
 ///        entidad borrada desde su snapshot pre-delete.
+/// @param applyVisGroupMembership F2H33: si false, ignora `saved.visgroupId`
+///        y NO agrega `VisGroupMembershipComponent`. Pensado para el path
+///        del MoodPlayer (convencion Hammer: VisGroups son del editor; el
+///        build final incluye todo). Default true para que callers
+///        existentes (DeleteEntityCommand::undo) preserven la membership.
 Entity applyOneEntity(const SavedEntity& saved,
                       Scene& scene,
-                      AssetManager& assets);
+                      AssetManager& assets,
+                      bool applyVisGroupMembership = true);
 
 } // namespace SceneLoader
 

@@ -3,6 +3,7 @@
 #include "core/math/AABB.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/resources/MeshAsset.h"
+#include "engine/scene/VisGroup.h"  // F2H33: hide gate
 #include "engine/scene/components/BrushComponent.h"  // F2H11
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Scene.h"
@@ -144,6 +145,11 @@ ScenePickResult pickEntityFromRay(Scene& scene,
     f32 bestT = std::numeric_limits<f32>::max();
 
     scene.forEach<TransformComponent>([&](Entity e, TransformComponent& t) {
+        // F2H33: skipear entities en VisGroups hidden — no son pickables
+        // (alineado con render). Un brush oculto no responde al click
+        // del editor.
+        if (isEntityHiddenByVisGroup(scene, e)) return;
+
         // Targets posibles, en orden de preferencia (mesh gana):
         //   a) MeshRenderer: AABB del mesh.
         //   b) Brush (F2H11): AABB del brush.

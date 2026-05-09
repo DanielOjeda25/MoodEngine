@@ -38,6 +38,7 @@
 // leen igual (entities queda vacio).
 
 #include "core/Types.h"
+#include "engine/scene/VisGroup.h"  // F2H33: SavedMap.visgroups
 #include "engine/scripting/exposed/ExposedProperty.h"
 #include "engine/world/grid/GridMap.h"
 
@@ -171,6 +172,9 @@ struct SavedEntity {
     std::optional<SavedParticleEmitter> particleEmitter; // Hito 29
     std::optional<SavedTrigger> trigger;                  // Hito 33
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
+    /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
+    ///        0 = "sin grupo" (default). Solo se persiste si != 0.
+    u64 visgroupId = 0;
 };
 
 /// @brief F2H11+F2H15: copia persistida de una BrushFace. Guarda el
@@ -213,6 +217,9 @@ struct SavedBrush {
     ///        materialPaths[0]).
     std::vector<std::string> materialPaths;
     std::vector<SavedBrushFace> faces;
+    /// @brief F2H33 (v14): id del VisGroup al que pertenece el brush.
+    ///        0 = "sin grupo" (default). Solo se persiste si != 0.
+    u64 visgroupId = 0;
 };
 
 /// @brief F2H26: submesh de la mesh estatica precompilada del mapa.
@@ -247,6 +254,9 @@ struct SavedMap {
     ///        sobre los brushes individuales. Mapas v12 (sin compile)
     ///        leen este campo como nullopt.
     std::optional<SavedCompiledMesh> compiledMesh;
+    /// @brief F2H33 (v14): grupos planos nombrados del editor. Mapas
+    ///        v13 sin el array se leen como vector vacio.
+    std::vector<VisGroup> visgroups;
 };
 
 /// @brief F2H26: construye un `SavedCompiledMesh` a partir de los

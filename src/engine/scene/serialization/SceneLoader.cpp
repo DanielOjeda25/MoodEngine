@@ -3,6 +3,7 @@
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/rhi/IRenderer.h"            // F2H26: VertexAttribute
+#include "engine/scene/VisGroup.h"  // F2H33
 #include "engine/scene/components/BrushComponent.h"   // F2H11
 #include "engine/scene/components/CompiledMeshComponent.h"  // F2H26
 #include "engine/scene/components/Components.h"
@@ -21,7 +22,8 @@ namespace Mood::SceneLoader {
 
 Entity applyOneEntity(const SavedEntity& se,
                        Scene& scene,
-                       AssetManager& assets) {
+                       AssetManager& assets,
+                       bool applyVisGroupMembership) {
     // Reemplazo de entidades auto-generadas: si esta SavedEntity tiene
     // un tag que `rebuildSceneFromMap` también genera ("Floor",
     // "Tile_X_Y"), Y ya existe una entidad con ese mismo tag en el
@@ -214,6 +216,14 @@ Entity applyOneEntity(const SavedEntity& se,
         if (!se.prefabPath.empty()) {
             e.addComponent<PrefabLinkComponent>(se.prefabPath);
         }
+
+        // F2H33: VisGroup membership opcional. groupId == 0 = sin grupo,
+        // no agregamos componente (preferimos ausencia a presencia con 0).
+        // Si `applyVisGroupMembership=false` (path Player), tambien skipear
+        // — convencion Hammer: VisGroups son solo del editor.
+        if (applyVisGroupMembership && se.visgroupId != 0) {
+            e.addComponent<VisGroupMembershipComponent>(se.visgroupId);
+        }
     }
     return e;
 }
@@ -222,8 +232,17 @@ void applyEntitiesToScene(const SavedMap& saved,
                           Scene& scene,
                           AssetManager& assets,
                           bool useCompiledMesh) {
+    // F2H33: cargar VisGroups antes de las entities solo en el editor
+    // (convencion Hammer: VisGroups son del editor; el Player ignora
+    // membership + lista, asi un grupo `hidden` en editor no afecta el
+    // gameplay del player). useCompiledMesh==true es el path Player.
+    const bool isEditorPath = !useCompiledMesh;
+    if (isEditorPath) {
+        scene.resetVisGroups(saved.visgroups);
+    }
+
     for (const auto& se : saved.entities) {
-        applyOneEntity(se, scene, assets);
+        applyOneEntity(se, scene, assets, /*applyVisGroupMembership=*/isEditorPath);
     }
 
     // F2H26: si el caller pidio usar la mesh compilada Y el savedMap la
@@ -334,6 +353,15 @@ void applyEntitiesToScene(const SavedMap& saved,
         }
         bc.dirty = true;
         e.addComponent<BrushComponent>(std::move(bc));
+
+        // F2H33: VisGroup membership opcional para brushes (mismo flow
+        // que applyOneEntity). Solo en path editor; Player ignora.
+        // (Si llegamos aca con useCompiledMesh=true es porque el mapa
+        // legacy no tiene compiledMesh — el fallback igual carga brushes
+        // pero los grupos no aplican.)
+        if (isEditorPath && sb.visgroupId != 0) {
+            e.addComponent<VisGroupMembershipComponent>(sb.visgroupId);
+        }
     }
 }
 

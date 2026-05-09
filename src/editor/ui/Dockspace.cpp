@@ -121,7 +121,11 @@ void buildMapEditorWorkspace(ImGuiID dockspaceId) {
     // F2H28: nombres alineados con la convencion Y-up de MoodEngine:
     // Top muestra el plano XZ (cama mira -Y), Front el plano XY
     // (cam mira -Z), Side el plano ZY (cam mira -X).
+    // F2H33: panel "Grupos" en la columna lateral derecha como tab al
+    // lado de "Map Tools" — el dev alterna entre tools y la lista de
+    // VisGroups sin cambiar el layout 4-viewport.
     ImGui::DockBuilderDockWindow("Map Tools",   dockRightBar);     // F2H30
+    ImGui::DockBuilderDockWindow("Grupos",      dockRightBar);     // F2H33: tab al lado
     ImGui::DockBuilderDockWindow("Top (XZ)",    dockMain);         // top-left
     ImGui::DockBuilderDockWindow("Viewport",    dockTopRight);     // top-right
     ImGui::DockBuilderDockWindow("Front (XY)",  dockBottom);       // bottom-left

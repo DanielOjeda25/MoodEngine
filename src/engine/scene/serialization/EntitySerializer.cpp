@@ -3,6 +3,7 @@
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/resources/MaterialAsset.h"
+#include "engine/scene/VisGroup.h"  // F2H33: visgroupIdOf
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/serialization/JsonHelpers.h" // adapters glm::vec3 <-> json
@@ -238,6 +239,13 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
             je["prefab_path"] = link.path;
         }
     }
+
+    // F2H33 (v14): visgroupId opcional. Solo se emite si la entity tiene
+    // componente con groupId != 0.
+    const u64 vgId = visgroupIdOf(entity);
+    if (vgId != 0) {
+        je["visgroupId"] = vgId;
+    }
     return je;
 }
 
@@ -352,6 +360,9 @@ SavedEntity parseEntityFromJson(const json& j) {
     }
 
     se.prefabPath = j.value("prefab_path", std::string{});
+
+    // F2H33 (v14): visgroupId opcional, default 0 (sin grupo).
+    se.visgroupId = j.value("visgroupId", u64{0});
     return se;
 }
 

@@ -313,6 +313,7 @@ add_library(mood_engine_lib STATIC
     src/engine/scene/core/Scene.cpp
     src/engine/scene/queries/ViewportPick.cpp
     src/engine/scene/queries/ScenePick.cpp
+    src/engine/scene/VisGroup.cpp  # F2H33
 
     src/engine/world/grid/GridMap.cpp
     src/engine/world/grid/Pathfinding.cpp
@@ -449,6 +450,7 @@ add_executable(MoodEditor
     src/editor/commands/SetTileCommand.cpp
     src/editor/commands/EditMeshRendererMaterialCommand.cpp
     src/editor/commands/EditScriptComponentCommand.cpp
+    src/editor/commands/VisGroupCommands.cpp  # F2H33
     src/editor/panels/scene/ViewportPanel.cpp
     src/editor/panels/scene/OrthoViewportPanel.cpp  # F2H28
     src/editor/panels/scene/InspectorPanel.cpp
@@ -466,6 +468,7 @@ add_executable(MoodEditor
     src/editor/panels/debug/ConsolePanel.cpp
     src/editor/panels/scene/HierarchyPanel.cpp
     src/editor/panels/scene/HierarchyCollect.cpp
+    src/editor/panels/scene/VisGroupsPanel.cpp  # F2H33
     src/editor/panels/debug/LuaApiPanel.cpp
     src/editor/panels/debug/PerformanceHudPanel.cpp
     src/editor/panels/assets/ScriptEditorPanel.cpp
@@ -478,34 +481,6 @@ target_link_libraries(MoodEditor PRIVATE
 )
 
 mood_set_compiler_warnings(MoodEditor)
-
-# En Windows: copiar SDL2.dll junto al ejecutable para poder arrancar
-if(WIN32)
-    add_custom_command(TARGET MoodEditor POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:SDL2::SDL2>
-            $<TARGET_FILE_DIR:MoodEditor>
-        COMMENT "Copiando SDL2.dll junto al ejecutable"
-    )
-endif()
-
-# Copiar los shaders built-in junto al ejecutable para que se encuentren con
-# rutas relativas. Se usa copy_directory para que funcione tambien al agregar
-# shaders nuevos sin regenerar el CMake.
-add_custom_command(TARGET MoodEditor POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/shaders
-        $<TARGET_FILE_DIR:MoodEditor>/shaders
-    COMMENT "Copiando shaders junto al ejecutable"
-)
-
-# Idem para los assets de ejemplo (texturas, etc.) cuando existan.
-add_custom_command(TARGET MoodEditor POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/assets
-        $<TARGET_FILE_DIR:MoodEditor>/assets
-    COMMENT "Copiando assets junto al ejecutable"
-)
 
 # Working directory por defecto para Visual Studio
 set_target_properties(MoodEditor PROPERTIES
@@ -539,30 +514,35 @@ target_link_libraries(MoodPlayer PRIVATE
 
 mood_set_compiler_warnings(MoodPlayer)
 
-if(WIN32)
-    add_custom_command(TARGET MoodPlayer POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:SDL2::SDL2>
-            $<TARGET_FILE_DIR:MoodPlayer>
-        COMMENT "Copiando SDL2.dll junto a MoodPlayer"
-    )
-endif()
-
-# Mismo deploy de shaders + assets que MoodEditor — para que el player
-# arranque desde build/debug/Debug/MoodPlayer.exe sin tener que copiar
-# nada a mano. Bloque 5 (PackageBuilder) usara estos mismos paths.
-add_custom_command(TARGET MoodPlayer POST_BUILD
+# F2H33: deploy compartido de SDL2.dll + shaders + assets via custom target
+# unico. Antes los POST_BUILD de MoodEditor + MoodPlayer copiaban a la misma
+# carpeta `build/debug/Debug/` y al construir en paralelo (--m) se pisaban
+# en `copy_directory` (race condition: archivo X parcialmente escrito por
+# uno mientras el otro lee). Centralizando en un custom target:
+#   - Una sola escritura por archivo, sin contienda.
+#   - Ambos exes construyen sus .obj en paralelo (mood_runtime_files NO
+#     bloquea la compilacion — solo el deploy post-link).
+#   - VS_DEBUGGER_WORKING_DIRECTORY de MoodEditor sigue apuntando al repo,
+#     asi el debug session lee shaders desde ahi (no de la carpeta deploy).
+add_custom_target(mood_runtime_files ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/shaders
-        $<TARGET_FILE_DIR:MoodPlayer>/shaders
-    COMMENT "Copiando shaders junto a MoodPlayer"
-)
-add_custom_command(TARGET MoodPlayer POST_BUILD
+        $<TARGET_FILE_DIR:MoodEditor>/shaders
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/assets
-        $<TARGET_FILE_DIR:MoodPlayer>/assets
-    COMMENT "Copiando assets junto a MoodPlayer"
+        $<TARGET_FILE_DIR:MoodEditor>/assets
+    COMMENT "Copiando shaders + assets junto a los ejecutables"
 )
+if(WIN32)
+    add_custom_command(TARGET mood_runtime_files POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:SDL2::SDL2>
+            $<TARGET_FILE_DIR:MoodEditor>
+        COMMENT "Copiando SDL2.dll junto a los ejecutables"
+    )
+endif()
+# Garantizar que los .exe esten enlazados antes del deploy.
+add_dependencies(mood_runtime_files MoodEditor MoodPlayer)
 
 set_target_properties(MoodPlayer PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

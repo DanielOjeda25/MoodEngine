@@ -2,6 +2,7 @@
 
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/resources/MeshAsset.h"
+#include "engine/scene/VisGroup.h"  // F2H33: hide gate
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Scene.h"
 
@@ -17,6 +18,10 @@ BatchingResult groupByBatch(Scene& scene,
 
     scene.forEach<TransformComponent, MeshRendererComponent>(
         [&](Entity e, TransformComponent& t, MeshRendererComponent& mr) {
+            // F2H33: skipear entities en VisGroups hidden — no entran ni
+            // al batch ni al non-batchable (no se rendean).
+            if (isEntityHiddenByVisGroup(scene, e)) return;
+
             // Skinned: lo maneja el pase aparte. Lo ignoramos aca y NO lo
             // metemos en non-batchable porque no debe pasar por el
             // path PBR static.

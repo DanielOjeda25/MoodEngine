@@ -34,6 +34,7 @@
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/rhi/RendererTypes.h"
+#include "engine/scene/VisGroup.h"  // F2H33: hide gate
 #include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/CompiledMeshComponent.h"  // F2H26
 #include "engine/scene/components/Components.h"
@@ -430,8 +431,9 @@ void SceneRenderer::renderScene(Scene& scene,
         applyShaderUniforms(*m_pbrSkinnedShader);
         scene.forEach<TransformComponent, MeshRendererComponent,
                        SkeletonComponent>(
-            [&](Entity, TransformComponent& t, MeshRendererComponent& mr,
+            [&](Entity e, TransformComponent& t, MeshRendererComponent& mr,
                 SkeletonComponent& sk) {
+                if (isEntityHiddenByVisGroup(scene, e)) return;  // F2H33
                 m_pbrSkinnedShader->setMat4("uModel", t.worldMatrix());
                 const usize n = sk.skinningMatrices.size();
                 if (n == 0) return;
@@ -464,7 +466,8 @@ void SceneRenderer::renderScene(Scene& scene,
                 {0, 3}, {1, 3}, {2, 2}, {3, 3}  // pos, color, uv, normal
             };
             scene.forEach<TransformComponent, BrushComponent>(
-                [&](Entity, TransformComponent& t, BrushComponent& bc) {
+                [&](Entity e, TransformComponent& t, BrushComponent& bc) {
+                    if (isEntityHiddenByVisGroup(scene, e)) return;  // F2H33
                     const glm::mat4 worldMatrix = t.worldMatrix();
                     // F2H15: si alguna cara tiene lockToWorld=true,
                     // el rebuild de mesh debe hacerse cada vez que
