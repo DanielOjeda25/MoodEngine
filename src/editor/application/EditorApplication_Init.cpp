@@ -99,6 +99,7 @@ EditorApplication::EditorApplication() {
     spec.title = "MoodEngine Editor - v0.4.0-dev (Hito 4)";
     spec.width = 1280;
     spec.height = 720;
+    spec.maximized = true;  // F2H35: arrancar maximizado en lugar de 1280x720
     m_window = std::make_unique<Window>(spec);
 
     // --- GLAD ---

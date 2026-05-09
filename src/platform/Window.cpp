@@ -25,6 +25,7 @@ Window::Window(const WindowSpec& spec) : m_spec(spec) {
     Uint32 flags = SDL_WINDOW_OPENGL;
     if (m_spec.resizable) flags |= SDL_WINDOW_RESIZABLE;
     if (m_spec.highDpi)   flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+    if (m_spec.maximized) flags |= SDL_WINDOW_MAXIMIZED;  // F2H35
 
     m_window = SDL_CreateWindow(
         m_spec.title.c_str(),

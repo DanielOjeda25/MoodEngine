@@ -19,6 +19,11 @@ struct WindowSpec {
     u32 height = 720;
     bool resizable = true;
     bool highDpi = true;
+    /// @brief F2H35: si true, la ventana arranca maximizada (cubre toda
+    ///        el area util del escritorio). Default false para preservar
+    ///        comportamiento del Player. El Editor lo activa para que el
+    ///        dev no tenga que maximizar manualmente cada arranque.
+    bool maximized = false;
 };
 
 class Window {
