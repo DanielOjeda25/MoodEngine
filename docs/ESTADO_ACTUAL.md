@@ -6,11 +6,37 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H33 cerrado: Organización + face polish (VisGroups + multi-select de caras + texture alignment).**
-Tag: `v1.23.0-fase2-hito33`.
-Verificado por dev: VisGroups crear/asignar/toggle/eliminar funciona end-to-end; persistencia v13→v14 round-trip OK; face mode con multi-select via Shift+click pickea cualquier brush hovered en 1 click + active en amarillo / secundarias en naranja; alignment ops funcionan single y multi (no probó "Treat as one" pero la math está cubierta por tests + el approach es iterativo sobre el `selectedFaceIndices` ya validado en Bloque C).
+**🚀 Fase 2 — F2H34 cerrado: Multi-face material drop.**
+Tag: `v1.24.0-fase2-hito34`.
+Verificado por dev: face mode → shift+click N caras → drop textura o material → las N caras reciben el material en una sola operación (un solo slot agregado al `bc.materials`, todas las caras apuntan ahí); Ctrl+Z las revierte juntas en un solo undo; los flows pre-F2H34 (single-face, object mode, drop sobre brush sin selección) siguen intactos.
 
-**🏁 Hammer Editor cerrado funcional al 100%.** 31/44 hitos de Fase 2.
+**🏁 Hammer Editor cerrado funcional al 100%.** 32/44 hitos de Fase 2.
+
+**Decisiones clave de F2H34:**
+- **Sin command class nuevo, extender el existente.** `EditBrushFaceMaterialCommand` cambió `u32 faceIndex` + `u32 oldFaceMatIndex` + `u32 newFaceMatIndex` por `vector<u32>` paralelos. Constructor 1-cara preservado como wrapper que rellena vectores tamaño 1 — back-compat total con call-sites pre-existentes y los 7 tests del F2H19. Razón: sumar `EditBrushFacesMaterialCommand` (plural) sería duplicar 90% del código y forzar a las llamadoras a elegir entre dos clases con la misma intención.
+- **Snapshot único de `bc.materials` compartido entre N caras.** Cuando el material es nuevo, un solo `push_back` al vector y todas las caras del set apuntan al mismo slot. Sin esto cada cara podría duplicar el slot al apply, inflando `bc.materials` y rompiendo el undo (el snapshot post se desincroniza con el real).
+- **Validación atómica de faceIndices en `apply`** (todo o nada): si un solo faceIndex está fuera de rango, no muta nada. Garantiza que un command corrupto nunca deje el brush en estado parcial. Cubierto por test "faceIndex fuera de rango en una cara → no muta nada".
+- **Helper `tryAssignMaterialToSelectedFaces` en namespace anónimo** del `DemoSpawners_Drop.cpp`, no en EditorApplication. Razón: la lógica solo existe en el flow de drop (texture + material drop comparten 100%); poner el helper en el header de EditorApplication la expondría a otros call-sites que no la necesitan. Devuelve `nullptr` cuando no aplica → llamadora cae al flow object-mode existente sin if extra.
+- **Label dinámico singular/plural** según `selectedFaceIndices.size()`. "Asignar textura a cara" vs "Asignar textura a caras" en Editar > Deshacer.
+- **NO se incluyó fix de "abrir maximizado" ni toggle wireframe/render** en este commit: el dev pidió no contaminar el cierre de F2H34 con cambios fuera de scope. Ambos quedan en F2H35 como mini-hito UX viewport propio.
+
+**Implementación (F2H34 en 2 commits feat + 1 commit docs/cierre):**
+
+- **Commit `<hash>` — feat(editor): EditBrushFaceMaterialCommand multi-cara**: extensión a vectores + constructor 1-cara wrapper + validación atómica + 5 tests nuevos.
+- **Commit `<hash>` — feat(editor): drop textura/material aplica a multi-cara**: helper `tryAssignMaterialToSelectedFaces` + refactor de los 2 call-sites (texture + material drop) + label dinámico singular/plural.
+- **Commit `<hash>` — docs(F2H34 cierre)**: HITOS / ESTADO / DECISIONS / PENDIENTES.
+
+**Pendientes conocidos** (post-F2H34):
+- **F2H35 — UX viewport polish (mini-hito)**: (1) abrir editor maximizado por defecto (~one-liner SDL flag); (2) toggle wireframe/render shading en viewport con botones overlay estilo Blender (~1-2h, toca render pipeline + un flag de mode). Identificado en validación F2H34.
+- **Resto de "Hammer-style visual polish"** (mismo mini-hito o aparte): tint del wireframe por color del VisGroup, color por tipo de entity, labels arriba de point entities.
+
+**Próximo paso**: **F2H35 — UX viewport polish**. Empezar por el fix de maximizado (trivial) + decidir si el toggle wireframe/render entra en el mismo hito o se separa.
+
+### F2H33 (anterior, ya cerrado)
+
+**🚀 F2H33 cerrado: Organización + face polish (VisGroups + multi-select de caras + texture alignment).**
+Tag: `v1.23.0-fase2-hito33`.
+Verificado por dev: VisGroups crear/asignar/toggle/eliminar funciona end-to-end; persistencia v13→v14 round-trip OK; face mode con multi-select via Shift+click pickea cualquier brush hovered en 1 click + active en amarillo / secundarias en naranja; alignment ops funcionan single y multi.
 
 **Decisiones clave de F2H33:**
 - **Schema bump aditivo v13→v14** mismo patrón que F2H26 v12→v13: array opcional `visgroups` top-level + campo opcional `visgroupId` por entity y brush. Mapas v13 cargan como v14 sin pérdida (array vacío + sin membership).

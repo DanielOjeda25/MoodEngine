@@ -11,6 +11,36 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-09: F2H34 cierre — Multi-face material drop (capitaliza refactor F2H33)
+
+**Contexto:** F2H33 introdujo `selectedFaceIndices` (vector de N caras seleccionables via Shift+click), pero el handler de drop en `DemoSpawners_Drop.cpp` quedó pre-F2H33 — solo aplicaba la textura/material al `activeFaceIndex()`. F2H34 capitaliza ese refactor extendiendo el flow para que el drop afecte a las N caras seleccionadas en una sola operación undoable. Es un mini-hito (~1 sesión, ~250 LOC) que cierra una deuda explícita anotada en `PENDIENTES.md` post-F2H33.
+
+**Decisiones técnicas clave:**
+
+- **Extender el command existente, no agregar uno nuevo.** `EditBrushFaceMaterialCommand` cambió `u32 faceIndex` + `u32 oldFaceMatIndex` + `u32 newFaceMatIndex` por `vector<u32>` paralelos, con un constructor 1-cara que wrappea al multi rellenando vectores de tamaño 1. Alternativa descartada: crear `EditBrushFacesMaterialCommand` (plural) — duplicaba 90% del código y forzaba a las llamadoras a elegir entre dos clases con la misma intención. El wrapper preserva los 7 tests del F2H19 sin modificación.
+
+- **Snapshot único de `bc.materials` compartido entre N caras.** Cuando el material es nuevo, un solo `push_back` y todas las caras del set apuntan al mismo slot. Sin esto, cada cara podría duplicar el slot en `apply` inflando `bc.materials` y desincronizando el snapshot post con el real → undo deja state inconsistente. Confirmado por test "aplica el mismo slot a 3 caras".
+
+- **Validación atómica de faceIndices en `apply` (todo o nada).** Si un solo faceIndex está fuera de rango (> `faces.size()`), el command retorna sin mutar nada. Garantiza que un command corrupto nunca deje el brush en estado parcial mid-undo o mid-redo. Cubierto por test específico.
+
+- **Helper `tryAssignMaterialToSelectedFaces` en namespace anónimo del .cpp**, no en EditorApplication header. La lógica solo existe en el flow de drop (texture + material drop comparten 100%). Exponerla en el header propagaría dependencias innecesarias. El helper devuelve `nullptr` cuando no aplica (object mode, brush distinto del active, set vacío) → llamadora cae al flow object-mode sin if extra.
+
+- **Label dinámico singular/plural** según `selectedFaceIndices.size()`: "Asignar textura a cara" vs "Asignar textura a caras". Ediciones del Editar > Deshacer informan correctamente la magnitud de la operación.
+
+- **Deferral consciente de "abrir maximizado" + "toggle wireframe/render" a F2H35.** Durante validación de F2H34 el dev pidió ambos features. Decisión: NO contaminar el commit de cierre F2H34 con scope creep — abrir F2H35 como mini-hito UX viewport propio. Patrón consistente con la convención previa (un hito = un dominio).
+
+**Alternativas descartadas explícitamente:**
+
+- **Push de N commands single-cara** (uno por cara seleccionada): undo/redo serían N pasos, mala UX. El user clickeó UNA vez (drop), el undo debe ser UNA pulsación.
+- **Soportar materiales DISTINTOS por cara en una sola op**: poco probable (un drop = un material). Si emerge necesidad futura, extender el command (ya tiene la estructura `vector` lista para variar `newFaceMatIndices` libremente).
+
+**Condiciones de revisión:**
+
+- Si emerge necesidad de aplicar materiales DISTINTOS a caras distintas en una sola op (ej. paint mode con paleta), el command ya soporta `newFaceMatIndices` heterogéneo nativamente — solo falta UI.
+- Si el cap de undo/redo del HistoryStack se vuelve apretado con N caras grandes (cada multi-face drop = 1 entry, no N), no hay riesgo previsible. El F2H32 ya tenía operaciones similares con snapshots grandes (BooleanOpCommand) sin problemas.
+
+---
+
 ## 2026-05-09: F2H33 cierre — VisGroups + multi-select caras + texture alignment (Hammer cerrado funcional al 100%)
 
 **Contexto:** F2H33 es el último hito antes de cerrar el editor estilo

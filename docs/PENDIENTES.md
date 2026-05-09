@@ -9,24 +9,31 @@
 
 ---
 
-## Post-F2H33 (2026-05-09) — Hammer Editor cerrado funcional al 100%
+## Post-F2H34 (2026-05-09) — Multi-face material drop cerrado
 
 ### Próximo a atacar
 
-- **TBD** — definir junto al dev. Opciones a considerar:
-  - Sub-fase 2.5 gameplay (diálogos / quests / inventario).
-  - Hammer-style visual polish (sub-bloque chico — ver "Activos sin
-    orden definido" abajo).
-  - Otra sub-fase del PLAN_FASE2 (optimización / runtime / polish UI
-    general).
+- **F2H35 — UX viewport polish (mini-hito)** — identificado en
+  validación de F2H34. Dos features pequeñas que comparten dominio
+  (UX del viewport) y son rápidas de cerrar juntas:
+  - **Editor abre maximizado por defecto**: actualmente arranca en
+    ventana ~1280x720 y el dev tiene que reajustar el dockspace
+    manualmente al maximizar. Fix: `SDL_WINDOW_MAXIMIZED` flag al
+    crear la ventana (o `SDL_MaximizeWindow` post-create). One-liner.
+  - **Toggle wireframe/render shading en viewport** estilo Blender:
+    botones overlay en la zona superior del viewport para alternar
+    entre vista renderizada (PBR actual) y wireframe. Requiere flag
+    en ViewportPanel + pasar a SceneRenderer / RenderPass para
+    aplicar `glPolygonMode(GL_LINE)` o equivalente al pase opaco.
+    ~1-2h, toca render pipeline.
 
 ### Activos sin orden definido (siguiente ola)
 
 - **Hammer-style visual polish** (paquete candidato a hito chico
-  futuro): cuando el dev pidió cerrar F2H33 mencionó varias mejoras
-  visuales que NO entraron por scope. Agruparlas en un hito propio
-  porque comparten dominio (render del wireframe + iconos del editor
-  de mapas):
+  futuro, posiblemente unificable con F2H35 si crece): cuando el dev
+  pidió cerrar F2H33 mencionó varias mejoras visuales que NO entraron
+  por scope. Agruparlas en un hito propio porque comparten dominio
+  (render del wireframe + iconos del editor de mapas):
   - **Tint del wireframe por color del VisGroup**: cada brush en un
     grupo se renderea con el color del grupo (~30 LOC, alto valor
     visual — el color ya está en el `VisGroup` struct).
@@ -44,17 +51,20 @@
     grandes. Investigar si hay margen en `Csg::pickFace` (epsilon /
     triangulación) o si es UX puro (preview hover).
 
-- **Multi-face material drop**: el handler de `DemoSpawners_Drop.cpp`
-  sigue aplicando solo al face active de un brush, incluso cuando hay
-  N caras seleccionadas via Shift+click (F2H33 Bloque C). Para que el
-  drop afecte a todas hay que extender `EditBrushFaceMaterialCommand`
-  a multi-cara (vector de pairs `<faceIdx, BrushFace>` en el snapshot).
-  Diferido — emerge si el dev lo pide.
-
 - **VisGroups jerárquicos / drag desde Hierarchy / auto-asignar a
   current group / lock de VisGroup**: features avanzadas que Hammer
   4 tiene pero F2H33 no entregó. Diferidos hasta que emerja necesidad
   real (Hammer 4 plano cubre el 80/20).
+
+### Histórico resuelto
+
+- ~~Multi-face material drop~~ — resuelto en F2H34 (`v1.24.0-fase2-hito34`).
+  `EditBrushFaceMaterialCommand` extendido a vectores con back-compat
+  via constructor 1-cara wrapper. Helper `tryAssignMaterialToSelectedFaces`
+  en `DemoSpawners_Drop.cpp` aplica el material a las N caras del set
+  con un solo `push_back` del slot.
+
+## Post-F2H33 (2026-05-09) — Hammer Editor cerrado funcional al 100%
 
 ### Histórico resuelto
 
