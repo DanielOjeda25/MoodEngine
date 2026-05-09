@@ -2,6 +2,7 @@
 
 #include "editor/application/EditorMode.h"
 #include "editor/ui/EditorUI.h"
+#include "editor/ui/IconsFontAwesome6.h"
 
 #include <imgui.h>
 
@@ -10,13 +11,12 @@ namespace Mood {
 namespace {
 
 // Botón rectangular con label y tooltip. Devuelve true si fue clickeado.
-// F2H22 polish: usar palabras cortas en español ("Mover" / "Rotar" /
-// "Escala") en lugar de letras solas (T/R/S) — el dev al validar
-// confirmo que las letras no le quedaban claras. Iconos verdaderos
-// (FontAwesome / IcoMoon) requieren mergear una font icon-pack en el
-// init de ImGui — anotado como pendiente futuro.
+// F2H36: el label puede llevar un icono FA prepended (ICON_FA_*) y el
+// botón se ensancha al ancho real del texto + icono.
 bool toolButton(const char* label, const char* tooltip, bool active = false) {
-    constexpr ImVec2 kBtnSize{72.0f, 36.0f};
+    // F2H36: bump 72 -> 92 px para acomodar icon + label castellano
+    // sin truncar (ej. "Cilindro" + ICON_FA_CIRCLE).
+    constexpr ImVec2 kBtnSize{92.0f, 36.0f};
     if (active) {
         ImGui::PushStyleColor(ImGuiCol_Button,
                                 ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
@@ -59,23 +59,28 @@ void Toolbar::onImGuiRender() {
     //   E (2 taps)  -> modal Scale uniforme (cursor distance).
     //   R (1 tap)   -> Rotate gizmo rings.
     //   R (2 taps)  -> modal Rotate libre (cursor angle, anillo visual).
-    if (toolButton("Mover",   "Translate (W) - mover via gizmo arrows")) {
+    if (toolButton(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT " Mover",
+                    "Translate (W) - mover via gizmo arrows")) {
         m_ui->requestGizmoMode(0);
     }
-    if (toolButton("Rotar",   "Rotate (R) - rings; doble-tap R = modal angulo libre")) {
+    if (toolButton(ICON_FA_ROTATE " Rotar",
+                    "Rotate (R) - rings; doble-tap R = modal angulo libre")) {
         m_ui->requestGizmoMode(1);
     }
-    if (toolButton("Escala",  "Scale (E) - per-axis; doble-tap E = modal uniforme")) {
+    if (toolButton(ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER " Escala",
+                    "Scale (E) - per-axis; doble-tap E = modal uniforme")) {
         m_ui->requestGizmoMode(2);
     }
 
     ImGui::Separator();
 
     // ---- Brushes (Add Box, Add Cylinder) ----
-    if (toolButton("Box",     "Anadir Box brush al mapa actual")) {
+    if (toolButton(ICON_FA_CUBE " Box",
+                    "Anadir Box brush al mapa actual")) {
         m_ui->requestProjectAction(ProjectAction::AddBoxBrush);
     }
-    if (toolButton("Cilindro", "Anadir Cylinder brush al mapa actual")) {
+    if (toolButton(ICON_FA_CIRCLE " Cilindro",
+                    "Anadir Cylinder brush al mapa actual")) {
         m_ui->requestProjectAction(ProjectAction::AddCylinderBrush);
     }
 
@@ -83,7 +88,7 @@ void Toolbar::onImGuiRender() {
 
     // ---- Face mode toggle ----
     const bool faceActive = (m_ui->subMode() == EditorSubMode::Face);
-    if (toolButton("Cara",
+    if (toolButton(ICON_FA_VECTOR_SQUARE " Cara",
                     "Toggle Face mode (3) - editar caras del brush",
                     faceActive)) {
         m_ui->requestToggleFaceMode();

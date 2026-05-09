@@ -2,6 +2,7 @@
 
 #include "editor/application/EditorMode.h"
 #include "editor/ui/EditorUI.h"
+#include "editor/ui/IconsFontAwesome6.h"
 
 #include <imgui.h>
 
@@ -53,18 +54,18 @@ void MapEditorTopBar::onImGuiRender() {
     // Select. CreateBlock spawnea brushes; Pincel agrega vertices. Solo
     // uno activo a la vez — el highlight refleja el m_mapTool.
     ImGui::TextDisabled("Herramienta");
-    if (toolButton("Selecc.",
+    if (toolButton(ICON_FA_ARROW_POINTER " Selecc.",
                     "Selección - drag en vacio dibuja rectangulo de marquee "
                     "y selecciona los brushes que toca",
                     currentTool == MapTool::Select && !polyActive)) {
         m_ui->requestMapTool(MapTool::Select);
     }
-    if (toolButton("Bloque",
+    if (toolButton(ICON_FA_CUBE " Bloque",
                     "Block tool - drag en vacio = preview + spawn brush",
                     currentTool == MapTool::CreateBlock && !polyActive)) {
         m_ui->requestMapTool(MapTool::CreateBlock);
     }
-    if (toolButton("Pincel",
+    if (toolButton(ICON_FA_PAINTBRUSH " Pincel",
                     "Pincel poligonal (B) - clicks agregan vertices, Enter cierra",
                     polyActive)) {
         // Pincel sigue manejandose via togglePolygonDrawMode (F2H30 C)
@@ -72,7 +73,7 @@ void MapEditorTopBar::onImGuiRender() {
         m_ui->requestTogglePolygonDraw();
     }
     // F2H32 Bloque B: clip tool.
-    if (toolButton("Clip",
+    if (toolButton(ICON_FA_SCISSORS " Clip",
                     "Clip tool - 2 clicks definen un plano que splittea "
                     "los brushes selectos. T cycle Front/Back/Both, "
                     "Enter confirma, Esc cancela",
@@ -86,22 +87,22 @@ void MapEditorTopBar::onImGuiRender() {
     // se manipula). Ortogonal al Tool de arriba. Solo aplica cuando hay
     // un brush selecto.
     ImGui::TextDisabled("Sub-modo");
-    if (toolButton("Objeto",
+    if (toolButton(ICON_FA_OBJECT_GROUP " Objeto",
                     "Object Mode (Esc) - mover/rotar/escalar brush entero",
                     currentSubMode == EditorSubMode::Object && !polyActive)) {
         m_ui->requestSubMode(EditorSubMode::Object);
     }
-    if (toolButton("Vertex",
+    if (toolButton(ICON_FA_CIRCLE_DOT " Vertex",
                     "Vertex Mode (1) - mover vertex del brush",
                     currentSubMode == EditorSubMode::Vertex && !polyActive)) {
         m_ui->requestSubMode(EditorSubMode::Vertex);
     }
-    if (toolButton("Edge",
+    if (toolButton(ICON_FA_MINUS " Edge",
                     "Edge Mode (2) - mover arista del brush",
                     currentSubMode == EditorSubMode::Edge && !polyActive)) {
         m_ui->requestSubMode(EditorSubMode::Edge);
     }
-    if (toolButton("Cara",
+    if (toolButton(ICON_FA_VECTOR_SQUARE " Cara",
                     "Face Mode (3) - editar caras del brush",
                     currentSubMode == EditorSubMode::Face && !polyActive)) {
         m_ui->requestSubMode(EditorSubMode::Face);
@@ -111,7 +112,7 @@ void MapEditorTopBar::onImGuiRender() {
 
     // F2H31 Bloque C: toggle snap-to-vertex (tecla V tambien dispara).
     ImGui::TextDisabled("Snap");
-    if (toolButton("Snap V",
+    if (toolButton(ICON_FA_MAGNET " Snap V",
                     "Snap a vertex (V) - snapea al vertex mas cercano de un "
                     "brush existente en lugar del grid",
                     m_ui->snapToVertexEnabled())) {
@@ -124,7 +125,7 @@ void MapEditorTopBar::onImGuiRender() {
     // perspective + ortos. Default ON. El boton highlight refleja el
     // state actual.
     ImGui::TextDisabled("Visualizacion");
-    if (toolButton("Nombres",
+    if (toolButton(ICON_FA_TAG " Nombres",
                     "Mostrar/ocultar nombres (TagComponent.name) arriba "
                     "de los iconos de Light/Audio/Trigger/Camera/Particle "
                     "en el perspective y en los 3 ortos. Persistido "
@@ -139,7 +140,7 @@ void MapEditorTopBar::onImGuiRender() {
     // brush activo por todos los brushes que intersectan su AABB.
     // Sin keyboard shortcut para evitar accidentes.
     ImGui::TextDisabled("Acciones");
-    if (toolButton("Carve",
+    if (toolButton(ICON_FA_CIRCLE_MINUS " Carve",
                     "Carve - resta el brush activo por todos los brushes "
                     "que lo atraviesan. Ctrl+Z deshace.",
                     false)) {

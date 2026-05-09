@@ -183,6 +183,39 @@ EditorApplication::EditorApplication() {
         throw std::runtime_error("ImGui_ImplOpenGL3_Init fallo");
     }
 
+    // F2H36: merge FontAwesome 6 free solid al atlas default. Permite
+    // usar `ICON_FA_*` como prefijo de string en cualquier label de
+    // ImGui (ver `editor/ui/IconsFontAwesome6.h`). El default font de
+    // ImGui (ProggyClean) cubre ASCII; el merge agrega los glyphs del
+    // rango Private Use Area que FA usa para sus iconos.
+    //
+    // ImGui 1.92+ tira un assert si el merge usa un size explicito
+    // distinto del que la default font registro como "reference size"
+    // (que es implicit con AddFontDefault()). Por eso pasamos 0.0f =
+    // implicit ref size en el merge — patron estandar documentado en
+    // imgui-src/docs/FONTS.md ("Merge font and icons" example).
+    //
+    // Si el TTF falla en cargar (ej. no esta en el deploy), seguimos
+    // con default font + los icons aparecen como tofu — degradacion
+    // graceful sin crash.
+    {
+        ImFontAtlas* atlas = io.Fonts;
+        atlas->AddFontDefault();
+        ImFontConfig iconCfg;
+        iconCfg.MergeMode = true;
+        iconCfg.PixelSnapH = true;
+        // NOTA: NO seteamos GlyphMinAdvanceX. ImGui 1.92 tira un IM_ASSERT
+        // si combinas glyph advance overrides + size 0.0f (implicit ref).
+        // El default rendering es suficiente — los iconos quedan al alto
+        // natural de la fuente, alineados con el texto.
+        static const ImWchar k_iconRange[] = { 0xE005, 0xF8FF, 0 };
+        atlas->AddFontFromFileTTF(
+            "assets/ui/fonts/fa-solid-900.ttf",
+            0.0f, // 0 = usar reference size implicit del default font
+            &iconCfg,
+            k_iconRange);
+    }
+
     // Hito 21 Bloque 2: SceneRenderer es dueno del pipeline completo de
     // render (FBs, shaders PBR, skybox, shadow, post-process, IBL, light
     // grid + SSBOs, debug renderer). El editor solo le pasa scene +
