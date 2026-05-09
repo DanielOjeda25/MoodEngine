@@ -280,8 +280,8 @@ void EditorUI::draw(bool& requestQuit) {
 void EditorUI::drawWelcomeModal() {
     // Trigger unico por frame: si el popup no esta abierto, abrirlo.
     // ImGui reabre sin "parpadeo" si ya esta open.
-    if (!ImGui::IsPopupOpen("MoodEngine — bienvenida")) {
-        ImGui::OpenPopup("MoodEngine — bienvenida");
+    if (!ImGui::IsPopupOpen("MoodEngine - bienvenida")) {
+        ImGui::OpenPopup("MoodEngine - bienvenida");
     }
 
     // Centrar el modal en la ventana principal.
@@ -296,7 +296,7 @@ void EditorUI::drawWelcomeModal() {
         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
 
-    if (ImGui::BeginPopupModal("MoodEngine — bienvenida", nullptr, flags)) {
+    if (ImGui::BeginPopupModal("MoodEngine - bienvenida", nullptr, flags)) {
         ImGui::TextUnformatted("No hay proyecto activo.");
         ImGui::TextUnformatted("Elegi que hacer para empezar:");
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
@@ -339,7 +339,7 @@ void EditorUI::drawWelcomeModal() {
                 std::error_code ec;
                 const bool exists = std::filesystem::exists(path, ec);
                 const std::string label = path.stem().generic_string() +
-                                          "  —  " + path.generic_string() +
+                                          "  -  " + path.generic_string() +
                                           (exists ? "" : "  (no existe)");
 
                 // Boton X al final de la fila.
