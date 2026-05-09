@@ -160,14 +160,32 @@ void VisGroupsPanel::onImGuiRender() {
             ImGui::OpenPopup("##color_picker");
         }
         if (ImGui::BeginPopup("##color_picker")) {
+            // F2H35 fix: snapshot pre cuando el popup recien aparece.
+            // Sin esto el `before` capturado en el push de abajo era el
+            // mismo valor que el `after` (porque el array `c[3]` se
+            // reinicializaba cada frame con el color actual de `vg`,
+            // y `vg->color` no se mutaba hasta el final — entonces el
+            // command nacia no-op y el editor revertia visualmente).
+            if (ImGui::IsWindowAppearing()) {
+                m_colorEditingId = gid;
+                m_colorEditBefore = vg->color;
+            }
             float c[3] = { vg->color.r, vg->color.g, vg->color.b };
-            ImGui::ColorPicker3("##picker", c);
-            if (ImGui::IsItemDeactivatedAfterEdit()) {
+            if (ImGui::ColorPicker3("##picker", c)) {
+                // Live preview: mutar el VisGroup directo cada frame
+                // mientras el dev arrastra el picker. El render del orto
+                // ya lee vg->color en cada frame asi que el cambio se
+                // ve al instante en los 3 viewports.
+                vg->color = glm::vec3(c[0], c[1], c[2]);
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit() &&
+                m_colorEditingId == gid) {
                 VisGroup before = *vg;
-                VisGroup after = *vg;
-                after.color = glm::vec3(c[0], c[1], c[2]);
+                before.color = m_colorEditBefore;
+                VisGroup after = *vg;  // ya tiene el color final tras live preview
                 m_history->push(std::make_unique<EditVisGroupCommand>(
                     m_scene, gid, before, after, "Cambiar color VisGroup"));
+                m_colorEditingId = 0;
             }
             ImGui::EndPopup();
         }
