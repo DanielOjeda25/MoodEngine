@@ -30,6 +30,11 @@ enum class BooleanOpKind {
     Subtract,
     Union,
     Intersect,
+    /// F2H32 Bloque B: clip tool. Conceptualmente A se splittea por un
+    /// plano sin un B explicito (B = empty snapshot con tag = ""). El
+    /// comando trata empty bSnapshot como "no hay B para destruir/
+    /// recrear" en execute/undo.
+    Clip,
 };
 
 class BooleanOpCommand : public ICommand {

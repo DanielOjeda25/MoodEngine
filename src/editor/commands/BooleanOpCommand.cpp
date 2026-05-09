@@ -49,6 +49,7 @@ const char* opKindName(BooleanOpKind k) {
         case BooleanOpKind::Subtract:  return "Subtract";
         case BooleanOpKind::Union:     return "Union";
         case BooleanOpKind::Intersect: return "Intersect";
+        case BooleanOpKind::Clip:      return "Clip";
     }
     return "?";
 }
@@ -101,6 +102,10 @@ std::string BooleanOpCommand::name() const {
 void BooleanOpCommand::destroyByTags(const std::vector<std::string>& tags) {
     if (m_scene == nullptr) return;
     for (const auto& tag : tags) {
+        // F2H32 Bloque B: clip op pasa bSnapshot.tag = "" porque no hay
+        // un brush B (el plano del clip no es una entidad). Skipear sin
+        // warn cuando el tag es vacio.
+        if (tag.empty()) continue;
         Entity victim;
         m_scene->forEach<TagComponent>([&](Entity e, TagComponent& t) {
             if (!static_cast<bool>(victim) && t.name == tag) {
@@ -119,8 +124,13 @@ void BooleanOpCommand::destroyByTags(const std::vector<std::string>& tags) {
 
 void BooleanOpCommand::recreateOriginals() {
     if (m_scene == nullptr) return;
-    recreateBrushEntity(*m_scene, m_assets, m_aSnapshot);
-    recreateBrushEntity(*m_scene, m_assets, m_bSnapshot);
+    if (!m_aSnapshot.tag.empty()) {
+        recreateBrushEntity(*m_scene, m_assets, m_aSnapshot);
+    }
+    // F2H32: clip no tiene B; skipear si tag vacio.
+    if (!m_bSnapshot.tag.empty()) {
+        recreateBrushEntity(*m_scene, m_assets, m_bSnapshot);
+    }
 }
 
 void BooleanOpCommand::recreateResults() {

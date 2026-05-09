@@ -168,6 +168,18 @@ public:
     void setSnapToVertexEnabled(bool v) { m_snapToVertexEnabled = v; }
     bool snapToVertexEnabled() const { return m_snapToVertexEnabled; }
 
+    /// @brief F2H32 Bloque C: el toolbar pide ejecutar carve sobre el
+    ///        brush activo (Hammer-style boolean subtract automatico
+    ///        contra todos los brushes que intersecten el AABB del
+    ///        active). Sin keyboard shortcut por seguridad
+    ///        (operacion destructiva).
+    void requestCarve() { m_carveRequested = true; }
+    bool consumeCarveRequest() {
+        const bool r = m_carveRequested;
+        m_carveRequested = false;
+        return r;
+    }
+
     /// @brief F2H30 Bloque C: acceso a la top toolbar.
     MapEditorTopBar& mapEditorTopBar() { return m_mapEditorTopBar; }
 
@@ -609,6 +621,9 @@ private:
     // F2H31 Bloque C: snap-to-vertex toggle.
     bool m_toggleSnapToVertexRequested = false;
     bool m_snapToVertexEnabled = false;
+
+    // F2H32 Bloque C: carve action button.
+    bool m_carveRequested = false;
 };
 
 } // namespace Mood

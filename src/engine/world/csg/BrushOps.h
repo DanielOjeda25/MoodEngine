@@ -62,4 +62,27 @@ std::optional<Brush> intersectOp(const Brush& A, const Brush& B);
 ///        - N > 2:      overlap parcial -> (A subtract B) ∪ {B}.
 std::vector<Brush> unionOp(const Brush& A, const Brush& B);
 
+/// @brief F2H32 Bloque B: clip tool. Splittea el brush A por el plano
+///        `clipPlane` (que se asume con normal y distance ya correctos
+///        para el lado "front"; el "back" se obtiene negando el plano).
+///
+///        Algoritmo: copia el brush, agrega un BrushFace con el plano
+///        correspondiente (intersect con el half-space). Validar con
+///        isBrushValid; si degenera (plano no toca al brush), no
+///        emitir esa parte.
+///
+///        `keepFront` true -> emite el lado positivo del plano.
+///        `keepBack`  true -> emite el lado negativo.
+///        Ambos true -> spawnea ambos como brushes separados.
+///        Devuelve hasta 2 brushes en orden: [front, back] (ausentes si
+///        no se piden o degeneran). Cardinalidad:
+///        - 0: el plano no intersecta al brush en ninguna direccion.
+///        - 1: solo un lado es valido (el plano tangencia o el brush
+///             vive todo de un lado).
+///        - 2: ambos lados validos.
+std::vector<Brush> clipBrushByPlane(const Brush& A,
+                                     const Plane& clipPlane,
+                                     bool keepFront,
+                                     bool keepBack);
+
 } // namespace Mood::Csg

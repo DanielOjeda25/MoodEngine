@@ -70,6 +70,14 @@ void MapEditorTopBar::onImGuiRender() {
         // que ya cancela y revierte si esta activo.
         m_ui->requestTogglePolygonDraw();
     }
+    // F2H32 Bloque B: clip tool.
+    if (toolButton("Clip",
+                    "Clip tool - 2 clicks definen un plano que splittea "
+                    "los brushes selectos. T cycle Front/Back/Both, "
+                    "Enter confirma, Esc cancela",
+                    currentTool == MapTool::Clip && !polyActive)) {
+        m_ui->requestMapTool(MapTool::Clip);
+    }
 
     ImGui::Separator();
 
@@ -107,6 +115,19 @@ void MapEditorTopBar::onImGuiRender() {
                     "brush existente en lugar del grid",
                     m_ui->snapToVertexEnabled())) {
         m_ui->requestToggleSnapToVertex();
+    }
+
+    ImGui::Separator();
+
+    // F2H32 Bloque C: carve UI button. Click destructivo — resta el
+    // brush activo por todos los brushes que intersectan su AABB.
+    // Sin keyboard shortcut para evitar accidentes.
+    ImGui::TextDisabled("Acciones");
+    if (toolButton("Carve",
+                    "Carve - resta el brush activo por todos los brushes "
+                    "que lo atraviesan (Hammer-style). Ctrl+Z deshace.",
+                    false)) {
+        m_ui->requestCarve();
     }
 
     ImGui::End();

@@ -155,6 +155,39 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                 dbgR.drawLine(camPos, cBR, frusEdge);
                 dbgR.drawLine(camPos, cBL, frusEdge);
             }
+            // F2H32 Bloque B: clip tool preview. p1 marker + linea de
+            // p1 al cursor (rubber band) si solo hay p1; o linea
+            // p1->p2 si ambos. Color amarillo claro consistente con
+            // el frustum y marquee. Solo en la orto donde se hizo el
+            // primer click.
+            if (m_clipTool.active &&
+                m_clipTool.orthoIdx == static_cast<int>(i) &&
+                m_sceneRenderer) {
+                auto& dbgR = m_sceneRenderer->debugRenderer();
+                const glm::vec3 clipColor(1.0f, 0.85f, 0.0f);
+                const f32 clipMarkerHalf = std::max(snapStep * 0.05f, 0.05f);
+                const glm::vec3 chm(clipMarkerHalf);
+                if (m_clipTool.hasP1) {
+                    dbgR.drawAabb(AABB{m_clipTool.p1World - chm,
+                                        m_clipTool.p1World + chm}, clipColor);
+                    glm::vec3 endPt = m_clipTool.p1World;
+                    if (m_clipTool.hasP2) {
+                        endPt = m_clipTool.p2World;
+                        dbgR.drawAabb(AABB{m_clipTool.p2World - chm,
+                                            m_clipTool.p2World + chm}, clipColor);
+                    } else {
+                        // Rubber band hasta el cursor live.
+                        const auto& lc = op->liveCursor();
+                        if (lc.hovered) {
+                            endPt = op->camera().worldFromNdc(
+                                lc.ndcX, lc.ndcY, oAspect);
+                            endPt = snapToVertexOrGrid(endPt,
+                                                        op->camera(), oAspect);
+                        }
+                    }
+                    dbgR.drawLine(m_clipTool.p1World, endPt, clipColor);
+                }
+            }
             // F2H31 Bloque B: rectangulo amarillo del marquee select.
             // Se dibuja solo en la orto donde arranco el drag. 4 lineas
             // sobre el plano del view (worldFromNdc en las 4 esquinas).

@@ -415,6 +415,8 @@ add_executable(MoodEditor
     src/editor/application/EditorApplication_Init.cpp
     src/editor/application/EditorApplication_Run.cpp
     src/editor/application/EditorApplication_Snap.cpp
+    src/editor/application/EditorProjectActions_Clip.cpp
+    src/editor/application/EditorProjectActions_Carve.cpp
     src/editor/application/DemoSpawners_Basic.cpp
     src/editor/application/DemoSpawners_Stress.cpp
     src/editor/application/DemoSpawners_Prefab.cpp

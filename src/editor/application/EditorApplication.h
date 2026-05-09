@@ -447,6 +447,43 @@ private:
     };
     OrthoMarqueeSession m_orthoMarquee;
 
+    /// @brief F2H32 Bloque B: sesion del clip tool. Activa cuando
+    ///        m_mapTool == Clip + el dev hace primer click en orto.
+    ///        Captura p1; segundo click captura p2 -> plano definido.
+    ///        Tecla T durante la sesion cycle keepMode. Enter confirma
+    ///        (splitea brushes seleccionados); Esc cancela.
+    struct ClipToolSession {
+        bool active = false;
+        int  orthoIdx = -1;  // -1 hasta el primer click
+        bool hasP1 = false;
+        bool hasP2 = false;
+        glm::vec3 p1World{0.0f};
+        glm::vec3 p2World{0.0f};
+        ClipKeepMode keepMode = ClipKeepMode::Front;
+    };
+    ClipToolSession m_clipTool;
+
+    /// @brief F2H32 Bloque B: ejecuta el clip de los brushes selectos
+    ///        usando el plano armado del `m_clipTool`. Spawnea los
+    ///        brushes resultado, destruye los originales, pushea el
+    ///        ClipBrushesCommand para Ctrl+Z agrupado. Llamado al
+    ///        confirmar con Enter o boton del toolbar.
+    void confirmClipTool();
+    /// @brief Cancela la sesion del clip sin spawnear (Esc).
+    void cancelClipTool();
+    /// @brief Cycle Front -> Back -> Both -> Front. Llamado por tecla T
+    ///        durante la sesion activa.
+    void cycleClipKeepMode();
+
+    /// @brief F2H32 Bloque C: carve sobre el brush activo. Resta del
+    ///        active todos los brushes que intersectan su AABB world.
+    ///        Reusa Csg::subtract iterativo + BooleanOpCommand
+    ///        (kind=Subtract con bSnapshot vacio porque hay multiples
+    ///        carvers — todos preservados; solo el active se reemplaza
+    ///        por sus fragmentos resultado). Llamado por el boton del
+    ///        toolbar lateral.
+    void handleCarve();
+
     /// @brief F2H29 Bloque C: spawnea un Box brush con `transform`
     ///        especificado (en lugar del `mat4(1.0f)` que usan las
     ///        primitivas del menu Brush > Anadir > Box). Usado por el

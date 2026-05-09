@@ -210,4 +210,57 @@ std::vector<Brush> unionOp(const Brush& A, const Brush& B) {
     return result;
 }
 
+std::vector<Brush> clipBrushByPlane(const Brush& A,
+                                     const Plane& clipPlane,
+                                     bool keepFront,
+                                     bool keepBack) {
+    std::vector<Brush> out;
+    if (!isBrushValid(A)) return out;
+    if (!keepFront && !keepBack) return out;
+
+    // F2H32 Bloque B: el "front" del split es el half-space del lado
+    // positivo de la normal del clipPlane (signedDistance > 0).
+    // Convencion CSG del motor: las normales de las caras del brush
+    // apuntan AFUERA, el interior es la interseccion de half-spaces
+    // negativos (signedDistance <= 0). Para mantener el "front"
+    // agregamos un plano con normal NEGADA (interior queda del lado
+    // positivo del clipPlane original); para "back" agregamos el
+    // plano tal cual.
+
+    auto makeSide = [&](bool front) -> Brush {
+        Brush copy = A;
+        BrushFace newFace;
+        if (front) {
+            newFace.plane.normal   = -clipPlane.normal;
+            newFace.plane.distance = -clipPlane.distance;
+        } else {
+            newFace.plane = clipPlane;
+        }
+        // Heredar material slot + UV defaults del primer face del
+        // brush original (mismo patron que F2H12 boolean ops).
+        if (!copy.faces.empty()) {
+            newFace.materialIndex = copy.faces.front().materialIndex;
+            newFace.uAxis     = copy.faces.front().uAxis;
+            newFace.vAxis     = copy.faces.front().vAxis;
+            newFace.uvOffset  = copy.faces.front().uvOffset;
+            newFace.uvScale   = copy.faces.front().uvScale;
+            newFace.uvRotation= copy.faces.front().uvRotation;
+            newFace.lockToWorld = copy.faces.front().lockToWorld;
+        }
+        copy.faces.push_back(newFace);
+        copy.localAabb = computeBrushAabb(copy);
+        return copy;
+    };
+
+    if (keepFront) {
+        Brush f = makeSide(true);
+        if (isBrushValid(f)) out.push_back(std::move(f));
+    }
+    if (keepBack) {
+        Brush b = makeSide(false);
+        if (isBrushValid(b)) out.push_back(std::move(b));
+    }
+    return out;
+}
+
 } // namespace Mood::Csg

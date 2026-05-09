@@ -382,15 +382,26 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                 m_snapToVertexEnabled ? "on" : "off");
         }
         // F2H30 Bloque C: Enter cierra el polígono activo.
+        // F2H32 Bloque B: Enter tambien confirma el clip si hay sesion.
         if ((ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
-             ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) &&
-            m_polyDraw.active) {
-            closePolygonDraw();
-        }
-        // Esc: si hay polígono en progreso, cancelarlo PRIMERO. Si no,
-        // volver a Object mode.
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+             ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false))) {
             if (m_polyDraw.active) {
+                closePolygonDraw();
+            } else if (m_clipTool.active && m_clipTool.hasP1
+                       && m_clipTool.hasP2) {
+                confirmClipTool();
+            }
+        }
+        // F2H32 Bloque B: tecla T cycle keep mode del clip tool. Solo
+        // si hay sesion clip activa (sino la tecla esta libre).
+        if (ImGui::IsKeyPressed(ImGuiKey_T, false) && m_clipTool.active) {
+            cycleClipKeepMode();
+        }
+        // Esc: clip > pincel > sub-mode (prioridad de cancelacion).
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+            if (m_clipTool.active) {
+                cancelClipTool();
+            } else if (m_polyDraw.active) {
                 cancelPolygonDraw();
             } else if (m_subMode != EditorSubMode::Object) {
                 m_subMode = EditorSubMode::Object;

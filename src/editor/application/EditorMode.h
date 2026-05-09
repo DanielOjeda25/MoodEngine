@@ -48,6 +48,21 @@ enum class MapTool {
     Select = 0,
     CreateBlock = 1,
     Pincel = 2,
+    /// F2H32 Bloque B: clip tool. Drag/clicks en orto definen un plano
+    /// perpendicular al view plane (linea entre 2 clicks + extrusion
+    /// sobre el eje perpendicular). Splittea brushes seleccionados.
+    /// Tecla T cycle KeepFront / KeepBack / KeepBoth; Enter confirma;
+    /// Esc cancela.
+    Clip = 3,
+};
+
+/// @brief F2H32 Bloque B: lado(s) del clip que se conserva al hacer
+///        split. Hammer convencional: T cycle entre los 3 modos durante
+///        la sesion del clip tool antes de confirmar con Enter.
+enum class ClipKeepMode {
+    Front = 0,  // lado positivo de la normal del plano (default)
+    Back  = 1,  // lado negativo
+    Both  = 2,  // spawnea ambos como brushes separados (F2H12 boolean-style)
 };
 
 /// @brief Acciones de proyecto que la UI solicita y EditorApplication atiende.

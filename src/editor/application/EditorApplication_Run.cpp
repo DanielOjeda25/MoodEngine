@@ -170,10 +170,40 @@ int EditorApplication::run() {
             if (requestedTool != MapTool::Pincel && m_polyDraw.active) {
                 cancelPolygonDraw();
             }
+            // F2H32 Bloque B: si cambiamos de tool y habia una sesion
+            // de clip activa, cancelarla (sin spawnear).
+            if (requestedTool != MapTool::Clip && m_clipTool.active) {
+                cancelClipTool();
+            }
+            // F2H32 Bloque B: hint visible si se activa Clip sin nada
+            // selecto. El consumer real (confirmClipTool) chequea de
+            // nuevo y aborta si la seleccion sigue vacia.
+            if (requestedTool == MapTool::Clip) {
+                bool hasSelection = false;
+                for (const Entity& sel : m_ui.selectionSet().selected) {
+                    if (sel && sel.hasComponent<BrushComponent>()) {
+                        hasSelection = true;
+                        break;
+                    }
+                }
+                if (!hasSelection) {
+                    Log::editor()->warn(
+                        "[clip] activado sin brush selecto — clickea "
+                        "'Selecc' + click sobre un brush primero");
+                    m_ui.setStatusMessage(
+                        "Clip: selecciona un brush primero (Selecc tool)");
+                }
+            }
             if (requestedTool != MapTool::Pincel) {
                 m_mapTool = requestedTool;
-                Log::editor()->info("[map toolbar] tool -> {}",
-                    requestedTool == MapTool::Select ? "Select" : "CreateBlock");
+                const char* lbl = "Select";
+                switch (requestedTool) {
+                    case MapTool::Select:      lbl = "Select"; break;
+                    case MapTool::CreateBlock: lbl = "CreateBlock"; break;
+                    case MapTool::Pincel:      lbl = "Pincel"; break;
+                    case MapTool::Clip:        lbl = "Clip"; break;
+                }
+                Log::editor()->info("[map toolbar] tool -> {}", lbl);
             }
             // Si requestedTool == Pincel, requestTogglePolygonDraw ya
             // se disparo (el toolbar emite ambos requests cuando clickeas
@@ -185,6 +215,10 @@ int EditorApplication::run() {
             m_snapToVertexEnabled = !m_snapToVertexEnabled;
             Log::editor()->info("[snap] vertex snap = {} (via toolbar)",
                 m_snapToVertexEnabled ? "on" : "off");
+        }
+        // F2H32 Bloque C: carve action button (sin keyboard shortcut).
+        if (m_ui.consumeCarveRequest()) {
+            handleCarve();
         }
         // Sync state: para que la top toolbar pueda highlight los
         // botones activos.
@@ -468,6 +502,83 @@ int EditorApplication::run() {
             m_ui.setStatusMessage(
                 "Pincel: click para vertex, Enter cierra, Esc cancela ["
                 + std::to_string(m_polyDraw.pointsWorld.size()) + " pts]");
+        }
+
+        // 2.4a-clip) F2H32 Bloque B: clip tool — 2 clicks en orto
+        //            definen una linea; el plano resultante es
+        //            perpendicular al view plane (extendido sobre el
+        //            forwardAxis del orto). Tecla T cycle keepMode;
+        //            Enter confirma; Esc cancela.
+        if (m_mode == EditorMode::Editor && m_mapTool == MapTool::Clip) {
+            OrthoViewportPanel* clipOrthoPanels[3] = {
+                &m_ui.orthoTop(), &m_ui.orthoFront(), &m_ui.orthoSide(),
+            };
+            for (int i = 0; i < 3; ++i) {
+                const auto click = clipOrthoPanels[i]->consumeClickSelect();
+                if (!click.pending) continue;
+                if (m_clipTool.active && m_clipTool.orthoIdx >= 0
+                    && m_clipTool.orthoIdx != i) {
+                    // Lockeado a otra orto — ignorar para mantener
+                    // coplanaridad del plano del clip con un view plane.
+                    continue;
+                }
+                const u32 oW = clipOrthoPanels[i]->desiredWidth();
+                const u32 oH = clipOrthoPanels[i]->desiredHeight();
+                if (oW == 0 || oH == 0) continue;
+                const f32 oAspect = static_cast<f32>(oW) /
+                                     static_cast<f32>(oH);
+                const auto& cam = clipOrthoPanels[i]->camera();
+                glm::vec3 worldPt = cam.worldFromNdc(
+                    click.ndcX, click.ndcY, oAspect);
+                worldPt = snapToVertexOrGrid(worldPt, cam, oAspect);
+                if (!m_clipTool.active) {
+                    // Primera vez: arranca sesion.
+                    m_clipTool.active = true;
+                    m_clipTool.orthoIdx = i;
+                    m_clipTool.hasP1 = false;
+                    m_clipTool.hasP2 = false;
+                    m_clipTool.keepMode = ClipKeepMode::Front;
+                }
+                if (!m_clipTool.hasP1) {
+                    m_clipTool.p1World = worldPt;
+                    m_clipTool.hasP1 = true;
+                    Log::editor()->info(
+                        "[clip] p1 = ({:.1f}, {:.1f}, {:.1f})",
+                        worldPt.x, worldPt.y, worldPt.z);
+                } else if (!m_clipTool.hasP2) {
+                    if (glm::distance(m_clipTool.p1World, worldPt)
+                        < kPlaneEpsilon) {
+                        Log::editor()->warn(
+                            "[clip] p2 == p1 (plano degenerado), "
+                            "ignorando click");
+                        continue;
+                    }
+                    m_clipTool.p2World = worldPt;
+                    m_clipTool.hasP2 = true;
+                    Log::editor()->info(
+                        "[clip] p2 = ({:.1f}, {:.1f}, {:.1f}) "
+                        "— Enter confirma, T cycle keep mode",
+                        worldPt.x, worldPt.y, worldPt.z);
+                } else {
+                    // Ya tenia p1 + p2; este 3er click reemplaza p2
+                    // (permite ajustar el plano sin cancelar).
+                    m_clipTool.p2World = worldPt;
+                    Log::editor()->info(
+                        "[clip] p2 actualizado = ({:.1f}, {:.1f}, {:.1f})",
+                        worldPt.x, worldPt.y, worldPt.z);
+                }
+            }
+            // Hint en status bar.
+            const char* keepLbl = "Front";
+            if (m_clipTool.keepMode == ClipKeepMode::Back) keepLbl = "Back";
+            else if (m_clipTool.keepMode == ClipKeepMode::Both) keepLbl = "Both";
+            std::string hint = "Clip: ";
+            if (!m_clipTool.hasP1) hint += "click 1ro punto";
+            else if (!m_clipTool.hasP2) hint += "click 2do punto";
+            else hint += "Enter confirma";
+            hint += " — keep="; hint += keepLbl;
+            hint += " (T cycle, Esc cancela)";
+            m_ui.setStatusMessage(hint);
         }
 
         // 2.4b) F2H28 Bloque F: click-select desde los 3 viewports
