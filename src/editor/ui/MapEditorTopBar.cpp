@@ -54,7 +54,8 @@ void MapEditorTopBar::onImGuiRender() {
     // uno activo a la vez — el highlight refleja el m_mapTool.
     ImGui::TextDisabled("Herramienta");
     if (toolButton("Selecc.",
-                    "Selección (Hammer-default) - drag en vacio = marquee select",
+                    "Selección - drag en vacio dibuja rectangulo de marquee "
+                    "y selecciona los brushes que toca",
                     currentTool == MapTool::Select && !polyActive)) {
         m_ui->requestMapTool(MapTool::Select);
     }
@@ -125,7 +126,7 @@ void MapEditorTopBar::onImGuiRender() {
     ImGui::TextDisabled("Acciones");
     if (toolButton("Carve",
                     "Carve - resta el brush activo por todos los brushes "
-                    "que lo atraviesan (Hammer-style). Ctrl+Z deshace.",
+                    "que lo atraviesan. Ctrl+Z deshace.",
                     false)) {
         m_ui->requestCarve();
     }
