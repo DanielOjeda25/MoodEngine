@@ -28,6 +28,87 @@
 
 namespace Mood {
 
+namespace {
+
+// F2H34: aplica `matId` a TODAS las caras seleccionadas del brush
+// `brushEnt` cuando el editor esta en Face Mode con seleccion activa
+// del mismo brush. Devuelve un command listo para pushear (o nullptr
+// si no aplica — la llamadora debe caer al flow object-mode).
+//
+// Reusa slot existente si el material ya esta en bc.materials. Si es
+// nuevo, hace UN solo push_back y todas las caras apuntan a ese slot.
+//
+// Pre: bc no mutado todavia. Post (si retorna != nullptr): bc.materials
+// posiblemente con un slot mas, todas las caras del set apuntan al slot
+// correspondiente, bc.dirty = true.
+struct FaceDropResult {
+    std::unique_ptr<EditBrushFaceMaterialCommand> cmd;
+    u32 slotUsed = 0;
+    size_t numFaces = 0;
+};
+
+FaceDropResult tryAssignMaterialToSelectedFaces(
+    Scene* scene, Entity brushEnt, const std::string& tag,
+    BrushComponent& bc, MaterialAssetId matId,
+    const SelectionSet& selSet, EditorSubMode subMode,
+    const std::string& label) {
+    FaceDropResult r;
+    if (subMode != EditorSubMode::Face) return r;
+    if (!static_cast<bool>(selSet.active)) return r;
+    if (selSet.active.handle() != brushEnt.handle()) return r;
+    if (selSet.selectedFaceIndices.empty()) return r;
+
+    // Validar que todas las caras seleccionadas estan en rango. Si una
+    // sola esta corrupta, fallback a object-mode (sin mutar nada).
+    std::vector<u32> faceIndices;
+    faceIndices.reserve(selSet.selectedFaceIndices.size());
+    for (i32 fi : selSet.selectedFaceIndices) {
+        if (fi < 0 || static_cast<u32>(fi) >= bc.brush.faces.size()) {
+            return r;
+        }
+        faceIndices.push_back(static_cast<u32>(fi));
+    }
+
+    // Snapshot pre.
+    std::vector<MaterialAssetId> oldMaterials = bc.materials;
+    std::vector<u32> oldFaceMatIndices;
+    oldFaceMatIndices.reserve(faceIndices.size());
+    for (u32 fi : faceIndices) {
+        oldFaceMatIndices.push_back(bc.brush.faces[fi].materialIndex);
+    }
+
+    // Buscar/crear slot del material (un solo push_back si es nuevo;
+    // todas las caras del set apuntan al mismo slot).
+    u32 slot = 0;
+    bool found = false;
+    for (u32 i = 0; i < bc.materials.size(); ++i) {
+        if (bc.materials[i] == matId) { slot = i; found = true; break; }
+    }
+    if (!found) {
+        slot = static_cast<u32>(bc.materials.size());
+        bc.materials.push_back(matId);
+    }
+
+    // Asignar slot a todas las caras + snapshot post.
+    std::vector<u32> newFaceMatIndices(faceIndices.size(), slot);
+    for (u32 fi : faceIndices) {
+        bc.brush.faces[fi].materialIndex = slot;
+    }
+    bc.dirty = true;
+
+    std::vector<MaterialAssetId> newMaterials = bc.materials;
+    r.numFaces = faceIndices.size();
+    r.slotUsed = slot;
+    r.cmd = std::make_unique<EditBrushFaceMaterialCommand>(
+        scene, tag, std::move(faceIndices),
+        std::move(oldMaterials), std::move(oldFaceMatIndices),
+        std::move(newMaterials), std::move(newFaceMatIndices),
+        label);
+    return r;
+}
+
+} // namespace
+
 void EditorApplication::processViewportTextureDrop() {
     const ViewportPanel::TextureDrop drop = m_ui.viewport().consumeTextureDrop();
     if (!(drop.pending && m_mode == EditorMode::Editor)) return;
@@ -54,51 +135,23 @@ void EditorApplication::processViewportTextureDrop() {
                     ? brushHit.entity.getComponent<TagComponent>().name
                     : std::string{"(sin tag)"};
 
-            // F2H17: si Face Mode + cara seleccionada del MISMO brush,
-            // asignar material a esa cara (agregar slot si no existe).
-            // Sino, comportamiento global F2H16 (slot 0).
+            // F2H17 + F2H34: si Face Mode + N caras seleccionadas del
+            // MISMO brush, asignar material a TODAS (un solo push_back
+            // del slot, todas las caras apuntan ahi). Sino, fallback al
+            // Object Mode (slot 0, F2H16).
             const SelectionSet& selSet = m_ui.selectionSet();
-            const bool faceMode =
-                m_subMode == EditorSubMode::Face &&
-                static_cast<bool>(selSet.active) &&
-                selSet.active.handle() == brushHit.entity.handle() &&
-                selSet.activeFaceIndex() >= 0 &&
-                static_cast<u32>(selSet.activeFaceIndex()) < bc.brush.faces.size();
-
-            if (faceMode) {
-                // F2H19: snapshot pre + push EditBrushFaceMaterialCommand.
-                // Buscar si newMat ya esta en bc.materials. Si si,
-                // reusar slot. Si no, agregar slot nuevo.
-                const u32 faceIdx = static_cast<u32>(selSet.activeFaceIndex());
-                std::vector<MaterialAssetId> oldMaterials = bc.materials;
-                const u32 oldFaceMatIndex =
-                    bc.brush.faces[faceIdx].materialIndex;
-
-                u32 slot = 0;
-                bool found = false;
-                for (u32 i = 0; i < bc.materials.size(); ++i) {
-                    if (bc.materials[i] == newMat) {
-                        slot = i; found = true; break;
-                    }
-                }
-                if (!found) {
-                    slot = static_cast<u32>(bc.materials.size());
-                    bc.materials.push_back(newMat);
-                }
-                bc.brush.faces[faceIdx].materialIndex = slot;
-                bc.dirty = true;
-
-                std::vector<MaterialAssetId> newMaterials = bc.materials;
-                m_history.push(std::make_unique<EditBrushFaceMaterialCommand>(
-                    m_scene.get(), tag, faceIdx,
-                    std::move(oldMaterials), oldFaceMatIndex,
-                    std::move(newMaterials), slot,
-                    "Asignar textura a cara"));
-
+            FaceDropResult faceRes = tryAssignMaterialToSelectedFaces(
+                m_scene.get(), brushHit.entity, tag, bc, newMat,
+                selSet, m_subMode,
+                selSet.selectedFaceIndices.size() > 1
+                    ? "Asignar textura a caras"
+                    : "Asignar textura a cara");
+            if (faceRes.cmd) {
+                m_history.push(std::move(faceRes.cmd));
                 m_ui.setSelectedEntity(brushHit.entity);
                 Log::editor()->info(
-                    "Drop textura id={} -> brush '{}' cara {} (slot {})",
-                    drop.textureId, tag, faceIdx, slot);
+                    "Drop textura id={} -> brush '{}' {} cara(s) (slot {})",
+                    drop.textureId, tag, faceRes.numFaces, faceRes.slotUsed);
                 markDirty();
                 return;
             }
@@ -264,48 +317,22 @@ void EditorApplication::processViewportMaterialDrop() {
     if (hit.entity.hasComponent<BrushComponent>()) {
         auto& bc = hit.entity.getComponent<BrushComponent>();
 
-        // F2H17: si Face Mode + cara seleccionada del mismo brush,
-        // asignar material a esa cara. Sino, slot 0 (Object Mode).
+        // F2H17 + F2H34: si Face Mode + N caras seleccionadas del MISMO
+        // brush, asignar material a TODAS. Sino, fallback a slot 0
+        // (Object Mode).
         const SelectionSet& selSet = m_ui.selectionSet();
-        const bool faceMode =
-            m_subMode == EditorSubMode::Face &&
-            static_cast<bool>(selSet.active) &&
-            selSet.active.handle() == hit.entity.handle() &&
-            selSet.activeFaceIndex() >= 0 &&
-            static_cast<u32>(selSet.activeFaceIndex()) < bc.brush.faces.size();
-
-        if (faceMode) {
-            // F2H19: snapshot pre + push EditBrushFaceMaterialCommand.
-            const u32 faceIdx = static_cast<u32>(selSet.activeFaceIndex());
-            std::vector<MaterialAssetId> oldMaterials = bc.materials;
-            const u32 oldFaceMatIndex =
-                bc.brush.faces[faceIdx].materialIndex;
-
-            u32 slot = 0;
-            bool found = false;
-            for (u32 i = 0; i < bc.materials.size(); ++i) {
-                if (bc.materials[i] == matId) {
-                    slot = i; found = true; break;
-                }
-            }
-            if (!found) {
-                slot = static_cast<u32>(bc.materials.size());
-                bc.materials.push_back(matId);
-            }
-            bc.brush.faces[faceIdx].materialIndex = slot;
-            bc.dirty = true;
-
-            std::vector<MaterialAssetId> newMaterials = bc.materials;
-            m_history.push(std::make_unique<EditBrushFaceMaterialCommand>(
-                m_scene.get(), tagName, faceIdx,
-                std::move(oldMaterials), oldFaceMatIndex,
-                std::move(newMaterials), slot,
-                "Asignar material a cara"));
-
+        FaceDropResult faceRes = tryAssignMaterialToSelectedFaces(
+            m_scene.get(), hit.entity, tagName, bc, matId,
+            selSet, m_subMode,
+            selSet.selectedFaceIndices.size() > 1
+                ? "Asignar material a caras"
+                : "Asignar material a cara");
+        if (faceRes.cmd) {
+            m_history.push(std::move(faceRes.cmd));
             m_ui.setSelectedEntity(hit.entity);
             Log::editor()->info(
-                "Drop material id {} -> brush '{}' cara {} (slot {})",
-                drop.materialId, tagName, faceIdx, slot);
+                "Drop material id {} -> brush '{}' {} cara(s) (slot {})",
+                drop.materialId, tagName, faceRes.numFaces, faceRes.slotUsed);
             markDirty();
             return;
         }
