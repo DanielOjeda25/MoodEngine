@@ -116,6 +116,7 @@ void EditorApplication::processEvents() {
         } else if (ev.type == SDL_KEYDOWN &&
                    (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
                    (ev.key.keysym.sym == SDLK_EQUALS ||
+                    ev.key.keysym.sym == SDLK_PLUS   ||
                     ev.key.keysym.sym == SDLK_KP_PLUS ||
                     ev.key.keysym.sym == SDLK_MINUS  ||
                     ev.key.keysym.sym == SDLK_KP_MINUS) &&
@@ -125,10 +126,16 @@ void EditorApplication::processEvents() {
                        == "Editor de mapas" &&
                    !ImGui::GetIO().WantTextInput) {
             // F2H28 Bloque G: ciclar snap step del workspace orto.
-            // Acepta Ctrl+= (= produce + con shift, pero la tecla fisica
-            // es =) Y Ctrl+ KP_PLUS / Ctrl+- / Ctrl+ KP_MINUS. Ignora
-            // el shift en la modifier mask asi Ctrl++ y Ctrl+= entran
-            // por el mismo branch.
+            // Acepta:
+            //   Ctrl+= (US/UK: la tecla fisica es '='; con shift produce '+')
+            //   Ctrl++ via SDLK_PLUS (layout ES: tecla a la derecha de Ñ
+            //                         da '+' SIN shift — F2H33 fix bug
+            //                         reportado por el dev en teclado 80%
+            //                         sin numerico).
+            //   Ctrl+ KP_PLUS  (numerico, opcional en 80%).
+            //   Ctrl+- y Ctrl+ KP_MINUS para reducir.
+            // Ignora shift en la modifier mask para que Ctrl++ y Ctrl+=
+            // entren por el mismo branch.
             static constexpr u32 k_steps[] = {1u, 2u, 4u, 8u, 16u,
                                                 32u, 64u, 128u};
             constexpr int k_stepsCount =
@@ -138,6 +145,7 @@ void EditorApplication::processEvents() {
                 if (k_steps[i] == m_hammerSnapStep) { idx = i; break; }
             }
             const bool up = (ev.key.keysym.sym == SDLK_EQUALS ||
+                              ev.key.keysym.sym == SDLK_PLUS  ||
                               ev.key.keysym.sym == SDLK_KP_PLUS);
             if (up && idx + 1 < k_stepsCount) ++idx;
             if (!up && idx - 1 >= 0) --idx;
