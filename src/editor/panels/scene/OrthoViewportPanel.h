@@ -88,6 +88,17 @@ public:
         return r;
     }
 
+    /// F2H30 Bloque C: posicion live del cursor en NDC (-1..+1) cuando
+    /// el cursor esta sobre la imagen del viewport. Se actualiza cada
+    /// frame del onImGuiRender. El caller (pincel poligonal) lo usa
+    /// para dibujar la rubber-band del ultimo vertex al cursor.
+    struct LiveCursor {
+        bool  hovered = false;
+        float ndcX = 0.0f;
+        float ndcY = 0.0f;
+    };
+    const LiveCursor& liveCursor() const { return m_liveCursor; }
+
 private:
     OrthoCamera m_camera;
     IFramebuffer* m_framebuffer = nullptr;
@@ -103,6 +114,7 @@ private:
 
     ClickSelect m_pendingClick{};
     DragState   m_dragState{};
+    LiveCursor  m_liveCursor{};
 };
 
 } // namespace Mood

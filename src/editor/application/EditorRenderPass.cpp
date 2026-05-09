@@ -110,6 +110,56 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                          m_orthoBlockSession.previewMax},
                     gmodCelesteRGB);
             }
+            // F2H30 Bloque C: re-encolar el preview del pincel poligonal
+            // en los ortos (incluye rubber band del ultimo vertex al
+            // cursor live de la orto lockeada).
+            if (m_polyDraw.active && m_polyDraw.pointsWorld.size() > 0
+                && m_sceneRenderer) {
+                auto& dbgR = m_sceneRenderer->debugRenderer();
+                const glm::vec3 polyColor(1.0f, 1.0f, 1.0f);
+                const f32 snap = static_cast<f32>(m_hammerSnapStep);
+                const f32 markerHalf = std::max(snap * 0.05f, 0.05f);
+                const glm::vec3 he(markerHalf);
+                for (usize k = 0; k < m_polyDraw.pointsWorld.size(); ++k) {
+                    const glm::vec3& p = m_polyDraw.pointsWorld[k];
+                    dbgR.drawAabb(AABB{p - he, p + he}, polyColor);
+                    if (k + 1 < m_polyDraw.pointsWorld.size()) {
+                        dbgR.drawLine(p, m_polyDraw.pointsWorld[k + 1],
+                                       polyColor);
+                    }
+                }
+                if (m_polyDraw.pointsWorld.size() >= 3) {
+                    const glm::vec3 closeColor(0.5f, 0.5f, 0.5f);
+                    dbgR.drawLine(m_polyDraw.pointsWorld.back(),
+                                   m_polyDraw.pointsWorld.front(),
+                                   closeColor);
+                }
+                // Rubber band desde ultimo vertex al cursor.
+                if (m_polyDraw.orthoIdx >= 0) {
+                    OrthoViewportPanel* lockedOp =
+                        orthoPanels[m_polyDraw.orthoIdx];
+                    const auto& lc = lockedOp->liveCursor();
+                    if (lc.hovered && lockedOp->desiredHeight() > 0) {
+                        const f32 oA = static_cast<f32>(lockedOp->desiredWidth())
+                                      / static_cast<f32>(lockedOp->desiredHeight());
+                        glm::vec3 cursorWorld =
+                            lockedOp->camera().worldFromNdc(
+                                lc.ndcX, lc.ndcY, oA);
+                        if (snap > 0.0f) {
+                            cursorWorld.x = std::round(cursorWorld.x / snap) * snap;
+                            cursorWorld.y = std::round(cursorWorld.y / snap) * snap;
+                            cursorWorld.z = std::round(cursorWorld.z / snap) * snap;
+                        }
+                        const glm::vec3 rubberColor(108.0f / 255.0f,
+                                                      193.0f / 255.0f,
+                                                      229.0f / 255.0f);
+                        dbgR.drawLine(m_polyDraw.pointsWorld.back(),
+                                       cursorWorld, rubberColor);
+                        dbgR.drawAabb(AABB{cursorWorld - he, cursorWorld + he},
+                                       rubberColor);
+                    }
+                }
+            }
             // F2H30 Bloque B: re-encolar markers de vertex/edge del
             // brush active si subMode == Vertex/Edge. Sin esto el dev
             // ve los markers solo en perspectiva pero NO en los ortos
@@ -451,6 +501,61 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                     for (usize i = 0; i < n; ++i) {
                         dbg.drawLine(poly[i], poly[(i + 1) % n], outlineColor);
                     }
+                }
+            }
+        }
+
+        // F2H30 Bloque C: preview del pincel poligonal — lineas entre
+        // vertices agregados + markers blancos en cada uno + RUBBER
+        // BAND del ultimo vertex al cursor live (snappeado). El user
+        // ve el polígono moviendose mientras decide donde clickear.
+        if (m_polyDraw.active && m_polyDraw.pointsWorld.size() > 0) {
+            const glm::vec3 polyColor(1.0f, 1.0f, 1.0f);   // blanco
+            const f32 snap = static_cast<f32>(m_hammerSnapStep);
+            const f32 markerHalf = std::max(snap * 0.05f, 0.05f);
+            const glm::vec3 he(markerHalf);
+            for (usize i = 0; i < m_polyDraw.pointsWorld.size(); ++i) {
+                const glm::vec3& p = m_polyDraw.pointsWorld[i];
+                dbg.drawAabb(AABB{p - he, p + he}, polyColor);
+                if (i + 1 < m_polyDraw.pointsWorld.size()) {
+                    dbg.drawLine(p, m_polyDraw.pointsWorld[i + 1], polyColor);
+                }
+            }
+            // Linea de cierre (preview del cierre cuando >= 3 puntos):
+            // dibuja en otro tono para que el dev vea que falta cerrar.
+            if (m_polyDraw.pointsWorld.size() >= 3) {
+                const glm::vec3 closeColor(0.5f, 0.5f, 0.5f); // gris
+                dbg.drawLine(m_polyDraw.pointsWorld.back(),
+                              m_polyDraw.pointsWorld.front(), closeColor);
+            }
+            // Rubber band: linea celeste del ultimo vertex al cursor
+            // live de la orto lockeada. Solo si hay locked ortho Y
+            // cursor hovered.
+            if (m_polyDraw.orthoIdx >= 0) {
+                OrthoViewportPanel* ops[3] = {
+                    &m_ui.orthoTop(), &m_ui.orthoFront(), &m_ui.orthoSide(),
+                };
+                OrthoViewportPanel* op = ops[m_polyDraw.orthoIdx];
+                const auto& lc = op->liveCursor();
+                if (lc.hovered && op->desiredHeight() > 0) {
+                    const f32 oA = static_cast<f32>(op->desiredWidth())
+                                  / static_cast<f32>(op->desiredHeight());
+                    glm::vec3 cursorWorld = op->camera().worldFromNdc(
+                        lc.ndcX, lc.ndcY, oA);
+                    if (snap > 0.0f) {
+                        cursorWorld.x = std::round(cursorWorld.x / snap) * snap;
+                        cursorWorld.y = std::round(cursorWorld.y / snap) * snap;
+                        cursorWorld.z = std::round(cursorWorld.z / snap) * snap;
+                    }
+                    const glm::vec3 rubberColor(108.0f / 255.0f,
+                                                  193.0f / 255.0f,
+                                                  229.0f / 255.0f); // celeste GMod
+                    dbg.drawLine(m_polyDraw.pointsWorld.back(),
+                                  cursorWorld, rubberColor);
+                    // Marker fantasma en el cursor (para que se vea
+                    // donde caeria el proximo vertex).
+                    dbg.drawAabb(AABB{cursorWorld - he, cursorWorld + he},
+                                  rubberColor);
                 }
             }
         }

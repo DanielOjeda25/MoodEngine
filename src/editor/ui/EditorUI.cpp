@@ -47,11 +47,15 @@ EditorUI::EditorUI() {
                 // F2H28: paneles del workspace "Editor de mapas".
                 // Arrancan ocultos; se hacen visibles via
                 // applyDefaultVisibilityForWorkspace.
-                &m_orthoTop, &m_orthoFront, &m_orthoSide};
+                &m_orthoTop, &m_orthoFront, &m_orthoSide,
+                // F2H30 Bloque C: top toolbar del mismo workspace.
+                &m_mapEditorTopBar};
     m_orthoTop.visible = false;
     m_orthoFront.visible = false;
     m_orthoSide.visible = false;
+    m_mapEditorTopBar.visible = false;
     m_toolbar.setEditorUi(this);  // F2H22: la toolbar emite requests a UI
+    m_mapEditorTopBar.setEditorUi(this);  // F2H30 Bloque C
 
     // F2H7: el dockspace arranca apuntando al workspace default
     // (F2H22: Modelar, era Layout).
@@ -159,6 +163,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Top (XZ)",   false);
         setVisible("Front (XY)", false);
         setVisible("Side (ZY)",  false);
+        setVisible("Map Tools",  false);  // F2H30 Bloque C: top toolbar
     };
 
     if (name == "Programar") {
@@ -190,10 +195,13 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         // Viewport (perspectiva en top-right) + 3 ortos. Inspector y
         // Escena ocultos por default — el dev los abre flotantes desde
         // menu Ver si los necesita.
+        // F2H30 Bloque C: + top toolbar "Map Tools" con sub-modo
+        // buttons (Objeto/Vertex/Edge/Cara/Pincel).
         setVisible("Viewport",        true);
         setVisible("Top (XZ)",        true);
         setVisible("Front (XY)",      true);
         setVisible("Side (ZY)",       true);
+        setVisible("Map Tools",       true);
         setVisible("Escena",          false);
         setVisible("Inspector",       false);
         setVisible("Asset Browser",   false);

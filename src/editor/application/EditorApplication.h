@@ -435,6 +435,28 @@ private:
     };
     OrthoVertexEditSession m_orthoVertexEdit;
 
+    /// @brief F2H30 Bloque C: sesion del "pincel poligonal". Activado
+    ///        con tecla `B` desde el workspace "Editor de mapas".
+    ///        Cada click LMB en una orto agrega un punto (snappeado
+    ///        al grid) al polígono. Enter cierra (valida convex CCW
+    ///        + crea prisma); Esc cancela. Locked a 1 sola orto
+    ///        (la primera donde se clickea) para mantener coplanaridad.
+    struct PolygonDrawSession {
+        bool active = false;
+        int  orthoIdx = -1;          // -1 hasta el primer click
+        u32  axisIndex = 1;           // eje perpendicular (0=X, 1=Y, 2=Z)
+        std::vector<glm::vec3> pointsWorld;
+    };
+    PolygonDrawSession m_polyDraw;
+
+    /// @brief F2H30 Bloque C: activa el modo pincel (toggle). Si ya
+    ///        habia una sesion en progreso, la cancela.
+    void togglePolygonDrawMode();
+    /// @brief Cierra el polígono (Enter): valida, spawnea brush.
+    void closePolygonDraw();
+    /// @brief Cancela la sesion (Esc) sin spawnear.
+    void cancelPolygonDraw();
+
     // Dimensiones del AABB del jugador (0.6 x 1.8 x 0.6 m). Centrado en la
     // posicion de la camara FPS. Escala SI realista: una persona promedio.
     // El half-extent 0.3 m es muy superior al near clipping plane (0.1 m)

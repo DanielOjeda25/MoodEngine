@@ -138,6 +138,28 @@ int EditorApplication::run() {
             Log::editor()->info("[toolbar] sub-mode -> {}",
                 m_subMode == EditorSubMode::Face ? "Face" : "Object");
         }
+        // F2H30 Bloque C: top toolbar (Map Tools) requests.
+        EditorSubMode requestedSubMode;
+        if (m_ui.consumeSubModeRequest(requestedSubMode)) {
+            m_subMode = requestedSubMode;
+            m_ui.selectionSet().activeFaceIndex = -1;
+            // Si activan otro sub-modo, cancelar el pincel si estaba.
+            if (m_polyDraw.active) cancelPolygonDraw();
+            const char* lbl = "Object";
+            switch (m_subMode) {
+                case EditorSubMode::Vertex: lbl = "Vertex"; break;
+                case EditorSubMode::Edge:   lbl = "Edge";   break;
+                case EditorSubMode::Face:   lbl = "Face";   break;
+                case EditorSubMode::Object: lbl = "Object"; break;
+            }
+            Log::editor()->info("[map toolbar] sub-mode -> {}", lbl);
+        }
+        if (m_ui.consumeTogglePolygonDrawRequest()) {
+            togglePolygonDrawMode();
+        }
+        // Sync state: para que la top toolbar pueda highlight el
+        // boton "Pincel" cuando esta activo.
+        m_ui.setPolygonDrawActive(m_polyDraw.active);
 
         // 2.25) Acciones de proyecto (Archivo > Nuevo / Abrir / Guardar / ...).
         switch (m_ui.consumeProjectAction()) {
@@ -320,6 +342,89 @@ int EditorApplication::run() {
             }
         }
 
+        // 2.4a-poly) F2H30 Bloque C: pincel poligonal — consume clicks
+        //            de las ortos ANTES del click-select. Cada click
+        //            agrega un vertex snappeado al grid. Lock a 1 orto
+        //            (la primera) para mantener coplanaridad. Despues
+        //            del primer click, clicks en otras ortos se
+        //            ignoran silenciosamente.
+        if (m_mode == EditorMode::Editor && m_polyDraw.active) {
+            OrthoViewportPanel* polyOrthoPanels[3] = {
+                &m_ui.orthoTop(), &m_ui.orthoFront(), &m_ui.orthoSide(),
+            };
+            for (int i = 0; i < 3; ++i) {
+                // F2H30 Bloque C: en pincel mode, aceptar tanto click
+                // puro como drag-end (el panel marca como drag si el
+                // cursor se movio > 4 px entre down y up — sin esto, un
+                // dev temblando levemente perderia el vertex). Tomamos
+                // el primero que tenga datos.
+                const auto click = polyOrthoPanels[i]->consumeClickSelect();
+                const auto dragEnd = polyOrthoPanels[i]->consumeDragEnded();
+                bool havePending = false;
+                f32 ndcX = 0.0f, ndcY = 0.0f;
+                if (click.pending) {
+                    havePending = true;
+                    ndcX = click.ndcX;
+                    ndcY = click.ndcY;
+                } else if (dragEnd.justEnded) {
+                    havePending = true;
+                    ndcX = dragEnd.ndcCurX;
+                    ndcY = dragEnd.ndcCurY;
+                }
+                if (!havePending) continue;
+                if (m_polyDraw.orthoIdx >= 0 && m_polyDraw.orthoIdx != i) {
+                    // Ignorar — locked a otra orto.
+                    continue;
+                }
+                const u32 oW = polyOrthoPanels[i]->desiredWidth();
+                const u32 oH = polyOrthoPanels[i]->desiredHeight();
+                if (oW == 0 || oH == 0) continue;
+                const f32 oAspect = static_cast<f32>(oW) /
+                                     static_cast<f32>(oH);
+                const auto& cam = polyOrthoPanels[i]->camera();
+                glm::vec3 worldPt = cam.worldFromNdc(
+                    ndcX, ndcY, oAspect);
+                // Snap absoluto al grid (mismo que vertex/edge edit).
+                const f32 snap = static_cast<f32>(m_hammerSnapStep);
+                if (snap > 0.0f) {
+                    worldPt.x = std::round(worldPt.x / snap) * snap;
+                    worldPt.y = std::round(worldPt.y / snap) * snap;
+                    worldPt.z = std::round(worldPt.z / snap) * snap;
+                }
+                if (m_polyDraw.orthoIdx < 0) {
+                    // Primer click: lockear orto + setear axisIndex
+                    // segun el eje perpendicular del view.
+                    m_polyDraw.orthoIdx = i;
+                    const glm::vec3 fwd = cam.forwardAxis();
+                    if (std::abs(fwd.x) > 0.5f)      m_polyDraw.axisIndex = 0;
+                    else if (std::abs(fwd.y) > 0.5f) m_polyDraw.axisIndex = 1;
+                    else                              m_polyDraw.axisIndex = 2;
+                }
+                // F2H30 fix: dedupe contra el ultimo punto. Sin esto,
+                // dos clicks que snapean a la misma celda generan un
+                // poligono degenerado y `closePolygonDraw` lo rechaza
+                // — el dev percibia "la figura desaparece" sin pista.
+                if (!m_polyDraw.pointsWorld.empty()) {
+                    const glm::vec3 last = m_polyDraw.pointsWorld.back();
+                    if (glm::distance(last, worldPt) < 1e-3f) {
+                        Log::editor()->info(
+                            "[pincel] click duplicado (mismo grid cell) "
+                            "— ignorado");
+                        continue;
+                    }
+                }
+                m_polyDraw.pointsWorld.push_back(worldPt);
+                Log::editor()->info(
+                    "[pincel] vertex {} agregado: ({:.1f}, {:.1f}, {:.1f})",
+                    m_polyDraw.pointsWorld.size(),
+                    worldPt.x, worldPt.y, worldPt.z);
+            }
+            // Hint en status bar mientras el modo este activo.
+            m_ui.setStatusMessage(
+                "Pincel: click para vertex, Enter cierra, Esc cancela ["
+                + std::to_string(m_polyDraw.pointsWorld.size()) + " pts]");
+        }
+
         // 2.4b) F2H28 Bloque F: click-select desde los 3 viewports
         //       ortograficos del workspace "Editor de mapas". Solo se
         //       consume si el panel reporta `pending=true` — el panel
@@ -397,8 +502,12 @@ int EditorApplication::run() {
         //       al grid si el brush arranco desalineado.
         //       F2H30 Bloque B: solo aplica si subMode == Object — en
         //       Vertex/Edge mode el drag lo consume el bloque 2.4e.
+        //       F2H30 Bloque C: tambien skipea si pincel poligonal
+        //       esta activo (sino un click-with-drag accidental
+        //       dispara el drag-edit del brush hovered).
         if (m_mode == EditorMode::Editor && m_scene &&
-            m_subMode == EditorSubMode::Object) {
+            m_subMode == EditorSubMode::Object &&
+            !m_polyDraw.active) {
             OrthoViewportPanel* orthoPanels[3] = {
                 &m_ui.orthoTop(),
                 &m_ui.orthoFront(),
@@ -543,8 +652,12 @@ int EditorApplication::run() {
         //       el eje perpendicular es default `snap * 4`.
         //       F2H30 Bloque B: solo aplica si subMode == Object — en
         //       Vertex/Edge mode no se crean brushes nuevos al drag.
+        //       F2H30 Bloque C: tambien skipea si pincel poligonal
+        //       activo (el block tool y el pincel comparten el LMB
+        //       en empty space — el pincel tiene prioridad).
         if (m_mode == EditorMode::Editor && m_scene &&
             m_subMode == EditorSubMode::Object &&
+            !m_polyDraw.active &&
             m_orthoBlockSession.active) {
             OrthoViewportPanel* blockOrthoPanels[3] = {
                 &m_ui.orthoTop(), &m_ui.orthoFront(), &m_ui.orthoSide(),
@@ -654,7 +767,12 @@ int EditorApplication::run() {
         //       con `delta_local = R^-1 * delta_world`. Valida
         //       `isBrushValid` post; si rompe, revierte. Al soltar,
         //       pushea EditBrushGeometryCommand.
+        //       F2H30 Bloque C fix: skipea si el pincel poligonal esta
+        //       activo (togglePolygonDrawMode ya pone subMode=Object,
+        //       pero la guarda extra previene que un session in-flight
+        //       siga corriendo si el pincel se activo a mitad de drag).
         if (m_mode == EditorMode::Editor && m_scene &&
+            !m_polyDraw.active &&
             (m_subMode == EditorSubMode::Vertex ||
              m_subMode == EditorSubMode::Edge)) {
             OrthoViewportPanel* vertOrthoPanels[3] = {

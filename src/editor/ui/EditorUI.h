@@ -20,6 +20,7 @@
 #include "editor/panels/assets/ScriptEditorPanel.h"
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28
 #include "editor/panels/scene/ViewportPanel.h"
+#include "editor/ui/MapEditorTopBar.h"  // F2H30 Bloque C
 #include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/workspace/WorkspaceManager.h"
 #include "engine/scene/core/Entity.h"
@@ -110,6 +111,34 @@ public:
         m_toggleFaceModeRequested = false;
         return r;
     }
+
+    /// @brief F2H30 Bloque C: la top toolbar del workspace "Editor de
+    ///        mapas" pide setear sub-mode (Object/Vertex/Edge/Face) o
+    ///        togglear el pincel poligonal. EditorApplication consume.
+    void requestSubMode(EditorSubMode mode) {
+        m_subModeRequested = mode;
+        m_hasSubModeRequest = true;
+    }
+    bool consumeSubModeRequest(EditorSubMode& outMode) {
+        if (!m_hasSubModeRequest) return false;
+        outMode = m_subModeRequested;
+        m_hasSubModeRequest = false;
+        return true;
+    }
+    void requestTogglePolygonDraw() { m_togglePolygonDrawRequested = true; }
+    bool consumeTogglePolygonDrawRequest() {
+        const bool r = m_togglePolygonDrawRequested;
+        m_togglePolygonDrawRequested = false;
+        return r;
+    }
+    /// @brief F2H30 Bloque C: state read-only del pincel poligonal,
+    ///        seteado por EditorApplication cada frame para que la
+    ///        top toolbar pueda highlight el boton activo.
+    void setPolygonDrawActive(bool v) { m_polygonDrawActive = v; }
+    bool polygonDrawActive() const { return m_polygonDrawActive; }
+
+    /// @brief F2H30 Bloque C: acceso a la top toolbar.
+    MapEditorTopBar& mapEditorTopBar() { return m_mapEditorTopBar; }
 
     /// @brief Acceso al panel Asset Browser para inyectarle el AssetManager
     ///        desde EditorApplication y leer la seleccion actual.
@@ -470,6 +499,7 @@ private:
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     MaterialEditorPanel m_materialEditor;  // Hito 42
     Toolbar m_toolbar;  // F2H22: tools de edicion (gizmo modes + brushes + face)
+    MapEditorTopBar m_mapEditorTopBar;  // F2H30 Bloque C: top toolbar del workspace "Editor de mapas"
     // F2H28: 3 paneles ortograficos del workspace "Editor de mapas".
     // Inicializados con la vista correspondiente; arrancan invisibles
     // (los hace visibles applyDefaultVisibilityForWorkspace cuando se
@@ -533,6 +563,12 @@ private:
     /// cada frame en `run()`.
     int  m_gizmoModeRequested = -1;     // -1 = sin request, 0/1/2 = T/R/S
     bool m_toggleFaceModeRequested = false;
+
+    // F2H30 Bloque C: requests de la top toolbar.
+    EditorSubMode m_subModeRequested = EditorSubMode::Object;
+    bool m_hasSubModeRequest = false;
+    bool m_togglePolygonDrawRequested = false;
+    bool m_polygonDrawActive = false;
 };
 
 } // namespace Mood

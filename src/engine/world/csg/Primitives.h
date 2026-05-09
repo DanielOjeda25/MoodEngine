@@ -17,6 +17,8 @@
 
 #include <glm/mat4x4.hpp>
 
+#include <vector>  // F2H30 Bloque C: makePrismBrushFromPolygon recibe vector.
+
 namespace Mood::Csg {
 
 /// @brief Brush cilindrico: N planos laterales radiales + 2 caps
@@ -66,5 +68,35 @@ Brush makePyramidBrush(const glm::mat4& worldFromLocal,
 ///        Util para escaleras, rampas, techos inclinados.
 Brush makeWedgeBrush(const glm::mat4& worldFromLocal,
                       u32 materialIndex = 0);
+
+/// @brief F2H30 Bloque C: brush prismatico desde polígono arbitrario.
+///        Toma una secuencia de N puntos en LOCAL space (sobre un
+///        plano perpendicular a `axisIndex`: 0=X, 1=Y, 2=Z) y los
+///        extrude `height` unidades en ambos sentidos del eje (mitad
+///        para arriba, mitad para abajo) generando N+2 caras (N
+///        laterales + cap superior + cap inferior).
+///
+///        Asume polígono CONVEXO en orden CCW visto desde +axis.
+///        Si no es convexo o tiene < 3 puntos, devuelve un Brush
+///        vacío (faces.empty()) — el caller debe validar antes.
+///
+///        Util para el "pincel poligonal" del workspace "Editor de
+///        mapas": dev clickea N puntos en una orto + Enter cierra
+///        el polígono + esto materializa el brush.
+Brush makePrismBrushFromPolygon(const std::vector<glm::vec3>& localPoints,
+                                  f32 height,
+                                  u32 axisIndex,
+                                  u32 materialIndex = 0);
+
+/// @brief F2H30 Bloque C: validacion de convexidad de un polígono
+///        2D (proyectado al plano perpendicular a `axisIndex`).
+///        Devuelve true si todos los cross products consecutivos
+///        tienen el mismo signo (convexo) — solo en orden CCW. Para
+///        CW devuelve false (el caller debe invertir el orden).
+///
+///        Tambien rechaza polígonos con < 3 puntos o con vertices
+///        coincidentes consecutivos.
+bool isConvexPolygonCCW(const std::vector<glm::vec3>& points,
+                         u32 axisIndex);
 
 } // namespace Mood::Csg

@@ -102,6 +102,12 @@ void buildMaterialsWorkspace(ImGuiID dockspaceId) {
 ///        necesidad real.
 void buildMapEditorWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockMain = dockspaceId;
+    // F2H30 Bloque C: columna lateral derecha (~10%) para "Map Tools"
+    // — botones verticales tipo Hammer/Blender. Antes era top bar pero
+    // los botones se aplastaban (issue del dev: "prefiero columna lado
+    // derecho").
+    ImGuiID dockRightBar = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Right, 0.10f, nullptr, &dockMain);
     // 1) Split horizontal: arriba (dockMain) / abajo (dockBottom).
     ImGuiID dockBottom = ImGui::DockBuilderSplitNode(
         dockMain, ImGuiDir_Down, 0.50f, nullptr, &dockMain);
@@ -115,6 +121,7 @@ void buildMapEditorWorkspace(ImGuiID dockspaceId) {
     // F2H28: nombres alineados con la convencion Y-up de MoodEngine:
     // Top muestra el plano XZ (cama mira -Y), Front el plano XY
     // (cam mira -Z), Side el plano ZY (cam mira -X).
+    ImGui::DockBuilderDockWindow("Map Tools",   dockRightBar);     // F2H30
     ImGui::DockBuilderDockWindow("Top (XZ)",    dockMain);         // top-left
     ImGui::DockBuilderDockWindow("Viewport",    dockTopRight);     // top-right
     ImGui::DockBuilderDockWindow("Front (XY)",  dockBottom);       // bottom-left

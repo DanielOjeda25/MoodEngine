@@ -244,4 +244,97 @@ Brush makeWedgeBrush(const glm::mat4& worldFromLocal,
     return b;
 }
 
+namespace {
+
+/// @brief F2H30 Bloque C: proyecta un punto 3D a 2D ignorando el
+///        componente del eje `axisIndex`. axisIndex=0 -> (y, z);
+///        1 -> (x, z); 2 -> (x, y).
+glm::vec2 project2D(const glm::vec3& p, u32 axisIndex) {
+    switch (axisIndex) {
+        case 0: return {p.y, p.z};
+        case 1: return {p.x, p.z};
+        default: return {p.x, p.y};
+    }
+}
+
+} // anonymous
+
+bool isConvexPolygonCCW(const std::vector<glm::vec3>& points,
+                          u32 axisIndex) {
+    if (points.size() < 3) return false;
+    if (axisIndex > 2) return false;
+    const usize n = points.size();
+    // Detectar duplicados consecutivos (polígono degenerado).
+    for (usize i = 0; i < n; ++i) {
+        if (glm::distance(points[i], points[(i + 1) % n]) < kPlaneEpsilon) {
+            return false;
+        }
+    }
+    // Convexidad: todos los cross products consecutivos del mismo
+    // signo Y positivo (CCW visto desde +axis). Si algun cross es
+    // <= eps, polígono no es estrictamente convexo CCW.
+    for (usize i = 0; i < n; ++i) {
+        const glm::vec2 a = project2D(points[i], axisIndex);
+        const glm::vec2 b = project2D(points[(i + 1) % n], axisIndex);
+        const glm::vec2 c = project2D(points[(i + 2) % n], axisIndex);
+        const f32 cz = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+        if (cz <= kPlaneEpsilon) return false;
+    }
+    return true;
+}
+
+Brush makePrismBrushFromPolygon(const std::vector<glm::vec3>& localPoints,
+                                  f32 height,
+                                  u32 axisIndex,
+                                  u32 materialIndex) {
+    Brush b;
+    if (!isConvexPolygonCCW(localPoints, axisIndex)) return b;
+    if (height <= 0.0f) return b;
+    const usize n = localPoints.size();
+    b.faces.reserve(n + 2);
+
+    // Eje canonico (vector unitario sobre axisIndex).
+    glm::vec3 axisVec(0.0f);
+    axisVec[axisIndex] = 1.0f;
+    const f32 halfH = 0.5f * height;
+
+    // Cap top: normal = +axis, plane en y=halfH (proyectado al eje).
+    // signedDistance(plane, p) = dot(n, p) + d = 0 para p on plane.
+    // Para n = +axisVec, p en y=+halfH: dot(axisVec, p) = halfH.
+    // Entonces d = -halfH.
+    {
+        BrushFace top;
+        top.plane.normal = axisVec;
+        top.plane.distance = -halfH;
+        top.materialIndex = materialIndex;
+        b.faces.push_back(top);
+
+        BrushFace bottom;
+        bottom.plane.normal = -axisVec;
+        bottom.plane.distance = -halfH;
+        bottom.materialIndex = materialIndex;
+        b.faces.push_back(bottom);
+    }
+
+    // Caras laterales: para cada par (p[i], p[i+1]), la normal apunta
+    // hacia AFUERA del polígono. CCW visto desde +axis ->
+    // normal = cross(edge, axis) si axis apunta hacia el observador.
+    for (usize i = 0; i < n; ++i) {
+        const glm::vec3 p0 = localPoints[i];
+        const glm::vec3 p1 = localPoints[(i + 1) % n];
+        const glm::vec3 edge = p1 - p0;
+        const glm::vec3 normal = glm::normalize(glm::cross(edge, axisVec));
+        // dot(n, p0) + d = 0 -> d = -dot(n, p0).
+        const f32 dist = -glm::dot(normal, p0);
+        BrushFace side;
+        side.plane.normal = normal;
+        side.plane.distance = dist;
+        side.materialIndex = materialIndex;
+        b.faces.push_back(side);
+    }
+
+    b.localAabb = computeBrushAabb(b);
+    return b;
+}
+
 } // namespace Mood::Csg

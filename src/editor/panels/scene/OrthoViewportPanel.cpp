@@ -96,6 +96,14 @@ void OrthoViewportPanel::onImGuiRender() {
             ndcY = 1.0f - (ly / imageSize.y) * 2.0f;
         };
 
+        // F2H30 Bloque C: live cursor en NDC mientras el panel este
+        // hovered. Lo lee el pincel poligonal para la rubber-band.
+        m_liveCursor.hovered = hovered;
+        if (hovered) {
+            const ImVec2 p = ImGui::GetMousePos();
+            mousePosToNdc(p, m_liveCursor.ndcX, m_liveCursor.ndcY);
+        }
+
         if (hovered) {
             // Zoom con scroll wheel.
             if (io.MouseWheel != 0.0f) {

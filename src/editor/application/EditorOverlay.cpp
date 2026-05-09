@@ -290,10 +290,28 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
         const bool key3 = ImGui::IsKeyPressed(ImGuiKey_3, false) ||
                             ImGui::IsKeyPressed(ImGuiKey_Keypad3, false);
         if (key3) toggleSubMode(EditorSubMode::Face);
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) &&
-            m_subMode != EditorSubMode::Object) {
-            m_subMode = EditorSubMode::Object;
-            m_ui.selectionSet().activeFaceIndex = -1;
+        // F2H30 Bloque C: tecla B toggle pincel poligonal. Solo
+        // activo en workspace "Editor de mapas" (atajo seria
+        // confuso en otros).
+        if (ImGui::IsKeyPressed(ImGuiKey_B, false) &&
+            m_ui.workspaceManager().activeWorkspace().name == "Editor de mapas") {
+            togglePolygonDrawMode();
+        }
+        // F2H30 Bloque C: Enter cierra el polígono activo.
+        if ((ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+             ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) &&
+            m_polyDraw.active) {
+            closePolygonDraw();
+        }
+        // Esc: si hay polígono en progreso, cancelarlo PRIMERO. Si no,
+        // volver a Object mode.
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+            if (m_polyDraw.active) {
+                cancelPolygonDraw();
+            } else if (m_subMode != EditorSubMode::Object) {
+                m_subMode = EditorSubMode::Object;
+                m_ui.selectionSet().activeFaceIndex = -1;
+            }
         }
         if (ImGui::IsKeyPressed(ImGuiKey_Period, false) &&
             selected && selected.hasComponent<TransformComponent>()) {

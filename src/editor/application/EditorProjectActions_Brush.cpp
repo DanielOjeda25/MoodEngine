@@ -13,6 +13,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>  // F2H29 Bloque C: glm::scale en spawnBoxBrushAt.
 
+#include <algorithm>  // F2H30 Bloque C: std::max en height default.
 #include <cstdio>
 #include <string>
 
@@ -66,6 +67,104 @@ void EditorApplication::handleAddBoxBrush() {
         Csg::makeBoxBrush(glm::mat4(1.0f)),
         "Box", "Anadir Box Brush:");
     pushCreatedEntities({e}, "Anadir Box Brush");
+}
+
+void EditorApplication::togglePolygonDrawMode() {
+    if (m_polyDraw.active) {
+        cancelPolygonDraw();
+        return;
+    }
+    // F2H30 fix: el pincel es un modal independiente del sub-modo. Si
+    // entramos con Vertex/Edge/Face activo, el bloque 2.4e podia mover
+    // un vertex del brush selecto al primer click — y la UI seguia
+    // mostrando markers de vertex/edge encima del pincel. Reset a
+    // Object al activar el pincel; al salir, queda en Object (sin
+    // restore — pedido del dev "es poco claro").
+    m_subMode = EditorSubMode::Object;
+    m_ui.selectionSet().activeFaceIndex = -1;
+    m_polyDraw.active = true;
+    m_polyDraw.orthoIdx = -1;
+    m_polyDraw.axisIndex = 1;  // default Y; se overridea al primer click.
+    m_polyDraw.pointsWorld.clear();
+    Log::editor()->info("[pincel] modo activado — click en orto para agregar vertice");
+}
+
+void EditorApplication::cancelPolygonDraw() {
+    if (!m_polyDraw.active) return;
+    Log::editor()->info("[pincel] cancelado ({} puntos descartados)",
+                          m_polyDraw.pointsWorld.size());
+    m_polyDraw.active = false;
+    m_polyDraw.orthoIdx = -1;
+    m_polyDraw.pointsWorld.clear();
+}
+
+void EditorApplication::closePolygonDraw() {
+    if (!m_polyDraw.active) return;
+    if (!m_scene) {
+        cancelPolygonDraw();
+        return;
+    }
+    if (m_polyDraw.pointsWorld.size() < 3) {
+        Log::editor()->warn(
+            "[pincel] necesito >= 3 vertices para cerrar (tengo {})",
+            m_polyDraw.pointsWorld.size());
+        return;
+    }
+
+    // Centroide en world space (sobre el plano del view — el axis
+    // perpendicular tiene componente 0).
+    glm::vec3 centroid(0.0f);
+    for (const auto& p : m_polyDraw.pointsWorld) centroid += p;
+    centroid /= static_cast<f32>(m_polyDraw.pointsWorld.size());
+
+    // Convertir a local (centrado en origen).
+    std::vector<glm::vec3> localPoints;
+    localPoints.reserve(m_polyDraw.pointsWorld.size());
+    for (const auto& p : m_polyDraw.pointsWorld) {
+        localPoints.push_back(p - centroid);
+    }
+
+    // Validar convexidad CCW. Si CW, invertir el orden.
+    if (!Csg::isConvexPolygonCCW(localPoints, m_polyDraw.axisIndex)) {
+        // Probar invirtiendo el orden — quizas el dev clickeo CW.
+        std::vector<glm::vec3> reversed(localPoints.rbegin(),
+                                          localPoints.rend());
+        if (Csg::isConvexPolygonCCW(reversed, m_polyDraw.axisIndex)) {
+            localPoints = std::move(reversed);
+        } else {
+            Log::editor()->warn(
+                "[pincel] polígono no convexo o degenerado — no spawneo brush "
+                "({} puntos)",
+                m_polyDraw.pointsWorld.size());
+            cancelPolygonDraw();
+            return;
+        }
+    }
+
+    // Altura default = snapStep * 4 (mismo que block tool).
+    const f32 height = std::max(static_cast<f32>(m_hammerSnapStep) * 4.0f,
+                                  4.0f);
+    Csg::Brush brush = Csg::makePrismBrushFromPolygon(
+        localPoints, height, m_polyDraw.axisIndex);
+    if (brush.faces.empty()) {
+        Log::editor()->warn(
+            "[pincel] makePrismBrushFromPolygon devolvio brush vacio");
+        cancelPolygonDraw();
+        return;
+    }
+
+    Entity e = spawnBrushEntity(*m_scene, std::move(brush),
+        "Poly", "Brush poligonal:");
+    auto& tf = e.getComponent<TransformComponent>();
+    tf.position = centroid;
+    pushCreatedEntities({e}, "Brush poligonal");
+    Log::editor()->info(
+        "[pincel] cerrado: {} vertices, height {:.1f}, centroid=({:.2f}, "
+        "{:.2f}, {:.2f})",
+        localPoints.size(), height, centroid.x, centroid.y, centroid.z);
+    m_polyDraw.active = false;
+    m_polyDraw.orthoIdx = -1;
+    m_polyDraw.pointsWorld.clear();
 }
 
 void EditorApplication::spawnBoxBrushAt(const glm::mat4& transform) {
