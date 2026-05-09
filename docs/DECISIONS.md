@@ -11,6 +11,55 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-09: F2H37 cierre — FontAwesome icons en el resto del editor + polish UX general (hito unificado)
+
+**Contexto:** Tras cerrar F2H36 (icons en los 2 toolbars del workspace "Editor de mapas"), el dev pidió expandir al resto del editor: *"deberemos integrarlos en otras areas del proyecto para que todo sea equitativo"*. Al revisar PENDIENTES.md emergió que había además un "Pase de polish UX general continuo" anotado desde F2H21+F2H22 (Inspector drop targets, Hierarchy multi-select feedback, Console level filter, StatusBar layout/colores) — los mismos paneles tocados. Decisión: **fusionar ambos pendientes en F2H37** para evitar doble pasada sobre los mismos archivos. Hito multi-bloque (~5h, ~400 LOC distribuidos en ~15 archivos).
+
+**Decisiones técnicas clave:**
+
+- **Hito unificado deliberadamente**, no dos hitos separados. Razón: ambos pendientes tocan los mismos paneles (Inspector, Hierarchy, AssetBrowser, Console, StatusBar). Hacerlos por separado implicaría abrir InspectorPanel_*.cpp dos veces (una para icons, otra para drop targets), recompilar dos veces, validar visualmente dos veces. Atacar todo junto en un hito reduce churn y evita conflicts de merge entre los dos pasadas. Validado por dev al pedir el scope unificado.
+
+- **Header `IconHelpers.h` separado de `IconsFontAwesome6.h`.** Razón: `IconsFontAwesome6.h` debe quedar como tabla pura de macros UTF-8, sin dependencias de scene/components — eso permite incluirlo desde código que no toca entities (ej. `MenuBar.cpp` solo usa los macros). `IconHelpers.h` agrega los helpers que dispatchean sobre presencia de componentes (`iconForEntity(Entity)`), que sí dependen de `Components.h`/`Entity.h`. Inline en el header — no requiere .cpp porque es un switch puro sobre presencia de componentes.
+
+- **`iconForEntity(Entity)` consolida `entityIconStr` duplicado** que vivía en HierarchyPanel + VisGroupsPanel pre-F2H37. Mismo orden de prioridad (MeshRenderer > Brush > Light > Audio > Script > Trigger > Camera > Particle > sin componente). Razón: el helper local en cada panel se justificaba pre-F2H37 (cada uno mapeaba a `[X]` ASCII), pero al migrar a FA quedaba claro que el mapping es idéntico — si alguien renombra/agrega un component type, hay que actualizarlo en N panels. Helper compartido = un solo punto de cambio. Costo: agregar un nuevo entity type ahora requiere extender el header en lugar de cada panel — bajo, gana coherencia.
+
+- **Polish multi-select del Hierarchy con 3 colores distintos** (naranja=active, amarillo=secundaria, gris=hidden) en lugar de seguir con el ImGui default selected highlight. Razón: pre-F2H37, el dev tenía que abrir el Inspector para saber cuál de las N entities seleccionadas era la primary (la que el Inspector edita por default en single-component flow). Distinguirlas en la lista con color = feedback visual sin click adicional. Color elegido: naranja-amarillo dentro del mismo "warm spectrum" para que no parezcan tipos completamente distintos (ambos son "selected", solo cambia el rol). Pasado test contra el outline naranja de overlay (consistencia cross-panel).
+
+- **Console level filter con 6 SmallButton toggles**, no un dropdown / combo. Razón: un dropdown obliga a 3 clicks (open + click + close) cada vez que cambia el filtro; los 6 toggles independientes permiten ON/OFF de cada nivel con un click puntual sin abrir/cerrar UI. Cada toggle muestra el icon FA del nivel + color del nivel (activo) o tinte tenue (off) — el estado se ve sin tooltip. Trade-off: usa más espacio horizontal en la toolbar que un combo (~6×24=144 px vs ~80 px del combo). Aceptable: la toolbar de Console ya tenía espacio (Limpiar + Auto-scroll + filter input + (?)). Estado en `m_levelEnabled[6]` del header del panel — NO en `.moodproj`. Razón: es un toggle ergonomico de sesión, no una preferencia persistente del proyecto. Default = todos true (mostrar todo).
+
+- **Tabs del AssetBrowserPanel reciben icon, rows NO.** Razón: cada tab es type-pure (todos meshes en Meshes, todos audio en Audio). Agregar el mismo icon en cada row dentro del tab sería ruido visual sin valor agregado. El audit inicial sugería ambos; al implementar emergió la redundancia. Rows mantienen el "displayName + metadata" original limpio.
+
+- **Tab "Texturas" sigue mostrando grid de thumbnails** (no list con icon). Razón: el thumbnail es el feedback visual canonico para texturas — agregar icon `IMAGE` al lado redundaría con el preview. Solo el tab itself recibe icon.
+
+- **InspectorPanel_Brush.cpp `TextDisabled("Brush (CSG)")` → `SeparatorText(ICON " Brush (CSG)")`** durante el pase. Razón: los demás partials del Inspector usan `SeparatorText` (F2H23 convention); el `TextDisabled` original era inconsistente y se notaba en el tour visual. Upgrade gratis al estar tocando el header.
+
+- **InspectorPanel_Particles.cpp mismo upgrade**: `TextDisabled("Particle Emitter")` → `SeparatorText(ICON " Particle Emitter")`. Mismo patrón.
+
+- **InspectorPanel_Internal.h centraliza el include de `IconsFontAwesome6.h`**, no cada partial. Razón: 11 partials hubieran requerido 11 ediciones de include, todas idénticas. Internal.h ya es include compartido por convención (F2H24); agregar un include más mantiene el patrón y reduce churn.
+
+- **Fix lateral em-dash tofu en Welcome modal** (descubierto en Bloque I): el carácter `—` (U+2014, General Punctuation block) no está en ProggyClean (default font de ImGui, cubre ASCII + Latin-1) ni en mi `k_iconRange = {0xE005, 0xF8FF}` (Private Use Area de FA). Pre-F2H36 ya se veía como `?` pero nunca se notó. Fix mínimo: reemplazar `—` por `-` (hyphen-minus U+002D, Basic Latin) en `EditorUI.cpp` (3 ocurrencias). Alternativa descartada: cambiar la default font a Lato (que ya está en `assets/ui/fonts/`) — scope mayor, requiere revisar todo el editor para verificar spacing/alineamiento. Hito propio si emerge necesidad real.
+
+- **Width del botón Play/Stop bumped 64→80 px** para acomodar `ICON_FA_PLAY " Play"` y `ICON_FA_STOP " Stop"`. Sin esto el "Stop" se cortaba.
+
+- **StatusBar mode indicator: `ICON_FA_PLAY` para Play / `ICON_FA_PEN_TO_SQUARE` para Editor.** Razón: `PEN_TO_SQUARE` matchea el icon del menú "Editar" del MenuBar (consistencia cross-panel). Para devs daltonicos, el shape del icon es un refuerzo accesible al color rojo/azul claro existente.
+
+**Alternativas descartadas explícitamente:**
+
+- **Hito separado para FontAwesome (F2H37) y otro para polish UX (F2H38)**: descartado por overlap de paneles. Doble churn sin valor agregado.
+- **Cambiar default font a Lato durante F2H37**: descartado, scope mayor. El em-dash tofu es una excepción rara, no un problema sistémico (el resto del UI usa ASCII + Latin-1 que ProggyClean cubre).
+- **Header IconHelpers.h con dispatchers para todos los tipos** (entity + asset + log level + workspace): descartado. `iconForEntity` se consolida porque pre-existía duplicación; `iconForAsset` no se usa fuera de AssetBrowserPanel y no hay duplicación que consolidar. `iconForWorkspace` queda local en MenuBar.cpp por la misma razón. YAGNI.
+- **Dropdown de level filter en Console**: descartado por UX (3 clicks vs 1 click por toggle).
+- **Persistir level filter en `.moodproj`**: descartado. Es ergonomia de sesión, no preferencia del proyecto. Si emerge necesidad real, agregar `Project::consoleLevelEnabled[6]` siguiendo el patrón de `showEntityLabels` (F2H35).
+
+**Condiciones de revisión:**
+
+- Si el dev pide cambiar el default font a Lato (más legible para mucho texto, ej. Console con muchos logs), abrir hito propio. El em-dash tofu se resolvería como side effect.
+- Si emerge un component type nuevo (ej. `NavMeshComponent`), extender `iconForEntity` en `IconHelpers.h` con el nuevo case + agregar el macro al header subset.
+- Si emerge necesidad de iconos color (multi-tone SVG-style) — FA6 free solid es monocromo. Cambio de pack es scope mayor.
+- Si los toggles del level filter se vuelven cuello de botella visual (ej. el dev quiere un "solo errors" macro), agregar shortcut keys (1-6 con modifier) o un macro button "Solo errores" / "Resetear filtros". Diferido.
+
+---
+
 ## 2026-05-09: F2H36 cierre — FontAwesome icons en toolbars del editor de mapas
 
 **Contexto:** F2H22 cerró un pase de polish UX que dejó como deuda explícita "iconos image-based del Toolbar" (las labels eran texto castellano corto: `Mover`/`Rotar`/`Escala`/...). El dev expresó interés post-F2H35 con feedback como *"no tenemos iconos para usar para gizmo, en blender es como esto..."*. Mini-hito chico (~30 min, ~50 LOC) que cierra esa deuda agregando FontAwesome 6 free solid al atlas de ImGui y aplicándola a los 17 botones de los 2 toolbars del workspace "Editor de mapas".

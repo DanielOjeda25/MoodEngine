@@ -6,7 +6,45 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H36 cerrado: FontAwesome icons en toolbars del editor de mapas.**
+**🚀 Fase 2 — F2H37 cerrado: FontAwesome icons en el resto del editor + polish UX general.**
+Tag: `v1.27.0-fase2-hito37`.
+Verificado visualmente por dev: MenuBar (los 6 menus + workspace tabs + Play/Stop con icon), Hierarchy (icon FA por tipo + multi-select polish naranja/amarillo/gris), VisGroupsPanel (consolidado al helper compartido), Inspector (icons en headers de 13 components), AssetBrowser (icons en 6 tabs), Console (icons por nivel + level filter toggles), StatusBar (FPS/mode/sub-mode con icons). Editor arranca sin asserts. Tour visual end-to-end OK.
+
+**🏁 Hammer Editor cerrado funcional al 100% + iconos FontAwesome en TODO el editor + polish UX consolidado.** 35/44 hitos de Fase 2.
+
+**Decisiones clave de F2H37:**
+- **Hito unificado**: fusiona "extender FontAwesome al resto del editor" (post-F2H36) + "Pase de polish UX general continuo" (anotado desde F2H21+F2H22). Mismos paneles tocados → un solo hito sin doble pasada. Validado por dev al pedir el scope unificado.
+- **Header `IconHelpers.h` separado de `IconsFontAwesome6.h`**. Razón: `IconsFontAwesome6.h` queda como "tabla pura de macros UTF-8" sin dependencias de scene/components; `IconHelpers.h` agrega los helpers que dispatchean sobre presencia de componentes (depende de `Components.h`/`Entity.h`). Inline en el header — no requiere .cpp porque es un switch puro.
+- **`iconForEntity(Entity)` consolida `entityIconStr` duplicado** que vivía en HierarchyPanel + VisGroupsPanel pre-F2H37. Mismo orden de prioridad (MeshRenderer > Brush > Light > Audio > Script > Trigger > Camera > Particle > sin componente). Cualquier hito futuro que agregue un nuevo component type renombra/extiende este helper en un solo lugar.
+- **Polish multi-select del Hierarchy con 3 colores**: naranja (active), amarillo claro (en seleccion pero no active), gris (hidden por VisGroup). Pre-F2H37 las secundarias se veían iguales al ImGui default — el dev tenia que abrir el Inspector para saber cuál era la primary.
+- **Console level filter con 6 toggles SmallButton** en lugar de un dropdown. Razón: el dropdown obliga a un click + open + click; los toggles permiten activar/desactivar varios niveles con clicks puntuales. Cada toggle muestra el icon + tinte coloreado cuando ON, tenue cuando OFF — el estado se ve sin abrir nada. Estado persistido en `m_levelEnabled[6]` del header del panel (no en `.moodproj` — es un toggle ergonomico de sesión, default a "mostrar todos").
+- **Rows del AssetBrowserPanel sin icon-por-row**. Razón: cada tab es type-pure (todos meshes en Meshes), agregar icon a cada row sería redundante con el icon del tab. El audit inicial lo proponía pero al implementar emergió que era ruido visual.
+- **InspectorPanel_Brush.cpp upgrade TextDisabled → SeparatorText** durante el pase. Razón: los demás partials usan SeparatorText (F2H23 convention); el `TextDisabled("Brush (CSG)")` original era inconsistente. Fix gratis al estar tocando el header.
+- **Fix lateral em-dash tofu en Welcome modal**: el carácter `—` (U+2014, General Punctuation) no está en ProggyClean ni en mi `k_iconRange` (FA Private Use Area). Pre-F2H36 ya se veía como `?` pero nunca se notó hasta el tour visual del Bloque I. Fix mínimo: reemplazar por `-` (hyphen-minus, U+002D, Basic Latin). Cambiar la default font a Lato (que ya está en `assets/ui/fonts/`) sería scope mayor — hito propio si emerge.
+- **NO se agrega icon-por-tipo en cada row del AssetBrowser** (audit inicial lo sugería). Razón: cada tab es type-pure, redundante.
+- **Width del botón Play/Stop bumped 64→80 px** para acomodar `ICON_FA_PLAY " Play"` / `ICON_FA_STOP " Stop"`.
+
+**Implementación (F2H37 Bloques A-J en commits):**
+
+- **Bloque A**: plan en [`archive/plans/PLAN_HITO_F2H37.md`](archive/plans/PLAN_HITO_F2H37.md).
+- **Bloques B-H unificados**: TTF asset ya existía (F2H36) → solo extender header + crear helper + aplicar a 7 paneles + polish.
+- **Fix lateral em-dash** (Bloque I validación): 3 ocurrencias en `EditorUI.cpp`.
+- **Bloque I**: build + validación visual end-to-end con dev.
+- **Bloque J (este commit)**: docs + tag.
+
+**Pendientes conocidos** (post-F2H37):
+- **TBD — definir con el dev**. Opciones:
+  - Sub-fase 2.5 gameplay (diálogos / quests / inventario).
+  - HUD procedural/minimalista del MoodPlayer (interés expresado post-F2H35).
+  - Otra sub-fase del PLAN_FASE2 (optimización / runtime).
+- **Cambiar default font ImGui a Lato** (existe en assets pero no se carga): nice-to-have. Resolvería el tofu del em-dash y mejoraría legibilidad general. Pero requiere revisar todo el editor para verificar que el spacing/alineamiento siguen OK con la métrica nueva. Hito propio si emerge.
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+
+**Próximo paso**: **TBD — definir con el dev**.
+
+### F2H36 (anterior, ya cerrado)
+
+**🚀 F2H36 cerrado: FontAwesome icons en toolbars del editor de mapas.**
 Tag: `v1.26.0-fase2-hito36`.
 Verificado visualmente por dev: los 17 botones del Toolbar lateral (Mover/Rotar/Escala/Box/Cilindro/Cara) + MapEditorTopBar (Selecc./Bloque/Pincel/Clip/Objeto/Vertex/Edge/Cara/Snap V/Nombres/Carve) renderean con icono FA + label castellano. Editor arranca sin asserts. Mini-hito chico que cierra deuda arrastrada desde F2H22.
 

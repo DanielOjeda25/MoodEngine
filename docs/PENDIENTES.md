@@ -9,36 +9,33 @@
 
 ---
 
-## Post-F2H36 (2026-05-09) — FontAwesome icons en toolbars del editor de mapas cerrado
+## Post-F2H37 (2026-05-09) — FontAwesome al resto del editor + polish UX cerrados
 
 ### Próximo a atacar
 
-- **F2H37 — extender FontAwesome al resto del editor** (pedido
-  explícito del dev al validar F2H36: *"deberemos integrarlos en
-  otras areas del proyecto para que todo sea equitativo"*). Areas
-  candidatas a cubrir:
-  - **MenuBar** principal (Archivo / Editar / Ver / Ayuda + tabs
-    Layout/Scripting/Profile/Materials/...): icon al lado de cada
-    item de menú + iconos en los tabs de workspace.
-  - **HierarchyPanel**: icon-por-tipo de entity (cube=mesh,
-    lightbulb=light, music=audio, video=camera, fire=particle,
-    cube-shaded=brush, etc.) al inicio de cada row.
-  - **InspectorPanel**: icon en el header de cada componente
-    (TagComponent / TransformComponent / MeshRendererComponent /
-    LightComponent / AudioSourceComponent / BrushComponent / etc.).
-  - **AssetBrowserPanel**: icon por tipo de asset (image=textura,
-    music=audio, cube=mesh, file-code=script, palette=material,
-    box=prefab) en cada row + icons en los tabs.
-  - **Console**: icon por nivel (info-circle=info,
-    triangle-exclamation=warn, circle-xmark=error).
-  - **StatusBar**: posibles indicators (save state / build status /
-    selection count).
-  - **Paneles auxiliares**: VisGroupsPanel (folder-open per group),
-    MaterialEditorPanel (palette + drop zones), ScriptEditorPanel
-    (code icon + actions).
-  Plan a redactar al arrancar como `docs/PLAN_HITO_F2H37.md`.
+- **TBD — definir con el dev**. **Hammer Editor cerrado funcional al
+  100% + iconos FontAwesome en TODO el editor + polish UX
+  consolidado.** Opciones a considerar:
+  - **Sub-fase 2.5 gameplay** (diálogos / quests / inventario) —
+    siguiente del PLAN_FASE2 si seguimos el orden.
+  - **HUD del juego procedural/minimalista** en MoodPlayer (interés
+    expresado post-F2H35) — explorar HUDs dibujados via ImGui
+    DrawList o shaders custom (Mirror's Edge / Doom Eternal style),
+    sin assets. Mini-hito futuro con scope a definir.
+  - **Otra sub-fase del PLAN_FASE2** (optimización / runtime).
 
 ### Activos sin orden definido (siguiente ola)
+
+- **Cambiar default font ImGui a Lato** (existe en
+  `assets/ui/fonts/LatoLatin-Regular.ttf` desde antes pero nunca se
+  carga; F2H37 solo agregó FA6 mergeada al ProggyClean default).
+  Ganancias: legibilidad general (proggy es pixely para texto
+  largo), tofu del em-dash desaparece como side effect (Lato cubre
+  General Punctuation). Costo: revisar todo el editor para
+  verificar spacing/alineamiento — la métrica de Lato es distinta
+  a Proggy y los layouts pueden re-flowear. Hito chico propio si
+  emerge necesidad. Mientras tanto, evitar `—` en strings
+  user-facing (replace por `-` o `:`).
 
 - **HUD del juego procedural/minimalista** (interés expresado por dev
   post-F2H35, scope mayor): explorar HUDs en MoodPlayer dibujados
@@ -52,12 +49,39 @@
 
 ### Histórico resuelto
 
+- ~~Pase de polish UX general continuo (deuda F2H21+F2H22)~~ —
+  resuelto en F2H37 (`v1.27.0-fase2-hito37`) fusionado con la
+  extensión FontAwesome. Hierarchy con polish multi-select (3
+  colores: naranja active / amarillo secundaria / gris hidden);
+  Console con 6 toggles para filter por log level + icons; Inspector
+  con icons en headers de 13 components (consistencia visual);
+  AssetBrowser con icons por tab (Texturas/Meshes/Prefabs/
+  Materiales/Scripts/Audio); StatusBar con icons en FPS/mode/sub-mode
+  (refuerzo accesible para devs daltonicos sobre el color existente);
+  MenuBar con icons en los 6 menus principales + workspace tabs +
+  Play/Stop.
+- ~~Extender FontAwesome al resto del editor (deuda F2H36)~~ —
+  resuelto en F2H37. Consolidación: helper `iconForEntity` en
+  `IconHelpers.h` reemplaza el `entityIconStr` duplicado en
+  HierarchyPanel + VisGroupsPanel. Header `IconsFontAwesome6.h` crece
+  de ~15 a ~45 macros para cubrir entity types, asset types, log
+  levels, MenuBar items, workspace tabs.
+- ~~Em-dash tofu en Welcome modal (bug pre-existente)~~ — resuelto
+  como fix lateral en F2H37 Bloque I. El carácter `—` (U+2014) no
+  está en ProggyClean ni en `k_iconRange` de FA. Fix mínimo:
+  reemplazar por `-` (U+002D) en EditorUI.cpp (3 ocurrencias). Si en
+  el futuro se carga Lato como default, el fix es innecesario.
+
+## Post-F2H36 (2026-05-09) — FontAwesome icons en toolbars del editor de mapas cerrado
+
+### Histórico resuelto
+
 - ~~Iconos image-based del Toolbar (deuda explícita F2H22)~~ —
   resuelto en F2H36 (`v1.26.0-fase2-hito36`) para Toolbar +
   MapEditorTopBar (17 botones). FontAwesome 6 free solid mergeada al
   atlas default de ImGui. Resto del editor (MenuBar, Hierarchy,
   Inspector, AssetBrowser, Console, StatusBar, paneles auxiliares)
-  diferido a F2H37.
+  diferido a F2H37 — resuelto.
 
 ## Post-F2H35 (2026-05-09) — Polish editor cerrado (UX viewport + Hammer-style visual)
 
