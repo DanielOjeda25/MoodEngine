@@ -682,6 +682,78 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
             }
         }
 
+        // F2H35 Bloque F: preview hover en Face Mode. Cada frame, si el
+        // cursor esta sobre el viewport perspectivo, calcular pickFace
+        // contra el brush hovered y dibujar el outline de esa cara en
+        // blanco tenue. El dev VE que cara va a seleccionar antes de
+        // clickear — resuelve la queja "no se que cara voy a pickear
+        // hasta que clickeo, requiere clicks ciegos hasta acertar".
+        // Skip si la cara ya esta seleccionada (sin valor agregado y
+        // su outline brillante ya gana la atencion).
+        if (m_subMode == EditorSubMode::Face &&
+            m_mode == EditorMode::Editor &&
+            m_ui.viewport().imageHovered() &&
+            m_scene && m_assetManager) {
+            const float ndcX = m_ui.viewport().mouseNdcX();
+            const float ndcY = m_ui.viewport().mouseNdcY();
+            ScenePickResult hoverHit = pickEntity(*m_scene, view,
+                projection, glm::vec2(ndcX, ndcY), m_assetManager.get());
+            if (hoverHit && hoverHit.entity.hasComponent<BrushComponent>() &&
+                hoverHit.entity.hasComponent<TransformComponent>()) {
+                const auto& bc =
+                    hoverHit.entity.getComponent<BrushComponent>();
+                const auto& tf =
+                    hoverHit.entity.getComponent<TransformComponent>();
+                // Reconstruir el rayo desde la cam (mismo flow del
+                // click handler).
+                const glm::mat4 invVP = glm::inverse(projection * view);
+                const glm::vec4 nearH = invVP *
+                    glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
+                const glm::vec4 farH = invVP *
+                    glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
+                if (nearH.w != 0.0f && farH.w != 0.0f) {
+                    const glm::vec3 origin = glm::vec3(nearH) / nearH.w;
+                    const glm::vec3 dir = glm::normalize(
+                        glm::vec3(farH) / farH.w - origin);
+                    const auto faceHit = Csg::pickFace(
+                        bc.brush, origin, dir, tf.worldMatrix());
+                    if (faceHit.has_value()) {
+                        const i32 idx = static_cast<i32>(*faceHit);
+                        // Skip si la cara hovered ya esta en el set
+                        // (su highlight brillante ya gana atencion).
+                        const bool alreadySelected =
+                            (set.active.handle() ==
+                             hoverHit.entity.handle()) &&
+                            std::find(set.selectedFaceIndices.begin(),
+                                      set.selectedFaceIndices.end(),
+                                      idx) != set.selectedFaceIndices.end();
+                        if (!alreadySelected) {
+                            const auto poly = Csg::collectFaceWorldPolygon(
+                                bc.brush, static_cast<u32>(idx),
+                                tf.worldMatrix());
+                            const usize n = poly.size();
+                            if (n >= 3) {
+                                // F2H35 fix: cyan saturado para que se
+                                // vea sobre cualquier textura (incluido
+                                // fondos blancos/claros donde el blanco
+                                // tenue inicial desaparecia). Contrasta
+                                // con amarillo (active) y naranja
+                                // (secondary selected) — el dev distingue
+                                // hover-preview vs ya-seleccionado.
+                                const glm::vec3 hoverColor(
+                                    0.10f, 0.95f, 1.00f);
+                                for (usize i = 0; i < n; ++i) {
+                                    dbg.drawLine(poly[i],
+                                                  poly[(i + 1) % n],
+                                                  hoverColor);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // F2H30 Bloque C: preview del pincel poligonal — lineas entre
         // vertices agregados + markers blancos en cada uno + RUBBER
         // BAND del ultimo vertex al cursor live (snappeado). El user
