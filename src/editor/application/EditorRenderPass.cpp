@@ -155,6 +155,54 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                 dbgR.drawLine(camPos, cBR, frusEdge);
                 dbgR.drawLine(camPos, cBL, frusEdge);
             }
+            // F2H35 Bloque D (orto): point entities (Light/Audio/Trigger/
+            // Camera/Particle sin mesh) se renderean como un cubo
+            // wireframe MUY pequeno del color del tipo en los 3 ortos
+            // (estilo Hammer Source clasico: la forma es solo "marker
+            // de posicion" y la diferenciacion real va al label del
+            // tag en Bloque E proximo). Tamano absoluto chico
+            // proporcional al snap pero clampeado, no escala con zoom.
+            if (m_mode == EditorMode::Editor && m_sceneRenderer) {
+                auto& dbgR = m_sceneRenderer->debugRenderer();
+                // F2H35: tamano FIJO en world units (no proporcional al
+                // snap). Hammer Source usa cubitos de 8 unidades
+                // (~4cm a 1u=5mm); aca ~40cm a 1u=1m. Coincide con
+                // k_iconPickRadius=0.6 de ScenePick para que el area
+                // visible matchee el area pickable (sin sorprender al
+                // dev "lo veo pero no lo agarro"). Independiente del
+                // snap del workspace para que con snap=64 no inflen
+                // la vista.
+                constexpr f32 r = 0.4f;
+                m_scene->forEach<TransformComponent>(
+                    [&](Entity e, TransformComponent& t) {
+                        const bool hasMesh =
+                            e.hasComponent<MeshRendererComponent>();
+                        const bool hasBrush =
+                            e.hasComponent<BrushComponent>();
+                        if (hasMesh || hasBrush) return;
+                        glm::vec3 col;
+                        if (e.hasComponent<LightComponent>()) {
+                            col = glm::vec3(1.00f, 0.88f, 0.40f);
+                        } else if (e.hasComponent<AudioSourceComponent>()) {
+                            col = glm::vec3(1.00f, 0.55f, 0.15f);
+                        } else if (e.hasComponent<TriggerComponent>()) {
+                            col = glm::vec3(0.30f, 0.85f, 0.35f);
+                        } else if (e.hasComponent<CameraComponent>()) {
+                            col = glm::vec3(0.45f, 0.65f, 1.00f);
+                        } else if (e.hasComponent<ParticleEmitterComponent>()) {
+                            col = glm::vec3(0.85f, 0.45f, 0.95f);
+                        } else {
+                            return;
+                        }
+                        // Cubo wireframe via drawAabb (12 lineas
+                        // internas, color uniforme — suficiente:
+                        // distinguir tipo via color + label del Bloque E,
+                        // no via shapes elaboradas).
+                        const glm::vec3 he(r);
+                        dbgR.drawAabb(AABB{t.position - he,
+                                            t.position + he}, col);
+                    });
+            }
             // F2H32 Bloque B: clip tool preview. p1 marker + linea de
             // p1 al cursor (rubber band) si solo hay p1; o linea
             // p1->p2 si ambos. Color amarillo claro consistente con

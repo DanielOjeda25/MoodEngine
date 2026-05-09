@@ -162,10 +162,19 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
     // - Delete/Backspace borra la entidad seleccionada (excepto tiles).
     const glm::mat4 vp = m_sceneRenderer->lastProjection() * m_sceneRenderer->lastView();
 
-    const ImU32 colLight = IM_COL32(255, 225, 100, 220);
-    const ImU32 colAudio = IM_COL32(100, 220, 230, 220);
-    const ImU32 colBorder = IM_COL32(20, 20, 20, 255);
-    const ImU32 colSel = IM_COL32(30, 180, 255, 255);
+    // F2H35 Bloque D: paleta por tipo de point entity (Hammer-style).
+    // Convencion alineada con el feedback del dev: lights amarillo,
+    // audio NARANJA (no cian — pre-F2H35 era cian, generaba confusion
+    // con el wireframe celeste de los brushes en perspective), trigger
+    // verde, camera azul, particle violeta. Generic = blanco.
+    const ImU32 colLight    = IM_COL32(255, 225, 100, 220);
+    const ImU32 colAudio    = IM_COL32(255, 145,  40, 220);  // F2H35: era cian
+    const ImU32 colTrigger  = IM_COL32( 80, 220,  90, 220);
+    const ImU32 colCamera   = IM_COL32(110, 160, 255, 220);
+    const ImU32 colParticle = IM_COL32(220, 110, 240, 220);
+    const ImU32 colGeneric  = IM_COL32(220, 220, 220, 220);
+    const ImU32 colBorder   = IM_COL32( 20,  20,  20, 255);
+    const ImU32 colSel      = IM_COL32( 30, 180, 255, 255);
 
     Entity selected = m_ui.selectedEntity();
     const auto selectedHandle = selected ? selected.handle() : entt::entity{entt::null};
@@ -176,7 +185,14 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
             const bool hasMesh = e.hasComponent<MeshRendererComponent>();
             const bool hasLight = e.hasComponent<LightComponent>();
             const bool hasAudio = e.hasComponent<AudioSourceComponent>();
-            const bool needsIcon = (hasLight || hasAudio) && !hasMesh;
+            // F2H35 Bloque D: tambien iconar Trigger/Camera/Particle
+            // (point entities sin mesh visible). Cada uno con su color
+            // del tipo (paleta de arriba).
+            const bool hasTrigger  = e.hasComponent<TriggerComponent>();
+            const bool hasCamera   = e.hasComponent<CameraComponent>();
+            const bool hasParticle = e.hasComponent<ParticleEmitterComponent>();
+            const bool needsIcon = (hasLight || hasAudio || hasTrigger ||
+                                     hasCamera || hasParticle) && !hasMesh;
             const bool isSelected = (selectedHandle != entt::entity{entt::null})
                                      && (e.handle() == selectedHandle);
             if (!needsIcon && !isSelected) return;
@@ -237,10 +253,70 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                             }
                         }
                     }
-                } else { // Audio
+                } else if (hasAudio) {
                     const f32 r = 10.0f;
                     dl->AddCircleFilled(c, r, colAudio, 24);
                     dl->AddCircle(c, r, colBorder, 24, 1.5f);
+                } else if (hasTrigger) {
+                    // F2H35 Bloque D: trigger = diamond verde (forma
+                    // alusiva al cubo de trigger en perspective y
+                    // distinguible de los circulos de Light/Audio).
+                    constexpr f32 r = 9.0f;
+                    const ImVec2 pts[4] = {
+                        {c.x,     c.y - r},
+                        {c.x + r, c.y    },
+                        {c.x,     c.y + r},
+                        {c.x - r, c.y    },
+                    };
+                    dl->AddConvexPolyFilled(pts, 4, colTrigger);
+                    dl->AddPolyline(pts, 4, colBorder, ImDrawFlags_Closed, 1.5f);
+                } else if (hasCamera) {
+                    // F2H35 Bloque D: camera = trapecio azul (camcorder
+                    // shape estilo Hammer/Unity, apuntando a la derecha).
+                    constexpr f32 cw = 10.0f, ch = 8.0f, lens = 4.0f;
+                    // Cuerpo rectangular.
+                    const ImVec2 bodyPts[4] = {
+                        {c.x - cw,        c.y - ch},
+                        {c.x + cw * 0.4f, c.y - ch},
+                        {c.x + cw * 0.4f, c.y + ch},
+                        {c.x - cw,        c.y + ch},
+                    };
+                    dl->AddConvexPolyFilled(bodyPts, 4, colCamera);
+                    dl->AddPolyline(bodyPts, 4, colBorder, ImDrawFlags_Closed, 1.2f);
+                    // Lente trapezoidal a la derecha.
+                    const ImVec2 lensPts[4] = {
+                        {c.x + cw * 0.4f, c.y - ch},
+                        {c.x + cw,        c.y - ch - lens},
+                        {c.x + cw,        c.y + ch + lens},
+                        {c.x + cw * 0.4f, c.y + ch},
+                    };
+                    dl->AddConvexPolyFilled(lensPts, 4, colCamera);
+                    dl->AddPolyline(lensPts, 4, colBorder, ImDrawFlags_Closed, 1.2f);
+                } else if (hasParticle) {
+                    // F2H35 Bloque D: particle = ramillete violeta
+                    // (puntos saliendo del centro, alusivo a particulas
+                    // emergiendo del emisor).
+                    constexpr f32 rCore = 3.0f;
+                    constexpr f32 rDots = 9.0f;
+                    constexpr f32 kTwoPi = 6.28318530718f;
+                    dl->AddCircleFilled(c, rCore, colParticle, 12);
+                    dl->AddCircle(c, rCore, colBorder, 12, 0.8f);
+                    for (int i = 0; i < 6; ++i) {
+                        const f32 a = (f32)i * kTwoPi / 6.0f;
+                        const ImVec2 p(c.x + std::cos(a) * rDots,
+                                       c.y + std::sin(a) * rDots);
+                        dl->AddCircleFilled(p, 1.6f, colParticle, 8);
+                    }
+                } else {
+                    // F2H35 Bloque D: fallback generic (no llega normalmente
+                    // — si entidad sin Mesh + sin componente conocido cae
+                    // aca, dibuja un cuadrado blanco para que sea visible
+                    // en lugar de invisible).
+                    constexpr f32 r = 7.0f;
+                    dl->AddRectFilled(ImVec2(c.x - r, c.y - r),
+                                       ImVec2(c.x + r, c.y + r), colGeneric);
+                    dl->AddRect(ImVec2(c.x - r, c.y - r),
+                                 ImVec2(c.x + r, c.y + r), colBorder, 0.0f, 0, 1.5f);
                 }
             }
 

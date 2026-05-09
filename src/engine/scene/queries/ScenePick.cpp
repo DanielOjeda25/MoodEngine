@@ -161,8 +161,17 @@ ScenePickResult pickEntityFromRay(Scene& scene,
         } else if (e.hasComponent<BrushComponent>()) {
             const auto& bc = e.getComponent<BrushComponent>();
             t_hit = rayAABB(origin, dir, brushAabbWorld(t, bc));
-        } else if (e.hasComponent<LightComponent>() ||
-                   e.hasComponent<AudioSourceComponent>()) {
+        } else if (e.hasComponent<LightComponent>()         ||
+                   e.hasComponent<AudioSourceComponent>()   ||
+                   e.hasComponent<TriggerComponent>()       ||  // F2H35
+                   e.hasComponent<CameraComponent>()        ||  // F2H35
+                   e.hasComponent<ParticleEmitterComponent>()) {  // F2H35
+            // F2H35: extender pick a todos los point entities. Pre-F2H35
+            // solo Light/Audio eran pickables; Trigger/Camera/Particle
+            // tenian icono visible (Bloque D) pero no respondian al
+            // click — el dev tenia que ir al panel Hierarchy del
+            // workspace Layout para seleccionarlos. Ahora todos usan
+            // la misma sphere pickable de radio k_iconPickRadius.
             t_hit = raySphere(origin, dir, t.position, k_iconPickRadius);
         } else {
             return; // entidad sin target pickable
