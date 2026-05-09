@@ -11,6 +11,187 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-09: F2H33 cierre — VisGroups + multi-select caras + texture alignment (Hammer cerrado funcional al 100%)
+
+**Contexto:** F2H33 es el último hito antes de cerrar el editor estilo
+Hammer en su totalidad funcional (31/44 hitos de Fase 2). Combina 3
+features que Hammer 4 tiene y MoodEngine no tenía: VisGroups
+(organización), multi-select de caras (selección productiva), y texture
+alignment (Align/Fit/Justify del Face Edit Sheet). Tras F2H33, el dev
+queda libre de elegir entre sub-fase 2.5 gameplay o seguir con polish UI.
+
+**Decisiones técnicas clave:**
+
+- **Schema bump `.moodmap` v13→v14 aditivo, mismo patrón que F2H26.**
+  Array opcional top-level `visgroups: [{id, name, color, hidden}]` +
+  campo opcional `visgroupId: u64` por SavedEntity y SavedBrush. El
+  loader v14 acepta mapas v13 (array vacío + sin membership) sin
+  migración irreversible — al guardar un mapa v13 abierto se persiste
+  como v14 sin pérdida. `checkFormatVersion` rechaza v15+ (forward-incompat).
+
+- **VisGroups planos (no jerárquicos), membership 1-a-N.** Hammer 4 es
+  así. Una entity pertenece a 0 o 1 grupo (lookup O(1) al renderizar
+  sin iterar membership múltiple). Sub-grupos diferidos como deuda
+  futura si emerge necesidad real — refactor a `unordered_set<u64>` si
+  hace falta. El componente `VisGroupMembershipComponent` opcional con
+  `groupId == 0` reservado como sentinel "sin grupo" (preferimos
+  ausencia de componente a presencia con 0).
+
+- **Player ignora VisGroups (convención Hammer).** En Hammer 4, los
+  VisGroups son herramienta del editor — el `.bsp` final incluye toda
+  la geometría sin importar grupos ocultos. Decisión: `applyEntitiesToScene`
+  con `useCompiledMesh=true` (path Player) skipea `scene.resetVisGroups()`
+  y NO agrega `VisGroupMembershipComponent`. Agregamos parámetro
+  `applyVisGroupMembership=true` (default true para callers como
+  `DeleteEntityCommand::undo` que sí necesitan preservar membership). Sin
+  esto, un mesh oculto en editor también desaparecía al probar en Player
+  — bug confuso. Ahora la convención queda explícita: VisGroups son
+  productividad del dev, no contenido del juego.
+
+- **Hide gates en 3 lugares: render, picking, Hierarchy grayed.** El
+  render (`groupByBatch`, brushPass, skinned pass) skipea entities en
+  grupos hidden — no se encolan al frame. ScenePick las skipea — no se
+  pueden seleccionar via click viewport. Hierarchy las muestra en gris
+  claro `(0.55, 0.55, 0.55)` — el dev necesita verlas para sacarlas del
+  grupo, pero queda claro que están "apagadas". Scripts y physics de
+  entities ocultas SIGUEN activos (alineado con Hammer — VisGroup no es
+  "disable", es "ocultar en viewport"). Si emerge necesidad real,
+  agregar flag `disableScripts` separado al VisGroup.
+
+- **Refactor `SelectionSet` breaking-internal: campo → método derivado.**
+  Pre-F2H33: `i32 activeFaceIndex` (F2H17) era field público accedido
+  como `set.activeFaceIndex`. Para multi-select, refactoreamos a
+  `std::vector<i32> selectedFaceIndices` + método `i32 activeFaceIndex()
+  const { return selectedFaceIndices.empty() ? -1 : back(); }`.
+  Invariante mantenido por los helpers (`setSingleFace`, `toggleFace`,
+  `add` que limpia caras al cambiar de active brush): el último del
+  vector es siempre la "active" (= primary para single-face ops).
+  Migrados ~7 call-sites de field access a método (`set.activeFaceIndex`
+  → `set.activeFaceIndex()`); writes a `set.activeFaceIndex = -1`
+  cambiados a `set.selectedFaceIndices.clear()`. Tests adaptados +
+  6 tests nuevos para los helpers de multi-face. Tradeoff: un breaking
+  cambio interno por un API más expresivo. Aceptable porque el dominio
+  cambió (single → multi).
+
+- **Active face en amarillo, secundarias en naranja Half-Life.**
+  Pre-F2H33 el highlight de cara era naranja uniforme (F2H17). Con
+  multi-select N caras todas naranjas no distinguen cuál es la primary
+  (la que se mostraba en el header del Face Edit Sheet). Decisión:
+  iterar `selectedFaceIndices` y dibujar la última (= active) con
+  outline + fill amarillos `(1.00, 0.95, 0.10)`, las demás con el
+  naranja Half-Life original. El dev distingue de un vistazo cuál cara
+  manda en single-face ops (drop material, ediciones que solo aplican
+  a la primary).
+
+- **Face picking robust: pickEntity primero, pickFace después.** Issue
+  pre-F2H33 (F2H17 original): `pickFace` solo testeaba contra el brush
+  active. Si el dev clickeaba una cara de OTRO brush en Face Mode, el
+  faceHit fallaba → caía al `pickEntity` → cambiaba el active → limpiaba
+  las caras seleccionadas → segundo click necesario. Con multi-select
+  esto rompía el flow de Shift+click cross-brush. Fix: `pickEntity`
+  primero (encuentra cualquier brush hovered), `pickFace` contra ese
+  brush. Si `sameBrush` + Shift → toggle; sameBrush + sin modifier →
+  single; brush distinto → `replaceWithSingle` + `setSingleFace` (no
+  toggle: cambiar de brush no acumula caras del brush viejo, sería
+  confuso). Resuelve el feedback del dev *"la seleccion es como
+  dificil... debo rotar y probar varias caras"*.
+
+- **Reuso de `EditBrushUVCommand` para alignment ops.** El comando ya
+  capturaba snapshot completo del brush (todas las caras + sus axisU/V/
+  scale/offset/rotation/lockToWorld). Eso significa que aplicar 1 op
+  a 1 cara o N caras y pushear el comando funciona sin extensión —
+  el snapshot post incluye los cambios de todas las caras tocadas.
+  Decisión: NO crear comando nuevo `EditFaceUVCommand`. Tradeoff: el
+  command label dice "Editar UV scale" sin distinguir 1 vs N caras
+  — aceptable. Los labels específicos del Inspector (`Editar UV scale
+  (cara)` / `(N caras)`) los pone el caller via param `label`.
+
+- **"Treat as one face" con axis heterogéneos: warn + aplica.** El
+  algoritmo de bounding rect compartido asume que las N caras
+  seleccionadas pueden proyectarse al mismo sistema (axisU, axisV) de
+  la primary. Si las caras tienen normales muy distintas (ej. arriba +
+  costado de un cubo), los axisU/V también difieren y la proyección no
+  es geométricamente coherente. Heurística simple: chequear `dot(face.
+  uAxis, primary.uAxis)` y vAxis; si < 0.99 (= ángulo > ~8°), log warn
+  pero aplicar igual. Hammer 4 hace lo mismo — el dev sabe lo que está
+  haciendo cuando activa el checkbox con caras de planos distintos. No
+  bloquear la op; solo informar.
+
+- **Refactor CMake colateral: race condition pre-existente.** Pre-F2H33,
+  cada exe (MoodEditor + MoodPlayer) tenía sus propios `add_custom_command
+  POST_BUILD` con `copy_directory` para shaders/ y assets/ apuntando a
+  `$<TARGET_FILE_DIR:exe>/shaders` y `/assets`. Como ambos exes salen
+  al mismo `build/Debug/`, `TARGET_FILE_DIR` evalúa al mismo path
+  → cuando se compilaban en paralelo (`/m`), ambos POST_BUILD escribían
+  a la misma carpeta destino → race condition de `copy_directory` con
+  archivos parcialmente escritos. Aparecía intermitente como `MSB3073`
+  en MoodPlayer.vcxproj. Fix: nuevo `add_custom_target(mood_runtime_files
+  ALL)` con los 3 copies (shaders + assets + SDL2.dll) centralizados;
+  `add_dependencies(mood_runtime_files MoodEditor MoodPlayer)` garantiza
+  que ambos exes terminan antes del deploy. Compilación de los .cpp de
+  ambos exes sigue paralela; solo el deploy es secuencial. Es un fix
+  pre-existente que no le tocaba a F2H33 estrictamente, pero apareció
+  durante el primer build con el código nuevo y lo cerramos acá.
+
+- **Bug fix `Ctrl++` en teclados 80% sin numérico (layout español).**
+  Pre-F2H33 el handler del snap step cycleable de F2H28 aceptaba
+  `SDLK_EQUALS` (US/UK: `=` con shift produce `+`) y `SDLK_KP_PLUS`
+  (numpad). En layout español la tecla a la derecha de Ñ manda
+  `SDLK_PLUS` directo (sin shift). Fix: agregar `SDLK_PLUS` al handler.
+  Reportado por el dev al validar Bloque B; aprovechamos el contexto
+  para arreglarlo dentro de F2H33.
+
+**Razones:**
+
+- **Paquete unificado (VisGroups + multi-face + alignment) en 1 hito**
+  en lugar de 3 separados: comparten dominio (face polish del editor de
+  mapas), comparten infra (SelectionSet refactor habilita tanto multi-
+  face del Bloque C como el iter del alignment del Bloque D), y cierran
+  juntos el "Hammer cerrado funcional 100%" de forma cohesiva. Spliteando
+  en 3 hitos hubiera diluido la narrativa.
+- **Reuso máximo**: schema bump aditivo (mismo patrón que F2H26),
+  comandos undoable (mismo patrón que F2H19 `EditScriptComponentCommand`),
+  panel layout (mismo patrón que `HierarchyPanel` con `IPanel::name()`/
+  `visible` flag + `applyDefaultVisibilityForWorkspace`), helpers de UV
+  (reusan `Csg::collectFaceWorldPolygon` de F2H17), comando UV reusa
+  `EditBrushUVCommand` que ya soporta multi-cara nativo.
+- **5 commits feat/fix + 1 docs**: granularidad útil para git blame
+  (cada bloque cierra una capa). Bloque B es grande pero coherente
+  (todo VisGroups end-to-end); bloque C agrupa el refactor SelectionSet
+  + handler face picking; bloque D agrupa math + UI; el fix lateral
+  del snap es un commit propio porque no es F2H33 strictly.
+
+**Alternativas descartadas:**
+
+- **VisGroups jerárquicos (sub-grupos)**: Hammer 4 es plano. Sub-grupos
+  agregaría tree drag UI + propagación de hide/show (¿propagar a hijos?
+  ¿nesting de visibility?) + schema más complejo. No agrega valor
+  80/20. Diferido.
+- **Comando nuevo `EditFaceUVCommand` para alignment**: el snapshot
+  completo de `EditBrushUVCommand` ya cubre multi-cara nativamente.
+  Comando nuevo sería duplicación.
+- **Drag entities desde Hierarchy a VisGroup**: scope mayor (DnD ImGui
+  custom). Menú contextual "Asignar selección al grupo" cubre el flow
+  básico. Diferido.
+- **Multi-face material drop dentro de F2H33**: requiere extender
+  `EditBrushFaceMaterialCommand` a multi-cara (vector de snapshots).
+  Estaba en el plan pero lo difirimos para no inflar el hito —
+  deuda explícita en `PENDIENTES.md`.
+
+**Condiciones de revisión:**
+
+- Si el dev pide sub-grupos VisGroup → refactor mayor (tree storage +
+  UI + propagación). Ahí evaluamos si vale el costo.
+- Si emerge un escenario donde "Treat as one face" con axis heterogéneos
+  produce resultados inaceptables (no solo "raros") → refactor a "rotar
+  axisU de las caras secundarias para alinear con la primary antes de
+  computar el rect compartido". Por ahora el warn + apply alcanza.
+- Si los VisGroups crecen > 100 grupos típicos por proyecto → reemplazar
+  el scan lineal de `findVisGroup` por `unordered_map<u64, VisGroup>`.
+  Improbable en uso típico de mapping.
+
+---
+
 ## 2026-05-09: F2H32 cierre — geometry tools (clip 2-click + carve UI Hammer-style)
 
 **Contexto:** F2H32 cierra 2 de las 3 herramientas core de geometría

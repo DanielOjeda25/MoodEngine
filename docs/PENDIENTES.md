@@ -9,18 +9,77 @@
 
 ---
 
-## Post-F2H32 (2026-05-09)
+## Post-F2H33 (2026-05-09) — Hammer Editor cerrado funcional al 100%
 
 ### Próximo a atacar
 
-- **F2H33 — Organización + face polish**. Último hito para cerrar el
-  Hammer en su totalidad funcional:
-  - **VisGroups**: panel nuevo con grupos nombrados, drag entidades a
-    grupo, toggle hide/show, persiste en `.moodmap` (schema bump
-    v13→v14).
-  - **Texture alignment del Face Edit Sheet**: en sub-modo Face con
-    cara seleccionada, botones Align to face / Fit / Justify L/R/T/B
-    + checkbox "Treat as one face" para múltiples caras seleccionadas.
+- **TBD** — definir junto al dev. Opciones a considerar:
+  - Sub-fase 2.5 gameplay (diálogos / quests / inventario).
+  - Hammer-style visual polish (sub-bloque chico — ver "Activos sin
+    orden definido" abajo).
+  - Otra sub-fase del PLAN_FASE2 (optimización / runtime / polish UI
+    general).
+
+### Activos sin orden definido (siguiente ola)
+
+- **Hammer-style visual polish** (paquete candidato a hito chico
+  futuro): cuando el dev pidió cerrar F2H33 mencionó varias mejoras
+  visuales que NO entraron por scope. Agruparlas en un hito propio
+  porque comparten dominio (render del wireframe + iconos del editor
+  de mapas):
+  - **Tint del wireframe por color del VisGroup**: cada brush en un
+    grupo se renderea con el color del grupo (~30 LOC, alto valor
+    visual — el color ya está en el `VisGroup` struct).
+  - **Color por tipo de entidad**: lights=amarillo, audio=naranja,
+    triggers=verde, etc. (mapa "tipo → color" + tintar el sphere icon
+    actual). Hammer-style.
+  - **Labels arriba de point entities**: texto del tag de la entidad
+    arriba del icono en world. Hammer original tiene toggle "Map →
+    Show Helpers".
+  - **Pulir face picking UX**: el dev reportó que la selección de
+    caras es difícil incluso después del fix de F2H33 Bloque C.
+    *"funciona, es complejo supongo de entender, pero se puede pulir
+    a futuro"*. Casos borde: rayo en bordes de cara, caras muy
+    inclinadas respecto a la cámara, caras chicas dentro de brushes
+    grandes. Investigar si hay margen en `Csg::pickFace` (epsilon /
+    triangulación) o si es UX puro (preview hover).
+
+- **Multi-face material drop**: el handler de `DemoSpawners_Drop.cpp`
+  sigue aplicando solo al face active de un brush, incluso cuando hay
+  N caras seleccionadas via Shift+click (F2H33 Bloque C). Para que el
+  drop afecte a todas hay que extender `EditBrushFaceMaterialCommand`
+  a multi-cara (vector de pairs `<faceIdx, BrushFace>` en el snapshot).
+  Diferido — emerge si el dev lo pide.
+
+- **VisGroups jerárquicos / drag desde Hierarchy / auto-asignar a
+  current group / lock de VisGroup**: features avanzadas que Hammer
+  4 tiene pero F2H33 no entregó. Diferidos hasta que emerja necesidad
+  real (Hammer 4 plano cubre el 80/20).
+
+### Histórico resuelto
+
+- ~~VisGroups~~ — resuelto en F2H33 (`v1.23.0-fase2-hito33`). Schema
+  bump aditivo v13→v14, panel "Grupos" con TreeNode + sub-lista de
+  miembros + comandos undoable + hide gates en render/pick/Hierarchy
+  (grayed) + Player skip (convención Hammer).
+- ~~Multi-select de caras + texture alignment~~ — resuelto en F2H33.
+  `selectedFaceIndices` vector + `setSingleFace`/`toggleFace`/
+  `containsFace` helpers + active en amarillo distintivo + Inspector
+  applyToScope multi + 6 botones Align/Fit/Justify L/R/T/B + checkbox
+  "Treat as one face" + `BrushOps` con `computeFaceUvRect` /
+  `alignFaceToFace` / `fitFaceToRect` / `justifyFaceToRect`.
+- ~~Face picking en 1 click sobre cualquier brush hovered~~ — resuelto
+  en F2H33 Bloque C. Pre-F2H33 el `pickFace` solo testeaba el brush
+  active → 2 clicks para cambiar. Fix: pickEntity primero, pickFace
+  contra el hovered, replace + single si distinto del active.
+- ~~Race CMake POST_BUILD MoodEditor + MoodPlayer~~ — resuelto en
+  F2H33 Bloque B como refactor colateral. `add_custom_target(
+  mood_runtime_files ALL)` centralizado.
+- ~~Ctrl++ en teclados ES sin numérico~~ — resuelto en F2H33 como
+  fix lateral. Agregar `SDLK_PLUS` al handler del snap step (la tecla
+  `+` a la derecha de Ñ en layout español).
+
+## Post-F2H32 (2026-05-09)
 
 ### Activos sin orden definido (siguiente ola, post-Hammer)
 

@@ -6,7 +6,47 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H32 cerrado: Geometry tools (clip tool 2-click + carve UI Hammer-style).**
+**🚀 Fase 2 — F2H33 cerrado: Organización + face polish (VisGroups + multi-select de caras + texture alignment).**
+Tag: `v1.23.0-fase2-hito33`.
+Verificado por dev: VisGroups crear/asignar/toggle/eliminar funciona end-to-end; persistencia v13→v14 round-trip OK; face mode con multi-select via Shift+click pickea cualquier brush hovered en 1 click + active en amarillo / secundarias en naranja; alignment ops funcionan single y multi (no probó "Treat as one" pero la math está cubierta por tests + el approach es iterativo sobre el `selectedFaceIndices` ya validado en Bloque C).
+
+**🏁 Hammer Editor cerrado funcional al 100%.** 31/44 hitos de Fase 2.
+
+**Decisiones clave de F2H33:**
+- **Schema bump aditivo v13→v14** mismo patrón que F2H26 v12→v13: array opcional `visgroups` top-level + campo opcional `visgroupId` por entity y brush. Mapas v13 cargan como v14 sin pérdida (array vacío + sin membership).
+- **VisGroups planos (no jerárquicos)** alineados con Hammer 4 — sub-grupos diferidos si emerge demanda real. Membership 1-a-N (entity en máximo 1 grupo); refactor a `unordered_set<u64>` si emerge.
+- **Player ignora VisGroups**: convención Hammer = VisGroups son del editor, el build final incluye todo. `applyEntitiesToScene(useCompiledMesh=true)` skipea `resetVisGroups` y no agrega `VisGroupMembershipComponent`. Si el dev oculta una torre para trabajar y luego prueba en Player, la torre se ve igual.
+- **Refactor `SelectionSet`** breaking-internal: campo `i32 activeFaceIndex` (F2H17) → `std::vector<i32> selectedFaceIndices` + método `activeFaceIndex()` derivado de `back()`. Invariante: el último del vector es siempre la "active" (= primary para ops single-face). 7 call-sites migrados.
+- **Face picking robust** (fix UX descubierto en validación): pre-F2H33 el pickFace solo testeaba el brush active → clickear otro brush requería 2 clicks. Fix: `pickEntity` primero, `pickFace` contra el brush hovered, replace + single si distinto del active. Resuelve la queja del dev *"la seleccion es como dificil... debo rotar y probar varias caras"*.
+- **Active face en amarillo, secundarias en naranja**: distingue visualmente cuál es la primary cuando hay multi-select. Antes era todo naranja Half-Life uniforme.
+- **Reuso de `EditBrushUVCommand` para alignment**: ya capturaba snapshot completo del brush, soporta multi-cara nativamente sin command nuevo.
+- **"Treat as one face" con axisU/V heterogéneos** = log warn + aplica igual: heurística `dot(face.axis, primary.axis) < 0.99` detecta sistemas distintos. El resultado puede salir feo pero es decisión consciente del dev (Hammer 4 hace lo mismo).
+- **Refactor CMake colateral**: race condition pre-existente en `add_custom_command POST_BUILD` de MoodEditor + MoodPlayer (ambos hacían `copy_directory` a la misma `Debug/`). Fix: `add_custom_target(mood_runtime_files ALL)` centralizado con `add_dependencies` para serializar el deploy sin perder paralelismo en compilación.
+- **Bug fix `Ctrl++` en teclados ES sin numérico**: pre-F2H33 solo aceptaba `SDLK_EQUALS` (US/UK) y `SDLK_KP_PLUS` (numpad); en layout español la tecla a la derecha de Ñ manda `SDLK_PLUS`. Fix agregar al handler.
+
+**Implementación (F2H33 Bloques A-E en 5 commits feat/fix + cierre):**
+
+- **Bloque A (commit `<hash>`)**: plan en [`archive/plans/PLAN_HITO_F2H33.md`](archive/plans/PLAN_HITO_F2H33.md).
+- **Bloque B (commit `<hash>`)**: VisGroups + schema bump + render/pick gates + grayed Hierarchy + Player skip + CMake refactor.
+- **Bloque C (commit `<hash>`)**: multi-select de caras (Shift+click) + face picking robust + Inspector multi-cara.
+- **Bloque D (commit `<hash>`)**: texture alignment Hammer-style (Align/Fit/Justify L/R/T/B + Treat as one face).
+- **Fix lateral (commit `<hash>`)**: SDLK_PLUS para Ctrl++ del snap step en teclados ES sin numérico.
+- **Bloque E (este commit)**: docs + tag.
+
+**Pendientes conocidos** (post-F2H33):
+- **Hammer-style visual polish** (sub-bloque candidato a hito chico futuro): tint del wireframe por color del VisGroup (~30 LOC, alto valor visual), color por tipo de entity (luz=amarillo, audio=naranja, etc.), labels arriba de point entities, mejoras al face picking (puede haber casos borde donde el rayo no pega). Diferidos como paquete.
+- **Multi-face material drop**: el handler de `DemoSpawners_Drop.cpp` sigue aplicando solo al face active. Para que aplique a las N caras seleccionadas hay que extender `EditBrushFaceMaterialCommand` a multi-cara. Diferido — emerge si el dev lo pide.
+- **VisGroups jerárquicos / drag desde Hierarchy / auto-asignar a current group / lock de VisGroup**: scope mayor, diferidos hasta que emerja necesidad.
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+
+**Próximo paso**: **TBD — definir junto al dev**. Hammer Editor está cerrado funcional al 100%. Opciones a considerar:
+- Sub-fase 2.5 gameplay (diálogos / quests / inventario).
+- Hammer-style visual polish (sub-bloque del polish UX continuo).
+- Otra sub-fase del PLAN_FASE2 (optimización / runtime / polish UI general).
+
+### F2H32 (anterior, ya cerrado)
+
+**🚀 F2H32 cerrado: Geometry tools (clip tool 2-click + carve UI Hammer-style).**
 Tag: `v1.22.0-fase2-hito32`.
 Verificado por dev: clip splittea 1 brush en Front/Back/Both según `T` cycle; carve resta brush activo por todos los intersectantes; Ctrl+Z restaura en ambos casos. UX hints visibles cuando faltan pre-condiciones.
 
@@ -243,20 +283,24 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: F2H33 — Organización + face polish (VisGroups + texture alignment)
+### Tarea inmediata: TBD — definir junto al dev
 
-F2H32 está cerrado (tag `v1.22.0-fase2-hito32`). Es el **último hito para cerrar el Hammer en su totalidad funcional**:
-- **VisGroups**: panel nuevo con grupos nombrados, drag entidades a grupo, toggle hide/show, persiste en `.moodmap` (schema bump v13→v14).
-- **Texture alignment del Face Edit Sheet**: en sub-modo Face con cara seleccionada, botones Align to face / Fit / Justify L/R/T/B + checkbox "Treat as one face" para múltiples caras seleccionadas.
+F2H33 está cerrado (tag `v1.23.0-fase2-hito33`). **Hammer Editor cerrado funcional al 100%.** 31/44 hitos de Fase 2.
 
-Tras F2H33 = 31/44 hitos, Hammer cerrado funcional. El dev luego decidirá entrar a sub-fase 2.5 gameplay (diálogos/quests/inventario) o mantenerse en polish UX/optimización.
+Opciones a considerar para el próximo hito (preguntar al dev al arrancar la sesión):
+
+1. **Sub-fase 2.5 gameplay** — diálogos, quests, inventario. Es el siguiente bloque del PLAN_FASE2 si seguimos el orden.
+2. **Hammer-style visual polish** (sub-bloque chico): tint del wireframe por color del VisGroup (~30 LOC, alto valor visual), color por tipo de entity (luz=amarillo, audio=naranja), labels arriba de point entities, mejoras al face picking UX (descubierto durante F2H33 — el dev mencionó *"se puede pulir a futuro"*). Diferidos como paquete.
+3. **Otra sub-fase del PLAN_FASE2** — optimización, runtime, polish UI general.
+4. **Multi-face material drop** — extender `EditBrushFaceMaterialCommand` a multi-cara para que dropear textura sobre N caras seleccionadas las afecte a todas (hoy aplica solo al active).
 
 ### Flujo recomendado en esta sesión
 
-1. Crear `docs/PLAN_HITO_F2H32.md` con bloques A-E concretos para clip tool + carve UI.
-2. Trabajar bloque por bloque marcando en el plan al cerrar cada uno.
-3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v1.22.0-fase2-hito32`, actualizar este documento + `docs/HITOS.md`, archive del plan.
+1. Preguntar al dev qué hito atacar (TBD entre las 4 opciones de arriba).
+2. Crear `docs/PLAN_HITO_F2HN.md` con bloques A-E concretos.
+3. Trabajar bloque por bloque marcando en el plan al cerrar cada uno.
+4. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
+5. Al final: commits atómicos en español, merge a main, tag `v1.X.0-fase2-hitoN`, actualizar este documento + `docs/HITOS.md`, archive del plan.
 
 ---
 
