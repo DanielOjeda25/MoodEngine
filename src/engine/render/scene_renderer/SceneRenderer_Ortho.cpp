@@ -26,6 +26,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
+#include "engine/scene/VisGroup.h"  // F2H35 Bloque C: tint por grupo
 
 #include <glad/gl.h>
 
@@ -66,6 +67,18 @@ bool entityIsSelected(Entity e, const std::vector<Entity>& selected) {
         if (s && s.handle() == e.handle()) return true;
     }
     return false;
+}
+
+// F2H35 Bloque C: si la entidad pertenece a un VisGroup visible (no
+// hidden — los hidden no llegan aca por el gate de F2H33), devuelve el
+// color del grupo. Sino, devuelve el celeste default. La seleccion
+// override esto (handled fuera).
+glm::vec3 wireframeColorForEntity(Scene& scene, Entity e) {
+    const u64 gid = visgroupIdOf(e);
+    if (gid == 0) return k_wireframeColor;
+    const VisGroup* vg = scene.findVisGroup(gid);
+    if (vg == nullptr) return k_wireframeColor;
+    return vg->color;
 }
 
 } // namespace
@@ -158,7 +171,8 @@ void SceneRenderer::renderOrthoView(Scene& scene,
             [&](Entity e, TransformComponent& t, BrushComponent& bc) {
                 if (bc.meshCache.empty()) return;
                 const glm::vec3 col = entityIsSelected(e, selectedEntities)
-                    ? k_selectedColor : k_wireframeColor;
+                    ? k_selectedColor
+                    : wireframeColorForEntity(scene, e);  // F2H35 Bloque C
                 m_wireframeOrthoShader->setMat4("uModel", t.worldMatrix());
                 m_wireframeOrthoShader->setVec3("uColor", col);
                 for (auto& mesh : bc.meshCache) {
@@ -178,7 +192,8 @@ void SceneRenderer::renderOrthoView(Scene& scene,
                 MeshAsset* asset = assets.getMesh(mr.mesh);
                 if (asset == nullptr) return;
                 const glm::vec3 col = entityIsSelected(e, selectedEntities)
-                    ? k_selectedColor : k_wireframeColor;
+                    ? k_selectedColor
+                    : wireframeColorForEntity(scene, e);  // F2H35 Bloque C
                 m_wireframeOrthoShader->setMat4("uModel", t.worldMatrix());
                 m_wireframeOrthoShader->setVec3("uColor", col);
                 for (const auto& sub : asset->submeshes) {
