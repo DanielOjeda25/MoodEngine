@@ -57,31 +57,24 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
     const f32 k_armLen = 60.0f;
     const f32 k_ringRad = 55.0f;
 
-    // F2H30 Bloque D: radio del anillo de rotate proporcional al AABB
-    // de la entidad. Antes era fijo en 1m world-space, dejaba el ring
-    // dentro de brushes grandes (no clickeable) o rodeando con holgura
-    // brushes chicos. `0.6 * size_max` cae justo afuera del lado mas
-    // grande del AABB; clamp a 0.5 para que entidades sin geometria
-    // (Light/Audio) no colapsen el ring.
+    // F2H35 fix: radio del ring de Rotate CONSTANTE EN PANTALLA (igual
+    // que `k_armLen = 60` de Translate/Scale arriba). Pre-F2H35 era
+    // proporcional al AABB world-space (F2H30 Bloque D) — al alejar
+    // la cam el ring se hacia muy chico y dificil de clickear, mientras
+    // que los handles de Translate/Scale se mantenian a 60 px. El dev
+    // reporto la inconsistencia: "deberia ser proporcional a la
+    // distancia de la camara, porque los demas lo son". Ahora derivamos
+    // `worldRadius = TARGET_PX / pixelsPerWorld` usando la distancia
+    // cam->origin + FOV vertical (analogo a la proyeccion perspectiva).
     f32 gizmoRingRadius = 1.0f;
     {
-        f32 maxSize = 0.0f;
-        if (selected.hasComponent<BrushComponent>()) {
-            const auto& bc = selected.getComponent<BrushComponent>();
-            const glm::vec3 sz = bc.brush.localAabb.size();
-            maxSize = std::max({sz.x, sz.y, sz.z});
-        } else if (selected.hasComponent<MeshRendererComponent>() && m_assetManager) {
-            const auto& mr = selected.getComponent<MeshRendererComponent>();
-            if (auto* asset = m_assetManager->getMesh(mr.mesh)) {
-                if (asset->aabbMin.x <= asset->aabbMax.x &&
-                    asset->aabbMin.y <= asset->aabbMax.y &&
-                    asset->aabbMin.z <= asset->aabbMax.z) {
-                    const glm::vec3 sz = asset->aabbMax - asset->aabbMin;
-                    maxSize = std::max({sz.x, sz.y, sz.z});
-                }
-            }
-        }
-        gizmoRingRadius = std::max(maxSize * 0.6f, 0.5f);
+        const glm::vec3 camPos = m_editorCamera.position();
+        const f32 dist = glm::length(camPos - worldOrigin);
+        const f32 fovYrad = m_editorCamera.fovDeg() * 3.1415926f / 180.0f;
+        const f32 halfH = std::max(dist * std::tan(fovYrad * 0.5f), 0.001f);
+        const f32 pxPerWorld = (h * 0.5f) / halfH;
+        constexpr f32 k_targetRingPx = 70.0f;
+        gizmoRingRadius = k_targetRingPx / std::max(pxPerWorld, 0.001f);
     }
 
     const ImVec2 mousePos = ImGui::GetMousePos();
