@@ -9,52 +9,61 @@
 
 ---
 
-## Post-F2H34 (2026-05-09) — Multi-face material drop cerrado
+## Post-F2H35 (2026-05-09) — Polish editor cerrado (UX viewport + Hammer-style visual)
 
 ### Próximo a atacar
 
-- **F2H35 — UX viewport polish (mini-hito)** — identificado en
-  validación de F2H34. Dos features pequeñas que comparten dominio
-  (UX del viewport) y son rápidas de cerrar juntas:
-  - **Editor abre maximizado por defecto**: actualmente arranca en
-    ventana ~1280x720 y el dev tiene que reajustar el dockspace
-    manualmente al maximizar. Fix: `SDL_WINDOW_MAXIMIZED` flag al
-    crear la ventana (o `SDL_MaximizeWindow` post-create). One-liner.
-  - **Toggle wireframe/render shading en viewport** estilo Blender:
-    botones overlay en la zona superior del viewport para alternar
-    entre vista renderizada (PBR actual) y wireframe. Requiere flag
-    en ViewportPanel + pasar a SceneRenderer / RenderPass para
-    aplicar `glPolygonMode(GL_LINE)` o equivalente al pase opaco.
-    ~1-2h, toca render pipeline.
+- **TBD** — definir junto al dev. Hammer Editor cerrado funcional al
+  100% + polish viewport + visual style. Opciones a considerar:
+  - Sub-fase 2.5 gameplay (diálogos / quests / inventario).
+  - Otra sub-fase del PLAN_FASE2 (optimización / runtime / polish UI
+    general).
+  - Hammer-Source 2 polish: iconos image-based del Toolbar via
+    FontAwesome (deuda explícita F2H22) + posibles improvements
+    sobre los iconos point entity actuales.
 
 ### Activos sin orden definido (siguiente ola)
 
-- **Hammer-style visual polish** (paquete candidato a hito chico
-  futuro, posiblemente unificable con F2H35 si crece): cuando el dev
-  pidió cerrar F2H33 mencionó varias mejoras visuales que NO entraron
-  por scope. Agruparlas en un hito propio porque comparten dominio
-  (render del wireframe + iconos del editor de mapas):
-  - **Tint del wireframe por color del VisGroup**: cada brush en un
-    grupo se renderea con el color del grupo (~30 LOC, alto valor
-    visual — el color ya está en el `VisGroup` struct).
-  - **Color por tipo de entidad**: lights=amarillo, audio=naranja,
-    triggers=verde, etc. (mapa "tipo → color" + tintar el sphere icon
-    actual). Hammer-style.
-  - **Labels arriba de point entities**: texto del tag de la entidad
-    arriba del icono en world. Hammer original tiene toggle "Map →
-    Show Helpers".
-  - **Pulir face picking UX**: el dev reportó que la selección de
-    caras es difícil incluso después del fix de F2H33 Bloque C.
-    *"funciona, es complejo supongo de entender, pero se puede pulir
-    a futuro"*. Casos borde: rayo en bordes de cara, caras muy
-    inclinadas respecto a la cámara, caras chicas dentro de brushes
-    grandes. Investigar si hay margen en `Csg::pickFace` (epsilon /
-    triangulación) o si es UX puro (preview hover).
+- **Hover preview de face picking en orto** (no solo perspective):
+  F2H35 Bloque F solo cubre perspective. Los ortos ya usan wireframe
+  color por VisGroup que es feedback razonable, pero pintar la cara
+  hovered cyan en orto requeriría pasarle el cursor del orto al
+  pickFace + dibujar overlay específico via debugRenderer. Diferido
+  — emerge si el dev lo pide.
 
 - **VisGroups jerárquicos / drag desde Hierarchy / auto-asignar a
   current group / lock de VisGroup**: features avanzadas que Hammer
   4 tiene pero F2H33 no entregó. Diferidos hasta que emerja necesidad
   real (Hammer 4 plano cubre el 80/20).
+
+### Histórico resuelto
+
+- ~~Editor abre maximizado por defecto~~ — resuelto en F2H35 Bloque B
+  (`v1.25.0-fase2-hito35`). `SDL_GetDesktopDisplayMode` para crear la
+  ventana al tamaño del display + flag `SDL_WINDOW_MAXIMIZED`. Fix
+  acoplado: dockspace se descuadraba por iniLayout stale del
+  `.moodproj` con WorkSize pre-maximize → stamp `k_IniLayoutStamp`
+  per-proyecto invalida los iniLayouts viejos.
+- ~~Toggle wireframe/render shading en perspective~~ — descartado por
+  dev (*"olvdalo, ya tenemos wireframe en el editor de mapas"*).
+- ~~Tint del wireframe por color del VisGroup~~ — resuelto en F2H35
+  Bloque C. Helper `wireframeColorForEntity` en SceneRenderer_Ortho.
+- ~~Color por tipo de entidad~~ — resuelto en F2H35 Bloque D. Paleta
+  Hammer-style + iconos 2D nuevos en perspective + cubitos orto +
+  fix lateral pickable Trigger/Camera/Particle.
+- ~~Labels arriba de point entities~~ — resuelto en F2H35 Bloque E.
+  Toggle "Nombres" default ON con persistencia opcional en `.moodproj`.
+- ~~Pulir face picking UX~~ — resuelto en F2H35 Bloque F. Hover
+  preview cyan en perspective antes de clickear (pickFace cada frame
+  si el cursor está sobre el viewport en Face Mode).
+- ~~VisGroupsPanel ColorPicker no persistía cambio~~ — bug F2H33
+  resuelto en F2H35 (live preview + snapshot pre + push al
+  IsItemDeactivatedAfterEdit).
+- ~~Gizmo Rotate proporcional al AABB no constante en pantalla~~ —
+  bug F2H30 resuelto en F2H35 Bloque E.5. Derivar worldRadius desde
+  pixelsPerWorld para que el ring sea ~70 px constantes.
+
+## Post-F2H34 (2026-05-09) — Multi-face material drop cerrado
 
 ### Histórico resuelto
 

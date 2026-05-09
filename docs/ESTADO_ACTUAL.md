@@ -6,11 +6,51 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H34 cerrado: Multi-face material drop.**
-Tag: `v1.24.0-fase2-hito34`.
-Verificado por dev: face mode → shift+click N caras → drop textura o material → las N caras reciben el material en una sola operación (un solo slot agregado al `bc.materials`, todas las caras apuntan ahí); Ctrl+Z las revierte juntas en un solo undo; los flows pre-F2H34 (single-face, object mode, drop sobre brush sin selección) siguen intactos.
+**🚀 Fase 2 — F2H35 cerrado: Polish editor (UX viewport + Hammer-style visual).**
+Tag: `v1.25.0-fase2-hito35`.
+Verificado por dev end-to-end: editor arranca maximizado con dockspace balanceado (sin "Restablecer layout" manual); brushes en VisGroup tintan su color en los 3 ortos; point entities por tipo (Light amarillo / Audio naranja / Trigger verde / Camera azul / Particle violeta) con cubitos en orto + iconos 2D en perspective + labels flotantes con tag (toggle "Nombres" persistido); face picking muestra hover preview cyan antes de clickear; gizmo Rotate constante en pantalla (igual que Translate/Scale).
 
-**🏁 Hammer Editor cerrado funcional al 100%.** 32/44 hitos de Fase 2.
+**🏁 Hammer Editor cerrado funcional al 100%.** 33/44 hitos de Fase 2.
+
+**Decisiones clave de F2H35:**
+- **Editor maximizado via `SDL_GetDesktopDisplayMode` + `SDL_WINDOW_MAXIMIZED`** en lugar de 1280x720 + maximize async. Razón: `SDL_GetWindowSize` en el primer frame devolvía 1280x720 stale, el rebuild del Dockspace usaba ese WorkSize, los splits se persistían como offsets absolutos al ini → dockspace descuadrado al maximizar la ventana real. Crear directamente al display garantiza dimensiones correctas desde el frame 0.
+- **Stamp `k_IniLayoutStamp = 1` per-proyecto.** El bumpear `imgui_layout_v3.ini` cubre el ini global, pero los `.moodproj` también guardan `iniLayout` por workspace (F2H7). Stamp invalida los iniLayouts persistidos cuando el dockspace builder cambia (mismo patrón que el ini global). Ausente = legacy 0 → invalidar y rebuild fresh con WorkSize correcto. Sin esto los proyectos viejos seguían descuadrados aunque la ventana arrancara maximizada.
+- **Tint VisGroup color solo en wireframe orto, NO en perspective.** Perspective ya renderea PBR completo (no wireframe excepto outlines de selected); tintar el wireframe del VisGroup tendría sentido solo en orto donde todo es wireframe. Mantiene consistencia: tipo va al perspective via icon, organización (VisGroup) va al orto via wireframe color.
+- **Cubitos point entity en orto: tamaño FIJO (r=0.4)**, NO proporcional al snap. Razón: con snap=64 los cubitos inflaban la vista; con snap=1 desaparecían. `r=0.4` matchea `k_iconPickRadius=0.6` de ScenePick para que el área visible coincida con el área pickable (sin sorprender al dev "lo veo pero no lo agarro").
+- **Hover preview de face picking en cyan brillante** `(0.10, 0.95, 1.00)`. Probado: blanco tenue inicial desaparecía sobre texturas claras (probado contra textura blanca tilada del proyecto del dev). Cyan saturado contrasta con amarillo (active selected) y naranja (secondary selected) — el dev distingue hover-preview vs ya-seleccionado a primera vista.
+- **Gizmo Rotate constante en pantalla = Translate/Scale.** Pre-F2H35 era `0.6 * max(localAabb)` world-space (F2H30 Bloque D) — al alejar la cam se hacía chico mientras los handles de Translate/Scale se mantenían a 60 px. Fix: `worldRadius = TARGET_PX / pixelsPerWorld` derivado de `(h/2) / (camDistance * tan(fovY/2))`. Target 70 px (mayor que k_armLen=60 para que el ring rodee los handles sin solaparse).
+- **Toggle "Nombres" default ON, persistido por proyecto.** Default OFF (Hammer original) sería más alineado con la convención clásica, pero el dev pidió explícitamente *"labels default On"*. Persistencia opcional en `.moodproj` solo si != default (mismo patrón que coyoteWindowSec del Hito 40 G — los `.moodproj` viejos no se ensucian).
+- **Detalles por tipo dentro del cubito orto descartados.** En iteración inicial agregué rayos/X/diagonal/frustum/burst dentro del cubo para diferenciar tipos sin label. Feedback dev: *"demasiado grande, como lo hace el hammer editor de valve?"*. Hammer Source clásico usa cubito chico + label de texto. La diferenciación fina viene del label (nombre de la entidad), no de la forma del icono — eso queda para Hammer-Source 2 / Hammer++ (FontAwesome icons, hito futuro).
+
+**Implementación (F2H35 Bloques A-G en 9 commits feat/fix + cierre):**
+
+- **Bloque A** (`a7c6484`): plan archivado.
+- **Bloque B** (`cdf1cff` + `d0ea5e2`): editor maximizado + 3 fixes layout descuadrado.
+- **Fix lateral** (`1734537`): VisGroupsPanel ColorPicker live-preview.
+- **Bloque C** (`befdd29`): tint wireframe brushes por VisGroup color en ortos.
+- **Bloque D** (`88bdba8`): paleta por tipo + iconos 2D perspective + cubitos orto + fix pickable Trigger/Camera/Particle.
+- **Bloque E** (`d5c8da1`): labels point entities + toggle "Nombres" + feedback selección orto.
+- **Bloque E.5** (`db1823a`): fix gizmo Rotate proporcional a cam.
+- **Bloque F** (`4cf5e89`): hover preview face picking cyan.
+- **Persistencia toggle** (`c44383f`): `Project::showEntityLabels` opcional.
+- **Bloque G** (este commit): docs + tag.
+
+**Pendientes conocidos** (post-F2H35):
+- **Iconos image-based del Toolbar** (FontAwesome merge): pendiente desde F2H22, ahora reforzado por el feedback de iconos de point entities. Bajo riesgo, alto impacto visual. Probable hito chico futuro.
+- **Hover preview en orto** (no perspective): F2H35 Bloque F solo cubre perspective; los ortos ya usan wireframe color del Bloque C que es feedback razonable, pero pintar la cara hovered cyan en orto requeriría pasarle el cursor del orto al pickFace y dibujar overlay específico. Diferido — emerge si el dev lo pide.
+- **VisGroups jerárquicos / drag desde Hierarchy / lock**: features avanzadas Hammer 4. Diferidas hasta que emerja necesidad real.
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+
+**Próximo paso**: **TBD — definir junto al dev**. Hammer Editor cerrado funcional al 100% + polish viewport + visual style. Opciones a considerar:
+- Sub-fase 2.5 gameplay (diálogos / quests / inventario).
+- Otra sub-fase del PLAN_FASE2 (optimización / runtime / polish UI general).
+- Hammer-Source 2 polish (FontAwesome icons + posibles improvements).
+
+### F2H34 (anterior, ya cerrado)
+
+**🚀 F2H34 cerrado: Multi-face material drop.**
+Tag: `v1.24.0-fase2-hito34`.
+Verificado por dev: face mode → shift+click N caras → drop textura o material → las N caras reciben el material en una sola operación.
 
 **Decisiones clave de F2H34:**
 - **Sin command class nuevo, extender el existente.** `EditBrushFaceMaterialCommand` cambió `u32 faceIndex` + `u32 oldFaceMatIndex` + `u32 newFaceMatIndex` por `vector<u32>` paralelos. Constructor 1-cara preservado como wrapper que rellena vectores tamaño 1 — back-compat total con call-sites pre-existentes y los 7 tests del F2H19. Razón: sumar `EditBrushFacesMaterialCommand` (plural) sería duplicar 90% del código y forzar a las llamadoras a elegir entre dos clases con la misma intención.

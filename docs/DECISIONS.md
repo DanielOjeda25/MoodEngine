@@ -11,6 +11,44 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-09: F2H35 cierre — Polish editor: UX viewport + Hammer-style visual
+
+**Contexto:** F2H35 agrupa varios items chicos identificados al validar F2H34 (editor maximizado, toggle wireframe en perspective descartado por dev) + paquete "Hammer-style visual polish" anotado post-F2H33 (tint VisGroup color, color por tipo de entity, labels point entities, pulir face picking). Mini-hito multi-bloque (~1 sesión, ~700 LOC) que cierra deuda de UX visual del editor sin tocar la math/lógica del CSG ni la del scene graph.
+
+**Decisiones técnicas clave:**
+
+- **Editor arranca al tamaño REAL del display, no 1280x720 + maximize async.** `SDL_CreateWindow(SDL_WINDOW_MAXIMIZED)` encola el resize asíncrono — `SDL_GetWindowSize` en el primer frame devuelve los valores que pasamos al CreateWindow (1280x720 stale), no las dimensiones reales maximizadas. El primer rebuild del Dockspace usaba ese WorkSize, los splits con ratio se calculaban a esa resolución y luego ImGui los persistía como offsets ABSOLUTOS al ini. Cuando la ventana ya era 1920x1057 (maximizada real), los offsets stale dejaban panels descuadrados. **Fix:** `SDL_GetDesktopDisplayMode(0, &dm)` antes de CreateWindow para crear directo al tamaño del display + flag `WindowSpec::maximized` para que el WM marque "restaurar" y respete la taskbar. Garantiza dimensiones correctas desde el frame 0.
+
+- **Stamp `k_IniLayoutStamp = 1` per-proyecto en `.moodproj`.** El bumpear `imgui_layout_v2.ini → v3.ini` cubre el ini global de ImGui, pero los `.moodproj` también guardan `iniLayout` por workspace (F2H7). Stamp invalida los iniLayouts persistidos cuando el dockspace builder cambia significativamente. Ausente = legacy 0 (pre-F2H35) → `ProjectSerializer::load` descarta los iniLayouts y deja `iniLayout=""`, forzando rebuild fresh con WorkSize correcto al primer activado del workspace. Sin esto los proyectos viejos seguían descuadrados aunque la ventana arrancara correcta.
+
+- **Tint VisGroup color SOLO en wireframe orto, no en perspective.** Perspective renderea PBR completo (no wireframe excepto outlines de selected); tintar el wireframe del VisGroup tendría sentido solo en orto donde TODO es wireframe. Mantiene consistencia: tipo va al perspective via icon (Bloque D), organización (VisGroup) va al orto via wireframe color (Bloque C). Selection sigue ganando: brush selected = naranja Hammer, override sobre el VisGroup color.
+
+- **Cubitos point entity en orto: tamaño FIJO (r=0.4), no proporcional al snap.** Iteración inicial usaba `snapStep * 0.5` — con snap=64 los cubos eran de 32 unidades de lado, inflaban la vista; con snap=1 desaparecían. Después probé `snapStep * 0.15` clampeado pero seguía siendo demasiado al snap=64. Decisión final: tamaño fijo `r=0.4` que matchea `k_iconPickRadius=0.6` de ScenePick (el área visible coincide con el área pickable, sin sorprender al dev "lo veo pero no lo agarro"). Hammer Source clásico también usa cubitos de tamaño fijo (~8 unidades hammer).
+
+- **Detalles internos elaborados en cubos orto (rayos/X/diagonal/frustum/burst) DESCARTADOS.** Iteración inicial agregó shapes distintivos por tipo dentro del cubo. Feedback dev: *"demasiado grande, como lo hace el hammer editor de valve?"*. Hammer Source clásico = cubito chico + label de texto. La diferenciación fina viene del label (Bloque E), no de la forma. Esto deja el código simpler (1 sola línea `drawAabb` por cubo) y delega la diferenciación al texto que es más legible.
+
+- **Hover preview de face picking en CYAN brillante** `(0.10, 0.95, 1.00)`, NO blanco tenue. Iteración inicial usaba `(0.85, 0.85, 0.95)` — testeado contra textura blanca tilada del proyecto del dev: el blanco desaparecía sobre fondos claros. Cyan saturado contrasta con amarillo (active selected) y naranja (secondary selected) — el dev distingue hover-preview vs ya-seleccionado a primera vista, sobre cualquier textura.
+
+- **Gizmo Rotate constante en pantalla = Translate/Scale.** Pre-F2H35 (F2H30 Bloque D) era `gizmoRingRadius = 0.6 * max(localAabb)` clamped a 0.5 — radio en world-space que se hacía chico al alejar la cam. Translate/Scale ya usaban `k_armLen = 60.0f` píxeles (constante en pantalla). Inconsistencia: alejabas cam, los handles seguían pero el ring se hacía minúsculo. **Fix:** derivar `worldRadius = TARGET_PX / pixelsPerWorld` con `pixelsPerWorld = (h/2) / (camDistance * tan(fovY/2))` — análogo a la proyección perspectiva. Target 70 px (ligeramente mayor que `k_armLen` para que el ring rodee los handles sin solaparse).
+
+- **Toggle "Nombres" default ON, persistido por proyecto.** Hammer original tiene este toggle OFF por default (menú "Map > Show Helpers"). Decisión del dev: *"labels default On"*. Persistencia opcional (`Project::showEntityLabels = true` + `ProjectSerializer::save` solo emite si != default) para no ensuciar `.moodproj` viejos con campos nuevos. Mismo patrón que coyoteWindowSec del Hito 40 G.
+
+- **Pickable extendido a Trigger/Camera/Particle en ScenePick.** Bug pre-existente del F2H17 detectado al implementar Bloque D: `pickEntityFromRay` solo soportaba Light y Audio en la rama sphere-pick — Trigger/Camera/Particle caían al `return` sin pickable. El dev tenía que ir al Hierarchy del workspace Layout para seleccionarlos. Fix extiende la condición a los 5 tipos (mismo `k_iconPickRadius=0.6`). Encajó dentro de F2H35 porque salió a la luz validando el Bloque D.
+
+**Alternativas descartadas explícitamente:**
+
+- **Toggle wireframe/render shading en perspective viewport** (parte original del plan F2H35 Bloque B): descartado por el dev — *"olvdalo, ya tenemos wireframe en el editor de mapas"* (los 3 ortos del workspace "Editor de mapas" ya son wireframe via F2H28). Implementarlo requería tocar el render pipeline + glPolygonMode global + UI overlay con botones — alto costo, bajo valor agregado.
+- **Detección automática de WorkSize cambio + rebuild dockspace defensivo**: alternativa al stamp `k_IniLayoutStamp` para invalidar iniLayouts stale. Descartado porque rompería la persistencia del layout custom del dev (cualquier resize manual disparaba reset). Stamp es más predecible.
+- **Iconos elaborados por tipo dentro del cubito orto** (rayos sun, X audio, frustum camera, etc.): descartado por feedback dev. Hammer Source clásico = cubito + label. Hammer-Source 2/Hammer++ usa SVG icons via FontAwesome — eso queda como hito futuro propio.
+
+**Condiciones de revisión:**
+
+- Si el render pipeline cambia significativamente y los splits del dockspace requieren bumpearse, incrementar `k_IniLayoutStamp` (mismo patrón del bump del ini global).
+- Si emerge necesidad real de iconos image-based en el toolbar (FontAwesome merge), abrir hito propio para no contaminar este — el dev ya lo mencionó como pendiente desde F2H22.
+- Si el dev pide hover preview en orto (no solo perspective), agregar — el helper `pickFace` ya está disponible, solo falta el wireup del cursor del orto al render pass.
+
+---
+
 ## 2026-05-09: F2H34 cierre — Multi-face material drop (capitaliza refactor F2H33)
 
 **Contexto:** F2H33 introdujo `selectedFaceIndices` (vector de N caras seleccionables via Shift+click), pero el handler de drop en `DemoSpawners_Drop.cpp` quedó pre-F2H33 — solo aplicaba la textura/material al `activeFaceIndex()`. F2H34 capitaliza ese refactor extendiendo el flow para que el drop afecte a las N caras seleccionadas en una sola operación undoable. Es un mini-hito (~1 sesión, ~250 LOC) que cierra una deuda explícita anotada en `PENDIENTES.md` post-F2H33.
