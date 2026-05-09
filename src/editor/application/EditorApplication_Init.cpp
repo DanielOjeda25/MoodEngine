@@ -183,35 +183,56 @@ EditorApplication::EditorApplication() {
         throw std::runtime_error("ImGui_ImplOpenGL3_Init fallo");
     }
 
-    // F2H36: merge FontAwesome 6 free solid al atlas default. Permite
-    // usar `ICON_FA_*` como prefijo de string en cualquier label de
-    // ImGui (ver `editor/ui/IconsFontAwesome6.h`). El default font de
-    // ImGui (ProggyClean) cubre ASCII; el merge agrega los glyphs del
-    // rango Private Use Area que FA usa para sus iconos.
+    // F2H38: cambiar el default font de ProggyClean (bitmap 13px,
+    // pixely, solo Basic Latin) a Lato Latin Regular (sans-serif TTF
+    // 15px, smooth, Latin completo + General Punctuation). Lato vive
+    // en `assets/ui/fonts/LatoLatin-Regular.ttf` desde antes pero
+    // nunca se cargaba. Todos los paneles del editor heredan la
+    // mejora de legibilidad — Console (text-heavy) es donde mas se
+    // nota. Side effect: el em-dash U+2014 ahora rendea (Lato cubre
+    // General Punctuation), pero el fix `—`->`-` de F2H37 queda en
+    // su lugar (es approach mas robusto, no depende del font).
     //
-    // ImGui 1.92+ tira un assert si el merge usa un size explicito
-    // distinto del que la default font registro como "reference size"
-    // (que es implicit con AddFontDefault()). Por eso pasamos 0.0f =
-    // implicit ref size en el merge — patron estandar documentado en
-    // imgui-src/docs/FONTS.md ("Merge font and icons" example).
+    // F2H36 (FA merge) seguia activo. ImGui 1.92 obliga a que la
+    // font primaria y la mergeada compartan convencion de "reference
+    // size" — pre-F2H38 ambas eran implicit (AddFontDefault + 0.0f);
+    // ahora que Lato carga con size explicito (15.0f), la FA tambien
+    // pasa a explicito (13.0f, ~85% del texto = icons proporcionales
+    // al cuerpo de Lato sin dominarlo).
     //
-    // Si el TTF falla en cargar (ej. no esta en el deploy), seguimos
-    // con default font + los icons aparecen como tofu — degradacion
-    // graceful sin crash.
+    // Si los TTF fallan en cargar (ej. assets/ no en el deploy),
+    // ImGui tira assert al intentar Build() del atlas. Aceptable:
+    // sin assets el editor no arranca en general.
     {
         ImFontAtlas* atlas = io.Fonts;
-        atlas->AddFontDefault();
+
+        // Lato como font primaria. Range custom: Basic Latin +
+        // Latin-1 Supplement (espanol) + General Punctuation
+        // (em-dash, en-dash, ellipsis, comillas curvas).
+        static const ImWchar k_latoRange[] = {
+            0x0020, 0x00FF, // Basic Latin + Latin-1 Sup
+            0x2010, 0x2027, // General Punctuation subset
+            0
+        };
+        ImFontConfig latoCfg;
+        latoCfg.PixelSnapH = false; // smooth scaling para sans-serif
+        atlas->AddFontFromFileTTF(
+            "assets/ui/fonts/LatoLatin-Regular.ttf",
+            15.0f,
+            &latoCfg,
+            k_latoRange);
+
+        // FA mergeada al Lato. Mismo size convention (explicit) para
+        // satisfacer el assert de ImGui 1.92. Tamano del icon a 13px
+        // = ~85% del texto de Lato — proporcional al cuerpo sin
+        // dominar el label.
         ImFontConfig iconCfg;
         iconCfg.MergeMode = true;
         iconCfg.PixelSnapH = true;
-        // NOTA: NO seteamos GlyphMinAdvanceX. ImGui 1.92 tira un IM_ASSERT
-        // si combinas glyph advance overrides + size 0.0f (implicit ref).
-        // El default rendering es suficiente — los iconos quedan al alto
-        // natural de la fuente, alineados con el texto.
         static const ImWchar k_iconRange[] = { 0xE005, 0xF8FF, 0 };
         atlas->AddFontFromFileTTF(
             "assets/ui/fonts/fa-solid-900.ttf",
-            0.0f, // 0 = usar reference size implicit del default font
+            13.0f,
             &iconCfg,
             k_iconRange);
     }
