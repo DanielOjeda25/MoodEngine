@@ -168,6 +168,11 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
     // setWorkspaces({}) cae a los 4 defaults.
     m_ui.workspaceManager().setWorkspaces(m_project->workspaces);
 
+    // F2H35 Bloque E: restaurar el toggle "Nombres" persistido por
+    // proyecto. Default true (post-F2H35) preservado si el .moodproj
+    // pre-F2H35 no tiene el campo.
+    m_ui.setShowEntityLabels(m_project->showEntityLabels);
+
     // F2H22 polish: al cargar un proyecto SIEMPRE arrancar en Modelar
     // (workspace 0) con layout limpio + visibility default. Antes el
     // editor recordaba el ultimo workspace + el ultimo layout (via
@@ -234,6 +239,9 @@ void EditorApplication::handleSave() {
             }
             m_project->workspaces = m_ui.workspaceManager().workspaces();
         }
+        // F2H35 Bloque E: capturar el toggle "Nombres" actual al
+        // proyecto antes de serializar.
+        m_project->showEntityLabels = m_ui.showEntityLabels();
         ProjectSerializer::save(*m_project);
         m_projectDirty = false;
         updateWindowTitle();

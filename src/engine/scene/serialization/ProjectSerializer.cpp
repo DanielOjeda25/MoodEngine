@@ -46,6 +46,11 @@ void ProjectSerializer::save(const Project& project) {
     if (project.jumpBufferWindowSec != 0.15f) {
         j["jumpBufferWindowSec"] = project.jumpBufferWindowSec;
     }
+    // F2H35 Bloque E: toggle Nombres — solo persistir si != default
+    // (true). Mismo patron que los settings de Hito 40 G.
+    if (!project.showEntityLabels) {
+        j["showEntityLabels"] = project.showEntityLabels;
+    }
 
     // F2H7: workspaces — solo persistir si la lista no esta vacia (proyectos
     // nuevos los inicializan al abrirse via WorkspaceManager defaults).
@@ -107,6 +112,10 @@ std::optional<Project> ProjectSerializer::load(const std::filesystem::path& mood
         }
         if (j.contains("jumpBufferWindowSec")) {
             p.jumpBufferWindowSec = j.at("jumpBufferWindowSec").get<f32>();
+        }
+        // F2H35 Bloque E: toggle Nombres opcional. Ausente = default true.
+        if (j.contains("showEntityLabels")) {
+            p.showEntityLabels = j.at("showEntityLabels").get<bool>();
         }
 
         // F2H7: workspaces opcionales. Si no estan, queda vacio y el

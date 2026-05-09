@@ -43,6 +43,11 @@ struct Project {
     /// defaults la primera vez que se abre. Al guardar, el editor captura
     /// el iniLayout actual y los persiste todos.
     std::vector<Workspace> workspaces;
+    /// F2H35 Bloque E: toggle "Nombres" del MapEditorTopBar — muestra/
+    /// oculta los labels arriba de los iconos de point entities en
+    /// perspective + ortos. Default true. Persistido por proyecto solo
+    /// si difiere del default (mismo patron que coyoteWindowSec).
+    bool showEntityLabels = true;
 };
 
 class ProjectSerializer {
