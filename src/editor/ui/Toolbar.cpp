@@ -53,18 +53,19 @@ void Toolbar::onImGuiRender() {
     }
 
     // ---- Gizmo modes (Translate / Rotate / Scale) ----
-    // Highlight del modo activo es nice-to-have; por ahora la Toolbar
-    // no conoce el `m_gizmoMode` actual del EditorApplication. Se
-    // podria pasar como setter desde EditorApplication en cada frame
-    // — diferido hasta que emerja necesidad real (al validar el dev
-    // ya ve W/E/R en hover y eso alcanza).
-    if (toolButton("Mover",   "Translate (W) - mover entidad seleccionada")) {
+    // F2H30 Bloque D iter 3: hibrido Maya + Blender via double-tap.
+    //   W           -> Translate gizmo.
+    //   E (1 tap)   -> Scale gizmo per-axis.
+    //   E (2 taps)  -> modal Scale uniforme (cursor distance).
+    //   R (1 tap)   -> Rotate gizmo rings.
+    //   R (2 taps)  -> modal Rotate libre (cursor angle, anillo visual).
+    if (toolButton("Mover",   "Translate (W) - mover via gizmo arrows")) {
         m_ui->requestGizmoMode(0);
     }
-    if (toolButton("Rotar",   "Rotate (E) - rotar entidad seleccionada")) {
+    if (toolButton("Rotar",   "Rotate (R) - rings; doble-tap R = modal angulo libre")) {
         m_ui->requestGizmoMode(1);
     }
-    if (toolButton("Escala",  "Scale (R) - escalar entidad seleccionada")) {
+    if (toolButton("Escala",  "Scale (E) - per-axis; doble-tap E = modal uniforme")) {
         m_ui->requestGizmoMode(2);
     }
 

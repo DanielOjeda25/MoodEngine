@@ -21,6 +21,9 @@
 #include "engine/world/grid/GridMap.h"
 #include "platform/Window.h"
 
+#include <glm/vec2.hpp>  // F2H30 Bloque D: ModalShortcutState.mouseStart
+#include <glm/mat4x4.hpp>  // F2H30 Bloque D: updateModalShortcut(vp,...)
+
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -456,6 +459,65 @@ private:
     void closePolygonDraw();
     /// @brief Cancela la sesion (Esc) sin spawnear.
     void cancelPolygonDraw();
+
+    /// @brief F2H30 Bloque D: state del modal G/R/S estilo Blender. El
+    ///        dev presiona `G`/`R`/`S` con un brush selecto (y mouse
+    ///        sobre el viewport perspectivo, fuera de un text input);
+    ///        eso captura el snapshot del Transform de cada entidad
+    ///        seleccionada y arranca un drag virtual. Mover el cursor
+    ///        actualiza Position (G) / Rotation (R) / Scale (S) en
+    ///        vivo respecto al pivote = centroide del SelectionSet.
+    ///        Click izq confirma (push MultiEditTransformCommand);
+    ///        Esc cancela (revert al startValue de cada entidad).
+    ///        Tecla X/Y/Z durante el modal lockea/destrabea el axis
+    ///        constraint (alineado con Blender). Convive con el gizmo
+    ///        de flechas — ambos terminan llamando al mismo command.
+    struct ModalShortcutEntry {
+        Entity   entity;
+        glm::vec3 startValue{0.0f};
+    };
+    struct ModalShortcutState {
+        bool active = false;
+        // Field se reusa de EditTransformCommand pero como int para
+        // evitar pull del header desde EditorApplication.h. 0=Position,
+        // 1=Rotation, 2=Scale. Mismo orden que el enum del command.
+        int  field = 0;
+        // axisLock: -1 = sin lock (libre), 0/1/2 = X/Y/Z.
+        int  axisLock = -1;
+        glm::vec2 mouseStart{0.0f};
+        // Pivote en world. Para G es el delta del cursor en plano de
+        // camara; para R/S es el centro respecto al cual rotamos/escalamos.
+        glm::vec3 worldCenter{0.0f};
+        std::vector<ModalShortcutEntry> entries;
+    };
+    ModalShortcutState m_modalShortcut;
+
+    /// @brief F2H30 Bloque D iter 3: state para detectar double-tap de
+    ///        E / R. Single-tap E -> GizmoMode::Scale; double-tap E ->
+    ///        modal Scale uniforme. Single-tap R -> GizmoMode::Rotate;
+    ///        double-tap R -> modal Rotate libre. Window 0.4s
+    ///        (default Windows double-click time). Pedido del dev:
+    ///        "si aprieto E una ves... si aprieto 2 veces que escale
+    ///        uniformemente, asi nos desacemos de la S".
+    struct GizmoKeyTapState {
+        int   lastKey = -1;        // -1 = none, 'E', 'R'
+        f32   lastPressTime = -1.0f;
+    };
+    GizmoKeyTapState m_gizmoKeyTap;
+
+    /// @brief Activa el modal G/R/S. `field` = 0 (Position/G), 1 (Rotation/R),
+    ///        2 (Scale/S). Conditions: workspace != Programar, mouse sobre
+    ///        viewport perspectivo, hay seleccion, !WantTextInput, !pincel.
+    ///        Si ya hay un modal activo, lo cancela primero.
+    void startModalShortcut(int field);
+    /// @brief Llamado cada frame por drawEditorOverlay. Lee mouse + teclas
+    ///        X/Y/Z + click + Esc. Aplica delta o cierra/cancela.
+    void updateModalShortcut(const glm::mat4& vp, float vx0, float vy0,
+                              float vw, float vh);
+    /// @brief Confirma: revert a startValue + push MultiEditTransformCommand.
+    void confirmModalShortcut();
+    /// @brief Cancela: revert a startValue, sin push.
+    void cancelModalShortcut();
 
     // Dimensiones del AABB del jugador (0.6 x 1.8 x 0.6 m). Centrado en la
     // posicion de la camara FPS. Escala SI realista: una persona promedio.

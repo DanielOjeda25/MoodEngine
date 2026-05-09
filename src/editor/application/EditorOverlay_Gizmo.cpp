@@ -8,6 +8,8 @@
 
 #include "editor/commands/EditTransformCommand.h"
 #include "editor/selection/SelectionSet.h"
+#include "engine/assets/manager/AssetManager.h"
+#include "engine/render/resources/MeshAsset.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/Components.h"
@@ -55,6 +57,33 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
     const f32 k_armLen = 60.0f;
     const f32 k_ringRad = 55.0f;
 
+    // F2H30 Bloque D: radio del anillo de rotate proporcional al AABB
+    // de la entidad. Antes era fijo en 1m world-space, dejaba el ring
+    // dentro de brushes grandes (no clickeable) o rodeando con holgura
+    // brushes chicos. `0.6 * size_max` cae justo afuera del lado mas
+    // grande del AABB; clamp a 0.5 para que entidades sin geometria
+    // (Light/Audio) no colapsen el ring.
+    f32 gizmoRingRadius = 1.0f;
+    {
+        f32 maxSize = 0.0f;
+        if (selected.hasComponent<BrushComponent>()) {
+            const auto& bc = selected.getComponent<BrushComponent>();
+            const glm::vec3 sz = bc.brush.localAabb.size();
+            maxSize = std::max({sz.x, sz.y, sz.z});
+        } else if (selected.hasComponent<MeshRendererComponent>() && m_assetManager) {
+            const auto& mr = selected.getComponent<MeshRendererComponent>();
+            if (auto* asset = m_assetManager->getMesh(mr.mesh)) {
+                if (asset->aabbMin.x <= asset->aabbMax.x &&
+                    asset->aabbMin.y <= asset->aabbMax.y &&
+                    asset->aabbMin.z <= asset->aabbMax.z) {
+                    const glm::vec3 sz = asset->aabbMax - asset->aabbMin;
+                    maxSize = std::max({sz.x, sz.y, sz.z});
+                }
+            }
+        }
+        gizmoRingRadius = std::max(maxSize * 0.6f, 0.5f);
+    }
+
     const ImVec2 mousePos = ImGui::GetMousePos();
     const bool mouseDown    = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     const bool mouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
@@ -87,16 +116,10 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
 
         int hoverAxis = -1;
         if (!m_gizmo.active) {
-            // En modo Scale, el handle central (axis=3) escala
-            // uniformemente. Hit-test primero (gana al per-axis si
-            // el mouse esta encima del centro).
-            if (effectiveMode == GizmoMode::Scale) {
-                const f32 dx = mousePos.x - osx;
-                const f32 dy = mousePos.y - osy;
-                if (std::sqrt(dx * dx + dy * dy) < 8.0f) {
-                    hoverAxis = 3;
-                }
-            }
+            // F2H30 Bloque D iter 2: removido el handle central (axis=3)
+            // de uniform scale. Pedido del dev: "al gismo de escalar,
+            // sacale el cuadrado central asi solo se usa la S". Para
+            // uniform scale ahora se usa exclusivamente la tecla S.
             if (hoverAxis < 0) {
                 f32 bestDist = 7.0f;
                 for (int i = 0; i < 3; ++i) {
@@ -276,19 +299,10 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
         }
 
         // Draw.
-        // Handle central de uniform scale (cuadrado en el origen).
-        if (effectiveMode == GizmoMode::Scale) {
-            const bool isActive = m_gizmo.active && m_gizmo.axis == 3;
-            const bool isHover  = !m_gizmo.active && hoverAxis == 3;
-            const ImU32 ccol = (isActive || isHover) ? hoverCol
-                               : IM_COL32(220, 220, 220, 230);
-            const f32 cs = 5.0f;
-            dl->AddRectFilled(ImVec2(osx - cs, osy - cs),
-                               ImVec2(osx + cs, osy + cs), ccol);
-            dl->AddRect(ImVec2(osx - cs, osy - cs),
-                         ImVec2(osx + cs, osy + cs),
-                         IM_COL32(20, 20, 20, 255));
-        }
+        // F2H30 Bloque D iter 2: el handle central de uniform scale fue
+        // removido (pedido del dev). Para escalar uniforme se usa la
+        // tecla S del modal Blender; los 3 arrows per-axis siguen para
+        // scale por eje individual.
         for (int i = 0; i < 3; ++i) {
             if (!axisVisible[i]) continue;
             ImU32 col = axisCol[i];
@@ -345,10 +359,12 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
             for (int s = 0; s < k_ringSamples; ++s) {
                 const f32 a = 2.0f * 3.1415926f * static_cast<f32>(s)
                                / static_cast<f32>(k_ringSamples);
-                // Radio 1m world-space. La conversion a screen via
-                // project() da un radio variable segun zoom, buscado
-                // (Blender hace lo mismo: scale con el zoom).
-                const glm::vec3 p = worldOrigin + (u * std::cos(a) + v * std::sin(a));
+                // F2H30 Bloque D: radio = `gizmoRingRadius` (proporcional
+                // al AABB del entity, computado arriba). Pre-F2H30 era
+                // fijo 1m — visible/clickeable solo para entidades del
+                // tamano del cubo unitario.
+                const glm::vec3 p = worldOrigin + (u * std::cos(a) + v * std::sin(a))
+                                     * gizmoRingRadius;
                 f32 sx, sy;
                 if (!detail::projectWorldToScreen(vp, x0, y0, w, h, p, sx, sy)) {
                     ringSX[i][s] = osx; ringSY[i][s] = osy; continue;

@@ -255,9 +255,84 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
     // selected"). Ignorar si ImGui esta capturando texto (p.ej. un
     // InputText del Inspector esta focuseado).
     if (!ImGui::GetIO().WantTextInput) {
-        if (ImGui::IsKeyPressed(ImGuiKey_W, false)) m_gizmoMode = GizmoMode::Translate;
-        if (ImGui::IsKeyPressed(ImGuiKey_E, false)) m_gizmoMode = GizmoMode::Rotate;
-        if (ImGui::IsKeyPressed(ImGuiKey_R, false)) m_gizmoMode = GizmoMode::Scale;
+        // F2H30 Bloque D iter 3: hibrido Maya + Blender via double-tap.
+        // Pedido del dev: "si aprieto W puedo mover, si aprieto E una vez
+        // aparece gismo de escalar, si aprieto 2 veces escala uniforme, R
+        // 1 vez gismo rotar, 2 veces rotar libre. Asi nos desacemos de S".
+        //   W           -> GizmoMode::Translate (single, sin modal).
+        //   E (1 tap)   -> GizmoMode::Scale.
+        //   E (2 taps)  -> modal Scale uniforme (replaces S).
+        //   R (1 tap)   -> GizmoMode::Rotate.
+        //   R (2 taps)  -> modal Rotate libre.
+        // Single-tap fires immediate (toggle gizmo); double-tap detection
+        // se hace contra m_gizmoKeyTap (key + timestamp). Window 0.4s.
+        //
+        // Si el modal esta activo, consume todo (incluso teclas
+        // generales — el modal tiene su propio Esc/click handler).
+        if (m_modalShortcut.active) {
+            updateModalShortcut(vp, x0, y0, w, h);
+            // F2H30 iter 3: feedback visual del modal post-update.
+            // Pedido del dev: "ahi que aparezca ese circulo para rotar".
+            // Rotate (field=1): anillo cuyo radio sigue al cursor + linea
+            //   desde el centro al cursor (indica el angulo activo).
+            // Scale (field=2): solo la linea (la longitud refleja el
+            //   ratio respecto al startDist).
+            if (m_modalShortcut.active) {
+                f32 csx, csy;
+                if (detail::projectWorldToScreen(
+                        vp, x0, y0, w, h,
+                        m_modalShortcut.worldCenter, csx, csy)) {
+                    const ImVec2 mp = ImGui::GetMousePos();
+                    const ImU32 col = IM_COL32(255, 220, 30, 230);
+                    if (m_modalShortcut.field == 1) {
+                        const f32 r = std::sqrt(
+                            (mp.x - csx) * (mp.x - csx) +
+                            (mp.y - csy) * (mp.y - csy));
+                        dl->AddCircle(ImVec2(csx, csy),
+                                       std::max(r, 30.0f), col, 64, 1.5f);
+                    }
+                    dl->AddLine(ImVec2(csx, csy), mp, col, 2.0f);
+                    dl->AddCircleFilled(ImVec2(csx, csy), 4.0f, col);
+                }
+            }
+            return;
+        }
+
+        const bool modalCanFire =
+            m_ui.workspaceManager().activeWorkspace().name != "Programar"
+            && !m_polyDraw.active
+            && selected && selected.hasComponent<TransformComponent>();
+        const f32 now = static_cast<f32>(ImGui::GetTime());
+        const f32 kDoubleTapWindow = 0.4f;
+
+        if (ImGui::IsKeyPressed(ImGuiKey_W, false)) {
+            m_gizmoMode = GizmoMode::Translate;
+            m_gizmoKeyTap.lastKey = -1; // reset cadena E/R si la habia
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_E, false)) {
+            m_gizmoMode = GizmoMode::Scale;
+            const bool doubleTap = (m_gizmoKeyTap.lastKey == 'E')
+                && (now - m_gizmoKeyTap.lastPressTime < kDoubleTapWindow);
+            if (doubleTap && modalCanFire) {
+                startModalShortcut(2); // Scale uniforme
+                m_gizmoKeyTap.lastKey = -1;
+                return;
+            }
+            m_gizmoKeyTap.lastKey = 'E';
+            m_gizmoKeyTap.lastPressTime = now;
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_R, false)) {
+            m_gizmoMode = GizmoMode::Rotate;
+            const bool doubleTap = (m_gizmoKeyTap.lastKey == 'R')
+                && (now - m_gizmoKeyTap.lastPressTime < kDoubleTapWindow);
+            if (doubleTap && modalCanFire) {
+                startModalShortcut(1); // Rotate libre
+                m_gizmoKeyTap.lastKey = -1;
+                return;
+            }
+            m_gizmoKeyTap.lastKey = 'R';
+            m_gizmoKeyTap.lastPressTime = now;
+        }
         // F2H17 + F2H30: teclas 1/2/3 toggle sub-modo Vertex/Edge/Face.
         // Esc vuelve a Object. ImGuiKey_N es la fila superior;
         // ImGuiKey_KeypadN es numpad. Aceptamos ambas para no fallar
