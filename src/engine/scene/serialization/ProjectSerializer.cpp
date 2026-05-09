@@ -50,6 +50,8 @@ void ProjectSerializer::save(const Project& project) {
     // F2H7: workspaces — solo persistir si la lista no esta vacia (proyectos
     // nuevos los inicializan al abrirse via WorkspaceManager defaults).
     if (!project.workspaces.empty()) {
+        // F2H35: stamp del schema de iniLayout. Ver JsonHelpers.h.
+        j["ini_layout_stamp"] = k_IniLayoutStamp;
         j["workspaces"] = json::array();
         for (const auto& ws : project.workspaces) {
             j["workspaces"].push_back({
@@ -109,11 +111,26 @@ std::optional<Project> ProjectSerializer::load(const std::filesystem::path& mood
 
         // F2H7: workspaces opcionales. Si no estan, queda vacio y el
         // WorkspaceManager usara los 4 defaults al cargar el proyecto.
+        // F2H35: si el stamp del iniLayout no matchea el actual (campo
+        // ausente = stamp 0 legacy), descartar los iniLayout y dejar que
+        // el editor reconstruya fresh con el WorkSize correcto al
+        // primer activado del workspace. Conservamos los nombres para
+        // preservar el orden de tabs custom del dev.
+        const int storedStamp = j.value("ini_layout_stamp", 0);
+        const bool invalidateLayouts = (storedStamp != k_IniLayoutStamp);
+        if (invalidateLayouts && j.contains("workspaces")) {
+            Log::assets()->info(
+                "ProjectSerializer::load: iniLayout stamp {} != actual {}, "
+                "descartando layouts persistidos (rebuild fresh al activar)",
+                storedStamp, k_IniLayoutStamp);
+        }
         if (j.contains("workspaces")) {
             for (const auto& wj : j.at("workspaces")) {
                 Workspace ws;
-                ws.name      = wj.value("name", std::string{});
-                ws.iniLayout = wj.value("ini_layout", std::string{});
+                ws.name = wj.value("name", std::string{});
+                ws.iniLayout = invalidateLayouts
+                    ? std::string{}
+                    : wj.value("ini_layout", std::string{});
                 if (!ws.name.empty()) {
                     p.workspaces.push_back(std::move(ws));
                 }

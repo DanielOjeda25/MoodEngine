@@ -94,6 +94,18 @@ namespace Mood {
 constexpr int k_MoodmapFormatVersion = 14;
 constexpr int k_MoodprojFormatVersion = 1;
 
+// F2H35: stamp del schema de iniLayout persistido en `.moodproj`. NO es
+// la version del .moodproj (esa sigue en 1) — es un stamp interno que
+// invalida los iniLayouts cuando cambia el dockspace builder. Bumpear
+// cuando se agregan paneles nuevos o se cambian splits del dockspace
+// (mismo patron que `imgui_layout_vN.ini`). El loader descarta los
+// iniLayouts cuyos stamp no matchea el actual y deja `iniLayout=""`,
+// forzando un rebuild fresh con el WorkSize actual al primer activado
+// del workspace. Sin esto, los `.moodproj` viejos restauran un layout
+// calculado con WorkSize stale (1280x720 pre-F2H35) y al cargar quedan
+// descuadrados aunque la ventana arranque maximizada.
+constexpr int k_IniLayoutStamp = 1;
+
 /// @brief Verifica que la version declarada en un archivo sea legible.
 ///        Lanza `std::runtime_error` con mensaje util si no.
 inline void checkFormatVersion(const nlohmann::json& j, int supportedVersion,

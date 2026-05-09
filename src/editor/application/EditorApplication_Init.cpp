@@ -97,10 +97,29 @@ EditorApplication::EditorApplication() {
 
     WindowSpec spec{};
     spec.title = "MoodEngine Editor - v0.4.0-dev (Hito 4)";
-    spec.width = 1280;
-    spec.height = 720;
-    spec.maximized = true;  // F2H35: arrancar maximizado en lugar de 1280x720
+    // F2H35: arrancar a la resolucion real del escritorio (no 1280x720
+    // + maximize). Razon: SDL_WINDOW_MAXIMIZED solo encola el resize y
+    // el primer SDL_GetWindowSize (que ImGui usa en NewFrame) devolvia
+    // las dimensiones que pasamos al CreateWindow (1280x720), no las
+    // reales maximizadas. El primer Dockspace::rebuildLayout calculaba
+    // los splits a 1280x720 y los persistia como offsets absolutos en
+    // el ini — quedaban torcidos cuando la ventana ya era 1920x1080.
+    // Crear la ventana directamente al tamano del desktop garantiza que
+    // SDL_GetWindowSize devuelva el tamano correcto desde el frame 0.
+    SDL_DisplayMode dm{};
+    if (SDL_GetDesktopDisplayMode(0, &dm) == 0) {
+        spec.width  = static_cast<u32>(dm.w);
+        spec.height = static_cast<u32>(dm.h);
+    } else {
+        spec.width  = 1280;
+        spec.height = 720;
+    }
+    spec.maximized = true;  // titulo bar muestra "restore" + respeta taskbar
     m_window = std::make_unique<Window>(spec);
+    // F2H35 defensivo: bombear eventos pendientes (en particular el
+    // SDL_WINDOWEVENT_SHOWN/RESIZED de la creacion) para que el state
+    // SDL este completamente sincronizado antes del primer NewFrame.
+    SDL_PumpEvents();
 
     // --- GLAD ---
     if (!gladLoaderLoadGL()) {
@@ -145,7 +164,15 @@ EditorApplication::EditorApplication() {
     // persisten en el archivo nuevo y sobreviven entre sesiones. Solo
     // se pierden cuando bumpeamos esta version (decision deliberada
     // del dev: "por defecto la UI es fija, luego el user acomoda").
-    io.IniFilename = "imgui_layout_v2.ini";
+    // F2H35: bump v2 -> v3. El arranque maximizado del Bloque B cambia
+    // las dimensiones iniciales del viewport (era 1280x720, ahora cubre
+    // toda la pantalla). Layouts persistidos en `imgui_layout_v2.ini`
+    // tenian splits con tamanos absolutos calculados a 1280x720 y al
+    // arrancar maximizado quedaban descuadrados (el panel "Top (XZ)"
+    // del workspace "Editor de mapas" comia el 60% del ancho dejando
+    // al "Viewport" amontonado). Bump fuerza fresh layout que el
+    // DockBuilder calcula con las dimensiones reales de la ventana.
+    io.IniFilename = "imgui_layout_v3.ini";
 
     ImGui::StyleColorsDark();
 
