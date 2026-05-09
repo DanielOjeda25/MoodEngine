@@ -16,6 +16,7 @@
 namespace Mood {
 
 class IFramebuffer;
+class Scene;  // F2H35 Bloque E: para iterar point entities y dibujar labels
 
 class OrthoViewportPanel : public IPanel {
 public:
@@ -33,6 +34,12 @@ public:
     /// panel lo muestre como label "Grid: Nu" arriba-derecha. El state
     /// real vive en EditorApplication; el caller lo inyecta cada frame.
     void setSnapStep(u32 step) { m_snapStep = step; }
+
+    /// F2H35 Bloque E: setters para el render de labels point entity.
+    /// Scene se setea una vez al init; el flag se sincroniza cada frame
+    /// desde EditorUI (toggle del boton "Nombres" en Map Tools).
+    void setScene(Scene* s) { m_scene = s; }
+    void setShowEntityLabels(bool v) { m_showEntityLabels = v; }
 
     /// Tamano deseado en pixeles. EditorApplication lo lee y resize
     /// el FBO al frame siguiente si difiere del actual.
@@ -115,6 +122,10 @@ private:
     ClickSelect m_pendingClick{};
     DragState   m_dragState{};
     LiveCursor  m_liveCursor{};
+
+    // F2H35 Bloque E: render de labels point entity en orto.
+    Scene* m_scene = nullptr;
+    bool m_showEntityLabels = true;
 };
 
 } // namespace Mood

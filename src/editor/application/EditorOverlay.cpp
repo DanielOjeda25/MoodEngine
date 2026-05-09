@@ -324,6 +324,34 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                 const float r = needsIcon ? 14.0f : 12.0f;
                 dl->AddCircle(ImVec2(sx, sy), r, colSel, 24, 2.0f);
             }
+
+            // F2H35 Bloque E: label del tag arriba del icono. Solo si
+            // toggle "Nombres" esta on (default). Texto gris claro con
+            // contorno negro para legibilidad sobre cualquier fondo.
+            // Solo entidades con icono (no toda entidad con
+            // TransformComponent — el viewport se inflaria con labels
+            // duplicados sobre cada brush/mesh).
+            if (needsIcon && m_ui.showEntityLabels() &&
+                e.hasComponent<TagComponent>()) {
+                const std::string& tag =
+                    e.getComponent<TagComponent>().name;
+                if (!tag.empty()) {
+                    const ImVec2 textSize = ImGui::CalcTextSize(tag.c_str());
+                    const ImVec2 textPos(sx - textSize.x * 0.5f,
+                                          sy - 24.0f);
+                    // Outline negro: 4 offsets de 1 px alrededor.
+                    const ImU32 colTextBg = IM_COL32(0, 0, 0, 220);
+                    const ImU32 colText   = IM_COL32(220, 220, 220, 235);
+                    for (int dx = -1; dx <= 1; ++dx)
+                        for (int dy = -1; dy <= 1; ++dy)
+                            if (dx != 0 || dy != 0)
+                                dl->AddText(
+                                    ImVec2(textPos.x + (float)dx,
+                                           textPos.y + (float)dy),
+                                    colTextBg, tag.c_str());
+                    dl->AddText(textPos, colText, tag.c_str());
+                }
+            }
         });
 
     // --- 2) Hotkeys del gizmo + sub-mode + frame ---

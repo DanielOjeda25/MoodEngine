@@ -220,6 +220,14 @@ int EditorApplication::run() {
         if (m_ui.consumeCarveRequest()) {
             handleCarve();
         }
+        // F2H35 Bloque E: toggle labels point entities (boton "Nombres"
+        // del toolbar). Estado vive en EditorUI (default ON).
+        if (m_ui.consumeToggleEntityLabelsRequest()) {
+            m_ui.setShowEntityLabels(!m_ui.showEntityLabels());
+            Log::editor()->info("[labels] entity labels = {}",
+                m_ui.showEntityLabels() ? "on" : "off");
+            markDirty();  // persistir el toggle al guardar el proyecto
+        }
         // Sync state: para que la top toolbar pueda highlight los
         // botones activos.
         m_ui.setPolygonDrawActive(m_polyDraw.active);

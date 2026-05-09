@@ -164,15 +164,19 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
             // proporcional al snap pero clampeado, no escala con zoom.
             if (m_mode == EditorMode::Editor && m_sceneRenderer) {
                 auto& dbgR = m_sceneRenderer->debugRenderer();
-                // F2H35: tamano FIJO en world units (no proporcional al
-                // snap). Hammer Source usa cubitos de 8 unidades
-                // (~4cm a 1u=5mm); aca ~40cm a 1u=1m. Coincide con
-                // k_iconPickRadius=0.6 de ScenePick para que el area
-                // visible matchee el area pickable (sin sorprender al
-                // dev "lo veo pero no lo agarro"). Independiente del
-                // snap del workspace para que con snap=64 no inflen
-                // la vista.
                 constexpr f32 r = 0.4f;
+                // F2H35 fix: feedback de seleccion para point entities
+                // en orto. Pre-fix los brushes/meshes cambiaban a
+                // naranja Hammer al seleccionarlos pero los point
+                // entities seguian del color del tipo — el dev no veia
+                // que estaba seleccionado. Ahora el cubo se pinta
+                // naranja `selectedColor` cuando esta en el SelectionSet
+                // (mismo color que SceneRenderer_Ortho usa para
+                // brushes/meshes selectos). Same-frame, sin acoplamiento
+                // al ECS porque chequeamos contra el SelectionSet
+                // expuesto via EditorUI.
+                const auto& selSet = m_ui.selectionSet();
+                const glm::vec3 selectedColor(1.0f, 0.6f, 0.2f);
                 m_scene->forEach<TransformComponent>(
                     [&](Entity e, TransformComponent& t) {
                         const bool hasMesh =
@@ -194,10 +198,17 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                         } else {
                             return;
                         }
-                        // Cubo wireframe via drawAabb (12 lineas
-                        // internas, color uniforme — suficiente:
-                        // distinguir tipo via color + label del Bloque E,
-                        // no via shapes elaboradas).
+                        // F2H35: si esta en el SelectionSet, override a
+                        // naranja Hammer (consistente con los brushes/
+                        // meshes selectos).
+                        bool isSelected = false;
+                        for (const Entity& s : selSet.selected) {
+                            if (s && s.handle() == e.handle()) {
+                                isSelected = true;
+                                break;
+                            }
+                        }
+                        if (isSelected) col = selectedColor;
                         const glm::vec3 he(r);
                         dbgR.drawAabb(AABB{t.position - he,
                                             t.position + he}, col);
@@ -375,6 +386,10 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
             // sincronizar el snap para el label "Grid: Nu" arriba-derecha.
             op->setFramebuffer(m_sceneRenderer->orthoFb(i));
             op->setSnapStep(m_hammerSnapStep);
+            // F2H35 Bloque E: scene + flag de labels para que el panel
+            // dibuje los labels point entity como overlay 2D.
+            op->setScene(m_scene.get());
+            op->setShowEntityLabels(m_ui.showEntityLabels());
         }
     }
 }

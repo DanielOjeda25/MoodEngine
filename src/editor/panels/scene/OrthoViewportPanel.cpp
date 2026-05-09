@@ -1,11 +1,18 @@
 #include "editor/panels/scene/OrthoViewportPanel.h"
 
 #include "engine/render/rhi/IFramebuffer.h"
+#include "engine/scene/components/BrushComponent.h"   // F2H35 Bloque E: skip
+#include "engine/scene/components/Components.h"        // F2H35 Bloque E
+#include "engine/scene/core/Entity.h"                  // F2H35 Bloque E
+#include "engine/scene/core/Scene.h"                   // F2H35 Bloque E
 
+#include <glm/mat4x4.hpp>
+#include <glm/vec4.hpp>
 #include <imgui.h>
 
 #include <algorithm>
 #include <cstdio>
+#include <string>
 
 namespace Mood {
 
@@ -75,6 +82,58 @@ void OrthoViewportPanel::onImGuiRender() {
         dlText->AddText(ImVec2(imageMin.x + imageSize.x - gridLabelSize.x - 6.0f,
                                 imageMin.y + 4.0f),
                          k_orangeValve, gridLabel);
+
+        // F2H35 Bloque E: labels de point entities (Light/Audio/
+        // Trigger/Camera/Particle sin mesh) flotando arriba del icono
+        // del Bloque D en cada orto. Proyecta pos world -> ndc del orto
+        // -> screen del panel. Mismo color/outline que el label del
+        // perspective (gris claro + outline negro). Solo si toggle ON
+        // (m_showEntityLabels, sincronizado desde EditorUI cada frame).
+        if (m_scene != nullptr && m_showEntityLabels &&
+            hasFb && imageSize.x > 0 && imageSize.y > 0) {
+            const f32 oAspect = imageSize.x / imageSize.y;
+            const glm::mat4 oView = m_camera.viewMatrix();
+            const glm::mat4 oProj = m_camera.projMatrix(oAspect);
+            const glm::mat4 vp = oProj * oView;
+            const ImU32 colTextBg = IM_COL32(0, 0, 0, 220);
+            const ImU32 colText   = IM_COL32(220, 220, 220, 235);
+            m_scene->forEach<TransformComponent, TagComponent>(
+                [&](Entity e, TransformComponent& t, TagComponent& tag) {
+                    if (e.hasComponent<MeshRendererComponent>()) return;
+                    if (e.hasComponent<BrushComponent>()) return;
+                    const bool isPointEntity =
+                        e.hasComponent<LightComponent>() ||
+                        e.hasComponent<AudioSourceComponent>() ||
+                        e.hasComponent<TriggerComponent>() ||
+                        e.hasComponent<CameraComponent>() ||
+                        e.hasComponent<ParticleEmitterComponent>();
+                    if (!isPointEntity || tag.name.empty()) return;
+                    const glm::vec4 clip = vp * glm::vec4(t.position, 1.0f);
+                    if (clip.w <= 0.0f) return;
+                    const float ndcX = clip.x / clip.w;
+                    const float ndcY = clip.y / clip.w;
+                    if (ndcX < -1.1f || ndcX > 1.1f ||
+                        ndcY < -1.1f || ndcY > 1.1f) return;
+                    const float sx = imageMin.x +
+                        (ndcX * 0.5f + 0.5f) * imageSize.x;
+                    const float sy = imageMin.y +
+                        (1.0f - (ndcY * 0.5f + 0.5f)) * imageSize.y;
+                    const ImVec2 textSize =
+                        ImGui::CalcTextSize(tag.name.c_str());
+                    // Offset arriba del icono (cubo de r=0.4 en world,
+                    // ~10 px en pantalla a zoom default — aprox 14 px de
+                    // offset garantiza que no tape el cubo).
+                    const ImVec2 textPos(sx - textSize.x * 0.5f, sy - 18.0f);
+                    for (int dx = -1; dx <= 1; ++dx)
+                        for (int dy = -1; dy <= 1; ++dy)
+                            if (dx != 0 || dy != 0)
+                                dlText->AddText(
+                                    ImVec2(textPos.x + (float)dx,
+                                           textPos.y + (float)dy),
+                                    colTextBg, tag.name.c_str());
+                    dlText->AddText(textPos, colText, tag.name.c_str());
+                });
+        }
 
         // F2H31 Bloque D: coords del cursor en world space (debajo del
         // label de la vista). Solo se muestra si el cursor esta dentro

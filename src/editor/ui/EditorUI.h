@@ -169,6 +169,20 @@ public:
     void setSnapToVertexEnabled(bool v) { m_snapToVertexEnabled = v; }
     bool snapToVertexEnabled() const { return m_snapToVertexEnabled; }
 
+    /// @brief F2H35 Bloque E: toggle de labels arriba de point entities
+    ///        (Light/Audio/Trigger/Camera/Particle) en el viewport
+    ///        perspectivo y en los 3 ortos. Default ON. El toolbar
+    ///        del workspace "Editor de mapas" tiene el boton "Nombres"
+    ///        para flipear. Persistido en `.moodproj` por proyecto.
+    void setShowEntityLabels(bool v) { m_showEntityLabels = v; }
+    bool showEntityLabels() const { return m_showEntityLabels; }
+    void requestToggleEntityLabels() { m_toggleEntityLabelsRequested = true; }
+    bool consumeToggleEntityLabelsRequest() {
+        const bool r = m_toggleEntityLabelsRequested;
+        m_toggleEntityLabelsRequested = false;
+        return r;
+    }
+
     /// @brief F2H32 Bloque C: el toolbar pide ejecutar carve sobre el
     ///        brush activo (Hammer-style boolean subtract automatico
     ///        contra todos los brushes que intersecten el AABB del
@@ -636,6 +650,10 @@ private:
 
     // F2H32 Bloque C: carve action button.
     bool m_carveRequested = false;
+
+    // F2H35 Bloque E: toggle labels point entities. Default ON.
+    bool m_toggleEntityLabelsRequested = false;
+    bool m_showEntityLabels = true;
 };
 
 } // namespace Mood

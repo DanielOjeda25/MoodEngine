@@ -120,6 +120,21 @@ void MapEditorTopBar::onImGuiRender() {
 
     ImGui::Separator();
 
+    // F2H35 Bloque E: toggle labels arriba de point entities en
+    // perspective + ortos. Default ON. El boton highlight refleja el
+    // state actual.
+    ImGui::TextDisabled("Visualizacion");
+    if (toolButton("Nombres",
+                    "Mostrar/ocultar nombres (TagComponent.name) arriba "
+                    "de los iconos de Light/Audio/Trigger/Camera/Particle "
+                    "en el perspective y en los 3 ortos. Persistido "
+                    "por proyecto.",
+                    m_ui->showEntityLabels())) {
+        m_ui->requestToggleEntityLabels();
+    }
+
+    ImGui::Separator();
+
     // F2H32 Bloque C: carve UI button. Click destructivo — resta el
     // brush activo por todos los brushes que intersectan su AABB.
     // Sin keyboard shortcut para evitar accidentes.
