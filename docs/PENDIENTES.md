@@ -9,30 +9,36 @@
 
 ---
 
-## Post-F2H35 (2026-05-09) — Polish editor cerrado (UX viewport + Hammer-style visual)
+## Post-F2H36 (2026-05-09) — FontAwesome icons en toolbars del editor de mapas cerrado
 
 ### Próximo a atacar
 
-- **TBD** — definir junto al dev. Hammer Editor cerrado funcional al
-  100% + polish viewport + visual style. Opciones a considerar:
-  - Sub-fase 2.5 gameplay (diálogos / quests / inventario).
-  - Otra sub-fase del PLAN_FASE2 (optimización / runtime / polish UI
-    general).
-  - Hammer-Source 2 polish: iconos image-based del Toolbar via
-    FontAwesome (deuda explícita F2H22) + posibles improvements
-    sobre los iconos point entity actuales.
+- **F2H37 — extender FontAwesome al resto del editor** (pedido
+  explícito del dev al validar F2H36: *"deberemos integrarlos en
+  otras areas del proyecto para que todo sea equitativo"*). Areas
+  candidatas a cubrir:
+  - **MenuBar** principal (Archivo / Editar / Ver / Ayuda + tabs
+    Layout/Scripting/Profile/Materials/...): icon al lado de cada
+    item de menú + iconos en los tabs de workspace.
+  - **HierarchyPanel**: icon-por-tipo de entity (cube=mesh,
+    lightbulb=light, music=audio, video=camera, fire=particle,
+    cube-shaded=brush, etc.) al inicio de cada row.
+  - **InspectorPanel**: icon en el header de cada componente
+    (TagComponent / TransformComponent / MeshRendererComponent /
+    LightComponent / AudioSourceComponent / BrushComponent / etc.).
+  - **AssetBrowserPanel**: icon por tipo de asset (image=textura,
+    music=audio, cube=mesh, file-code=script, palette=material,
+    box=prefab) en cada row + icons en los tabs.
+  - **Console**: icon por nivel (info-circle=info,
+    triangle-exclamation=warn, circle-xmark=error).
+  - **StatusBar**: posibles indicators (save state / build status /
+    selection count).
+  - **Paneles auxiliares**: VisGroupsPanel (folder-open per group),
+    MaterialEditorPanel (palette + drop zones), ScriptEditorPanel
+    (code icon + actions).
+  Plan a redactar al arrancar como `docs/PLAN_HITO_F2H37.md`.
 
 ### Activos sin orden definido (siguiente ola)
-
-- **FontAwesome icons en el editor** (deuda explícita F2H22, dev
-  expresó interés post-F2H35): merge de `fa-solid-900.ttf` al atlas
-  del font default de ImGui via `MergeMode = true`. Header
-  `IconsFontAwesome.h` (~2000 macros `ICON_FA_*`) para usar como
-  `ICON_FA_PLAY " Play"` en buttons/labels. Mini-hito chico (~30 min).
-  Decidir scope: solo Toolbar + MapEditorTopBar (alto impacto, low
-  risk) o también MenuBar/Inspector/Hierarchy (más completo pero más
-  decisiones de diseño). Atender al peso del binary (~150 KB extra
-  para subset, ~300 KB para full free).
 
 - **HUD del juego procedural/minimalista** (interés expresado por dev
   post-F2H35, scope mayor): explorar HUDs en MoodPlayer dibujados
@@ -43,6 +49,19 @@
   assets, escala perfecta, animable trivialmente. Mini-hito futuro
   con scope a definir junto al dev (cobertura: barra de vida,
   munición, mira, indicadores de daño, etc.).
+
+### Histórico resuelto
+
+- ~~Iconos image-based del Toolbar (deuda explícita F2H22)~~ —
+  resuelto en F2H36 (`v1.26.0-fase2-hito36`) para Toolbar +
+  MapEditorTopBar (17 botones). FontAwesome 6 free solid mergeada al
+  atlas default de ImGui. Resto del editor (MenuBar, Hierarchy,
+  Inspector, AssetBrowser, Console, StatusBar, paneles auxiliares)
+  diferido a F2H37.
+
+## Post-F2H35 (2026-05-09) — Polish editor cerrado (UX viewport + Hammer-style visual)
+
+### Activos diferidos sin orden definido
 
 - **Hover preview de face picking en orto** (no solo perspective):
   F2H35 Bloque F solo cubre perspective. Los ortos ya usan wireframe

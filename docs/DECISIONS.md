@@ -11,6 +11,41 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-09: F2H36 cierre — FontAwesome icons en toolbars del editor de mapas
+
+**Contexto:** F2H22 cerró un pase de polish UX que dejó como deuda explícita "iconos image-based del Toolbar" (las labels eran texto castellano corto: `Mover`/`Rotar`/`Escala`/...). El dev expresó interés post-F2H35 con feedback como *"no tenemos iconos para usar para gizmo, en blender es como esto..."*. Mini-hito chico (~30 min, ~50 LOC) que cierra esa deuda agregando FontAwesome 6 free solid al atlas de ImGui y aplicándola a los 17 botones de los 2 toolbars del workspace "Editor de mapas".
+
+**Decisiones técnicas clave:**
+
+- **FontAwesome 6 free solid (`fa-solid-900.ttf`) commiteada al repo en `assets/ui/fonts/`.** Asset estático del repo oficial `FortAwesome/Font-Awesome` rama `6.x`, ~417 KB. Alternativas descartadas: (1) CPM/FetchContent de la zip release de FontAwesome — no hay distribución oficial CMake-friendly, agregaría build step frágil; (2) hand-rolled SVG icons via ImGui DrawList — escala lineal con cantidad de icons, alto costo por icono; (3) Lucide / Material Symbols / IcoMoon — más nuevos pero menos cobertura del legacy FA4/5 codepoints que muchas guías documentan. FA6 es el estándar de facto, estable y autocontenido.
+
+- **Header `IconsFontAwesome6.h` con subset de ~15 macros**, no el header full de ~2000. Macros encoded en UTF-8 con escapes hex (`"\xef\x86\xb2"` etc.) para no depender de la code page del source MSVC (warning C4566). Incrementar el subset al agregar features nuevas con icon es un cambio explícito + visible en code review, no un import implícito que crece sin control. Trade-off: agregar un nuevo icono requiere computar el escape hex UTF-8 a mano (3 bytes para codepoints 0x0800-0xFFFF). Bajo costo, alta legibilidad.
+
+- **Merge con default font (ProggyClean) usando `0.0f` como `SizePixels` en el merge**, no `13.0f`. Razón: ImGui 1.92 introdujo asserts que verifican que el merge use el mismo "reference size" que la dst font (que es implicit cuando se usa `AddFontDefault()`). Pasar 13.0f explicit triggera `IM_ASSERT((font->Flags & ImFontFlags_ImplicitRefSize) == 0)`. Patrón documentado en `imgui-src/docs/FONTS.md` ("Merge font and icons" example).
+
+- **`GlyphMinAdvanceX` dropeado** (que originalmente seteé a 13.0f para mono-spacing del icon column). Razón: ImGui 1.92 tira un segundo assert si combinas glyph advance overrides + `SizePixels = 0.0f` ("Specifying glyph offset/advances requires a reference size to base it on"). Default rendering es suficiente — los iconos quedan al alto natural de la fuente, alineados con el texto del label. La consistencia visual no se nota en uso real con icons mezclados con label castellano.
+
+- **Width del Toolbar bumped 72→92 px** para acomodar `ICON " Cilindro"` sin truncar. `ICON_FA_CIRCLE` + espacio + 8 chars de label en font 13px = ~85 px. Margen de 7 px para padding interno. Valores menores cortaban el label y dejaban el botón con texto mochado.
+
+- **Scope explícitamente acotado a Toolbar + MapEditorTopBar** (los 2 toolbars laterales del workspace "Editor de mapas"). Quedan FUERA y se difieren a F2H37 dedicado: MenuBar, Hierarchy con icon-por-tipo de entity, Inspector con icons en headers de componentes, AssetBrowser con icons por tipo, Console con icons por nivel, StatusBar, paneles VisGroups/Material/Script. Decisión consciente alineada con la convención previa "un hito = un dominio acotado". El dev validó la decisión al pedir el resto: *"deberemos integrarlos en otras areas del proyecto para que todo sea equitativo"* — confirmación de que el approach incremental es correcto, no que el F2H36 quedó incompleto.
+
+- **NO se carga la `LatoLatin-Regular.ttf` que ya existe en `assets/ui/fonts/`.** El dev nunca la activó (ImGui usa default ProggyClean). Cambiar la default font global = scope mayor (revisar todo el editor para verificar que el spacing / alineamiento siguen OK con la nueva métrica) y NO es lo que pidió F2H22 (que pedía iconos, no cambiar la font del editor). Si se decide en el futuro promover Lato como default, hito propio.
+
+**Alternativas descartadas explícitamente:**
+
+- **Embedded TTF en el binary** (via `xxd -i` o `bin2c` para no depender de runtime file): el TTF es 417 KB, se commite una vez al repo, el `mood_runtime_files` target ya copia `assets/` automáticamente. Embedding agregaría build step + complica cargar variantes en el futuro.
+- **Mantener el header completo de ~2000 macros** (descargado del repo `juliettef/IconFontCppHeaders`): contamina autocompletado de VS, hace ruido en grep, agrega ~150 KB de overhead de preprocessing por cada TU que lo incluya. El subset acotado se extiende explícitamente cuando hace falta.
+- **Push del icon como override del label en `toolButton`** (helper que recibe icon + label separados y los concat internamente): el helper es shared entre Toolbar y MapEditorTopBar pero el call-site sigue siendo el que sabe qué icon usar, así que pasar `ICON_FA_CUBE " Box"` directo es más explícito y permite que el formateo varíe (icon-only / icon-then-label / label-only) sin tocar el helper.
+
+**Condiciones de revisión:**
+
+- Si en F2H37 (extensión al resto del editor) el subset crece a ~50+ icons, considerar adoptar el header `IconsFontAwesome6.h` upstream del repo `juliettef/IconFontCppHeaders` con `#define IGFD_USE_QUICK_PATHS_AND_TYPES` o similar para acotar lo que entra al preprocessor. Mientras estemos < 30 macros, el header propio es más simple.
+- Si ImGui actualiza a 1.93+ y cambia el patrón de reference size, revisar este merge. El comentario en `EditorApplication_Init.cpp` apunta al CHANGELOG y FONTS.md como referencia.
+- Si el dev pide cambiar a otro icon pack (Lucide, Material Symbols), el cambio principal es regenerar `IconsFontAwesome6.h` (renombrar a `IconsLucide.h` o similar) + reemplazar el TTF + actualizar los call-sites con los macros nuevos. ~30 min de trabajo.
+- Si emerge necesidad de iconos color (multi-color SVG-style), FA6 free solid es monocromo — habría que mover a Twemoji / Noto Color Emoji o equivalente, scope mayor.
+
+---
+
 ## 2026-05-09: F2H35 cierre — Polish editor: UX viewport + Hammer-style visual
 
 **Contexto:** F2H35 agrupa varios items chicos identificados al validar F2H34 (editor maximizado, toggle wireframe en perspective descartado por dev) + paquete "Hammer-style visual polish" anotado post-F2H33 (tint VisGroup color, color por tipo de entity, labels point entities, pulir face picking). Mini-hito multi-bloque (~1 sesión, ~700 LOC) que cierra deuda de UX visual del editor sin tocar la math/lógica del CSG ni la del scene graph.

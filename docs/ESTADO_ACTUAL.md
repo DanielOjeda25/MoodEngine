@@ -6,11 +6,40 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H35 cerrado: Polish editor (UX viewport + Hammer-style visual).**
+**🚀 Fase 2 — F2H36 cerrado: FontAwesome icons en toolbars del editor de mapas.**
+Tag: `v1.26.0-fase2-hito36`.
+Verificado visualmente por dev: los 17 botones del Toolbar lateral (Mover/Rotar/Escala/Box/Cilindro/Cara) + MapEditorTopBar (Selecc./Bloque/Pincel/Clip/Objeto/Vertex/Edge/Cara/Snap V/Nombres/Carve) renderean con icono FA + label castellano. Editor arranca sin asserts. Mini-hito chico que cierra deuda arrastrada desde F2H22.
+
+**🏁 Hammer Editor cerrado funcional al 100% + iconos en toolbars del workspace de mapas.** 34/44 hitos de Fase 2.
+
+**Decisiones clave de F2H36:**
+- **FontAwesome 6 free solid (`fa-solid-900.ttf`, ~417 KB)** descargada del repo oficial `FortAwesome/Font-Awesome` rama `6.x` al path `assets/ui/fonts/`. Asset estático commiteado al repo (no se regenera, no requiere build step).
+- **Header `IconsFontAwesome6.h` con subset de ~15 macros**, no el header full de ~2000. Macros encoded en UTF-8 con escapes hex (`"\xef\x86\xb2"`) para no depender de la code page del source MSVC. Agregar un icono nuevo en hitos futuros = extender este header explícitamente (no autoimport).
+- **Merge con default font (ProggyClean) usando `0.0f` como SizePixels**, no `13.0f`. Razón: ImGui 1.92 introdujo asserts que verifican que el merge use el mismo "reference size" que la dst font (implicit en `AddFontDefault`). Pasar 13.0f explicit triggera assert. Patrón confirmado en `imgui-src/docs/FONTS.md`.
+- **GlyphMinAdvanceX dropeado** (override de mono-spacing). Razón: ImGui 1.92 tira otro assert si combinas glyph advance overrides + size 0.0f. Default rendering es suficiente — los iconos quedan al alto natural alineados con el texto.
+- **Width del Toolbar bumped 72→92 px** para acomodar icon + label castellano sin truncar (`ICON_FA_CIRCLE " Cilindro"` no entra en 72 px).
+- **Scope explícitamente acotado a los 2 toolbars del workspace "Editor de mapas"**. MenuBar / Hierarchy / Inspector / AssetBrowser / Console / StatusBar / paneles VisGroups/Material/Script quedan diferidos a F2H37 dedicado. Decisión alineada con la convención "un hito = un dominio acotado". Validado por dev al pedir continuar: *"deberemos integrarlos en otras areas del proyecto para que todo sea equitativo"*.
+
+**Implementación (F2H36 Bloques A-E en commits feat + cierre):**
+
+- **Bloque A**: plan en [`archive/plans/PLAN_HITO_F2H36.md`](archive/plans/PLAN_HITO_F2H36.md).
+- **Bloques B+C unificados**: TTF asset + `IconsFontAwesome6.h` + merge en `EditorApplication_Init.cpp` + iconos en `Toolbar.cpp` + `MapEditorTopBar.cpp`.
+- **Bug fix iter 2 — ImGui 1.92 asserts**: dropear PixelSnap typo (era PixelSnapH) + pasar 0.0f size al merge + dropear GlyphMinAdvanceX. 3 fixes acoplados resueltos en una sola iteración tras lanzar el editor 2 veces.
+- **Bloque D — validación visual**: dev confirma iconos OK en los 17 botones, sin tofu.
+- **Bloque E (este commit)**: docs + tag.
+
+**Pendientes conocidos** (post-F2H36):
+- **F2H37 — extender FontAwesome al resto del editor** (próximo, pedido explícito del dev): MenuBar (Archivo / Editar / Ver / Ayuda + tabs Layout/Scripting/...), Hierarchy con icon-por-tipo de entity (cube=mesh, lightbulb=light, music=audio, video=camera, etc.), Inspector con icons en headers de componentes, AssetBrowser con icons por tipo de asset (image=textura, music=audio, file-code=script, etc.), Console con icons por nivel (info/warn/error), StatusBar, paneles VisGroups/Material/Script. Plan a redactar al arrancar.
+- **HUD del juego procedural/minimalista** (interés expresado post-F2H35): MoodPlayer con HUDs estilo Mirror's Edge / Doom Eternal vía ImGui DrawList o shaders custom. Diferido tras F2H37.
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+
+**Próximo paso**: **F2H37 — extender FontAwesome al resto del editor**. Plan en `docs/PLAN_HITO_F2H37.md` cuando arranquemos.
+
+### F2H35 (anterior, ya cerrado)
+
+**🚀 F2H35 cerrado: Polish editor (UX viewport + Hammer-style visual).**
 Tag: `v1.25.0-fase2-hito35`.
 Verificado por dev end-to-end: editor arranca maximizado con dockspace balanceado (sin "Restablecer layout" manual); brushes en VisGroup tintan su color en los 3 ortos; point entities por tipo (Light amarillo / Audio naranja / Trigger verde / Camera azul / Particle violeta) con cubitos en orto + iconos 2D en perspective + labels flotantes con tag (toggle "Nombres" persistido); face picking muestra hover preview cyan antes de clickear; gizmo Rotate constante en pantalla (igual que Translate/Scale).
-
-**🏁 Hammer Editor cerrado funcional al 100%.** 33/44 hitos de Fase 2.
 
 **Decisiones clave de F2H35:**
 - **Editor maximizado via `SDL_GetDesktopDisplayMode` + `SDL_WINDOW_MAXIMIZED`** en lugar de 1280x720 + maximize async. Razón: `SDL_GetWindowSize` en el primer frame devolvía 1280x720 stale, el rebuild del Dockspace usaba ese WorkSize, los splits se persistían como offsets absolutos al ini → dockspace descuadrado al maximizar la ventana real. Crear directamente al display garantiza dimensiones correctas desde el frame 0.
