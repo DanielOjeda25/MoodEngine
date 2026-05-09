@@ -13,33 +13,58 @@ namespace Mood {
 EditBrushFaceMaterialCommand::EditBrushFaceMaterialCommand(
     Scene* scene,
     std::string entityTag,
+    std::vector<u32> faceIndices,
+    std::vector<MaterialAssetId> oldMaterials,
+    std::vector<u32> oldFaceMatIndices,
+    std::vector<MaterialAssetId> newMaterials,
+    std::vector<u32> newFaceMatIndices,
+    std::string label)
+    : m_scene(scene),
+      m_entityTag(std::move(entityTag)),
+      m_faceIndices(std::move(faceIndices)),
+      m_oldMaterials(std::move(oldMaterials)),
+      m_oldFaceMatIndices(std::move(oldFaceMatIndices)),
+      m_newMaterials(std::move(newMaterials)),
+      m_newFaceMatIndices(std::move(newFaceMatIndices)),
+      m_label(std::move(label)) {}
+
+EditBrushFaceMaterialCommand::EditBrushFaceMaterialCommand(
+    Scene* scene,
+    std::string entityTag,
     u32 faceIndex,
     std::vector<MaterialAssetId> oldMaterials,
     u32 oldFaceMatIndex,
     std::vector<MaterialAssetId> newMaterials,
     u32 newFaceMatIndex,
     std::string label)
-    : m_scene(scene),
-      m_entityTag(std::move(entityTag)),
-      m_faceIndex(faceIndex),
-      m_oldMaterials(std::move(oldMaterials)),
-      m_oldFaceMatIndex(oldFaceMatIndex),
-      m_newMaterials(std::move(newMaterials)),
-      m_newFaceMatIndex(newFaceMatIndex),
-      m_label(std::move(label)) {}
+    : EditBrushFaceMaterialCommand(
+        scene,
+        std::move(entityTag),
+        std::vector<u32>{faceIndex},
+        std::move(oldMaterials),
+        std::vector<u32>{oldFaceMatIndex},
+        std::move(newMaterials),
+        std::vector<u32>{newFaceMatIndex},
+        std::move(label)) {}
 
 void EditBrushFaceMaterialCommand::execute() {
-    apply(m_newMaterials, m_newFaceMatIndex);
+    apply(m_newMaterials, m_newFaceMatIndices);
 }
 
 void EditBrushFaceMaterialCommand::undo() {
-    apply(m_oldMaterials, m_oldFaceMatIndex);
+    apply(m_oldMaterials, m_oldFaceMatIndices);
 }
 
 void EditBrushFaceMaterialCommand::apply(
     const std::vector<MaterialAssetId>& materials,
-    u32 faceMatIndex) {
+    const std::vector<u32>& faceMatIndices) {
     if (m_scene == nullptr) return;
+    if (m_faceIndices.size() != faceMatIndices.size()) {
+        Log::editor()->warn(
+            "EditBrushFaceMaterialCommand: tamano mismatch faceIndices={} vs faceMatIndices={}",
+            m_faceIndices.size(), faceMatIndices.size());
+        return;
+    }
     Entity target;
     m_scene->forEach<TagComponent>([&](Entity e, TagComponent& tag) {
         if (!static_cast<bool>(target) && tag.name == m_entityTag) {
@@ -59,15 +84,21 @@ void EditBrushFaceMaterialCommand::apply(
         return;
     }
     auto& bc = target.getComponent<BrushComponent>();
-    if (m_faceIndex >= bc.brush.faces.size()) {
-        Log::editor()->warn(
-            "EditBrushFaceMaterialCommand: faceIndex {} fuera de rango "
-            "(brush '{}' tiene {} caras)",
-            m_faceIndex, m_entityTag, bc.brush.faces.size());
-        return;
+    // Validar TODOS los faceIndex antes de mutar (si alguno esta fuera de
+    // rango, no aplicamos parcial — todo o nada).
+    for (u32 fi : m_faceIndices) {
+        if (fi >= bc.brush.faces.size()) {
+            Log::editor()->warn(
+                "EditBrushFaceMaterialCommand: faceIndex {} fuera de rango "
+                "(brush '{}' tiene {} caras)",
+                fi, m_entityTag, bc.brush.faces.size());
+            return;
+        }
     }
     bc.materials = materials;
-    bc.brush.faces[m_faceIndex].materialIndex = faceMatIndex;
+    for (size_t i = 0; i < m_faceIndices.size(); ++i) {
+        bc.brush.faces[m_faceIndices[i]].materialIndex = faceMatIndices[i];
+    }
     bc.dirty = true;
 }
 
