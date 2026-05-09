@@ -6,41 +6,43 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H29 cerrado: Block tool + drag-edit en ortos.**
-Tag: `v1.19.0-fase2-hito29`.
-Verificado por dev: drag-edit funciona (click sobre brush + drag → mueve con snap, Ctrl+Z/Y), block tool funciona (click-drag en empty space → preview celeste en 4 vistas + spawn al soltar), origen del brush en su centro (gizmo en posición correcta), Welcome modal limpio al arranque.
+**🚀 Fase 2 — F2H30 cerrado: Polish del editor de mapas (vertex/edge edit + pincel poligonal + gizmo proporcional + W/E/R double-tap modal).**
+Tag: `v1.20.0-fase2-hito30`.
+Verificado por dev: vertex/edge edit funciona con snap absoluto al grid + rebasing al cierre, pincel poligonal crea prismas (4 vertices distintos → brush spawneado, dedupe corrigió "figura desaparece"), gizmo rotate sigue al AABB del brush, W/E/R con double-tap dispara modal Rotate/Scale con anillo amarillo visual, click confirma + Esc cancela.
 
-**Cambio importante**: F2H29 entrega 2 de los 3 bloques planeados (B drag-edit + C block tool). Bloque D (vertex/edge edit) **diferido a F2H30** tras feedback del dev al validar — apareció scope nuevo de polish UX (gizmo rotate proporcional, atajos Blender S/R/G, brush poligonal "pincel") que tiene mayor valor inmediato y forma un hito coherente. Decisión validada explícitamente por dev: *"me gusta ese plan siguelo"*.
+**Cambio importante**: el esquema de atajos del modal pasó por **3 iteraciones** según feedback del dev:
+- **Iter 1 (plan)**: G/R/S puros estilo Blender + W/E/R Maya conviven.
+- **Iter 2**: dev pide "solo Blender, no Maya" → removidos W/E/R, R = modal Rotate, S = modal Scale.
+- **Iter 3 (final, validado)**: dev pide hibrido double-tap → W = Translate gizmo, E single = Scale gizmo / E doble = modal Scale uniforme, R single = Rotate gizmo / R doble = modal Rotate libre. G y S removidos. Cuadrado central de uniform-scale gizmo eliminado (la S desapareció reemplazada por E doble).
 
-**Decisiones clave de F2H29:**
-- **DragState pulse-style** en `OrthoViewportPanel`: `active` durante el drag, `justEnded` un frame al soltar. Click puro (< 4 px) sigue siendo `ClickSelect` (no se rompe el flow del Bloque F de F2H28).
-- **Snap al delta, no a posición absoluta**: `pos = startPos + round((cur - start) / snap) * snap` — preserva el offset original del brush respecto al grid si arrancó desalineado. Convención Hammer.
-- **`pickEntityFromRay` extraído** como helper público en `ScenePick`: el orto picking usa rayos paralelos (`origin = worldFromNdc(...) - forwardAxis * 1024`, `dir = forwardAxis`) reusando el mismo broadphase mesh AABB / brush AABB / icon sphere del perspective. `pickEntity` perspective ahora es wrapper.
-- **Block tool: snap a las esquinas, no al delta**: el rectángulo dibujado se snappea por esquinas (no por movement) para que el brush quede alineado al grid global. Altura default = `snap * 4` sobre el eje perpendicular del view.
-- **Preview en 4 vistas via debug renderer**: la sesión guarda `previewMin/Max`; `EditorRenderPass` re-encola el AABB en el `debugRenderer` antes de cada `renderOrthoView`; `renderOrthoView` flushea el debugRenderer al final con sus matrices. Cada flush limpia la cola, así cada vista renderiza su set queue-eado.
-- **Color celeste GMod** `(108, 193, 229)` para el preview por pedido del dev — paleta Valve+GMod consistente.
-- **Fix de origen del brush en block tool**: descomponer el transform en `T(center) * S(dims)`; construir el brush con solo `S(dims)` (local space) y override `tf.position = center`. Sin esto, el gizmo aparecía lejos del mesh (mismo bug que F2H12 boolean ops resolvió con `snapshotResultWorld`).
-- **Fix lateral Welcome modal**: `EditorUI` ctor llama `requestRebuildForCurrentWorkspace()` para que el ini auto-loadeado de la sesión previa no muestre windows en posiciones stale.
-- **Bloque D diferido a F2H30**: vertex/edge edit + brush poligonal + gizmo polish + atajos Blender forman paquete coherente de UX-polish.
+**Decisiones clave de F2H30:**
+- **Vertex/edge edit con snap WORLD-space (no local)**: el grid del workspace orto vive en world; snap en local quedaba desfasado para brushes con `tf.position != 0`. Solo se snappean los ejes que el dev MUEVE (`|deltaWorld[i]| > eps`), preservando coords no-grid-aligned en ejes intactos.
+- **Rebasing al cierre del drag**: `newCentroidLocal = brush.localAabb.center()`, todos los planos se trasladan por `-newCentroid`, `tf.position += R * newCentroid`. Sin esto el gizmo quedaba en la posición vieja del brush. Mismo patrón que F2H12 boolean ops resolvió con `snapshotResultWorld`.
+- **Dedupe en pincel**: dos clicks que snapean a la misma celda generaban polígono degenerado y `closePolygonDraw` cancelaba sin pista — el dev percibía "la figura desaparece". Fix: skipear el segundo click si está a < 1mm del último.
+- **Gates anti-conflicto pincel/vertex-edit/block-tool**: activar pincel resetea sub-modo a Object + `activeFaceIndex = -1`; bloque 2.4e (vertex/edge edit) gateado con `!m_polyDraw.active`. Sin estos guards, un click del pincel en sub-modo Vertex disparaba edit accidental del brush selecto.
+- **Toolbar lateral "Map Tools"** (columna derecha del workspace, ~10% ancho): pedido del dev *"hagamos uno superior"* mutado a *"prefiero columna lado derecho"*. Botones Objeto/Vertex/Edge/Cara/Pincel apilados verticalmente con highlight del activo + tooltips con shortcut.
+- **Gizmo rotate radio = `0.6 * max(localAabb.size())` clamp >= 0.5m**: cubre BrushComponent (via `bc.brush.localAabb`) y MeshRendererComponent (via `MeshAsset::aabbMin/Max`). Antes era fijo 1m world — invisible dentro de brushes grandes.
+- **W/E/R + double-tap (<0.4s) hibrido Maya/Blender**: scheme final que el dev validó. State `GizmoKeyTapState { lastKey, lastPressTime }` detecta double-tap. Single-tap toggea `GizmoMode`; double-tap arranca modal con misma tecla. Sin shortcuts cruzados — cada tecla tiene un único significado.
+- **Modal con axis-lock X/Y/Z**: durante el modal, presionar X/Y/Z lockea/destrabe el constraint (alineado con Blender). Click izq confirma (push `MultiEditTransformCommand`); Esc cancela (revert al startValue snapshot).
+- **Visual feedback del modal**: anillo amarillo (radio = distancia cursor-centro) + línea cursor→centro durante Rotate; línea sola durante Scale. Pedido del dev *"que aparezca ese circulo para rotar"*.
 
-**Implementación (F2H29 Bloques A-C + E en 4 commits):**
+**Implementación (F2H30 Bloques A-E en 4 commits):**
 
-- **Bloque A (commit `7728a89`)**: plan archivado en [`archive/plans/PLAN_HITO_F2H29.md`](archive/plans/PLAN_HITO_F2H29.md).
-- **Bloque B (commit `6036c19`)**: drag-edit con `DragState` + `OrthoDragSession` + `pickEntityFromRay`. Push de `MultiEditTransformCommand` al soltar.
-- **Bloque C + Welcome fix (commit `6781aa0`)**: block tool con `OrthoBlockToolSession` + preview celeste GMod en 4 vistas + `spawnBoxBrushAt` con rebasing a local space + `EditorUI` ctor con rebuild fresh del dockspace.
+- **Bloque A (commit `5674812` previo + plan en `docs/PLAN_HITO_F2H30.md`)**: plan archivado en [`archive/plans/PLAN_HITO_F2H30.md`](archive/plans/PLAN_HITO_F2H30.md).
+- **Bloque B (commit `03ed19a`)**: vertex/edge edit con `Csg::pickVertex/pickEdge` + `EditBrushGeometryCommand` snapshot pre/post de planos + `tf.position` + sub-modos `Vertex` (tecla 1) / `Edge` (tecla 2) en `EditorSubMode`.
+- **Bloque C (commit `4db0bd0`)**: pincel poligonal con `Csg::makePrismBrushFromPolygon` + validación CCW con auto-revert + dedupe + toolbar lateral `MapEditorTopBar` + gates anti-conflicto.
+- **Bloque D (commit `67611ec`)**: gizmo proporcional + W/E/R double-tap modal con `ModalShortcutState` + `GizmoKeyTapState` + visual feedback. Implementación en `EditorOverlay_Modal.cpp` separado para no inflar `EditorApplication_Run.cpp`.
 - **Bloque E (este commit)**: docs + tag.
 
-**Pendientes conocidos** (post-F2H29):
-- **F2H30 — Polish gizmo + atajos Blender + brush poligonal + vertex/edge edit** (paquete polish UX, próximo).
+**Pendientes conocidos** (post-F2H30):
+- **MVP del editor estilo Hammer está completo**: 4-viewport + click-select + grid + block tool + drag-edit + vertex/edge edit + pincel poligonal + W/E/R modal. Próximo hito **TBD** — definir junto al dev qué prioriza.
 - **Validación full del Player** con compiledMesh: deuda menor heredada de F2H26.
-- **Multi-selección de caras** (Shift+click sobre múltiples caras del mismo brush) — diferida a F2H30 si emerge naturalmente.
+- **Multi-selección con marquee select** en orto (clásico Hammer rectángulo de selección sobre múltiples brushes): diferido — no bloquea el modeling flow.
+- **Snap-to-vertex** (snap a vertices existentes del scene, no solo al grid): nice-to-have.
+- **Brush poligonal cóncavo**: requiere refactor mayor del CSG core (asume convexos).
 - Los demás items del backlog "Activos sin orden definido" siguen vivos: split fino de `SceneRenderer_Render.cpp`, iconos Toolbar, polish UX panels, node-graph Material Editor.
 
-**Próximo paso**: **F2H30 — Polish UX del gizmo + atajos Blender + brush poligonal + vertex/edge edit**. Paquete coherente de polish que junta:
-1. Vertex/edge edit en ortos (Bloque D diferido de F2H29).
-2. Brush poligonal "pincel": clicks sucesivos sobre vertices del grid hasta cerrar mesh (feature nueva).
-3. Gizmo rotate proporcional al AABB del brush (bug pre-existente F2H13).
-4. Atajos Blender-style `G` (grab) / `R` (rotate) / `S` (scale) modal con cursor + línea punteada al centro + Esc para cancelar (feature nueva).
+**Próximo paso**: **TBD — definir junto al dev**. El editor de mapas tiene su MVP funcional cubierto; queda alinear sobre qué priorizar (gameplay/scripting, polish UI/UX, optimización runtime, features nuevas del editor).
 
 ### F2H28 (anterior, ya cerrado)
 
@@ -179,18 +181,21 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: definir y abrir el Hito 33
+### Tarea inmediata: definir y abrir el Hito F2H31 (TBD)
 
-El Hito 32 está cerrado (tag `v0.32.0-hito32`). Deudas de undo del Inspector cerradas. **Hito 33 está TBD** — candidatos en `docs/PLAN_HITO33.md`. Top: raycasts + triggers en Lua (combo natural post-31/32), save/load gameplay, UI menu MoodPlayer, completar wire-up del Inspector restante (42 widgets), Inspector drop de textura.
-
-NavAgent polish queda descartado permanentemente por decisión del dev — no proponerlo.
+F2H30 está cerrado (tag `v1.20.0-fase2-hito30`). El editor estilo Hammer está completo en su MVP funcional. **F2H31 está TBD** — candidatos por discutir con el dev:
+- Continuar polish UI/UX del editor de mapas (snap-to-vertex, marquee select, frustum perspectivo en orto, coordenadas world bajo cursor).
+- Optimización runtime / build pipeline (validación full del Player con compiledMesh, profiling).
+- Gameplay / scripting (raycasts + triggers en Lua, save/load gameplay).
+- Features nuevas del editor (node-graph del Material Editor, iconos image-based del Toolbar).
 
 ### Flujo recomendado en esta sesión
 
-1. Leer `docs/PLAN_HITO33.md` (candidatos) y discutir con el dev qué se prioriza.
-2. Una vez definido, trabajar bloque por bloque marcando en el plan al cerrar cada uno.
-3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-4. Al final: commits atómicos en español, merge a main, tag `v0.33.0-hito33`, actualizar este documento y `docs/HITOS.md`, crear `docs/PLAN_HITO34.md`.
+1. Preguntar al dev qué prioriza para F2H31.
+2. Una vez definido, crear `docs/PLAN_HITO_F2H31.md` con bloques A-E concretos.
+3. Trabajar bloque por bloque marcando en el plan al cerrar cada uno.
+4. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
+5. Al final: commits atómicos en español, merge a main, tag `v1.21.0-fase2-hito31`, actualizar este documento + `docs/HITOS.md`, archive del plan.
 
 ---
 

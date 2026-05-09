@@ -9,36 +9,27 @@
 
 ---
 
-## Post-F2H29 (2026-05-08)
+## Post-F2H30 (2026-05-08)
 
 ### Próximo a atacar
 
-- **F2H30 — Polish del gizmo + atajos Blender + brush poligonal + vertex/edge edit**.
-  Paquete polish UX que junta el Bloque D diferido de F2H29 + 3
-  features nuevas pedidas por el dev tras validar F2H29:
-  - **Vertex/edge edit en ortos** (Bloque D diferido). Teclas `1` /
-    `2` activan sub-modos. Click sobre vertex/edge del brush lo
-    selecciona + drag lo mueve con snap. La mesh se regenera al
-    soltar. Mover vertex = trasladar 3 planos adyacentes; mover edge =
-    trasladar 2; validar `isBrushValid` post + revert si falla.
-    `EditBrushGeometryCommand` nuevo captura `vector<Plane>` pre/post.
-  - **Brush poligonal "pincel"**: clicks sucesivos sobre vertices del
-    grid en una orto, cierra con doble-click (o tecla Enter) creando
-    un brush prismático con esa base poligonal + altura default.
-    Feature nueva pedida por dev: *"mas adelante tendremos la
-    capacidad de ir creando como si fuera un pincel, siguiendo el
-    grid claro, hasta cerrar el mesh?"*.
-  - **Gizmo rotate proporcional al AABB del brush** (bug pre-existente
-    F2H13). El radio del anillo es fijo, queda en posición rara
-    dentro/fuera del mesh cuando el brush es muy grande/chico. Fix
-    chico (~10 LOC en `EditorOverlay_Gizmo.cpp`).
-  - **Atajos Blender-style** `G` (grab) / `R` (rotate) / `S` (scale)
-    modal con cursor + línea punteada al centro del objeto + Esc para
-    cancelar. Feature nueva pedida por dev:
-    *"con la letra S escalamos, como shortcut, blender estira una
-    linea punteada hasta el cursor en su pocision y ahi se puede
-    escalar"*. Es un modal interaction model distinto al gizmo de
-    flechas — duplica la UX, no la reemplaza.
+- **F2H31 — TBD**. El editor de mapas estilo Hammer está completo en
+  su MVP funcional tras F2H30 (4-viewport + click-select + grid + block
+  tool + drag-edit + vertex/edge edit + pincel poligonal + W/E/R modal).
+  Definir junto al dev la próxima dirección. Candidatos:
+  - **Polish UI/UX continuo del editor de mapas**: snap-to-vertex
+    (snap a vertices existentes del scene, no solo al grid), marquee
+    select (rectángulo de selección sobre múltiples brushes en orto),
+    frustum de cámara perspectiva dibujado en ortos, coordenadas world
+    bajo el cursor en cada orto.
+  - **Optimización runtime / build pipeline**: validación full del
+    Player con compiledMesh (deuda F2H26), profiling del frame loop
+    en escenas grandes.
+  - **Gameplay / scripting**: raycasts + triggers en Lua, save/load
+    gameplay state, UI menu del MoodPlayer.
+  - **Features nuevas del editor**: node-graph del Material Editor
+    (deuda F2H21), iconos image-based del Toolbar (deuda F2H22),
+    completar wire-up del Inspector (widgets restantes).
 
 ### Activos sin orden definido (siguiente ola, post-Hammer)
 
@@ -104,6 +95,28 @@
 - **Preview esférico del Material Editor con interacción de mouse**
   (orbit cam, zoom): F2H21 dejó rotación automática lenta. Nice-to-have
   si emerge en uso real.
+
+## Post-F2H30 (2026-05-08) — histórico resuelto
+
+- ~~Vertex/edge edit en ortos~~ — resuelto en F2H30 (`v1.20.0-fase2-hito30`).
+  `Csg::pickVertex/pickEdge` + sub-modos Vertex/Edge en EditorSubMode
+  + drag mueve los planos incidentes con snap absoluto WORLD-space +
+  rebasing al cierre + `EditBrushGeometryCommand` para Ctrl+Z agrupado.
+- ~~Brush poligonal "pincel"~~ — resuelto en F2H30. Tecla B / botón del
+  toolbar lateral activa modo; clicks agregan vertices snappeados;
+  Enter cierra spawneando un brush prismático via
+  `Csg::makePrismBrushFromPolygon`. Validación CCW con auto-revert +
+  dedupe de clicks consecutivos en la misma celda.
+- ~~Gizmo rotate proporcional al AABB del brush~~ — resuelto en F2H30.
+  Radio = `0.6 * max(localAabb.size())` clamp >= 0.5m. Cubre
+  BrushComponent (via `bc.brush.localAabb`) y MeshRendererComponent
+  (via `MeshAsset::aabbMin/Max`).
+- ~~Atajos modales Blender-style~~ — resuelto en F2H30 con esquema
+  hibrido tras 3 iteraciones de feedback. Final: W = Translate gizmo;
+  E single = Scale gizmo / E doble = modal Scale uniforme; R single =
+  Rotate gizmo / R doble = modal Rotate libre. X/Y/Z lockean axis
+  durante el modal. G y S removidos (no shortcuts cruzados). Cuadrado
+  central de uniform-scale gizmo eliminado.
 
 ## Post-F2H29 (2026-05-08) — histórico resuelto
 

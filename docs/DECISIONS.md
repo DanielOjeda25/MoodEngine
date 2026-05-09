@@ -11,6 +11,125 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-08: F2H30 cierre — vertex/edge edit + pincel poligonal + W/E/R double-tap modal (3 iteraciones de atajos)
+
+**Contexto:** F2H30 entregó 4 features unificadas como paquete polish UX
+del editor de mapas estilo Hammer:
+1. Vertex/edge edit con snap absoluto WORLD + rebasing al cierre.
+2. Brush poligonal "pincel" + toolbar lateral "Map Tools".
+3. Gizmo rotate proporcional al AABB del brush.
+4. Atajos modales (esquema final tras 3 iteraciones de feedback).
+
+**Decisiones técnicas clave:**
+
+- **Snap WORLD-space (no LOCAL) en vertex/edge edit.** El grid del
+  workspace orto vive en world coords; snappear el delta_local
+  inevitablemente desfasaba el resultado para brushes con
+  `tf.position != 0`. Implementación: `pivotWorldStart = worldMat *
+  pivotLocalStart`; snap del `pivotWorldNew`; reconvertir delta a
+  local via `inverse(R) * effDeltaWorld`. **Solo snappear los ejes que
+  el dev MOVIO** (`|deltaWorld[i]| > 1e-4`): si snappeás todos,
+  brushes con coords no-grid-aligned saltan al grid en el primer
+  drag aunque ese eje no se haya tocado.
+
+- **Rebasing del centroide al cierre del drag.** Al modificar planos
+  via vertex edit, el centroide del AABB nuevo del brush se aleja
+  del `tf.position` original — el gizmo aparece "lejos del brush".
+  Fix: en el `dragEnd`, `newCentroidLocal = bc.brush.localAabb.center()`,
+  trasladar todos los planos por `-newCentroid`, `tf.position += R *
+  newCentroid`. Mismo patrón que F2H12 boolean ops resolvió con
+  `snapshotResultWorld`. Ahora el gizmo siempre aparece en el centro
+  visual del brush.
+
+- **Dedupe de clicks consecutivos en pincel.** Dos clicks que
+  snapeaban a la misma celda del grid generaban un polígono
+  degenerado (vértices A → A) y `closePolygonDraw` cancelaba con un
+  warn que el dev no veía → percibía "la figura desaparece". Fix:
+  skipear el segundo click si está a < 1mm del último, con log
+  explícito `[pincel] click duplicado (mismo grid cell) — ignorado`.
+  Trade-off: esto solo cubre duplicados *consecutivos*; un polígono
+  con vertice 1 = vertice N se sigue rechazando con warn de
+  "polígono degenerado". Aceptable.
+
+- **Gates anti-conflicto pincel ↔ vertex/edge ↔ block tool.** Cuando
+  el dev activa el pincel:
+  - `togglePolygonDrawMode()` setea `m_subMode = Object` +
+    `activeFaceIndex = -1` (sin esto, vertex/edge markers seguían
+    dibujados encima del pincel + el bloque 2.4e disparaba edits
+    accidentales del brush selecto al primer click).
+  - El bloque 2.4e (vertex/edge edit) chequea `!m_polyDraw.active`.
+  - El bloque 2.4d (block tool LMB) ya tenía el guard.
+  Razón: tres consumidores potenciales del LMB en empty space del
+  orto. Sin priorización explícita, un click "puro" del pincel
+  podía consumirlo el panel como drag (>4 px de jitter) y disparar
+  el block tool o el vertex edit en paralelo.
+
+- **Toolbar lateral "Map Tools" como columna derecha.** Pedido
+  original del dev: *"hagamos uno superior"*; mutó a *"prefiero
+  columna lado derecho"* tras ver que botones horizontales se
+  aplastan en 36 px. Ancho 10% del workspace, botones verticales
+  32 px alto, highlight del activo + tooltips con shortcut.
+
+- **Gizmo rotate radio proporcional.** `radius = max(0.6 *
+  max(localAabb.size()), 0.5)`. Cubre BrushComponent (via
+  `bc.brush.localAabb`) y MeshRendererComponent (via
+  `MeshAsset::aabbMin/Max`). **No multiplicado por `tf.scale`**:
+  simpler, suficiente para el caso común. Si emerge bug con brushes
+  rotados + escalados asimétricamente, refactor a OBB world-space.
+
+- **Atajos: 3 iteraciones por feedback explícito del dev.** Plan
+  original: G/R/S puros (Blender) + W/E/R Maya conviven. Iter 2: dev
+  pidió *"ya no usaremos los shortcuts de maya sino los de blender
+  como base"* + *"el de grab eliminalo"* → removidos W/E/R, R = modal
+  Rotate, S = modal Scale. Iter 3: dev pidió hibrido double-tap → W
+  = Translate gizmo; E single = Scale gizmo / E doble = modal Scale
+  uniforme; R single = Rotate gizmo / R doble = modal Rotate libre.
+  G y S removidos. Estado final: **sin shortcuts cruzados** — cada
+  tecla tiene un único significado. Detección double-tap via state
+  `GizmoKeyTapState { lastKey, lastPressTime }` con window 0.4s
+  (default Windows double-click).
+
+- **Cuadrado central de uniform-scale gizmo eliminado.** Pedido del
+  dev *"asi solo se usa la S"* → mutó a *"asi nos desacemos de la
+  S"* (uniform scale via E doble en lugar de S). Como nadie usa el
+  cuadrado, removido. Los 3 arrows per-axis siguen.
+
+**Razones:**
+
+- **Paquete unificado** (4 features en 1 hito) en lugar de 4 hitos
+  individuales: las 4 comparten dominio (manipulación geométrica
+  desde orto + atajos del editor) y se validan juntas. Un hito
+  separado por feature sería ceremonia sin valor.
+- **Scope cerrado en 4 commits feat (B/C/D + cierre)**: alineado con
+  el ritmo de F2H28 / F2H29.
+- **Visual feedback del modal** (anillo amarillo + línea
+  cursor→centro) por pedido del dev *"que aparezca ese circulo para
+  rotar"*. Cosmetic pero importante para entender qué hace el modal.
+
+**Alternativas descartadas:**
+
+- **Snap LOCAL para vertex edit**: dejaba brushes con `tf.position
+  != 0` desfasados — el dev lo notó al primer test.
+- **Modal G permanece** (translate via cursor): removido por pedido
+  explícito del dev.
+- **GizmoKeyTapState con timer cosa-loca**: simplificado a `lastKey
+  + lastPressTime` + ventana 0.4s. Menos código.
+- **Visual de modal con línea punteada del plan original**: cambiado
+  a línea sólida + anillo (más visible). Trivial revertir si emerge
+  preferencia.
+- **Snap-to-vertex** (snap a vertices del scene en lugar de al
+  grid): scope mayor + interaction model distinto. Diferido.
+- **Marquee select en orto** (rectángulo de selección sobre múltiples
+  brushes): scope mayor + se solapa con el block tool en empty
+  space. Diferido — no bloquea el modeling flow.
+
+**Condiciones de revisión:** si el dev pide marquee select, snap-to-
+vertex, brush poligonal cóncavo, o modal G (translate cursor-driven).
+Si emerge preferencia por "rotate sobre view-axis" en lugar de Y
+default + axis lock, ajustar el modal Rotate.
+
+---
+
 ## 2026-05-08: F2H29 — Block tool + drag-edit en ortos (descope tarde, paquete polish a F2H30)
 
 **Problema:** F2H29 plan original (escrito al cerrar F2H28) prometía 3 bloques de edición en ortos: drag-edit (Bloque B), block tool (Bloque C), vertex/edge edit (Bloque D). Tras implementar y validar B+C, el dev probó el flujo y emergió scope nuevo: gizmo rotate no proporcional al brush (bug pre-existente F2H13), pedido de atajos Blender-style `S/R/G` modal con cursor + línea punteada, pedido de "pincel" poligonal (clicks sobre vertices del grid hasta cerrar mesh — feature distinta del Bloque D vertex/edge edit).
