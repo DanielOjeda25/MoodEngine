@@ -9,33 +9,48 @@
 
 ---
 
-## Post-F2H37 (2026-05-09) — FontAwesome al resto del editor + polish UX cerrados
+## Post-F2H38 (2026-05-09) — Default font ImGui a Lato cerrado
 
 ### Próximo a atacar
 
-- **TBD — definir con el dev**. **Hammer Editor cerrado funcional al
-  100% + iconos FontAwesome en TODO el editor + polish UX
-  consolidado.** Opciones a considerar:
-  - **Sub-fase 2.5 gameplay** (diálogos / quests / inventario) —
-    siguiente del PLAN_FASE2 si seguimos el orden.
-  - **HUD del juego procedural/minimalista** en MoodPlayer (interés
-    expresado post-F2H35) — explorar HUDs dibujados via ImGui
-    DrawList o shaders custom (Mirror's Edge / Doom Eternal style),
-    sin assets. Mini-hito futuro con scope a definir.
-  - **Otra sub-fase del PLAN_FASE2** (optimización / runtime).
+- **F2H39 — optimización runtime** (definido con el dev). Plan
+  emergerá de un Bloque A de profiling Tracy + Performance HUD
+  sobre escenas reales — la infra existe desde F2H2. Candidatos
+  sin profilar todavía: skinned animation pass, particle update,
+  brush mesh rebuild on dirty, físicas con N rigidbodies, audio
+  3D attenuation con N sources. Plan a redactar en
+  `docs/PLAN_HITO_F2H39.md` cuando arranquemos.
 
 ### Activos sin orden definido (siguiente ola)
 
-- **Cambiar default font ImGui a Lato** (existe en
-  `assets/ui/fonts/LatoLatin-Regular.ttf` desde antes pero nunca se
-  carga; F2H37 solo agregó FA6 mergeada al ProggyClean default).
-  Ganancias: legibilidad general (proggy es pixely para texto
-  largo), tofu del em-dash desaparece como side effect (Lato cubre
-  General Punctuation). Costo: revisar todo el editor para
-  verificar spacing/alineamiento — la métrica de Lato es distinta
-  a Proggy y los layouts pueden re-flowear. Hito chico propio si
-  emerge necesidad. Mientras tanto, evitar `—` en strings
-  user-facing (replace por `-` o `:`).
+- **Cambiar font del MoodPlayer a Lato** (coherencia visual
+  Editor↔Player): F2H38 solo carga Lato en el editor. El Player
+  usa init propio (`PlayerApplication_Init.cpp`) que sigue con
+  ProggyClean. Fix chico, mismo patrón que F2H38. Hito propio si
+  emerge presión de coherencia visual.
+
+- **HUD del juego procedural/minimalista** (interés expresado por dev
+  post-F2H35, scope mayor): explorar HUDs en MoodPlayer dibujados
+  via shader procedural (ImGui DrawList API o shaders custom) en
+  lugar de sprites/textures. Approach Mirror's Edge / Doom Eternal —
+  círculos, barras, anillos, hexágonos calculados por math
+  (`length(uv-center) < radius`) sin assets. Pros: cero peso de
+  assets, escala perfecta, animable trivialmente. Mini-hito futuro
+  con scope a definir junto al dev (cobertura: barra de vida,
+  munición, mira, indicadores de daño, etc.).
+
+### Histórico resuelto
+
+- ~~Cambiar default font ImGui a Lato~~ — resuelto en F2H38
+  (`v1.28.0-fase2-hito38`). Lato Latin Regular a 15px reemplaza
+  ProggyClean en el editor. Custom GlyphRanges cubre Basic Latin +
+  Latin-1 + General Punctuation subset (em-dash + comillas curvas +
+  ellipsis). FA merge ajustada a 13px explicit para satisfacer
+  convencion de reference size de ImGui 1.92. Sin re-flow / overflow
+  en ningún panel — dev validó *"todo se ve perfecto"* al primer
+  arranque.
+
+## Post-F2H37 (2026-05-09) — FontAwesome al resto del editor + polish UX cerrados
 
 - **HUD del juego procedural/minimalista** (interés expresado por dev
   post-F2H35, scope mayor): explorar HUDs en MoodPlayer dibujados

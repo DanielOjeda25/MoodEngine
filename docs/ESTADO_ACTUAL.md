@@ -6,7 +6,39 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H37 cerrado: FontAwesome icons en el resto del editor + polish UX general.**
+**🚀 Fase 2 — F2H38 cerrado: Default font ImGui a Lato.**
+Tag: `v1.28.0-fase2-hito38`.
+Verificado visualmente por dev: *"todo se ve perfecto"*. Lato a 15px legible inmediato; Console text-heavy es donde más se nota el upgrade. Sin re-flow / overflow / truncate en ningún panel.
+
+**🏁 Hammer Editor cerrado funcional al 100% + iconos FontAwesome en TODO el editor + polish UX consolidado + tipografía profesional con Lato.** 36/44 hitos de Fase 2.
+
+**Decisiones clave de F2H38:**
+- **Lato Latin Regular a 15px** como default font del editor. Razón: ProggyClean es bitmap monoespaciada de 13px diseñada para terminales — pixely y poco kerning para UIs modernas; Lato es sans-serif TTF diseñada para pantalla, smooth scaling. 15px matchea convención de IDEs modernos (VSCode/JetBrains).
+- **Custom GlyphRanges para Lato** que cubra Basic Latin + Latin-1 Supplement + General Punctuation subset (`{0x0020, 0x00FF, 0x2010, 0x2027, 0}`). General Punctuation incluye em-dash U+2014, en-dash U+2013, ellipsis U+2026, comillas curvas U+2018-201D — todos los caracteres "naturales" del español que ProggyClean no cubría.
+- **FA merge a 13px explicit** (no más 0.0f implicit). ImGui 1.92 obliga a que primary y merge compartan convención de reference size; Lato a 15.0f explicit fuerza a FA también explicit. 13px ≈ 85% del texto = proporcional sin dominar.
+- **`PixelSnapH = false` en Lato** (smooth scaling de sans-serif), `true` en FA (icons monocromos se benefician del snap a pixel).
+- **NO se revierte el fix em-dash de F2H37** (`—`→`-` en EditorUI.cpp). Razón: el `-` es universal Latin, funciona con cualquier font. Mantener el fix evita reintroducir dependencia en el coverage de Lato si alguien cambia la font en el futuro.
+- **NO se toca el MoodPlayer** — usa init propio (`PlayerApplication_Init.cpp`), sigue con ProggyClean. Fix chico posterior si emerge presión de coherencia visual.
+
+**Implementación (F2H38 Bloques A-E):**
+
+- **Bloque A**: plan en [`archive/plans/PLAN_HITO_F2H38.md`](archive/plans/PLAN_HITO_F2H38.md).
+- **Bloque B**: edit puntual en `EditorApplication_Init.cpp` (~25 LOC neto).
+- **Bloque C**: tour visual end-to-end. Sin issues.
+- **Bloque D skipped** — todo OK al primer arranque.
+- **Bloque E (este commit)**: docs + tag.
+
+**Pendientes conocidos** (post-F2H38):
+- **F2H39 — optimización runtime** (definido con el dev). Plan emergerá de un Bloque A de profiling Tracy + Performance HUD sobre escenas reales (la infra existe desde F2H2). Candidatos sin profilar todavía: skinned animation pass, particle update, brush mesh rebuild on dirty, físicas con N rigidbodies, audio 3D attenuation con N sources.
+- **Cambiar font del MoodPlayer a Lato** (coherencia visual Editor↔Player) — fix chico, hito propio si emerge presión.
+- **HUD procedural/minimalista MoodPlayer** (interés post-F2H35) — diferido tras F2H39.
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+
+**Próximo paso**: **F2H39 — optimización runtime**. Plan en `docs/PLAN_HITO_F2H39.md` cuando arranquemos. Bloque A será profiling — el plan emerge de los datos.
+
+### F2H37 (anterior, ya cerrado)
+
+**🚀 F2H37 cerrado: FontAwesome icons en el resto del editor + polish UX general.**
 Tag: `v1.27.0-fase2-hito37`.
 Verificado visualmente por dev: MenuBar (los 6 menus + workspace tabs + Play/Stop con icon), Hierarchy (icon FA por tipo + multi-select polish naranja/amarillo/gris), VisGroupsPanel (consolidado al helper compartido), Inspector (icons en headers de 13 components), AssetBrowser (icons en 6 tabs), Console (icons por nivel + level filter toggles), StatusBar (FPS/mode/sub-mode con icons). Editor arranca sin asserts. Tour visual end-to-end OK.
 

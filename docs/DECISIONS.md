@@ -11,6 +11,42 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-09: F2H38 cierre — Default font ImGui a Lato
+
+**Contexto:** F2H37 cerró el polish UX + iconos FA con un fix lateral para el em-dash tofu del Welcome modal (síntoma de que ProggyClean — el default font de ImGui — no cubre General Punctuation). El asset `LatoLatin-Regular.ttf` ya estaba en `assets/ui/fonts/` desde antes pero nunca se había cargado. F2H38 promueve Lato a default y consolida los benefits: legibilidad mejorada (especialmente en Console text-heavy), coverage Unicode más amplio, side effect de resolver problemas de tofu para cualquier punctuation natural del español. Mini-hito chico (~30 min, ~25 LOC neto en un solo archivo).
+
+**Decisiones técnicas clave:**
+
+- **Lato Latin Regular a 15px** como tamaño base. Razón: ProggyClean es bitmap monoespaciada de 13px diseñada para terminales (legible en pixel-art, pero pixely y sin kerning para UIs modernas). Lato es sans-serif TTF diseñada para pantalla con kerning correcto. 15px matchea VSCode / JetBrains / convención IDE moderna. Bumpeable a 14 / 16 si validación visual lo pidiera, pero el dev confirmó *"todo se ve perfecto"* al primer arranque.
+
+- **Custom GlyphRanges custom para Lato**: `{0x0020, 0x00FF, 0x2010, 0x2027, 0}`. Cubre Basic Latin + Latin-1 Supplement + subset de General Punctuation (em-dash U+2014, en-dash U+2013, hyphen variants U+2010-U+2015, ellipsis U+2026, comillas curvas U+2018-U+201D). Razón: el dev escribe en español; los caracteres naturales del idioma (acentos, ñ, comillas curvas) deben renderear sin esfuerzo. Pre-F2H38 el em-dash era tofu — F2H38 lo resuelve para todos los strings, no solo el del Welcome modal. Alternativa descartada: `GetGlyphRangesDefault()` (Basic Latin + Latin-1 solo) — dejaría el tofu del em-dash sin resolver.
+
+- **FA merge a 13px explicit**, no `0.0f` implicit. Razón: ImGui 1.92 tira `IM_ASSERT((font->Flags & ImFontFlags_ImplicitRefSize) == 0)` si la primary y la merge no comparten convención de reference size. F2H36 resolvió pasando `0.0f` al merge porque `AddFontDefault` es implicit; F2H38 con Lato a 15.0f explicit obliga a la FA también explicit. 13px = ~85% del texto Lato = icons proporcionales al cuerpo del texto (regla común en design systems: icons al 80-90% del text size para que se vean "del mismo peso visual" sin dominar).
+
+- **`PixelSnapH = false` en Lato**, `true` en FA. Razón: Lato es sans-serif diseñada para anti-aliasing smooth — snap a pixel rompe el rendering a tamaños no enteros y deshabilita kerning sub-pixel. FA monocromática se beneficia del snap (icons crisp en sus tamaños base). Diferencia es visible en hover state y al zoom.
+
+- **NO se revierte el fix em-dash de F2H37** (`—`→`-` en `EditorUI.cpp`). Razón: con Lato cargado, el em-dash ahora rendea correctamente, pero el fix `-` queda en su lugar como approach más robusto: el hyphen-minus U+002D es universal Latin (cualquier font lo cubre), mientras que depender de Lato para U+2014 reintroduciría tofu si alguien cambia la font default en el futuro. Costo del fix mínimo (3 ocurrencias, sin pérdida de información semántica).
+
+- **NO se carga la font del MoodPlayer**. Razón: el Player usa su propio `PlayerApplication_Init.cpp` con su `AddFontDefault()` separado. Cargar Lato allí también requiere replicar la lógica — scope adicional sin valor inmediato (el Player no es text-heavy en runtime, sus paneles son Main Menu + HUD scripts). Si emerge presión de coherencia visual Editor↔Player, fix chico posterior siguiendo el mismo patrón.
+
+- **NO se carga Lato Bold / Italic / SemiBold**. Razón: ImGui no usa font weights nativamente (`ImGui::Text` no tiene un `bold` parameter); el bold se simula con color alfa o `PushFont`. Cargar variantes adicionales agrega ~150 KB cada una al binary sin ganancia clara. Si emerge necesidad real (ej. Inspector quiere bold para headers), agregar variante específica en hito propio.
+
+**Alternativas descartadas explícitamente:**
+
+- **Inter / Roboto / Source Sans Pro / SF Pro / otra sans-serif**: descartado. Lato ya estaba en assets desde antes (heredado, escogido en algún momento previo); cambiar de pack ahora introduce 150-200 KB nuevos sin valor agregado. Lato es decisión "buena suficiente" — todas son sans-serif para UI bien rasterizadas.
+- **Cargar Lato con backend FreeType** (mejor rasterizado que stb_truetype default): scope mayor — requiere CPM/build de FreeType, link, y el atlas builder de ImGui debe enchufarse a backend custom. Diferido si emerge presión de calidad de rendering en sizes pequeños.
+- **Tamaño 14px o 16px**: descartado tras validación. 15px funciona bien en el monitor del dev (notebook Iris Xe + desktop GTX 1660). Si en pantallas 4K el texto se ve chico, agregar global `io.FontGlobalScale` toggle por DPI — diferido.
+- **Font fallback chain (Lato → Noto Color Emoji → CJK)**: scope mayor, no necesario. El editor es interface en español con icons FA — no requiere CJK / emoji ahora.
+
+**Condiciones de revisión:**
+
+- Si el dev pide variantes (Bold para headers de Inspector, Italic para tooltips), agregar hito propio. El patrón es trivial pero requiere decidir mapeo (qué widgets usan qué variante).
+- Si emerge necesidad de DPI scaling (4K monitors), agregar `io.FontGlobalScale` toggle desde el menu Ver / settings.
+- Si el dev pide cambiar a Inter / otra font, regenerar `IconsFontAwesome6.h` no necesario (FA es independiente). Solo cambiar el TTF + el `AddFontFromFileTTF` path.
+- Si MoodPlayer comparte init de ImGui en el futuro (hipotético refactor de "PlayerEditorBase"), Lato se cargaría una sola vez. Mientras tanto, fix chico aparte si emerge.
+
+---
+
 ## 2026-05-09: F2H37 cierre — FontAwesome icons en el resto del editor + polish UX general (hito unificado)
 
 **Contexto:** Tras cerrar F2H36 (icons en los 2 toolbars del workspace "Editor de mapas"), el dev pidió expandir al resto del editor: *"deberemos integrarlos en otras areas del proyecto para que todo sea equitativo"*. Al revisar PENDIENTES.md emergió que había además un "Pase de polish UX general continuo" anotado desde F2H21+F2H22 (Inspector drop targets, Hierarchy multi-select feedback, Console level filter, StatusBar layout/colores) — los mismos paneles tocados. Decisión: **fusionar ambos pendientes en F2H37** para evitar doble pasada sobre los mismos archivos. Hito multi-bloque (~5h, ~400 LOC distribuidos en ~15 archivos).
