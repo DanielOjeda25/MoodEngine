@@ -24,6 +24,26 @@
 
 ### Activos sin orden definido (siguiente ola)
 
+- **FontAwesome icons en el editor** (deuda explícita F2H22, dev
+  expresó interés post-F2H35): merge de `fa-solid-900.ttf` al atlas
+  del font default de ImGui via `MergeMode = true`. Header
+  `IconsFontAwesome.h` (~2000 macros `ICON_FA_*`) para usar como
+  `ICON_FA_PLAY " Play"` en buttons/labels. Mini-hito chico (~30 min).
+  Decidir scope: solo Toolbar + MapEditorTopBar (alto impacto, low
+  risk) o también MenuBar/Inspector/Hierarchy (más completo pero más
+  decisiones de diseño). Atender al peso del binary (~150 KB extra
+  para subset, ~300 KB para full free).
+
+- **HUD del juego procedural/minimalista** (interés expresado por dev
+  post-F2H35, scope mayor): explorar HUDs en MoodPlayer dibujados
+  via shader procedural (ImGui DrawList API o shaders custom) en
+  lugar de sprites/textures. Approach Mirror's Edge / Doom Eternal —
+  círculos, barras, anillos, hexágonos calculados por math
+  (`length(uv-center) < radius`) sin assets. Pros: cero peso de
+  assets, escala perfecta, animable trivialmente. Mini-hito futuro
+  con scope a definir junto al dev (cobertura: barra de vida,
+  munición, mira, indicadores de daño, etc.).
+
 - **Hover preview de face picking en orto** (no solo perspective):
   F2H35 Bloque F solo cubre perspective. Los ortos ya usan wireframe
   color por VisGroup que es feedback razonable, pero pintar la cara
