@@ -85,4 +85,58 @@ std::vector<Brush> clipBrushByPlane(const Brush& A,
                                      bool keepFront,
                                      bool keepBack);
 
+// --- F2H33 Bloque D: texture alignment ops ---
+//
+// Orden de transformacion UV en BrushMesh.cpp (referencia):
+//   uRaw = dot(pos, face.uAxis); vRaw = dot(pos, face.vAxis);
+//   uRot = cos(rot)*uRaw - sin(rot)*vRaw; vRot = sin*uRaw + cos*vRaw;
+//   finalUV = (uRot * uvScale.x + uvOffset.x,
+//              vRot * uvScale.y + uvOffset.y);
+//
+// Las ops trabajan sobre `(uRot, vRot)` (post-rotacion) — modificar
+// `uvScale` y `uvOffset` para que finalUV cumpla el target deseado.
+
+/// @brief Bounding rect 2D del poligono de una cara proyectado al plano
+///        UV de esa cara (post-rotacion). Vacio si el poligono es
+///        degenerado (menos de 3 vertices o area cero en el plano UV).
+struct FaceUvRect {
+    f32 uMin = 0.0f, uMax = 0.0f;
+    f32 vMin = 0.0f, vMax = 0.0f;
+    bool isValid() const;
+    f32 width() const  { return uMax - uMin; }
+    f32 height() const { return vMax - vMin; }
+};
+
+/// @brief Computa el bounding rect en UV (post-rotacion) del poligono de
+///        la cara `faceIdx` del brush. Si `overrideUAxis`/`overrideVAxis`
+///        no son nulos, los usa en lugar de los axis de la cara — util
+///        para "Treat as one face" (proyectar caras secundarias al
+///        sistema UV de la primary).
+FaceUvRect computeFaceUvRect(const Brush& brush, u32 faceIdx,
+                              const glm::mat4& worldMatrix,
+                              const glm::vec3* overrideUAxis = nullptr,
+                              const glm::vec3* overrideVAxis = nullptr,
+                              const f32* overrideRotation = nullptr);
+
+/// @brief Reset UV de la cara al "default" estilo Quake/Hammer:
+///        axisU/V derivados de la normal via defaultTangentBasis;
+///        scale=1, offset=0, rotation=0. lockToWorld se preserva
+///        (es opinable; el dev decide).
+void alignFaceToFace(BrushFace& face);
+
+/// @brief Setea uvScale + uvOffset para que la textura cubra el rect
+///        EXACTAMENTE — el polygon de la cara queda mapeado a UV ∈
+///        [0,1] x [0,1]. Mantiene uvRotation. Si rect es degenerado,
+///        no-op.
+void fitFaceToRect(BrushFace& face, const FaceUvRect& rect);
+
+/// @brief Lados del poligono para Justify L/R/T/B.
+enum class JustifySide { Left, Right, Top, Bottom };
+
+/// @brief Mantiene uvScale + uvRotation; ajusta uvOffset para que el
+///        borde correspondiente del poligono coincida con UV=0 (L,T)
+///        o UV=1 (R,B). Si rect es degenerado, no-op.
+void justifyFaceToRect(BrushFace& face, const FaceUvRect& rect,
+                        JustifySide side);
+
 } // namespace Mood::Csg

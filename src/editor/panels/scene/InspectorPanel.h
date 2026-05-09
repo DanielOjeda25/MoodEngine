@@ -77,6 +77,11 @@ private:
     /// a cambios de seleccion durante el drag (improbable pero
     /// defensivo).
     std::string m_uvSnapshotEntityTag;
+
+    /// F2H33: estado del checkbox "Treat as one face" del Face Edit
+    /// Sheet. Visible solo si hay > 1 caras seleccionadas; al bajar a
+    /// single se resetea a false.
+    bool m_treatAsOneFace = false;
 };
 
 } // namespace Mood

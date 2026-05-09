@@ -342,7 +342,7 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                 ? EditorSubMode::Object
                 : target;
             if (m_subMode == EditorSubMode::Object) {
-                m_ui.selectionSet().activeFaceIndex = -1;
+                m_ui.selectionSet().selectedFaceIndices.clear();  // F2H33
             }
             const char* label = "Object";
             switch (m_subMode) {
@@ -405,7 +405,7 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                 cancelPolygonDraw();
             } else if (m_subMode != EditorSubMode::Object) {
                 m_subMode = EditorSubMode::Object;
-                m_ui.selectionSet().activeFaceIndex = -1;
+                m_ui.selectionSet().selectedFaceIndices.clear();  // F2H33
             }
         }
         if (ImGui::IsKeyPressed(ImGuiKey_Period, false) &&

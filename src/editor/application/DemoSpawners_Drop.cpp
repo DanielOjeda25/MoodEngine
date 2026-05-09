@@ -62,14 +62,14 @@ void EditorApplication::processViewportTextureDrop() {
                 m_subMode == EditorSubMode::Face &&
                 static_cast<bool>(selSet.active) &&
                 selSet.active.handle() == brushHit.entity.handle() &&
-                selSet.activeFaceIndex >= 0 &&
-                static_cast<u32>(selSet.activeFaceIndex) < bc.brush.faces.size();
+                selSet.activeFaceIndex() >= 0 &&
+                static_cast<u32>(selSet.activeFaceIndex()) < bc.brush.faces.size();
 
             if (faceMode) {
                 // F2H19: snapshot pre + push EditBrushFaceMaterialCommand.
                 // Buscar si newMat ya esta en bc.materials. Si si,
                 // reusar slot. Si no, agregar slot nuevo.
-                const u32 faceIdx = static_cast<u32>(selSet.activeFaceIndex);
+                const u32 faceIdx = static_cast<u32>(selSet.activeFaceIndex());
                 std::vector<MaterialAssetId> oldMaterials = bc.materials;
                 const u32 oldFaceMatIndex =
                     bc.brush.faces[faceIdx].materialIndex;
@@ -271,12 +271,12 @@ void EditorApplication::processViewportMaterialDrop() {
             m_subMode == EditorSubMode::Face &&
             static_cast<bool>(selSet.active) &&
             selSet.active.handle() == hit.entity.handle() &&
-            selSet.activeFaceIndex >= 0 &&
-            static_cast<u32>(selSet.activeFaceIndex) < bc.brush.faces.size();
+            selSet.activeFaceIndex() >= 0 &&
+            static_cast<u32>(selSet.activeFaceIndex()) < bc.brush.faces.size();
 
         if (faceMode) {
             // F2H19: snapshot pre + push EditBrushFaceMaterialCommand.
-            const u32 faceIdx = static_cast<u32>(selSet.activeFaceIndex);
+            const u32 faceIdx = static_cast<u32>(selSet.activeFaceIndex());
             std::vector<MaterialAssetId> oldMaterials = bc.materials;
             const u32 oldFaceMatIndex =
                 bc.brush.faces[faceIdx].materialIndex;

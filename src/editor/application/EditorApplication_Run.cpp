@@ -142,7 +142,7 @@ int EditorApplication::run() {
         EditorSubMode requestedSubMode;
         if (m_ui.consumeSubModeRequest(requestedSubMode)) {
             m_subMode = requestedSubMode;
-            m_ui.selectionSet().activeFaceIndex = -1;
+            m_ui.selectionSet().selectedFaceIndices.clear();  // F2H33
             // Si activan otro sub-modo, cancelar el pincel si estaba.
             if (m_polyDraw.active) cancelPolygonDraw();
             const char* lbl = "Object";
@@ -322,18 +322,35 @@ int EditorApplication::run() {
             const glm::mat4 view = m_editorCamera.viewMatrix();
             const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
 
-            // F2H17: en Face Mode, intentar pickFace contra el brush
-            // active ANTES del pickEntity. Si pega, solo actualiza
-            // activeFaceIndex sin tocar la seleccion. Si NO pega o
-            // no hay brush active, fallback al picking de Object Mode.
+            // F2H17 + F2H33 fix UX: en Face Mode, picking robusto que
+            // funciona sobre CUALQUIER brush hovered (no solo el active).
+            // Issue pre-F2H33: el pickFace solo testeaba el brush active,
+            // asi que clickear sobre OTRO brush fallaba el faceHit ->
+            // caia al pickEntity -> cambiaba el active -> limpiaba las
+            // caras. El dev tenia que clickear 2 veces para seleccionar
+            // una cara de otro brush (y multi-select via Shift se
+            // rompia por el cambio de active).
+            //
+            // Flow nuevo:
+            //   1. pickEntity (siempre) -> brush bajo el rayo (el que sea).
+            //   2. Si es brush -> pickFace contra ese brush.
+            //   3. Si face hit:
+            //      - sameBrush + Shift -> toggle.
+            //      - sameBrush + sin modifier -> single.
+            //      - distinto brush -> replace selection + single face
+            //        (cambiar de brush no togglea, seria confuso).
+            //   4. Sin brush bajo el rayo o sin face hit -> fallback al
+            //      Object pick handler (cambia/limpia seleccion).
             bool faceModeHandled = false;
+            ScenePickResult hit{};
             if (m_subMode == EditorSubMode::Face) {
-                SelectionSet& selSet = m_ui.selectionSet();
-                if (static_cast<bool>(selSet.active) &&
-                    selSet.active.hasComponent<BrushComponent>() &&
-                    selSet.active.hasComponent<TransformComponent>()) {
-                    auto& bc = selSet.active.getComponent<BrushComponent>();
-                    auto& t = selSet.active.getComponent<TransformComponent>();
+                hit = pickEntity(*m_scene, view, projection,
+                                  glm::vec2(click.ndcX, click.ndcY),
+                                  m_assetManager.get());
+                if (hit && hit.entity.hasComponent<BrushComponent>() &&
+                    hit.entity.hasComponent<TransformComponent>()) {
+                    auto& bc = hit.entity.getComponent<BrushComponent>();
+                    auto& t = hit.entity.getComponent<TransformComponent>();
                     const glm::mat4 invVP =
                         glm::inverse(projection * view);
                     const glm::vec4 nearH = invVP *
@@ -347,23 +364,48 @@ int EditorApplication::run() {
                     const auto faceHit = Csg::pickFace(
                         bc.brush, origin, dir, t.worldMatrix());
                     if (faceHit.has_value()) {
-                        selSet.activeFaceIndex =
-                            static_cast<i32>(*faceHit);
+                        const Uint8* keys = SDL_GetKeyboardState(nullptr);
+                        const bool keyShiftFace =
+                            keys[SDL_SCANCODE_LSHIFT] ||
+                            keys[SDL_SCANCODE_RSHIFT];
+                        SelectionSet& selSet = m_ui.selectionSet();
+                        const bool sameBrush =
+                            static_cast<bool>(selSet.active) &&
+                            selSet.active.handle() == hit.entity.handle();
+                        const i32 idx = static_cast<i32>(*faceHit);
+
+                        if (!sameBrush) {
+                            // Cambio de brush: replace + single face.
+                            // El replaceWithSingle limpia las caras del
+                            // brush viejo (invariante del SelectionSet).
+                            replaceWithSingle(selSet, hit.entity);
+                            setSingleFace(selSet, idx);
+                        } else if (keyShiftFace) {
+                            toggleFace(selSet, idx);
+                        } else {
+                            setSingleFace(selSet, idx);
+                        }
                         Log::editor()->info(
-                            "Face Mode: selected face {} of brush '{}'",
-                            *faceHit,
+                            "Face Mode: face {} of brush '{}' "
+                            "({} caras seleccionadas, active={})",
+                            idx,
                             selSet.active.hasComponent<TagComponent>()
                                 ? selSet.active.getComponent<TagComponent>().name
-                                : std::string{"(sin tag)"});
+                                : std::string{"(sin tag)"},
+                            selSet.selectedFaceIndices.size(),
+                            selSet.activeFaceIndex());
                         faceModeHandled = true;
                     }
-                    // Sin face hit: cae al picking de Object para
-                    // permitir cambiar de brush activo.
+                    // Sin face hit pero brush sí: el rayo pego el AABB
+                    // pero falló contra los planos (caso borde). Caemos
+                    // al Object handler con el `hit` ya computado para
+                    // que cambie/preserve la seleccion del brush.
                 }
+                // Sin brush bajo el rayo: idem fallback con hit vacio
+                // -> Object handler aplica clear si no hay modifier.
             }
 
-            ScenePickResult hit{};
-            if (!faceModeHandled) {
+            if (m_subMode != EditorSubMode::Face && !faceModeHandled) {
                 hit = pickEntity(*m_scene, view, projection,
                                   glm::vec2(click.ndcX, click.ndcY),
                                   m_assetManager.get());

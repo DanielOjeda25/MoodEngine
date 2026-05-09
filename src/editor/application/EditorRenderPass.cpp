@@ -510,14 +510,15 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
         const glm::vec3 selColor   (0.95f, 0.95f, 0.20f); // amarillo claro (resalta sobre cielo gris-azul)
 
         const SelectionSet& set = m_ui.selectionSet();
-        // F2H17: en Face Mode con cara seleccionada, NO dibujamos
-        // el outline del brush activo (caeria encima del cyan de
-        // la cara y los pixeles se superponen perdiendo claridad).
-        // Solo se dibuja el outline de la cara seleccionada.
+        // F2H17 + F2H33: en Face Mode con cara(s) seleccionada(s),
+        // NO dibujamos el outline del brush activo (caeria encima
+        // del highlight de cara y los pixeles se superponen
+        // perdiendo claridad). Solo se dibujan los outlines de las
+        // caras seleccionadas.
         const bool faceModeWithSelectedFace =
             (m_subMode == EditorSubMode::Face) &&
             static_cast<bool>(set.active) &&
-            set.activeFaceIndex >= 0;
+            !set.selectedFaceIndices.empty();
 
         for (const Entity& sel : set.selected) {
             if (!sel || !sel.hasComponent<TransformComponent>()) continue;
@@ -565,46 +566,55 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
             }
         }
 
-        // F2H17: highlight de cara seleccionada en Face Mode estilo
-        // Blender — capa cyan SEMI-TRANSPARENTE encima de la cara +
-        // outline cyan brillante alrededor para denotar bordes.
-        // Solo si submode == Face Y la `active` tiene BrushComponent
-        // Y activeFaceIndex >= 0.
+        // F2H17 + F2H33: highlight de cara(s) seleccionada(s) en
+        // Face Mode estilo Blender — capa SEMI-TRANSPARENTE encima
+        // de cada cara + outline brillante alrededor.
+        //   - Caras "secundarias" (todas menos la ultima clickeada):
+        //     naranja (~Half-Life).
+        //   - Cara "active" (back de selectedFaceIndices, = primary
+        //     para single-face ops): amarilla, mas brillante. Asi el
+        //     dev distingue cual es la primaria cuando hay multi-
+        //     seleccion via Shift+click.
         if (m_subMode == EditorSubMode::Face &&
             static_cast<bool>(set.active) &&
             set.active.hasComponent<BrushComponent>() &&
             set.active.hasComponent<TransformComponent>() &&
-            set.activeFaceIndex >= 0) {
+            !set.selectedFaceIndices.empty()) {
             const auto& bc = set.active.getComponent<BrushComponent>();
             const auto& tf = set.active.getComponent<TransformComponent>();
-            const u32 faceIdx = static_cast<u32>(set.activeFaceIndex);
-            if (faceIdx < bc.brush.faces.size()) {
+            const i32 activeIdx = set.activeFaceIndex();
+            // F2H17: la capa rellena solo se dibuja cuando el dev
+            // NO esta editando UV params — durante un drag de slider
+            // la capa tapa la textura. Outline siempre.
+            const bool editingUV = m_ui.inspector().isEditingBrushUV();
+            const glm::mat4 worldMat = tf.worldMatrix();
+            for (i32 faceIdxSigned : set.selectedFaceIndices) {
+                if (faceIdxSigned < 0) continue;
+                const u32 faceIdx = static_cast<u32>(faceIdxSigned);
+                if (faceIdx >= bc.brush.faces.size()) continue;
+                const bool isActive = (faceIdxSigned == activeIdx);
+                // F2H33: amarillo (active/primary) vs naranja (otras).
+                const glm::vec3 outlineColor = isActive
+                    ? glm::vec3(1.00f, 0.95f, 0.10f)
+                    : glm::vec3(1.00f, 0.50f, 0.00f);
+                const glm::vec4 fillColor = isActive
+                    ? glm::vec4(1.00f, 0.95f, 0.10f, 0.50f)
+                    : glm::vec4(1.00f, 0.55f, 0.10f, 0.40f);
                 const auto poly = Csg::collectFaceWorldPolygon(
-                    bc.brush, faceIdx, tf.worldMatrix());
-                // F2H17: naranja Half-Life (más visible sobre cualquier
-                // textura que el cyan).
-                const glm::vec3 outlineColor(1.00f, 0.50f, 0.00f);
-                const glm::vec4 fillColor   (1.00f, 0.55f, 0.10f, 0.55f);
+                    bc.brush, faceIdx, worldMat);
                 const usize n = poly.size();
-                if (n >= 3) {
-                    // F2H17: la capa rellena solo se dibuja cuando el dev
-                    // NO esta editando UV params — durante un drag de
-                    // slider la capa tapa la textura y dificulta ver el
-                    // efecto del cambio. El outline siempre se dibuja
-                    // para mantener visible cual cara esta seleccionada.
-                    const bool editingUV = m_ui.inspector().isEditingBrushUV();
-                    if (!editingUV) {
-                        glm::vec3 centroid(0.0f);
-                        for (const auto& v : poly) centroid += v;
-                        centroid /= static_cast<f32>(n);
-                        for (usize i = 0; i < n; ++i) {
-                            dbg.drawTriangle(centroid, poly[i],
-                                              poly[(i + 1) % n], fillColor);
-                        }
-                    }
+                if (n < 3) continue;
+                if (!editingUV) {
+                    glm::vec3 centroid(0.0f);
+                    for (const auto& v : poly) centroid += v;
+                    centroid /= static_cast<f32>(n);
                     for (usize i = 0; i < n; ++i) {
-                        dbg.drawLine(poly[i], poly[(i + 1) % n], outlineColor);
+                        dbg.drawTriangle(centroid, poly[i],
+                                          poly[(i + 1) % n], fillColor);
                     }
+                }
+                for (usize i = 0; i < n; ++i) {
+                    dbg.drawLine(poly[i], poly[(i + 1) % n], outlineColor);
                 }
             }
         }

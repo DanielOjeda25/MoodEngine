@@ -81,7 +81,7 @@ void EditorApplication::togglePolygonDrawMode() {
     // Object al activar el pincel; al salir, queda en Object (sin
     // restore — pedido del dev "es poco claro").
     m_subMode = EditorSubMode::Object;
-    m_ui.selectionSet().activeFaceIndex = -1;
+    m_ui.selectionSet().selectedFaceIndices.clear();  // F2H33
     m_polyDraw.active = true;
     m_polyDraw.orthoIdx = -1;
     m_polyDraw.axisIndex = 1;  // default Y; se overridea al primer click.

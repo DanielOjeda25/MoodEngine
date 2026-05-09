@@ -257,59 +257,117 @@ TEST_CASE("invariante: sin duplicados") {
 }
 
 // ============================================================
-// F2H17: activeFaceIndex
+// F2H17 + F2H33: face selection (activeFaceIndex + selectedFaceIndices)
 // ============================================================
 
-TEST_CASE("SelectionSet: activeFaceIndex default es -1") {
+TEST_CASE("SelectionSet: activeFaceIndex() default es -1") {
     SelectionSet s;
-    CHECK(s.activeFaceIndex == -1);
+    CHECK(s.activeFaceIndex() == -1);
+    CHECK(s.selectedFaceIndices.empty());
 }
 
-TEST_CASE("clear: resetea activeFaceIndex a -1") {
+TEST_CASE("clear: resetea selectedFaceIndices") {
     TestScene t(1);
     SelectionSet s;
     add(s, t.e[0]);
-    s.activeFaceIndex = 3;
+    setSingleFace(s, 3);
     clear(s);
-    CHECK(s.activeFaceIndex == -1);
+    CHECK(s.activeFaceIndex() == -1);
+    CHECK(s.selectedFaceIndices.empty());
 }
 
-TEST_CASE("add con entity distinta resetea activeFaceIndex") {
+TEST_CASE("add con entity distinta resetea selectedFaceIndices") {
     TestScene t(2);
     SelectionSet s;
     add(s, t.e[0]);
-    s.activeFaceIndex = 5;
+    setSingleFace(s, 5);
     add(s, t.e[1]);  // active cambia
-    CHECK(s.activeFaceIndex == -1);
+    CHECK(s.activeFaceIndex() == -1);
 }
 
-TEST_CASE("add con misma entity preserva activeFaceIndex") {
+TEST_CASE("add con misma entity preserva selectedFaceIndices") {
     TestScene t(1);
     SelectionSet s;
     add(s, t.e[0]);
-    s.activeFaceIndex = 2;
+    setSingleFace(s, 2);
     add(s, t.e[0]);  // re-add: active no cambia
-    CHECK(s.activeFaceIndex == 2);
+    CHECK(s.activeFaceIndex() == 2);
 }
 
-TEST_CASE("remove del active resetea activeFaceIndex") {
+TEST_CASE("remove del active resetea selectedFaceIndices") {
     TestScene t(2);
     SelectionSet s;
     add(s, t.e[0]);
     add(s, t.e[1]);  // active = e1
-    s.activeFaceIndex = 4;
+    setSingleFace(s, 4);
     remove(s, t.e[1]);  // active cambia a e0
-    CHECK(s.activeFaceIndex == -1);
+    CHECK(s.activeFaceIndex() == -1);
 }
 
-TEST_CASE("remove de no-active preserva activeFaceIndex") {
+TEST_CASE("remove de no-active preserva selectedFaceIndices") {
     TestScene t(2);
     SelectionSet s;
     add(s, t.e[0]);
     add(s, t.e[1]);  // active = e1
-    s.activeFaceIndex = 4;
+    setSingleFace(s, 4);
     remove(s, t.e[0]);  // e0 no era active
-    CHECK(s.activeFaceIndex == 4);
+    CHECK(s.activeFaceIndex() == 4);
+}
+
+// F2H33: multi-face select via toggleFace.
+
+TEST_CASE("F2H33: setSingleFace reemplaza el set por una sola cara") {
+    SelectionSet s;
+    setSingleFace(s, 7);
+    CHECK(s.selectedFaceIndices.size() == 1);
+    CHECK(s.activeFaceIndex() == 7);
+    setSingleFace(s, 2);
+    CHECK(s.selectedFaceIndices.size() == 1);
+    CHECK(s.activeFaceIndex() == 2);
+}
+
+TEST_CASE("F2H33: setSingleFace con -1 limpia el set") {
+    SelectionSet s;
+    setSingleFace(s, 3);
+    setSingleFace(s, -1);
+    CHECK(s.selectedFaceIndices.empty());
+    CHECK(s.activeFaceIndex() == -1);
+}
+
+TEST_CASE("F2H33: toggleFace add cuando no esta") {
+    SelectionSet s;
+    toggleFace(s, 1);
+    toggleFace(s, 2);
+    toggleFace(s, 3);
+    CHECK(s.selectedFaceIndices.size() == 3);
+    CHECK(s.activeFaceIndex() == 3);  // ultima clickeada = active
+}
+
+TEST_CASE("F2H33: toggleFace remove cuando ya esta") {
+    SelectionSet s;
+    toggleFace(s, 1);
+    toggleFace(s, 2);
+    toggleFace(s, 1);  // remove 1
+    CHECK(s.selectedFaceIndices.size() == 1);
+    CHECK(s.activeFaceIndex() == 2);
+}
+
+TEST_CASE("F2H33: toggleFace de active = remove + nuevo active es back()") {
+    SelectionSet s;
+    toggleFace(s, 1);
+    toggleFace(s, 2);
+    toggleFace(s, 3);  // active = 3
+    toggleFace(s, 3);  // remove active
+    CHECK(s.selectedFaceIndices.size() == 2);
+    CHECK(s.activeFaceIndex() == 2);  // back() de los restantes
+}
+
+TEST_CASE("F2H33: containsFace") {
+    SelectionSet s;
+    toggleFace(s, 5);
+    CHECK(containsFace(s, 5));
+    CHECK_FALSE(containsFace(s, 3));
+    CHECK_FALSE(containsFace(s, -1));
 }
 
 TEST_CASE("determinismo: misma secuencia produce mismo estado") {

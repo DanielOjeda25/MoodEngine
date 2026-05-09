@@ -5,6 +5,7 @@
 #include <glm/geometric.hpp>
 
 #include <cmath>
+#include <limits>
 
 namespace Mood::Csg {
 
@@ -261,6 +262,107 @@ std::vector<Brush> clipBrushByPlane(const Brush& A,
         if (isBrushValid(b)) out.push_back(std::move(b));
     }
     return out;
+}
+
+// --- F2H33 Bloque D: texture alignment ops ---
+
+bool FaceUvRect::isValid() const {
+    return (uMax - uMin) > kPlaneEpsilon &&
+           (vMax - vMin) > kPlaneEpsilon;
+}
+
+FaceUvRect computeFaceUvRect(const Brush& brush, u32 faceIdx,
+                              const glm::mat4& worldMatrix,
+                              const glm::vec3* overrideUAxis,
+                              const glm::vec3* overrideVAxis,
+                              const f32* overrideRotation) {
+    FaceUvRect rect;
+    if (faceIdx >= brush.faces.size()) return rect;
+    const BrushFace& face = brush.faces[faceIdx];
+
+    // Recolectar el poligono local de la cara (worldMatrix=identity para
+    // que `pos` quede en local space; lockToWorld lo aplicamos manual).
+    const auto poly = collectFaceWorldPolygon(brush, faceIdx, glm::mat4(1.0f));
+    if (poly.size() < 3) return rect;
+
+    const glm::vec3& uAxis = overrideUAxis ? *overrideUAxis : face.uAxis;
+    const glm::vec3& vAxis = overrideVAxis ? *overrideVAxis : face.vAxis;
+    const f32 rot = overrideRotation ? *overrideRotation : face.uvRotation;
+    const f32 cosR = std::cos(rot);
+    const f32 sinR = std::sin(rot);
+
+    f32 uMin = std::numeric_limits<f32>::max();
+    f32 uMax = std::numeric_limits<f32>::lowest();
+    f32 vMin = std::numeric_limits<f32>::max();
+    f32 vMax = std::numeric_limits<f32>::lowest();
+    for (const auto& pLocal : poly) {
+        // Mismo flow que BrushMesh.cpp: lockToWorld decide si se usa
+        // pos local o pos transformada por worldMatrix.
+        const glm::vec3 pForUV = face.lockToWorld
+            ? glm::vec3(worldMatrix * glm::vec4(pLocal, 1.0f))
+            : pLocal;
+        const f32 uRaw = glm::dot(pForUV, uAxis);
+        const f32 vRaw = glm::dot(pForUV, vAxis);
+        const f32 uRot = cosR * uRaw - sinR * vRaw;
+        const f32 vRot = sinR * uRaw + cosR * vRaw;
+        if (uRot < uMin) uMin = uRot;
+        if (uRot > uMax) uMax = uRot;
+        if (vRot < vMin) vMin = vRot;
+        if (vRot > vMax) vMax = vRot;
+    }
+    rect.uMin = uMin; rect.uMax = uMax;
+    rect.vMin = vMin; rect.vMax = vMax;
+    return rect;
+}
+
+void alignFaceToFace(BrushFace& face) {
+    glm::vec3 newU(1, 0, 0), newV(0, 1, 0);
+    defaultTangentBasis(face.plane.normal, newU, newV);
+    face.uAxis = newU;
+    face.vAxis = newV;
+    face.uvOffset = glm::vec2(0.0f, 0.0f);
+    face.uvScale = glm::vec2(1.0f, 1.0f);
+    face.uvRotation = 0.0f;
+    // lockToWorld se preserva — es decision del dev independiente
+    // del default UV.
+}
+
+void fitFaceToRect(BrushFace& face, const FaceUvRect& rect) {
+    if (!rect.isValid()) return;
+    // finalUV(rect.min) = 0; finalUV(rect.max) = 1.
+    //   finalU = uRot * uvScale.x + uvOffset.x
+    //   want: rect.uMin -> 0, rect.uMax -> 1
+    //         uvScale.x = 1 / (uMax - uMin)
+    //         uvOffset.x = -uMin * uvScale.x
+    face.uvScale.x = 1.0f / rect.width();
+    face.uvScale.y = 1.0f / rect.height();
+    face.uvOffset.x = -rect.uMin * face.uvScale.x;
+    face.uvOffset.y = -rect.vMin * face.uvScale.y;
+}
+
+void justifyFaceToRect(BrushFace& face, const FaceUvRect& rect,
+                        JustifySide side) {
+    if (!rect.isValid()) return;
+    // Mantener uvScale + uvRotation; ajustar uvOffset para que el
+    // borde correspondiente toque UV=0 (L/T) o UV=1 (R/B).
+    switch (side) {
+        case JustifySide::Left:
+            // finalU(uMin) = 0 -> uvOffset.x = -uMin * uvScale.x
+            face.uvOffset.x = -rect.uMin * face.uvScale.x;
+            break;
+        case JustifySide::Right:
+            // finalU(uMax) = 1 -> uvOffset.x = 1 - uMax * uvScale.x
+            face.uvOffset.x = 1.0f - rect.uMax * face.uvScale.x;
+            break;
+        case JustifySide::Top:
+            // Convencion textura: V=0 arriba. finalV(vMin) = 0.
+            face.uvOffset.y = -rect.vMin * face.uvScale.y;
+            break;
+        case JustifySide::Bottom:
+            // V=1 abajo. finalV(vMax) = 1.
+            face.uvOffset.y = 1.0f - rect.vMax * face.uvScale.y;
+            break;
+    }
 }
 
 } // namespace Mood::Csg
