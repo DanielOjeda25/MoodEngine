@@ -11,6 +11,116 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-08: F2H31 cierre — productivity selection + visual polish (marquee + group transform + snap-to-vertex + frustum + coords cursor)
+
+**Contexto:** F2H31 cierra las brechas de productividad y feedback
+visual del editor de mapas estilo Hammer. Tras F2H30 (que cerró el MVP
+funcional), el dev evaluó qué falta vs. Hammer real: marquee select,
+snap-to-vertex, clip tool, carve UI, VisGroups, texture alignment,
+frustum + coords. Decisión: split en 3 hitos (F2H31/32/33) para no
+inflar el scope.
+
+**Decisiones técnicas clave:**
+
+- **Tool selector mutually exclusive vs. modifier-based.** Antes el
+  block tool fireba siempre con drag en empty space; agregar marquee
+  competía por el mismo input. Opciones: (a) tool selector radio
+  (Hammer-style); (b) modifier (Shift/Ctrl distingue). Decisión:
+  selector radio en la sección "Herramienta" del toolbar lateral —
+  alineado con Hammer Editor real, default = Select. Eliminada la
+  ambigüedad: cada drag sabe qué hacer según el tool activo.
+- **Marquee hit-test "any corner inside" del AABB world.** Para cada
+  entidad, proyectar los 8 corners del AABB world al ndc del orto;
+  si CUALQUIER corner cae dentro del rectángulo, hit. Más liberal
+  que "todos los corners adentro" — alineado con Hammer (cualquier
+  overlap selecciona). Trade-off: brushes muy alargados pueden
+  seleccionarse con un marquee pequeño que toque solo una esquina.
+  Aceptable — es lo que hace Hammer.
+- **Group transform reusa infra existente.** El `OrthoDragSession::
+  startPositions` desde F2H29 Bloque B ya iteraba `set.selected` al
+  populate (no solo el clicked); el comportamiento de "mover N
+  entidades juntas" emerge naturalmente al llenar `set.selected` con
+  N via marquee. Cero código nuevo de movimiento, solo cambio de
+  data. `MultiEditTransformCommand` cubre el push undoable.
+- **Snap-to-vertex toggle global (no per-tool).** Un solo flag
+  `m_snapToVertexEnabled` afecta pincel + block tool corners + rubber
+  band. El dev no quiere "snap-to-vertex solo en pincel" o variantes
+  per-tool — uniforme alinea expectativa: si está on, todo lo que
+  snappearia al grid prueba primero contra vertices.
+- **Snap-to-vertex broadphase por AABB world.** Sin esto, escenas con
+  cientos de brushes hacen N² (cada brush enumerar V vertices ×
+  cursor cada frame). Mitigación: solo brushes cuyo AABB world
+  expandido por threshold contiene el cursor entran al inner loop.
+  Si emerge slow en escenas con > 500 brushes, refactor a spatial
+  hash. Threshold ndc 0.02 (~8 px screen) generoso.
+- **Auto-close del pincel al clickear vertex 1.** Pedido implícito del
+  dev tras observar el bug *"cuando cierro todos los puntos y aprieto
+  enter, no lo crea"* — porque clickeaba vertex 1 de vuelta generando
+  `vertex N == vertex 1` → polígono degenerado → rechazo. Fix: si
+  `pointsWorld.size() >= 3` y el click cae dentro de 1mm de
+  `pointsWorld[0]`, llamar `closePolygonDraw` directo (skipear el
+  push del vertex duplicado). Coexiste con cierre vía Enter
+  (Blender-style). Mental model alineado con editores 2D clásicos
+  (Photoshop pen tool, Illustrator).
+- **Frustum a "look-ahead" 4u en lugar del near-plane real.** El
+  near-plane real (~0.1m) es invisible al render (rect colapsa). Un
+  rect a distancia 4u en la dirección forward de la cam con dimensión
+  proporcional al fovY y aspect del 3D viewport es claramente visible
+  y orientable. El dev percibe "qué mira la 3D cam" desde los 3
+  ortos. 4 líneas tenues `(0.6, 0.55, 0.2)` desde camPos a las
+  esquinas indican el tronco del frustum.
+- **Camera basis extraída de la transpose del 3x3 del view matrix.**
+  EditorCamera no exposa right/up/fwd directamente. El view matrix
+  tiene esas básicas en sus filas (porque view = R^T * T(-eye)). La
+  transpose del 3x3 superior-izquierdo da camera-to-world rotation;
+  las columnas resultantes son los ejes en world. Sin agregar API
+  nueva al EditorCamera. Forward = -row(2) (convención RH OpenGL).
+- **Coords cursor solo cuando hovered.** El `m_liveCursor.hovered` ya
+  lo reportaba el panel desde F2H30 Bloque C (para el rubber band del
+  pincel). Reutilizado: cuando hovered, formatear y mostrar
+  `(x, y, z)` debajo del label de la vista. Sin overhead extra
+  cuando el cursor está fuera del panel.
+
+**Razones:**
+
+- **Paquete unificado** (5 features en 1 hito) en lugar de 5 hitos:
+  todos comparten dominio (productividad + feedback visual del orto)
+  y se validan juntos. Marquee + group transform es 1 feature
+  conceptual ("seleccionar y mover varios"); snap-to-vertex toca
+  pincel + block tool en paralelo; frustum + coords son polish
+  visual del orto.
+- **3 commits feat (A plan + B+C+D unificado + E cierre)**: simpler
+  que 4 commits porque B/C/D entrelazan (snap-to-vertex modifica
+  pincel que tiene auto-close fix; frustum coexiste con todo en
+  EditorRenderPass). El commit unificado documenta los 3 bloques.
+- **Sin schema bump**: F2H31 es state in-memory + UI overlays. F2H33
+  hará el bump v13→v14 para VisGroups.
+
+**Alternativas descartadas:**
+
+- **Marquee con modifier (Shift+drag)** en lugar de tool selector:
+  rompe el mental model de Hammer donde tools son radio. Descartado.
+- **Snap-to-vertex per-tool**: añade complejidad UI (3 toggles) sin
+  uso real (el dev quiere un único concepto "estar snappeando al
+  vertex").
+- **Frustum con near + far + 8 corners + 12 edges**: ruidoso, no
+  aporta info útil. Descartado en favor de "rect de mira".
+- **Coords cursor en formato custom** (notación científica para
+  valores grandes, etc.): premature; `%.1f` cubre el caso común.
+  Si emerge necesidad, agregar.
+- **Snap-to-vertex extendido a vertex/edge edit (bloque 2.4e)**:
+  scope similar pero el caso de uso es distinto (mover un vertex y
+  pegarlo a otro vertex). Diferido — no bloquea el flow actual.
+- **Marquee Alt-modifier (remove)**: scope incremental, agregar si
+  el dev lo pide.
+
+**Condiciones de revisión:** si el dev pide marquee Alt-remove, snap-
+to-vertex en vertex edit, frustum más detallado (near + far), o coords
+en otra unidad. Si emerge slow en escenas con muchos brushes
+(snap-to-vertex N²), refactor a spatial hash.
+
+---
+
 ## 2026-05-08: F2H30 cierre — vertex/edge edit + pincel poligonal + W/E/R double-tap modal (3 iteraciones de atajos)
 
 **Contexto:** F2H30 entregó 4 features unificadas como paquete polish UX

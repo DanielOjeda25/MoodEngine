@@ -9,27 +9,28 @@
 
 ---
 
-## Post-F2H30 (2026-05-08)
+## Post-F2H31 (2026-05-08)
 
 ### Próximo a atacar
 
-- **F2H31 — TBD**. El editor de mapas estilo Hammer está completo en
-  su MVP funcional tras F2H30 (4-viewport + click-select + grid + block
-  tool + drag-edit + vertex/edge edit + pincel poligonal + W/E/R modal).
-  Definir junto al dev la próxima dirección. Candidatos:
-  - **Polish UI/UX continuo del editor de mapas**: snap-to-vertex
-    (snap a vertices existentes del scene, no solo al grid), marquee
-    select (rectángulo de selección sobre múltiples brushes en orto),
-    frustum de cámara perspectiva dibujado en ortos, coordenadas world
-    bajo el cursor en cada orto.
-  - **Optimización runtime / build pipeline**: validación full del
-    Player con compiledMesh (deuda F2H26), profiling del frame loop
-    en escenas grandes.
-  - **Gameplay / scripting**: raycasts + triggers en Lua, save/load
-    gameplay state, UI menu del MoodPlayer.
-  - **Features nuevas del editor**: node-graph del Material Editor
-    (deuda F2H21), iconos image-based del Toolbar (deuda F2H22),
-    completar wire-up del Inspector (widgets restantes).
+- **F2H32 — Geometry tools (clip + carve)**. Dev decidió cerrar el
+  Hammer en su totalidad antes de pasar a gameplay. F2H32 cubre 2
+  features pedidas:
+  - **Clip tool**: 3 clicks definen un plano (3 puntos en world space);
+    splittea los brushes seleccionados con BSP polygon clipping (reusa
+    F2H25); UI elige qué lado descartar (botón "Front / Back / Both").
+    Spawn de N brushes resultado del split (lados retenidos) +
+    `EditBrushGeometryCommand` para Ctrl+Z agrupado.
+  - **Carve UI**: flow Hammer-style — select brush A; click "Carve" en
+    toolbar → A es restado por todos los brushes que intersectan.
+    Reusa boolean ops de F2H12 que ya tienen la math de subtract.
+- **F2H33 — Organización + face polish**. Tras F2H32 cierra el Hammer:
+  - **VisGroups**: panel nuevo con grupos nombrados, drag entidades a
+    grupo, toggle hide/show, persiste en `.moodmap` (schema bump
+    v13→v14).
+  - **Texture alignment del Face Edit Sheet**: en sub-modo Face con
+    cara seleccionada, botones Align to face / Fit / Justify L/R/T/B
+    + checkbox "Treat as one face" para múltiples caras seleccionadas.
 
 ### Activos sin orden definido (siguiente ola, post-Hammer)
 
@@ -95,6 +96,32 @@
 - **Preview esférico del Material Editor con interacción de mouse**
   (orbit cam, zoom): F2H21 dejó rotación automática lenta. Nice-to-have
   si emerge en uso real.
+
+## Post-F2H31 (2026-05-08) — histórico resuelto
+
+- ~~Marquee select en orto~~ — resuelto en F2H31 (`v1.21.0-fase2-hito31`).
+  Enum nuevo MapTool (Select/CreateBlock/Pincel) en EditorMode.h +
+  toolbar reorganizado en 2 secciones. Drag empty space + Select
+  dibuja rect amarillo y al soltar hit-testea AABB world.
+- ~~Group transform (multi-entity drag)~~ — resuelto en F2H31. La infra
+  ya existía desde F2H29 Bloque B (`OrthoDragSession::startPositions`
+  ya iteraba `set.selected`); marquee llena el set y el drag-edit
+  mueve N entidades juntas con `MultiEditTransformCommand`.
+- ~~Snap-to-vertex toggle~~ — resuelto en F2H31. Tecla V o boton "Snap V"
+  togglea `m_snapToVertexEnabled`; helper `snapToVertexOrGrid` con
+  broadphase AABB + threshold ndc 0.02 (~8 px). Aplicado en pincel
+  (rubber band incluido) + block tool corners.
+- ~~Auto-close del pincel al click sobre vertex 1~~ — resuelto en F2H31.
+  Antes el dev intuitivamente clickeaba vertex 1 de vuelta y eso
+  generaba poligono degenerado; ahora si pointsWorld.size() >= 3 y un
+  click cae dentro de 1mm de pointsWorld[0] → auto-close.
+- ~~Frustum de cámara perspectiva en ortos~~ — resuelto en F2H31. Rect
+  amarillo a 4u distancia + 4 lineas tenues desde camPos a las
+  esquinas. Camera basis extraida de la transpose del 3x3 del view
+  matrix.
+- ~~Coords world del cursor en orto~~ — resuelto en F2H31. Label
+  `(x.x, y.y, z.z)` gris claro debajo del label de la vista, solo
+  cuando `m_liveCursor.hovered`.
 
 ## Post-F2H30 (2026-05-08) — histórico resuelto
 

@@ -6,7 +6,38 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H30 cerrado: Polish del editor de mapas (vertex/edge edit + pincel poligonal + gizmo proporcional + W/E/R double-tap modal).**
+**🚀 Fase 2 — F2H31 cerrado: Productivity selection + visual polish (marquee + group transform + snap-to-vertex + frustum + coords cursor).**
+Tag: `v1.21.0-fase2-hito31`.
+Verificado por dev: marquee detecta N entidades en cualquier orto y group transform las mueve juntas; snap-to-vertex hace el cursor pegarse al vertex objetivo; auto-close del pincel funciona clickeando vertex 1; frustum amarillo de la 3D cam visible en los 3 ortos; coords world del cursor siguen en vivo al mouse.
+
+**Decisiones clave de F2H31:**
+- **Tool selector mutually exclusive** en lugar de modifier: Select / CreateBlock / Pincel como radio (3 botones del toolbar). Default = Select estilo Hammer. Antes el block tool fireba siempre con drag en empty space; ahora hay que clickear "Bloque" para activarlo. Mismo modelo que Hammer Editor real.
+- **Marquee hit-test "any corner inside"**: para cada entidad, proyectar los 8 corners del AABB world al ndc del orto; si CUALQUIER corner cae dentro del rectángulo, hit. Más liberal que "todos adentro" — alineado con Hammer (cualquier overlap selecciona).
+- **Group transform reusa infra existente**: `OrthoDragSession::startPositions` ya iteraba `set.selected` desde F2H29 Bloque B; marquee solo cambia el contenido de `set.selected`, no el flow del drag-edit. Cero código nuevo de movimiento.
+- **Snap-to-vertex toggle global** (no per-tool): al activar, AFECTA pincel + block tool corners + rubber band perspectivo simultáneamente. Threshold 0.02 ndc (~8 px screen) generoso para que el snap "agarre" temprano sin requerir precisión al pixel.
+- **Broadphase por AABB world expandido**: el snap-to-vertex enumera vertices solo de brushes cercanos al cursor (AABB intersect con caja de threshold). Sin esto, escenas con cientos de brushes hacen N² por frame del drag.
+- **Auto-close del pincel al clickear vertex 1**: pedido implícito del dev (*"cuando cierro todos los puntos y aprieto enter, no lo crea"* — porque clickeaba vertex 1 de vuelta generando degenerado). Fix: detectar click dentro de 1mm de `pointsWorld[0]` con `>= 3` puntos → auto-close. Coexiste con el cierre vía Enter (Blender-style).
+- **Frustum dibujado a distancia "look-ahead" 4u en lugar del near-plane real**: el near-plane (~0.1m) sería invisible al render. El "rect de mira" a 4u es claramente visible y orientable; el dev percibe "qué mira la 3D cam" desde los 3 ortos.
+- **Coords cursor solo cuando hovered**: el `m_liveCursor.hovered` ya lo reportaba el panel desde F2H30 Bloque C (para el pincel rubber band). Reutilizado para mostrar el label `(x, y, z)` en gris claro debajo del label de la vista.
+
+**Implementación (F2H31 Bloques A-E en 3 commits):**
+
+- **Bloque A (commit `c98cfad`)**: plan en [`archive/plans/PLAN_HITO_F2H31.md`](archive/plans/PLAN_HITO_F2H31.md).
+- **Bloques B+C+D unificados (commit `3e0e414`)**: marquee + group transform + snap-to-vertex + auto-close pincel + frustum + coords cursor + helpers `brushAabbWorld` / `meshAabbWorld` expuestos.
+- **Bloque E (este commit)**: docs + tag.
+
+**Pendientes conocidos** (post-F2H31):
+- **F2H32 — Geometry tools** (próximo, siguiente del plan "cerrar Hammer en su totalidad"): clip tool (3-click define plano que splittea brushes) + carve UI (boolean subtract con flow Hammer-style).
+- **F2H33 — Organización + face polish**: VisGroups (agrupar brushes con nombre + hide/show + persistencia, schema bump v13→v14) + texture alignment del Face Edit Sheet.
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+- Snap-to-vertex aplicado a vertex/edge edit: actualmente solo en pincel + block tool. Si emerge necesidad, extender al bloque 2.4e.
+- Marquee Alt-modifier (remove): scope incremental, agregar si el dev lo pide.
+
+**Próximo paso**: **F2H32 — Geometry tools (clip + carve)**. Plan en `docs/PLAN_HITO_F2H32.md` cuando arranquemos.
+
+### F2H30 (anterior, ya cerrado)
+
+**🚀 F2H30 cerrado: Polish del editor de mapas (vertex/edge edit + pincel poligonal + gizmo proporcional + W/E/R double-tap modal).**
 Tag: `v1.20.0-fase2-hito30`.
 Verificado por dev: vertex/edge edit funciona con snap absoluto al grid + rebasing al cierre, pincel poligonal crea prismas (4 vertices distintos → brush spawneado, dedupe corrigió "figura desaparece"), gizmo rotate sigue al AABB del brush, W/E/R con double-tap dispara modal Rotate/Scale con anillo amarillo visual, click confirma + Esc cancela.
 
@@ -181,21 +212,20 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: definir y abrir el Hito F2H31 (TBD)
+### Tarea inmediata: F2H32 — Geometry tools (clip + carve)
 
-F2H30 está cerrado (tag `v1.20.0-fase2-hito30`). El editor estilo Hammer está completo en su MVP funcional. **F2H31 está TBD** — candidatos por discutir con el dev:
-- Continuar polish UI/UX del editor de mapas (snap-to-vertex, marquee select, frustum perspectivo en orto, coordenadas world bajo cursor).
-- Optimización runtime / build pipeline (validación full del Player con compiledMesh, profiling).
-- Gameplay / scripting (raycasts + triggers en Lua, save/load gameplay).
-- Features nuevas del editor (node-graph del Material Editor, iconos image-based del Toolbar).
+F2H31 está cerrado (tag `v1.21.0-fase2-hito31`). El dev decidió **cerrar el Hammer en su totalidad antes de pasar a sub-fase 2.5 gameplay**. El plan acordado son 3 hitos secuenciales:
+- **F2H32 (próximo)**: clip tool (3-click define plano que splittea brushes) + carve UI (boolean subtract con flow Hammer-style sobre la math de F2H12).
+- **F2H33**: VisGroups (agrupar brushes con nombre + hide/show + persistencia schema bump v13→v14) + texture alignment del Face Edit Sheet (Align/Fit/Justify L/R/T/B).
+
+Tras F2H33 = 31/44 hitos, Hammer cerrado en su totalidad funcional.
 
 ### Flujo recomendado en esta sesión
 
-1. Preguntar al dev qué prioriza para F2H31.
-2. Una vez definido, crear `docs/PLAN_HITO_F2H31.md` con bloques A-E concretos.
-3. Trabajar bloque por bloque marcando en el plan al cerrar cada uno.
-4. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
-5. Al final: commits atómicos en español, merge a main, tag `v1.21.0-fase2-hito31`, actualizar este documento + `docs/HITOS.md`, archive del plan.
+1. Crear `docs/PLAN_HITO_F2H32.md` con bloques A-E concretos para clip tool + carve UI.
+2. Trabajar bloque por bloque marcando en el plan al cerrar cada uno.
+3. Actualizar `docs/DECISIONS.md` cuando aparezca una decisión no trivial.
+4. Al final: commits atómicos en español, merge a main, tag `v1.22.0-fase2-hito32`, actualizar este documento + `docs/HITOS.md`, archive del plan.
 
 ---
 
