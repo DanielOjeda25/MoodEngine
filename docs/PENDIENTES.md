@@ -9,22 +9,12 @@
 
 ---
 
-## Post-F2H31 (2026-05-08)
+## Post-F2H32 (2026-05-09)
 
 ### Próximo a atacar
 
-- **F2H32 — Geometry tools (clip + carve)**. Dev decidió cerrar el
-  Hammer en su totalidad antes de pasar a gameplay. F2H32 cubre 2
-  features pedidas:
-  - **Clip tool**: 3 clicks definen un plano (3 puntos en world space);
-    splittea los brushes seleccionados con BSP polygon clipping (reusa
-    F2H25); UI elige qué lado descartar (botón "Front / Back / Both").
-    Spawn de N brushes resultado del split (lados retenidos) +
-    `EditBrushGeometryCommand` para Ctrl+Z agrupado.
-  - **Carve UI**: flow Hammer-style — select brush A; click "Carve" en
-    toolbar → A es restado por todos los brushes que intersectan.
-    Reusa boolean ops de F2H12 que ya tienen la math de subtract.
-- **F2H33 — Organización + face polish**. Tras F2H32 cierra el Hammer:
+- **F2H33 — Organización + face polish**. Último hito para cerrar el
+  Hammer en su totalidad funcional:
   - **VisGroups**: panel nuevo con grupos nombrados, drag entidades a
     grupo, toggle hide/show, persiste en `.moodmap` (schema bump
     v13→v14).
@@ -96,6 +86,19 @@
 - **Preview esférico del Material Editor con interacción de mouse**
   (orbit cam, zoom): F2H21 dejó rotación automática lenta. Nice-to-have
   si emerge en uso real.
+
+## Post-F2H32 (2026-05-09) — histórico resuelto
+
+- ~~Clip tool (2-click plane split)~~ — resuelto en F2H32
+  (`v1.22.0-fase2-hito32`). MapTool::Clip + ClipKeepMode {Front, Back,
+  Both} + Csg::clipBrushByPlane via add face al brush. Visual feedback
+  (marker p1 + linea p1->cursor / p1->p2). UX hints visibles cuando
+  faltan pre-condiciones. BooleanOpCommand extendido con kind=Clip.
+- ~~Carve UI Hammer-style~~ — resuelto en F2H32. Boton "Carve" en el
+  toolbar resta el active brush por todos los brushes que intersectan
+  su AABB. Carvers preservados. Reusa BooleanOpCommand kind=Subtract
+  con bSnapshot vacio para skipear destroy/recreate de carvers en
+  undo. Broadphase por AABB.
 
 ## Post-F2H31 (2026-05-08) — histórico resuelto
 

@@ -11,6 +11,122 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-09: F2H32 cierre — geometry tools (clip 2-click + carve UI Hammer-style)
+
+**Contexto:** F2H32 cierra 2 de las 3 herramientas core de geometría
+de Hammer Editor (Hollow se deja como deferido). Tras F2H31 (selection
++ visual polish), el dev priorizó cerrar el Hammer en su totalidad
+antes de pasar a sub-fase 2.5 gameplay.
+
+**Decisiones técnicas clave:**
+
+- **Clip plane derivada de 2 clicks + view-perpendicular del orto.**
+  En orto, 3 clicks no pueden definir un plano 3D (todos coplanares
+  en el view plane = degenerado). Convención Hammer: la línea entre
+  los 2 clicks + extrusión sobre el `forwardAxis` del orto define el
+  plano. Implementación: `normal = cross(forwardAxis_orto, lineDir_world)`;
+  validación de `||cross|| > kPlaneEpsilon` (línea no paralela al
+  forward); `d = -dot(normal, p1)`. La regla "elige el lado positivo
+  o negativo" queda determinada por el orden de los clicks, lo cual
+  es UX aceptable (si el lado equivocado se conserva, `Ctrl+Z` + `T`
+  cycle + Enter de nuevo).
+
+- **Clip = agregar plane a Brush::faces (no clipping geométrico).**
+  Convención CSG del motor: las normales de las caras del brush
+  apuntan AFUERA, el interior es la intersección de half-spaces
+  negativos. Para conservar el lado "Front" (positivo del clipPlane):
+  agregar `BrushFace { -clipPlane.normal, -clipPlane.distance }` —
+  el interior queda del lado positivo del clipPlane original. Para
+  "Back": agregar el plano tal cual. `isBrushValid` filtra resultados
+  degenerados (plano fuera del brush, brush queda sin volumen). La
+  AABB se recompute via `computeBrushAabb`. **No** se hace polygon
+  clipping explícito (Sutherland-Hodgman) — el brush mantiene la
+  representación implicit-by-planes.
+
+- **`BooleanOpCommand` extendido con kind=Clip + bSnapshot vacío.**
+  Pre-F2H32 el command asumía dos brushes (A + B). Para clip hay 1
+  brush (A) y un plano. Decisión: no crear `ClipBrushesCommand`
+  separado; en lugar de eso, agregar `Clip` al enum + skipear
+  destroy/recreate cuando `bSnapshot.tag.empty()`. Mismo patrón
+  reutilizable para carve (donde los carvers no se destruyen, así
+  que tampoco hay B que recrear). Trade-off: leve acoplamiento
+  semántico (un BooleanOpCommand de "Clip" no tiene B), pero
+  evita duplicar el flow snapshot+execute+undo.
+
+- **Carve = subtract iterativo + carvers preservados.** Algoritmo:
+  `fragments = [A_world]`; por cada carver B con AABB intersect:
+  `fragments = union de subtract(fragment, B)`. Si A queda
+  completamente consumido (todos los fragmentos vacíos tras un
+  carver), break temprano. Carvers se preservan en el scene
+  (estilo Hammer — el dev decide después qué hacer con ellos).
+  Push `BooleanOpCommand` con kind=Subtract y bSnapshot vacío
+  (los carvers no necesitan recreación en undo).
+
+- **Carve broadphase por AABB.** Sin esto, escenas con muchos
+  brushes hacen N² test booleanos por click (cada subtract es ~300
+  LOC de geometría). Mitigación: solo brushes cuyo AABB world
+  intersecta el AABB del active entran al loop. Ya tenemos
+  `intersects(aabb, aabb)` en core/math/AABB.h.
+
+- **Sin keyboard shortcut para carve.** Operación destructiva +
+  silenciosa (no hay sesión preview); obligar click explícito en el
+  botón "Carve" del toolbar evita accidentes. La tecla `C` queda
+  libre. Trade-off: ligeramente más fricción para quien la use mucho;
+  aceptable para v1.
+
+- **UX hints visibles via `setStatusMessage`.** Pre-iter el clip y
+  el carve solo logueaban warns; el dev no los veía mientras testeaba
+  (consola separada). Fix: `setStatusMessage` muestra el hint en el
+  status bar inferior — visible siempre que falten pre-condiciones
+  (sin selección, sin intersección, plano degenerado, etc.). Misma
+  estrategia que el pincel poligonal (F2H30 Bloque C).
+
+- **No hay schema bump.** El clip/carve es spawn dinámico de brushes;
+  el undo via `BooleanOpCommand` snapshot. F2H33 traerá el bump
+  v13→v14 para VisGroups.
+
+**Razones:**
+
+- **Paquete unificado** (clip + carve en 1 hito) en lugar de 2 hitos:
+  comparten dominio (boolean ops sobre brushes con UI Hammer-style),
+  comparten el patrón de snapshot+spawn+command, y se validan juntos
+  con escenas similares. F2H32 cierra Hammer + carve sin sobrecarga.
+- **Reuso máximo**: `Csg::subtract` (F2H12) + `BooleanOpCommand`
+  (F2H12) + `brushAabbWorld` (expuesto en F2H31) + `setStatusMessage`
+  (F2H30 Bloque C). Solo `clipBrushByPlane` (math chica ~50 LOC)
+  + handlers + UI nuevo.
+- **3 commits feat (A plan + B+C unificado + D cierre)**: simpler que
+  4 porque B y C comparten el patrón de snapshot+command. El commit
+  unificado documenta los 2 bloques.
+
+**Alternativas descartadas:**
+
+- **Polygon clipping explícito en clip tool** (Sutherland-Hodgman
+  sobre las caras del brush): innecesario — la representación
+  implicit-by-planes ya hace el clip "gratis" al agregar la nueva
+  cara. Más simple + correcto.
+- **`ClipBrushesCommand` separado**: redundante con `BooleanOpCommand`
+  + skip de tag vacío. Decisión: extender el existente.
+- **Hollow tool en F2H32**: scope incremental sobre carve (sintáctico
+  azúcar de "carve A con un brush más chico interior"). Diferido — no
+  es típico del flow básico.
+- **Multi-brush clip simultáneo (N brushes selectos al confirmar)**:
+  ya soportado en el código actual — itera `targets` y cada uno se
+  splittea con el mismo plano. Validado mentalmente; no testeado
+  exhaustivamente.
+- **Clip tool en perspectiva 3D**: gizmo manipulable para mover el
+  plano libre sería scope mucho mayor. Hammer no lo tiene.
+- **Keyboard shortcut para carve** (ej. `Ctrl+Shift+C`): operación
+  destructiva con efecto silencioso (sin sesión preview). El botón
+  explícito es la decisión segura. Si emerge pedido del dev, agregar.
+
+**Condiciones de revisión:** si el dev pide hollow tool, multi-brush
+carve simultáneo (N A's), clip en perspectiva 3D, o un shortcut para
+carve. Si el flow descubre bugs en escenas con muchos brushes
+(broadphase O(N) podría ser slow → considerar spatial hash).
+
+---
+
 ## 2026-05-08: F2H31 cierre — productivity selection + visual polish (marquee + group transform + snap-to-vertex + frustum + coords cursor)
 
 **Contexto:** F2H31 cierra las brechas de productividad y feedback

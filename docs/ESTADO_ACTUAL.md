@@ -6,7 +6,38 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H31 cerrado: Productivity selection + visual polish (marquee + group transform + snap-to-vertex + frustum + coords cursor).**
+**🚀 Fase 2 — F2H32 cerrado: Geometry tools (clip tool 2-click + carve UI Hammer-style).**
+Tag: `v1.22.0-fase2-hito32`.
+Verificado por dev: clip splittea 1 brush en Front/Back/Both según `T` cycle; carve resta brush activo por todos los intersectantes; Ctrl+Z restaura en ambos casos. UX hints visibles cuando faltan pre-condiciones.
+
+**Decisiones clave de F2H32:**
+- **Clip plane perpendicular al view del orto**: 2 clicks en orto definen una línea (no 3 clicks que serían coplanares en el view plane = degenerado). El plano se construye con `normal = cross(forwardAxis_orto, lineDir_world)` — perpendicular al forward (en el view plane) AND a la línea. Convención Hammer.
+- **Clip = agregar plane a Brush::faces**: para Front, agregar `BrushFace { -clipPlane.normal, -clipPlane.distance }` (el interior queda del lado positivo del clipPlane original — convención de normales del motor: outward). Para Back, agregar el plano tal cual. `isBrushValid` filtra resultados degenerados (plano fuera del brush).
+- **`BooleanOpCommand` reusado para clip y carve**: extendido el enum con `Clip` + skip de destroy/recreate cuando `bSnapshot.tag.empty()`. Sin command nuevo. Pasa para carve también (kind=Subtract con bSnapshot vacío porque los carvers no se destruyen).
+- **Carve = subtract iterativo**: `fragments = [A]`; por cada carver B: `fragments = union de subtract(fragment, B)`. Si A queda completamente consumido → fragments vacío → solo destroy de A (sin spawn). Carvers preservados (Hammer).
+- **Carve broadphase por AABB**: solo brushes cuyo AABB intersecta el del active entran al loop. Sin esto N² test booleano por click.
+- **Sin keyboard shortcut para carve**: operación destructiva; obligatorio click explícito en el botón del toolbar para evitar accidentes (tecla `C` queda libre).
+- **UX hints visibles via `setStatusMessage`**: clip + carve setean mensajes claros en el status bar cuando faltan pre-condiciones (sin selección, sin intersección, etc.). El log warn existente no era visible al dev mientras testeaba.
+- **Sin schema bump**: spawn de fragments es state in-memory; el undo via `BooleanOpCommand` snapshot.
+
+**Implementación (F2H32 Bloques A-D en 3 commits):**
+
+- **Bloque A (commit `b1c9963`)**: plan en [`archive/plans/PLAN_HITO_F2H32.md`](archive/plans/PLAN_HITO_F2H32.md).
+- **Bloques B+C unificados (commit `4c8d560`)**: clip + carve + UX hints + extensión a BooleanOpCommand. Partials nuevos: `EditorProjectActions_Clip.cpp` + `EditorProjectActions_Carve.cpp`.
+- **Bloque D (este commit)**: docs + tag.
+
+**Pendientes conocidos** (post-F2H32):
+- **F2H33 — Organización + face polish** (próximo, último hito para cerrar el Hammer en su totalidad funcional): VisGroups (agrupar brushes con nombre + hide/show + persistencia, schema bump v13→v14) + texture alignment del Face Edit Sheet (Align/Fit/Justify L/R/T/B + Treat as one face).
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+- **Hollow tool** (carve A con un brush "interior" para crear paredes huecas): scope incremental sobre carve. Diferido — no típico del flow básico de Hammer.
+- **Multi-brush carve simultáneo** (selección de N A's en lugar de 1): la math de subtract lo soporta; UI sólo necesita iterar. Si emerge necesidad, agregar.
+- **Clip tool en perspectiva 3D**: Hammer no lo tiene; gizmo manipulable para mover el plano libre = scope mucho mayor. Diferido.
+
+**Próximo paso**: **F2H33 — Organización + face polish (VisGroups + texture alignment)**. Plan en `docs/PLAN_HITO_F2H33.md` cuando arranquemos.
+
+### F2H31 (anterior, ya cerrado)
+
+**🚀 F2H31 cerrado: Productivity selection + visual polish (marquee + group transform + snap-to-vertex + frustum + coords cursor).**
 Tag: `v1.21.0-fase2-hito31`.
 Verificado por dev: marquee detecta N entidades en cualquier orto y group transform las mueve juntas; snap-to-vertex hace el cursor pegarse al vertex objetivo; auto-close del pincel funciona clickeando vertex 1; frustum amarillo de la 3D cam visible en los 3 ortos; coords world del cursor siguen en vivo al mouse.
 
@@ -212,13 +243,13 @@ Para ejecutar:
 
 ## 4. Qué tiene que hacer el próximo agente
 
-### Tarea inmediata: F2H32 — Geometry tools (clip + carve)
+### Tarea inmediata: F2H33 — Organización + face polish (VisGroups + texture alignment)
 
-F2H31 está cerrado (tag `v1.21.0-fase2-hito31`). El dev decidió **cerrar el Hammer en su totalidad antes de pasar a sub-fase 2.5 gameplay**. El plan acordado son 3 hitos secuenciales:
-- **F2H32 (próximo)**: clip tool (3-click define plano que splittea brushes) + carve UI (boolean subtract con flow Hammer-style sobre la math de F2H12).
-- **F2H33**: VisGroups (agrupar brushes con nombre + hide/show + persistencia schema bump v13→v14) + texture alignment del Face Edit Sheet (Align/Fit/Justify L/R/T/B).
+F2H32 está cerrado (tag `v1.22.0-fase2-hito32`). Es el **último hito para cerrar el Hammer en su totalidad funcional**:
+- **VisGroups**: panel nuevo con grupos nombrados, drag entidades a grupo, toggle hide/show, persiste en `.moodmap` (schema bump v13→v14).
+- **Texture alignment del Face Edit Sheet**: en sub-modo Face con cara seleccionada, botones Align to face / Fit / Justify L/R/T/B + checkbox "Treat as one face" para múltiples caras seleccionadas.
 
-Tras F2H33 = 31/44 hitos, Hammer cerrado en su totalidad funcional.
+Tras F2H33 = 31/44 hitos, Hammer cerrado funcional. El dev luego decidirá entrar a sub-fase 2.5 gameplay (diálogos/quests/inventario) o mantenerse en polish UX/optimización.
 
 ### Flujo recomendado en esta sesión
 
