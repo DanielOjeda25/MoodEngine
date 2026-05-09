@@ -137,6 +137,37 @@ public:
     void setPolygonDrawActive(bool v) { m_polygonDrawActive = v; }
     bool polygonDrawActive() const { return m_polygonDrawActive; }
 
+    /// @brief F2H31 Bloque B: el toolbar "Map Tools" pide setear el tool
+    ///        activo (Select/CreateBlock/Pincel). EditorApplication consume
+    ///        cada frame y propaga a `m_mapTool`. Setea Pincel via
+    ///        toggle-style (cancela si ya estaba); Select/Block son
+    ///        idempotentes.
+    void requestMapTool(MapTool tool) {
+        m_mapToolRequested = tool;
+        m_hasMapToolRequest = true;
+    }
+    bool consumeMapToolRequest(MapTool& outTool) {
+        if (!m_hasMapToolRequest) return false;
+        outTool = m_mapToolRequested;
+        m_hasMapToolRequest = false;
+        return true;
+    }
+    /// @brief F2H31 Bloque B: state read-only del MapTool activo, seteado
+    ///        por EditorApplication cada frame para highlight del boton.
+    void setMapTool(MapTool t) { m_mapTool = t; }
+    MapTool mapTool() const { return m_mapTool; }
+
+    /// @brief F2H31 Bloque C: el toolbar pide togglear el snap-to-vertex
+    ///        (tecla V tambien lo dispara desde EditorOverlay).
+    void requestToggleSnapToVertex() { m_toggleSnapToVertexRequested = true; }
+    bool consumeToggleSnapToVertexRequest() {
+        const bool r = m_toggleSnapToVertexRequested;
+        m_toggleSnapToVertexRequested = false;
+        return r;
+    }
+    void setSnapToVertexEnabled(bool v) { m_snapToVertexEnabled = v; }
+    bool snapToVertexEnabled() const { return m_snapToVertexEnabled; }
+
     /// @brief F2H30 Bloque C: acceso a la top toolbar.
     MapEditorTopBar& mapEditorTopBar() { return m_mapEditorTopBar; }
 
@@ -569,6 +600,15 @@ private:
     bool m_hasSubModeRequest = false;
     bool m_togglePolygonDrawRequested = false;
     bool m_polygonDrawActive = false;
+
+    // F2H31 Bloque B: tool selector del toolbar lateral.
+    MapTool m_mapToolRequested = MapTool::Select;
+    bool m_hasMapToolRequest = false;
+    MapTool m_mapTool = MapTool::Select;
+
+    // F2H31 Bloque C: snap-to-vertex toggle.
+    bool m_toggleSnapToVertexRequested = false;
+    bool m_snapToVertexEnabled = false;
 };
 
 } // namespace Mood

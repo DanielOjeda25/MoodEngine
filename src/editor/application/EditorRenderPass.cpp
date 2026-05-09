@@ -110,6 +110,76 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                          m_orthoBlockSession.previewMax},
                     gmodCelesteRGB);
             }
+            // F2H31 Bloque D: frustum de la 3D cam dibujado en cada
+            // orto. 4 lineas amarillas claras desde la pos de la cam
+            // a las 4 esquinas de un "rect de mira" a distancia
+            // representativa (4 world units) — ayuda al dev a ubicar
+            // donde mira la perspectiva sin alt-tabbear al 3D viewport.
+            if (m_mode == EditorMode::Editor && m_sceneRenderer) {
+                const glm::vec3 camPos = m_editorCamera.position();
+                const glm::mat4 vMat = m_editorCamera.viewMatrix();
+                // Camera basis en world via la transpose del 3x3
+                // superior-izquierdo del view matrix.
+                const glm::vec3 right = glm::vec3(
+                    vMat[0][0], vMat[1][0], vMat[2][0]);
+                const glm::vec3 up = glm::vec3(
+                    vMat[0][1], vMat[1][1], vMat[2][1]);
+                const glm::vec3 fwd = -glm::vec3(
+                    vMat[0][2], vMat[1][2], vMat[2][2]);
+                const f32 fovYrad =
+                    m_editorCamera.fovDeg() * 3.1415926f / 180.0f;
+                const f32 distance = 4.0f;
+                const f32 halfH = distance * std::tan(fovYrad * 0.5f);
+                // Aspect del 3D viewport (no del orto).
+                const f32 perspAspect = (panelH > 0)
+                    ? static_cast<f32>(panelW) / static_cast<f32>(panelH)
+                    : 1.0f;
+                const f32 halfW = halfH * perspAspect;
+                const glm::vec3 npCenter = camPos + fwd * distance;
+                const glm::vec3 cTL = npCenter - right * halfW + up * halfH;
+                const glm::vec3 cTR = npCenter + right * halfW + up * halfH;
+                const glm::vec3 cBR = npCenter + right * halfW - up * halfH;
+                const glm::vec3 cBL = npCenter - right * halfW - up * halfH;
+                const glm::vec3 frusColor(1.0f, 0.95f, 0.4f);
+                auto& dbgR = m_sceneRenderer->debugRenderer();
+                // Rect de mira (4 lados).
+                dbgR.drawLine(cTL, cTR, frusColor);
+                dbgR.drawLine(cTR, cBR, frusColor);
+                dbgR.drawLine(cBR, cBL, frusColor);
+                dbgR.drawLine(cBL, cTL, frusColor);
+                // Lineas desde la posicion de la cam al rect (forma el
+                // tronco). Mas tenue para que no compita con el rect.
+                const glm::vec3 frusEdge(0.6f, 0.55f, 0.2f);
+                dbgR.drawLine(camPos, cTL, frusEdge);
+                dbgR.drawLine(camPos, cTR, frusEdge);
+                dbgR.drawLine(camPos, cBR, frusEdge);
+                dbgR.drawLine(camPos, cBL, frusEdge);
+            }
+            // F2H31 Bloque B: rectangulo amarillo del marquee select.
+            // Se dibuja solo en la orto donde arranco el drag. 4 lineas
+            // sobre el plano del view (worldFromNdc en las 4 esquinas).
+            if (m_orthoMarquee.active &&
+                m_orthoMarquee.orthoIdx == static_cast<int>(i) &&
+                m_sceneRenderer) {
+                const auto& ds = op->dragState();
+                if (ds.active) {
+                    const glm::vec3 marqColor(1.0f, 0.85f, 0.0f);
+                    const f32 ndcMinX = std::min(ds.ndcStartX, ds.ndcCurX);
+                    const f32 ndcMaxX = std::max(ds.ndcStartX, ds.ndcCurX);
+                    const f32 ndcMinY = std::min(ds.ndcStartY, ds.ndcCurY);
+                    const f32 ndcMaxY = std::max(ds.ndcStartY, ds.ndcCurY);
+                    const auto& cam = op->camera();
+                    const glm::vec3 c00 = cam.worldFromNdc(ndcMinX, ndcMinY, oAspect);
+                    const glm::vec3 c10 = cam.worldFromNdc(ndcMaxX, ndcMinY, oAspect);
+                    const glm::vec3 c11 = cam.worldFromNdc(ndcMaxX, ndcMaxY, oAspect);
+                    const glm::vec3 c01 = cam.worldFromNdc(ndcMinX, ndcMaxY, oAspect);
+                    auto& dbgR = m_sceneRenderer->debugRenderer();
+                    dbgR.drawLine(c00, c10, marqColor);
+                    dbgR.drawLine(c10, c11, marqColor);
+                    dbgR.drawLine(c11, c01, marqColor);
+                    dbgR.drawLine(c01, c00, marqColor);
+                }
+            }
             // F2H30 Bloque C: re-encolar el preview del pincel poligonal
             // en los ortos (incluye rubber band del ultimo vertex al
             // cursor live de la orto lockeada).
@@ -145,11 +215,12 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                         glm::vec3 cursorWorld =
                             lockedOp->camera().worldFromNdc(
                                 lc.ndcX, lc.ndcY, oA);
-                        if (snap > 0.0f) {
-                            cursorWorld.x = std::round(cursorWorld.x / snap) * snap;
-                            cursorWorld.y = std::round(cursorWorld.y / snap) * snap;
-                            cursorWorld.z = std::round(cursorWorld.z / snap) * snap;
-                        }
+                        // F2H31 Bloque C: el rubber band tambien snap-
+                        // to-vertex si el toggle esta on (el dev ve a
+                        // donde se va a "pegar" antes de clickear).
+                        cursorWorld = snapToVertexOrGrid(cursorWorld,
+                                                          lockedOp->camera(),
+                                                          oA);
                         const glm::vec3 rubberColor(108.0f / 255.0f,
                                                       193.0f / 255.0f,
                                                       229.0f / 255.0f);
@@ -542,11 +613,10 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                                   / static_cast<f32>(op->desiredHeight());
                     glm::vec3 cursorWorld = op->camera().worldFromNdc(
                         lc.ndcX, lc.ndcY, oA);
-                    if (snap > 0.0f) {
-                        cursorWorld.x = std::round(cursorWorld.x / snap) * snap;
-                        cursorWorld.y = std::round(cursorWorld.y / snap) * snap;
-                        cursorWorld.z = std::round(cursorWorld.z / snap) * snap;
-                    }
+                    // F2H31 Bloque C: rubber band perspectivo tambien
+                    // sigue al snap-to-vertex.
+                    cursorWorld = snapToVertexOrGrid(cursorWorld,
+                                                      op->camera(), oA);
                     const glm::vec3 rubberColor(108.0f / 255.0f,
                                                   193.0f / 255.0f,
                                                   229.0f / 255.0f); // celeste GMod

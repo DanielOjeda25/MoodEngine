@@ -156,10 +156,41 @@ int EditorApplication::run() {
         }
         if (m_ui.consumeTogglePolygonDrawRequest()) {
             togglePolygonDrawMode();
+            // F2H31 Bloque B: refleja el estado del pincel en m_mapTool.
+            // togglePolygonDrawMode ya forza m_subMode=Object; aca solo
+            // resincronizamos el tool selector del toolbar.
+            m_mapTool = m_polyDraw.active ? MapTool::Pincel : MapTool::Select;
         }
-        // Sync state: para que la top toolbar pueda highlight el
-        // boton "Pincel" cuando esta activo.
+        // F2H31 Bloque B: tool selector del toolbar (Select / CreateBlock).
+        // Pincel se setea via la rama togglePolygonDrawMode arriba; aca
+        // solo gestionamos las otras 2 transiciones — y si el dev cambia
+        // de Pincel a otro tool, cancelamos el pincel.
+        MapTool requestedTool;
+        if (m_ui.consumeMapToolRequest(requestedTool)) {
+            if (requestedTool != MapTool::Pincel && m_polyDraw.active) {
+                cancelPolygonDraw();
+            }
+            if (requestedTool != MapTool::Pincel) {
+                m_mapTool = requestedTool;
+                Log::editor()->info("[map toolbar] tool -> {}",
+                    requestedTool == MapTool::Select ? "Select" : "CreateBlock");
+            }
+            // Si requestedTool == Pincel, requestTogglePolygonDraw ya
+            // se disparo (el toolbar emite ambos requests cuando clickeas
+            // el boton Pincel) y la rama de arriba lo manejo.
+        }
+        // F2H31 Bloque C: toggle snap-to-vertex desde el toolbar
+        // (alias de la tecla V que vive en EditorOverlay).
+        if (m_ui.consumeToggleSnapToVertexRequest()) {
+            m_snapToVertexEnabled = !m_snapToVertexEnabled;
+            Log::editor()->info("[snap] vertex snap = {} (via toolbar)",
+                m_snapToVertexEnabled ? "on" : "off");
+        }
+        // Sync state: para que la top toolbar pueda highlight los
+        // botones activos.
         m_ui.setPolygonDrawActive(m_polyDraw.active);
+        m_ui.setMapTool(m_mapTool);
+        m_ui.setSnapToVertexEnabled(m_snapToVertexEnabled);
 
         // 2.25) Acciones de proyecto (Archivo > Nuevo / Abrir / Guardar / ...).
         switch (m_ui.consumeProjectAction()) {
@@ -384,13 +415,10 @@ int EditorApplication::run() {
                 const auto& cam = polyOrthoPanels[i]->camera();
                 glm::vec3 worldPt = cam.worldFromNdc(
                     ndcX, ndcY, oAspect);
-                // Snap absoluto al grid (mismo que vertex/edge edit).
-                const f32 snap = static_cast<f32>(m_hammerSnapStep);
-                if (snap > 0.0f) {
-                    worldPt.x = std::round(worldPt.x / snap) * snap;
-                    worldPt.y = std::round(worldPt.y / snap) * snap;
-                    worldPt.z = std::round(worldPt.z / snap) * snap;
-                }
+                // F2H31 Bloque C: snap-to-vertex toma prioridad si el
+                // toggle esta on; sino fallback al grid (comportamiento
+                // F2H30 Bloque C). Mismo helper que el block tool corners.
+                worldPt = snapToVertexOrGrid(worldPt, cam, oAspect);
                 if (m_polyDraw.orthoIdx < 0) {
                     // Primer click: lockear orto + setear axisIndex
                     // segun el eje perpendicular del view.
@@ -411,6 +439,23 @@ int EditorApplication::run() {
                             "[pincel] click duplicado (mismo grid cell) "
                             "— ignorado");
                         continue;
+                    }
+                }
+                // F2H31 Bloque C fix: auto-close al clickear cerca del
+                // primer vertex (con >= 3 puntos ya). Mental model del
+                // dev: "click de vuelta en el inicio = cerrar" (estilo
+                // editor de polígonos 2D clasico). Sin esto, clickear
+                // sobre vertex 1 generaba vertex N == vertex 1 ->
+                // polígono degenerado -> rechazo silencioso.
+                if (m_polyDraw.pointsWorld.size() >= 3) {
+                    const glm::vec3 first = m_polyDraw.pointsWorld.front();
+                    if (glm::distance(first, worldPt) < 1e-3f) {
+                        Log::editor()->info(
+                            "[pincel] click sobre vertex 1 — cerrando "
+                            "polígono ({} puntos)",
+                            m_polyDraw.pointsWorld.size());
+                        closePolygonDraw();
+                        break; // sesion cerrada — salir del for ortos
                     }
                 }
                 m_polyDraw.pointsWorld.push_back(worldPt);
@@ -533,14 +578,25 @@ int EditorApplication::run() {
                     const ScenePickResult hit = pickEntityFromRay(
                         *m_scene, origin, dir, m_assetManager.get());
                     if (!hit) {
-                        // F2H29 Bloque C: empty space — block tool.
-                        // Marca sesion; el handling (preview AABB +
-                        // spawn al soltar) vive en el bloque 2.4d.
-                        if (!m_orthoBlockSession.active) {
-                            m_orthoBlockSession.active = true;
-                            m_orthoBlockSession.orthoIdx = i;
-                            Log::editor()->info(
-                                "[ortho:{}] block tool START", cam.label());
+                        // F2H31 Bloque B: empty space — el comportamiento
+                        // depende del MapTool activo:
+                        //   Select      -> marquee session (handling 2.4f).
+                        //   CreateBlock -> block tool session (handling 2.4d).
+                        //   Pincel      -> consumido en 2.4a-poly (no llega aca).
+                        if (m_mapTool == MapTool::CreateBlock) {
+                            if (!m_orthoBlockSession.active) {
+                                m_orthoBlockSession.active = true;
+                                m_orthoBlockSession.orthoIdx = i;
+                                Log::editor()->info(
+                                    "[ortho:{}] block tool START", cam.label());
+                            }
+                        } else if (m_mapTool == MapTool::Select) {
+                            if (!m_orthoMarquee.active) {
+                                m_orthoMarquee.active = true;
+                                m_orthoMarquee.orthoIdx = i;
+                                Log::editor()->info(
+                                    "[ortho:{}] marquee START", cam.label());
+                            }
                         }
                         continue;
                     }
@@ -655,9 +711,11 @@ int EditorApplication::run() {
         //       F2H30 Bloque C: tambien skipea si pincel poligonal
         //       activo (el block tool y el pincel comparten el LMB
         //       en empty space — el pincel tiene prioridad).
+        //       F2H31 Bloque B: solo si m_mapTool == CreateBlock.
         if (m_mode == EditorMode::Editor && m_scene &&
             m_subMode == EditorSubMode::Object &&
             !m_polyDraw.active &&
+            m_mapTool == MapTool::CreateBlock &&
             m_orthoBlockSession.active) {
             OrthoViewportPanel* blockOrthoPanels[3] = {
                 &m_ui.orthoTop(), &m_ui.orthoFront(), &m_ui.orthoSide(),
@@ -675,19 +733,13 @@ int EditorApplication::run() {
                     ds.ndcStartX, ds.ndcStartY, oAspect);
                 const glm::vec3 wc = cam.worldFromNdc(
                     ds.ndcCurX, ds.ndcCurY, oAspect);
-                // Snap ambas esquinas al grid (no al delta — para que
-                // el brush quede alineado al grid global).
+                // F2H31 Bloque C: snap-to-vertex toma prioridad si el
+                // toggle esta on; sino fallback al grid. Snap se aplica
+                // a las ESQUINAS (no al delta) para que el brush quede
+                // alineado al grid global o pegado al vertex vecino.
                 const f32 snap = static_cast<f32>(m_hammerSnapStep);
-                auto snapVec3 = [snap](glm::vec3 v) {
-                    if (snap > 0.0f) {
-                        v.x = std::round(v.x / snap) * snap;
-                        v.y = std::round(v.y / snap) * snap;
-                        v.z = std::round(v.z / snap) * snap;
-                    }
-                    return v;
-                };
-                const glm::vec3 wsSnap = snapVec3(ws);
-                const glm::vec3 wcSnap = snapVec3(wc);
+                const glm::vec3 wsSnap = snapToVertexOrGrid(ws, cam, oAspect);
+                const glm::vec3 wcSnap = snapToVertexOrGrid(wc, cam, oAspect);
                 glm::vec3 minPt = glm::min(wsSnap, wcSnap);
                 glm::vec3 maxPt = glm::max(wsSnap, wcSnap);
                 // Inflar el eje perpendicular del view a `snap * 4`
@@ -756,6 +808,105 @@ int EditorApplication::run() {
                 // Panel sin tamano valido (workspace cambio mid-drag?).
                 m_orthoBlockSession.active = false;
                 m_orthoBlockSession.previewValid = false;
+            }
+        }
+
+        // 2.4f) F2H31 Bloque B: marquee select en orto. Activa cuando el
+        //       drag arranca en empty space + m_mapTool == Select. El
+        //       rectangulo amarillo se dibuja desde EditorRenderPass
+        //       leyendo `m_orthoMarquee.active` + el panel's dragState.
+        //       Aca solo procesamos el cierre (justEnded): hit-test cada
+        //       entidad con AABB world contra el rectangulo en ndc del
+        //       orto; replace / Shift=add / Ctrl=toggle del SelectionSet.
+        if (m_mode == EditorMode::Editor && m_scene &&
+            m_orthoMarquee.active &&
+            m_mapTool == MapTool::Select) {
+            OrthoViewportPanel* marqOrthoPanels[3] = {
+                &m_ui.orthoTop(), &m_ui.orthoFront(), &m_ui.orthoSide(),
+            };
+            OrthoViewportPanel* op =
+                marqOrthoPanels[m_orthoMarquee.orthoIdx];
+            const auto ds = op->consumeDragEnded();
+            if (ds.justEnded) {
+                const u32 oW = op->desiredWidth();
+                const u32 oH = op->desiredHeight();
+                if (oW > 0 && oH > 0) {
+                    const f32 oAspect = static_cast<f32>(oW) /
+                                         static_cast<f32>(oH);
+                    const auto& cam = op->camera();
+                    const glm::mat4 mView = cam.viewMatrix();
+                    const glm::mat4 mProj = cam.projMatrix(oAspect);
+                    const glm::mat4 mVP = mProj * mView;
+                    const f32 ndcMinX = std::min(ds.ndcStartX, ds.ndcCurX);
+                    const f32 ndcMaxX = std::max(ds.ndcStartX, ds.ndcCurX);
+                    const f32 ndcMinY = std::min(ds.ndcStartY, ds.ndcCurY);
+                    const f32 ndcMaxY = std::max(ds.ndcStartY, ds.ndcCurY);
+                    const Uint8* keys = SDL_GetKeyboardState(nullptr);
+                    const bool keyShift = keys[SDL_SCANCODE_LSHIFT] ||
+                                            keys[SDL_SCANCODE_RSHIFT];
+                    const bool keyCtrl  = keys[SDL_SCANCODE_LCTRL]  ||
+                                            keys[SDL_SCANCODE_RCTRL];
+
+                    SelectionSet& set = m_ui.selectionSet();
+                    if (!keyShift && !keyCtrl) {
+                        clear(set);
+                    }
+
+                    int hitCount = 0;
+                    auto hitTestEntity = [&](Entity e, const AABB& aabb) {
+                        const glm::vec3 corners[8] = {
+                            {aabb.min.x, aabb.min.y, aabb.min.z},
+                            {aabb.max.x, aabb.min.y, aabb.min.z},
+                            {aabb.min.x, aabb.max.y, aabb.min.z},
+                            {aabb.max.x, aabb.max.y, aabb.min.z},
+                            {aabb.min.x, aabb.min.y, aabb.max.z},
+                            {aabb.max.x, aabb.min.y, aabb.max.z},
+                            {aabb.min.x, aabb.max.y, aabb.max.z},
+                            {aabb.max.x, aabb.max.y, aabb.max.z},
+                        };
+                        for (int c = 0; c < 8; ++c) {
+                            const glm::vec4 clip = mVP *
+                                glm::vec4(corners[c], 1.0f);
+                            if (std::abs(clip.w) < 1e-6f) continue;
+                            const f32 ndcX = clip.x / clip.w;
+                            const f32 ndcY = clip.y / clip.w;
+                            if (ndcX >= ndcMinX && ndcX <= ndcMaxX &&
+                                ndcY >= ndcMinY && ndcY <= ndcMaxY) {
+                                if (keyCtrl) {
+                                    toggle(set, e);
+                                } else {
+                                    add(set, e);
+                                }
+                                ++hitCount;
+                                return;
+                            }
+                        }
+                    };
+
+                    m_scene->forEach<TransformComponent>(
+                        [&](Entity e, TransformComponent& t) {
+                            if (e.hasComponent<BrushComponent>()) {
+                                const auto& bc =
+                                    e.getComponent<BrushComponent>();
+                                hitTestEntity(e, brushAabbWorld(t, bc));
+                            } else if (e.hasComponent<MeshRendererComponent>()) {
+                                const auto& mr =
+                                    e.getComponent<MeshRendererComponent>();
+                                hitTestEntity(e, meshAabbWorld(
+                                    t, &mr, m_assetManager.get()));
+                            }
+                        });
+
+                    Log::editor()->info(
+                        "[ortho:{}] marquee END ({}{}{}): {} entidades hit",
+                        cam.label(),
+                        keyShift ? "+Shift" : "",
+                        keyCtrl  ? "+Ctrl"  : "",
+                        keyShift || keyCtrl ? "" : "replace",
+                        hitCount);
+                }
+                m_orthoMarquee.active = false;
+                m_orthoMarquee.orthoIdx = -1;
             }
         }
 

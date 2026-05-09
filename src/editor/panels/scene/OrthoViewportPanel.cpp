@@ -76,6 +76,22 @@ void OrthoViewportPanel::onImGuiRender() {
                                 imageMin.y + 4.0f),
                          k_orangeValve, gridLabel);
 
+        // F2H31 Bloque D: coords del cursor en world space (debajo del
+        // label de la vista). Solo se muestra si el cursor esta dentro
+        // del panel. Usa la matriz de la camara orto + aspect actual
+        // para la conversion ndc -> world.
+        if (m_liveCursor.hovered && imageSize.y > 0) {
+            const f32 oAspect = imageSize.x / imageSize.y;
+            const glm::vec3 wp = m_camera.worldFromNdc(
+                m_liveCursor.ndcX, m_liveCursor.ndcY, oAspect);
+            char coordsLabel[64];
+            std::snprintf(coordsLabel, sizeof(coordsLabel),
+                           "(%.1f, %.1f, %.1f)", wp.x, wp.y, wp.z);
+            dlText->AddText(
+                ImVec2(imageMin.x + 6.0f, imageMin.y + 22.0f),
+                IM_COL32(200, 200, 200, 230), coordsLabel);
+        }
+
         if (!hasFb) {
             ImGui::End();
             ImGui::PopStyleVar();

@@ -361,6 +361,32 @@ private:
     ///        hitos futuros. Esc vuelve a Object Mode.
     EditorSubMode m_subMode = EditorSubMode::Object;
 
+    /// @brief F2H31 Bloque B: tool del workspace "Editor de mapas". Default
+    ///        Select (marquee al drag en empty space — Hammer-style). El
+    ///        dev cambia a CreateBlock para spawnear brushes via drag.
+    ///        Pincel se setea via togglePolygonDrawMode (que ya maneja el
+    ///        m_polyDraw); este enum mantiene la coherencia visual del
+    ///        toolbar (los 3 botones Select/Block/Pincel mutually exclusive).
+    MapTool m_mapTool = MapTool::Select;
+
+    /// @brief F2H31 Bloque C: si esta activo, los snaps de pincel /
+    ///        block tool prueban primero contra los vertices de brushes
+    ///        existentes (threshold 8 px screen-space) y solo caen al
+    ///        grid del workspace si ninguno gana. Toggle con tecla `V`
+    ///        o boton "Snap V" del toolbar lateral. Default false (Hammer
+    ///        clasico solo snapea al grid).
+    bool m_snapToVertexEnabled = false;
+
+    /// @brief F2H31 Bloque C: snap helper compartido por pincel y block
+    ///        tool. Si `m_snapToVertexEnabled` y hay un vertex de algun
+    ///        brush dentro de threshold ~8 px screen-space del orto,
+    ///        devuelve la pos world de ese vertex; sino snap al grid
+    ///        del workspace (`m_hammerSnapStep`). Si snap-to-vertex
+    ///        esta off, snap al grid directo.
+    glm::vec3 snapToVertexOrGrid(const glm::vec3& worldPt,
+                                  const struct OrthoCamera& cam,
+                                  f32 oAspect);
+
     /// @brief F2H28 Bloque G: snap step (en world units) de los viewports
     ///        ortograficos del workspace "Editor de mapas". Cycleable con
     ///        Ctrl + + / Ctrl + - en valores [1, 2, 4, 8, 16, 32, 64, 128].
@@ -406,6 +432,20 @@ private:
         bool      previewValid = false;
     };
     OrthoBlockToolSession m_orthoBlockSession;
+
+    /// @brief F2H31 Bloque B: sesion de marquee select en orto. Activada
+    ///        cuando el LMB-down inicia drag en EMPTY space + m_mapTool
+    ///        == Select. Cada frame el panel reporta `dragState().ndcCur`
+    ///        que se usa para dibujar el rectangulo amarillo (4 lineas
+    ///        en world space sobre el plano del view, via debugRenderer).
+    ///        Al soltar, hit-test cada entidad seleccionable: AABB world
+    ///        proyectado a ndc; si CUALQUIER corner cae dentro del rect
+    ///        del marquee, hit. Aplica modifiers Shift/Ctrl al SelectionSet.
+    struct OrthoMarqueeSession {
+        bool active = false;
+        int  orthoIdx = -1;
+    };
+    OrthoMarqueeSession m_orthoMarquee;
 
     /// @brief F2H29 Bloque C: spawnea un Box brush con `transform`
     ///        especificado (en lugar del `mat4(1.0f)` que usan las

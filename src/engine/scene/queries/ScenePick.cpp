@@ -59,11 +59,14 @@ f32 raySphere(const glm::vec3& origin, const glm::vec3& dir,
     return t;
 }
 
+} // namespace (anonymous)
+
 /// @brief Construye el AABB world-space del MeshRenderer. Si hay
 ///        AssetManager + MeshAsset valido, usa el AABB del bind pose
 ///        local del mesh (`MeshAsset::aabbMin/aabbMax`) y lo proyecta al
 ///        mundo via los 8 corners (soporta rotaciones del Transform).
 ///        Sin assets -> fallback al cubo unitario (legacy / tests).
+///        F2H31 Bloque B: expuesto al header para reuso por marquee select.
 AABB meshAabbWorld(const TransformComponent& t,
                     const MeshRendererComponent* mr,
                     const AssetManager* assets) {
@@ -132,8 +135,6 @@ AABB brushAabbWorld(const TransformComponent& t, const BrushComponent& bc) {
     }
     return AABB{wMin, wMax};
 }
-
-} // namespace
 
 ScenePickResult pickEntityFromRay(Scene& scene,
                                    const glm::vec3& origin,

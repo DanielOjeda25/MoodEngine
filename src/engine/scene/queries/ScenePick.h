@@ -9,6 +9,7 @@
 // mismo concepto vendra cuando `PhysicsWorld::rayCast` exista (Hito 13+).
 
 #include "core/Types.h"
+#include "core/math/AABB.h"
 #include "engine/scene/core/Entity.h"
 
 #include <glm/mat4x4.hpp>
@@ -21,6 +22,25 @@ namespace Mood {
 
 class Scene;
 class AssetManager;
+struct TransformComponent;
+struct MeshRendererComponent;
+struct BrushComponent;
+
+/// @brief F2H31 Bloque B: helper publico que computa el AABB world-space
+///        de una entidad con MeshRenderer. Reuso de la version interna
+///        de pickEntity para que el marquee select pueda hit-testear
+///        entidades sin duplicar la logica de proyectar 8 corners + scale
+///        del Transform. Si `mr->mesh` no se resuelve via `assets`, usa
+///        el cubo unitario [-0.5, 0.5]^3 como fallback (mismo legacy).
+AABB meshAabbWorld(const TransformComponent& t,
+                    const MeshRendererComponent* mr,
+                    const AssetManager* assets);
+
+/// @brief F2H31 Bloque B: AABB world-space de un brush. Toma
+///        `bc.brush.localAabb`, proyecta los 8 corners por el
+///        worldMatrix del Transform y reconstruye un AABB axis-aligned.
+AABB brushAabbWorld(const TransformComponent& t,
+                     const BrushComponent& bc);
 
 struct ScenePickResult {
     Entity entity{};               // default-constructed = sin hit

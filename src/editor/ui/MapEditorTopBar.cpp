@@ -45,11 +45,38 @@ void MapEditorTopBar::onImGuiRender() {
     }
 
     const EditorSubMode currentSubMode = m_ui->subMode();
+    const MapTool currentTool = m_ui->mapTool();
     const bool polyActive = m_ui->polygonDrawActive();
 
-    // F2H30 Bloque C: layout vertical (columna lateral derecha) — un
-    // boton por linea, ancho completo. Sub-modos arriba, separador,
-    // pincel abajo. Estilo Hammer / Blender.
+    // F2H31 Bloque B: arriba, los 3 TOOLS mutually exclusive (que pasa
+    // con un drag en empty space del orto). Default Hammer-style =
+    // Select. CreateBlock spawnea brushes; Pincel agrega vertices. Solo
+    // uno activo a la vez — el highlight refleja el m_mapTool.
+    ImGui::TextDisabled("Herramienta");
+    if (toolButton("Selecc.",
+                    "Selección (Hammer-default) - drag en vacio = marquee select",
+                    currentTool == MapTool::Select && !polyActive)) {
+        m_ui->requestMapTool(MapTool::Select);
+    }
+    if (toolButton("Bloque",
+                    "Block tool - drag en vacio = preview + spawn brush",
+                    currentTool == MapTool::CreateBlock && !polyActive)) {
+        m_ui->requestMapTool(MapTool::CreateBlock);
+    }
+    if (toolButton("Pincel",
+                    "Pincel poligonal (B) - clicks agregan vertices, Enter cierra",
+                    polyActive)) {
+        // Pincel sigue manejandose via togglePolygonDrawMode (F2H30 C)
+        // que ya cancela y revierte si esta activo.
+        m_ui->requestTogglePolygonDraw();
+    }
+
+    ImGui::Separator();
+
+    // F2H30 Bloque C: sub-modos del SelectionSet (que NIVEL de geometria
+    // se manipula). Ortogonal al Tool de arriba. Solo aplica cuando hay
+    // un brush selecto.
+    ImGui::TextDisabled("Sub-modo");
     if (toolButton("Objeto",
                     "Object Mode (Esc) - mover/rotar/escalar brush entero",
                     currentSubMode == EditorSubMode::Object && !polyActive)) {
@@ -73,10 +100,13 @@ void MapEditorTopBar::onImGuiRender() {
 
     ImGui::Separator();
 
-    if (toolButton("Pincel",
-                    "Pincel poligonal (B) - clickear vertices + Enter cierra",
-                    polyActive)) {
-        m_ui->requestTogglePolygonDraw();
+    // F2H31 Bloque C: toggle snap-to-vertex (tecla V tambien dispara).
+    ImGui::TextDisabled("Snap");
+    if (toolButton("Snap V",
+                    "Snap a vertex (V) - snapea al vertex mas cercano de un "
+                    "brush existente en lugar del grid",
+                    m_ui->snapToVertexEnabled())) {
+        m_ui->requestToggleSnapToVertex();
     }
 
     ImGui::End();

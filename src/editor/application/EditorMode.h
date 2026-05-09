@@ -29,6 +29,27 @@ enum class EditorSubMode {
     Face,    // F2H17: pickea caras individuales del brush activo.
 };
 
+/// @brief F2H31 Bloque B: tool del workspace "Editor de mapas". Selecciona
+///        que pasa con un drag en EMPTY SPACE de un orto:
+///        - Select:      drag dibuja rectangulo amarillo de marquee y al
+///                       soltar selecciona N brushes que toca el rectangulo
+///                       (replace / Shift=add / Ctrl=toggle). Click en un
+///                       brush sigue siendo click-select; drag sobre un
+///                       brush sigue siendo drag-edit. Default Hammer-style.
+///        - CreateBlock: drag dibuja preview celeste del brush a spawnear,
+///                       como block tool de F2H29. Click en empty space
+///                       no hace nada.
+///        - Pincel:      drag/click agrega vertices al poligono. Setea
+///                       m_polyDraw.active=true (mismo flag que F2H30
+///                       Bloque C). Mutually exclusive con Select / Block.
+///        El sub-modo Vertex/Edge/Face es ortogonal — opera sobre brushes
+///        ya seleccionados, no sobre empty space.
+enum class MapTool {
+    Select = 0,
+    CreateBlock = 1,
+    Pincel = 2,
+};
+
 /// @brief Acciones de proyecto que la UI solicita y EditorApplication atiende.
 enum class ProjectAction {
     None,

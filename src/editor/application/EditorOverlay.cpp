@@ -372,6 +372,15 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
             m_ui.workspaceManager().activeWorkspace().name == "Editor de mapas") {
             togglePolygonDrawMode();
         }
+        // F2H31 Bloque C: tecla V toggle snap-to-vertex. Solo en
+        // workspace "Editor de mapas" — fuera de ese contexto V no
+        // tiene significado y podria pisar inputs futuros.
+        if (ImGui::IsKeyPressed(ImGuiKey_V, false) &&
+            m_ui.workspaceManager().activeWorkspace().name == "Editor de mapas") {
+            m_snapToVertexEnabled = !m_snapToVertexEnabled;
+            Log::editor()->info("[snap] vertex snap = {}",
+                m_snapToVertexEnabled ? "on" : "off");
+        }
         // F2H30 Bloque C: Enter cierra el polígono activo.
         if ((ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
              ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) &&
