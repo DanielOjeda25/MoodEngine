@@ -2,13 +2,30 @@
 
 #include "core/Log.h"
 #include "editor/ui/EditorUI.h"
+#include "editor/ui/IconsFontAwesome6.h"
 #include "editor/panels/IPanel.h"
 
 #include <imgui.h>
 
+#include <string>
 #include <string_view>
 
 namespace Mood {
+
+namespace {
+
+// F2H37: mapping de nombre de workspace a icono FA. Hardcoded porque
+// los nombres son fijos en `WorkspaceManager.cpp` y un mapping
+// generico requeriria que cada workspace declarara su icon — overkill.
+const char* iconForWorkspace(const std::string& name) {
+    if (name == "Layout")          return ICON_FA_TABLE_COLUMNS;
+    if (name == "Programar")        return ICON_FA_CODE;
+    if (name == "Materiales")       return ICON_FA_PALETTE;
+    if (name == "Editor de mapas")  return ICON_FA_MAP;
+    return ICON_FA_TABLE_COLUMNS; // fallback razonable
+}
+
+} // namespace
 
 void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
     if (ImGui::BeginMenuBar()) {
@@ -16,7 +33,7 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
         // proyecto + asset ops globales (script/prefab) + Salir. El
         // submenu Mapa se promovio a top-level; geometria (Brush
         // primitivas + Boolean) salio a top-level "Brush".
-        if (ImGui::BeginMenu("Archivo")) {
+        if (ImGui::BeginMenu(ICON_FA_FOLDER " Archivo")) {
             if (ImGui::MenuItem("Nuevo Proyecto")) {
                 ui.requestProjectAction(ProjectAction::NewProject);
             }
@@ -63,7 +80,7 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
 
         // F2H18: top-level "Mapa". Antes era Archivo > Mapa. File ops
         // del mapa actual del proyecto activo (multi-mapa de F2H8).
-        if (ImGui::BeginMenu("Mapa", ui.hasProject())) {
+        if (ImGui::BeginMenu(ICON_FA_MAP " Mapa", ui.hasProject())) {
             if (ImGui::MenuItem("Nuevo mapa")) {
                 ui.requestProjectAction(ProjectAction::NewMap);
             }
@@ -117,7 +134,7 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
 
         // F2H18: top-level "Brush". Geometria (primitivas + booleanos).
         // Antes vivia anidada como Archivo > Mapa > {Anadir Brush, Boolean}.
-        if (ImGui::BeginMenu("Brush", ui.hasProject())) {
+        if (ImGui::BeginMenu(ICON_FA_CUBES_STACKED " Brush", ui.hasProject())) {
             // F2H11 + F2H14: primitivas CSG para el mapa actual.
             if (ImGui::BeginMenu("Anadir")) {
                 if (ImGui::MenuItem("Box")) {
@@ -151,7 +168,7 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("Editar")) {
+        if (ImGui::BeginMenu(ICON_FA_PEN_TO_SQUARE " Editar")) {
             // Hito 27: cableado a HistoryStack inyectado por EditorApplication.
             // Hasta que el ctor termine, m_history puede ser nullptr — evitamos
             // crash deshabilitando los items.
@@ -171,7 +188,7 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("Ver")) {
+        if (ImGui::BeginMenu(ICON_FA_EYE " Ver")) {
             // F2H7: agrupar paneles por categoria (Scene/Assets/Debug/World).
             // Cada IPanel sobreescribe `category()` o usa el default "Scene".
             // El order de las categorias arriba es deliberado: Scene primero
@@ -208,7 +225,7 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("Ayuda")) {
+        if (ImGui::BeginMenu(ICON_FA_CIRCLE_QUESTION " Ayuda")) {
             if (ImGui::MenuItem("Acerca de")) {
                 m_showAboutPopup = true;
             }
@@ -340,7 +357,13 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                     const ImVec4 dim = ImGui::GetStyleColorVec4(ImGuiCol_Tab);
                     ImGui::PushStyleColor(ImGuiCol_Button, dim);
                 }
-                if (ImGui::Button(ws.name.c_str())) {
+                // F2H37: prefijo icon segun el nombre del workspace.
+                std::string label;
+                label.reserve(ws.name.size() + 8);
+                label += iconForWorkspace(ws.name);
+                label += ' ';
+                label += ws.name;
+                if (ImGui::Button(label.c_str())) {
                     if (!isActive) ui.requestWorkspaceSwitch(i);
                 }
                 ImGui::PopStyleColor(isActive ? 2 : 1);
@@ -350,8 +373,8 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
 
         // Boton Play/Stop empujado a la derecha de la menu bar.
         const bool isPlay = ui.mode() == EditorMode::Play;
-        const char* btnLabel = isPlay ? "Stop" : "Play";
-        const float btnWidth = 64.0f;
+        const char* btnLabel = isPlay ? (ICON_FA_STOP " Stop") : (ICON_FA_PLAY " Play");
+        const float btnWidth = 80.0f; // F2H37: bumped 64->80 px para acomodar icon
         const float avail = ImGui::GetContentRegionAvail().x;
         if (avail > btnWidth) {
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - btnWidth));

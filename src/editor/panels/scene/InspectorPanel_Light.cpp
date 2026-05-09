@@ -18,7 +18,7 @@ namespace Mood {
 // direction (directional) + enabled.
 void InspectorPanel::renderLightSection(Entity e) {
     auto& lt = e.getComponent<LightComponent>();
-    ImGui::SeparatorText("Light");
+    ImGui::SeparatorText(ICON_FA_LIGHTBULB " Light");
 
     if (ImGui::Checkbox("enabled##lt", &lt.enabled)) m_editedThisFrame = true;
 
@@ -88,7 +88,7 @@ void InspectorPanel::renderLightSection(Entity e) {
 // EditorApplication). Cambios en vivo via DragFloat / Combo.
 void InspectorPanel::renderEnvironmentSection(Entity e) {
     auto& env = e.getComponent<EnvironmentComponent>();
-    ImGui::SeparatorText("Environment");
+    ImGui::SeparatorText(ICON_FA_TREE " Environment");
 
     ImGui::TextDisabled("Skybox: %s (asset catalog futuro)",
                          env.skyboxPath.c_str());

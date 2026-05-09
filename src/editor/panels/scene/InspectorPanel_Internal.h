@@ -7,6 +7,7 @@
 #include "editor/commands/EditPropertyCommand.h"
 #include "editor/panels/scene/InspectorEditTracker.h"
 #include "editor/ui/EditorUI.h"
+#include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons en headers de seccion
 #include "engine/scene/core/Entity.h"
 
 #include <imgui.h>

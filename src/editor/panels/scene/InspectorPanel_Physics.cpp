@@ -20,7 +20,7 @@ namespace Mood {
 // si se recarga el proyecto, o al destruir/recrear el body manualmente.
 void InspectorPanel::renderRigidBodySection(Entity e) {
     auto& rb = e.getComponent<RigidBodyComponent>();
-    ImGui::SeparatorText("RigidBody");
+    ImGui::SeparatorText(ICON_FA_WEIGHT_HANGING " RigidBody");
 
     const char* typeNames[] = {"Static", "Kinematic", "Dynamic"};
     int typeIdx = static_cast<int>(rb.type);

@@ -15,7 +15,7 @@ namespace Mood {
 
 void InspectorPanel::renderTagSection(Entity e) {
     auto& tag = e.getComponent<TagComponent>();
-    ImGui::SeparatorText("Tag");
+    ImGui::SeparatorText(ICON_FA_TAG " Tag");
     char buf[256];
     std::snprintf(buf, sizeof(buf), "%s", tag.name.c_str());
     if (ImGui::InputText("##tag", buf, sizeof(buf))) {
@@ -34,7 +34,7 @@ void InspectorPanel::renderTagSection(Entity e) {
 
 void InspectorPanel::renderCameraSection(Entity e) {
     auto& cam = e.getComponent<CameraComponent>();
-    ImGui::SeparatorText("Camera");
+    ImGui::SeparatorText(ICON_FA_VIDEO " Camera");
     if (ImGui::DragFloat("fov (deg)##cam", &cam.fovDeg, 0.1f, 1.0f, 179.0f)) {
         m_editedThisFrame = true;
     }
@@ -64,7 +64,7 @@ void InspectorPanel::renderCameraSection(Entity e) {
 
 void InspectorPanel::renderTriggerSection(Entity e) {
     auto& tc = e.getComponent<TriggerComponent>();
-    ImGui::SeparatorText("Trigger");
+    ImGui::SeparatorText(ICON_FA_BORDER_NONE " Trigger");
     if (ImGui::DragFloat3("halfExtents##trig", &tc.halfExtents.x,
                             0.05f, 0.01f, 100.0f)) {
         m_editedThisFrame = true;

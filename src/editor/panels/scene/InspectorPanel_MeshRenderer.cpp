@@ -21,7 +21,7 @@ namespace Mood {
 // mesh resuelto y la lista de materiales.
 void InspectorPanel::renderMeshRendererSection(Entity e) {
     auto& mr = e.getComponent<MeshRendererComponent>();
-    ImGui::SeparatorText("MeshRenderer");
+    ImGui::SeparatorText(ICON_FA_CUBE " MeshRenderer");
     if (m_assets != nullptr) {
         ImGui::Text("mesh: %s (id %u)",
                      m_assets->meshPathOf(mr.mesh).c_str(), mr.mesh);

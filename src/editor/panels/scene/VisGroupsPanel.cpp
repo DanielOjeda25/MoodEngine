@@ -5,8 +5,8 @@
 #include "editor/commands/VisGroupCommands.h"
 #include "editor/selection/SelectionSet.h"
 #include "editor/ui/EditorUI.h"
+#include "editor/ui/IconHelpers.h"  // F2H37: iconForEntity compartido
 #include "engine/scene/VisGroup.h"
-#include "engine/scene/components/BrushComponent.h"  // entityIconStr
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -53,20 +53,6 @@ u64 countMembers(Scene& scene, u64 groupId) {
             if (m.groupId == groupId) ++n;
         });
     return n;
-}
-
-/// @brief Mismo helper de iconos por tipo que usa HierarchyPanel.
-///        Repetido aca para no acoplar este panel al HierarchyPanel.
-const char* entityIconStr(Entity e) {
-    if (e.hasComponent<MeshRendererComponent>())     return "[M]";
-    if (e.hasComponent<BrushComponent>())             return "[B]";
-    if (e.hasComponent<LightComponent>())             return "[L]";
-    if (e.hasComponent<AudioSourceComponent>())       return "[A]";
-    if (e.hasComponent<ScriptComponent>())            return "[S]";
-    if (e.hasComponent<TriggerComponent>())           return "[T]";
-    if (e.hasComponent<CameraComponent>())            return "[C]";
-    if (e.hasComponent<ParticleEmitterComponent>())   return "[P]";
-    return "[ ]";
 }
 
 } // namespace
@@ -304,7 +290,7 @@ void VisGroupsPanel::onImGuiRender() {
                     ImGui::PushID(m.tag.c_str());
                     char rowLabel[140];
                     std::snprintf(rowLabel, sizeof(rowLabel), "    %s %s",
-                                   entityIconStr(m.e), m.tag.c_str());
+                                   iconForEntity(m.e), m.tag.c_str());
                     if (ImGui::Selectable(rowLabel)) {
                         if (m_ui != nullptr) {
                             m_ui->setSelectedEntity(m.e);

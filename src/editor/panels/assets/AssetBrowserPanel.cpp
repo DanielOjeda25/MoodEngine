@@ -1,6 +1,7 @@
 #include "editor/panels/assets/AssetBrowserPanel.h"
 
 #include "core/Log.h"
+#include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons en tabs + filas
 #include "engine/audio/clips/AudioClip.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MeshAsset.h"
@@ -276,7 +277,7 @@ void AssetBrowserPanel::onImGuiRender() {
         // ============================================================
         // TAB: Texturas (con grid de miniaturas)
         // ============================================================
-        if (ImGui::BeginTabItem("Texturas")) {
+        if (ImGui::BeginTabItem(ICON_FA_IMAGE " Texturas")) {
             ImGui::TextDisabled("%zu texturas", m_entries.size());
             ImGui::BeginChild("##texturas_scroll", ImVec2(0.0f, 0.0f), false);
 
@@ -347,7 +348,7 @@ void AssetBrowserPanel::onImGuiRender() {
         // ============================================================
         // TAB: Meshes
         // ============================================================
-        if (ImGui::BeginTabItem("Meshes")) {
+        if (ImGui::BeginTabItem(ICON_FA_CUBE " Meshes")) {
             ImGui::TextDisabled("%zu meshes", m_meshEntries.size());
             ImGui::BeginChild("##meshes_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& me : m_meshEntries) {
@@ -374,7 +375,7 @@ void AssetBrowserPanel::onImGuiRender() {
         // ============================================================
         // TAB: Prefabs
         // ============================================================
-        if (ImGui::BeginTabItem("Prefabs")) {
+        if (ImGui::BeginTabItem(ICON_FA_BOX_OPEN " Prefabs")) {
             ImGui::TextDisabled("%zu prefabs", m_prefabEntries.size());
             ImGui::BeginChild("##prefabs_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& pe : m_prefabEntries) {
@@ -397,7 +398,7 @@ void AssetBrowserPanel::onImGuiRender() {
         // ============================================================
         // TAB: Materiales
         // ============================================================
-        if (ImGui::BeginTabItem("Materiales")) {
+        if (ImGui::BeginTabItem(ICON_FA_PALETTE " Materiales")) {
             ImGui::TextDisabled("%zu materiales", m_materialEntries.size());
             ImGui::BeginChild("##materiales_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& me : m_materialEntries) {
@@ -420,7 +421,7 @@ void AssetBrowserPanel::onImGuiRender() {
         // ============================================================
         // TAB: Scripts
         // ============================================================
-        if (ImGui::BeginTabItem("Scripts")) {
+        if (ImGui::BeginTabItem(ICON_FA_FILE_CODE " Scripts")) {
             ImGui::TextDisabled("%zu scripts", m_scriptEntries.size());
             ImGui::BeginChild("##scripts_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& se : m_scriptEntries) {
@@ -448,7 +449,7 @@ void AssetBrowserPanel::onImGuiRender() {
         // ============================================================
         // TAB: Audio
         // ============================================================
-        if (ImGui::BeginTabItem("Audio")) {
+        if (ImGui::BeginTabItem(ICON_FA_MUSIC " Audio")) {
             ImGui::TextDisabled("%zu clips", m_audioEntries.size());
             ImGui::BeginChild("##audio_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& ae : m_audioEntries) {

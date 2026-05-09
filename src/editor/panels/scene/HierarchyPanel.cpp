@@ -3,9 +3,8 @@
 #include "core/Log.h"  // F2H23: log de selection
 #include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/ui/EditorUI.h"
+#include "editor/ui/IconHelpers.h"  // F2H37: iconForEntity compartido
 #include "engine/scene/VisGroup.h"  // F2H33: gray-out hidden entities
-#include "engine/scene/components/BrushComponent.h"  // F2H23: icono brush
-#include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 
@@ -15,26 +14,6 @@
 #include <string>
 
 namespace Mood {
-
-namespace {
-
-// F2H23: icono ASCII por tipo de entidad. Sirve como hint visual rapido
-// del tipo (Mesh / Luz / Audio / Brush / Script / Trigger / Empty)
-// sin requerir una font icon-pack. El orden de checks define la
-// prioridad — entidades multi-componente toman el primer match.
-const char* entityIconStr(Entity e) {
-    if (e.hasComponent<MeshRendererComponent>())     return "[M]";
-    if (e.hasComponent<BrushComponent>())             return "[B]";
-    if (e.hasComponent<LightComponent>())             return "[L]";
-    if (e.hasComponent<AudioSourceComponent>())       return "[A]";
-    if (e.hasComponent<ScriptComponent>())            return "[S]";
-    if (e.hasComponent<TriggerComponent>())           return "[T]";
-    if (e.hasComponent<CameraComponent>())            return "[C]";
-    if (e.hasComponent<ParticleEmitterComponent>())   return "[P]";
-    return "[ ]";  // entidad sin componentes visibles (rare)
-}
-
-} // namespace
 
 void HierarchyPanel::onImGuiRender() {
     if (!visible) return;
@@ -78,9 +57,10 @@ void HierarchyPanel::onImGuiRender() {
             "Multi-seleccion: el Inspector aplica los cambios de\n"
             "Transform a TODAS las entidades como mismo delta.\n"
             "\n"
-            "Iconos al inicio del nombre:\n"
-            "[M]=Mesh  [B]=Brush  [L]=Luz  [A]=Audio\n"
-            "[S]=Script  [T]=Trigger  [C]=Camera  [P]=Particles");
+            "Color del row:\n"
+            "Naranja    -> entidad activa (primary del set).\n"
+            "Amarillo   -> en seleccion pero no activa (secundaria).\n"
+            "Gris       -> oculta por VisGroup (sigue clickeable).");
     }
     ImGui::Separator();
 
@@ -107,26 +87,34 @@ void HierarchyPanel::onImGuiRender() {
             // PushID por handle para diferenciar entidades con el mismo tag.
             ImGui::PushID(static_cast<int>(entry.handle));
 
-            // F2H13: color del Header distinto cuando es la "active"
-            // (ImGui ya destaca isInSelection con el color default
-            // del header). Para la active overrideamos a un naranja
-            // discreto que matchea el outline del overlay.
-            const bool pushedColor = isActive;
-            if (pushedColor) {
+            // F2H13: color del Header naranja para "active" (primary del set).
+            // F2H37 polish multi-select: amarillo para secundarias (en
+            // selection pero no active) — pre-F2H37 todas las del set
+            // se veian igual al ImGui default y el dev no distinguia
+            // cual era la primary sin abrir el Inspector.
+            const bool pushedColor = isInSelection;
+            if (isActive) {
                 ImGui::PushStyleColor(ImGuiCol_Header,
                     ImVec4(0.95f, 0.55f, 0.10f, 0.65f));
                 ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
                     ImVec4(0.95f, 0.60f, 0.15f, 0.80f));
                 ImGui::PushStyleColor(ImGuiCol_HeaderActive,
                     ImVec4(1.00f, 0.65f, 0.20f, 1.00f));
+            } else if (isInSelection) {
+                ImGui::PushStyleColor(ImGuiCol_Header,
+                    ImVec4(0.85f, 0.75f, 0.15f, 0.55f));
+                ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                    ImVec4(0.90f, 0.80f, 0.20f, 0.75f));
+                ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                    ImVec4(0.95f, 0.85f, 0.25f, 1.00f));
             }
 
-            // F2H23: prefijo con icono del tipo de entidad para
-            // distinguir Mesh/Luz/Audio/Brush/etc. de un vistazo.
-            // Buffer chico — los nombres tipicos son <50 chars + "[X] ".
-            char labelBuf[80];
+            // F2H37: icono FontAwesome via helper compartido. Pre-F2H37
+            // era ASCII `[M]`/`[B]`/... (F2H23). Buffer chico — los
+            // nombres tipicos son <50 chars + 1 codepoint UTF-8 + " ".
+            char labelBuf[88];
             std::snprintf(labelBuf, sizeof(labelBuf), "%s %s",
-                            entityIconStr(e), entry.tag->name.c_str());
+                            iconForEntity(e), entry.tag->name.c_str());
             // F2H33: si la entidad pertenece a un VisGroup hidden, mostrar
             // el label en gris claro para que el dev sepa que esta oculta
             // en viewport (sino se sorprende: "click en X y no la veo

@@ -21,6 +21,10 @@ private:
     // "" = sin filtro.
     std::array<char, 32> m_channelFilter{};
     bool m_autoScroll = true;
+    // F2H37: filtro por nivel — 6 toggles independientes (trace, debug,
+    // info, warn, err, critical). Default = todos visibles. Si un nivel
+    // esta off, sus entries se skipean al iterar el snapshot del sink.
+    std::array<bool, 6> m_levelEnabled{ true, true, true, true, true, true };
 };
 
 } // namespace Mood

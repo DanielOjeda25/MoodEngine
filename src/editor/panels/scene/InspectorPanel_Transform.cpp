@@ -23,7 +23,7 @@ void InspectorPanel::renderTransformSection(Entity e) {
     auto& t = e.getComponent<TransformComponent>();
     // F2H23: SeparatorText agrupa visualmente cada componente (antes
     // era TextDisabled + Separator separados; menos claro).
-    ImGui::SeparatorText("Transform");
+    ImGui::SeparatorText(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT " Transform");
 
     // F2H23 fix: sliders Transform mas grandes + soportan multi-edit
     // sobre `selectionSet.selected`. Antes eran chicos y dificiles

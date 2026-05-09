@@ -22,7 +22,7 @@ namespace Mood {
 // el frame 0.
 void InspectorPanel::renderAnimatorSection(Entity e) {
     auto& anim = e.getComponent<AnimatorComponent>();
-    ImGui::SeparatorText("Animator");
+    ImGui::SeparatorText(ICON_FA_PERSON_RUNNING " Animator");
 
     // Necesitamos el MeshAsset para listar los clips. Lo resolvemos
     // via MeshRenderer (mismo flujo que el AnimationSystem).

@@ -21,7 +21,7 @@ namespace Mood {
 // limpio de globals.
 void InspectorPanel::renderScriptSection(Entity e) {
     auto& sc = e.getComponent<ScriptComponent>();
-    ImGui::SeparatorText("Script");
+    ImGui::SeparatorText(ICON_FA_FILE_CODE " Script");
     char buf[512];
     std::snprintf(buf, sizeof(buf), "%s", sc.path.c_str());
     if (ImGui::InputText("path##sc", buf, sizeof(buf))) {
