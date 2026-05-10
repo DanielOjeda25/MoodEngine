@@ -4,6 +4,82 @@
 
 ---
 
+## 0. HANDOFF ACTIVO — Sub-fase 2.5 confirmada con scope Pro Tools (2026-05-10)
+
+> **Mensaje para la próxima sesión del agente** (probablemente en otra máquina del dev — escritorio).
+> El dev quiere arrancar Sub-fase 2.5 (diálogos / quests / inventario) y antes de tocar código exigió alineamiento estratégico. Esta sección es el resumen de esa conversación. **Leerla antes de hacer cualquier propuesta de implementación.**
+
+### Decisión 1 — Framing: motor que crea juegos, no juego concreto.
+Cita verbatim del dev: *"este sistema que haremos ahora es el más importante, me refiero a que debe ser la base para que a futuro cualquier dev al crear su juego pueda utilizar este sistema de inventario, quests, y diálogos, para sus juegos, osea debe ser versátil y realmente amigable de usar... aún no estamos creando un juego, estamos creando el motor que va a crear juegos"*.
+
+Implicaciones que se acordaron y que aplican a TODAS las decisiones de diseño de la sub-fase:
+
+1. **Data-driven, no code-driven.** Devs deben crear NPCs / quests / items SIN tocar código del motor. Todo es asset visualmente editable (`.mooddialog`, `.moodquest`, `.mooditem`).
+2. **Sin semántica hardcodeada de gameplay.** El motor NO sabe qué es "XP", "mana", "vida" o cualquier recurso específico. API genérica: `stats.add("xp", 100)`, `inventory.add(player, "rupia", 5)` — el dev registra los recursos que su juego usa.
+3. **Hooks Lua sobre primitivas, no callbacks hardcodeados.** Ej: `on_quest_complete(quest_id, callback)` — el callback Lua hace lo que ese juego quiera (XP, dialog flag, animación). Mismo patrón que ya tenemos con triggers + scripts.
+4. **Default + override en rendering.** Cada sistema viene con widget HUD default funcional. `dialog.set_renderer(lua_callback)` permite override total para juegos con HUD propio.
+5. **Composabilidad con sistemas existentes.** Quest objectives son predicados genéricos contra estado: `item_count(player, "key") >= 1`, `area_entered("temple")`, `flag_set("boss_defeated")`. NO inventamos tipos específicos como "kill 10 wolves".
+6. **Editor visual real, no JSON a mano.** Cada sistema necesita su panel dedicado de editor visual. Si el dev abre `.json` crudo para crear contenido, fallamos.
+7. **State vs rendering separados** (patrón F2H39 GameState ↔ GameOverlay). Toda la lógica vive en módulos puros sin deps gráficas → `mood_tests` los testea sin ImGui.
+8. **Engine-agnostic respecto al género.** RPG / shooter con quests / walking sim / metroidvania / dungeon crawler — los 3 sistemas deben servir a todos. Si la API solo encaja con uno, fallamos.
+
+### Decisión 2 — Scope nivel B (Pro Tools), no nivel A (mínimo viable).
+Cita verbatim del dev: *"B, aunque nos lleve días"*.
+
+Esto significa:
+- **Dialog Editor**: node-graph visual interconectado estilo Unreal Blueprints / `ink` — pan/zoom, sockets, conexiones por curvas Bézier, snapping. **NO** una lista de nodos con dropdowns "next node".
+- **Quest Editor**: flowchart visual de objectives + dependencies + rewards. **NO** una lista plana de objectives.
+- **Item Browser**: panel con grid de cards + **3D preview rotable del modelo** + tags/filters + property editor por field. **NO** un Asset Browser plano.
+- **Costo aceptado**: la sub-fase pasa de ~3 hitos (scope A en `PLAN_FASE2.md:285-303`) a **~15-20 hitos**. El roadmap original de Fase 2 queda obsoleto en ese rango.
+
+### Decisión 3 — Orden de bloques propuesto (pendiente confirmar con dev al arrancar).
+
+**Bloque 0 — Infra compartida** (antes de los 3 sistemas):
+- **Node-graph framework reutilizable**: pan/zoom/snap, nodos draggeables, conexiones por sockets, save/load JSON. Lo usan Dialog Editor + Quest Editor + eventualmente Material Editor pro version.
+- **3D preview widget reutilizable**: render-to-texture mini de mesh/material, controles de cámara orbital. Lo usa Item Browser + eventualmente Material Editor pro.
+
+**Bloque 1 — Inventario** (recomendado primero — diálogos/quests dependen de "tengo X item" para condicionales):
+- ItemAsset schema + serialización (`.mooditem`).
+- Item Browser panel con 3D preview + tags/filters.
+- InventoryComponent + soporte para 3 modos de layout (grid 2D RE-style + lista plana + equipment slots).
+- Pickup/drop integrado con triggers + interact_prompt del HUD.
+- Bindings Lua + i18n para nombres/descripciones.
+
+**Bloque 2 — Diálogos:**
+- DialogTree schema con nodos + opciones + variables + portrait/audio/animation hooks.
+- Dialog Editor node-graph (sobre el framework del Bloque 0).
+- Runtime + HUD widget default (override-able via Lua).
+- Bindings Lua + i18n para texto de líneas.
+
+**Bloque 3 — Quests:**
+- Quest schema con objectives (predicados genéricos) + rewards genéricos + state machine.
+- Quest Editor flowchart (sobre el framework del Bloque 0).
+- Quest Log panel + HUD tracker widget.
+- Predicados generic-purpose: `item_count`, `flag_set`, `area_entered`, `counter_at_least`, `entity_killed_tag`.
+- Bindings Lua + i18n.
+
+**Bloque 4 — Soporte para producción:**
+- Stats/RPG primitives genéricos (sin hardcodear XP/HP/Mana específicos).
+- Save extendido v3 (`.moodsave` con dialog state + quest state + inventory + stats).
+- **Template/sample project** que muestre los 3 sistemas integrados — el "Hello World" del motor para juegos narrativos. Crítico para devs nuevos.
+- Documentación developer-facing en `docs/CONTENT_PIPELINE.md` (esto sí justifica doc externo porque devs externos lo necesitan).
+
+### Próxima acción concreta para la sesión que retome esto
+
+1. **Leer [`docs/PLAN_SUBFASE_2_5.md`](PLAN_SUBFASE_2_5.md)** — skeleton del plan ya está commiteado. Tiene la filosofía y la estructura de bloques pero los hitos individuales están como `[TBD]`.
+2. **Confirmar con el dev** el orden (recomendado: inventario primero) y la barra de "definición de done" por hito antes de arrancar.
+3. **Decisión técnica abierta a evaluar**: para el node-graph framework del Bloque 0 — ¿implementar propio sobre ImGui DrawList (control total + más esfuerzo) o usar `imnodes` / `imgui-node-editor` (más rápido + menos control)? Documentar pros/cons antes de elegir.
+4. **NO arrancar implementación** sin tener el plan completo y aprobado por el dev. El dev fue explícito: la sub-fase es la más importante del motor, no se improvisa.
+
+### Lo que NO se quiere
+
+- **NO scope reducido**. El dev rechazó explícitamente el nivel A.
+- **NO assumptions de género**. Cualquier API que solo sirva para RPG o solo para shooter es bug de diseño.
+- **NO hardcoded semantics** ("XP", "level", "mana" como conceptos del motor). El motor solo conoce contenedores genéricos.
+- **NO empezar por diálogos si los items condicionan opciones de diálogo** — empezar por items evita migrar flags hardcodeados después.
+
+---
+
 ## 1. ¿Dónde estamos?
 
 **🚀 Fase 2 — F2H45 cerrado: cierre de deudas pre-Sub-fase 2.5 (AddComponentCommand undoable + Lato en Player con tildes + Console tooltip i18n).**

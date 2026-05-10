@@ -11,6 +11,49 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-10: Sub-fase 2.5 — commitment estratégico (scope Pro Tools + filosofía engine-grade)
+
+**Contexto:** Post-F2H45 el dev confirma Sub-fase 2.5 (diálogos / quests / inventario) como next-up. Pre-implementación arranca conversación estratégica: el dev quiere alineamiento del agente con la filosofía del motor antes de tocar código. Esta entrada documenta los compromisos de diseño que aplican a TODA la sub-fase (no a un hito específico) y que cualquier decisión técnica futura en la sub-fase debe respetar. **NO es decisión de implementación** — es marco de diseño no-negociable que precede a la implementación.
+
+**Decisiones estratégicas clave:**
+
+- **Filosofía: motor que crea juegos, no juego concreto.** Cita verbatim del dev: *"este sistema que haremos ahora es el más importante, me refiero a que debe ser la base para que a futuro cualquier dev al crear su juego pueda utilizar este sistema de inventario, quests, y diálogos, para sus juegos, osea debe ser versátil y realmente amigable de usar... aún no estamos creando un juego, estamos creando el motor que va a crear juegos"*. **Implicación dura**: cualquier decisión que solo encaje con un género (RPG / shooter / walking sim / metroidvania) o que asuma una semántica de gameplay (XP / mana / HP como conceptos del motor) es **bug de diseño** y debe rechazarse. El motor solo conoce contenedores genéricos; el dev del juego registra los recursos y semántica que su juego usa.
+
+- **Scope nivel B (Pro Tools), no nivel A (mínimo viable).** Cita verbatim: *"B, aunque nos lleve días"*. Significa: Dialog Editor como node-graph visual interconectado (estilo Unreal Blueprints / `ink`), Quest Editor como flowchart, Item Browser con 3D preview rotable. **NO** listas de nodos con dropdowns, **NO** lista plana de objectives, **NO** Asset Browser plano. **Costo aceptado**: la sub-fase pasa de ~3 hitos (scope A en `PLAN_FASE2.md:285-303`, ahora obsoleto) a ~15-20 hitos. El dev explícitamente acepta el costo en tiempo a cambio de calidad engine-grade.
+
+- **8 principios de diseño no-negociables** (extraídos de la conversación y aplicables a TODOS los hitos de la sub-fase):
+  1. **Data-driven, no code-driven**: NPCs / quests / items se crean sin tocar código del motor. Todo es asset visualmente editable (`.mooddialog`, `.moodquest`, `.mooditem`).
+  2. **Sin semántica hardcodeada de gameplay**: API genérica `stats.add("xp", 100)` donde `"xp"` es string que el dev registra, no un campo `stats.xp` del motor.
+  3. **Hooks Lua sobre primitivas**: `on_quest_complete(id, callback)` — el callback hace lo que ese juego quiera. Patrón ya consolidado con triggers + scripts.
+  4. **Default + override en rendering**: widget HUD default funcional + `dialog.set_renderer(lua_callback)` para juegos con HUD propio.
+  5. **Composabilidad con sistemas existentes**: quest objectives son predicados genéricos contra estado del motor (`item_count`, `flag_set`, `area_entered`, `counter_at_least`). No tipos específicos como "kill 10 wolves".
+  6. **Editor visual real, no JSON a mano**: cada sistema tiene su panel de editor visual. Si el dev abre `.json` crudo para crear contenido, fallamos.
+  7. **State vs rendering separados**: patrón F2H39 `GameState` ↔ `GameOverlay` — lógica en módulos puros sin deps gráficas → `mood_tests` los testea sin ImGui. Aplica a Dialog/Quest/Inventory state.
+  8. **Engine-agnostic respecto al género**: si la API solo sirve para RPG o solo para shooter, es bug.
+
+- **Orden propuesto de bloques** (pendiente confirmar con dev al arrancar la sub-fase): Bloque 0 (infra compartida: node-graph framework + 3D preview widget) → Bloque 1 (inventario) → Bloque 2 (diálogos) → Bloque 3 (quests) → Bloque 4 (soporte producción: stats genéricos + save v3 + template/sample project + docs developer-facing). **Recomendación inventario primero**: diálogos y quests dependen de "tengo X item" para condicionales — empezar por items evita hardcodear flags `game.has_key` que después hay que migrar. Detalle completo en [`PLAN_SUBFASE_2_5.md`](PLAN_SUBFASE_2_5.md).
+
+- **Bloque 0 (infra compartida) primero, no por dentro de cada sistema.** Razón: Dialog Editor + Quest Editor van a compartir arquitectura de node-graph. Implementar UN framework reutilizable (pan/zoom/snap, sockets, conexiones, save/load) y consumirlo desde los 2 editores. Alternativa descartada: implementar diálogos primero con su propio grafo, refactor cuando llega quests — más rework. Mismo razonamiento para el 3D preview widget (Item Browser ahora + Material Editor pro version después).
+
+- **Decisión técnica abierta para el Bloque 0**: node-graph framework propio sobre ImGui DrawList vs adoptar `imnodes` / `imgui-node-editor`. Pros del propio: control total sobre look-and-feel + integración estética con el resto del motor + no agregar dependencia. Pros de adoptar: ~10x menos esfuerzo + battle-tested. **Pendiente evaluar al arrancar Bloque 0** — documentar pros/cons con código de muestra antes de elegir.
+
+**Alternativas descartadas explícitamente:**
+
+- **Scope A (mínimo viable)**: descartado por el dev. *"B, aunque nos lleve días"*.
+- **Implementar los 3 sistemas en paralelo**: descartado por scope. Cada uno es un proyecto considerable; secuencial permite que las decisiones del primero informen al siguiente (ej. cómo se hace el editor visual del inventario informa cómo se hace el de diálogos).
+- **Empezar por diálogos**: descartado. Items condicionan diálogos via predicados — si arrancamos por diálogos hardcodearíamos flags que después hay que migrar al sistema de inventario real.
+- **Hardcodear "XP", "level", "mana" como campos del Stats system**: descartado. Cada juego tiene su modelo (XP / soul / experiencia / nada). Genérico key-value.
+- **Diferir el editor visual para una v2**: descartado. Sin editor visual el sistema NO es engine-grade. Si el dev tiene que tocar JSON crudo para crear NPCs, fallamos.
+
+**Condiciones de revisión:**
+
+- Si en cualquier punto de la sub-fase emerge una decisión técnica que viola alguno de los 8 principios, **detenerse** y pedir confirmación al dev. Los principios son no-negociables salvo intervención explícita.
+- Si el scope estimado de ~15-20 hitos resulta muy bajo (ej. el node-graph framework solo toma 4-5 hitos), no recortar features — extender la sub-fase. El dev priorizó calidad sobre velocidad.
+- Si emerge un caso donde un género específico (ej. shooter sin diálogos) no necesita un sistema, eso no justifica simplificar el sistema. La opcionalidad ya está garantizada (un juego no usa un sistema que no enchufa) — la generalidad sigue siendo necesaria.
+- Cuando se cierre cada hito de la sub-fase, anotar en `DECISIONS.md` las decisiones técnicas específicas, pero referenciar esta entrada como marco general.
+
+---
+
 ## 2026-05-10: F2H45 cierre — deudas pre-Sub-fase 2.5 (AddComponentCommand undoable + Lato Player con tildes + Console tooltip i18n)
 
 **Contexto:** tras cerrar F2H44, el dev pidió revisar `PENDIENTES.md` para clasificar deuda real vs feature diferida y arreglar las deudas reales antes de arrancar Sub-fase 2.5: *"no me gustan las deudas futuras, quiero arreglar lo necesario ahora antes de pasar a otra cosa"*. Tres deudas identificadas como reales (consistencia/sweep incompleto): (1) AddComponentCommand sin undo (toda otra acción del Inspector es undoable, romper esa expectativa para Add Component generaba dissonance), (2) font del MoodPlayer atrasada en ProggyClean desde F2H38 + por consecuencia `es.json` sin tildes desde F2H43 (paridad forzada), (3) Console tooltip multilínea con icons FA inline que el subagente de F2H43 dejó sin envolver. Otras ~12 entradas del PENDIENTES.md fueron clasificadas como features diferidas (no son deuda) y NO entraron al hito.

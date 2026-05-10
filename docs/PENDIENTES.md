@@ -13,9 +13,20 @@
 
 ### Próximo a atacar
 
-- **Orden actualizado por el dev** (2026-05-10 post-F2H45):
-  1. **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
-     PLAN_FASE2 líneas 285-303. **Próximo a arrancar.**
+- **Orden actualizado por el dev** (2026-05-10 post-F2H45 + decisión estratégica de scope):
+  1. **Sub-fase 2.5 gameplay** (diálogos / quests / inventario)
+     — **scope confirmado nivel B (Pro Tools)**, no nivel A.
+     **El roadmap original en `PLAN_FASE2.md:285-303` queda obsoleto**
+     porque fue planeado con scope A en mente (~3 hitos para los 3
+     sistemas). Con scope B son ~15-20 hitos, organizados en 5 bloques
+     según el plan nuevo en [`PLAN_SUBFASE_2_5.md`](PLAN_SUBFASE_2_5.md).
+     Filosofía no-negociable: **motor que crea juegos, no juego concreto**
+     (data-driven + sin semántica hardcodeada de gameplay + hooks Lua +
+     editor visual real por sistema + engine-agnostic respecto al género).
+     Ver detalle en `ESTADO_ACTUAL.md` sección 0 (handoff activo) +
+     `DECISIONS.md` entry 2026-05-10 commitment estratégico.
+     **Próximo paso concreto**: completar el plan (hitos individuales
+     todavía marcados `[TBD]` en el skeleton) **antes de tocar código**.
 
 ### Diferidos sin orden (emergentes post-F2H45)
 
