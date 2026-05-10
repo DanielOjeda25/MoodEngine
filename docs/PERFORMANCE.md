@@ -398,6 +398,98 @@ ser **features**, no optimizaciones de emergencia:
   - Spatial partitioning / octree para frustum cull jerarquico (cuando
     aparezca una escena con >100K entidades visibles simultaneas).
 
+## F2H42 — Shadow map caching + VSync toggle (2026-05-10)
+
+> Re-medicion sobre PC de escritorio con la **stress scene completa**
+> (`Mapa > Spawn FULL STRESS SCENE (F2H42)`): 200 cubos + 64 point lights
+> + 9 esferas PBR + shadow demo + Fox + CesiumMan + fuego + trigger Lua
+> = 285 entidades / 17K tris. **Build Release** con `MOOD_PROFILE=ON`.
+> Tracy v0.11.1 (cliente + GUI). 4 capturas + 30+ snapshots CSV.
+
+### Bottleneck identificado y atacado
+
+| Zone | Pre-fix (test1, vsync ON) | Post-cache (test3, vsync OFF) | Δ |
+|---|---|---|---|
+| **ShadowPass::record** | 13,424 μs/frame (54.7%) | 0.26 μs/frame (1 record en 22317 frames) | **-99.998%** |
+| ShadowPass::hash | — | 31 μs/frame | nuevo |
+| **Stress FPS sin VSync** | ~45 fps estimado | **780 fps real** | **17x** |
+| **Frame_ms real** | ~22 ms | **1.27 ms** | **-94%** |
+
+### Fix implementado
+
+**Shadow map caching por hash de escena** (`SceneRenderer_Render.cpp`):
+hash FNV-1a 64 incremental cada frame de (`lightDir` + `sceneCenter` +
+`sceneRadius` + por entidad con `MeshRendererComponent`: `position` +
+`rotationEuler` + `scale` + `mesh id`). Si coincide con frame anterior
+y `m_shadowMapValid`, skip `m_shadowPass->record(...)` y reusa la
+GLTexture existente. **Cache hit rate medido: 99.996%** (1 record en
+22317 frames de captura test3 con escena estática). Hash overhead
+medido: 32 μs por llamada — barato para 285 entidades.
+
+**VSync toggle** (`Window::setVSync` + checkbox en
+`PerformanceHudPanel`): permite medir FPS real (sin cap a 60 fps del
+refresco del monitor). Default ON (preserva comportamiento histórico
++ ahorra energía en escenas pequeñas); el toggle es para measurement.
+
+### Tracy capturas
+
+| Captura | Frames | Estado |
+|---|---|---|
+| `test1.tracy` (639 KB) | 3212 | baseline pre-fix, VSync ON |
+| `test2.tracy` (994 KB) | 5156 | post-shadow-cache, VSync ON |
+| `test3.tracy` (3.5 MB) | 22317 | **post-cache + VSync OFF** (números honestos) |
+| `test4.tracy` (2.8 MB) | 17913 | skybox reorder probado y revertido |
+
+### Distribución del frame post-fix (test3, sin VSync)
+
+| Zone | μs/frame | % del frame |
+|---|---|---|
+| renderSceneToViewport (total) | 1,585 | 100% |
+| Skybox::draw (real cost) | 1,140 | 72% |
+| swapBuffers | 586 | 37% |
+| ImGui_ImplOpenGL3_RenderDrawData | 434 | 27% |
+| UI::draw (CPU UI gen) | 365 | 23% |
+| LightGrid::compute (Forward+) | 88 | 6% |
+| ParticleRenderer::render | 71 | 4% |
+| PBR::instancedPass | 70 | 4% |
+| ShadowPass::hash | 31 | 2% |
+| ShadowPass::record (1 sola vez) | 0.26 | <0.01% |
+| AnimSystem/Script/Physics/Audio combined | <50 c/u | <3% c/u |
+
+**Lectura**: a 780 FPS de headroom (1.27 ms reales vs 16.67 ms del
+target 60 fps), **el motor está sobrado para contenido real**. Los
+sistemas gameplay (Anim/Script/Physics/Audio) suman <0.2 ms total.
+El próximo bottleneck "natural" sería Skybox a 1.14 ms — pero es
+GPU sync (no fragment shader), validado al revertir el reorder
+post-PBR sin ganancia medible.
+
+### Skybox reorder probado y revertido
+
+Hipótesis: dibujar skybox post-PBR con `depth=1 LEQUAL` solo pinta
+píxeles donde la geometría no escribió, reduciendo overdraw del
+fragment shader. **Resultado test4** (17913 frames): empate dentro
+del ruido (~744 fps reorder vs ~776 fps original = -4%, dentro
+del jitter normal). El "1.14 ms del skybox" no era trabajo del
+fragment shader (que es trivial: 1 sampler read del cubemap o 2
+atan/asin del equirect), era **GPU sync redistribuido**. Revertido:
+sin ganancia + rompe doc del SkyboxRenderer + convención estándar
+(skybox-first es el patrón estable).
+
+### Diferidos en F2H42 (sin urgencia con headroom 17x)
+
+- **GPU timestamp queries** (`glQueryCounter` con `GL_TIMESTAMP`):
+  mediría costo GPU real en lugar del CPU stall. Hito propio si
+  emerge presión.
+- **CSM (Cascaded Shadow Maps)**: la shadow map 2048x2048 + bounding
+  sphere fijo (radius=30m al origen) es suficiente para escenas tipo
+  Hito 20. CSM aporta calidad en outdoor amplios.
+- **Frustum culling shadow pass**: con cache 99.996% hit rate, el
+  costo del record es prácticamente cero. Sin sentido optimizar el
+  0.004% de los frames donde sí se renderiza.
+- **Pre-renderizar skybox a cubemap LDR cacheado**: cubemap mode YA
+  usa cubemap. Equirect podría convertirse on-load pero el costo del
+  shader es trivial.
+
 ## Notas de medicion
 
 - **Build mode**: el Debug de MSVC no esta optimizado — el `frame ms` real en

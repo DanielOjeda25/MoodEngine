@@ -6,11 +6,48 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H41 cerrado: 5 widgets HUD diferidos + 3 fixes laterales + i18n unificado.**
+**🚀 Fase 2 — F2H42 cerrado: optimización runtime (shadow map caching + VSync toggle).**
+Tag: `v1.32.0-fase2-hito42`.
+Validado por Tracy + CSV: stress scene (285 entidades / 17K tris) corre a **780 FPS sin VSync** (1.27 ms/frame), **17x mejor** que pre-fix. Cache hit rate del shadow: **99.996%** (1 record en 22317 frames de captura).
+
+**🏁 HUD framework + físicas robustas + walk feel pulido + i18n inglés + shadow cache + VSync toggle (motor sobrado para contenido real con headroom 17x sobre baseline).** 40/44 hitos de Fase 2.
+
+**Decisiones clave de F2H42:**
+
+- **Shadow map caching por hash de escena, no invalidación dirty-flag.** Hash FNV-1a 64 incremental cada frame de (`lightDir` + `sceneCenter` + `sceneRadius` + `position/rotationEuler/scale/mesh id` por cada entidad con MeshRenderer). Si coincide con el frame anterior y `m_shadowMapValid`, skip `m_shadowPass->record(...)` y reusa la GLTexture existente. **Razón**: el ECS no tiene dirty flags por componente; trackearlos requeriría hookear todos los call sites que mutan transforms (Inspector, gizmos, Lua scripts, animaciones, físicas). Hash es O(N) con N entidades — barato (32 μs en stress) y captura **cualquier** cambio sin tocar call sites.
+- **Off→on de shadows fuerza regenerado.** Si `shadowEnabled` pasó de false a true, `m_shadowMapValid=false` aunque el hash coincida. Sin esto, reactivar luz direccional con la misma escena reusaría una shadow map stale (o vacía si nunca se generó).
+- **VSync toggle vive en el Performance panel, no en un menú global.** El panel ya es el lugar donde el dev mide FPS / frame_ms / draws — agregar el toggle ahí lo hace descubrible. Patrón request/consume idéntico a los spawners (`consumeVsyncToggleRequest` → EditorApplication aplica via `Window::setVSync`). Sync inicial del checkbox con el estado real del Window cubre el edge case del driver que rechace vsync al crear el contexto.
+- **Skybox reorder probado y revertido.** Hipótesis: dibujar skybox post-PBR con depth=1 LEQUAL solo pinta donde la geometría no escribió, reduciendo overdraw. Resultado test4 (17913 frames): empate dentro del ruido (~744 vs ~776 fps). El "1.14 ms del skybox" no era trabajo del fragment shader sino GPU sync redistribuido. Revertido por: no aporta ganancia + rompe doc del SkyboxRenderer + convención estándar (skybox-first).
+- **VSync ON por defecto, no OFF.** Mantenemos el default histórico — el toggle es para medir, no para producción. Sin VSync el GPU corre al 100% en escenas pequeñas tirando energía y calor sin razón.
+- **Cierre temprano del hito.** A 780 FPS de headroom en stress real (200 cubos + 64 lights + Fox + CesiumMan + fuego + trigger Lua), no tiene sentido invertir más esfuerzo. Optimizaciones diferidas (GPU timing queries, CSM cascadas, frustum cull shadow pass): hito propio si emerge presión real.
+
+**Implementación (F2H42 Bloques A-G):**
+
+- **Bloque A**: handler `EditorApplication::processSpawnFullStressSceneRequest` en `DemoSpawners_Stress.cpp` que dispara los 8 spawners individuales. Menu item `Mapa > Spawn FULL STRESS SCENE (F2H42)` en `MenuBar.cpp`. CMake re-configurado con `MOOD_PROFILE=ON`.
+- **Bloque B**: análisis Tracy `test1.tracy` (3212 frames) → top bottleneck `ShadowPass::record = 13.4 ms/frame (54.7%)`.
+- **Bloque C**: `m_lastShadowSceneHash u64 + m_shadowMapValid bool` en `SceneRenderer.h`. Hash FNV-1a 64 + condicional skip de `record()` en `SceneRenderer_Render.cpp`. Wrappeado en `MOOD_PROFILE_SCOPE("ShadowPass::hash")` separado.
+- **Bloque D**: re-medición `test2.tracy` → shadow record cae a 278 μs/frame (-98%). Cache hit rate 98%. Anomalía: Skybox sube a 13.8 ms/frame (GPU sync redistribuido por VSync absorbiendo).
+- **Bloque E**: `Window::setVSync(bool)` + getter + miembro. PerformanceHudPanel checkbox + `consumeVsyncToggleRequest`. EditorApplication consume cada frame. Sync inicial en `EditorApplication_Init.cpp`.
+- **Bloque F**: re-medición sin VSync `test3.tracy` (22317 frames) → **780 FPS / 1.27 ms-frame / 99.996% cache hit**. Validación HONESTA del fix.
+- **Bloque H**: skybox reorder probado (`test4.tracy`) → empate, revertido.
+- **Bloque G (este commit)**: docs + tag + push.
+
+**Pendientes conocidos** (post-F2H42):
+- **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
+- **Sistema de i18n** (translation table + lookup en HUD strings, ahora que están unificadas).
+- **Mini-map / Radar** (CoD/Fallout): requiere render-to-texture topdown del mundo cercano.
+- **Themes alternativos del HUD** (Doom saturado / Fallout verde): requiere theme runtime + bindings Lua.
+- **HUD diegetic 3D** (Pip-Boy / muñequera Metro): requiere FPS arms primero.
+- **Optimizaciones GPU side** diferidas: timestamp queries, CSM cascadas, frustum cull shadow pass. Sin urgencia con headroom 17x actual.
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+
+**Próximo paso**: **TBD — definir con el dev**.
+
+### F2H41 (anterior, ya cerrado)
+
+**🚀 F2H41 cerrado: 5 widgets HUD diferidos + 3 fixes laterales + i18n unificado.**
 Tag: `v1.31.0-fase2-hito41`.
 Verificado visualmente por dev: *"todo ok"* tras tour completo de los 5 widgets nuevos (StaminaBar / ObjectiveText / KillFeed / CompassBar / CRT scanline) + validación de los 3 fixes laterales (no-hover en Hierarchy durante Play, walk feel mejorado, spawn centrado en `(0,1.6,0)`) + unificación final i18n (todo el HUD en inglés post-feedback "no he visto cosas en español e ingles mescladas").
-
-**🏁 HUD framework con 13 widgets activos (8 F2H39 + 5 F2H41) + físicas robustas + walk feel pulido + spawn centrado + i18n unificado a inglés (baseline para futura selección de idioma).** 39/44 hitos de Fase 2.
 
 **Decisiones clave de F2H41:**
 

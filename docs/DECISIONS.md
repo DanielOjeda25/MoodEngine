@@ -11,6 +11,41 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-10: F2H42 cierre — optimización runtime (shadow caching + VSync toggle)
+
+**Contexto:** F2H39 original "optimización runtime" diferido para PC de escritorio (GTX 1660 / Ryzen 5 5600G del baseline F2H2-F2H6) — el dev movió el trabajo a la desktop. Tracy Profiler v0.11.1 ya integrado vía CPM con `MOOD_PROFILE` cmake option (estaba OFF por default en Release; F2H42 lo activa). Stress scene generada por nuevo handler `processSpawnFullStressSceneRequest` que dispara los 8 spawners individuales: 200 cubos + 64 point lights + 9 esferas PBR + shadow demo + Fox + CesiumMan + fuego + trigger Lua = 285 entidades / 17K tris.
+
+**Decisión clave 1 — shadow map caching por hash de escena (no dirty flags):** hash FNV-1a 64 incremental cada frame de (`lightDir` + `sceneCenter` + `sceneRadius` + por entidad con MeshRenderer: `position/rotationEuler/scale/mesh id`). Si coincide con frame anterior y `m_shadowMapValid`, skip `m_shadowPass->record(...)` y reusa la GLTexture existente. Resultado: ShadowPass::record cae de 13.4 ms/frame a **278 μs/frame (-98%)**, cache hit rate **99.996%** en escena estática. Hash overhead: 32 μs por frame.
+
+- **Razón hash vs dirty flags:** el ECS no tiene dirty flags por componente. Implementarlos requeriría hookear todos los call sites que mutan transforms (Inspector, gizmos drag, Lua scripts, `AnimationSystem::update`, `Physics::updateRigidBodies`, undo/redo commands, deserialización de saves). Hash es O(N) con N = entidades MeshRenderer — barato (32 μs en stress de 285 entidades) y captura **cualquier** mutación sin tocar call sites. Si la escena crece a >5000 meshes, re-evaluar hash incremental por chunk + mark-dirty desde mutators críticos.
+- **Razón FNV-1a vs xxHash o std::hash:** FNV-1a es 4 líneas de código sin dependencias, suficientemente bueno para detectar cambios (no es crypto). std::hash<glm::vec3> no existe out-of-the-box. xxHash sería más rápido pero requiere lib externa para una optimización marginal.
+- **Edge case off→on:** si `shadowEnabled` pasó de false a true entre frames, `m_shadowMapValid=false` aunque el hash coincida. Sin esto, reactivar luz direccional con escena idéntica reusaría una shadow map vacía (nunca se generó).
+
+**Decisión clave 2 — VSync toggle en Performance panel (no en menú global):** método `Window::setVSync(bool)` + getter `vsyncEnabled()` + checkbox "VSync (60fps cap)" en `PerformanceHudPanel`. Patrón request/consume (`consumeVsyncToggleRequest` → EditorApplication aplica via Window). Sync inicial del checkbox con estado real del Window en `EditorApplication_Init.cpp` (cubre edge case del driver que rechace vsync al crear contexto).
+
+- **Razón Performance panel vs menú global:** el dev mide FPS / frame_ms / draws acá. Agregar el toggle en el mismo panel lo hace descubrible cuando ya está midiendo. Patrón consistente con resto del editor (request flags consumidos por EditorApplication, no callbacks).
+- **VSync ON por defecto:** mantenemos el default histórico. El toggle es para medir, no para producción. Sin VSync el GPU corre al 100% en escenas pequeñas tirando energía y calor sin razón.
+
+**Decisión clave 3 — skybox reorder probado y revertido:** hipótesis era que dibujar skybox post-PBR con `depth=1 LEQUAL` solo pintaría píxeles donde la geometría no escribió, reduciendo overdraw del fragment shader. Test4 (17913 frames sin VSync): empate dentro del ruido (~744 fps reorder vs ~776 fps original).
+
+- **Por qué no funcionó:** el "1.14 ms del skybox" en test3 NO era trabajo del fragment shader (que es trivial: 1 sampler read del cubemap o 2 atan/asin del equirect). Era **GPU sync** absorbido por el scope (CPU-side stall esperando que la GPU termine trabajo encolado). Mover el skybox al final solo redistribuye el sync entre Skybox/swapBuffers/endFrame; el costo total no baja.
+- **Por qué revertir:** sin ganancia medible + rompe el comentario doc del SkyboxRenderer.h ("Llamar PRIMERO en el frame para que la escena escriba encima") + convención estándar de motores (skybox-first es el patrón estable). Mantener el cambio agregaría carga cognitiva sin retorno.
+
+**Decisión clave 4 — cierre temprano del hito a 780 FPS de headroom:** test3 (sin VSync, post-shadow-cache) muestra stress scene a **780 FPS / 1.27 ms-frame**. Sistemas gameplay combined <0.2 ms. Skybox 1.14 ms (real cost). ImGui ~0.4 ms. PBR pases <0.1 ms cada uno. **17x headroom sobre el baseline pre-fix.** No tiene sentido invertir más esfuerzo cuando el motor está sobrado para contenido real. Optimizaciones diferidas (GPU timestamp queries, CSM cascadas, frustum cull shadow pass): hito propio si emerge presión real (escenas >1000 meshes, target VR, mobile port).
+
+**Alternativas descartadas en F2H42:**
+- **GPU timestamp queries (`glQueryCounter` con `GL_TIMESTAMP`):** descartado por scope. Mediría el costo GPU real en lugar del CPU stall, pero requiere buffering 2-3 frames + manejo async + lectura diferida. ~2-3 horas de trabajo para diagnóstico que con 17x headroom no se necesita. Hito propio si emerge presión.
+- **CSM (Cascaded Shadow Maps):** descartado. La shadow map actual de 2048x2048 + bounding sphere fijo (radius=30m al origen) es suficiente para escenas tipo Hito 20. CSM aporta calidad en escenas grandes / outdoor amplios — no es el caso aún.
+- **Frustum culling del shadow pass:** descartado. Con cache 99.996% hit rate, el costo del record es prácticamente cero. Frustum cull sumaría complejidad para optimizar el 0.004% de los frames donde sí se renderiza.
+- **Pre-renderizar skybox a cubemap LDR cacheado:** descartado. El cubemap mode YA usa cubemap (no es procedural). El equirect sí podría convertirse a cubemap on-load, pero el costo del shader (2 atan + 1 textureLod) es trivial y la "mejora" de 1ms es ruido a 780 fps.
+
+**Condiciones de revisión:**
+- Si la escena crece a >5000 meshes con MeshRenderer, re-evaluar el hash O(N) — podría ser >100 μs y empezar a pesar.
+- Si target shifts a VR (90+ fps requeridos x 2 ojos = 180 fps eye) o mobile (30 fps target con thermal throttling), volver a evaluar GPU side: timestamp queries + CSM + Forward+ tile culling más agresivo.
+- Si emerge necesidad de profile post-mortem en producción, agregar export Tracy automático al cerrar el editor.
+
+---
+
 ## 2026-05-09: F2H41 cierre — 5 widgets HUD diferidos + 3 fixes laterales + i18n unificado
 
 **Contexto:** F2H39 dejó explícitamente diferido un paquete de 5 widgets HUD adicionales (CompassBar / ObjectiveText / KillFeed / Stamina / CRT scanline) — la lista de la "wishlist" del dev (Half-Life base + Doom/Fallout/Metro/CoD). F2H41 ataca ese pendiente directo, manteniendo el contrato del framework establecido en F2H39: agregar widgets toca máximo 4 lugares (función `drawXxx`, registry, HudState, bindings Lua si necesita). Hito mediano (~3h, ~750 LOC neto) que entrega los 5 widgets + 3 fixes reactivos al feedback del dev durante validación + unificación i18n del HUD.

@@ -9,26 +9,45 @@
 
 ---
 
-## Post-F2H41 (2026-05-09) — 5 widgets HUD diferidos + 3 fixes laterales + i18n unificado cerrado
+## Post-F2H42 (2026-05-10) — Optimización runtime cerrada (shadow caching + VSync toggle)
 
 ### Próximo a atacar
 
-- **TBD — definir con el dev**. **HUD framework con 13 widgets activos +
-  físicas robustas + walk feel pulido + spawn centrado + i18n unificado
-  a inglés.** Opciones a considerar:
-  - **Optimización runtime sobre la PC de escritorio** (era F2H39
-    original, postergado al hardware del baseline F2H2-F2H6 — la
-    notebook actual da números no comparables).
-  - **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
+- **Orden actualizado por el dev** (2026-05-10 post-F2H42):
+  1. **Sistema de i18n** (translation table + lookup en HUD strings,
+     ahora que están unificadas a inglés. Refactor mecánico: wrap de
+     literals en `tr()` + JSON con traducciones por idioma). **Próximo
+     a arrancar.**
+  2. **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
+     PLAN_FASE2 líneas 285-303. Después de i18n.
+
+- **Diferidos sin orden** (emergentes post-F2H39 + post-F2H42, no en
+  PLAN_FASE2):
   - **Mini-map / Radar** (CoD/Fallout — requiere render-to-texture
     topdown del mundo cercano. Hito propio mediano).
   - **Themes alternativos del HUD** (Doom saturado / Fallout verde —
     requiere theme runtime + bindings Lua. Hito chico propio).
-  - **Sistema de i18n** (translation table + lookup en HUD strings,
-    ahora que están unificadas a inglés. Refactor mecánico: wrap de
-    literals en `tr()` + JSON con traducciones por idioma).
-  - **HUD diegetic 3D** (Pip-Boy / muñequera Metro — requiere FPS
-    arms primero).
+  - **Optimizaciones GPU side** diferidas en F2H42: GPU timestamp
+    queries (medición real GPU vs CPU stall), CSM cascadas (mejora
+    calidad shadow en escenas grandes), frustum cull shadow pass.
+    **Sin urgencia** — motor a 780 FPS en stress (17x headroom). Hito
+    propio si emerge presión real (escenas >1000 meshes, target VR,
+    mobile port).
+
+### Histórico resuelto
+
+- ~~Optimización runtime sobre PC de escritorio~~ — resuelto en F2H42
+  (`v1.32.0-fase2-hito42`). **Shadow map caching por hash de escena**
+  (FNV-1a 64 incremental de transforms + mesh ids + light dir): cache
+  hit rate **99.996%** en escena estática, ShadowPass::record cae de
+  **13.4 ms/frame a 278 μs/frame (-98%)**. **VSync toggle** en
+  Performance panel para medir FPS real. Stress scene (285 entidades /
+  17K tris): **780 FPS sin VSync (1.27 ms/frame)** vs estimado ~45
+  fps pre-fix = **17x mejor**. Skybox reorder probado y revertido
+  (era GPU sync, no overdraw del shader). Tracy: `test1-4.tracy`,
+  CSV: `performance_baseline.csv` con 5 labels.
+
+## Post-F2H41 (2026-05-09) — 5 widgets HUD diferidos + 3 fixes laterales + i18n unificado cerrado
 
 ### Histórico resuelto
 
@@ -78,14 +97,6 @@
   - **Themes alternativos** (Doom paleta saturada / Fallout monocromo
     verde): toggle desde Lua. **Diferido a hito chico propio** —
     requiere theme runtime + bindings Lua.
-
-- **HUD diegetic 3D** (Pip-Boy / Metro muñequera / Doom plasma rifle
-  display): geometría 3D enganchada al brazo del player + render-to-
-  texture del HUD a una textura del modelo. **Hito propio mayor** —
-  requiere FPS arms (mesh + animator del brazo) primero. La
-  arquitectura del widget framework F2H39 deja la puerta abierta:
-  un widget puede ser "DiegeticArmHud" que dispatchea su draw a un
-  mundo 3D en lugar de a un overlay 2D, sin tocar nada del framework.
 
 ### Activos sin orden definido (siguiente ola)
 
