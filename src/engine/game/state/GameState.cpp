@@ -46,4 +46,23 @@ void clearInteractPrompt() {
     hud().interact_prompt.clear();
 }
 
+void pushKill(const char* text) {
+    pushKillColored(text, 0xFFF8F8F8u); // default blanco
+}
+
+void pushKillColored(const char* text, unsigned int color) {
+    if (text == nullptr || std::strlen(text) == 0) return;
+    auto& q = hud().kill_feed;
+    if (q.size() >= 5) q.pop_front();
+    KillEntry e;
+    e.text  = text;
+    e.color = color;
+    e.ttl   = 4.0f;
+    q.push_back(std::move(e));
+}
+
+void clearObjective() {
+    hud().objective_text.clear();
+}
+
 } // namespace Mood::GameState

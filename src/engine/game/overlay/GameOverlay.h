@@ -19,6 +19,8 @@
 // boton "Salir" cambia segun el host: en el editor vuelve a Editor
 // Mode; en el player cierra la app. Por eso recibe un callback.
 
+#include <glm/vec3.hpp>
+
 #include <functional>
 
 // Forward decl en namespace global — `ImDrawList` vive en el toplevel
@@ -39,6 +41,10 @@ struct HudContext {
     HudState* hud;          // estado del HUD (mutable: widgets pueden
                             // decrementar timers, popear queue)
     float now;              // tiempo absoluto desde boot (segundos)
+    /// F2H41: forward de la camara del player. Usado por CompassBar
+    /// para derivar yaw. Default `(0,0,-1)` = mirando -Z (convencion
+    /// OpenGL right-handed). Caller pasa `m_playCamera.forward()`.
+    glm::vec3 cameraForward{0.0f, 0.0f, -1.0f};
 };
 
 namespace GameOverlay {
@@ -60,6 +66,7 @@ namespace GameOverlay {
 void draw(::ImDrawList* dl,
           float x0, float y0, float w, float h,
           float dt,
+          const glm::vec3& cameraForward,
           const char* exitButtonLabel,
           const std::function<void()>& onExitRequested);
 

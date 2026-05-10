@@ -30,6 +30,8 @@
 #include <backends/imgui_impl_sdl2.h>
 #include <imgui.h>
 
+#include <cfloat>  // F2H41 fix: FLT_MAX para neutralizar mouse pos en Play
+
 namespace Mood {
 
 void EditorApplication::updateWindowTitle() {
@@ -165,6 +167,25 @@ void EditorApplication::beginFrame() {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
+
+    // F2H41 fix lateral: en Play Mode el cursor SDL esta capturado
+    // (relative mouse mode) — el FpsCamera lee deltas via
+    // SDL_GetRelativeMouseState directo. Pero ImGui sigue viendo
+    // la pos OS del cursor (warpeada al centro de la ventana al
+    // entrar a relative mode), lo que hace que los panels que
+    // queden bajo del cursor virtual muestren entries como
+    // hovered/selected (Hierarchy, Inspector, AssetBrowser, etc.).
+    // El dev rotaba la cam y "veia" entries seleccionarse en la
+    // escena.
+    //
+    // Fix: forzar MousePos off-screen mientras Play Mode activo
+    // y NO paused. Cuando paused, el cursor se libera (Esc dispara
+    // SDL_SetRelativeMouseMode(SDL_FALSE)) y queremos hover/click
+    // normales para los botones del pause menu.
+    if (m_mode == EditorMode::Play && !GameState::paused()) {
+        ImGuiIO& io = ImGui::GetIO();
+        io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
+    }
 }
 
 void EditorApplication::endFrame() {

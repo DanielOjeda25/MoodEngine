@@ -105,6 +105,35 @@ void setupLuaBindings(sol::state& lua, Entity self,
             return GameState::hud().isWidgetEnabled(name);
         });
 
+    // F2H41 — StaminaBar.
+    hudTable.set_function("setStamina",     [](int v) { GameState::hud().stamina     = v; });
+    hudTable.set_function("getStamina",     []() { return GameState::hud().stamina; });
+    hudTable.set_function("setMaxStamina",  [](int v) { GameState::hud().max_stamina = v; });
+    hudTable.set_function("getMaxStamina",  []() { return GameState::hud().max_stamina; });
+
+    // F2H41 — ObjectiveText.
+    hudTable.set_function("setObjective",
+        [](const std::string& s) { GameState::hud().objective_text = s; });
+    hudTable.set_function("clearObjective",
+        []() { GameState::clearObjective(); });
+    hudTable.set_function("getObjective",
+        []() { return GameState::hud().objective_text; });
+
+    // F2H41 — KillFeed.
+    hudTable.set_function("pushKill",
+        [](const std::string& s) { GameState::pushKill(s.c_str()); });
+    hudTable.set_function("pushKillColored",
+        [](const std::string& s, int r, int g, int b) {
+            // Lua int 0..255 -> ImU32 packed (RGBA, alpha=255).
+            const auto clamp255 = [](int x) { return std::clamp(x, 0, 255); };
+            const unsigned int col =
+                (static_cast<unsigned int>(clamp255(r))      ) |
+                (static_cast<unsigned int>(clamp255(g)) <<  8) |
+                (static_cast<unsigned int>(clamp255(b)) << 16) |
+                (255u << 24);
+            GameState::pushKillColored(s.c_str(), col);
+        });
+
     // --- engine.exposed (Hito 24) ---
     // Registra una exposed property + devuelve el override de la
     // entidad (si existe) o el default. Inferencia de tipo del default:

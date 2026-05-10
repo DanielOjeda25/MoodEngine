@@ -136,7 +136,7 @@ void PlayerApplication::drawMainMenu() {
 
         // 5) Reset cámara a la pos inicial. La pos default del
         //    constructor es la del FpsCamera member-init list.
-        m_playCamera = FpsCamera(glm::vec3(-4.5f, 1.6f, 7.5f), -90.0f, 0.0f);
+        m_playCamera = FpsCamera(glm::vec3(0.0f, 1.6f, 0.0f), -90.0f, 0.0f);
 
         m_inMainMenu = false;
     }

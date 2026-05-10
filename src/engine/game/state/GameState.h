@@ -32,6 +32,17 @@ struct PickupNotification {
     f32         ttl = 0.0f;
 };
 
+/// @brief Una entry en la kill feed (Doom/CoD style). Mismo patron
+///        ttl que PickupNotification — el widget decrementa cada
+///        frame y popea cuando ttl<=0.
+struct KillEntry {
+    std::string text;
+    /// RGBA packed (IM_COL32). Default blanco; pushKillColored permite
+    /// custom para diferenciar enemy types o team colors.
+    unsigned int color = 0xFFF8F8F8;
+    f32         ttl = 0.0f;
+};
+
 struct HudState {
     // --- Hito 20 (preservado) ---
     int hp   = 100;
@@ -68,11 +79,32 @@ struct HudState {
     /// el mas viejo si la cola esta llena (ver `GameOverlay::pushPickup`).
     std::deque<PickupNotification> pickup_queue;
 
+    // --- F2H41: StaminaBar (Skyrim/Metro) ---
+    /// Stamina actual y maxima. Color shift a amarillo cuando
+    /// stamina < 30%. Drena al correr / atacar (gameplay decide).
+    int stamina     = 100;
+    int max_stamina = 100;
+
+    // --- F2H41: ObjectiveText (HL2/CoD) ---
+    /// Texto del objetivo actual. Vacio = no se dibuja. El widget
+    /// agrega el prefijo "OBJETIVO: " automaticamente.
+    std::string objective_text;
+
+    // --- F2H41: KillFeed (Doom/CoD) ---
+    /// Cola de kills transient. Cap implicito ~5. Lifetime 4s con
+    /// fade in/out. Mismo patron que pickup_queue.
+    std::deque<KillEntry> kill_feed;
+
     // --- F2H39: Toggles per-widget ---
     /// Map name -> bool. Ausente = enabled (default true). Lua puede
     /// togglear con `hud.set_widget("name", false)` para esconder
     /// widgets segun el contexto (ej. cinematics, menus).
-    std::unordered_map<std::string, bool> widget_enabled;
+    /// F2H41: defaults explicitos a false para widgets que deben
+    /// estar OFF por default (ej. crt_scanline — efecto opcional
+    /// que pocos juegos quieren prendido siempre).
+    std::unordered_map<std::string, bool> widget_enabled{
+        {"crt_scanline", false},
+    };
 
     /// @brief Ayuda al overlay: testea si un widget esta enabled
     ///        (default true si el name no esta en el map).
@@ -113,6 +145,20 @@ void pushPickup(const char* text);
 /// @brief Limpia el interact prompt (azucar — equivalente a setear
 ///        string vacio).
 void clearInteractPrompt();
+
+// --- F2H41: helpers KillFeed ---
+
+/// @brief Empuja un kill entry a la kill feed con color default.
+///        Lifetime 4s. Cap visual 5 — push sobre lleno descarta el
+///        mas viejo (FIFO).
+void pushKill(const char* text);
+
+/// @brief Variante con color RGBA packed (IM_COL32) para diferenciar
+///        enemy types / team colors.
+void pushKillColored(const char* text, unsigned int color);
+
+/// @brief Limpia el objective text (azucar).
+void clearObjective();
 
 } // namespace GameState
 

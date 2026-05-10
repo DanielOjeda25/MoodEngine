@@ -114,10 +114,11 @@ void PlayerApplication::endFrame() {
             GameOverlay::draw(ImGui::GetWindowDrawList(),
                                imgPos.x, imgPos.y, imgSize.x, imgSize.y,
                                ImGui::GetIO().DeltaTime,
-                               "Salir al menu",
+                               m_playCamera.forward(),
+                               "EXIT TO MENU",
                                [this]() {
                                    Log::engine()->info(
-                                       "[MainMenu] Salir al menu -> back to MainMenu");
+                                       "[MainMenu] Exit to menu -> back to MainMenu");
                                    m_inMainMenu = true;
                                    GameState::paused() = false;
                                });

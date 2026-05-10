@@ -1,28 +1,43 @@
--- Script demo del Hito 20 Bloque 5 + F2H39: ejercita el HUD framework.
+-- Script demo del Hito 20 + F2H39 + F2H41: ejercita los 13 widgets del HUD.
 --
--- API actual (post-F2H39):
---   Health: hud.setHp / hud.setMaxHp / hud.getHp / hud.getMaxHp
---   Ammo:   hud.setMag / hud.setMaxMag / hud.setReserve / getters
---   Pause:  hud.setPaused / hud.getPaused
---   Interact: hud.setInteractPrompt / hud.clearInteractPrompt
---   Efectos: hud.showHitMarker / hud.flashDamage(x,y) / hud.pushPickup(text)
---   Toggles: hud.setWidget("name", bool) / hud.isWidgetEnabled("name")
+-- API actual (post-F2H41):
+--   Health:     hud.setHp / hud.setMaxHp / getters
+--   Ammo:       hud.setMag / hud.setMaxMag / hud.setReserve / getters
+--   Stamina:    hud.setStamina / hud.setMaxStamina / getters    [F2H41]
+--   Pause:      hud.setPaused / hud.getPaused
+--   Interact:   hud.setInteractPrompt / hud.clearInteractPrompt
+--   Objective:  hud.setObjective / hud.clearObjective           [F2H41]
+--   Efectos:    hud.showHitMarker / hud.flashDamage(x,y) /
+--               hud.pushPickup(text) / hud.pushKill(text) /     [F2H41]
+--               hud.pushKillColored(text, r, g, b)              [F2H41]
+--   Toggles:    hud.setWidget("name", bool) / hud.isWidgetEnabled("name")
 --
--- Comportamiento del demo:
---   - Init: HP=100/100, MAG=12/30, Reserve=90.
+-- Comportamiento del demo (post-F2H41):
+--   - Init: HP=100/100, MAG=12/30, RESERVE=90, STAMINA=100/100,
+--     OBJECTIVE="Demo: explorar el mapa de pruebas".
 --   - Cada 1.0s drena 1 HP (al llegar a 0 pausa el juego).
---   - Cada 3.0s flashDamage desde una direccion aleatoria + showHitMarker
---     (asi el dev ve los dos efectos sin necesidad de gameplay real).
---   - Cada 5.0s push de un pickup notification de demo.
---   - Cada 7.0s toggle del interact prompt (set / clear).
+--   - Cada 1.5s drena 2 stamina, regen lento si > 0.
+--   - Cada 3.0s flashDamage random + showHitMarker.
+--   - Cada 5.0s pushPickup.
+--   - Cada 7.0s toggle interactPrompt.
+--   - Cada 8.0s pushKill rotativo (Headcrab / Manhack / Combine / Antlion).
+--   - Cada 12.0s toggle CRT scanline overlay.
 
 local INITIALIZED = false
-local accumHp = 0.0
-local accumDmg = 0.0
+local accumHp     = 0.0
+local accumStam   = 0.0
+local accumDmg    = 0.0
 local accumPickup = 0.0
 local accumPrompt = 0.0
+local accumKill   = 0.0
+local accumScan   = 0.0
 local pickupCount = 0
-local promptOn = false
+local killCount   = 0
+local promptOn    = false
+local scanOn      = false
+
+-- Lista rotativa de enemigos para el kill feed (HL flavor).
+local KILL_ENEMIES = {"Headcrab", "Manhack", "Combine", "Antlion", "Zombie"}
 
 function onUpdate(self, dt)
     if not INITIALIZED then
@@ -31,8 +46,11 @@ function onUpdate(self, dt)
         hud.setMag(12)
         hud.setMaxMag(30)
         hud.setReserve(90)
+        hud.setMaxStamina(100)
+        hud.setStamina(100)
         hud.clearInteractPrompt()
-        log.info("hud_demo (F2H39): HP=100, MAG=12/30, RESERVE=90")
+        hud.setObjective("Demo: explore the test map")
+        log.info("hud_demo (F2H41): HP=100, MAG=12/30, STAM=100, OBJ='explore'")
         INITIALIZED = true
     end
 
@@ -51,11 +69,23 @@ function onUpdate(self, dt)
         end
     end
 
+    -- Stamina drain/regen cada 1.5s. Drena 2 si > 30, regen 5 si <= 30.
+    accumStam = accumStam + dt
+    if accumStam >= 1.5 then
+        accumStam = accumStam - 1.5
+        local s = hud.getStamina()
+        local maxS = hud.getMaxStamina()
+        if s > 30 then
+            hud.setStamina(math.max(0, s - 2))
+        else
+            hud.setStamina(math.min(maxS, s + 5))
+        end
+    end
+
     -- Damage flash + hit marker cada 3s.
     accumDmg = accumDmg + dt
     if accumDmg >= 3.0 then
         accumDmg = accumDmg - 3.0
-        -- Direccion pseudo-aleatoria via math.random.
         local angle = math.random() * 2.0 * math.pi
         local dx = math.cos(angle)
         local dy = math.sin(angle)
@@ -79,8 +109,26 @@ function onUpdate(self, dt)
             hud.clearInteractPrompt()
             promptOn = false
         else
-            hud.setInteractPrompt("[E] Levantar item demo")
+            hud.setInteractPrompt("[E] Pick up demo item")
             promptOn = true
         end
+    end
+
+    -- Kill feed cada 8s con rotacion + colores.
+    accumKill = accumKill + dt
+    if accumKill >= 8.0 then
+        accumKill = accumKill - 8.0
+        killCount = killCount + 1
+        local enemy = KILL_ENEMIES[((killCount - 1) % #KILL_ENEMIES) + 1]
+        hud.pushKill("Killed: " .. enemy .. " #" .. killCount)
+    end
+
+    -- Toggle CRT scanline overlay cada 12s.
+    accumScan = accumScan + dt
+    if accumScan >= 12.0 then
+        accumScan = accumScan - 12.0
+        scanOn = not scanOn
+        hud.setWidget("crt_scanline", scanOn)
+        log.info("hud_demo: crt_scanline = " .. tostring(scanOn))
     end
 end

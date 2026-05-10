@@ -117,7 +117,9 @@ private:
 
     GridMap m_map{8u, 8u, 3.0f};
 
-    FpsCamera m_playCamera{glm::vec3(-4.5f, 1.6f, 7.5f), -90.0f, 0.0f};
+    // F2H41: spawn al centro del mapa (0,1.6,0). Mismo cambio que en
+    // EditorApplication.h — convencion del motor.
+    FpsCamera m_playCamera{glm::vec3(0.0f, 1.6f, 0.0f), -90.0f, 0.0f};
 
     static constexpr glm::vec3 k_playerHalfExtents{0.3f, 0.9f, 0.3f};
 

@@ -250,12 +250,17 @@ void EditorApplication::updateRigidBodies(f32 dt) {
             constexpr f32 k_eyeStanding = 0.5f + 0.4f - 0.2f;  // 0.7
             constexpr f32 k_eyeCrouched = 0.1f + 0.4f - 0.2f;  // 0.3
             const f32 eye = glm::mix(k_eyeStanding, k_eyeCrouched, m_crouchVisualT);
-            // Headbob suave: 5 Hz, amplitud 4 cm. Empieza desde 0 y
+            // Headbob suave: 3.5 Hz, amplitud 5 cm. Empieza desde 0 y
             // mantiene sin spike al recomenzar el movimiento.
             // Hito 34 D: amplitud escalada por velocity horizontal [0..1]
             // — full bob caminando, ~50% crouched, 0 quieto.
-            constexpr f32 k_bobFreq = 5.0f * 6.2831853f; // 5 Hz a rad/s
-            constexpr f32 k_bobAmp  = 0.04f;
+            // F2H41 fix lateral: bajado de 5 Hz a 3.5 Hz para que los
+            // pasos no se sientan "muy pegados". A walkSpeed 5.5 m/s
+            // (ver EditorPlayMode.cpp), 3.5 Hz da ~1.6 m por paso —
+            // stride humana realista. Amplitud subida a 5 cm para
+            // compensar la menor frecuencia y mantener visibilidad.
+            constexpr f32 k_bobFreq = 3.5f * 6.2831853f; // 3.5 Hz a rad/s
+            constexpr f32 k_bobAmp  = 0.05f;
             const f32 bobY = std::sin(m_headbobTime * k_bobFreq) * k_bobAmp
                               * m_horizSpeed01;
             const glm::vec3 charPos = m_physicsWorld->characterPosition(m_playerCharId);

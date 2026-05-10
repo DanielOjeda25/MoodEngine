@@ -49,6 +49,14 @@ void EditorApplication::exitPlayMode() {
     }
     m_jumpCooldown = 0.0f;
     m_crouching    = false;
+    // F2H41 fix lateral: resetear m_playCamera a la pose inicial. En
+    // Play Mode, EditorScene::updateRigidBodies setea la cam cada
+    // frame al char position. Si el char cae al vacio (camina fuera
+    // del Floor finito), la cam queda con Y muy negativo. Al
+    // re-entrar a Play, el char spawnea en cam.pos - eyeStand y cae
+    // infinito otra vez. Reset evita esto. Mismo patron que
+    // PlayerApplication_SaveLoad.cpp:139.
+    m_playCamera = FpsCamera(glm::vec3(0.0f, 1.6f, 0.0f), -90.0f, 0.0f);
     Log::editor()->info("Editor Mode activo");
 }
 
@@ -96,8 +104,13 @@ void EditorApplication::updateCameras(f32 dt) {
         // del Hito 34 C.
         const f32 k_coyoteWindow     = m_project ? m_project->coyoteWindowSec     : 0.10f;
         const f32 k_jumpBufferWindow = m_project ? m_project->jumpBufferWindowSec : 0.15f;
-        constexpr f32 k_walkSpeed            = 4.0f;
-        constexpr f32 k_crouchSpeed          = 2.0f;
+        // F2H41 fix lateral: tuning del feel de caminata. Pre-F2H41
+        // walk=4 m/s daba sensacion lenta vs convencion FPS (HL2 ~5.5,
+        // CoD ~6, Doom Eternal ~7). 5.5 m/s con freq de bob mas bajo
+        // (ver mas abajo) da pasitos largos + paso rapido sin sentir
+        // que el char "trota muy chiquito".
+        constexpr f32 k_walkSpeed            = 5.5f;
+        constexpr f32 k_crouchSpeed          = 3.0f;
         if (m_playerCharId == 0) {
             const f32 eyeStand = k_charHalfHeightStand + k_charRadius - 0.2f;
             const glm::vec3 camPos = m_playCamera.position();
@@ -229,7 +242,8 @@ void EditorApplication::drawGameOverlay(ImDrawList* dl,
     // para que el editor (Play Mode) y `MoodPlayer` lo compartan.
     GameOverlay::draw(dl, x0, y0, w, h,
                        ImGui::GetIO().DeltaTime,
-                       "Salir al editor",
+                       m_playCamera.forward(),
+                       "EXIT TO EDITOR",
                        [this]() { exitPlayMode(); });
 }
 

@@ -354,7 +354,11 @@ private:
     // pone la camara al borde del piso, ideal para empezar a editar
     // brushes 1m.
     EditorCamera m_editorCamera{45.0f, 30.0f, 12.0f};
-    FpsCamera m_playCamera{glm::vec3(-4.5f, 1.6f, 7.5f), -90.0f, 0.0f};
+    // F2H41: spawn al centro del mapa (0,1.6,0). Pre-F2H41 era
+    // (-4.5,1.6,7.5) legacy de un demo. Convencion: mapa centrado
+    // en world (0,0,0) — Floor en (0,-0.05,0). Spawnear en (0,1.6,0)
+    // pone al player en el centro por default.
+    FpsCamera m_playCamera{glm::vec3(0.0f, 1.6f, 0.0f), -90.0f, 0.0f};
     EditorMode m_mode = EditorMode::Editor;
     /// @brief F2H17: sub-modo del Editor estilo Blender. Toggle con
     ///        tecla 3 (Face). 1 (vertex) y 2 (edge) reservadas para

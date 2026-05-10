@@ -28,6 +28,11 @@ namespace palette {
     // Rojo damage (low HP shift + vignette).
     constexpr ImU32 k_red         = IM_COL32(255,  48,  48, 255);
     constexpr ImU32 k_red_dim     = IM_COL32(255,  48,  48, 180);
+    // F2H41: stamina (verde-azul Skyrim/Metro) + warn amarillo.
+    constexpr ImU32 k_stamina     = IM_COL32( 80, 200, 180, 255);
+    constexpr ImU32 k_stamina_lo  = IM_COL32(255, 220,  80, 255);
+    // F2H41: scanline tint verdoso (Pip-Boy CRT).
+    constexpr ImU32 k_scanline    = IM_COL32(120, 180,  80,  35);
     // Blanco texto neutro.
     constexpr ImU32 k_white       = IM_COL32(248, 248, 248, 255);
     constexpr ImU32 k_white_dim   = IM_COL32(248, 248, 248, 180);
@@ -450,9 +455,9 @@ void drawPauseMenu(const HudContext& ctx,
     // 3 botones con border geometrico.
     struct Btn { const char* label; int action; };
     const Btn btns[3] = {
-        {"CONTINUAR", 0},
-        {"OPCIONES",  1},
-        {exitLabel,   2},
+        {"CONTINUE", 0},
+        {"OPTIONS",  1},
+        {exitLabel,  2},
     };
     constexpr float btnW = 360.0f;
     constexpr float btnH = 56.0f;
@@ -505,11 +510,223 @@ void drawPauseMenu(const HudContext& ctx,
             Log::engine()->info("PauseMenu click: {}", btns[i].label);
             switch (btns[i].action) {
                 case 0: GameState::paused() = false; break;
-                case 1: Log::engine()->info("Pause: 'Opciones' aun no implementado."); break;
+                case 1: Log::engine()->info("Pause: 'Options' aun no implementado."); break;
                 case 2: if (onExitRequested) onExitRequested(); break;
                 default: break;
             }
         }
+    }
+}
+
+// =============================================================
+// F2H41 WIDGETS — extension del paquete inicial F2H39
+// =============================================================
+
+// 9. STAMINA BAR — bottom-left, debajo del HealthNumber. Barra
+//    horizontal pequena verde-azul (Skyrim/Metro). Color shift a
+//    amarillo cuando stamina < 30%.
+void drawStaminaBar(const HudContext& ctx) {
+    const HudState& h = *ctx.hud;
+    if (h.max_stamina <= 0) return; // bypass si gameplay no usa stamina
+    const float ratio = std::clamp(
+        static_cast<float>(h.stamina) / static_cast<float>(h.max_stamina),
+        0.0f, 1.0f);
+    const ImU32 col = (ratio < 0.30f) ? palette::k_stamina_lo : palette::k_stamina;
+
+    // Justo encima del HealthNumber (que ocupa 80 px alto desde
+    // bottom). StaminaBar es chica: 180 ancho x 14 alto. La pegamos
+    // arriba del HP box para hacer un grupo visual.
+    const float pad = 24.0f;
+    const float originX = ctx.x0 + pad;
+    const float originY = ctx.y0 + ctx.h - pad - 80.0f - 22.0f;
+    constexpr float bw = 180.0f;
+    constexpr float bh = 14.0f;
+
+    // Background + border.
+    ctx.dl->AddRectFilled(ImVec2(originX, originY),
+                           ImVec2(originX + bw, originY + bh),
+                           palette::k_bg_box, 3.0f);
+    ctx.dl->AddRect(ImVec2(originX, originY),
+                     ImVec2(originX + bw, originY + bh),
+                     palette::k_border, 3.0f, 0, 1.0f);
+
+    // Fill horizontal proporcional.
+    if (ratio > 0.0f) {
+        ctx.dl->AddRectFilled(
+            ImVec2(originX + 2.0f, originY + 2.0f),
+            ImVec2(originX + 2.0f + (bw - 4.0f) * ratio, originY + bh - 2.0f),
+            col, 2.0f);
+    }
+
+    // Label "STAMINA" mini al ras del extremo izquierdo.
+    ctx.dl->AddText(ImVec2(originX + 6.0f, originY - 2.0f),
+                     palette::k_white_dim, "STAMINA");
+}
+
+// 10. OBJECTIVE TEXT — top-left, debajo del MenuBar (~24 px desde
+//     top). Caja oscura con border amarillo HL + texto blanco. El
+//     widget agrega el prefijo "OBJETIVO: " automaticamente.
+void drawObjectiveText(const HudContext& ctx) {
+    const HudState& h = *ctx.hud;
+    if (h.objective_text.empty()) return;
+
+    constexpr float pad = 24.0f;
+    const float originX = ctx.x0 + pad;
+    const float originY = ctx.y0 + pad;
+
+    char buf[256];
+    std::snprintf(buf, sizeof(buf), "OBJECTIVE: %s", h.objective_text.c_str());
+
+    const ImVec2 sz = ImGui::CalcTextSize(buf);
+    constexpr float padX = 14.0f, padY = 8.0f;
+    const ImVec2 a(originX, originY);
+    const ImVec2 b(originX + sz.x + padX * 2.0f, originY + sz.y + padY * 2.0f);
+    ctx.dl->AddRectFilled(a, b, palette::k_bg_box, 3.0f);
+    ctx.dl->AddRect(a, b, palette::k_yellow, 3.0f, 0, 1.5f);
+    ctx.dl->AddText(ImVec2(originX + padX, originY + padY),
+                     palette::k_white, buf);
+}
+
+// 11. KILL FEED — top-right, columna stack vertical. Toast rojo con
+//     texto custom-color. Cap visual 5 entradas. Lifetime 4s con
+//     fade in/out (mismo patron que pickup_queue).
+void drawKillFeed(const HudContext& ctx) {
+    HudState& h = *ctx.hud;
+    constexpr float k_lifetime = 4.0f;
+    constexpr float k_fadeIn   = 0.15f;
+    constexpr float k_fadeOut  = 0.8f;
+
+    // Decrementar ttl + popear expiradas (front; FIFO).
+    for (auto& e : h.kill_feed) e.ttl -= ctx.dt;
+    while (!h.kill_feed.empty() && h.kill_feed.front().ttl <= 0.0f) {
+        h.kill_feed.pop_front();
+    }
+    if (h.kill_feed.empty()) return;
+
+    // Layout: stack vertical desde arriba derecha (comienza ~24 px
+    // bajo el menu bar — el ObjectiveText ya cubre top-left).
+    constexpr float pad = 24.0f;
+    constexpr float rowH = 26.0f;
+    const float baseY = ctx.y0 + pad + 60.0f; // bajo objective text
+    const float rightX = ctx.x0 + ctx.w - pad;
+
+    int i = 0;
+    for (const auto& e : h.kill_feed) {
+        const float age = k_lifetime - e.ttl;
+        float alpha = 1.0f;
+        if (age < k_fadeIn) alpha = age / k_fadeIn;
+        else if (e.ttl < k_fadeOut) alpha = e.ttl / k_fadeOut;
+        alpha = std::clamp(alpha, 0.0f, 1.0f);
+
+        const float y = baseY + i * rowH;
+        const ImVec2 sz = ImGui::CalcTextSize(e.text.c_str());
+        constexpr float padX = 12.0f, padY = 4.0f;
+        const ImVec2 a(rightX - sz.x - padX * 2.0f, y);
+        const ImVec2 b(rightX, y + sz.y + padY * 2.0f);
+        ctx.dl->AddRectFilled(a, b,
+                                withAlpha(palette::k_red_dim, alpha * 0.85f),
+                                3.0f);
+        ctx.dl->AddText(ImVec2(a.x + padX, y + padY),
+                         withAlpha(e.color, alpha), e.text.c_str());
+        ++i;
+        if (i >= 5) break; // cap visual
+    }
+}
+
+// 12. COMPASS BAR — top-center, debajo del MenuBar. Barra horizontal
+//     con tickmarks cada 15 grados y letras N/E/S/W. Indicador
+//     central (triangulo naranja apuntando abajo) marca yaw actual.
+//     Yaw derivado del cameraForward del HudContext.
+void drawCompassBar(const HudContext& ctx) {
+    // Yaw en grados desde el forward XZ. Convencion: yaw=0 mira -Z
+    // (norte), yaw=90 mira +X (este), yaw=180 mira +Z (sur),
+    // yaw=270 mira -X (oeste). atan2 con (forward.x, -forward.z)
+    // satisface esta convencion.
+    const glm::vec3& f = ctx.cameraForward;
+    if (std::abs(f.x) < 1e-6f && std::abs(f.z) < 1e-6f) return; // cam vertical
+    const float yawRad = std::atan2(f.x, -f.z);
+    const float yawDeg = yawRad * 57.2957795f; // rad -> deg
+    // Normalizar a [0, 360).
+    auto normDeg = [](float d) {
+        while (d < 0.0f)    d += 360.0f;
+        while (d >= 360.0f) d -= 360.0f;
+        return d;
+    };
+    const float yaw = normDeg(yawDeg);
+
+    // Layout: barra de 480 px ancho centrada arriba.
+    constexpr float pad = 24.0f;
+    constexpr float barW = 480.0f;
+    constexpr float barH = 28.0f;
+    const float barX = ctx.x0 + (ctx.w - barW) * 0.5f;
+    const float barY = ctx.y0 + pad;
+
+    // Background + border.
+    ctx.dl->AddRectFilled(ImVec2(barX, barY),
+                           ImVec2(barX + barW, barY + barH),
+                           palette::k_bg_box, 2.0f);
+    ctx.dl->AddRect(ImVec2(barX, barY),
+                     ImVec2(barX + barW, barY + barH),
+                     palette::k_border, 2.0f, 0, 1.0f);
+
+    // Visualizamos +-90 grados desde el yaw actual (180 grados de
+    // rango total). Cada grado son barW/180 px.
+    constexpr float visibleRange = 180.0f;
+    const float pxPerDeg = barW / visibleRange;
+    const float cx = barX + barW * 0.5f;
+
+    // Tickmarks cada 15 grados.
+    for (int t = 0; t < 360; t += 15) {
+        const float deltaSigned = static_cast<float>(t) - yaw;
+        // wrap a [-180, 180].
+        float d = deltaSigned;
+        while (d >  180.0f) d -= 360.0f;
+        while (d < -180.0f) d += 360.0f;
+        if (std::abs(d) > visibleRange * 0.5f) continue;
+
+        const float px = cx + d * pxPerDeg;
+        const bool isCardinal = (t % 90) == 0;
+        const float tickH = isCardinal ? barH * 0.6f : barH * 0.3f;
+        const ImU32 tickCol = isCardinal ? palette::k_white : palette::k_white_dim;
+        ctx.dl->AddLine(ImVec2(px, barY + barH * 0.5f),
+                          ImVec2(px, barY + barH * 0.5f + tickH),
+                          tickCol, isCardinal ? 1.5f : 1.0f);
+
+        if (isCardinal) {
+            const char* lbl = "?";
+            switch (t) {
+                case   0: lbl = "N"; break;
+                case  90: lbl = "E"; break;
+                case 180: lbl = "S"; break;
+                case 270: lbl = "W"; break;
+            }
+            const ImVec2 lblSz = ImGui::CalcTextSize(lbl);
+            ctx.dl->AddText(ImVec2(px - lblSz.x * 0.5f, barY + 2.0f),
+                              palette::k_white, lbl);
+        }
+    }
+
+    // Indicador central (triangulo naranja apuntando abajo) — marca yaw actual.
+    constexpr float triH = 8.0f;
+    constexpr float triW = 6.0f;
+    ctx.dl->AddTriangleFilled(
+        ImVec2(cx - triW, barY - 2.0f),
+        ImVec2(cx + triW, barY - 2.0f),
+        ImVec2(cx, barY - 2.0f + triH),
+        palette::k_orange);
+}
+
+// 13. CRT SCANLINE OVERLAY — full-screen overlay con lineas
+//     horizontales semi-transparentes verdosas (~12% alpha), cada
+//     3 px. Default OFF (toggle desde Lua via setWidget).
+void drawCrtScanline(const HudContext& ctx) {
+    constexpr float spacing = 3.0f;
+    const float yEnd = ctx.y0 + ctx.h;
+    for (float y = ctx.y0; y < yEnd; y += spacing) {
+        ctx.dl->AddLine(ImVec2(ctx.x0,            y),
+                          ImVec2(ctx.x0 + ctx.w,  y),
+                          palette::k_scanline,
+                          1.0f);
     }
 }
 
@@ -525,11 +742,16 @@ const HudWidget k_widgets[] = {
     // Vignette PRIMERO para que quede detras del HUD numerico.
     { "damage_vignette",  &drawDamageVignette },
     { "health_number",    &drawHealthNumber },
+    { "stamina_bar",      &drawStaminaBar },       // F2H41
     { "ammo_counter",     &drawAmmoCounter },
+    { "objective_text",   &drawObjectiveText },    // F2H41
+    { "kill_feed",        &drawKillFeed },         // F2H41
+    { "compass_bar",      &drawCompassBar },       // F2H41
     { "crosshair",        &drawCrosshair },
     { "hit_marker",       &drawHitMarker },
     { "interact_prompt",  &drawInteractPrompt },
     { "pickup_queue",     &drawPickupNotifications },
+    { "crt_scanline",     &drawCrtScanline },      // F2H41 (default OFF)
 };
 
 } // namespace
@@ -541,6 +763,7 @@ const HudWidget k_widgets[] = {
 void draw(::ImDrawList* dl,
           float x0, float y0, float w, float h,
           float dt,
+          const glm::vec3& cameraForward,
           const char* exitButtonLabel,
           const std::function<void()>& onExitRequested) {
     HudState& hudRef = GameState::hud();
@@ -550,6 +773,7 @@ void draw(::ImDrawList* dl,
     ctx.dt = dt;
     ctx.hud = &hudRef;
     ctx.now = static_cast<float>(ImGui::GetTime());
+    ctx.cameraForward = cameraForward;
 
     // Iterar widgets enabled. El default es enabled; Lua puede togglear.
     for (const HudWidget& wd : k_widgets) {
