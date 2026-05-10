@@ -44,6 +44,17 @@ bool save(const SaveData& d, const std::filesystem::path& path) {
     j["map_path"] = d.mapPath;
     j["hud"]["hp"]   = d.hud.hp;
     j["hud"]["ammo"] = d.hud.ammo;
+    // F2H39: campos nuevos del HUD framework. Solo serializar si difieren
+    // del default — keep saves chicas para gameplay basico.
+    if (d.hud.max_hp  != 100) j["hud"]["max_hp"]  = d.hud.max_hp;
+    if (d.hud.mag     !=  30) j["hud"]["mag"]     = d.hud.mag;
+    if (d.hud.max_mag !=  30) j["hud"]["max_mag"] = d.hud.max_mag;
+    if (d.hud.reserve !=  90) j["hud"]["reserve"] = d.hud.reserve;
+    if (!d.hud.interact_prompt.empty())
+        j["hud"]["interact_prompt"] = d.hud.interact_prompt;
+    // hit_marker_t / damage_t / pickup_queue son state transient — NO se
+    // persisten (no tiene sentido restaurar un hit marker a medio fade
+    // tras load).
     j["player"]["position"] = std::vector<f32>{
         d.playerPosition.x, d.playerPosition.y, d.playerPosition.z};
     j["player"]["yaw"]   = d.playerYaw;
@@ -140,6 +151,14 @@ std::optional<SaveData> load(const std::filesystem::path& path) {
         const auto& jhud = j.at("hud");
         d.hud.hp   = jhud.value("hp",   d.hud.hp);
         d.hud.ammo = jhud.value("ammo", d.hud.ammo);
+        // F2H39: campos nuevos opcionales. Saves pre-F2H39 no los tienen
+        // - default values en HudState garantizan back-compat.
+        d.hud.max_hp           = jhud.value("max_hp",  d.hud.max_hp);
+        d.hud.mag              = jhud.value("mag",     d.hud.mag);
+        d.hud.max_mag          = jhud.value("max_mag", d.hud.max_mag);
+        d.hud.reserve          = jhud.value("reserve", d.hud.reserve);
+        d.hud.interact_prompt  = jhud.value("interact_prompt",
+                                             d.hud.interact_prompt);
     }
     if (j.contains("player")) {
         const auto& jp = j.at("player");

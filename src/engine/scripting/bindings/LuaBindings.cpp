@@ -1,7 +1,7 @@
 #include "engine/scripting/bindings/LuaBindings.h"
 
 #include "core/Log.h"
-#include "engine/game/state/GameState.h"
+#include "engine/game/state/GameState.h"  // F2H39: triggerHitMarker / pushPickup / etc viven aqui
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
@@ -55,17 +55,55 @@ void setupLuaBindings(sol::state& lua, Entity self,
         Log::script()->warn("{}", msg);
     });
 
-    // --- hud (Hito 20 Bloque 5) ---
+    // --- hud (Hito 20 Bloque 5 + F2H39 expandido) ---
     // Tabla global para que cualquier script pueda mutar el HUD del juego
     // y togglear la pausa. El estado real vive en `GameState` (singleton);
     // los scripts solo leen/escriben copias o flags.
     sol::table hudTable = lua.create_named_table("hud");
+
+    // Hito 20 — preservadas para back-compat con scripts existentes.
     hudTable.set_function("setHp",     [](int v) { GameState::hud().hp   = v; });
     hudTable.set_function("setAmmo",   [](int v) { GameState::hud().ammo = v; });
     hudTable.set_function("setPaused", [](bool v) { GameState::paused() = v; });
     hudTable.set_function("getHp",     []() { return GameState::hud().hp; });
     hudTable.set_function("getAmmo",   []() { return GameState::hud().ammo; });
     hudTable.set_function("getPaused", []() { return GameState::paused(); });
+
+    // F2H39 — health extendido + ammo split.
+    hudTable.set_function("setMaxHp",   [](int v) { GameState::hud().max_hp  = v; });
+    hudTable.set_function("getMaxHp",   []() { return GameState::hud().max_hp; });
+    hudTable.set_function("setMag",     [](int v) { GameState::hud().mag     = v; });
+    hudTable.set_function("getMag",     []() { return GameState::hud().mag; });
+    hudTable.set_function("setMaxMag",  [](int v) { GameState::hud().max_mag = v; });
+    hudTable.set_function("getMaxMag",  []() { return GameState::hud().max_mag; });
+    hudTable.set_function("setReserve", [](int v) { GameState::hud().reserve = v; });
+    hudTable.set_function("getReserve", []() { return GameState::hud().reserve; });
+
+    // F2H39 — interact prompt.
+    hudTable.set_function("setInteractPrompt",
+        [](const std::string& s) { GameState::hud().interact_prompt = s; });
+    hudTable.set_function("clearInteractPrompt",
+        []() { GameState::clearInteractPrompt(); });
+    hudTable.set_function("getInteractPrompt",
+        []() { return GameState::hud().interact_prompt; });
+
+    // F2H39 — efectos transient (timers + queue).
+    hudTable.set_function("showHitMarker",
+        []() { GameState::triggerHitMarker(); });
+    hudTable.set_function("flashDamage",
+        [](float dirX, float dirY) { GameState::triggerDamageFlash(dirX, dirY); });
+    hudTable.set_function("pushPickup",
+        [](const std::string& s) { GameState::pushPickup(s.c_str()); });
+
+    // F2H39 — toggle de widgets per-name.
+    hudTable.set_function("setWidget",
+        [](const std::string& name, bool enabled) {
+            GameState::hud().widget_enabled[name] = enabled;
+        });
+    hudTable.set_function("isWidgetEnabled",
+        [](const std::string& name) {
+            return GameState::hud().isWidgetEnabled(name);
+        });
 
     // --- engine.exposed (Hito 24) ---
     // Registra una exposed property + devuelve el override de la

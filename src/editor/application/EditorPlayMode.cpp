@@ -11,6 +11,7 @@
 #include "systems/physics/PhysicsSystem.h"
 
 #include <SDL.h>
+#include <imgui.h>  // F2H39: ImGui::GetIO().DeltaTime para HUD overlay
 
 #include <algorithm>  // std::min / std::max para crouch lerp clamp
 
@@ -226,7 +227,9 @@ void EditorApplication::drawGameOverlay(ImDrawList* dl,
                                           float w, float h) {
     // Hito 21 Bloque 3 Fase B: el overlay vive en `engine/game/GameOverlay`
     // para que el editor (Play Mode) y `MoodPlayer` lo compartan.
-    GameOverlay::draw(dl, x0, y0, w, h, "Salir al editor",
+    GameOverlay::draw(dl, x0, y0, w, h,
+                       ImGui::GetIO().DeltaTime,
+                       "Salir al editor",
                        [this]() { exitPlayMode(); });
 }
 

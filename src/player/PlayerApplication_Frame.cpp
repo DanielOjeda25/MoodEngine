@@ -111,6 +111,7 @@ void PlayerApplication::endFrame() {
         } else {
             GameOverlay::draw(ImGui::GetWindowDrawList(),
                                imgPos.x, imgPos.y, imgSize.x, imgSize.y,
+                               ImGui::GetIO().DeltaTime,
                                "Salir al menu",
                                [this]() {
                                    Log::engine()->info(
