@@ -48,9 +48,21 @@ Window::Window(const WindowSpec& spec) : m_spec(spec) {
     // VSync activado por defecto; si falla no es fatal.
     if (SDL_GL_SetSwapInterval(1) != 0) {
         MOOD_LOG_WARN("VSync no disponible: {}", SDL_GetError());
+        m_vsyncEnabled = false;
+    } else {
+        m_vsyncEnabled = true;
     }
 
     MOOD_LOG_INFO("Ventana creada ({}x{})", m_spec.width, m_spec.height);
+}
+
+void Window::setVSync(bool enabled) {
+    if (SDL_GL_SetSwapInterval(enabled ? 1 : 0) != 0) {
+        MOOD_LOG_WARN("VSync set({}) fallo: {}", enabled, SDL_GetError());
+        return;
+    }
+    m_vsyncEnabled = enabled;
+    MOOD_LOG_INFO("VSync {}", enabled ? "ON (60fps cap)" : "OFF (uncapped)");
 }
 
 Window::~Window() {

@@ -42,6 +42,16 @@ public:
     /// @brief Intercambia los buffers de la ventana (presenta el frame).
     void swapBuffers();
 
+    /// @brief F2H42: cambia el swap interval. true = VSync ON (60fps cap),
+    ///        false = VSync OFF (uncapped). Si el driver no soporta el
+    ///        modo pedido, se loggea warn y `vsyncEnabled()` queda como
+    ///        estaba.
+    void setVSync(bool enabled);
+
+    /// @brief F2H42: estado actual de VSync (segun ultimo `setVSync` o
+    ///        valor inicial del ctor).
+    bool vsyncEnabled() const { return m_vsyncEnabled; }
+
     SDL_Window* sdlHandle() const { return m_window; }
     SDL_GLContext glContext() const { return m_glContext; }
 
@@ -52,6 +62,7 @@ private:
     WindowSpec m_spec{};
     SDL_Window* m_window = nullptr;
     SDL_GLContext m_glContext = nullptr;
+    bool m_vsyncEnabled = true;  // F2H42: ON por defecto en el ctor
 };
 
 } // namespace Mood

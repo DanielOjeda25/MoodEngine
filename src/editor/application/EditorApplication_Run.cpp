@@ -98,6 +98,15 @@ int EditorApplication::run() {
                 metrics.entityCount = static_cast<u32>(m_scene->entityCount());
             }
             m_ui.performanceHud().setMetrics(metrics);
+
+            // F2H42: aplicar toggle VSync si el dev clickeo el checkbox.
+            bool vsyncRequested = true;
+            if (m_ui.performanceHud().consumeVsyncToggleRequest(vsyncRequested)) {
+                m_window->setVSync(vsyncRequested);
+                // Sync el panel con el estado real del Window (puede no
+                // haberse aplicado si el driver rechazo el cambio).
+                m_ui.performanceHud().setVsyncState(m_window->vsyncEnabled());
+            }
         }
 
         // Hot-reload de shaders (Hito 25 G): chequeo throttle 500ms de
@@ -300,6 +309,9 @@ int EditorApplication::run() {
         // Demos del menu Ayuda + handlers de drag&drop al viewport. Hito 16:
         // implementaciones movidas a `DemoSpawners.cpp` para mantener `run()`
         // legible.
+        // F2H42: full stress scene PRIMERO — setea flags individuales que
+        // los process*Request de abajo consumen en este mismo frame.
+        processSpawnFullStressSceneRequest();
         processSpawnRotatorRequest();
         processSpawnHudDemoRequest();
         processSpawnEnemyDemoRequest();

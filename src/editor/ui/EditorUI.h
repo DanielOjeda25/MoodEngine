@@ -426,6 +426,19 @@ public:
         return r;
     }
 
+    /// @brief F2H42: request para spawnear UNA escena completa de stress
+    ///        (cubos + 64 luces + esferas PBR + sombras + 2 chars
+    ///        animados + particulas + trigger). El handler setea todos
+    ///        los flags individuales de spawn — el frame loop los procesa
+    ///        en orden al frame siguiente. Para baseline measurement de
+    ///        F2H42 (optimizacion runtime) y futuras mediciones.
+    void requestSpawnFullStressScene() { m_spawnFullStressSceneRequested = true; }
+    bool consumeSpawnFullStressSceneRequest() {
+        const bool r = m_spawnFullStressSceneRequested;
+        m_spawnFullStressSceneRequested = false;
+        return r;
+    }
+
     /// @brief F2H2: request para spawnear un grid 3D de cubos hasta el
     ///        target de triangulos indicado (cubo = 12 tris). Valores
     ///        validos: 10000, 100000, 500000, 1000000. 0 = sin request.
@@ -606,6 +619,7 @@ private:
     bool m_spawnFireParticlesRequested = false;     // Hito 29
     bool m_spawnTriggerRequested = false;           // Hito 33
     int  m_spawnStressTrisRequested = 0;             // F2H2 (target tris)
+    bool m_spawnFullStressSceneRequested = false;   // F2H42
     bool m_recentsDirty = false; // Hito 15 polish: edicion manual de la lista de recientes
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;

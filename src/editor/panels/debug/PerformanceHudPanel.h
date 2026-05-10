@@ -37,11 +37,32 @@ public:
 
     void setMetrics(const Metrics& m) { m_metrics = m; }
 
+    /// @brief F2H42: setea el estado mostrado del checkbox VSync (sync con
+    ///        el valor real del Window). El caller llama esto una vez al
+    ///        inicio y luego cada vez que cambia VSync via API.
+    void setVsyncState(bool enabled) { m_vsyncEnabled = enabled; }
+
+    /// @brief F2H42: consume el toggle pedido por el dev en el checkbox.
+    ///        Devuelve true + el nuevo valor pedido si hay cambio pendiente.
+    ///        El caller aplica via `Window::setVSync` y luego sync con
+    ///        `setVsyncState`.
+    bool consumeVsyncToggleRequest(bool& outNewValue) {
+        if (!m_vsyncToggleRequested) return false;
+        m_vsyncToggleRequested = false;
+        outNewValue = m_vsyncEnabled;
+        return true;
+    }
+
 private:
     Metrics m_metrics{};
     // F2H2 Bloque G: snapshot dump → log + performance_baseline.csv
     char m_snapshotLabel[64]{};
     void writeSnapshot();
+
+    // F2H42: estado del checkbox VSync. Cambios disparan
+    // m_vsyncToggleRequested para que EditorApplication aplique en el Window.
+    bool m_vsyncEnabled = true;
+    bool m_vsyncToggleRequested = false;
 };
 
 } // namespace Mood

@@ -322,6 +322,27 @@ void EditorApplication::processSpawnAnimatedCharacterRequest() {
     pushCreatedEntities({fox}, "Spawn personaje animado");
 }
 
+void EditorApplication::processSpawnFullStressSceneRequest() {
+    if (!m_ui.consumeSpawnFullStressSceneRequest()) return;
+    if (!m_scene) return;
+    // F2H42: setea todos los flags individuales — el frame loop los
+    // consume EN EL MISMO frame porque este handler corre antes que los
+    // process*Request individuales en EditorApplication_Run.cpp. Asi
+    // un solo click del menu spawnea la escena completa.
+    m_ui.requestSpawnStressTris(2400);     // 200 cubos = 2400 tris
+    m_ui.requestSpawnLightStress();        // 64 point lights
+    m_ui.requestSpawnPbrSpheres();          // 9 esferas PBR
+    m_ui.requestSpawnShadowDemo();          // floor + columna + sun direccional
+    m_ui.requestSpawnAnimatedCharacter();   // Fox
+    m_ui.requestSpawnEnemyDemo();           // CesiumMan
+    m_ui.requestSpawnFireParticles();       // emisor de fuego
+    m_ui.requestSpawnTrigger();             // trigger + script Lua
+    Log::editor()->info(
+        "[stress] Full stress scene requested: 200 cubes + 64 lights + "
+        "9 PBR spheres + shadow demo + Fox + CesiumMan + particles + "
+        "trigger. Spawning at next frame.");
+}
+
 void EditorApplication::processSpawnStressTrisRequest() {
     const int targetTris = m_ui.consumeSpawnStressTrisRequest();
     if (targetTris <= 0 || !m_scene || !m_assetManager) return;

@@ -229,6 +229,7 @@ private:
     void processSpawnFireParticlesRequest();     // Hito 29
     void processSpawnTriggerRequest();           // Hito 33
     void processSpawnStressTrisRequest();        // F2H2
+    void processSpawnFullStressSceneRequest();   // F2H42
 
     /// @brief Hito 28: empaqueta una creacion (spawn / drop) como
     ///        `CreateEntityCommand` y la empuja al `m_history`. El

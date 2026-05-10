@@ -333,6 +333,17 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                     }
                     ImGui::EndMenu();
                 }
+
+                // F2H42: scene completa para baseline measurement de
+                // optimizacion runtime — dispara TODOS los demos juntos
+                // (cubos + 64 luces + esferas PBR + sombras + Fox +
+                // CesiumMan + particulas + trigger). Click una vez,
+                // queda escena lista para profilear con Tracy +
+                // Performance panel snapshot CSV.
+                ImGui::Separator();
+                if (ImGui::MenuItem("Spawn FULL STRESS SCENE (F2H42)")) {
+                    ui.requestSpawnFullStressScene();
+                }
                 ImGui::EndMenu();
             }
             ImGui::EndMenu();

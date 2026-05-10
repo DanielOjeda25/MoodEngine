@@ -59,6 +59,15 @@ void PerformanceHudPanel::onImGuiRender() {
 
     ImGui::Separator();
 
+    // F2H42: toggle VSync. Con VSync OFF el FPS se desbloquea del refresco
+    // del monitor, util para medir el costo CPU/GPU real (con VSync ON el
+    // frame time queda capado a 16.6ms ocultando ganancias de optimizacion).
+    if (ImGui::Checkbox("VSync (60fps cap)", &m_vsyncEnabled)) {
+        m_vsyncToggleRequested = true;
+    }
+
+    ImGui::Separator();
+
     // F2H2 Bloque G: snapshot dump del estado actual al log + CSV. El dev
     // setea el label de la escena (Empty / 10K / 100K / 500K / 1M) y
     // clickea "Snapshot". Append-only — multiples clicks generan multiples

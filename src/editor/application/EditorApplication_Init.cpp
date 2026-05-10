@@ -264,6 +264,9 @@ EditorApplication::EditorApplication() {
         });
     m_ui.assetBrowser().setAssetManager(m_assetManager.get());
     m_ui.setHistoryStack(&m_history); // Hito 27: para items Editar > Deshacer/Rehacer
+    // F2H42: sync el checkbox VSync del Performance panel con el estado real
+    // del Window (puede haber sido rechazado por el driver al crearse).
+    m_ui.performanceHud().setVsyncState(m_window->vsyncEnabled());
 
     m_ui.viewport().setFramebuffer(&m_sceneRenderer->viewportFb());
 
