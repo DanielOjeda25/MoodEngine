@@ -1,6 +1,7 @@
 #include "editor/ui/EditorUI.h"
 
 #include "core/Log.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/BrushComponent.h"  // F2H12
 #include "engine/scene/components/Components.h"      // F2H12: TagComponent
 #include "engine/scene/core/Scene.h"                  // F2H12
@@ -297,17 +298,17 @@ void EditorUI::drawWelcomeModal() {
         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
 
     if (ImGui::BeginPopupModal("MoodEngine - bienvenida", nullptr, flags)) {
-        ImGui::TextUnformatted("No hay proyecto activo.");
-        ImGui::TextUnformatted("Elegi que hacer para empezar:");
+        ImGui::TextUnformatted(I18n::T("editor.welcome.no_project").c_str());
+        ImGui::TextUnformatted(I18n::T("editor.welcome.choose").c_str());
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
         // Accion principal: crear uno nuevo.
-        if (ImGui::Button("Nuevo proyecto", ImVec2(240.0f, 32.0f))) {
+        if (ImGui::Button(I18n::T("editor.welcome.new_project").c_str(), ImVec2(240.0f, 32.0f))) {
             requestProjectAction(ProjectAction::NewProject);
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Abrir proyecto...", ImVec2(240.0f, 32.0f))) {
+        if (ImGui::Button(I18n::T("editor.welcome.open_project").c_str(), ImVec2(240.0f, 32.0f))) {
             requestProjectAction(ProjectAction::OpenProject);
             ImGui::CloseCurrentPopup();
         }
@@ -317,15 +318,16 @@ void EditorUI::drawWelcomeModal() {
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
         if (m_recentProjects.empty()) {
-            ImGui::TextDisabled("Sin proyectos recientes todavia.");
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.welcome.no_recent").c_str());
         } else {
-            ImGui::TextUnformatted("Recientes:");
+            ImGui::TextUnformatted(I18n::T("editor.welcome.recents").c_str());
             ImGui::SameLine();
             // Boton al tope que filtra los recientes que ya no existen en
             // disco. Util cuando se mueven o borran proyectos por afuera.
             const float availX = ImGui::GetContentRegionAvail().x;
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availX - 160.0f);
-            if (ImGui::SmallButton("Limpiar inexistentes")) {
+            if (ImGui::SmallButton(I18n::T("editor.welcome.clean_missing").c_str())) {
                 pruneMissingRecents();
             }
 
@@ -340,7 +342,9 @@ void EditorUI::drawWelcomeModal() {
                 const bool exists = std::filesystem::exists(path, ec);
                 const std::string label = path.stem().generic_string() +
                                           "  -  " + path.generic_string() +
-                                          (exists ? "" : "  (no existe)");
+                                          (exists ? std::string{}
+                                                  : std::string("  ") +
+                                                    I18n::T("editor.welcome.missing_marker"));
 
                 // Boton X al final de la fila.
                 const float rowAvail = ImGui::GetContentRegionAvail().x;
@@ -369,7 +373,8 @@ void EditorUI::drawWelcomeModal() {
                     toErase = path;
                 }
                 if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("Quitar de la lista de recientes");
+                    ImGui::SetTooltip("%s",
+                        I18n::T("editor.welcome.remove_from_recents").c_str());
                 }
                 ImGui::PopID();
             }
@@ -381,8 +386,8 @@ void EditorUI::drawWelcomeModal() {
         }
 
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
-        ImGui::TextDisabled(
-            "El editor va a permanecer bloqueado hasta que elijas un proyecto.");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.welcome.locked_hint").c_str());
 
         ImGui::EndPopup();
     }
@@ -404,7 +409,7 @@ void EditorUI::drawBooleanOpMenu() {
     const bool ready = (brushCount >= 2)
         && (m_selectionSet.selected.size() == static_cast<usize>(brushCount));
 
-    if (!ImGui::BeginMenu("Boolean", ready)) {
+    if (!ImGui::BeginMenu(I18n::T("editor.menu.boolean").c_str(), ready)) {
         return;
     }
 
@@ -413,17 +418,19 @@ void EditorUI::drawBooleanOpMenu() {
                                     m_selectionSet.active.hasComponent<TagComponent>())
         ? m_selectionSet.active.getComponent<TagComponent>().name
         : std::string{"?"};
-    ImGui::TextDisabled("%d brushes seleccionados", brushCount);
-    ImGui::TextDisabled("Tool brush (B): %s", activeTag.c_str());
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.menu.boolean.brushes_selected", brushCount).c_str());
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.menu.boolean.tool_brush", activeTag).c_str());
     ImGui::Separator();
 
-    if (ImGui::MenuItem("Subtract (A - B) por cada A")) {
+    if (ImGui::MenuItem(I18n::T("editor.menu.boolean.subtract").c_str())) {
         requestBooleanOp(BooleanOpRequestKind::Subtract);
     }
-    if (ImGui::MenuItem("Union (A U B) en cascada")) {
+    if (ImGui::MenuItem(I18n::T("editor.menu.boolean.union").c_str())) {
         requestBooleanOp(BooleanOpRequestKind::Union);
     }
-    if (ImGui::MenuItem("Intersect (A & B) en cascada")) {
+    if (ImGui::MenuItem(I18n::T("editor.menu.boolean.intersect").c_str())) {
         requestBooleanOp(BooleanOpRequestKind::Intersect);
     }
 

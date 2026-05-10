@@ -1,7 +1,9 @@
 #include "editor/ui/MenuBar.h"
 
 #include "core/Log.h"
+#include "core/UserSettings.h"  // F2H43
 #include "editor/ui/EditorUI.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "editor/ui/IconsFontAwesome6.h"
 #include "editor/panels/IPanel.h"
 
@@ -33,46 +35,35 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
         // proyecto + asset ops globales (script/prefab) + Salir. El
         // submenu Mapa se promovio a top-level; geometria (Brush
         // primitivas + Boolean) salio a top-level "Brush".
-        if (ImGui::BeginMenu(ICON_FA_FOLDER " Archivo")) {
-            if (ImGui::MenuItem("Nuevo Proyecto")) {
+        if (ImGui::BeginMenu((std::string(ICON_FA_FOLDER " ") + I18n::T("editor.menu.file")).c_str())) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.file.new").c_str())) {
                 ui.requestProjectAction(ProjectAction::NewProject);
             }
-            if (ImGui::MenuItem("Abrir Proyecto")) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.file.open").c_str())) {
                 ui.requestProjectAction(ProjectAction::OpenProject);
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Guardar", "Ctrl+S", false, ui.hasProject())) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.file.save").c_str(), "Ctrl+S", false, ui.hasProject())) {
                 ui.requestProjectAction(ProjectAction::Save);
             }
-            if (ImGui::MenuItem("Cerrar proyecto", nullptr, false, ui.hasProject())) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.file.close").c_str(), nullptr, false, ui.hasProject())) {
                 ui.requestProjectAction(ProjectAction::CloseProject);
             }
             ImGui::Separator();
-            // Hito 21 Bloque 5: empaqueta el proyecto activo en una
-            // carpeta autocontenida (MoodPlayer.exe + DLLs + assets +
-            // shaders + project + game.json). Solo disponible con
-            // proyecto guardado — si esta dirty obliga a Save primero.
-            if (ImGui::MenuItem("Empaquetar proyecto...", nullptr, false,
+            if (ImGui::MenuItem(I18n::T("editor.menu.file.package").c_str(), nullptr, false,
                                 ui.hasProject())) {
                 ui.requestProjectAction(ProjectAction::PackageProject);
             }
             ImGui::Separator();
-            // Hito 22 Bloque 3: crea un .lua nuevo en assets/scripts/.
-            // Los scripts son assets globales del repo (igual que prefabs),
-            // asi que no se exige proyecto activo.
-            if (ImGui::MenuItem("Nuevo Script...")) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.file.new_script").c_str())) {
                 ui.requestProjectAction(ProjectAction::NewScript);
             }
-            // Hito 14: guardar la entidad seleccionada como prefab. Los
-            // prefabs son assets globales del repo (`<cwd>/assets/prefabs/`),
-            // no per-proyecto, asi que basta con tener una entidad
-            // seleccionada — no se exige proyecto activo.
             const bool canSavePrefab = static_cast<bool>(ui.selectedEntity());
-            if (ImGui::MenuItem("Guardar como prefab...", nullptr, false, canSavePrefab)) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.file.save_prefab").c_str(), nullptr, false, canSavePrefab)) {
                 ui.requestSavePrefabDialog();
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Salir", "Alt+F4")) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.file.exit").c_str(), "Alt+F4")) {
                 requestQuit = true;
             }
             ImGui::EndMenu();
@@ -80,11 +71,11 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
 
         // F2H18: top-level "Mapa". Antes era Archivo > Mapa. File ops
         // del mapa actual del proyecto activo (multi-mapa de F2H8).
-        if (ImGui::BeginMenu(ICON_FA_MAP " Mapa", ui.hasProject())) {
-            if (ImGui::MenuItem("Nuevo mapa")) {
+        if (ImGui::BeginMenu((std::string(ICON_FA_MAP " ") + I18n::T("editor.menu.map")).c_str(), ui.hasProject())) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.map.new").c_str())) {
                 ui.requestProjectAction(ProjectAction::NewMap);
             }
-            if (ImGui::BeginMenu("Abrir mapa", !ui.projectMaps().empty())) {
+            if (ImGui::BeginMenu(I18n::T("editor.menu.map.open").c_str(), !ui.projectMaps().empty())) {
                 for (const auto& p : ui.projectMaps()) {
                     const std::string display = p.filename().generic_string();
                     const bool isCurrent =
@@ -95,38 +86,38 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                     std::string label;
                     if (isCurrent) label += "* ";
                     label += display;
-                    if (isDefault) label += "  [default]";
+                    if (isDefault) { label += "  "; label += I18n::T("editor.menu.map.default_marker"); }
                     if (ImGui::MenuItem(label.c_str(), nullptr, isCurrent)) {
                         if (!isCurrent) ui.requestOpenMap(p);
                     }
                 }
                 ImGui::EndMenu();
             }
-            if (ImGui::MenuItem("Guardar mapa como...")) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.map.save_as").c_str())) {
                 ui.requestProjectAction(ProjectAction::SaveMapAs);
             }
             {
                 const bool alreadyDefault =
                     ui.currentMapPath().generic_string() ==
                     ui.defaultMapPath().generic_string();
-                if (ImGui::MenuItem("Establecer como default", nullptr,
+                if (ImGui::MenuItem(I18n::T("editor.menu.map.set_default").c_str(), nullptr,
                                       alreadyDefault, !alreadyDefault)) {
                     ui.requestProjectAction(ProjectAction::SetCurrentMapAsDefault);
                 }
             }
             {
                 const bool canDelete = ui.projectMaps().size() > 1u;
-                if (ImGui::MenuItem("Eliminar mapa actual", nullptr,
+                if (ImGui::MenuItem(I18n::T("editor.menu.map.delete").c_str(), nullptr,
                                       false, canDelete)) {
                     ui.requestProjectAction(ProjectAction::DeleteCurrentMap);
                 }
             }
             // F2H20: compilacion brush -> mesh estatica + export OBJ.
             ImGui::Separator();
-            if (ImGui::MenuItem("Compilar mapa (stats)")) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.map.compile").c_str())) {
                 ui.requestProjectAction(ProjectAction::CompileMap);
             }
-            if (ImGui::MenuItem("Exportar OBJ...")) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.map.export_obj").c_str())) {
                 ui.requestProjectAction(ProjectAction::ExportObj);
             }
             ImGui::EndMenu();
@@ -134,29 +125,29 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
 
         // F2H18: top-level "Brush". Geometria (primitivas + booleanos).
         // Antes vivia anidada como Archivo > Mapa > {Anadir Brush, Boolean}.
-        if (ImGui::BeginMenu(ICON_FA_CUBES_STACKED " Brush", ui.hasProject())) {
+        if (ImGui::BeginMenu((std::string(ICON_FA_CUBES_STACKED " ") + I18n::T("editor.menu.brush")).c_str(), ui.hasProject())) {
             // F2H11 + F2H14: primitivas CSG para el mapa actual.
-            if (ImGui::BeginMenu("Anadir")) {
-                if (ImGui::MenuItem("Box")) {
+            if (ImGui::BeginMenu(I18n::T("editor.menu.brush.add").c_str())) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.brush.box").c_str())) {
                     ui.requestProjectAction(ProjectAction::AddBoxBrush);
                 }
-                if (ImGui::MenuItem("Cylinder")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.brush.cylinder").c_str())) {
                     ui.requestProjectAction(ProjectAction::AddCylinderBrush);
                 }
-                if (ImGui::MenuItem("Sphere (poliedrica)")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.brush.sphere").c_str())) {
                     ui.requestProjectAction(ProjectAction::AddSphereBrush);
                 }
-                if (ImGui::MenuItem("Pyramid")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.brush.pyramid").c_str())) {
                     ui.requestProjectAction(ProjectAction::AddPyramidBrush);
                 }
-                if (ImGui::MenuItem("Wedge (rampa)")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.brush.wedge").c_str())) {
                     ui.requestProjectAction(ProjectAction::AddWedgeBrush);
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Prism Triangular")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.brush.prism_tri").c_str())) {
                     ui.requestProjectAction(ProjectAction::AddPrismTriangularBrush);
                 }
-                if (ImGui::MenuItem("Prism Hexagonal")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.brush.prism_hex").c_str())) {
                     ui.requestProjectAction(ProjectAction::AddPrismHexagonalBrush);
                 }
                 ImGui::EndMenu();
@@ -168,7 +159,7 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu(ICON_FA_PEN_TO_SQUARE " Editar")) {
+        if (ImGui::BeginMenu((std::string(ICON_FA_PEN_TO_SQUARE " ") + I18n::T("editor.menu.edit")).c_str())) {
             // Hito 27: cableado a HistoryStack inyectado por EditorApplication.
             // Hasta que el ctor termine, m_history puede ser nullptr — evitamos
             // crash deshabilitando los items.
@@ -176,9 +167,11 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             const bool canUndo = (h != nullptr && h->canUndo());
             const bool canRedo = (h != nullptr && h->canRedo());
             const std::string undoLabel = canUndo
-                ? ("Deshacer '" + h->undoName() + "'") : std::string("Deshacer");
+                ? I18n::T("editor.menu.edit.undo_named", h->undoName())
+                : I18n::T("editor.menu.edit.undo");
             const std::string redoLabel = canRedo
-                ? ("Rehacer '" + h->redoName() + "'") : std::string("Rehacer");
+                ? I18n::T("editor.menu.edit.redo_named", h->redoName())
+                : I18n::T("editor.menu.edit.redo");
             if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, canUndo)) {
                 h->undo();
             }
@@ -188,7 +181,7 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu(ICON_FA_EYE " Ver")) {
+        if (ImGui::BeginMenu((std::string(ICON_FA_EYE " ") + I18n::T("editor.menu.view")).c_str())) {
             // F2H7: agrupar paneles por categoria (Scene/Assets/Debug/World).
             // Cada IPanel sobreescribe `category()` o usa el default "Scene".
             // El order de las categorias arriba es deliberado: Scene primero
@@ -205,13 +198,33 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                         }
                     }
                     if (!any) {
-                        ImGui::TextDisabled("(vacio)");
+                        ImGui::TextDisabled("%s", I18n::T("editor.menu.view.empty").c_str());
                     }
                     ImGui::EndMenu();
                 }
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Restablecer layout del workspace activo")) {
+            // F2H43: selector de idioma (persiste en %APPDATA%\MoodEngine\settings.json).
+            if (ImGui::BeginMenu(I18n::T("editor.menu.view.language").c_str())) {
+                const auto current = I18n::currentLanguage();
+                if (ImGui::MenuItem(I18n::T("editor.menu.view.language.english").c_str(),
+                                     nullptr, current == I18n::Language::English)) {
+                    if (I18n::setLanguage(I18n::Language::English)) {
+                        UserSettings::setLanguage(I18n::Language::English);
+                        UserSettings::save();
+                    }
+                }
+                if (ImGui::MenuItem(I18n::T("editor.menu.view.language.spanish").c_str(),
+                                     nullptr, current == I18n::Language::Spanish)) {
+                    if (I18n::setLanguage(I18n::Language::Spanish)) {
+                        UserSettings::setLanguage(I18n::Language::Spanish);
+                        UserSettings::save();
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem(I18n::T("editor.menu.view.reset_layout").c_str())) {
                 // F2H22: el reset re-aplica tanto el dock layout (via
                 // DockBuilder en el proximo frame) como la visibility
                 // default de los panels — sin esto, los panels que el
@@ -225,123 +238,71 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu(ICON_FA_CIRCLE_QUESTION " Ayuda")) {
-            if (ImGui::MenuItem("Acerca de")) {
+        if (ImGui::BeginMenu((std::string(ICON_FA_CIRCLE_QUESTION " ") + I18n::T("editor.menu.help")).c_str())) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.help.about").c_str())) {
                 m_showAboutPopup = true;
             }
             ImGui::Separator();
-            // F2H18: los demos viven en submenu Ayuda > Demos. No son
-            // ayuda al usuario, son para validar features rapidamente
-            // — pero tampoco merecen top-level (son secundarios al
-            // flow de mapping serio). El stress test de poligonos
-            // queda dentro del mismo submenu (es un demo mas).
-            if (ImGui::BeginMenu("Demos", ui.hasProject())) {
-                // Demo Hito 8: spawnea una entidad flotante con ScriptComponent
-                // que apunta a assets/scripts/rotator.lua. Util para validar
-                // que el ScriptSystem engancha sin tocar nada del mapa.
-                if (ImGui::MenuItem("Agregar rotador demo")) {
+            if (ImGui::BeginMenu(I18n::T("editor.menu.help.demos").c_str(), ui.hasProject())) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.rotator").c_str())) {
                     ui.requestSpawnRotator();
                 }
-                // Demo Hito 20 Bloque 5: spawnea una entidad invisible con
-                // ScriptComponent apuntando a hud_demo.lua. En Play Mode el
-                // script setea HP=75/Ammo=12 y dren a HP=0 -> auto-pausa.
-                if (ImGui::MenuItem("Agregar HUD demo")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.hud").c_str())) {
                     ui.requestSpawnHudDemo();
                 }
-                // Demo Hito 23 Bloque 3: enemigo NavAgent que persigue al
-                // jugador en Play Mode. Mesh = Fox.glb caminando.
-                if (ImGui::MenuItem("Agregar enemigo demo")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.enemy").c_str())) {
                     ui.requestSpawnEnemyDemo();
                 }
-                // Demo Hito 9: spawnea una entidad con AudioSourceComponent
-                // (beep.wav loop 3D) en una esquina del mapa. En Play Mode,
-                // acercarse debería subir el volumen por atenuacion 3D.
-                if (ImGui::MenuItem("Agregar audio source demo")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.audio").c_str())) {
                     ui.requestSpawnAudioSource();
                 }
-                // Demo Hito 11: spawnea una luz puntual blanca encima del centro
-                // del mapa. Si no hay luces, la sala se ve casi negra (solo
-                // ambient); con esta luz aparecen highlights y caras sombreadas.
-                if (ImGui::MenuItem("Agregar luz puntual demo")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.point_light").c_str())) {
                     ui.requestSpawnPointLight();
                 }
-                // Demo Hito 12: caja fisica (rigid body dinamico) que cae por
-                // gravedad. En Play Mode la caja se apoya en el suelo y puede
-                // ser empujada por el jugador (colisiones AABB vs capsule
-                // llegan en hitos posteriores).
-                if (ImGui::MenuItem("Agregar caja fisica demo")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.physics_box").c_str())) {
                     ui.requestSpawnPhysicsBox();
                 }
-                // Demo Hito 15: entidad "Environment" con EnvironmentComponent
-                // default. Una vez creada, se puede editar desde el Inspector
-                // (skybox path, fog mode/color/density, exposure, tonemap).
-                if (ImGui::MenuItem("Agregar Environment")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.environment").c_str())) {
                     ui.requestSpawnEnvironment();
                 }
-                // Demo Hito 16: piso plano + columna + sol direccional con
-                // castShadows=true. Pensado para ver shadow mapping aislado sin
-                // que el mapa de tiles tape la sombra contra los muros.
-                if (ImGui::MenuItem("Agregar demo de sombras")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.shadow").c_str())) {
                     ui.requestSpawnShadowDemo();
                 }
-                // Demo Hito 17: 4 esferas con materiales PBR distintos (oro
-                // pulido, cobre rugoso, plastico azul, blanco mate). Permite
-                // ver el efecto del IBL specular + diffuse en una sola toma.
-                if (ImGui::MenuItem("Agregar esferas PBR de prueba")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.pbr_spheres").c_str())) {
                     ui.requestSpawnPbrSpheres();
                 }
-                // Demo Hito 18: stress test del Forward+ — 64 point lights
-                // (8x8 grid sobre y=2) con colores procedurales. Sin tile
-                // culling el shader iterria 64 veces por fragment; con
-                // culling solo procesa las que afectan cada tile.
-                if (ImGui::MenuItem("Agregar stress test 64 luces")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.light_stress").c_str())) {
                     ui.requestSpawnLightStress();
                 }
-                // Demo Hito 19: spawnea el personaje Fox.glb (CC0) con
-                // animacion. Se ve en loop tanto en Editor como Play Mode.
-                // Cambiar el clip activo desde el Inspector (Animator).
-                if (ImGui::MenuItem("Agregar personaje animado")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.animated_char").c_str())) {
                     ui.requestSpawnAnimatedCharacter();
                 }
-                // Demo Hito 29: spawnea un emisor de particulas preset
-                // "fuego" en (0, 0.5, 0). Visible en Editor y Play.
-                if (ImGui::MenuItem("Agregar particulas de fuego demo")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.fire_particles").c_str())) {
                     ui.requestSpawnFireParticles();
                 }
-                // Demo Hito 33: spawnea un trigger demo (AABB 2x2x2m) con
-                // script que loguea enter/exit. Activo solo en Play Mode.
-                if (ImGui::MenuItem("Agregar trigger demo")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.trigger").c_str())) {
                     ui.requestSpawnTrigger();
                 }
 
-                // F2H2: stress tests de poligonos. Spawnean grids 3D de cubos
-                // hasta el target de tris (cubo = 12 tris). Para benchmark de
-                // FPS, draw calls y identificacion de cuellos de botella.
                 ImGui::Separator();
-                if (ImGui::BeginMenu("Stress test poligonos")) {
-                    if (ImGui::MenuItem("Spawn 10K tris (cubos)")) {
+                if (ImGui::BeginMenu(I18n::T("editor.menu.help.stress").c_str())) {
+                    if (ImGui::MenuItem(I18n::T("editor.menu.help.stress.10k").c_str())) {
                         ui.requestSpawnStressTris(10000);
                     }
-                    if (ImGui::MenuItem("Spawn 100K tris (cubos)")) {
+                    if (ImGui::MenuItem(I18n::T("editor.menu.help.stress.100k").c_str())) {
                         ui.requestSpawnStressTris(100000);
                     }
-                    if (ImGui::MenuItem("Spawn 500K tris (cubos)")) {
+                    if (ImGui::MenuItem(I18n::T("editor.menu.help.stress.500k").c_str())) {
                         ui.requestSpawnStressTris(500000);
                     }
-                    if (ImGui::MenuItem("Spawn 1M tris (cubos)")) {
+                    if (ImGui::MenuItem(I18n::T("editor.menu.help.stress.1m").c_str())) {
                         ui.requestSpawnStressTris(1000000);
                     }
                     ImGui::EndMenu();
                 }
 
-                // F2H42: scene completa para baseline measurement de
-                // optimizacion runtime — dispara TODOS los demos juntos
-                // (cubos + 64 luces + esferas PBR + sombras + Fox +
-                // CesiumMan + particulas + trigger). Click una vez,
-                // queda escena lista para profilear con Tracy +
-                // Performance panel snapshot CSV.
                 ImGui::Separator();
-                if (ImGui::MenuItem("Spawn FULL STRESS SCENE (F2H42)")) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.full_stress").c_str())) {
                     ui.requestSpawnFullStressScene();
                 }
                 ImGui::EndMenu();
@@ -384,7 +345,10 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
 
         // Boton Play/Stop empujado a la derecha de la menu bar.
         const bool isPlay = ui.mode() == EditorMode::Play;
-        const char* btnLabel = isPlay ? (ICON_FA_STOP " Stop") : (ICON_FA_PLAY " Play");
+        const std::string playStopLabel = isPlay
+            ? (std::string(ICON_FA_STOP " ") + I18n::T("editor.menu.stop"))
+            : (std::string(ICON_FA_PLAY " ") + I18n::T("editor.menu.play"));
+        const char* btnLabel = playStopLabel.c_str();
         const float btnWidth = 80.0f; // F2H37: bumped 64->80 px para acomodar icon
         const float avail = ImGui::GetContentRegionAvail().x;
         if (avail > btnWidth) {
@@ -408,31 +372,35 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
     }
 
     // --- Popups ---
+    // F2H43: titles de popups son IDs internos de ImGui — NO traducir
+    // (cambiar el ID rompe BeginPopupModal). Se mantienen en codigo;
+    // el usuario nunca los ve en el title bar (los modals son
+    // AlwaysAutoResize sin titulo visible relevante).
     if (m_showAboutPopup) {
-        ImGui::OpenPopup("Acerca de MoodEngine");
+        ImGui::OpenPopup("##about_modal");
         m_showAboutPopup = false;
     }
     if (m_showNotImplementedPopup) {
-        ImGui::OpenPopup("No implementado");
+        ImGui::OpenPopup("##notimpl_modal");
         m_showNotImplementedPopup = false;
     }
 
-    if (ImGui::BeginPopupModal("Acerca de MoodEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("MoodEngine");
-        ImGui::Text("Version 0.3.0 (Hito 3)");
+    if (ImGui::BeginPopupModal("##about_modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("%s", I18n::T("editor.modal.about.title").c_str());
+        ImGui::Text("%s", I18n::T("editor.modal.about.version").c_str());
         ImGui::Separator();
-        ImGui::Text("Motor grafico 3D propio con editor integrado.");
-        ImGui::Text("Repositorio: https://github.com/DanielOjeda25/MoodEngine");
+        ImGui::Text("%s", I18n::T("editor.modal.about.description").c_str());
+        ImGui::Text("%s", I18n::T("editor.modal.about.repo").c_str());
         ImGui::Separator();
-        if (ImGui::Button("Cerrar", ImVec2(120, 0))) {
+        if (ImGui::Button(I18n::T("editor.modal.common.close").c_str(), ImVec2(120, 0))) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
     }
 
-    if (ImGui::BeginPopupModal("No implementado", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("Esta accion se implementara en un hito futuro.");
-        if (ImGui::Button("Ok", ImVec2(120, 0))) {
+    if (ImGui::BeginPopupModal("##notimpl_modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("%s", I18n::T("editor.modal.notimpl.body").c_str());
+        if (ImGui::Button(I18n::T("editor.modal.common.ok").c_str(), ImVec2(120, 0))) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();

@@ -4,6 +4,7 @@
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/scene/InspectorPanel_Internal.h"
 
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/Components.h"
 
 #include <imgui.h>
@@ -24,19 +25,22 @@ void InspectorPanel::renderScriptSection(Entity e) {
     ImGui::SeparatorText(ICON_FA_FILE_CODE " Script");
     char buf[512];
     std::snprintf(buf, sizeof(buf), "%s", sc.path.c_str());
-    if (ImGui::InputText("path##sc", buf, sizeof(buf))) {
+    const std::string pathLabel = I18n::T("editor.panel.inspector.script.path") + "##sc";
+    if (ImGui::InputText(pathLabel.c_str(), buf, sizeof(buf))) {
         sc.path = buf;
         sc.loaded = false;
         sc.lastError.clear();
         m_editedThisFrame = true;
     }
-    if (ImGui::Button("Recargar##sc")) {
+    const std::string reloadLabel = I18n::T("editor.panel.inspector.script.reload") + "##sc";
+    if (ImGui::Button(reloadLabel.c_str())) {
         sc.loaded = false;
         sc.lastError.clear();
     }
     if (!sc.lastError.empty()) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
-        ImGui::TextWrapped("Error: %s", sc.lastError.c_str());
+        ImGui::TextWrapped("%s",
+            I18n::T("editor.panel.inspector.script.error", sc.lastError).c_str());
         ImGui::PopStyleColor();
     }
 
@@ -47,7 +51,8 @@ void InspectorPanel::renderScriptSection(Entity e) {
     // binding; un boton "Reset" borra el override (vuelve al
     // default del script).
     if (!sc.exposedProps.empty()) {
-        ImGui::TextDisabled("Exposed properties");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.script.exposed_props").c_str());
         for (const auto& prop : sc.exposedProps) {
             ImGui::PushID(prop.name.c_str());
 
@@ -107,7 +112,7 @@ void InspectorPanel::renderScriptSection(Entity e) {
             }
 
             ImGui::SameLine();
-            if (ImGui::SmallButton("Reset")) {
+            if (ImGui::SmallButton(I18n::T("editor.panel.inspector.script.reset").c_str())) {
                 sc.overrides.erase(prop.name);
                 changed = true;
             }

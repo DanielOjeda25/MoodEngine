@@ -4,6 +4,7 @@
 #include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/ui/EditorUI.h"
 #include "editor/ui/IconHelpers.h"  // F2H37: iconForEntity compartido
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/VisGroup.h"  // F2H33: gray-out hidden entities
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -24,7 +25,7 @@ void HierarchyPanel::onImGuiRender() {
     }
 
     if (m_scene == nullptr || m_ui == nullptr) {
-        ImGui::TextDisabled("Escena no inyectada");
+        ImGui::TextDisabled("%s", I18n::T("editor.panel.hierarchy.scene_not_injected").c_str());
         ImGui::End();
         return;
     }
@@ -35,7 +36,7 @@ void HierarchyPanel::onImGuiRender() {
     collectHierarchyEntries(*m_scene, m_entries);
 
     if (m_entries.empty()) {
-        ImGui::TextDisabled("Escena vacia.");
+        ImGui::TextDisabled("%s", I18n::T("editor.panel.hierarchy.empty").c_str());
         ImGui::End();
         return;
     }
@@ -47,20 +48,9 @@ void HierarchyPanel::onImGuiRender() {
     // no robar foco visual; tooltip al hover por si el dev quiere ver
     // el detalle de cada modifier. F2H23 polish: Shift=add, Ctrl=toggle
     // (convencion Maya / Hammer — pedido del dev).
-    ImGui::TextDisabled("Click=sel | Shift+Click=anadir | Ctrl+Click=toggle");
+    ImGui::TextDisabled("%s", I18n::T("editor.panel.hierarchy.shortcut_hint").c_str());
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip(
-            "Click            -> reemplazar seleccion (single).\n"
-            "Shift+Click      -> anadir entidad al set (multi-seleccion).\n"
-            "Ctrl+Click       -> toggle (anadir si no esta, quitar si esta).\n"
-            "\n"
-            "Multi-seleccion: el Inspector aplica los cambios de\n"
-            "Transform a TODAS las entidades como mismo delta.\n"
-            "\n"
-            "Color del row:\n"
-            "Naranja    -> entidad activa (primary del set).\n"
-            "Amarillo   -> en seleccion pero no activa (secundaria).\n"
-            "Gris       -> oculta por VisGroup (sigue clickeable).");
+        ImGui::SetTooltip("%s", I18n::T("editor.panel.hierarchy.shortcut_tooltip").c_str());
     }
     ImGui::Separator();
 
@@ -171,11 +161,12 @@ void HierarchyPanel::onImGuiRender() {
     if (totalCount > 5000) {
         ImGui::PushStyleColor(ImGuiCol_Text,
                                 ImVec4(1.00f, 0.85f, 0.25f, 1.00f));
-        ImGui::Text("%d entidades (lista grande - puede impactar perf)",
-                     totalCount);
+        ImGui::Text("%s",
+                     I18n::T("editor.panel.hierarchy.count_large", totalCount).c_str());
         ImGui::PopStyleColor();
     } else {
-        ImGui::TextDisabled("%d entidades", totalCount);
+        ImGui::TextDisabled("%s",
+                              I18n::T("editor.panel.hierarchy.count", totalCount).c_str());
     }
 
     ImGui::End();

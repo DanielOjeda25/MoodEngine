@@ -1,5 +1,7 @@
 #include "editor/panels/debug/LuaApiPanel.h"
 
+#include "engine/i18n/I18n.h"  // F2H43
+
 #include <imgui.h>
 
 namespace Mood {
@@ -34,10 +36,8 @@ void LuaApiPanel::onImGuiRender() {
         return;
     }
 
-    ImGui::TextWrapped(
-        "Bindings disponibles para scripts asignados via ScriptComponent. "
-        "El sistema llama `function onUpdate(self, dt)` cada frame de la "
-        "entidad que tiene el script.");
+    ImGui::TextWrapped("%s",
+        I18n::T("editor.panel.lua_api.intro").c_str());
     ImGui::Spacing();
 
     if (ImGui::BeginTabBar("##LuaApiTabs")) {
@@ -64,11 +64,8 @@ void LuaApiPanel::onImGuiRender() {
 
         if (ImGui::BeginTabItem("hud")) {
             ImGui::Spacing();
-            ImGui::TextWrapped(
-                "Estado global del juego (HP/Ammo/paused). Visible en el "
-                "HUD del Play Mode (editor) o de MoodPlayer (standalone). "
-                "El estado vive en GameState (singleton) — todos los "
-                "scripts comparten la misma instancia.");
+            ImGui::TextWrapped("%s",
+                I18n::T("editor.panel.lua_api.hud_intro").c_str());
             ImGui::Spacing();
             drawApiEntry("hud.setHp(int)",
                 "Setea el HP visible en el bloque izquierdo del HUD.",
@@ -95,10 +92,8 @@ void LuaApiPanel::onImGuiRender() {
 
         if (ImGui::BeginTabItem("log")) {
             ImGui::Spacing();
-            ImGui::TextWrapped(
-                "Logging que aparece en el panel Console del editor (canal "
-                "`script`). Util para debug — no use `print()` (Lua print "
-                "va a stdout que el editor no captura).");
+            ImGui::TextWrapped("%s",
+                I18n::T("editor.panel.lua_api.log_intro").c_str());
             ImGui::Spacing();
             drawApiEntry("log.info(string)",
                 "Mensaje informativo. Color por defecto en la consola.",
@@ -111,9 +106,8 @@ void LuaApiPanel::onImGuiRender() {
 
         if (ImGui::BeginTabItem("Lifecycle")) {
             ImGui::Spacing();
-            ImGui::TextWrapped(
-                "El motor llama estas funciones del script. Definirlas en "
-                "el `.lua` global; ScriptSystem las invoca por nombre.");
+            ImGui::TextWrapped("%s",
+                I18n::T("editor.panel.lua_api.lifecycle_intro").c_str());
             ImGui::Spacing();
             drawApiEntry("function onUpdate(self, dt)",
                 "Llamada cada frame mientras la entidad tiene "
@@ -124,10 +118,8 @@ void LuaApiPanel::onImGuiRender() {
                 "        self.transform.rotationEuler.y + 45 * dt\n"
                 "end");
             ImGui::Spacing();
-            ImGui::TextWrapped(
-                "Hot-reload: si el archivo .lua cambia en disco, "
-                "ScriptSystem re-ejecuta el chunk en el mismo sol::state. "
-                "Las globals del script persisten entre reloads.");
+            ImGui::TextWrapped("%s",
+                I18n::T("editor.panel.lua_api.hot_reload").c_str());
             ImGui::EndTabItem();
         }
 

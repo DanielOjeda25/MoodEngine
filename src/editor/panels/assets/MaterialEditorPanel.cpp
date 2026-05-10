@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/render/preview/MaterialPreviewRenderer.h"
 #include "engine/render/resources/MaterialAsset.h"
 
@@ -36,14 +37,16 @@ void MaterialEditorPanel::onImGuiRender() {
     }
 
     if (m_assets == nullptr) {
-        ImGui::TextDisabled("AssetManager no inyectado");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.material.no_manager").c_str());
         ImGui::End();
         return;
     }
 
     const usize matCount = m_assets->materialCount();
     if (matCount == 0) {
-        ImGui::TextDisabled("No hay materiales registrados.");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.material.no_materials").c_str());
         ImGui::End();
         return;
     }
@@ -54,7 +57,7 @@ void MaterialEditorPanel::onImGuiRender() {
     for (MaterialAssetId i = 0; i < matCount; ++i) {
         labels.push_back(m_assets->materialPathOf(i));
         if (labels.back().empty()) {
-            labels.back() = "<sin path>";
+            labels.back() = I18n::T("editor.panel.material.no_path");
         }
     }
     // F2H21: la primera vez que el panel se abre (m_selectedMatIdx=-1),
@@ -71,7 +74,7 @@ void MaterialEditorPanel::onImGuiRender() {
         }
     }
 
-    if (ImGui::BeginCombo("Material",
+    if (ImGui::BeginCombo(I18n::T("editor.panel.material.material").c_str(),
                             labels[m_selectedMatIdx].c_str())) {
         for (int i = 0; i < static_cast<int>(matCount); ++i) {
             const bool selected = (m_selectedMatIdx == i);
@@ -94,7 +97,8 @@ void MaterialEditorPanel::onImGuiRender() {
     const MaterialAssetId matId = static_cast<MaterialAssetId>(m_selectedMatIdx);
     MaterialAsset* mat = m_assets->getMaterial(matId);
     if (mat == nullptr) {
-        ImGui::TextDisabled("Material id %u sin instancia (raro).", matId);
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.material.no_instance", matId).c_str());
         ImGui::End();
         return;
     }
@@ -138,13 +142,14 @@ void MaterialEditorPanel::onImGuiRender() {
                 ImVec2(0.0f, 1.0f),
                 ImVec2(1.0f, 0.0f));
         } else {
-            ImGui::TextDisabled("(preview no disponible)");
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.panel.material.preview_unavailable").c_str());
         }
     };
 
     // En modo Vertical, el preview va PRIMERO (arriba).
     if (layout == LayoutMode::Vertical) {
-        ImGui::TextUnformatted("Preview");
+        ImGui::TextUnformatted(I18n::T("editor.panel.material.preview").c_str());
         drawPreviewBlock();
         ImGui::Separator();
     }
@@ -214,7 +219,7 @@ void MaterialEditorPanel::onImGuiRender() {
         const bool empty = (slotRef == 0);
         const std::string path = m_assets->pathOf(slotRef);
         const std::string btnLabel = empty
-            ? std::string(label) + ": (vacio - drop textura aqui)"
+            ? std::string(label) + ": " + I18n::T("editor.panel.material.slot_empty")
             : std::string(label) + ": " + path;
 
         // Reservar 28 px a la derecha para el boton "X". -FLT_MIN tomaba
@@ -224,8 +229,11 @@ void MaterialEditorPanel::onImGuiRender() {
                               - ImGui::GetStyle().ItemSpacing.x;
         ImGui::Button(btnLabel.c_str(), ImVec2(mainBtnW, 0));
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("%s\n(drop textura desde Asset Browser)",
-                                empty ? "<sin textura>" : path.c_str());
+            const std::string ttBody = empty
+                ? I18n::T("editor.panel.material.slot_no_texture")
+                : path;
+            ImGui::SetTooltip("%s",
+                I18n::T("editor.panel.material.slot_tooltip", ttBody).c_str());
         }
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* p =
@@ -265,18 +273,19 @@ void MaterialEditorPanel::onImGuiRender() {
         }
         if (empty) ImGui::EndDisabled();
         if (ImGui::IsItemHovered() && !empty) {
-            ImGui::SetTooltip("Quitar textura del slot '%s'", label);
+            ImGui::SetTooltip("%s",
+                I18n::T("editor.panel.material.slot_remove_tooltip",
+                        std::string(label)).c_str());
         }
     };
 
     ImGui::Spacing();
-    ImGui::TextUnformatted("Texture slots");
+    ImGui::TextUnformatted(I18n::T("editor.panel.material.texture_slots").c_str());
     ImGui::SameLine();
     ImGui::TextDisabled("(?)");
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip(
-            "Cada slot acepta drag-and-drop de una textura desde el panel\n"
-            "Asset Browser. El boton 'X' a la derecha vacia el slot.");
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.panel.material.texture_slots_help").c_str());
     }
 
     textureSlot("albedo",             mat->albedo);
@@ -292,7 +301,7 @@ void MaterialEditorPanel::onImGuiRender() {
     if (!canSave) {
         ImGui::BeginDisabled();
     }
-    if (ImGui::Button("Guardar (.material)", ImVec2(-FLT_MIN, 0))) {
+    if (ImGui::Button(I18n::T("editor.panel.material.save").c_str(), ImVec2(-FLT_MIN, 0))) {
         // F2H21 tracking: log de la accion + resultado.
         Log::editor()->info(
             "[material-editor] click Guardar: '{}'", matPath);
@@ -302,16 +311,17 @@ void MaterialEditorPanel::onImGuiRender() {
     }
     if (!canSave) {
         ImGui::EndDisabled();
-        ImGui::TextDisabled("(material runtime / sentinel - no persistible)");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.material.runtime_sentinel").c_str());
     }
     if (m_saveStatusFrames > 0) {
         const ImVec4 color = m_saveStatusOk
             ? ImVec4(0.4f, 0.95f, 0.4f, 1.0f)
             : ImVec4(0.95f, 0.4f, 0.4f, 1.0f);
         ImGui::PushStyleColor(ImGuiCol_Text, color);
-        ImGui::TextUnformatted(m_saveStatusOk
-            ? "Guardado OK"
-            : "Guardar fallo (ver log)");
+        ImGui::TextUnformatted(I18n::T(m_saveStatusOk
+            ? "editor.panel.material.save_ok"
+            : "editor.panel.material.save_fail").c_str());
         ImGui::PopStyleColor();
         --m_saveStatusFrames;
     }
@@ -320,7 +330,7 @@ void MaterialEditorPanel::onImGuiRender() {
     if (layout == LayoutMode::TwoColumns) {
         ImGui::NextColumn();
 
-        ImGui::TextUnformatted("Preview");
+        ImGui::TextUnformatted(I18n::T("editor.panel.material.preview").c_str());
         ImGui::Separator();
 
         drawPreviewBlock();

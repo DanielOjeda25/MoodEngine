@@ -8,7 +8,9 @@
 #include "player/PlayerApplication.h"
 
 #include "core/Log.h"
+#include "core/UserSettings.h"  // F2H43
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/audio/device/AudioDevice.h"
 #include "engine/game/manifest/GameManifest.h"
 #include "engine/game/state/GameState.h"
@@ -49,6 +51,11 @@ constexpr const char* k_GlslVersion = "#version 450 core";
 PlayerApplication::PlayerApplication() {
     Log::init();
     MOOD_LOG_INFO("MoodPlayer iniciando...");
+
+    // F2H43: cargar idioma persistido (compartido con MoodEditor via
+    // %APPDATA%\MoodEngine\settings.json) y arrancar I18n.
+    UserSettings::init();
+    I18n::init(UserSettings::language());
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0) {
         throw std::runtime_error(std::string("SDL_Init fallo: ") + SDL_GetError());

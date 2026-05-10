@@ -3,6 +3,7 @@
 #include "core/Log.h"
 #include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons en tabs + filas
 #include "engine/audio/clips/AudioClip.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MeshAsset.h"
 
@@ -239,7 +240,8 @@ void AssetBrowserPanel::onImGuiRender() {
     }
 
     if (m_assetManager == nullptr) {
-        ImGui::TextDisabled("Asset manager no inyectado");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.assets.no_manager").c_str());
         ImGui::End();
         return;
     }
@@ -263,7 +265,8 @@ void AssetBrowserPanel::onImGuiRender() {
             m_reloadRequested = true;
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Recargar assets desde disco");
+            ImGui::SetTooltip("%s",
+                I18n::T("editor.panel.assets.reload_tooltip").c_str());
         }
     }
 
@@ -277,8 +280,12 @@ void AssetBrowserPanel::onImGuiRender() {
         // ============================================================
         // TAB: Texturas (con grid de miniaturas)
         // ============================================================
-        if (ImGui::BeginTabItem(ICON_FA_IMAGE " Texturas")) {
-            ImGui::TextDisabled("%zu texturas", m_entries.size());
+        const std::string texTabLabel = std::string(ICON_FA_IMAGE " ") +
+            I18n::T("editor.panel.assets.tab.textures");
+        if (ImGui::BeginTabItem(texTabLabel.c_str())) {
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.panel.assets.count.textures",
+                        m_entries.size()).c_str());
             ImGui::BeginChild("##texturas_scroll", ImVec2(0.0f, 0.0f), false);
 
             const float avail = ImGui::GetContentRegionAvail().x;
@@ -348,8 +355,12 @@ void AssetBrowserPanel::onImGuiRender() {
         // ============================================================
         // TAB: Meshes
         // ============================================================
-        if (ImGui::BeginTabItem(ICON_FA_CUBE " Meshes")) {
-            ImGui::TextDisabled("%zu meshes", m_meshEntries.size());
+        const std::string meshTabLabel = std::string(ICON_FA_CUBE " ") +
+            I18n::T("editor.panel.assets.tab.meshes");
+        if (ImGui::BeginTabItem(meshTabLabel.c_str())) {
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.panel.assets.count.meshes",
+                        m_meshEntries.size()).c_str());
             ImGui::BeginChild("##meshes_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& me : m_meshEntries) {
                 MeshAsset* asset = m_assetManager->getMesh(me.id);
@@ -362,9 +373,10 @@ void AssetBrowserPanel::onImGuiRender() {
                 }
                 if (asset != nullptr) {
                     ImGui::SameLine();
-                    ImGui::TextDisabled("[%u submeshes, %u v]",
-                                         static_cast<u32>(asset->submeshes.size()),
-                                         asset->totalVertexCount());
+                    ImGui::TextDisabled("%s",
+                        I18n::T("editor.panel.assets.mesh_meta",
+                                static_cast<u32>(asset->submeshes.size()),
+                                asset->totalVertexCount()).c_str());
                 }
                 ImGui::PopID();
             }
@@ -375,8 +387,12 @@ void AssetBrowserPanel::onImGuiRender() {
         // ============================================================
         // TAB: Prefabs
         // ============================================================
-        if (ImGui::BeginTabItem(ICON_FA_BOX_OPEN " Prefabs")) {
-            ImGui::TextDisabled("%zu prefabs", m_prefabEntries.size());
+        const std::string prefabTabLabel = std::string(ICON_FA_BOX_OPEN " ") +
+            I18n::T("editor.panel.assets.tab.prefabs");
+        if (ImGui::BeginTabItem(prefabTabLabel.c_str())) {
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.panel.assets.count.prefabs",
+                        m_prefabEntries.size()).c_str());
             ImGui::BeginChild("##prefabs_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& pe : m_prefabEntries) {
                 ImGui::PushID(pe.logicalPath.c_str());
@@ -388,7 +404,8 @@ void AssetBrowserPanel::onImGuiRender() {
                     ImGui::EndDragDropSource();
                 }
                 ImGui::SameLine();
-                ImGui::TextDisabled("(prefab)");
+                ImGui::TextDisabled("%s",
+                    I18n::T("editor.panel.assets.kind.prefab").c_str());
                 ImGui::PopID();
             }
             ImGui::EndChild();
@@ -398,8 +415,12 @@ void AssetBrowserPanel::onImGuiRender() {
         // ============================================================
         // TAB: Materiales
         // ============================================================
-        if (ImGui::BeginTabItem(ICON_FA_PALETTE " Materiales")) {
-            ImGui::TextDisabled("%zu materiales", m_materialEntries.size());
+        const std::string matTabLabel = std::string(ICON_FA_PALETTE " ") +
+            I18n::T("editor.panel.assets.tab.materials");
+        if (ImGui::BeginTabItem(matTabLabel.c_str())) {
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.panel.assets.count.materials",
+                        m_materialEntries.size()).c_str());
             ImGui::BeginChild("##materiales_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& me : m_materialEntries) {
                 ImGui::PushID(me.logicalPath.c_str());
@@ -411,7 +432,8 @@ void AssetBrowserPanel::onImGuiRender() {
                     ImGui::EndDragDropSource();
                 }
                 ImGui::SameLine();
-                ImGui::TextDisabled("(material)");
+                ImGui::TextDisabled("%s",
+                    I18n::T("editor.panel.assets.kind.material").c_str());
                 ImGui::PopID();
             }
             ImGui::EndChild();
@@ -421,8 +443,12 @@ void AssetBrowserPanel::onImGuiRender() {
         // ============================================================
         // TAB: Scripts
         // ============================================================
-        if (ImGui::BeginTabItem(ICON_FA_FILE_CODE " Scripts")) {
-            ImGui::TextDisabled("%zu scripts", m_scriptEntries.size());
+        const std::string scriptTabLabel = std::string(ICON_FA_FILE_CODE " ") +
+            I18n::T("editor.panel.assets.tab.scripts");
+        if (ImGui::BeginTabItem(scriptTabLabel.c_str())) {
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.panel.assets.count.scripts",
+                        m_scriptEntries.size()).c_str());
             ImGui::BeginChild("##scripts_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& se : m_scriptEntries) {
                 ImGui::PushID(se.logicalPath.c_str());
@@ -439,7 +465,9 @@ void AssetBrowserPanel::onImGuiRender() {
                     ImGui::EndDragDropSource();
                 }
                 ImGui::SameLine();
-                ImGui::TextDisabled("(%u lineas)", se.lineCount);
+                ImGui::TextDisabled("%s",
+                    I18n::T("editor.panel.assets.script_lines",
+                            se.lineCount).c_str());
                 ImGui::PopID();
             }
             ImGui::EndChild();
@@ -449,8 +477,12 @@ void AssetBrowserPanel::onImGuiRender() {
         // ============================================================
         // TAB: Audio
         // ============================================================
-        if (ImGui::BeginTabItem(ICON_FA_MUSIC " Audio")) {
-            ImGui::TextDisabled("%zu clips", m_audioEntries.size());
+        const std::string audioTabLabel = std::string(ICON_FA_MUSIC " ") +
+            I18n::T("editor.panel.assets.tab.audio");
+        if (ImGui::BeginTabItem(audioTabLabel.c_str())) {
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.panel.assets.count.clips",
+                        m_audioEntries.size()).c_str());
             ImGui::BeginChild("##audio_scroll", ImVec2(0.0f, 0.0f), false);
             for (const auto& ae : m_audioEntries) {
                 AudioClip* clip = m_assetManager->getAudio(ae.id);

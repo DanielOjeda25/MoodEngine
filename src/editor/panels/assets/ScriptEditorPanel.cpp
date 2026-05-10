@@ -1,6 +1,7 @@
 #include "editor/panels/assets/ScriptEditorPanel.h"
 
 #include "core/Log.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/Components.h"
 
 #include <imgui.h>
@@ -70,8 +71,8 @@ void ScriptEditorPanel::onImGuiRender() {
     }
 
     if (targetPath.empty()) {
-        ImGui::TextDisabled(
-            "Selecciona una entidad con ScriptComponent para editar su .lua.");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.script_editor.no_entity").c_str());
         // Si no hay path, descartamos cualquier estado previo.
         if (!m_loadedPath.empty()) {
             m_loadedPath.clear();
@@ -90,8 +91,9 @@ void ScriptEditorPanel::onImGuiRender() {
 
     if (m_loadFailed) {
         ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1),
-                            "No se pudo abrir '%s' (no existe o sin permiso).",
-                            targetPath.c_str());
+                            "%s",
+                            I18n::T("editor.panel.script_editor.open_failed",
+                                    targetPath).c_str());
         ImGui::End();
         return;
     }
@@ -99,7 +101,9 @@ void ScriptEditorPanel::onImGuiRender() {
     // Header con path + dirty flag.
     ImGui::Text("%s%s", targetPath.c_str(), m_dirty ? " *" : "");
     ImGui::SameLine();
-    const bool clickedSave = ImGui::Button(m_dirty ? "Guardar" : "Guardar (sin cambios)");
+    const bool clickedSave = ImGui::Button(I18n::T(m_dirty
+        ? "editor.panel.script_editor.save"
+        : "editor.panel.script_editor.save_clean").c_str());
     ImGui::SameLine();
     ImGui::TextDisabled("Ctrl+S");
 

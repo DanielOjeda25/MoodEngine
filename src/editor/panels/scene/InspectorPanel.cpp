@@ -2,6 +2,7 @@
 
 #include "editor/selection/SelectionSet.h"           // F2H13
 #include "editor/ui/EditorUI.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/BrushComponent.h"  // F2H11
 #include "engine/scene/components/Components.h"
 
@@ -28,15 +29,15 @@ void InspectorPanel::onImGuiRender() {
     }
 
     if (m_ui == nullptr) {
-        ImGui::TextDisabled("Editor UI no inyectado");
+        ImGui::TextDisabled("%s", I18n::T("editor.panel.inspector.ui_not_injected").c_str());
         ImGui::End();
         return;
     }
 
     Entity e = m_ui->selectedEntity();
     if (!e) {
-        ImGui::TextDisabled("No hay entidad seleccionada");
-        ImGui::TextDisabled("Click en el panel Hierarchy para elegir una.");
+        ImGui::TextDisabled("%s", I18n::T("editor.panel.inspector.no_selection").c_str());
+        ImGui::TextDisabled("%s", I18n::T("editor.panel.inspector.no_selection_hint").c_str());
         ImGui::End();
         return;
     }
@@ -47,10 +48,9 @@ void InspectorPanel::onImGuiRender() {
     {
         const SelectionSet& set = m_ui->selectionSet();
         if (set.selected.size() > 1) {
-            ImGui::TextDisabled(
-                "+%d entidad(es) adicional(es) seleccionada(s) — solo se "
-                "edita la activa",
-                static_cast<int>(set.selected.size() - 1));
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.panel.inspector.multi_extra",
+                        static_cast<int>(set.selected.size() - 1)).c_str());
             ImGui::Separator();
         }
     }

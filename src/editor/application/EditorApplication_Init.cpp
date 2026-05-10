@@ -8,7 +8,9 @@
 #include "editor/application/EditorApplication.h"
 
 #include "core/Log.h"
+#include "core/UserSettings.h"  // F2H43
 #include "engine/audio/device/AudioDevice.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/render/preview/MaterialPreviewRenderer.h"
 #include "engine/render/rhi/IFramebuffer.h"
@@ -90,6 +92,11 @@ void GLAD_API_PTR glDebugCallback(GLenum /*source*/, GLenum type, GLuint id,
 EditorApplication::EditorApplication() {
     Log::init();
     MOOD_LOG_INFO("MoodEngine iniciando...");
+
+    // F2H43: cargar idioma persistido (default Spanish si no hay archivo)
+    // y arrancar I18n con ese idioma como activo. Fallback siempre Ingles.
+    UserSettings::init();
+    I18n::init(UserSettings::language());
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0) {
         throw std::runtime_error(std::string("SDL_Init fallo: ") + SDL_GetError());

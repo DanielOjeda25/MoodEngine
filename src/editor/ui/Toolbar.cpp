@@ -3,8 +3,11 @@
 #include "editor/application/EditorMode.h"
 #include "editor/ui/EditorUI.h"
 #include "editor/ui/IconsFontAwesome6.h"
+#include "engine/i18n/I18n.h"  // F2H43
 
 #include <imgui.h>
+
+#include <string>
 
 namespace Mood {
 
@@ -47,7 +50,8 @@ void Toolbar::onImGuiRender() {
     }
 
     if (m_ui == nullptr) {
-        ImGui::TextDisabled("EditorUI no inyectado");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.toolbar.no_ui").c_str());
         ImGui::End();
         return;
     }
@@ -59,28 +63,43 @@ void Toolbar::onImGuiRender() {
     //   E (2 taps)  -> modal Scale uniforme (cursor distance).
     //   R (1 tap)   -> Rotate gizmo rings.
     //   R (2 taps)  -> modal Rotate libre (cursor angle, anillo visual).
-    if (toolButton(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT " Mover",
-                    "Translate (W) - mover via gizmo arrows")) {
+    const std::string moveLabel = std::string(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT " ") +
+        I18n::T("editor.panel.toolbar.move");
+    const std::string moveTooltip = I18n::T("editor.panel.toolbar.move_tooltip");
+    if (toolButton(moveLabel.c_str(),
+                    moveTooltip.c_str())) {
         m_ui->requestGizmoMode(0);
     }
-    if (toolButton(ICON_FA_ROTATE " Rotar",
-                    "Rotate (R) - rings; doble-tap R = modal angulo libre")) {
+    const std::string rotLabel = std::string(ICON_FA_ROTATE " ") +
+        I18n::T("editor.panel.toolbar.rotate");
+    const std::string rotTooltip = I18n::T("editor.panel.toolbar.rotate_tooltip");
+    if (toolButton(rotLabel.c_str(),
+                    rotTooltip.c_str())) {
         m_ui->requestGizmoMode(1);
     }
-    if (toolButton(ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER " Escala",
-                    "Scale (E) - per-axis; doble-tap E = modal uniforme")) {
+    const std::string scaleLabel = std::string(ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER " ") +
+        I18n::T("editor.panel.toolbar.scale");
+    const std::string scaleTooltip = I18n::T("editor.panel.toolbar.scale_tooltip");
+    if (toolButton(scaleLabel.c_str(),
+                    scaleTooltip.c_str())) {
         m_ui->requestGizmoMode(2);
     }
 
     ImGui::Separator();
 
     // ---- Brushes (Add Box, Add Cylinder) ----
-    if (toolButton(ICON_FA_CUBE " Box",
-                    "Anadir Box brush al mapa actual")) {
+    const std::string boxLabel = std::string(ICON_FA_CUBE " ") +
+        I18n::T("editor.panel.toolbar.box");
+    const std::string boxTooltip = I18n::T("editor.panel.toolbar.box_tooltip");
+    if (toolButton(boxLabel.c_str(),
+                    boxTooltip.c_str())) {
         m_ui->requestProjectAction(ProjectAction::AddBoxBrush);
     }
-    if (toolButton(ICON_FA_CIRCLE " Cilindro",
-                    "Anadir Cylinder brush al mapa actual")) {
+    const std::string cylLabel = std::string(ICON_FA_CIRCLE " ") +
+        I18n::T("editor.panel.toolbar.cylinder");
+    const std::string cylTooltip = I18n::T("editor.panel.toolbar.cylinder_tooltip");
+    if (toolButton(cylLabel.c_str(),
+                    cylTooltip.c_str())) {
         m_ui->requestProjectAction(ProjectAction::AddCylinderBrush);
     }
 
@@ -88,8 +107,11 @@ void Toolbar::onImGuiRender() {
 
     // ---- Face mode toggle ----
     const bool faceActive = (m_ui->subMode() == EditorSubMode::Face);
-    if (toolButton(ICON_FA_VECTOR_SQUARE " Cara",
-                    "Toggle Face mode (3) - editar caras del brush",
+    const std::string faceLabel = std::string(ICON_FA_VECTOR_SQUARE " ") +
+        I18n::T("editor.panel.toolbar.face");
+    const std::string faceTooltip = I18n::T("editor.panel.toolbar.face_tooltip");
+    if (toolButton(faceLabel.c_str(),
+                    faceTooltip.c_str(),
                     faceActive)) {
         m_ui->requestToggleFaceMode();
     }

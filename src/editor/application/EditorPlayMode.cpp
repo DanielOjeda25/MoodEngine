@@ -4,6 +4,7 @@
 #include "core/math/AABB.h"
 #include "engine/game/overlay/GameOverlay.h"
 #include "engine/game/state/GameState.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/queries/ViewportPick.h"
 #include "engine/world/grid/GridMap.h"
@@ -240,10 +241,13 @@ void EditorApplication::drawGameOverlay(ImDrawList* dl,
                                           float w, float h) {
     // Hito 21 Bloque 3 Fase B: el overlay vive en `engine/game/GameOverlay`
     // para que el editor (Play Mode) y `MoodPlayer` lo compartan.
+    // F2H43: label exit traducido — la string vive el frame entero,
+    // GameOverlay la captura como `const char*`.
+    const std::string exitLbl = I18n::T("hud.menu.exit_to_editor");
     GameOverlay::draw(dl, x0, y0, w, h,
                        ImGui::GetIO().DeltaTime,
                        m_playCamera.forward(),
-                       "EXIT TO EDITOR",
+                       exitLbl.c_str(),
                        [this]() { exitPlayMode(); });
 }
 

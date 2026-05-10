@@ -6,6 +6,7 @@
 #include "core/Log.h"
 #include "editor/selection/SelectionSet.h"
 #include "editor/ui/EditorUI.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/Components.h"
 
@@ -62,15 +63,15 @@ void InspectorPanel::renderTransformSection(Entity e) {
 
     // --- position ---
     const glm::vec3 prePos = t.position;
-    if (ImGui::DragFloat3("position##tr", &t.position.x, 0.05f)) {
+    const std::string posLabel = I18n::T("editor.panel.inspector.transform.position") + "##tr";
+    if (ImGui::DragFloat3(posLabel.c_str(), &t.position.x, 0.05f)) {
         m_editedThisFrame = true;
         applyDeltaToSelection(t.position - prePos,
             [](TransformComponent& tc) { return tc.position; },
             [](TransformComponent& tc, const glm::vec3& v) { tc.position = v; },
             "position");
     }
-    detail::helpMarker("Posicion en metros (X derecha, Y arriba, Z atras).\n"
-                "Multi-seleccion: el mismo delta se aplica a todas.");
+    detail::helpMarker(I18n::T("editor.panel.inspector.transform.position_help").c_str());
     detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.position,
         [](Entity& en, const glm::vec3& v) {
             en.getComponent<TransformComponent>().position = v;
@@ -88,15 +89,15 @@ void InspectorPanel::renderTransformSection(Entity e) {
     if (showRotScale) {
         // --- rotation ---
         const glm::vec3 preRot = t.rotationEuler;
-        if (ImGui::DragFloat3("rotation (deg)##tr", &t.rotationEuler.x, 0.5f)) {
+        const std::string rotLabel = I18n::T("editor.panel.inspector.transform.rotation") + "##tr";
+        if (ImGui::DragFloat3(rotLabel.c_str(), &t.rotationEuler.x, 0.5f)) {
             m_editedThisFrame = true;
             applyDeltaToSelection(t.rotationEuler - preRot,
                 [](TransformComponent& tc) { return tc.rotationEuler; },
                 [](TransformComponent& tc, const glm::vec3& v) { tc.rotationEuler = v; },
                 "rotation");
         }
-        detail::helpMarker("Rotacion en grados Euler (X, Y, Z) — orden YXZ.\n"
-                    "Multi-seleccion: el mismo delta se aplica a todas.");
+        detail::helpMarker(I18n::T("editor.panel.inspector.transform.rotation_help").c_str());
         detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.rotationEuler,
             [](Entity& en, const glm::vec3& v) {
                 en.getComponent<TransformComponent>().rotationEuler = v;
@@ -105,7 +106,8 @@ void InspectorPanel::renderTransformSection(Entity e) {
 
         // --- scale ---
         const glm::vec3 preScale = t.scale;
-        if (ImGui::DragFloat3("scale##tr", &t.scale.x, 0.05f, 0.01f, 100.0f)) {
+        const std::string scaleLabel = I18n::T("editor.panel.inspector.transform.scale") + "##tr";
+        if (ImGui::DragFloat3(scaleLabel.c_str(), &t.scale.x, 0.05f, 0.01f, 100.0f)) {
             m_editedThisFrame = true;
             applyDeltaToSelection(t.scale - preScale,
                 [](TransformComponent& tc) { return tc.scale; },
@@ -118,8 +120,7 @@ void InspectorPanel::renderTransformSection(Entity e) {
                 },
                 "scale");
         }
-        detail::helpMarker("Escala (rango 0.01-100). 1.0 = tamano original.\n"
-                    "Multi-seleccion: el mismo delta se aplica a todas.");
+        detail::helpMarker(I18n::T("editor.panel.inspector.transform.scale_help").c_str());
         detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.scale,
             [](Entity& en, const glm::vec3& v) {
                 en.getComponent<TransformComponent>().scale = v;
@@ -132,9 +133,9 @@ void InspectorPanel::renderTransformSection(Entity e) {
     // F2H23: hint de multi-seleccion. Solo aparece cuando hay >1.
     const SelectionSet& set = m_ui->selectionSet();
     if (set.selected.size() > 1u) {
-        ImGui::TextDisabled(
-            "(multi-edit: %zu entidades — delta aplicado a todas)",
-            set.selected.size());
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.transform.multi_edit_hint",
+                    set.selected.size()).c_str());
     }
 }
 

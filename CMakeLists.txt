@@ -271,6 +271,7 @@ add_library(mood_engine_lib STATIC
     src/core/Log.cpp
     src/core/LogRingSink.cpp
     src/core/Time.cpp
+    src/core/UserSettings.cpp  # F2H43
 
     src/platform/Window.cpp
     src/platform/VFS.cpp
@@ -295,6 +296,8 @@ add_library(mood_engine_lib STATIC
     src/engine/game/manifest/GameManifest.cpp
     src/engine/game/overlay/GameOverlay.cpp
     src/engine/game/state/GameState.cpp
+
+    src/engine/i18n/I18n.cpp  # F2H43
 
     src/engine/packaging/PackageBuilder.cpp
 

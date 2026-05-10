@@ -10,6 +10,7 @@
 
 #include "core/Log.h"
 #include "engine/game/state/GameState.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
@@ -91,7 +92,7 @@ void PlayerApplication::drawMainMenu() {
     ImGui::Spacing();
 
     constexpr ImVec2 k_btn(-FLT_MIN, 48.0f);
-    if (ImGui::Button("New Game", k_btn)) {
+    if (ImGui::Button(I18n::T("player.menu.new_game").c_str(), k_btn)) {
         Log::engine()->info("[MainMenu] New Game -> reload mapa default + reset state");
         // Hito 41 fix-up: New Game debe RECARGAR el mapa default
         // desde el .moodproj — sin esto el state runtime acumulado
@@ -140,13 +141,16 @@ void PlayerApplication::drawMainMenu() {
 
         m_inMainMenu = false;
     }
-    if (ImGui::Button("Load Game", k_btn)) {
+    if (ImGui::Button(I18n::T("player.menu.load_game").c_str(), k_btn)) {
         // pfd::open_file devuelve un vector<string>; vacio = cancel.
+        const std::string dialogTitle = I18n::T("player.dialog.load_save");
+        const std::string filterMoodsave = I18n::T("player.dialog.filter.moodsave");
+        const std::string filterAll = I18n::T("player.dialog.filter.all");
         const auto results = pfd::open_file(
-            "Cargar partida",
+            dialogTitle,
             (exeBaseDir()).generic_string(),
-            { "MoodSave (*.moodsave)", "*.moodsave",
-              "All Files", "*" }).result();
+            { filterMoodsave, "*.moodsave",
+              filterAll, "*" }).result();
         if (!results.empty()) {
             const std::filesystem::path savePath(results[0]);
             const auto data = SaveLoad::load(savePath);
@@ -160,7 +164,7 @@ void PlayerApplication::drawMainMenu() {
             }
         }
     }
-    if (ImGui::Button("Quit", k_btn)) {
+    if (ImGui::Button(I18n::T("player.menu.quit").c_str(), k_btn)) {
         Log::engine()->info("[MainMenu] Quit -> exiting MoodPlayer");
         m_running = false;
     }
@@ -169,11 +173,11 @@ void PlayerApplication::drawMainMenu() {
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
-    // Atajos de teclado en gris suave, centrados.
-    const char* hint = "F5 quicksave  |  F6 save as...  |  Esc menu pausa";
-    const ImVec2 hintSize = ImGui::CalcTextSize(hint);
+    // Atajos de teclado en gris suave, centrados. F2H43: i18n.
+    const std::string hint = I18n::T("player.menu.shortcuts_hint");
+    const ImVec2 hintSize = ImGui::CalcTextSize(hint.c_str());
     ImGui::SetCursorPosX((k_panelW - hintSize.x) * 0.5f);
-    ImGui::TextDisabled("%s", hint);
+    ImGui::TextDisabled("%s", hint.c_str());
 
     ImGui::End();
     ImGui::PopStyleColor(4);  // WindowBg + Button{,Hovered,Active}
@@ -412,10 +416,12 @@ void PlayerApplication::saveAs() {
     const auto d = captureCurrentState();
     // pfd::save_file abre dialog "Guardar como" con default_path en el
     // exe dir y filtro `.moodsave`. Si el user cancela, retorna "".
+    const std::string dialogTitle = I18n::T("player.dialog.save_as");
+    const std::string filterMoodsave = I18n::T("player.dialog.filter.moodsave");
     const auto chosen = pfd::save_file(
-        "Guardar partida como...",
+        dialogTitle,
         (exeBaseDir() / "partida.moodsave").generic_string(),
-        { "MoodSave (*.moodsave)", "*.moodsave" }).result();
+        { filterMoodsave, "*.moodsave" }).result();
     if (chosen.empty()) {
         Log::engine()->info("[SaveAs] cancelado por el usuario");
         return;

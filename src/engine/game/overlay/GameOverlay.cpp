@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "engine/game/state/GameState.h"
+#include "engine/i18n/I18n.h"  // F2H43
 
 #include <imgui.h>
 
@@ -128,9 +129,10 @@ void drawHealthNumber(const HudContext& ctx) {
                      ImVec2(originX + bw, originY + bh),
                      palette::k_border, 4.0f, 0, 1.5f);
 
-    // Label "HEALTH" chiquito arriba (estilo HL).
+    // Label "HEALTH" chiquito arriba (estilo HL). F2H43: i18n via T().
+    const std::string healthLbl = I18n::T("hud.label.health");
     ctx.dl->AddText(ImVec2(originX + 12.0f, originY + 8.0f),
-                     palette::k_white_dim, "HEALTH");
+                     palette::k_white_dim, healthLbl.c_str());
 
     // Numero grande del HP — escalado 2.5x.
     char buf[16];
@@ -171,10 +173,11 @@ void drawAmmoCounter(const HudContext& ctx) {
                      ImVec2(originX + bw, originY + bh),
                      palette::k_border, 4.0f, 0, 1.5f);
 
-    // Label "AMMO" arriba derecha.
-    const ImVec2 lblSz = ImGui::CalcTextSize("AMMO");
+    // Label "AMMO" arriba derecha. F2H43: i18n.
+    const std::string ammoLbl = I18n::T("hud.label.ammo");
+    const ImVec2 lblSz = ImGui::CalcTextSize(ammoLbl.c_str());
     ctx.dl->AddText(ImVec2(originX + bw - 12.0f - lblSz.x, originY + 8.0f),
-                     palette::k_white_dim, "AMMO");
+                     palette::k_white_dim, ammoLbl.c_str());
 
     // Numero MAG grande — escalado 2.8x.
     char magBuf[24];
@@ -189,12 +192,11 @@ void drawAmmoCounter(const HudContext& ctx) {
     ctx.dl->AddText(ImVec2(originX + 60.0f + magSz.x + 4.0f, originY + 28.0f),
                      palette::k_white_dim, maxBuf);
 
-    // "RESERVE: N" abajo, mas chico.
-    char resBuf[32];
-    std::snprintf(resBuf, sizeof(resBuf), "RESERVE: %d", h.reserve);
-    const ImVec2 resSz = ImGui::CalcTextSize(resBuf);
+    // "RESERVE: N" abajo, mas chico. F2H43: i18n con interpolacion fmt.
+    const std::string resStr = I18n::T("hud.label.reserve", h.reserve);
+    const ImVec2 resSz = ImGui::CalcTextSize(resStr.c_str());
     ctx.dl->AddText(ImVec2(originX + bw - 12.0f - resSz.x, originY + bh - 18.0f),
-                     palette::k_white_dim, resBuf);
+                     palette::k_white_dim, resStr.c_str());
 
     // Icono procedural de bala (rectangulo + triangulo) a la izquierda.
     const float iconX = originX + 16.0f;
@@ -441,23 +443,26 @@ void drawPauseMenu(const HudContext& ctx,
                            ImVec2(ctx.x0 + ctx.w, ctx.y0 + ctx.h),
                            palette::k_bg_pause);
 
-    // Titulo "PAUSED" en grande arriba (font scale 4x).
+    // Titulo "PAUSED" en grande arriba (font scale 4x). F2H43: i18n.
     const float cx = ctx.x0 + ctx.w * 0.5f;
     const float titleY = ctx.y0 + ctx.h * 0.18f;
-    const ImVec2 titleSz = calcTextSizeScaled("PAUSED", 4.0f);
+    const std::string pausedLbl = I18n::T("hud.menu.paused");
+    const ImVec2 titleSz = calcTextSizeScaled(pausedLbl.c_str(), 4.0f);
     drawTextScaled(ctx.dl, ImVec2(cx - titleSz.x * 0.5f, titleY),
-                   "PAUSED", palette::k_orange, 4.0f);
+                   pausedLbl.c_str(), palette::k_orange, 4.0f);
 
-    // Subtitulo chico.
+    // Subtitulo chico. NO traducimos "MoodEngine" — es el nombre del producto.
     drawTextCentered(ctx.dl, cx, titleY + titleSz.y + 8.0f,
                       "MoodEngine", palette::k_white_dim);
 
-    // 3 botones con border geometrico.
+    // 3 botones con border geometrico. F2H43: labels traducidos.
+    const std::string continueLbl = I18n::T("hud.menu.continue");
+    const std::string optionsLbl  = I18n::T("hud.menu.options");
     struct Btn { const char* label; int action; };
     const Btn btns[3] = {
-        {"CONTINUE", 0},
-        {"OPTIONS",  1},
-        {exitLabel,  2},
+        {continueLbl.c_str(), 0},
+        {optionsLbl.c_str(),  1},
+        {exitLabel,            2},
     };
     constexpr float btnW = 360.0f;
     constexpr float btnH = 56.0f;
@@ -558,9 +563,10 @@ void drawStaminaBar(const HudContext& ctx) {
             col, 2.0f);
     }
 
-    // Label "STAMINA" mini al ras del extremo izquierdo.
+    // Label "STAMINA" mini al ras del extremo izquierdo. F2H43: i18n.
+    const std::string staminaLbl = I18n::T("hud.label.stamina");
     ctx.dl->AddText(ImVec2(originX + 6.0f, originY - 2.0f),
-                     palette::k_white_dim, "STAMINA");
+                     palette::k_white_dim, staminaLbl.c_str());
 }
 
 // 10. OBJECTIVE TEXT — top-left, debajo del MenuBar (~24 px desde
@@ -574,17 +580,17 @@ void drawObjectiveText(const HudContext& ctx) {
     const float originX = ctx.x0 + pad;
     const float originY = ctx.y0 + pad;
 
-    char buf[256];
-    std::snprintf(buf, sizeof(buf), "OBJECTIVE: %s", h.objective_text.c_str());
-
-    const ImVec2 sz = ImGui::CalcTextSize(buf);
+    // F2H43: prefix i18n con interpolacion fmt.
+    const std::string objStr = I18n::T("hud.label.objective_prefix",
+                                         h.objective_text);
+    const ImVec2 sz = ImGui::CalcTextSize(objStr.c_str());
     constexpr float padX = 14.0f, padY = 8.0f;
     const ImVec2 a(originX, originY);
     const ImVec2 b(originX + sz.x + padX * 2.0f, originY + sz.y + padY * 2.0f);
     ctx.dl->AddRectFilled(a, b, palette::k_bg_box, 3.0f);
     ctx.dl->AddRect(a, b, palette::k_yellow, 3.0f, 0, 1.5f);
     ctx.dl->AddText(ImVec2(originX + padX, originY + padY),
-                     palette::k_white, buf);
+                     palette::k_white, objStr.c_str());
 }
 
 // 11. KILL FEED — top-right, columna stack vertical. Toast rojo con

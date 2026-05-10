@@ -3,8 +3,11 @@
 #include "editor/application/EditorMode.h"
 #include "editor/ui/EditorUI.h"
 #include "editor/ui/IconsFontAwesome6.h"
+#include "engine/i18n/I18n.h"  // F2H43
 
 #include <imgui.h>
+
+#include <string>
 
 namespace Mood {
 
@@ -40,7 +43,8 @@ void MapEditorTopBar::onImGuiRender() {
     }
 
     if (m_ui == nullptr) {
-        ImGui::TextDisabled("EditorUI no inyectado");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.map_tools.no_ui").c_str());
         ImGui::End();
         return;
     }
@@ -53,30 +57,40 @@ void MapEditorTopBar::onImGuiRender() {
     // con un drag en empty space del orto). Default Hammer-style =
     // Select. CreateBlock spawnea brushes; Pincel agrega vertices. Solo
     // uno activo a la vez — el highlight refleja el m_mapTool.
-    ImGui::TextDisabled("Herramienta");
-    if (toolButton(ICON_FA_ARROW_POINTER " Selecc.",
-                    "Selección - drag en vacio dibuja rectangulo de marquee "
-                    "y selecciona los brushes que toca",
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.map_tools.tool").c_str());
+    const std::string selectLabel = std::string(ICON_FA_ARROW_POINTER " ") +
+        I18n::T("editor.panel.map_tools.select");
+    const std::string selectTooltip = I18n::T("editor.panel.map_tools.select_tooltip");
+    if (toolButton(selectLabel.c_str(),
+                    selectTooltip.c_str(),
                     currentTool == MapTool::Select && !polyActive)) {
         m_ui->requestMapTool(MapTool::Select);
     }
-    if (toolButton(ICON_FA_CUBE " Bloque",
-                    "Block tool - drag en vacio = preview + spawn brush",
+    const std::string blockLabel = std::string(ICON_FA_CUBE " ") +
+        I18n::T("editor.panel.map_tools.block");
+    const std::string blockTooltip = I18n::T("editor.panel.map_tools.block_tooltip");
+    if (toolButton(blockLabel.c_str(),
+                    blockTooltip.c_str(),
                     currentTool == MapTool::CreateBlock && !polyActive)) {
         m_ui->requestMapTool(MapTool::CreateBlock);
     }
-    if (toolButton(ICON_FA_PAINTBRUSH " Pincel",
-                    "Pincel poligonal (B) - clicks agregan vertices, Enter cierra",
+    const std::string brushLabel = std::string(ICON_FA_PAINTBRUSH " ") +
+        I18n::T("editor.panel.map_tools.brush");
+    const std::string brushTooltip = I18n::T("editor.panel.map_tools.brush_tooltip");
+    if (toolButton(brushLabel.c_str(),
+                    brushTooltip.c_str(),
                     polyActive)) {
         // Pincel sigue manejandose via togglePolygonDrawMode (F2H30 C)
         // que ya cancela y revierte si esta activo.
         m_ui->requestTogglePolygonDraw();
     }
     // F2H32 Bloque B: clip tool.
-    if (toolButton(ICON_FA_SCISSORS " Clip",
-                    "Clip tool - 2 clicks definen un plano que splittea "
-                    "los brushes selectos. T cycle Front/Back/Both, "
-                    "Enter confirma, Esc cancela",
+    const std::string clipLabel = std::string(ICON_FA_SCISSORS " ") +
+        I18n::T("editor.panel.map_tools.clip");
+    const std::string clipTooltip = I18n::T("editor.panel.map_tools.clip_tooltip");
+    if (toolButton(clipLabel.c_str(),
+                    clipTooltip.c_str(),
                     currentTool == MapTool::Clip && !polyActive)) {
         m_ui->requestMapTool(MapTool::Clip);
     }
@@ -86,24 +100,37 @@ void MapEditorTopBar::onImGuiRender() {
     // F2H30 Bloque C: sub-modos del SelectionSet (que NIVEL de geometria
     // se manipula). Ortogonal al Tool de arriba. Solo aplica cuando hay
     // un brush selecto.
-    ImGui::TextDisabled("Sub-modo");
-    if (toolButton(ICON_FA_OBJECT_GROUP " Objeto",
-                    "Object Mode (Esc) - mover/rotar/escalar brush entero",
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.map_tools.sub_mode").c_str());
+    const std::string objLabel = std::string(ICON_FA_OBJECT_GROUP " ") +
+        I18n::T("editor.panel.map_tools.object");
+    const std::string objTooltip = I18n::T("editor.panel.map_tools.object_tooltip");
+    if (toolButton(objLabel.c_str(),
+                    objTooltip.c_str(),
                     currentSubMode == EditorSubMode::Object && !polyActive)) {
         m_ui->requestSubMode(EditorSubMode::Object);
     }
-    if (toolButton(ICON_FA_CIRCLE_DOT " Vertex",
-                    "Vertex Mode (1) - mover vertex del brush",
+    const std::string vertLabel = std::string(ICON_FA_CIRCLE_DOT " ") +
+        I18n::T("editor.panel.map_tools.vertex");
+    const std::string vertTooltip = I18n::T("editor.panel.map_tools.vertex_tooltip");
+    if (toolButton(vertLabel.c_str(),
+                    vertTooltip.c_str(),
                     currentSubMode == EditorSubMode::Vertex && !polyActive)) {
         m_ui->requestSubMode(EditorSubMode::Vertex);
     }
-    if (toolButton(ICON_FA_MINUS " Edge",
-                    "Edge Mode (2) - mover arista del brush",
+    const std::string edgeLabel = std::string(ICON_FA_MINUS " ") +
+        I18n::T("editor.panel.map_tools.edge");
+    const std::string edgeTooltip = I18n::T("editor.panel.map_tools.edge_tooltip");
+    if (toolButton(edgeLabel.c_str(),
+                    edgeTooltip.c_str(),
                     currentSubMode == EditorSubMode::Edge && !polyActive)) {
         m_ui->requestSubMode(EditorSubMode::Edge);
     }
-    if (toolButton(ICON_FA_VECTOR_SQUARE " Cara",
-                    "Face Mode (3) - editar caras del brush",
+    const std::string faceLabel = std::string(ICON_FA_VECTOR_SQUARE " ") +
+        I18n::T("editor.panel.map_tools.face");
+    const std::string faceTooltip = I18n::T("editor.panel.map_tools.face_tooltip");
+    if (toolButton(faceLabel.c_str(),
+                    faceTooltip.c_str(),
                     currentSubMode == EditorSubMode::Face && !polyActive)) {
         m_ui->requestSubMode(EditorSubMode::Face);
     }
@@ -111,10 +138,13 @@ void MapEditorTopBar::onImGuiRender() {
     ImGui::Separator();
 
     // F2H31 Bloque C: toggle snap-to-vertex (tecla V tambien dispara).
-    ImGui::TextDisabled("Snap");
-    if (toolButton(ICON_FA_MAGNET " Snap V",
-                    "Snap a vertex (V) - snapea al vertex mas cercano de un "
-                    "brush existente en lugar del grid",
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.map_tools.snap").c_str());
+    const std::string snapLabel = std::string(ICON_FA_MAGNET " ") +
+        I18n::T("editor.panel.map_tools.snap_v");
+    const std::string snapTooltip = I18n::T("editor.panel.map_tools.snap_v_tooltip");
+    if (toolButton(snapLabel.c_str(),
+                    snapTooltip.c_str(),
                     m_ui->snapToVertexEnabled())) {
         m_ui->requestToggleSnapToVertex();
     }
@@ -124,12 +154,13 @@ void MapEditorTopBar::onImGuiRender() {
     // F2H35 Bloque E: toggle labels arriba de point entities en
     // perspective + ortos. Default ON. El boton highlight refleja el
     // state actual.
-    ImGui::TextDisabled("Visualizacion");
-    if (toolButton(ICON_FA_TAG " Nombres",
-                    "Mostrar/ocultar nombres (TagComponent.name) arriba "
-                    "de los iconos de Light/Audio/Trigger/Camera/Particle "
-                    "en el perspective y en los 3 ortos. Persistido "
-                    "por proyecto.",
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.map_tools.visualization").c_str());
+    const std::string namesLabel = std::string(ICON_FA_TAG " ") +
+        I18n::T("editor.panel.map_tools.names");
+    const std::string namesTooltip = I18n::T("editor.panel.map_tools.names_tooltip");
+    if (toolButton(namesLabel.c_str(),
+                    namesTooltip.c_str(),
                     m_ui->showEntityLabels())) {
         m_ui->requestToggleEntityLabels();
     }
@@ -139,10 +170,13 @@ void MapEditorTopBar::onImGuiRender() {
     // F2H32 Bloque C: carve UI button. Click destructivo — resta el
     // brush activo por todos los brushes que intersectan su AABB.
     // Sin keyboard shortcut para evitar accidentes.
-    ImGui::TextDisabled("Acciones");
-    if (toolButton(ICON_FA_CIRCLE_MINUS " Carve",
-                    "Carve - resta el brush activo por todos los brushes "
-                    "que lo atraviesan. Ctrl+Z deshace.",
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.map_tools.actions").c_str());
+    const std::string carveLabel = std::string(ICON_FA_CIRCLE_MINUS " ") +
+        I18n::T("editor.panel.map_tools.carve");
+    const std::string carveTooltip = I18n::T("editor.panel.map_tools.carve_tooltip");
+    if (toolButton(carveLabel.c_str(),
+                    carveTooltip.c_str(),
                     false)) {
         m_ui->requestCarve();
     }

@@ -4,6 +4,7 @@
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/scene/InspectorPanel_Internal.h"
 
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/Components.h"
 
 #include <imgui.h>
@@ -35,7 +36,8 @@ void InspectorPanel::renderTagSection(Entity e) {
 void InspectorPanel::renderCameraSection(Entity e) {
     auto& cam = e.getComponent<CameraComponent>();
     ImGui::SeparatorText(ICON_FA_VIDEO " Camera");
-    if (ImGui::DragFloat("fov (deg)##cam", &cam.fovDeg, 0.1f, 1.0f, 179.0f)) {
+    const std::string fovLabel = I18n::T("editor.panel.inspector.camera.fov") + "##cam";
+    if (ImGui::DragFloat(fovLabel.c_str(), &cam.fovDeg, 0.1f, 1.0f, 179.0f)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, cam.fovDeg,
@@ -43,7 +45,8 @@ void InspectorPanel::renderCameraSection(Entity e) {
             en.getComponent<CameraComponent>().fovDeg = v;
         },
         "Editar camera fov");
-    if (ImGui::DragFloat("near##cam", &cam.nearPlane, 0.001f, 0.001f, 100.0f)) {
+    const std::string nearLabel = I18n::T("editor.panel.inspector.camera.near") + "##cam";
+    if (ImGui::DragFloat(nearLabel.c_str(), &cam.nearPlane, 0.001f, 0.001f, 100.0f)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, cam.nearPlane,
@@ -51,7 +54,8 @@ void InspectorPanel::renderCameraSection(Entity e) {
             en.getComponent<CameraComponent>().nearPlane = v;
         },
         "Editar camera near");
-    if (ImGui::DragFloat("far##cam", &cam.farPlane, 0.1f, 1.0f, 10000.0f)) {
+    const std::string farLabel = I18n::T("editor.panel.inspector.camera.far") + "##cam";
+    if (ImGui::DragFloat(farLabel.c_str(), &cam.farPlane, 0.1f, 1.0f, 10000.0f)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, cam.farPlane,
@@ -65,7 +69,8 @@ void InspectorPanel::renderCameraSection(Entity e) {
 void InspectorPanel::renderTriggerSection(Entity e) {
     auto& tc = e.getComponent<TriggerComponent>();
     ImGui::SeparatorText(ICON_FA_BORDER_NONE " Trigger");
-    if (ImGui::DragFloat3("halfExtents##trig", &tc.halfExtents.x,
+    const std::string halfLabel = I18n::T("editor.panel.inspector.trigger.half_extents") + "##trig";
+    if (ImGui::DragFloat3(halfLabel.c_str(), &tc.halfExtents.x,
                             0.05f, 0.01f, 100.0f)) {
         m_editedThisFrame = true;
     }
@@ -74,8 +79,9 @@ void InspectorPanel::renderTriggerSection(Entity e) {
             en.getComponent<TriggerComponent>().halfExtents = v;
         },
         "Editar trigger halfExtents");
-    ImGui::TextDisabled("playerInside: %s",
-                         tc.playerInside ? "si" : "no");
+    ImGui::TextDisabled("%s",
+        I18n::T(tc.playerInside ? "editor.panel.inspector.trigger.player_inside_yes"
+                                  : "editor.panel.inspector.trigger.player_inside_no").c_str());
     ImGui::Separator();
 }
 

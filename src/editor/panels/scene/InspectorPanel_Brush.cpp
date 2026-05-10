@@ -8,6 +8,7 @@
 #include "editor/commands/EditBrushUVCommand.h"  // BrushUVSnapshot
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/Components.h"
 #include "engine/world/csg/BrushOps.h"  // F2H33: alignment helpers
@@ -30,23 +31,27 @@ void InspectorPanel::renderBrushSection(Entity e) {
     auto& bc = e.getComponent<BrushComponent>();
     ImGui::SeparatorText(ICON_FA_CUBES_STACKED " Brush (CSG)");
 
-    ImGui::Text("faces: %u", static_cast<u32>(bc.brush.faces.size()));
+    ImGui::Text("%s",
+        I18n::T("editor.panel.inspector.brush.faces",
+                static_cast<u32>(bc.brush.faces.size())).c_str());
 
     const glm::vec3 size = bc.brush.localAabb.size();
-    ImGui::TextDisabled("local AABB: %.2f x %.2f x %.2f",
-                         static_cast<double>(size.x),
-                         static_cast<double>(size.y),
-                         static_cast<double>(size.z));
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.inspector.brush.local_aabb",
+                static_cast<double>(size.x),
+                static_cast<double>(size.y),
+                static_cast<double>(size.z)).c_str());
 
     if (m_assets != nullptr) {
         // F2H17: el brush tiene N slots de material (uno por
         // material distinto entre las caras). Mostrar todos.
-        ImGui::Text("materiales: %u slots",
-                     static_cast<u32>(bc.materials.size()));
+        ImGui::Text("%s",
+            I18n::T("editor.panel.inspector.brush.materials_slots",
+                    static_cast<u32>(bc.materials.size())).c_str());
         for (u32 i = 0; i < bc.materials.size(); ++i) {
             const MaterialAssetId mid = bc.materials[i];
             const std::string matPath = (mid == 0)
-                ? std::string{"(blank look)"}
+                ? I18n::T("editor.panel.inspector.brush.blank_look")
                 : m_assets->materialPathOf(mid);
             ImGui::TextDisabled("  [%u] %s (id %u)", i,
                                    matPath.c_str(),
@@ -54,14 +59,17 @@ void InspectorPanel::renderBrushSection(Entity e) {
         }
     }
 
-    ImGui::TextDisabled("mesh cache: %u submeshes",
-                         static_cast<u32>(bc.meshCache.size()));
-    ImGui::TextDisabled("dirty: %s", bc.dirty ? "si" : "no");
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.inspector.brush.mesh_cache",
+                static_cast<u32>(bc.meshCache.size())).c_str());
+    ImGui::TextDisabled("%s",
+        I18n::T(bc.dirty ? "editor.panel.inspector.brush.dirty_yes"
+                          : "editor.panel.inspector.brush.dirty_no").c_str());
 
     // Recompute mesh: util para debug si la mesh quedo stale por
     // un cambio que no marcamos dirty (no deberia pasar pero es
     // breadcrumb util cuando F2H12+ agreguen booleanos).
-    if (ImGui::Button("Recompute mesh")) {
+    if (ImGui::Button(I18n::T("editor.panel.inspector.brush.recompute_mesh").c_str())) {
         bc.dirty = true;
     }
 
@@ -88,12 +96,15 @@ void InspectorPanel::renderBrushSection(Entity e) {
     const bool multiFace = (selectedFaceCount > 1);
 
     if (multiFace) {
-        ImGui::TextDisabled("UV (%zu caras, primary=#%d)",
-                             selectedFaceCount, faceIdx);
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.brush.uv_multi",
+                    selectedFaceCount, faceIdx).c_str());
     } else if (faceMode) {
-        ImGui::TextDisabled("UV (Cara %d)", faceIdx);
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.brush.uv_face", faceIdx).c_str());
     } else {
-        ImGui::TextDisabled("UV (Brush)");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.brush.uv_brush").c_str());
     }
 
     if (!bc.brush.faces.empty()) {
@@ -148,7 +159,8 @@ void InspectorPanel::renderBrushSection(Entity e) {
         };
 
         glm::vec2 uvScale = faceRef.uvScale;
-        if (ImGui::DragFloat2("uv scale##uvbrush", &uvScale.x,
+        const std::string uvScaleLabel = I18n::T("editor.panel.inspector.brush.uv_scale") + "##uvbrush";
+        if (ImGui::DragFloat2(uvScaleLabel.c_str(), &uvScale.x,
                                 0.05f, 0.01f, 100.0f)) {
             applyToScope([&](auto& f) { f.uvScale = uvScale; });
             bc.dirty = true;
@@ -161,7 +173,8 @@ void InspectorPanel::renderBrushSection(Entity e) {
                                    : "Editar UV scale"));
 
         f32 uvRotDeg = glm::degrees(faceRef.uvRotation);
-        if (ImGui::DragFloat("uv rotation (deg)##uvbrush",
+        const std::string uvRotLabel = I18n::T("editor.panel.inspector.brush.uv_rotation") + "##uvbrush";
+        if (ImGui::DragFloat(uvRotLabel.c_str(),
                                 &uvRotDeg, 1.0f, -360.0f, 360.0f)) {
             const f32 uvRotRad = glm::radians(uvRotDeg);
             applyToScope([&](auto& f) { f.uvRotation = uvRotRad; });
@@ -175,7 +188,8 @@ void InspectorPanel::renderBrushSection(Entity e) {
                                    : "Editar UV rotation"));
 
         glm::vec2 uvOffset = faceRef.uvOffset;
-        if (ImGui::DragFloat2("uv offset##uvbrush", &uvOffset.x,
+        const std::string uvOffsetLabel = I18n::T("editor.panel.inspector.brush.uv_offset") + "##uvbrush";
+        if (ImGui::DragFloat2(uvOffsetLabel.c_str(), &uvOffset.x,
                                 0.05f)) {
             applyToScope([&](auto& f) { f.uvOffset = uvOffset; });
             bc.dirty = true;
@@ -190,8 +204,9 @@ void InspectorPanel::renderBrushSection(Entity e) {
         // Checkbox: instantaneo. Capturar pre + post al click + push.
         bool lockToWorld = faceRef.lockToWorld;
         BrushUVSnapshot lockPreSnap;
+        const std::string lockLabel = I18n::T("editor.panel.inspector.brush.lock_to_world") + "##uvbrush";
         const bool lockChanged = [&]() {
-            if (ImGui::Checkbox("lock to world##uvbrush", &lockToWorld)) {
+            if (ImGui::Checkbox(lockLabel.c_str(), &lockToWorld)) {
                 lockPreSnap = captureBrushUV(bc.brush);
                 applyToScope([&](auto& f) { f.lockToWorld = lockToWorld; });
                 bc.dirty = true;
@@ -228,9 +243,10 @@ void InspectorPanel::renderBrushSection(Entity e) {
         for (const auto& f : bc.brush.faces) {
             if (f.lockToWorld) ++lockedCount;
         }
-        ImGui::TextDisabled("%u/%u caras con lock-to-world",
-                              lockedCount,
-                              static_cast<u32>(bc.brush.faces.size()));
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.brush.locked_count",
+                    lockedCount,
+                    static_cast<u32>(bc.brush.faces.size())).c_str());
 
         // --- F2H33 Bloque D: texture alignment ---
         // Solo aplica en Face Mode. Botones operan sobre la cara active
@@ -241,21 +257,19 @@ void InspectorPanel::renderBrushSection(Entity e) {
         // de textura coherente en lugar de fitear cada una por separado.
         if (faceMode && e.hasComponent<TransformComponent>()) {
             ImGui::Separator();
-            ImGui::TextDisabled("Alineacion");
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.panel.inspector.brush.alignment").c_str());
 
             const auto& tf = e.getComponent<TransformComponent>();
             const glm::mat4 worldMat = tf.worldMatrix();
 
             if (multiFace) {
-                ImGui::Checkbox("Treat as one face##align",
+                const std::string treatLabel = I18n::T("editor.panel.inspector.brush.treat_as_one") + "##align";
+                ImGui::Checkbox(treatLabel.c_str(),
                                  &m_treatAsOneFace);
                 if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(
-                        "Computa un solo bounding rect UV compartido\n"
-                        "(usando el sistema de la cara primary) y aplica\n"
-                        "la op a las N caras con ese rect — la textura\n"
-                        "queda coherente entre las caras seleccionadas.\n"
-                        "Off = cada cara se procesa con su propio rect.");
+                    ImGui::SetTooltip("%s",
+                        I18n::T("editor.panel.inspector.brush.treat_as_one_tooltip").c_str());
                 }
             } else {
                 m_treatAsOneFace = false;  // reset si bajamos a single
@@ -346,7 +360,8 @@ void InspectorPanel::renderBrushSection(Entity e) {
             const f32 buttonW = (ImGui::GetContentRegionAvail().x - 8.0f) * 0.5f;
             const ImVec2 buttonSize(buttonW, 0.0f);
 
-            if (ImGui::Button("Align to face##align", ImVec2(-1, 0))) {
+            const std::string alignBtn = I18n::T("editor.panel.inspector.brush.align_to_face") + "##align";
+            if (ImGui::Button(alignBtn.c_str(), ImVec2(-1, 0))) {
                 // Align ignora el rect — resetea el axis sin medir el
                 // poligono. Lo wrappeamos en una op compatible con
                 // runAlignmentOp pasando un rect dummy.
@@ -356,43 +371,46 @@ void InspectorPanel::renderBrushSection(Entity e) {
                     });
             }
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip(
-                    "Resetea axisU/V derivados de la normal (default Quake)\n"
-                    "+ scale=1, offset=0, rotation=0. Preserva lockToWorld.");
+                ImGui::SetTooltip("%s",
+                    I18n::T("editor.panel.inspector.brush.align_tooltip").c_str());
             }
 
-            if (ImGui::Button("Fit##align", buttonSize)) {
+            const std::string fitBtn = I18n::T("editor.panel.inspector.brush.fit") + "##align";
+            if (ImGui::Button(fitBtn.c_str(), buttonSize)) {
                 runAlignmentOp("Fit",
                     [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
                         Csg::fitFaceToRect(f, r);
                     });
             }
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip(
-                    "Setea scale + offset para que la textura cubra\n"
-                    "exactamente el rect 2D de la cara (UV ∈ [0,1]).");
+                ImGui::SetTooltip("%s",
+                    I18n::T("editor.panel.inspector.brush.fit_tooltip").c_str());
             }
             ImGui::SameLine();
-            if (ImGui::Button("Justify L##align", buttonSize)) {
+            const std::string justLBtn = I18n::T("editor.panel.inspector.brush.justify_l") + "##align";
+            if (ImGui::Button(justLBtn.c_str(), buttonSize)) {
                 runAlignmentOp("Justify L",
                     [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
                         Csg::justifyFaceToRect(f, r, Csg::JustifySide::Left);
                     });
             }
-            if (ImGui::Button("Justify R##align", buttonSize)) {
+            const std::string justRBtn = I18n::T("editor.panel.inspector.brush.justify_r") + "##align";
+            if (ImGui::Button(justRBtn.c_str(), buttonSize)) {
                 runAlignmentOp("Justify R",
                     [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
                         Csg::justifyFaceToRect(f, r, Csg::JustifySide::Right);
                     });
             }
             ImGui::SameLine();
-            if (ImGui::Button("Justify T##align", buttonSize)) {
+            const std::string justTBtn = I18n::T("editor.panel.inspector.brush.justify_t") + "##align";
+            if (ImGui::Button(justTBtn.c_str(), buttonSize)) {
                 runAlignmentOp("Justify T",
                     [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
                         Csg::justifyFaceToRect(f, r, Csg::JustifySide::Top);
                     });
             }
-            if (ImGui::Button("Justify B##align", buttonSize)) {
+            const std::string justBBtn = I18n::T("editor.panel.inspector.brush.justify_b") + "##align";
+            if (ImGui::Button(justBBtn.c_str(), buttonSize)) {
                 runAlignmentOp("Justify B",
                     [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
                         Csg::justifyFaceToRect(f, r, Csg::JustifySide::Bottom);

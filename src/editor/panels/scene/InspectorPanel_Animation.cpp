@@ -5,6 +5,7 @@
 
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/Components.h"
 
@@ -38,7 +39,9 @@ void InspectorPanel::renderAnimatorSection(Entity e) {
             for (int i = 0; i < static_cast<int>(clipNames.size()); ++i) {
                 if (clipNames[i] == anim.clipName) { currentIdx = i; break; }
             }
-            if (ImGui::BeginCombo("clip##anim", clipNames[currentIdx].c_str())) {
+            const std::string clipLabel = I18n::T("editor.panel.inspector.animator.clip") + "##anim";
+            if (ImGui::BeginCombo(clipLabel.c_str(),
+                                    clipNames[currentIdx].c_str())) {
                 for (int i = 0; i < static_cast<int>(clipNames.size()); ++i) {
                     const bool selected = (currentIdx == i);
                     if (ImGui::Selectable(clipNames[i].c_str(), selected)) {
@@ -69,14 +72,17 @@ void InspectorPanel::renderAnimatorSection(Entity e) {
                 ImGui::EndCombo();
             }
             ImGui::TextDisabled(
-                "duration: %.2fs  time: %.2fs",
-                mesh->animations[currentIdx].duration, anim.time);
+                "%s",
+                I18n::T("editor.panel.inspector.animator.duration_time",
+                        mesh->animations[currentIdx].duration, anim.time).c_str());
         } else {
-            ImGui::TextDisabled("Mesh sin animaciones");
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.panel.inspector.animator.no_clips").c_str());
         }
     }
 
-    if (ImGui::DragFloat("speed##anim", &anim.speed, 0.05f, 0.0f, 10.0f)) {
+    const std::string speedLabel = I18n::T("editor.panel.inspector.animator.speed") + "##anim";
+    if (ImGui::DragFloat(speedLabel.c_str(), &anim.speed, 0.05f, 0.0f, 10.0f)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, anim.speed,
@@ -84,21 +90,24 @@ void InspectorPanel::renderAnimatorSection(Entity e) {
             en.getComponent<AnimatorComponent>().speed = v;
         },
         "Editar animator speed");
-    if (ImGui::Checkbox("playing##anim", &anim.playing)) { m_editedThisFrame = true; }
+    const std::string playingLabel = I18n::T("editor.panel.inspector.animator.playing") + "##anim";
+    if (ImGui::Checkbox(playingLabel.c_str(), &anim.playing)) { m_editedThisFrame = true; }
     detail::pushEditIfDone<bool>(m_editTracker, m_ui, e, anim.playing,
         [](Entity& en, const bool& v) {
             en.getComponent<AnimatorComponent>().playing = v;
         },
         "Toggle animator playing");
     ImGui::SameLine();
-    if (ImGui::Checkbox("loop##anim", &anim.loop)) { m_editedThisFrame = true; }
+    const std::string loopLabel = I18n::T("editor.panel.inspector.animator.loop") + "##anim";
+    if (ImGui::Checkbox(loopLabel.c_str(), &anim.loop)) { m_editedThisFrame = true; }
     detail::pushEditIfDone<bool>(m_editTracker, m_ui, e, anim.loop,
         [](Entity& en, const bool& v) {
             en.getComponent<AnimatorComponent>().loop = v;
         },
         "Toggle animator loop");
     ImGui::SameLine();
-    if (ImGui::Button("Reset##anim")) {
+    const std::string resetLabel = I18n::T("editor.panel.inspector.animator.reset") + "##anim";
+    if (ImGui::Button(resetLabel.c_str())) {
         anim.time = 0.0f;
         m_editedThisFrame = true;
     }

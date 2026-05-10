@@ -29,6 +29,7 @@ add_executable(mood_tests
     test_light_grid.cpp
     test_animation.cpp
     test_game_state.cpp
+    test_i18n.cpp  # F2H43
     test_package_builder.cpp
     test_nav_system.cpp
     test_pathfinding.cpp
@@ -141,6 +142,8 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/editor/commands/DeleteEntityCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/CreateEntityCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/i18n/I18n.cpp  # F2H43
+    ${CMAKE_SOURCE_DIR}/src/core/UserSettings.cpp  # F2H43
 )
 
 # AssetManager.cpp usa spdlog (via core/Log). JsonHelpers requiere nlohmann_json.

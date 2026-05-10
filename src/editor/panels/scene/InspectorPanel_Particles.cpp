@@ -4,6 +4,7 @@
 #include "editor/panels/scene/InspectorPanel_Internal.h"
 
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/Components.h"
 
 #include <imgui.h>
@@ -20,21 +21,24 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
     auto& em = e.getComponent<ParticleEmitterComponent>();
     ImGui::SeparatorText(ICON_FA_FIRE " Particle Emitter");
 
-    if (ImGui::Checkbox("emitting##pe", &em.emitting)) m_editedThisFrame = true;
+    const std::string emittingLabel = I18n::T("editor.panel.inspector.particles.emitting") + "##pe";
+    if (ImGui::Checkbox(emittingLabel.c_str(), &em.emitting)) m_editedThisFrame = true;
     detail::pushEditIfDone<bool>(m_editTracker, m_ui, e, em.emitting,
         [](Entity& en, const bool& v) {
             en.getComponent<ParticleEmitterComponent>().emitting = v;
         },
         "Toggle particle emitting");
     ImGui::SameLine();
-    if (ImGui::Checkbox("additive##pe", &em.additive)) m_editedThisFrame = true;
+    const std::string additiveLabel = I18n::T("editor.panel.inspector.particles.additive") + "##pe";
+    if (ImGui::Checkbox(additiveLabel.c_str(), &em.additive)) m_editedThisFrame = true;
     detail::pushEditIfDone<bool>(m_editTracker, m_ui, e, em.additive,
         [](Entity& en, const bool& v) {
             en.getComponent<ParticleEmitterComponent>().additive = v;
         },
         "Toggle particle additive");
     ImGui::SameLine();
-    if (ImGui::Checkbox("localSpace##pe", &em.localSpace)) m_editedThisFrame = true;
+    const std::string localSpaceLabel = I18n::T("editor.panel.inspector.particles.local_space") + "##pe";
+    if (ImGui::Checkbox(localSpaceLabel.c_str(), &em.localSpace)) m_editedThisFrame = true;
     detail::pushEditIfDone<bool>(m_editTracker, m_ui, e, em.localSpace,
         [](Entity& en, const bool& v) {
             en.getComponent<ParticleEmitterComponent>().localSpace = v;
@@ -45,12 +49,14 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
     using ES = ParticleEmitterComponent::EmissionShape;
     const char* shapeNames[] = {"Point", "Box", "Sphere", "Disc", "Cone"};
     int shapeIdx = static_cast<int>(em.emissionShape);
-    if (ImGui::Combo("emit shape##pe", &shapeIdx, shapeNames, 5)) {
+    const std::string emitShapeLabel = I18n::T("editor.panel.inspector.particles.emit_shape") + "##pe";
+    if (ImGui::Combo(emitShapeLabel.c_str(), &shapeIdx, shapeNames, 5)) {
         em.emissionShape = static_cast<ES>(shapeIdx);
         m_editedThisFrame = true;
     }
     if (em.emissionShape != ES::Point) {
-        if (ImGui::DragFloat("shape size (m)##pe",
+        const std::string shapeSizeLabel = I18n::T("editor.panel.inspector.particles.shape_size") + "##pe";
+        if (ImGui::DragFloat(shapeSizeLabel.c_str(),
                               &em.emissionShapeSize, 0.05f, 0.01f, 100.0f)) {
             m_editedThisFrame = true;
         }
@@ -62,7 +68,8 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
     }
     // Hito 40 A: cone axis solo visible si shape == Cone.
     if (em.emissionShape == ES::Cone) {
-        if (ImGui::DragFloat3("cone axis##pe",
+        const std::string coneAxisLabel = I18n::T("editor.panel.inspector.particles.cone_axis") + "##pe";
+        if (ImGui::DragFloat3(coneAxisLabel.c_str(),
                                 &em.emissionConeAxis.x, 0.01f, -1.0f, 1.0f)) {
             m_editedThisFrame = true;
         }
@@ -73,7 +80,8 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             "Editar cone axis");
     }
 
-    if (ImGui::DragFloat("rate (1/s)##pe", &em.emitRate, 1.0f, 0.0f, 10000.0f)) {
+    const std::string rateLabel = I18n::T("editor.panel.inspector.particles.rate") + "##pe";
+    if (ImGui::DragFloat(rateLabel.c_str(), &em.emitRate, 1.0f, 0.0f, 10000.0f)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, em.emitRate,
@@ -81,7 +89,8 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             en.getComponent<ParticleEmitterComponent>().emitRate = v;
         },
         "Editar emit rate");
-    if (ImGui::DragFloatRange2("lifetime (s)##pe",
+    const std::string lifeLabel = I18n::T("editor.panel.inspector.particles.lifetime") + "##pe";
+    if (ImGui::DragFloatRange2(lifeLabel.c_str(),
                                  &em.lifetimeMin, &em.lifetimeMax,
                                  0.05f, 0.05f, 60.0f)) {
         m_editedThisFrame = true;
@@ -95,7 +104,8 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             emc.lifetimeMax = v.second;
         },
         "Editar lifetime range");
-    if (ImGui::DragFloat3("velMin (m/s)##pe", &em.velocityMin.x, 0.05f)) {
+    const std::string velMinLabel = I18n::T("editor.panel.inspector.particles.vel_min") + "##pe";
+    if (ImGui::DragFloat3(velMinLabel.c_str(), &em.velocityMin.x, 0.05f)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, em.velocityMin,
@@ -103,7 +113,8 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             en.getComponent<ParticleEmitterComponent>().velocityMin = v;
         },
         "Editar particle velocityMin");
-    if (ImGui::DragFloat3("velMax (m/s)##pe", &em.velocityMax.x, 0.05f)) {
+    const std::string velMaxLabel = I18n::T("editor.panel.inspector.particles.vel_max") + "##pe";
+    if (ImGui::DragFloat3(velMaxLabel.c_str(), &em.velocityMax.x, 0.05f)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, em.velocityMax,
@@ -111,7 +122,8 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             en.getComponent<ParticleEmitterComponent>().velocityMax = v;
         },
         "Editar particle velocityMax");
-    if (ImGui::DragFloatRange2("size (m)##pe",
+    const std::string sizeLabel = I18n::T("editor.panel.inspector.particles.size") + "##pe";
+    if (ImGui::DragFloatRange2(sizeLabel.c_str(),
                                  &em.sizeStart, &em.sizeEnd,
                                  0.005f, 0.0f, 5.0f)) {
         m_editedThisFrame = true;
@@ -125,7 +137,8 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             emc.sizeEnd   = v.second;
         },
         "Editar size range");
-    if (ImGui::ColorEdit4("colorStart##pe", &em.colorStart.x)) {
+    const std::string colorStartLabel = I18n::T("editor.panel.inspector.particles.color_start") + "##pe";
+    if (ImGui::ColorEdit4(colorStartLabel.c_str(), &em.colorStart.x)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<glm::vec4>(m_editTracker, m_ui, e, em.colorStart,
@@ -133,7 +146,8 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             en.getComponent<ParticleEmitterComponent>().colorStart = v;
         },
         "Editar particle colorStart");
-    if (ImGui::ColorEdit4("colorEnd##pe", &em.colorEnd.x)) {
+    const std::string colorEndLabel = I18n::T("editor.panel.inspector.particles.color_end") + "##pe";
+    if (ImGui::ColorEdit4(colorEndLabel.c_str(), &em.colorEnd.x)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<glm::vec4>(m_editTracker, m_ui, e, em.colorEnd,
@@ -141,7 +155,8 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             en.getComponent<ParticleEmitterComponent>().colorEnd = v;
         },
         "Editar particle colorEnd");
-    if (ImGui::DragFloat("gravityFactor##pe", &em.gravityFactor, 0.01f,
+    const std::string gravLabel = I18n::T("editor.panel.inspector.particles.gravity_factor") + "##pe";
+    if (ImGui::DragFloat(gravLabel.c_str(), &em.gravityFactor, 0.01f,
                           -2.0f, 2.0f)) {
         m_editedThisFrame = true;
     }
@@ -150,7 +165,8 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             en.getComponent<ParticleEmitterComponent>().gravityFactor = v;
         },
         "Editar gravity factor (particles)");
-    if (ImGui::DragInt("maxParticles##pe",
+    const std::string maxLabel = I18n::T("editor.panel.inspector.particles.max_particles") + "##pe";
+    if (ImGui::DragInt(maxLabel.c_str(),
                          reinterpret_cast<int*>(&em.maxParticles),
                          1.0f, 1, 4096)) {
         // Resize lazy en el proximo update; vaciamos pool ahora para
@@ -179,12 +195,15 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             emc.aliveCount = 0;
         },
         "Editar maxParticles");
-    ImGui::TextDisabled("vivas: %u / %u",
-                         em.aliveCount, em.maxParticles);
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.inspector.particles.alive_count",
+                em.aliveCount, em.maxParticles).c_str());
 
     if (m_assets != nullptr) {
         const std::string texPath = m_assets->pathOf(em.texture);
-        ImGui::TextDisabled("textura: %s", texPath.c_str());
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.particles.texture",
+                    texPath).c_str());
     }
     ImGui::Separator();
 }

@@ -4,6 +4,7 @@
 #include "core/LogRingSink.h"
 #include "core/Types.h"  // F2H23: usize
 #include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons por nivel
+#include "engine/i18n/I18n.h"  // F2H43
 
 #include <imgui.h>
 
@@ -90,7 +91,8 @@ void ConsolePanel::onImGuiRender() {
 
     LogRingSink* sink = Log::ringSink();
     if (sink == nullptr) {
-        ImGui::TextDisabled("Log::init() no se llamo aun.");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.console.no_log_init").c_str());
         ImGui::End();
         return;
     }
@@ -101,26 +103,29 @@ void ConsolePanel::onImGuiRender() {
     // - Auto-scroll checkbox sin cambios.
     // - Input de filtro ancho dinamico (40% del panel).
     // - Hint "(?)" con leyenda de los tags TRC/DBG/INF/WRN/ERR/CRT.
-    if (ImGui::Button(ICON_FA_CIRCLE_XMARK " Limpiar")) {
+    const std::string clearBtnLabel = std::string(ICON_FA_CIRCLE_XMARK " ") +
+        I18n::T("editor.panel.console.clear");
+    if (ImGui::Button(clearBtnLabel.c_str())) {
         ImGui::OpenPopup("##confirm_clear");
     }
     if (ImGui::BeginPopup("##confirm_clear")) {
-        ImGui::TextUnformatted("Limpiar todos los logs?");
-        ImGui::TextDisabled("Esta accion no se puede deshacer.");
+        ImGui::TextUnformatted(I18n::T("editor.panel.console.clear_confirm").c_str());
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.console.clear_warn").c_str());
         ImGui::Separator();
-        if (ImGui::Button("Limpiar")) {
+        if (ImGui::Button(I18n::T("editor.panel.console.clear").c_str())) {
             sink->clear();
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancelar")) {
+        if (ImGui::Button(I18n::T("editor.panel.console.cancel").c_str())) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
     }
 
     ImGui::SameLine();
-    ImGui::Checkbox("Auto-scroll", &m_autoScroll);
+    ImGui::Checkbox(I18n::T("editor.panel.console.auto_scroll").c_str(), &m_autoScroll);
 
     ImGui::SameLine();
     ImGui::TextDisabled("|");
@@ -151,7 +156,9 @@ void ConsolePanel::onImGuiRender() {
             ImGui::PopStyleColor(2);
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%s %s",
-                    on ? "Ocultar" : "Mostrar", kLevelLabels[i]);
+                    I18n::T(on ? "editor.panel.console.hide"
+                                : "editor.panel.console.show").c_str(),
+                    kLevelLabels[i]);
             }
             if (i < 5) ImGui::SameLine();
         }
@@ -164,7 +171,8 @@ void ConsolePanel::onImGuiRender() {
     const float filterWidth =
         std::max(140.0f, ImGui::GetContentRegionAvail().x * 0.40f);
     ImGui::SetNextItemWidth(filterWidth);
-    ImGui::InputTextWithHint("##channel", "filtro canal (substring)",
+    ImGui::InputTextWithHint("##channel",
+                                I18n::T("editor.panel.console.filter_hint").c_str(),
                                 m_channelFilter.data(),
                                 m_channelFilter.size());
 
@@ -218,10 +226,13 @@ void ConsolePanel::onImGuiRender() {
 
     // F2H23: counter en el footer del panel — N visibles / M totales.
     if (hasFilter) {
-        ImGui::TextDisabled("%zu de %zu lineas (filtro activo)",
-                              visibleCount, totalCount);
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.console.lines_filtered",
+                    visibleCount, totalCount).c_str());
     } else {
-        ImGui::TextDisabled("%zu lineas", totalCount);
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.console.lines",
+                    totalCount).c_str());
     }
 
     ImGui::End();

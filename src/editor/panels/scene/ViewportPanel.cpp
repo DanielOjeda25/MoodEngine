@@ -1,10 +1,12 @@
 #include "editor/panels/scene/ViewportPanel.h"
 
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/render/rhi/IFramebuffer.h"
 
 #include <imgui.h>
 
 #include <cstring>
+#include <string>
 
 namespace Mood {
 
@@ -205,12 +207,12 @@ void ViewportPanel::onImGuiRender() {
                 m_cameraPanDy = io.MouseDelta.y;
             }
         } else {
-            const char* placeholder = "Viewport (sin framebuffer)";
-            const ImVec2 textSize = ImGui::CalcTextSize(placeholder);
+            const std::string placeholder = I18n::T("editor.panel.viewport.no_framebuffer");
+            const ImVec2 textSize = ImGui::CalcTextSize(placeholder.c_str());
             ImGui::SetCursorPos(ImVec2(
                 (avail.x - textSize.x) * 0.5f + ImGui::GetCursorPosX(),
                 (avail.y - textSize.y) * 0.5f + ImGui::GetCursorPosY()));
-            ImGui::TextUnformatted(placeholder);
+            ImGui::TextUnformatted(placeholder.c_str());
         }
     }
     ImGui::End();

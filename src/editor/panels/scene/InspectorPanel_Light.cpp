@@ -5,6 +5,7 @@
 #include "editor/panels/scene/InspectorPanel_Internal.h"
 
 #include "editor/ui/EditorUI.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/Components.h"
 
 #include <imgui.h>
@@ -20,11 +21,13 @@ void InspectorPanel::renderLightSection(Entity e) {
     auto& lt = e.getComponent<LightComponent>();
     ImGui::SeparatorText(ICON_FA_LIGHTBULB " Light");
 
-    if (ImGui::Checkbox("enabled##lt", &lt.enabled)) m_editedThisFrame = true;
+    const std::string enabledLabel = I18n::T("editor.panel.inspector.light.enabled") + "##lt";
+    if (ImGui::Checkbox(enabledLabel.c_str(), &lt.enabled)) m_editedThisFrame = true;
 
     const char* items[] = {"Directional", "Point"};
     int current = static_cast<int>(lt.type);
-    if (ImGui::Combo("type##lt", &current, items, 2)) {
+    const std::string typeLabel = I18n::T("editor.panel.inspector.light.type") + "##lt";
+    if (ImGui::Combo(typeLabel.c_str(), &current, items, 2)) {
         // Hito 40 F: undo del light type combo.
         const auto oldType = lt.type;
         const auto newType = static_cast<LightComponent::Type>(current);
@@ -45,13 +48,15 @@ void InspectorPanel::renderLightSection(Entity e) {
             m_editedThisFrame = true;
         }
     }
-    if (ImGui::ColorEdit3("color##lt", &lt.color.x)) m_editedThisFrame = true;
+    const std::string colorLabel = I18n::T("editor.panel.inspector.light.color") + "##lt";
+    if (ImGui::ColorEdit3(colorLabel.c_str(), &lt.color.x)) m_editedThisFrame = true;
     detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, lt.color,
         [](Entity& en, const glm::vec3& v) {
             en.getComponent<LightComponent>().color = v;
         },
         "Editar light color");
-    if (ImGui::DragFloat("intensity##lt", &lt.intensity, 0.01f, 0.0f, 100.0f)) {
+    const std::string intensityLabel = I18n::T("editor.panel.inspector.light.intensity") + "##lt";
+    if (ImGui::DragFloat(intensityLabel.c_str(), &lt.intensity, 0.01f, 0.0f, 100.0f)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, lt.intensity,
@@ -61,7 +66,8 @@ void InspectorPanel::renderLightSection(Entity e) {
         "Editar light intensity");
 
     if (lt.type == LightComponent::Type::Point) {
-        if (ImGui::DragFloat("radius (m)##lt", &lt.radius, 0.1f, 0.1f, 1000.0f)) {
+        const std::string radiusLabel = I18n::T("editor.panel.inspector.light.radius") + "##lt";
+        if (ImGui::DragFloat(radiusLabel.c_str(), &lt.radius, 0.1f, 0.1f, 1000.0f)) {
             m_editedThisFrame = true;
         }
         detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, lt.radius,
@@ -70,12 +76,14 @@ void InspectorPanel::renderLightSection(Entity e) {
             },
             "Editar light radius");
     } else {
-        if (ImGui::DragFloat3("direction##lt", &lt.direction.x, 0.01f, -1.0f, 1.0f)) {
+        const std::string dirLabel = I18n::T("editor.panel.inspector.light.direction") + "##lt";
+        if (ImGui::DragFloat3(dirLabel.c_str(), &lt.direction.x, 0.01f, -1.0f, 1.0f)) {
             m_editedThisFrame = true;
         }
         // Hito 16: solo directional puede emitir shadow map (point shadows
         // requeririan cubemap depth, fuera de scope).
-        if (ImGui::Checkbox("castShadows##lt", &lt.castShadows)) {
+        const std::string castLabel = I18n::T("editor.panel.inspector.light.cast_shadows") + "##lt";
+        if (ImGui::Checkbox(castLabel.c_str(), &lt.castShadows)) {
             m_editedThisFrame = true;
         }
     }
@@ -90,38 +98,44 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
     auto& env = e.getComponent<EnvironmentComponent>();
     ImGui::SeparatorText(ICON_FA_TREE " Environment");
 
-    ImGui::TextDisabled("Skybox: %s (asset catalog futuro)",
-                         env.skyboxPath.c_str());
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.inspector.environment.skybox",
+                env.skyboxPath).c_str());
 
     ImGui::Separator();
-    ImGui::TextUnformatted("Fog");
+    ImGui::TextUnformatted(I18n::T("editor.panel.inspector.environment.fog").c_str());
     const char* fogModes[] = {"Off", "Linear", "Exp", "Exp2"};
     int fogIdx = static_cast<int>(env.fogMode);
-    if (ImGui::Combo("mode##env", &fogIdx, fogModes, 4)) {
+    const std::string fogModeLabel = I18n::T("editor.panel.inspector.environment.mode") + "##env";
+    if (ImGui::Combo(fogModeLabel.c_str(), &fogIdx, fogModes, 4)) {
         env.fogMode = static_cast<u32>(fogIdx);
         m_editedThisFrame = true;
     }
-    if (ImGui::ColorEdit3("color##envfog", &env.fogColor.x)) m_editedThisFrame = true;
+    const std::string fogColorLabel = I18n::T("editor.panel.inspector.environment.color") + "##envfog";
+    if (ImGui::ColorEdit3(fogColorLabel.c_str(), &env.fogColor.x)) m_editedThisFrame = true;
     detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, env.fogColor,
         [](Entity& en, const glm::vec3& v) {
             en.getComponent<EnvironmentComponent>().fogColor = v;
         },
         "Editar fog color");
     if (env.fogMode == 1) {
-        if (ImGui::DragFloat("start (m)##env", &env.fogLinearStart, 0.1f, 0.0f, 500.0f)) m_editedThisFrame = true;
+        const std::string startLabel = I18n::T("editor.panel.inspector.environment.start") + "##env";
+        if (ImGui::DragFloat(startLabel.c_str(), &env.fogLinearStart, 0.1f, 0.0f, 500.0f)) m_editedThisFrame = true;
         detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.fogLinearStart,
             [](Entity& en, const f32& v) {
                 en.getComponent<EnvironmentComponent>().fogLinearStart = v;
             },
             "Editar fog linear start");
-        if (ImGui::DragFloat("end (m)##env",   &env.fogLinearEnd,   0.1f, 0.0f, 500.0f)) m_editedThisFrame = true;
+        const std::string endLabel = I18n::T("editor.panel.inspector.environment.end") + "##env";
+        if (ImGui::DragFloat(endLabel.c_str(),   &env.fogLinearEnd,   0.1f, 0.0f, 500.0f)) m_editedThisFrame = true;
         detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.fogLinearEnd,
             [](Entity& en, const f32& v) {
                 en.getComponent<EnvironmentComponent>().fogLinearEnd = v;
             },
             "Editar fog linear end");
     } else if (env.fogMode == 2 || env.fogMode == 3) {
-        if (ImGui::DragFloat("density##env", &env.fogDensity, 0.001f, 0.0f, 1.0f)) m_editedThisFrame = true;
+        const std::string densityLabel = I18n::T("editor.panel.inspector.environment.density") + "##env";
+        if (ImGui::DragFloat(densityLabel.c_str(), &env.fogDensity, 0.001f, 0.0f, 1.0f)) m_editedThisFrame = true;
         detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.fogDensity,
             [](Entity& en, const f32& v) {
                 en.getComponent<EnvironmentComponent>().fogDensity = v;
@@ -130,8 +144,9 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
     }
 
     ImGui::Separator();
-    ImGui::TextUnformatted("Post-process");
-    if (ImGui::DragFloat("exposure (EV)##env", &env.exposure, 0.05f, -5.0f, 5.0f)) m_editedThisFrame = true;
+    ImGui::TextUnformatted(I18n::T("editor.panel.inspector.environment.post_process").c_str());
+    const std::string exposureLabel = I18n::T("editor.panel.inspector.environment.exposure") + "##env";
+    if (ImGui::DragFloat(exposureLabel.c_str(), &env.exposure, 0.05f, -5.0f, 5.0f)) m_editedThisFrame = true;
     detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.exposure,
         [](Entity& en, const f32& v) {
             en.getComponent<EnvironmentComponent>().exposure = v;
@@ -139,13 +154,15 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
         "Editar exposure");
     const char* tonemaps[] = {"None", "Reinhard", "ACES"};
     int toneIdx = static_cast<int>(env.tonemapMode);
-    if (ImGui::Combo("tonemap##env", &toneIdx, tonemaps, 3)) {
+    const std::string tonemapLabel = I18n::T("editor.panel.inspector.environment.tonemap") + "##env";
+    if (ImGui::Combo(tonemapLabel.c_str(), &toneIdx, tonemaps, 3)) {
         env.tonemapMode = static_cast<u32>(toneIdx);
         m_editedThisFrame = true;
     }
     // Hito 18: control del aporte del IBL al ambient. Util cuando el
     // skybox es muy claro y "ahoga" la directional + point lights.
-    if (ImGui::SliderFloat("IBL intensity##env",
+    const std::string iblLabel = I18n::T("editor.panel.inspector.environment.ibl_intensity") + "##env";
+    if (ImGui::SliderFloat(iblLabel.c_str(),
                             &env.iblIntensity, 0.0f, 2.0f, "%.2f")) {
         m_editedThisFrame = true;
     }

@@ -5,6 +5,7 @@
 
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/Components.h"
@@ -23,13 +24,15 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
     auto& mr = e.getComponent<MeshRendererComponent>();
     ImGui::SeparatorText(ICON_FA_CUBE " MeshRenderer");
     if (m_assets != nullptr) {
-        ImGui::Text("mesh: %s (id %u)",
-                     m_assets->meshPathOf(mr.mesh).c_str(), mr.mesh);
+        ImGui::Text("%s",
+            I18n::T("editor.panel.inspector.mesh.mesh_id_path",
+                    m_assets->meshPathOf(mr.mesh), mr.mesh).c_str());
         MeshAsset* asset = m_assets->getMesh(mr.mesh);
         if (asset != nullptr) {
-            ImGui::Text("submeshes: %u, vertices: %u",
-                         static_cast<u32>(asset->submeshes.size()),
-                         asset->totalVertexCount());
+            ImGui::Text("%s",
+                I18n::T("editor.panel.inspector.mesh.submeshes_vertices",
+                        static_cast<u32>(asset->submeshes.size()),
+                        asset->totalVertexCount()).c_str());
 
             // F2H6: info de LODs (read-only en v1). Editar manualmente
             // o regenerar = hito futuro.
@@ -38,28 +41,39 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
             for (const auto& s : asset->lod1Submeshes) lod1Tris += s.vertexCount / 3;
             for (const auto& s : asset->lod2Submeshes) lod2Tris += s.vertexCount / 3;
             if (lod1Tris > 0 || lod2Tris > 0) {
-                ImGui::TextDisabled("LOD 0: %u tris (full)", lod0Tris);
-                ImGui::TextDisabled("LOD 1: %u tris", lod1Tris);
-                ImGui::TextDisabled("LOD 2: %u tris", lod2Tris);
-                ImGui::TextDisabled("LOD distances: %.0fm / %.0fm",
-                                      static_cast<double>(asset->lodDistances.x),
-                                      static_cast<double>(asset->lodDistances.y));
+                ImGui::TextDisabled("%s",
+                    I18n::T("editor.panel.inspector.mesh.lod0_tris", lod0Tris).c_str());
+                ImGui::TextDisabled("%s",
+                    I18n::T("editor.panel.inspector.mesh.lod1_tris", lod1Tris).c_str());
+                ImGui::TextDisabled("%s",
+                    I18n::T("editor.panel.inspector.mesh.lod2_tris", lod2Tris).c_str());
+                ImGui::TextDisabled("%s",
+                    I18n::T("editor.panel.inspector.mesh.lod_distances",
+                            static_cast<double>(asset->lodDistances.x),
+                            static_cast<double>(asset->lodDistances.y)).c_str());
             } else if (asset->hasSkeleton()) {
-                ImGui::TextDisabled("LODs: skinned (no generado)");
+                ImGui::TextDisabled("%s",
+                    I18n::T("editor.panel.inspector.mesh.lods_skinned").c_str());
             } else {
-                ImGui::TextDisabled("LODs: no aplicable (mesh chico)");
+                ImGui::TextDisabled("%s",
+                    I18n::T("editor.panel.inspector.mesh.lods_na").c_str());
             }
         }
     } else {
-        ImGui::Text("mesh id: %u", mr.mesh);
+        ImGui::Text("%s",
+            I18n::T("editor.panel.inspector.mesh.mesh_id", mr.mesh).c_str());
     }
-    ImGui::Text("materials: %u", static_cast<u32>(mr.materials.size()));
+    ImGui::Text("%s",
+        I18n::T("editor.panel.inspector.mesh.materials",
+                static_cast<u32>(mr.materials.size())).c_str());
     for (usize i = 0; i < mr.materials.size(); ++i) {
         const MaterialAssetId matId = mr.materials[i];
         const std::string matPath = m_assets->materialPathOf(matId);
         ImGui::PushID(static_cast<int>(i));
         // Header del slot: path del material (read-only).
-        ImGui::SeparatorText(("Material slot " + std::to_string(i)).c_str());
+        ImGui::SeparatorText(
+            (I18n::T("editor.panel.inspector.mesh.material_slot") + " " +
+             std::to_string(i)).c_str());
         ImGui::TextDisabled("%s (id %u)", matPath.c_str(),
                               static_cast<unsigned>(matId));
 
@@ -114,10 +128,10 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
                 "Editar ao");
             // Estado de las texturas — read-only por ahora salvo el
             // drop de albedo (Hito 35 A).
-            ImGui::TextDisabled(
-                "albedo: %u  MR: %u  normal: %u  ao: %u",
-                mat->albedo, mat->metallicRoughness,
-                mat->normal,  mat->ao);
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.panel.inspector.mesh.tex_status",
+                        mat->albedo, mat->metallicRoughness,
+                        mat->normal,  mat->ao).c_str());
         }
 
         // Hito 35 A: drop de textura del AssetBrowser sobre este slot
@@ -136,7 +150,7 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
             ImGui::PushStyleColor(ImGuiCol_Button,
                                     ImVec4(0.20f, 0.55f, 0.25f, 1.0f));
         }
-        ImGui::Button("Drop textura para reemplazar material",
+        ImGui::Button(I18n::T("editor.panel.inspector.mesh.drop_replace").c_str(),
                         ImVec2(-FLT_MIN, 0));
         if (dragTex) ImGui::PopStyleColor();
         if (ImGui::BeginDragDropTarget()) {

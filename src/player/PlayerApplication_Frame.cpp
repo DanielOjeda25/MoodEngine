@@ -17,6 +17,7 @@
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/game/overlay/GameOverlay.h"
 #include "engine/game/state/GameState.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
@@ -111,11 +112,12 @@ void PlayerApplication::endFrame() {
         if (m_inMainMenu) {
             drawMainMenu();
         } else {
+            const std::string exitLbl = I18n::T("hud.menu.exit_to_menu");
             GameOverlay::draw(ImGui::GetWindowDrawList(),
                                imgPos.x, imgPos.y, imgSize.x, imgSize.y,
                                ImGui::GetIO().DeltaTime,
                                m_playCamera.forward(),
-                               "EXIT TO MENU",
+                               exitLbl.c_str(),
                                [this]() {
                                    Log::engine()->info(
                                        "[MainMenu] Exit to menu -> back to MainMenu");

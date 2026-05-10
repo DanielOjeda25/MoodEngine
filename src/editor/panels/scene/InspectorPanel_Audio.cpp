@@ -6,6 +6,7 @@
 
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/audio/clips/AudioClip.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/Components.h"
 
 #include <imgui.h>
@@ -36,7 +37,8 @@ void InspectorPanel::renderAudioSourceSection(Entity e) {
             current = 0;
         }
         // BeginCombo para soportar paths largos con scroll.
-        if (ImGui::BeginCombo("clip##as", labels[current].c_str())) {
+        const std::string clipLabel = I18n::T("editor.panel.inspector.audio.clip") + "##as";
+        if (ImGui::BeginCombo(clipLabel.c_str(), labels[current].c_str())) {
             for (int i = 0; i < static_cast<int>(labels.size()); ++i) {
                 const bool selected = (current == i);
                 if (ImGui::Selectable(labels[i].c_str(), selected)) {
@@ -49,10 +51,13 @@ void InspectorPanel::renderAudioSourceSection(Entity e) {
             ImGui::EndCombo();
         }
     } else {
-        ImGui::Text("clip id: %u (asset manager no inyectado)", asrc.clip);
+        ImGui::Text("%s",
+            I18n::T("editor.panel.inspector.audio.clip_id_no_assets",
+                    asrc.clip).c_str());
     }
 
-    if (ImGui::SliderFloat("volume##as", &asrc.volume, 0.0f, 1.0f)) {
+    const std::string volumeLabel = I18n::T("editor.panel.inspector.audio.volume") + "##as";
+    if (ImGui::SliderFloat(volumeLabel.c_str(), &asrc.volume, 0.0f, 1.0f)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, asrc.volume,
@@ -60,14 +65,16 @@ void InspectorPanel::renderAudioSourceSection(Entity e) {
             en.getComponent<AudioSourceComponent>().volume = v;
         },
         "Editar audio volume");
-    if (ImGui::Checkbox("loop##as", &asrc.loop)) { m_editedThisFrame = true; }
+    const std::string loopLabel = I18n::T("editor.panel.inspector.audio.loop") + "##as";
+    if (ImGui::Checkbox(loopLabel.c_str(), &asrc.loop)) { m_editedThisFrame = true; }
     detail::pushEditIfDone<bool>(m_editTracker, m_ui, e, asrc.loop,
         [](Entity& en, const bool& v) {
             en.getComponent<AudioSourceComponent>().loop = v;
         },
         "Toggle audio loop");
     ImGui::SameLine();
-    if (ImGui::Checkbox("playOnStart##as", &asrc.playOnStart)) {
+    const std::string playOnStartLabel = I18n::T("editor.panel.inspector.audio.play_on_start") + "##as";
+    if (ImGui::Checkbox(playOnStartLabel.c_str(), &asrc.playOnStart)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<bool>(m_editTracker, m_ui, e, asrc.playOnStart,
@@ -76,7 +83,8 @@ void InspectorPanel::renderAudioSourceSection(Entity e) {
         },
         "Toggle audio playOnStart");
     ImGui::SameLine();
-    if (ImGui::Checkbox("is3D##as", &asrc.is3D)) { m_editedThisFrame = true; }
+    const std::string is3DLabel = I18n::T("editor.panel.inspector.audio.is_3d") + "##as";
+    if (ImGui::Checkbox(is3DLabel.c_str(), &asrc.is3D)) { m_editedThisFrame = true; }
     detail::pushEditIfDone<bool>(m_editTracker, m_ui, e, asrc.is3D,
         [](Entity& en, const bool& v) {
             en.getComponent<AudioSourceComponent>().is3D = v;
@@ -85,7 +93,8 @@ void InspectorPanel::renderAudioSourceSection(Entity e) {
 
     // Preview: resetear `started` fuerza al AudioSystem a volver a
     // disparar la reproduccion en el proximo frame. Requiere playOnStart.
-    if (ImGui::Button("Reproducir##as")) {
+    const std::string playLabel = I18n::T("editor.panel.inspector.audio.play") + "##as";
+    if (ImGui::Button(playLabel.c_str())) {
         asrc.started = false;
         if (!asrc.playOnStart) {
             // Preview implicito: encender playOnStart temporalmente no
@@ -94,7 +103,7 @@ void InspectorPanel::renderAudioSourceSection(Entity e) {
         }
     }
     if (ImGui::BeginPopup("audio_preview_note")) {
-        ImGui::TextUnformatted("Activa 'playOnStart' para que suene al disparar.");
+        ImGui::TextUnformatted(I18n::T("editor.panel.inspector.audio.preview_hint").c_str());
         ImGui::EndPopup();
     }
     ImGui::Separator();

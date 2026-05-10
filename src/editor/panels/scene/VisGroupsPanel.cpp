@@ -6,6 +6,7 @@
 #include "editor/selection/SelectionSet.h"
 #include "editor/ui/EditorUI.h"
 #include "editor/ui/IconHelpers.h"  // F2H37: iconForEntity compartido
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/VisGroup.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
@@ -66,28 +67,30 @@ void VisGroupsPanel::onImGuiRender() {
     }
 
     if (m_scene == nullptr || m_history == nullptr) {
-        ImGui::TextDisabled("Scene / HistoryStack no inyectados");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.visgroups.not_injected").c_str());
         ImGui::End();
         return;
     }
 
     // Boton "+ Nuevo grupo" arriba.
-    if (ImGui::Button("+ Nuevo grupo")) {
+    if (ImGui::Button(I18n::T("editor.panel.visgroups.new_group").c_str())) {
         const u64 nextN = m_scene->visgroups().size() + 1;
-        char defaultName[32];
-        std::snprintf(defaultName, sizeof(defaultName), "Grupo %llu",
-                       static_cast<unsigned long long>(nextN));
+        const std::string defaultName =
+            I18n::T("editor.panel.visgroups.default_name",
+                    static_cast<unsigned long long>(nextN));
         m_history->push(std::make_unique<CreateVisGroupCommand>(
-            m_scene, std::string(defaultName), randomPastelColor()));
+            m_scene, defaultName, randomPastelColor()));
     }
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Crea un VisGroup vacio. Asignale entidades\n"
-                          "con click derecho > 'Asignar seleccion'.");
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.panel.visgroups.new_group_tooltip").c_str());
     }
     ImGui::Separator();
 
     if (m_scene->visgroups().empty()) {
-        ImGui::TextDisabled("Sin grupos. Crea uno arriba para empezar.");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.visgroups.empty").c_str());
         ImGui::End();
         return;
     }
@@ -133,7 +136,9 @@ void VisGroupsPanel::onImGuiRender() {
                 after.hidden ? "Ocultar VisGroup" : "Mostrar VisGroup"));
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip(vg->hidden ? "Mostrar grupo" : "Ocultar grupo");
+            ImGui::SetTooltip("%s",
+                I18n::T(vg->hidden ? "editor.panel.visgroups.show_group"
+                                     : "editor.panel.visgroups.hide_group").c_str());
         }
 
         ImGui::SameLine();
@@ -214,7 +219,7 @@ void VisGroupsPanel::onImGuiRender() {
 
         // Menu contextual (click derecho sobre la fila del header).
         if (ImGui::BeginPopupContextItem("##ctx")) {
-            if (ImGui::MenuItem("Renombrar")) {
+            if (ImGui::MenuItem(I18n::T("editor.panel.visgroups.rename").c_str())) {
                 m_renamingGroupId = gid;
                 std::strncpy(m_renameBuffer, vg->name.c_str(),
                               sizeof(m_renameBuffer) - 1);
@@ -223,7 +228,7 @@ void VisGroupsPanel::onImGuiRender() {
             if (m_ui != nullptr) {
                 const auto& set = m_ui->selectionSet();
                 const bool hasSelection = !set.selected.empty();
-                if (ImGui::MenuItem("Asignar seleccion al grupo",
+                if (ImGui::MenuItem(I18n::T("editor.panel.visgroups.assign_selection").c_str(),
                                      nullptr, false, hasSelection)) {
                     for (const Entity& e : set.selected) {
                         if (!e || !e.hasComponent<TagComponent>()) continue;
@@ -239,7 +244,7 @@ void VisGroupsPanel::onImGuiRender() {
                         "[visgroups] asignados {} entities al grupo '{}'",
                         set.selected.size(), vg->name);
                 }
-                if (ImGui::MenuItem("Quitar seleccion del grupo",
+                if (ImGui::MenuItem(I18n::T("editor.panel.visgroups.remove_selection").c_str(),
                                      nullptr, false, hasSelection)) {
                     for (const Entity& e : set.selected) {
                         if (!e || !e.hasComponent<TagComponent>()) continue;
@@ -254,7 +259,7 @@ void VisGroupsPanel::onImGuiRender() {
                 }
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Eliminar grupo")) {
+            if (ImGui::MenuItem(I18n::T("editor.panel.visgroups.delete_group").c_str())) {
                 m_history->push(std::make_unique<DeleteVisGroupCommand>(
                     m_scene, gid));
             }
@@ -267,8 +272,8 @@ void VisGroupsPanel::onImGuiRender() {
         // del grupo. Si el grupo esta vacio, hint en gris.
         if (expanded) {
             if (count == 0) {
-                ImGui::TextDisabled("    (sin miembros — click derecho > "
-                                     "Asignar seleccion)");
+                ImGui::TextDisabled("%s",
+                    I18n::T("editor.panel.visgroups.no_members").c_str());
             } else {
                 // Coleccionar miembros en una pasada (no iterar mientras
                 // mutamos el set / pusheamos comandos).
@@ -304,7 +309,8 @@ void VisGroupsPanel::onImGuiRender() {
                             m_scene, m.tag, gid, 0, "Quitar del grupo"));
                     }
                     if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("Quitar del grupo");
+                        ImGui::SetTooltip("%s",
+                            I18n::T("editor.panel.visgroups.remove_from_group").c_str());
                     }
                     ImGui::PopID();
                 }

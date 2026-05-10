@@ -5,6 +5,7 @@
 #include "editor/panels/scene/InspectorPanel_Internal.h"
 
 #include "editor/ui/EditorUI.h"
+#include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/Components.h"
 
 #include <imgui.h>
@@ -24,7 +25,8 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
 
     const char* typeNames[] = {"Static", "Kinematic", "Dynamic"};
     int typeIdx = static_cast<int>(rb.type);
-    if (ImGui::Combo("type##rb", &typeIdx, typeNames, 3)) {
+    const std::string typeLabel = I18n::T("editor.panel.inspector.physics.type") + "##rb";
+    if (ImGui::Combo(typeLabel.c_str(), &typeIdx, typeNames, 3)) {
         // Hito 40 F: undo via EditPropertyCommand<u32> (cambio
         // estructural, atomico — no usa el tracker drag-end).
         const auto oldType = rb.type;
@@ -49,7 +51,8 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
 
     const char* shapeNames[] = {"Box", "Sphere", "Capsule"};
     int shapeIdx = static_cast<int>(rb.shape);
-    if (ImGui::Combo("shape##rb", &shapeIdx, shapeNames, 3)) {
+    const std::string shapeLabel = I18n::T("editor.panel.inspector.physics.shape") + "##rb";
+    if (ImGui::Combo(shapeLabel.c_str(), &shapeIdx, shapeNames, 3)) {
         // Hito 40 F: undo del shape combo.
         const auto oldShape = rb.shape;
         const auto newShape = static_cast<RigidBodyComponent::Shape>(shapeIdx);
@@ -71,7 +74,8 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
         }
     }
 
-    if (ImGui::DragFloat3("halfExtents##rb", &rb.halfExtents.x, 0.05f, 0.01f, 100.0f)) {
+    const std::string halfLabel = I18n::T("editor.panel.inspector.physics.half_extents") + "##rb";
+    if (ImGui::DragFloat3(halfLabel.c_str(), &rb.halfExtents.x, 0.05f, 0.01f, 100.0f)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, rb.halfExtents,
@@ -80,7 +84,8 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
         },
         "Editar rigid body halfExtents");
     if (rb.type == RigidBodyComponent::Type::Dynamic) {
-        if (ImGui::DragFloat("mass (kg)##rb", &rb.mass, 0.1f, 0.001f, 10000.0f)) {
+        const std::string massLabel = I18n::T("editor.panel.inspector.physics.mass") + "##rb";
+        if (ImGui::DragFloat(massLabel.c_str(), &rb.mass, 0.1f, 0.001f, 10000.0f)) {
             m_editedThisFrame = true;
         }
         detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, rb.mass,
@@ -91,7 +96,8 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
     }
     // Hito 34 A: friction. Aplica a static + dynamic (el contacto en
     // ambos lados afecta el comportamiento).
-    if (ImGui::DragFloat("friction##rb", &rb.friction, 0.01f, 0.0f, 2.0f)) {
+    const std::string fricLabel = I18n::T("editor.panel.inspector.physics.friction") + "##rb";
+    if (ImGui::DragFloat(fricLabel.c_str(), &rb.friction, 0.01f, 0.0f, 2.0f)) {
         m_editedThisFrame = true;
     }
     detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, rb.friction,
@@ -99,7 +105,8 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
             en.getComponent<RigidBodyComponent>().friction = v;
         },
         "Editar friction (RigidBody)");
-    ImGui::TextDisabled("body id: %u (0 = no materializado) — re-Play para aplicar friction", rb.bodyId);
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.inspector.physics.body_id_hint", rb.bodyId).c_str());
     ImGui::Separator();
 }
 
