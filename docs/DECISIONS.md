@@ -11,6 +11,59 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-10: F2H45 cierre — deudas pre-Sub-fase 2.5 (AddComponentCommand undoable + Lato Player con tildes + Console tooltip i18n)
+
+**Contexto:** tras cerrar F2H44, el dev pidió revisar `PENDIENTES.md` para clasificar deuda real vs feature diferida y arreglar las deudas reales antes de arrancar Sub-fase 2.5: *"no me gustan las deudas futuras, quiero arreglar lo necesario ahora antes de pasar a otra cosa"*. Tres deudas identificadas como reales (consistencia/sweep incompleto): (1) AddComponentCommand sin undo (toda otra acción del Inspector es undoable, romper esa expectativa para Add Component generaba dissonance), (2) font del MoodPlayer atrasada en ProggyClean desde F2H38 + por consecuencia `es.json` sin tildes desde F2H43 (paridad forzada), (3) Console tooltip multilínea con icons FA inline que el subagente de F2H43 dejó sin envolver. Otras ~12 entradas del PENDIENTES.md fueron clasificadas como features diferidas (no son deuda) y NO entraron al hito.
+
+**Decisión clave 1 — AddComponentCommand type-erased en lugar de N templates específicos:** el comando vive como una sola clase `AddComponentCommand` con dos `std::function<void(Entity&)>` (`add` + `remove`) que el helper templated `makeAddComponentCommand<T>(entity, label)` rellena capturando T en las closures. El callsite del popup pasa de `[e]() mutable { e.addComponent<X>(); }` a `[](Entity en, std::string lbl) { return makeAddComponentCommand<X>(en, std::move(lbl)); }`.
+
+- **Razón vs `template<T> class AddComponentCommand`:** una clase templated generaría 11 instanciaciones del comando completo en el binario (con sus virtuales). Type-erase es 1 clase + 11 sitios de captura templated triviales (~3 LOC cada uno). El cost extra de los `std::function` es ~32 bytes por comando + heap alloc de la closure — irrelevante para una operación que el dev hace raramente vs los sliders del Inspector.
+- **Razón vs implementar como `EditPropertyCommand<bool>` con setter que add/remove:** EditPropertyCommand está pensado para edits de UN campo de UN componente existente. Crear/destruir el componente entero es semánticamente otro animal — un comando dedicado tiene mejor `name()` ("Agregar componente: Luz") y separa el log del edit del log del add.
+- **Sin snapshot del estado pre-add:** si el dev hace add → edita campos del componente → undo, los EditPropertyCommand de los edits quedan más arriba en el stack y se deshacen primero (LIFO). El AddComponentCommand solo necesita add/remove con valores default — los campos editados quedan capturados en sus propios commands. Probado en `test_add_component_command.cpp` con la interacción Add+Edit+Undo.
+- **Trade-off aceptado:** redo de un Add (tras undo) recrea con valores default. Si el dev había editado campos en el ciclo original, los EditPropertyCommand del redo los re-aplican en orden — funciona correctamente, pero requiere que la HistoryStack mantenga los edits posteriores en el redo stack (lo hace por design — push() limpia el redo, pero un solo undo+redo no toca el redo).
+
+**Decisión clave 2 — Lato en Player con mismo patrón que F2H38, sin FA merge:** el MoodPlayer ahora carga `LatoLatin-Regular.ttf` 15px en `PlayerApplication_Init.cpp` con range Basic Latin + Latin-1 Supplement + General Punctuation subset. FA (FontAwesome) NO mergeada al atlas.
+
+- **Razón sin FA:** el HUD del Player usa DrawList procedural (F2H39+) — círculos, barras, anillos, hexágonos calculados con math, sin sprites ni iconos. El Pause menu del Player no usa FA tampoco (validado con grep `ICON_FA` en `src/player/`). Cargar FA agregaría ~400KB al atlas para nada. Si en el futuro un menú del Player necesita FA (improbable), agregarlo en su momento.
+- **Razón mismo size 15px que el editor:** coherencia visual al transicionar Editor → Play Mode. Pre-F2H45 había salto de tamaño + estilo (ProggyClean 13px bitmap → Lato 15px smooth) que era inconsistente.
+- **Sweep tildes habilitado:** con Lato cargado, los `á/é/í/ó/ú/ñ` rendean correctamente. Subagente delegado para sweep mecánico de ~75 palabras corregidas en ~60 valores de `es.json` (fundamentalmente sustantivos `acción/selección/configuración`, palabras del HUD `MUNICIÓN/MENÚ`, `Diseño/Español/Añadir/tamaño`). Términos técnicos en inglés (`Inspector/Hierarchy/Brush/MeshRenderer/workspaces`) intactos por convención del motor.
+
+**Decisión clave 3 — Console tooltip: keys i18n para texto, icons FA en código:** el tooltip de leyenda log levels en `ConsolePanel.cpp` ahora se construye con `std::string` concat en C++:
+
+```cpp
+const std::string body =
+    I18n::T("editor.panel.console.help.header") + "\n"
+    "  " ICON_FA_BUG " " + I18n::T("editor.panel.console.help.level.trace") + "\n"
+    ... (5 lines más) ...
+    "\n" + I18n::T("editor.panel.console.help.footer");
+ImGui::SetTooltip("%s", body.c_str());
+```
+
+- **Razón vs poner los icons en el JSON:** los macros `#define ICON_FA_X "\xef\x86\x88"` son secuencias UTF-8 cuyos bytes son válidos en JSON (después de `JSON.parse`), pero serían frágiles a editar y a la vista del traductor son tofu. Mantenerlos en código asegura que el traductor solo edita texto plano (la parte que SÍ entiende su idioma) y que un eventual cambio de los iconos FA no requiere tocar el JSON.
+- **Patrón replicable:** este approach (1 key por segmento de texto + concat con bytes literales en código) es la solución estándar para cualquier tooltip / mensaje con icons inline. Quedó documentado en `_comment` de los JSONs como precedente.
+
+**Decisión clave 4 — botón "Recompute mesh" eliminado, no escondido en grupo "Debug avanzado":** a pedido del dev tras tour visual del Inspector. Era debug breadcrumb del Hito 12+ que forzaba `bc.dirty=true` por si alguna mutación del brush no marcaba dirty automáticamente.
+
+- **Razón vs esconderlo:** ninguna mutación del brush deja `dirty=false` por error en práctica (validado por 50+ commits desde F2H12 sin reportes). Esconderlo en un TreeNodeEx("Debug") agrega ruido visual y mantiene código muerto. Eliminar es más limpio.
+- **Recuperable si emerge necesidad:** el campo `bc.dirty` sigue público; si en el futuro un developer necesita el escape hatch, puede agregarlo en una rama de debug local con 4 LOC.
+
+**Alternativas descartadas:**
+
+- **Lua scripts traducibles:** identificada como deuda real pero descartada del scope F2H45 — solo aplica a demos actuales (`hud_demo.lua`), no hay scripts gameplay reales. Esperar a que emerjan.
+- **Validación full Player con compiledMesh:** no es deuda, es validación pendiente al primer empaquetado real del dev. Sin código que escribir hoy.
+- **Implementar AddComponentCommand templated por cada T (sin type-erase):** scope inflado innecesariamente (11 instanciaciones × ~80 LOC cada una = ~900 LOC vs ~80 LOC del header-only type-erased actual).
+- **Cargar FA en Player por si acaso:** YAGNI. El HUD procedural no lo necesita; agregar peso al atlas sin uso real es deuda preventiva.
+- **Esconder "Recompute mesh" detrás de un toggle "Debug avanzado" en lugar de eliminar:** agrega complejidad de UI por código que nunca se usó. Eliminar > esconder.
+
+**Condiciones de revisión:**
+
+- Si emerge un caso real donde un brush queda con mesh stale sin marcar `dirty=true`, recuperar el botón "Recompute mesh" como single-LOC (`if (ImGui::Button("Recompute")) bc.dirty = true;`) — no requiere reabrir el hito.
+- Si el dev percibe overhead notable de los `std::function` en AddComponentCommand al hacer add masivos (improbable — add no es operación de tight loop), refactorizar a templated por T.
+- Si en el futuro se agrega un componente que NO sea default-constructible (improbable, todos los actuales lo son), `makeAddComponentCommand<T>` falla en compilación — requeriría sobrecarga adicional con args explícitos.
+- Si el subagente cometió errores en el sweep de tildes que solo se ven en uso real (ej. tildes innecesarias en una palabra técnica que el dev espera sin tilde), corregir esa palabra puntual con `Edit` — no requiere hito propio.
+
+---
+
 ## 2026-05-10: F2H44 cierre — polish onboarding UX (sin docs)
 
 **Contexto:** tras cerrar F2H43 (i18n), el dev pidió evaluación crítica honesta de la UI desde la perspectiva de un dev de juegos nuevo. La auditoría identificó 5 gaps de descubribilidad/UX que limitaban la primera impresión del editor: (1) workspaces con nombres ambiguos al usuario nuevo, (2) sin "Add Component" en Inspector — el dev solo podía agregar componentes via demos hardcoded del menú Help, (3) demos enterrados en `Ayuda > Demos` (primera vista del editor era dockspace vacío), (4) VisGroups sin onboarding contextual del concepto Hammer/Source, (5) outline AABB de meshes seleccionados invisible (cubo unitario hardcoded que se perdía dentro de meshes grandes como Fox.glb). Bloque originalmente planeado #5 (USER_GUIDE/* + README + GIF) fue descartado por el dev: *"seguiremos agregando cosas que luego vamos a terminar cambiando"* — docs externos rotarían más rápido que la implementación.

@@ -6,11 +6,41 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H44 cerrado: polish onboarding UX (sin docs externos).**
+**🚀 Fase 2 — F2H45 cerrado: cierre de deudas pre-Sub-fase 2.5 (AddComponentCommand undoable + Lato en Player con tildes + Console tooltip i18n).**
+Tag: `v1.35.0-fase2-hito45`.
+Validado visualmente por dev *"lo demás está OK"* tras tour de los 3 bloques. 3 deudas reales cerradas (deuda crónica F2H38 Lato Player + sweep i18n F2H43 incompleto + falta de undo en Add Component F2H44). Fix lateral: botón "Recompute mesh" del Inspector eliminado a pedido del dev (era debug breadcrumb sin uso real).
+
+**🏁 Motor sobrado para contenido real: i18n completo (con tildes en ES) + UX onboarding pulido (Add Component undoable + Welcome demo Fox + workspaces ASCII-id + outline AABB real + Material Editor robusto + Ctrl+wheel snap orto + VisGroups help + Console tooltip i18n).** 43/44 hitos de Fase 2.
+
+**Decisiones clave de F2H45:**
+
+- **AddComponentCommand type-erased en lugar de N templates específicos.** Una sola clase `AddComponentCommand` con `std::function<void(Entity&)>` para `add` y `remove`. Helper templated `makeAddComponentCommand<T>(entity, label)` captura T en las dos closures. Razón: 11 componentes templated generarían 11 instanciaciones del comando completo en el binario; type-erase es 1 clase + 11 sitios de captura templated triviales. Coherente con cómo el popup ya usaba lambdas para los add. Trade-off aceptado: dos `std::function` por comando (allocación heap chica), aceptable porque add se usa raramente vs sliders del Inspector.
+- **No snapshot del estado pre-add.** Si el dev hace add → edita campos → undo, los EditPropertyCommand quedan más arriba en el stack y se deshacen primero (LIFO). El AddComponentCommand solo necesita add/remove con default — los campos editados quedan capturados en sus propios commands. Razón: simplicidad + correctitud por composición. Probado en `test_add_component_command.cpp` con la interacción Add+EditProperty.
+- **Lato en Player con mismo patrón que F2H38, sin FA merge.** El HUD del Player usa DrawList procedural (F2H39+) sin iconos FA. Cargar FA solo agregaría peso al atlas para nada. Si en el futuro un menú del Player necesita FA (improbable), agregarlo en su momento.
+- **Sweep tildes delegado a subagente.** ~75 palabras corregidas en ~60 valores de `es.json` — refactor mecánico voluminoso (>15 ediciones del mismo patrón) calificó para delegación según convención del dev. Reporte del subagente listó decisiones (términos técnicos en inglés intactos, voseo argentino preservado, signos de apertura agregados) — judgment calls validados por mí post-hoc.
+- **Console tooltip: keys i18n para texto, icons FA en código.** Los macros `#define ICON_FA_X "\xef\x86\x88"` no caben en JSON sin perder los bytes UTF-8. Solución: 8 keys nuevas (header + 6 levels + footer), construcción del tooltip en C++ concatenando icon + space + I18n::T(level). Patrón replicable para cualquier texto con icons inline.
+- **"Recompute mesh" eliminado**, no escondido en grupo "Debug avanzado". Era debug breadcrumb del Hito 12+ que nunca se usó (no debería pasar el caso que lo justificaba — ninguna mutación del brush deja `dirty=false` por error). Eliminar > esconder cuando no aporta valor real.
+
+**Implementación (F2H45 Bloques A-C):**
+
+- **Bloque A — AddComponentCommand**: nuevo `editor/commands/AddComponentCommand.h` (header-only, ~80 LOC). Refactor del popup en `InspectorPanel.cpp`: struct `Item.makeCmdFn` ahora es `std::function<std::unique_ptr<ICommand>(Entity, std::string)>`; las 11 closures pasan a `[](Entity en, std::string lbl) { return makeAddComponentCommand<X>(en, std::move(lbl)); }`; handler del Selectable hace `historyStack()->push(it.makeCmdFn(e, label))`. Key i18n nueva `editor.cmd.add_component`. 8 tests nuevos en `test_add_component_command.cpp` (registrado en `tests/CMakeLists.txt`).
+- **Bloque B — Lato en Player + tildes**: ~25 LOC en `PlayerApplication_Init.cpp` post-init de ImGui (mismo patrón que `EditorApplication_Init.cpp` F2H38, sin el bloque FA merge). Sweep mecánico de `es.json` delegado a subagente — 400 keys totales preservadas, ~75 palabras con tildes correctas.
+- **Bloque C — Console tooltip i18n**: 8 keys nuevas en `assets/i18n/en.json` + `es.json`. Refactor de ~12 LOC en `ConsolePanel.cpp` (`ImGui::SetTooltip(literal_concat)` → `std::string body = ...; SetTooltip("%s", body.c_str())`). **Fix lateral del dev**: -8 LOC en `InspectorPanel_Brush.cpp` (botón Recompute mesh + comentario), -2 keys (`editor.panel.inspector.brush.recompute_mesh` en EN+ES).
+
+**Pendientes conocidos** (post-F2H45):
+- **Sub-fase 2.5 gameplay** (diálogos / quests / inventario). PLAN_FASE2 líneas 285-303. **Próximo a arrancar.**
+- **Lua scripts traducibles** (deuda F2H43 que NO entró en F2H45): solo aplica a demos actuales, esperar a tener scripts gameplay reales.
+- **USER_GUIDE/ + README + GIF + tutorial** (descartado por el dev en F2H44): hito propio post-Fase 2.
+- **Mini-map / Radar**, **Themes HUD**, **HUD diegetic 3D**, **GPU optimizations** (sin urgencia, features diferidas).
+- Validación full del Player con compiledMesh: al primer empaquetado real.
+
+**Próximo paso**: **Sub-fase 2.5 gameplay** (confirmado por el dev como next-up).
+
+### F2H44 (anterior, ya cerrado)
+
+**🚀 F2H44 cerrado: polish onboarding UX (sin docs externos).**
 Tag: `v1.34.0-fase2-hito44`.
 Validado visualmente por dev *"funciona"*, *"perfecto"*, *"va ok"* tras tour de cada bloque. 5 gaps de UX cerrados sin agregar docs externos (deuda de `USER_GUIDE/` queda diferida intencionalmente — *"seguiremos agregando cosas que luego vamos a terminar cambiando"*).
-
-**🏁 Motor sobrado para contenido real: i18n completo + UX onboarding pulido + Add Component + Welcome demo Fox + workspaces ASCII-id + outline AABB real + Material Editor robusto + Ctrl+wheel snap orto + VisGroups help marker.** 42/44 hitos de Fase 2.
 
 **Decisiones clave de F2H44:**
 

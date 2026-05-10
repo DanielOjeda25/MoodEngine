@@ -9,21 +9,58 @@
 
 ---
 
-## Post-F2H44 (2026-05-10) — Polish onboarding UX cerrado (sin docs externos)
+## Post-F2H45 (2026-05-10) — Cierre de deudas pre-Sub-fase 2.5 (AddComponentCommand undoable + Lato Player con tildes + Console tooltip i18n)
 
 ### Próximo a atacar
 
-- **Orden actualizado por el dev** (2026-05-10 post-F2H44):
+- **Orden actualizado por el dev** (2026-05-10 post-F2H45):
   1. **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
      PLAN_FASE2 líneas 285-303. **Próximo a arrancar.**
 
-### Diferidos sin orden (emergentes post-F2H44)
+### Diferidos sin orden (emergentes post-F2H45)
 
-- **AddComponentCommand undoable**: el popup Add Component agregado en
-  F2H44 NO usa command pattern (mismo patrón que demos de
-  `Ayuda > Demos`). Si emerge presión por undo, implementar templated
-  command genérico que serialice estado pre-add (default values del
-  componente). ~200 LOC estimados.
+- **Lua scripts traducibles** (deuda F2H43 que NO entró en F2H45):
+  los string literals dentro de `assets/scripts/*.lua` (ej. `hud_demo.lua`
+  con `"Demo: explore the test map"`, `"[E] Pick up demo item"`)
+  quedaron sin envolver. Requiere binding Lua `T("...")` desde sol2 +
+  sweep de los .lua. **Scope reducido** post-F2H45: solo aplica a demos
+  actuales, esperar a tener scripts gameplay reales (Sub-fase 2.5+).
+- (resto de diferidos heredados de F2H44/F2H43, ver bloques siguientes)
+
+### Histórico resuelto F2H45
+
+- ~~AddComponentCommand undoable~~ — resuelto en F2H45
+  (`v1.35.0-fase2-hito45`). Type-erased via `std::function<void(Entity&)>`
+  para `add` y `remove` (un solo header `AddComponentCommand.h` cubre
+  los 11 componentes del popup). Helper templado
+  `makeAddComponentCommand<T>(entity, label)` captura T en las dos
+  closures. Refactor del popup en `InspectorPanel.cpp`: las 11 closures
+  pasan a returnar `std::unique_ptr<ICommand>` y el handler hace
+  `historyStack()->push(...)`. Sin snapshot del estado pre-add — los
+  edits posteriores quedan capturados en sus propios EditPropertyCommand
+  (LIFO). Key i18n nueva `editor.cmd.add_component`. 8 tests nuevos.
+- ~~Cambiar font del MoodPlayer a Lato + tildes en `es.json`~~ — resuelto
+  en F2H45. `PlayerApplication_Init.cpp` ahora carga
+  `LatoLatin-Regular.ttf` 15px con range Basic Latin + Latin-1 Supplement
+  + General Punctuation subset (mismo patrón que `EditorApplication_Init.cpp`
+  F2H38). FA NO mergeada (HUD usa DrawList procedural, no necesita
+  iconos). Sweep mecánico delegado a subagente: ~75 palabras corregidas
+  en ~60 valores de `es.json` (sustantivos `acción/selección/posición`,
+  HUD `MUNICIÓN/MENÚ`, `Diseño/Español/Añadir/tamaño`, signos `¿/¡`).
+  400 keys totales preservadas, JSON parsea limpio.
+- ~~Console tooltip multilínea i18n~~ — resuelto en F2H45. 8 keys nuevas
+  (`editor.panel.console.help.header`, 6 `level.X`, `footer`). Los
+  icons FA siguen en código (sus macros UTF-8 no caben en JSON sin
+  perder bytes). Tooltip se construye con `std::string` concat: header
+  + `"  " ICON_FA_X " " + I18n::T("level.X")` por nivel + footer.
+- ~~Botón "Recompute mesh" del Inspector~~ — eliminado en F2H45 a pedido
+  del dev como fix lateral. Era debug breadcrumb del Hito 12+ que forzaba
+  `bc.dirty=true` por si alguna mutación del brush no marcaba dirty
+  automáticamente. -8 LOC en `InspectorPanel_Brush.cpp`, -2 keys i18n.
+
+## Post-F2H44 (2026-05-10) — Polish onboarding UX cerrado (sin docs externos)
+
+### Diferidos sin orden (emergentes post-F2H44)
 - **USER_GUIDE/* + README + GIF + tutorial**: descartado en F2H44 por
   el dev (*"seguiremos agregando cosas que luego vamos a terminar
   cambiando"*). Reactivar como hito propio post-Fase 2 cuando el motor
@@ -80,32 +117,11 @@
 
 ### Diferidos sin orden (emergentes post-F2H43)
 
-- **Cambiar font del MoodPlayer a Lato** (deuda crónica desde F2H38, con
-  presión nueva en F2H43): el Player usa init propio en
-  `PlayerApplication_Init.cpp` que sigue con ProggyClean (charset Basic
-  Latin solo). En F2H43 dejamos `es.json` SIN tildes para mantener
-  paridad con el Player — agregar tildes correctas requiere primero
-  cargar Lato. Fix chico, mismo patrón que F2H38 pero en
-  `PlayerApplication_Init.cpp`. Después: find-and-replace mecánico en
-  `assets/i18n/es.json` (`a→á`, `e→é`, etc en palabras como
-  `MUNICION→MUNICIÓN`, `RESERVA→RESERVA`, `RESISTENCIA→RESISTENCIA`).
-- **Workspace names traducibles** (deuda F2H43): los nombres
-  `Layout`/`Programar`/`Materiales`/`Editor de mapas` viven en
-  `WorkspaceManager.cpp` con el nombre como ID persistido en
-  `.moodproj`. Traducirlos requiere refactor: separar nombre INTERNO
-  estable (ej `"map_editor"`) del label MOSTRADO (`T("workspace.map_editor")`).
-  Hito chico cuando emerja necesidad real (un usuario reportando que
-  los tabs de workspace siguen en español/mezclados).
-- **Lua scripts traducibles** (deuda F2H43): los string literals dentro
-  de `assets/scripts/*.lua` (ej. `hud_demo.lua` con `"Demo: explore the
-  test map"`, `"[E] Pick up demo item"`) quedaron sin envolver. Requiere
-  binding Lua `T("...")` desde sol2 + sweep de los .lua. Hito chico
-  cuando aparezcan scripts gameplay reales (no demos).
-- **Console tooltip multilínea i18n** (deuda C2 del subagente): el
-  tooltip de la leyenda de log levels en `ConsolePanel.cpp` tiene
-  `ICON_FA_BUG` etc. concatenados al string literal, no triviales de
-  pasar al JSON sin perder los icons embebidos. Solución: dividir el
-  tooltip en segmentos, cada uno con su key + icon en código.
+- **Lua scripts traducibles** (deuda F2H43, no resuelta en F2H45): los
+  string literals dentro de `assets/scripts/*.lua` (`hud_demo.lua` con
+  `"Demo: explore the test map"`, `"[E] Pick up demo item"`) quedaron
+  sin envolver. Requiere binding Lua `T("...")` desde sol2 + sweep de
+  los .lua. Esperar a tener scripts gameplay reales (Sub-fase 2.5+).
 - **Plurales en i18n**: ej. "1 entity" vs "5 entities" en HUD se
   resuelve hoy con la misma key `editor.panel.hierarchy.count` que dice
   "{} entidades" (siempre plural). Si emerge presión visual, evaluar
@@ -117,6 +133,12 @@
 - **Optimizaciones GPU side** diferidas en F2H42: GPU timestamp
   queries, CSM cascadas, frustum cull shadow pass. Sin urgencia con
   headroom 17x actual.
+
+> **Resueltos en hitos posteriores** (no listar como pendientes):
+> - Cambiar font Player a Lato + sweep tildes en `es.json` → resuelto
+>   en F2H45 Bloque B.
+> - Workspace names traducibles → resuelto en F2H44 Bloque C.
+> - Console tooltip multilínea i18n → resuelto en F2H45 Bloque C.
 
 ### Histórico resuelto
 
