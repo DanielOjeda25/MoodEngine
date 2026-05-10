@@ -6,7 +6,39 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H39 cerrado: HUD framework extensible + paquete inicial estilo HL/Doom/Fallout.**
+**🚀 Fase 2 — F2H40 cerrado: Fix físicas Floor scale-RigidBody desync.**
+Tag: `v1.30.0-fase2-hito40`.
+Verificado por dev: *"bien ya funciona"* tras crear proyecto nuevo + enlargar Floor.scale.x 2.5x + Play → quedó parado en el suelo (pre-F2H40 caía infinito).
+
+**🏁 HUD framework + físicas robustas (Floor / brushes / walls escalables sin desync) + arquitectura preparada para más widgets HUD y diegetic 3D futuros.** 38/44 hitos de Fase 2.
+
+**Decisiones clave de F2H40:**
+- **Auto-sync `halfExtents` desde `Transform.scale` solo para Box bodies**. Sphere/Capsule mantienen halfExtents independiente — el campo significa cosas distintas (radio, altura) que no escalan uniformemente desde un `Transform.scale` potencialmente no-uniforme.
+- **`setBodyHalfExtents` (existente) en lugar de destroy+recreate**: preserva pose + velocity + contacts del body. Importante para Dynamic bodies escalados mid-frame (script Lua o gizmo en Editor Mode).
+- **Cache `lastSyncedHalfExtents` en `RigidBodyComponent`** para detectar desync. Inicializado en `vec3(0)` para forzar primer sync al materializar el body. NO se serializa (estado runtime).
+- **Pase de re-sync corre cada frame** después del materializar inicial. Overhead negligible (epsilon compare de 3 floats por entity con RigidBody).
+- **Aplica también a `PlayerApplication::updatePhysics`** (paridad con Editor) por scripts Lua que muten Transform o saves cargados con scale enlargado.
+- **Cubre 2 vectores**: scale via gizmo/Inspector + halfExtents editado directo en Inspector (Sphere/Capsule).
+
+**Implementación (F2H40 Bloques A-D):**
+
+- **Bloque A**: plan en [`archive/plans/PLAN_HITO_F2H40.md`](archive/plans/PLAN_HITO_F2H40.md).
+- **Bloque B**: campo `lastSyncedHalfExtents` en `Components.h` + pase de re-sync en `EditorScene.cpp::updateRigidBodies` y `PlayerApplication_Frame.cpp::updatePhysics`.
+- **Bloque C**: build OK + dev valida tras enlargar Floor.
+- **Bloque D (este commit)**: docs + tag.
+
+**Pendientes conocidos** (post-F2H40):
+- **Optimización runtime sobre la PC de escritorio** (era F2H39 original): pendiente en hardware del baseline F2H2-F2H6. Se ataca cuando el dev esté en la desktop.
+- **HUD widgets diferidos** (CompassBar, ObjectiveText, KillFeed, Stamina, Mini-map, CRT scanline, themes alternativos): cada uno se agrega extendiendo el registry de widgets en `GameOverlay.cpp`.
+- **HUD diegetic 3D** (Pip-Boy / Metro muñequera / Doom plasma rifle display): requiere FPS arms primero. Hito propio mayor futuro.
+- **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+
+**Próximo paso**: **TBD — definir con el dev**.
+
+### F2H39 (anterior, ya cerrado)
+
+**🚀 F2H39 cerrado: HUD framework extensible + paquete inicial estilo HL/Doom/Fallout.**
 Tag: `v1.29.0-fase2-hito39`.
 Verificado visualmente por dev: *"los widgets se ven bien, vi la mayoria, validalo, cerra y vamos a lo siguiente"*. HEALTH naranja+barra, AMMO mag/reserve+ícono procedural de bala, crosshair, hit marker cyan, damage vignette rojo direccional, pickup notifications, interact prompt, pause menu Doom-style con título "PAUSED" gigante.
 

@@ -9,38 +9,33 @@
 
 ---
 
-## Post-F2H39 (2026-05-09) — HUD framework extensible cerrado
+## Post-F2H40 (2026-05-09) — Fix físicas Floor scale-RigidBody desync cerrado
 
 ### Próximo a atacar
 
-- **TBD — definir con el dev**. **HUD framework activo + 8 widgets
-  funcionando + arquitectura preparada para CompassBar / ObjectiveText /
-  KillFeed / HUD diegetic 3D futuros.** Opciones a considerar:
+- **TBD — definir con el dev**. **HUD framework + físicas robustas +
+  arquitectura preparada para extensión.** Opciones a considerar:
   - **Optimización runtime sobre la PC de escritorio** (era F2H39
     original, postergado al hardware del baseline F2H2-F2H6 — la
     notebook actual da números no comparables).
   - **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
-  - **Bug físicas Floor scale-RigidBody desync** (descubierto en
-    validación F2H39, fix lateral propio).
   - **Más widgets HUD de la lista diferida** (CompassBar, ObjectiveText,
-    KillFeed, Stamina, Mini-map, CRT scanline, themes alternativos,
-    HUD diegetic 3D — este último requiere FPS arms primero).
+    KillFeed, Stamina, Mini-map, CRT scanline, themes alternativos).
+  - **HUD diegetic 3D** (Pip-Boy / muñequera Metro — requiere FPS
+    arms primero).
 
-### Activos sin orden definido (siguiente ola)
+### Histórico resuelto
 
-- **Bug físicas Floor scale-RigidBody desync** (descubierto en
-  validación F2H39): cuando el dev cambia `Transform.scale` del
-  Floor (o cualquier entidad con RigidBody) en Inspector o gizmo, el
-  `RigidBody.halfExtents` no se sincroniza — el visual cambia pero
-  la colisión queda con el size original del body creation. Player
-  puede caer fuera del body si la enlargada fue significativa, o el
-  body queda con tamaño desactualizado. Fix razonable: en
-  `Inspector_Transform.cpp::renderTransformSection` o
-  `EditorScene::updateRigidBodies`, detectar delta de `Transform.scale`
-  desde la última creación del body y re-crear o llamar
-  `setBodyShape` con halfExtents proporcional. Hito chico (~30-60
-  min). El fix lateral de F2H39 solo cubre el caso específico de
-  proyectos pre-Hito 12 cargados sin RigidBody serializado.
+- ~~Bug físicas Floor scale-RigidBody desync~~ — resuelto en F2H40
+  (`v1.30.0-fase2-hito40`). Auto-sync `halfExtents = Transform.scale
+  * 0.5` para Box bodies + cache `lastSyncedHalfExtents` para detectar
+  cambios + `setBodyHalfExtents` (existente, preserva pose + velocity
+  + contacts via Jolt `BodyInterface::SetShape`). Aplicado en
+  `EditorScene::updateRigidBodies` y `PlayerApplication::updatePhysics`.
+  Cubre 2 vectores: scale via gizmo/Inspector + halfExtents editado
+  directo en Inspector.
+
+## Post-F2H39 (2026-05-09) — HUD framework extensible cerrado
 
 - **HUD widgets diferidos** (extensiones del framework F2H39):
   - **CompassBar** (Skyrim/CoD): barra horizontal arriba con marker

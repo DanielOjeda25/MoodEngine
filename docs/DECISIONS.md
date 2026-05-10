@@ -11,6 +11,39 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-09: F2H40 cierre — Fix físicas Floor scale-RigidBody desync
+
+**Contexto:** Bug físicas descubierto durante validación de F2H39. El dev no podía pararse en el Floor para ver los widgets dinámicos del HUD porque caía infinito tras enlargar el piso vía Inspector. Pre-F2H40 cuando el `Transform.scale` de una entidad con `RigidBody` cambiaba (Inspector / gizmo / script), el `RigidBody.halfExtents` no se sincronizaba — el visual cambiaba pero la colisión Jolt quedaba al tamaño del body inicial. Mini-hito chico (~45 min, ~80 LOC neto) que cierra el bug + previene futuros desync similares.
+
+**Decisiones técnicas clave:**
+
+- **Auto-sync `halfExtents = Transform.scale * 0.5` solo para Box bodies.** Razón: en Box, el campo `halfExtents` es realmente la mitad del tamaño en 3 ejes — sincronizar con `t.scale * 0.5` es semánticamente intuitivo y matchea cómo el codebase crea bodies (ver `EditorScene.cpp:104` Floor, `:142` Tile, `DemoSpawners` físicas demo). Sphere/Capsule tienen significados distintos para `halfExtents.x` (radio en Sphere; halfHeight en Capsule), no escalan uniformemente desde un `Transform.scale` potencialmente no-uniforme. Si el dev quiere cambiar radius/height de Sphere/Capsule, lo edita en el Inspector field directamente y el caso 2 de abajo lo sincroniza.
+
+- **Re-sync via `setBodyHalfExtents` existente, no destroy+recreate.** `PhysicsWorld::setBodyHalfExtents` (introducido en hitos previos) llama Jolt `BodyInterface::SetShape` que recrea el collider preservando pose + velocity + contacts del body. Importante para Dynamic bodies escalados mid-frame (script Lua o gizmo en Editor Mode con un cube físico). Alternativa descartada: destroy + recreate body — pierde la pose actual + velocidad, lo que rompe Dynamic bodies en movimiento.
+
+- **Cache `lastSyncedHalfExtents` en `RigidBodyComponent`** para detectar cuándo invocar el resync. Inicializado en `vec3(0)` para forzar primer sync inmediato post-materialización. Updated después de cada `setBodyHalfExtents` exitoso. NO se serializa (estado runtime puro). Alternativa descartada: dirty flag `bool needsResync` que el Inspector / gizmo prendan al editar — requiere hookear todos los puntos de mutación del Transform/halfExtents (Inspector partials, gizmo, script bindings); más invasivo que el polling con epsilon compare.
+
+- **Pase de re-sync corre cada frame en `updateRigidBodies`** después del materializar inicial. Overhead negligible (epsilon compare de 3 floats por entity con RigidBody, ~30 ns); a 1000+ entities con RigidBody el costo total queda <30 µs por frame. Si emerge presión de perf en escenas extremas, mover a un dirty-flag system.
+
+- **Aplica también a `PlayerApplication::updatePhysics`** (paridad con Editor). Razón: scripts Lua pueden mutar `Transform.scale` en Play Mode (ej. growing/shrinking effect); saves cargados pueden tener Floor con scale enlargado y el body se recrea con halfExtents derivados de scale del JSON correctamente — pero si el dev guardó un scale modificado en editor pre-F2H40, el sync recién ocurre en F2H40. Patrón idéntico al Editor.
+
+- **Lógica auto-sync ANTES del re-sync condicional**, no en orden inverso. Razón: el caso (a) (Box scale change) muta `rb.halfExtents`; el caso (b) (resync al body) compara `halfExtents` contra `lastSyncedHalfExtents`. Si la lógica corriera en orden inverso, el caso (b) primero observaría el `halfExtents` viejo (pre-mutación) y no detectaría el cambio que el caso (a) iba a aplicar el siguiente frame — un frame de lag visible. Con el orden actual, cualquier cambio se aplica el mismo frame.
+
+**Alternativas descartadas explícitamente:**
+
+- **Sync Transform.position / rotation al body en runtime para Static bodies**: descartado para F2H40 por scope. Ya hay pattern para Dynamic bodies (`step` lee del body al Transform); el caso opuesto (Editor mueve un Floor en Editor Mode → body se actualiza) no estaba en el bug original. Si emerge necesidad real (ej. dev mueve Floor con gizmo y luego entra a Play y el body queda en posición vieja), agregar como hito chico — patrón análogo: comparar `lastSyncedPosition` y llamar `setBodyPosition`.
+- **Opt-out flag** `bool autoSyncBoxToScale = true` en RigidBodyComponent: descartado en v1. La convención en todo el codebase actual es `halfExtents = scale*0.5` para Box bodies. Si emerge un caso de uso intencional (ej. Box visual deformado pero colisión cilíndrica más chica), agregar el flag entonces.
+- **Refactor del PhysicsSystem a event-driven** (Inspector dispatcha "transform changed" event que el sistema atiende): descartado por scope. Polling con epsilon compare es más simple y suficiente para cualquier escena razonable.
+
+**Condiciones de revisión:**
+
+- Si emerge un demo / entity-creator del codebase con `halfExtents != scale*0.5` intencional (Box body con tamaño distinto al visual), agregar el opt-out flag.
+- Si en escenas con 1000+ Box bodies el polling se vuelve cuello del frame (>0.1 ms), refactor a dirty-flag pattern: el Inspector + gizmo + script bindings setean `needsResync=true` al mutar Transform/halfExtents.
+- Si emerge necesidad de sync Transform.position/rotation a Static bodies (dev mueve Floor en Editor → body en posición nueva), agregar como hito chico siguiendo el mismo patrón de `lastSyncedPosition`.
+- Si Jolt actualiza la API y `BodyInterface::SetShape` deja de existir o cambia comportamiento (preserva pose vs re-spawnea), revisar `PhysicsWorld::setBodyHalfExtents` y este sync flow.
+
+---
+
 ## 2026-05-09: F2H39 cierre — HUD framework extensible + paquete inicial estilo HL/Doom/Fallout
 
 **Contexto:** El F2H39 original era "optimización runtime", pospuesto a hito futuro porque el dev está en notebook (Iris Xe) y el baseline de profiling de F2H2-F2H6 se hizo en su desktop (GTX 1660 / Ryzen 5 5600G) — números no comparables. PERFORMANCE.md además explícitamente concluye que sub-fase 2.1 cumplió: *"el motor está listo para contenido real"*. F2H39 pivota al pendiente "HUD del juego procedural/minimalista" anotado post-F2H35. Dev confirma estética **Half-Life como inspiración base** del motor + influencias Doom/Doom Eternal/Fallout/Metro/CoD: *"abarcar todas las posibles cosas de HUD que necesitaremos para futuro, y que se puedan ir agregando más"*. Hito mediano (~3h, ~700 LOC neto) que entrega framework extensible + 8 widgets default + bindings Lua + bug fix lateral.
