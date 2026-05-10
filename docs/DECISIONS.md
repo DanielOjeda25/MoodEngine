@@ -11,6 +11,60 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-09: F2H41 cierre — 5 widgets HUD diferidos + 3 fixes laterales + i18n unificado
+
+**Contexto:** F2H39 dejó explícitamente diferido un paquete de 5 widgets HUD adicionales (CompassBar / ObjectiveText / KillFeed / Stamina / CRT scanline) — la lista de la "wishlist" del dev (Half-Life base + Doom/Fallout/Metro/CoD). F2H41 ataca ese pendiente directo, manteniendo el contrato del framework establecido en F2H39: agregar widgets toca máximo 4 lugares (función `drawXxx`, registry, HudState, bindings Lua si necesita). Hito mediano (~3h, ~750 LOC neto) que entrega los 5 widgets + 3 fixes reactivos al feedback del dev durante validación + unificación i18n del HUD.
+
+**Decisiones técnicas clave:**
+
+- **Único cambio en arquitectura del framework: `HudContext` gana `glm::vec3 cameraForward`.** Razón: CompassBar necesita yaw del player. Default `vec3(0,0,-1)` para tests que no inicializan cam. Callers (`EditorApplication::drawGameOverlay` y `PlayerApplication_Frame::endFrame`) leen `m_playCamera.forward()` y lo pasan. Alternativa descartada: leer cam global o singleton — pasar explícito vía context es testeable y libre de orden de init.
+
+- **CompassBar yaw via `atan2(forward.x, -forward.z)`, no `FpsCamera.yaw` interno.** Razón: el compass es UI derivada — `forward` es lo que el player ve, derivar el yaw de ahí garantiza consistencia visual con la cámara real. Si emerge inconsistencia (ej. cam vertical pura donde `forward.x≈0 && forward.z≈0`), el widget abortea con guard `if (std::abs(f.x) < 1e-6f && std::abs(f.z) < 1e-6f) return`. Convención: `yaw=0=N=-Z`, `90=E=+X`, `180=S=+Z`, `270=W=-X`. Tickmarks cada 15° con cardinales destacados (1.5x altura + texto). Rango visible ±90° (180° total).
+
+- **CRT scanline default OFF, los demás 12 default ON.** Razón: efecto retro divisivo (Pip-Boy) que no encaja con todo proyecto. `widget_enabled` initializa con `crt_scanline=false`; toggle desde Lua via `setWidget("crt_scanline", true)`. Patrón explícito: el widget se dibuja siempre que esté en el registry y enabled — el opt-out vía init del map preserva el contrato de F2H39 (registry hardcoded, toggle dinámico).
+
+- **StaminaBar bypass si `max_stamina<=0`.** Razón: gameplay sin stamina (proyectos puzzle/walking sim) no debería consumir área de pantalla con una barra inútil. Default `100/100` para que el demo y proyectos típicos arranquen con la barra visible. Alternativa descartada: requerir `setWidget("stamina_bar", false)` explícito — feo por default; el bypass es semántico correcto.
+
+- **KillFeed con `KillEntry { string text, ImU32 color, float ttl }` + lifetime 4s.** Razón: longer lifetime que `pickup_queue` (2.5s) porque el dev quiere ver kills sin perderlos en combate intenso. Cap visual 5 entradas. Color custom permite diferenciar enemy types/headshots/etc — `pushKillColored(text, r, g, b)` desde Lua. Patrón ttl idéntico a F2H39 pickup_queue (decremento con `dt`, popea en `<=0`, fade in/out por edges) — consistencia interna.
+
+- **Helpers de los 4 widgets con state mutable viven en `GameState::*`, no `GameOverlay::*`.** `pushKill / pushKillColored / setObjective / clearObjective / setStamina / setMaxStamina / etc` se definen en GameState por la misma razón que F2H39: LuaBindings linkea contra GameState (puro state, sin ImGui), pero NO contra GameOverlay (depende de ImGui). Mover los helpers a GameState los hace invocables desde Lua sin arrastrar ImGui al modulo de tests `mood_tests.exe`. Patrón establecido en F2H39, F2H41 lo respeta.
+
+- **Lua bindings expandidos en la misma tabla `hud`, no nueva tabla.** 10 funciones nuevas (`setStamina`, `setMaxStamina`, `getStamina`, `getMaxStamina`, `setObjective`, `clearObjective`, `getObjective`, `pushKill`, `pushKillColored`) sobre las 24 ya existentes (Hito 20 + F2H39). Razón: scripts pre-F2H41 siguen funcionando sin cambios; nuevos pueden mezclar libre. Una sola tabla simplifica la API mental. Alternativa descartada: tabla nueva `hud_combat` o `hud_v2` — segmentaría confusamente.
+
+**3 fixes laterales descubiertos en validación visual con dev:**
+
+- **Hover/pick spurious en Hierarchy panel durante Play Mode.** Síntoma observado: cada vez que el dev miraba un elemento en el viewport durante Play, el ítem correspondiente del Hierarchy se marcaba hovered/seleccionado. Causa: `SDL_SetRelativeMouseMode` captura el cursor para FPS look pero ImGui sigue viendo la posición OS warpeada al centro del viewport — y el Hierarchy panel está debajo del centro en muchos layouts, así que ImGui interpreta cada frame que el mouse "está sobre" la primera entry del Hierarchy. Fix: `io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX)` en `EditorApplication::beginFrame` cuando `m_mode == EditorMode::Play && !GameState::paused()`. Off-screen pos → ImGui no hovera nada. Cuando paused, ImGui vuelve a ver pos real (cursor visible). Aplica solo al Editor — el Player no tiene panels.
+
+- **Caminata "muy lenta con pasitos pegados".** Feedback dev: *"siento que avanzo muy lento, los pasos están muy pegados uno del otro"*. Causa: walkSpeed 4.0 m/s + headbob 5 Hz daba stride visual ~80 cm por paso = denso/agitado. Fix: `k_walkSpeed 4.0→5.5 m/s` (paso normal humano ~5 km/h ≈ 1.4 m/s; FPS convencional 5-6 m/s para feel ágil), `k_crouchSpeed 2.0→3.0`, `k_bobFreq 5.0→3.5 Hz` (paso ~1.6 m a 5.5 m/s = stride realista), `k_bobAmp 0.04→0.05 m`. Aplicado en Editor + Player (paridad — ambos usan mismas constantes en `EditorPlayMode.cpp` y `EditorScene.cpp`). Decisión: estos números son tuning dependiente del feel — quedan ajustables por proyecto en futuro hito (config en `.moodproj`).
+
+- **Spawn no centrado.** Feedback dev: *"en que ubicacion spawnea el usuario? no debería aparecer en el punto 0,0 para que siempre esté en el centro del mapa?"*. Causa: legacy hardcoded `(-4.5, 1.6, 7.5)` heredado del placeholder buildTestMap (esquina del 8x8 grid). Fix: cambio a `(0, 1.6, 0)` en 4 lugares: `EditorApplication.h:m_playCamera` default, `EditorPlayMode.cpp:exitPlayMode` reset, `PlayerApplication.h:m_playCamera` default, `PlayerApplication_SaveLoad.cpp:applyLoadedSave` reset. Convención del motor: spawn al centro del mapa. Para mapas con spawn custom (ej. proyectos con `SpawnPoint` entity), F2H futuro agregará lookup en runtime; por ahora `(0,1.6,0)` es el default sano.
+
+**i18n unificado a inglés** post-feedback dev *"no se si he visto cosas en español e ingles mescladas, no es lo ideal, si a futuro tenemos seleccion de idioma no es lo ideal"*:
+
+- **Decisión: unificar todo el HUD a inglés** (no a español). Razón: convención FPS HUD ya dominante en el codebase pre-fix (HEALTH / AMMO / STAMINA / PAUSED / RESERVE inglés mientras OBJETIVO / CONTINUAR / OPCIONES estaban en español). Inglés es lingua franca de games + matchea estética HL/CoD/Doom inspiración. Strings cambiados: `OBJETIVO:`→`OBJECTIVE:`, `CONTINUAR`→`CONTINUE`, `OPCIONES`→`OPTIONS`, `"Salir al editor"`→`"EXIT TO EDITOR"` (EditorPlayMode), `"Salir al menu"`→`"EXIT TO MENU"` (PlayerApplication_Frame), demo Lua `"Demo: explorar el mapa de pruebas"`→`"Demo: explore the test map"`, `"[E] Levantar item demo"`→`"[E] Pick up demo item"`.
+- **Comments del código + log lines siguen en español.** Razón: son dev-facing, no user-facing. La unificación cubre solo strings que aparecen en el HUD/UI del jugador.
+- **Sienta baseline para futura selección de idioma** — los string literals serán keys de translation table (`tr("OBJECTIVE")` o similar) sin tener que tocar lógica del HUD. El refactor cuando se implemente i18n será mecánico: wrap de literals en `tr()` + JSON con traducciones por idioma.
+
+**Alternativas descartadas explícitamente:**
+
+- **Vector dinámico de widgets en lugar de array hardcoded:** descartado en F2H41 (igual que F2H39). 13 widgets stable; vector dinámico agregaría runtime registration sin ganancia hasta que aparezca un caso real (ej. plugins / mods que registren widgets propios).
+- **HUD diegetic 3D incluido en F2H41:** descartado por scope. Requiere FPS arms (mesh + animator del brazo) que no existen aún. Hito propio mayor futuro.
+- **Mini-map / Radar incluidos en F2H41:** descartado por scope. Requiere render-to-texture topdown del mundo cercano — diferente arquitectura del HUD que es pure DrawList. Hito propio mediano futuro.
+- **Themes alternativos (Doom saturado / Fallout verde) incluidos en F2H41:** descartado por scope. Requiere theme runtime + bindings Lua. Hito chico propio futuro.
+- **Sound feedback (hit marker sound, low HP heartbeat):** descartado por scope. Requiere audio bindings en GameState — fuera del paquete HUD visual.
+- **Compass con objective markers proyectados a screen-space:** descartado en v1. Requiere world-space objectives con coordenadas — agregar después si emerge necesidad real (gameplay con waypoints).
+- **Implementar i18n completo en F2H41:** descartado. F2H41 unifica strings (baseline) pero translation table queda como hito propio cuando emerja la necesidad real (dev quiere shipping multi-idioma). Sin urgencia ahora.
+
+**Condiciones de revisión:**
+
+- Si emerge feedback de que el HUD necesita más widgets stable (>20), considerar refactor del registry a vector dinámico con plugin pattern.
+- Si CompassBar yaw derivation tiene jitter (especialmente cam casi vertical), agregar damping o switch a `FpsCamera.yaw` interno.
+- Si CRT scanline a 3 px de espaciado se vuelve cuello en pantallas 1440p+, aumentar spacing a 4-5 px o convertir a shader post-process.
+- Si el walk speed 5.5 m/s se siente muy rápido para un proyecto específico, agregar `walk_speed` al `.moodproj` config (ya hay precedente en F2H40 con coyote/jump buffer windows per-proyecto).
+- Si emerge proyecto multi-idioma, agregar el sistema i18n con translation table + lookup en HUD strings (ya unificadas).
+
+---
+
 ## 2026-05-09: F2H40 cierre — Fix físicas Floor scale-RigidBody desync
 
 **Contexto:** Bug físicas descubierto durante validación de F2H39. El dev no podía pararse en el Floor para ver los widgets dinámicos del HUD porque caía infinito tras enlargar el piso vía Inspector. Pre-F2H40 cuando el `Transform.scale` de una entidad con `RigidBody` cambiaba (Inspector / gizmo / script), el `RigidBody.halfExtents` no se sincronizaba — el visual cambiaba pero la colisión Jolt quedaba al tamaño del body inicial. Mini-hito chico (~45 min, ~80 LOC neto) que cierra el bug + previene futuros desync similares.

@@ -6,7 +6,51 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H40 cerrado: Fix físicas Floor scale-RigidBody desync.**
+**🚀 Fase 2 — F2H41 cerrado: 5 widgets HUD diferidos + 3 fixes laterales + i18n unificado.**
+Tag: `v1.31.0-fase2-hito41`.
+Verificado visualmente por dev: *"todo ok"* tras tour completo de los 5 widgets nuevos (StaminaBar / ObjectiveText / KillFeed / CompassBar / CRT scanline) + validación de los 3 fixes laterales (no-hover en Hierarchy durante Play, walk feel mejorado, spawn centrado en `(0,1.6,0)`) + unificación final i18n (todo el HUD en inglés post-feedback "no he visto cosas en español e ingles mescladas").
+
+**🏁 HUD framework con 13 widgets activos (8 F2H39 + 5 F2H41) + físicas robustas + walk feel pulido + spawn centrado + i18n unificado a inglés (baseline para futura selección de idioma).** 39/44 hitos de Fase 2.
+
+**Decisiones clave de F2H41:**
+
+- **Widgets nuevos extienden el framework F2H39, no lo reescriben.** Cada uno es 4 cosas: (1) función libre `drawXxx(HudContext&)` en `GameOverlay.cpp`, (2) entry en `k_widgets[]`, (3) state en `HudState` si necesita, (4) bindings Lua si scripts lo controlan. Ese es el contrato del framework — agregar widgets nunca debería tocar más que esos 4 lugares.
+- **Único cambio en arquitectura del framework**: `HudContext` gana `glm::vec3 cameraForward` (default `vec3(0,0,-1)` para tests) — necesario para CompassBar derive yaw. Callers (EditorPlayMode + PlayerApplication_Frame) leen `m_playCamera.forward()` y lo pasan al `draw()`.
+- **CompassBar yaw via `atan2(forward.x, -forward.z)`**: convención `yaw=0=N=-Z`, `90=E=+X`, `180=S=+Z`, `270=W=-X`. Rango visible ±90° (180° total), tickmarks cada 15° con cardinales N/E/S/W destacados (1.5x altura + texto encima). Indicador central naranja apuntando abajo marca yaw actual. Auto-driven sin Lua bindings.
+- **CRT scanline default OFF** — `widget_enabled` initializa con `crt_scanline=false` (los 12 demás son default true). Razón: efecto retro divisivo, dev decide si lo quiere por proyecto/escena vía `setWidget("crt_scanline", true)` desde Lua.
+- **StaminaBar bypass si `max_stamina<=0`** — gameplay sin stamina no consume área de pantalla. Default `100/100` para que arranque visible si el dev no setea explícitamente.
+- **KillFeed con `KillEntry { string text, ImU32 color, float ttl }`** — patrón ttl idéntico a `pickup_queue` de F2H39, pero con color custom por entry. Lifetime 4s (vs 2.5s pickup), cap visual 5. `pushKillColored(text, r, g, b)` permite diferenciar enemy types/headshots/etc.
+- **3 fixes laterales descubiertos en validación:**
+  - **Hover/pick spurious en Hierarchy panel durante Play Mode**: cursor SDL captured pero ImGui veía la pos OS warpeada al centro, marcando entries como hovered. Fix: `io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX)` en `EditorApplication::beginFrame` cuando `m_mode == Play && !GameState::paused()`. Off-screen pos → ImGui no hovera nada.
+  - **Caminata "muy lenta con pasitos pegados"**: tuning del char controller — `k_walkSpeed 4.0→5.5 m/s`, `k_crouchSpeed 2.0→3.0`, headbob `freq 5.0→3.5 Hz` (paso ~1.6 m a 5.5 m/s = stride realista), `amp 0.04→0.05`. Aplicado en Editor + Player (paridad).
+  - **Spawn no centrado**: legacy hardcoded `(-4.5, 1.6, 7.5)` cambiado a `(0, 1.6, 0)` en 4 lugares (Editor `m_playCamera` default + reset en `exitPlayMode`, Player `m_playCamera` default + reset en quickSave-Quit/SaveLoad). Convención del motor: spawn al centro del mapa.
+- **i18n unificado a inglés post-feedback dev** (*"si a futuro tenemos seleccion de idioma no es lo ideal"*). Estado pre-fix: HUD mezclaba inglés (HEALTH/AMMO/STAMINA/PAUSED) y español (OBJETIVO/CONTINUAR/OPCIONES + exit labels callers + 2 strings demo Lua). Cambios: `OBJETIVO`→`OBJECTIVE`, `CONTINUAR`→`CONTINUE`, `OPCIONES`→`OPTIONS`, `"Salir al editor"`→`"EXIT TO EDITOR"`, `"Salir al menu"`→`"EXIT TO MENU"`, demo Lua `"Demo: explorar el mapa de pruebas"`→`"Demo: explore the test map"`, `"[E] Levantar item demo"`→`"[E] Pick up demo item"`. Sienta baseline para futura selección de idioma — los string literals serán keys de translation table sin tocar lógica del HUD.
+
+**Implementación (F2H41 Bloques A-H):**
+
+- **Bloque A**: plan en [`archive/plans/PLAN_HITO_F2H41.md`](archive/plans/PLAN_HITO_F2H41.md).
+- **Bloque B**: expandir `HudState` (stamina/max_stamina, objective_text, kill_feed deque, KillEntry struct) + `HudContext.cameraForward`. Helpers nuevos en `GameState::*` (no GameOverlay) para que LuaBindings linkee en `mood_tests`.
+- **Bloque C**: 5 widgets en `GameOverlay.cpp` + agregados al registry `k_widgets[]`. Total 13 widgets activos.
+- **Bloque D**: bindings Lua expandidos (10 funciones nuevas en tabla `hud`).
+- **Bloque E**: callers (EditorPlayMode + PlayerApplication_Frame) pasan `m_playCamera.forward()` al `HudContext`.
+- **Bloque F**: `hud_demo.lua` extendido con timers para los 5 nuevos.
+- **Bloque G**: build + validación visual con dev + 3 fixes laterales reactivos al feedback + unificación i18n reactiva al feedback final.
+- **Bloque H (este commit)**: docs + tag.
+
+**Pendientes conocidos** (post-F2H41):
+- **Optimización runtime sobre la PC de escritorio** (era F2H39 original, postergado al hardware del baseline F2H2-F2H6). Se ataca cuando el dev esté en la desktop.
+- **Mini-map / Radar** (CoD/Fallout): requiere render-to-texture topdown del mundo cercano. Hito propio mediano.
+- **Themes alternativos del HUD** (Doom saturado / Fallout verde): requiere theme runtime + bindings Lua. Hito chico propio.
+- **HUD diegetic 3D** (Pip-Boy / muñequera Metro): requiere FPS arms primero. Hito propio mayor futuro.
+- **Sistema de i18n** (translation table + lookup en HUD strings, ahora que están unificadas).
+- **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+
+**Próximo paso**: **TBD — definir con el dev**.
+
+### F2H40 (anterior, ya cerrado)
+
+**🚀 F2H40 cerrado: Fix físicas Floor scale-RigidBody desync.**
 Tag: `v1.30.0-fase2-hito40`.
 Verificado por dev: *"bien ya funciona"* tras crear proyecto nuevo + enlargar Floor.scale.x 2.5x + Play → quedó parado en el suelo (pre-F2H40 caía infinito).
 

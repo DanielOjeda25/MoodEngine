@@ -9,20 +9,51 @@
 
 ---
 
-## Post-F2H40 (2026-05-09) — Fix físicas Floor scale-RigidBody desync cerrado
+## Post-F2H41 (2026-05-09) — 5 widgets HUD diferidos + 3 fixes laterales + i18n unificado cerrado
 
 ### Próximo a atacar
 
-- **TBD — definir con el dev**. **HUD framework + físicas robustas +
-  arquitectura preparada para extensión.** Opciones a considerar:
+- **TBD — definir con el dev**. **HUD framework con 13 widgets activos +
+  físicas robustas + walk feel pulido + spawn centrado + i18n unificado
+  a inglés.** Opciones a considerar:
   - **Optimización runtime sobre la PC de escritorio** (era F2H39
     original, postergado al hardware del baseline F2H2-F2H6 — la
     notebook actual da números no comparables).
   - **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
-  - **Más widgets HUD de la lista diferida** (CompassBar, ObjectiveText,
-    KillFeed, Stamina, Mini-map, CRT scanline, themes alternativos).
+  - **Mini-map / Radar** (CoD/Fallout — requiere render-to-texture
+    topdown del mundo cercano. Hito propio mediano).
+  - **Themes alternativos del HUD** (Doom saturado / Fallout verde —
+    requiere theme runtime + bindings Lua. Hito chico propio).
+  - **Sistema de i18n** (translation table + lookup en HUD strings,
+    ahora que están unificadas a inglés. Refactor mecánico: wrap de
+    literals en `tr()` + JSON con traducciones por idioma).
   - **HUD diegetic 3D** (Pip-Boy / muñequera Metro — requiere FPS
     arms primero).
+
+### Histórico resuelto
+
+- ~~5 widgets HUD diferidos (StaminaBar / ObjectiveText / KillFeed /
+  CompassBar / CRT scanline)~~ — resuelto en F2H41 (`v1.31.0-fase2-hito41`).
+  Total post-F2H41: 13 widgets en `k_widgets[]`. CompassBar derive yaw
+  via `atan2(cameraForward.x, -cameraForward.z)`; KillFeed con `KillEntry`
+  + lifetime 4s + cap 5; CRT scanline default OFF; StaminaBar bypass si
+  `max_stamina<=0`; ObjectiveText con prefix `OBJECTIVE: ` automático.
+  Bindings Lua expandidos: 10 funciones nuevas en tabla `hud`.
+- ~~Hover/pick spurious en Hierarchy panel durante Play Mode~~ —
+  resuelto en F2H41 fix lateral. `io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX)`
+  en `EditorApplication::beginFrame` cuando Play && !paused.
+- ~~Caminata "muy lenta con pasitos pegados"~~ — resuelto en F2H41 fix
+  lateral. walkSpeed 4→5.5 m/s, crouchSpeed 2→3, headbob freq 5→3.5 Hz,
+  amp 0.04→0.05.
+- ~~Spawn no centrado~~ — resuelto en F2H41 fix lateral. Cambio de
+  `(-4.5, 1.6, 7.5)` legacy a `(0, 1.6, 0)` en 4 lugares (Editor + Player
+  defaults + resets).
+- ~~HUD mezcla español/inglés~~ — resuelto en F2H41 i18n unification.
+  Todo el HUD ahora en inglés (HEALTH / AMMO / STAMINA / OBJECTIVE /
+  PAUSED / CONTINUE / OPTIONS / EXIT TO X). Sienta baseline para futura
+  selección de idioma.
+
+## Post-F2H40 (2026-05-09) — Fix físicas Floor scale-RigidBody desync cerrado
 
 ### Histórico resuelto
 
@@ -37,23 +68,16 @@
 
 ## Post-F2H39 (2026-05-09) — HUD framework extensible cerrado
 
-- **HUD widgets diferidos** (extensiones del framework F2H39):
-  - **CompassBar** (Skyrim/CoD): barra horizontal arriba con marker
-    N/S/E/W + objective markers proyectados.
-  - **ObjectiveText** (HL2/CoD): texto persistente lateral con el
-    objetivo actual.
-  - **KillFeed** (Doom/CoD): lista de kills transient arriba derecha.
-  - **Stamina/MagicBar** (Skyrim/Metro): segunda barra al lado del
-    HP para estamina/magia/oxígeno.
+- ~~**HUD widgets diferidos** (CompassBar / ObjectiveText / KillFeed /
+  Stamina / CRT scanline)~~ — **5 de 7 resueltos en F2H41**
+  (`v1.31.0-fase2-hito41`). Quedan 2 que se diferencian en arquitectura
+  o scope:
   - **Mini-map / Radar** (CoD/Fallout): topdown view del mundo
-    cercano.
-  - **CRT scanline overlay** (Fallout Pip-Boy effect global):
-    post-process tipo scanline + chromatic aberration sobre todo el
-    HUD para feel retro. Toggleable.
+    cercano. **Diferido a hito propio mediano** — requiere render-to-
+    texture, diferente del DrawList puro del framework.
   - **Themes alternativos** (Doom paleta saturada / Fallout monocromo
-    verde): toggle desde Lua. v1 hardcodea HL paleta.
-  Cada uno se agrega extendiendo el registry de widgets en
-  `GameOverlay.cpp` + bindings Lua si necesita state.
+    verde): toggle desde Lua. **Diferido a hito chico propio** —
+    requiere theme runtime + bindings Lua.
 
 - **HUD diegetic 3D** (Pip-Boy / Metro muñequera / Doom plasma rifle
   display): geometría 3D enganchada al brazo del player + render-to-
