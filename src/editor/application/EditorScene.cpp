@@ -184,6 +184,49 @@ void EditorApplication::updateRigidBodies(f32 dt) {
                 rb.pendingLinearVel = glm::vec3(0.0f);
                 rb.pendingAngularVel = glm::vec3(0.0f);
             }
+            // F2H40: trackear el halfExtents inicial sincronizado al body.
+            if (rb.bodyId != 0) {
+                rb.lastSyncedHalfExtents = rb.halfExtents;
+            }
+        });
+
+    // F2H40: pase de re-sync para bodies ya materializados. Cubre dos
+    // casos que pre-F2H40 desincronizaban visual y colision:
+    //   (a) Box body con `Transform.scale` cambiado via Inspector / gizmo.
+    //       Auto-update `halfExtents = t.scale * 0.5` (Box es la unica
+    //       shape donde la equivalencia es semanticamente intuitiva —
+    //       Sphere/Capsule tienen halfExtents.x = radius / etc.).
+    //   (b) Cualquier shape con `halfExtents` editado directo en el
+    //       Inspector. El sync compara contra `lastSyncedHalfExtents`.
+    // `setBodyHalfExtents` llama Jolt `BodyInterface::SetShape` que
+    // preserva pose + velocity + contacts (no destroy + recreate).
+    m_scene->forEach<TransformComponent, RigidBodyComponent>(
+        [&](Entity, TransformComponent& t, RigidBodyComponent& rb) {
+            if (rb.bodyId == 0) return;
+            // (a) Box auto-sync desde Transform.scale.
+            if (rb.shape == RigidBodyComponent::Shape::Box) {
+                const glm::vec3 desired = t.scale * 0.5f;
+                constexpr f32 k_eps = 1e-4f;
+                if (std::abs(desired.x - rb.halfExtents.x) > k_eps ||
+                    std::abs(desired.y - rb.halfExtents.y) > k_eps ||
+                    std::abs(desired.z - rb.halfExtents.z) > k_eps) {
+                    rb.halfExtents = desired;
+                }
+            }
+            // (b) Resync al body si difiere del ultimo aplicado.
+            constexpr f32 k_eps = 1e-4f;
+            if (std::abs(rb.halfExtents.x - rb.lastSyncedHalfExtents.x) > k_eps ||
+                std::abs(rb.halfExtents.y - rb.lastSyncedHalfExtents.y) > k_eps ||
+                std::abs(rb.halfExtents.z - rb.lastSyncedHalfExtents.z) > k_eps) {
+                CollisionShape shape = CollisionShape::Box;
+                switch (rb.shape) {
+                    case RigidBodyComponent::Shape::Box:     shape = CollisionShape::Box;     break;
+                    case RigidBodyComponent::Shape::Sphere:  shape = CollisionShape::Sphere;  break;
+                    case RigidBodyComponent::Shape::Capsule: shape = CollisionShape::Capsule; break;
+                }
+                m_physicsWorld->setBodyHalfExtents(rb.bodyId, shape, rb.halfExtents);
+                rb.lastSyncedHalfExtents = rb.halfExtents;
+            }
         });
 
     // 2) Stepear la simulacion SOLO en Play Mode. En Editor Mode los bodies

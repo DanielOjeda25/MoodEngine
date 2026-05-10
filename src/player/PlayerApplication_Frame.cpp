@@ -10,6 +10,8 @@
 
 #include "player/PlayerApplication.h"
 
+#include <cmath>  // F2H40: std::abs en pase de re-sync de halfExtents
+
 #include "core/Log.h"
 #include "core/Profiler.h"
 #include "engine/assets/manager/AssetManager.h"
@@ -327,6 +329,41 @@ void PlayerApplication::updateRigidBodies(f32 dt) {
                 rb.hasPendingVel = false;
                 rb.pendingLinearVel = glm::vec3(0.0f);
                 rb.pendingAngularVel = glm::vec3(0.0f);
+            }
+            // F2H40: trackear el halfExtents inicial sincronizado al body.
+            if (rb.bodyId != 0) {
+                rb.lastSyncedHalfExtents = rb.halfExtents;
+            }
+        });
+
+    // F2H40: pase de re-sync para bodies ya materializados (paridad
+    // con `EditorApplication::updateRigidBodies`). En el Player es
+    // menos comun que el dev cambie scale en runtime — pero los
+    // saves cargados pueden tener Floor con scale enlargado y body
+    // pre-existente, y los scripts Lua pueden mutar Transform.
+    m_scene->forEach<TransformComponent, RigidBodyComponent>(
+        [&](Entity, TransformComponent& t, RigidBodyComponent& rb) {
+            if (rb.bodyId == 0) return;
+            constexpr f32 k_eps = 1e-4f;
+            if (rb.shape == RigidBodyComponent::Shape::Box) {
+                const glm::vec3 desired = t.scale * 0.5f;
+                if (std::abs(desired.x - rb.halfExtents.x) > k_eps ||
+                    std::abs(desired.y - rb.halfExtents.y) > k_eps ||
+                    std::abs(desired.z - rb.halfExtents.z) > k_eps) {
+                    rb.halfExtents = desired;
+                }
+            }
+            if (std::abs(rb.halfExtents.x - rb.lastSyncedHalfExtents.x) > k_eps ||
+                std::abs(rb.halfExtents.y - rb.lastSyncedHalfExtents.y) > k_eps ||
+                std::abs(rb.halfExtents.z - rb.lastSyncedHalfExtents.z) > k_eps) {
+                CollisionShape shape = CollisionShape::Box;
+                switch (rb.shape) {
+                    case RigidBodyComponent::Shape::Box:     shape = CollisionShape::Box;     break;
+                    case RigidBodyComponent::Shape::Sphere:  shape = CollisionShape::Sphere;  break;
+                    case RigidBodyComponent::Shape::Capsule: shape = CollisionShape::Capsule; break;
+                }
+                m_physicsWorld->setBodyHalfExtents(rb.bodyId, shape, rb.halfExtents);
+                rb.lastSyncedHalfExtents = rb.halfExtents;
             }
         });
 

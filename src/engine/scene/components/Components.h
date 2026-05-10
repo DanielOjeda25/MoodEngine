@@ -164,6 +164,20 @@ struct RigidBodyComponent {
 
     u32 bodyId = 0;               // llenado por PhysicsSystem (0 = no creado)
 
+    // F2H40: cache del ultimo halfExtents sincronizado al body Jolt.
+    // Si `halfExtents != lastSyncedHalfExtents`, `updateRigidBodies`
+    // llama `setBodyHalfExtents` para resincronizar. Cubre 2 vectores:
+    //   1. Para Box bodies, auto-actualiza `halfExtents = t.scale*0.5`
+    //      cuando el dev escala el Transform (Inspector / gizmo). Sin
+    //      esto, el visual se ensancha pero la colision queda con el
+    //      tamaño original — el player atraviesa o cae al vacio.
+    //   2. Para cualquier shape, sincroniza si el dev edita
+    //      `halfExtents` directo en el Inspector (Sphere radius,
+    //      Capsule height, etc.).
+    // NO se serializa (estado runtime). Default 0 fuerza primer sync
+    // al materializar el body.
+    glm::vec3 lastSyncedHalfExtents{0.0f};
+
     // Hito 41 fix-up #2: pending velocidades del Save/Load. Si
     // `applyLoadedSave` corre ANTES de que el body se materialice
     // (bodyId == 0), las vels del snapshot se quedan stash aca.
