@@ -1,5 +1,7 @@
 #include "editor/panels/scene/InspectorPanel.h"
 
+#include "editor/commands/AddComponentCommand.h"      // F2H45 Bloque A
+#include "editor/commands/HistoryStack.h"             // F2H45 Bloque A
 #include "editor/selection/SelectionSet.h"           // F2H13
 #include "editor/ui/EditorUI.h"
 #include "engine/i18n/I18n.h"  // F2H43
@@ -143,21 +145,21 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
     ImGui::Separator();
 
     // Spec de cada componente agregable: nombre + descripcion + grupo +
-    // hash flag (`hasComponent<X>(e)`) + addFunctor (closure que llama
-    // `e.addComponent<X>(default)`).
+    // hash flag (`hasComponent<X>(e)`) + makeCmdFn que arma un
+    // AddComponentCommand<T> tipado en T (F2H45 Bloque A: undoable).
     struct Item {
         const char* nameKey;
         const char* descKey;
         const char* catKey;
         bool        alreadyHas;
-        std::function<void()> addFn;
+        std::function<std::unique_ptr<ICommand>(Entity, std::string)> makeCmdFn;
     };
     std::vector<Item> items;
     items.reserve(12);
 
     auto add = [&](const char* nameKey, const char* descKey,
                     const char* catKey, bool alreadyHas,
-                    std::function<void()> fn) {
+                    std::function<std::unique_ptr<ICommand>(Entity, std::string)> fn) {
         items.push_back({nameKey, descKey, catKey, alreadyHas, std::move(fn)});
     };
 
@@ -165,59 +167,83 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
     add("component.name.mesh_renderer", "component.desc.mesh_renderer",
         "editor.panel.inspector.add.cat.render",
         e.hasComponent<MeshRendererComponent>(),
-        [e]() mutable { e.addComponent<MeshRendererComponent>(); });
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<MeshRendererComponent>(en, std::move(lbl));
+        });
     add("component.name.light", "component.desc.light",
         "editor.panel.inspector.add.cat.render",
         e.hasComponent<LightComponent>(),
-        [e]() mutable { e.addComponent<LightComponent>(); });
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<LightComponent>(en, std::move(lbl));
+        });
     add("component.name.environment", "component.desc.environment",
         "editor.panel.inspector.add.cat.render",
         e.hasComponent<EnvironmentComponent>(),
-        [e]() mutable { e.addComponent<EnvironmentComponent>(); });
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<EnvironmentComponent>(en, std::move(lbl));
+        });
     add("component.name.animator", "component.desc.animator",
         "editor.panel.inspector.add.cat.render",
         e.hasComponent<AnimatorComponent>(),
-        [e]() mutable { e.addComponent<AnimatorComponent>(); });
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<AnimatorComponent>(en, std::move(lbl));
+        });
     add("component.name.particle_emitter", "component.desc.particle_emitter",
         "editor.panel.inspector.add.cat.render",
         e.hasComponent<ParticleEmitterComponent>(),
-        [e]() mutable { e.addComponent<ParticleEmitterComponent>(); });
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<ParticleEmitterComponent>(en, std::move(lbl));
+        });
     add("component.name.camera", "component.desc.camera",
         "editor.panel.inspector.add.cat.render",
         e.hasComponent<CameraComponent>(),
-        [e]() mutable { e.addComponent<CameraComponent>(); });
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<CameraComponent>(en, std::move(lbl));
+        });
 
     // Physics
     add("component.name.rigid_body", "component.desc.rigid_body",
         "editor.panel.inspector.add.cat.physics",
         e.hasComponent<RigidBodyComponent>(),
-        [e]() mutable { e.addComponent<RigidBodyComponent>(); });
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<RigidBodyComponent>(en, std::move(lbl));
+        });
     add("component.name.trigger", "component.desc.trigger",
         "editor.panel.inspector.add.cat.physics",
         e.hasComponent<TriggerComponent>(),
-        [e]() mutable { e.addComponent<TriggerComponent>(); });
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<TriggerComponent>(en, std::move(lbl));
+        });
 
     // Audio
     add("component.name.audio_source", "component.desc.audio_source",
         "editor.panel.inspector.add.cat.audio",
         e.hasComponent<AudioSourceComponent>(),
-        [e]() mutable { e.addComponent<AudioSourceComponent>(); });
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<AudioSourceComponent>(en, std::move(lbl));
+        });
 
     // Logic
     add("component.name.script", "component.desc.script",
         "editor.panel.inspector.add.cat.logic",
         e.hasComponent<ScriptComponent>(),
-        [e]() mutable { e.addComponent<ScriptComponent>(); });
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<ScriptComponent>(en, std::move(lbl));
+        });
     add("component.name.nav_agent", "component.desc.nav_agent",
         "editor.panel.inspector.add.cat.logic",
         e.hasComponent<NavAgentComponent>(),
-        [e]() mutable { e.addComponent<NavAgentComponent>(); });
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<NavAgentComponent>(en, std::move(lbl));
+        });
 
     // World
     add("component.name.brush", "component.desc.brush",
         "editor.panel.inspector.add.cat.world",
         e.hasComponent<BrushComponent>(),
-        [e]() mutable { e.addComponent<BrushComponent>(); });
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<BrushComponent>(en, std::move(lbl));
+        });
 
     // Filtro: solo los que la entidad NO tiene + matchean el search.
     // Agrupados por categoria, en el orden original del registro.
@@ -240,7 +266,18 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
         if (ImGui::Selectable(nameTr.c_str(), false,
                                 ImGuiSelectableFlags_None,
                                 ImVec2(360.0f, 0.0f))) {
-            it.addFn();
+            // F2H45 Bloque A: undoable. `HistoryStack::push` invoca
+            // `execute()` internamente (no duplicar). El label se arma
+            // con la traduccion del componente ya resuelta — la entry
+            // del menu Editar > Deshacer lee `cmd->name()`.
+            std::string label = I18n::T("editor.cmd.add_component", nameTr);
+            auto cmd = it.makeCmdFn(e, std::move(label));
+            HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
+            if (h != nullptr) {
+                h->push(std::move(cmd));
+            } else {
+                cmd->execute();  // fallback defensivo sin history
+            }
             m_editedThisFrame = true;
             ImGui::CloseCurrentPopup();
         }

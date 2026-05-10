@@ -179,18 +179,21 @@ void ConsolePanel::onImGuiRender() {
     ImGui::SameLine();
     ImGui::TextDisabled("(?)");
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip(
-            "Niveles de log (icon + tag + color):\n"
-            "  " ICON_FA_BUG                    " TRC = Trace     (gris)\n"
-            "  " ICON_FA_BUG_SLASH              " DBG = Debug     (celeste)\n"
-            "  " ICON_FA_CIRCLE_INFO            " INF = Info      (blanco)\n"
-            "  " ICON_FA_TRIANGLE_EXCLAMATION   " WRN = Warning   (amarillo)\n"
-            "  " ICON_FA_CIRCLE_XMARK           " ERR = Error     (rojo)\n"
-            "  " ICON_FA_SKULL                  " CRT = Critical  (magenta)\n"
-            "\n"
-            "Toggles a la izquierda: click para mostrar/ocultar cada nivel.\n"
-            "Filtro canal: substring match contra el nombre del canal\n"
-            "(engine / render / assets / editor / world / etc).");
+        // F2H45 Bloque C: tooltip multilinea via i18n. Los icons FA viven
+        // en macros (`#define ICON_FA_X "..."`) y se mantienen en codigo
+        // — el JSON no puede cargarlos sin perder el byte sequence UTF-8.
+        // Cada linea de nivel se compone aqui: dos espacios + icon +
+        // espacio + I18n::T(level_label).
+        const std::string body =
+            I18n::T("editor.panel.console.help.header") + "\n"
+            "  " ICON_FA_BUG                  " " + I18n::T("editor.panel.console.help.level.trace")    + "\n"
+            "  " ICON_FA_BUG_SLASH            " " + I18n::T("editor.panel.console.help.level.debug")    + "\n"
+            "  " ICON_FA_CIRCLE_INFO          " " + I18n::T("editor.panel.console.help.level.info")     + "\n"
+            "  " ICON_FA_TRIANGLE_EXCLAMATION " " + I18n::T("editor.panel.console.help.level.warn")     + "\n"
+            "  " ICON_FA_CIRCLE_XMARK         " " + I18n::T("editor.panel.console.help.level.err")      + "\n"
+            "  " ICON_FA_SKULL                " " + I18n::T("editor.panel.console.help.level.critical") + "\n"
+            "\n" + I18n::T("editor.panel.console.help.footer");
+        ImGui::SetTooltip("%s", body.c_str());
     }
     ImGui::Separator();
 

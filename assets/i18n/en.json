@@ -137,6 +137,8 @@
   "editor.panel.inspector.add.empty": "Entity already has all available components.",
   "editor.panel.inspector.add.no_match": "No matches for '{}'.",
 
+  "editor.cmd.add_component": "Add component: {}",
+
   "component.name.mesh_renderer": "Mesh Renderer",
   "component.name.light": "Light",
   "component.name.environment": "Environment",
@@ -195,7 +197,6 @@
   "editor.panel.inspector.brush.mesh_cache": "mesh cache: {} submeshes",
   "editor.panel.inspector.brush.dirty_yes": "dirty: yes",
   "editor.panel.inspector.brush.dirty_no": "dirty: no",
-  "editor.panel.inspector.brush.recompute_mesh": "Recompute mesh",
   "editor.panel.inspector.brush.uv_multi": "UV ({} faces, primary=#{})",
   "editor.panel.inspector.brush.uv_face": "UV (Face {})",
   "editor.panel.inspector.brush.uv_brush": "UV (Brush)",
@@ -358,6 +359,14 @@
   "editor.panel.console.filter_hint": "channel filter (substring)",
   "editor.panel.console.lines": "{} lines",
   "editor.panel.console.lines_filtered": "{} of {} lines (filter active)",
+  "editor.panel.console.help.header": "Log levels (icon + tag + color):",
+  "editor.panel.console.help.level.trace":    "TRC = Trace     (gray)",
+  "editor.panel.console.help.level.debug":    "DBG = Debug     (cyan)",
+  "editor.panel.console.help.level.info":     "INF = Info      (white)",
+  "editor.panel.console.help.level.warn":     "WRN = Warning   (yellow)",
+  "editor.panel.console.help.level.err":      "ERR = Error     (red)",
+  "editor.panel.console.help.level.critical": "CRT = Critical  (magenta)",
+  "editor.panel.console.help.footer": "Toggles on the left: click to show/hide each level.\nChannel filter: substring match against the channel name\n(engine / render / assets / editor / world / etc).",
 
   "editor.panel.lua_api.intro": "Bindings available for scripts assigned via ScriptComponent. The system calls `function onUpdate(self, dt)` each frame for the entity that owns the script.",
   "editor.panel.lua_api.hud_intro": "Global game state (HP/Ammo/paused). Visible in the Play Mode HUD (editor) or in MoodPlayer (standalone). The state lives in GameState (singleton) — all scripts share the same instance.",

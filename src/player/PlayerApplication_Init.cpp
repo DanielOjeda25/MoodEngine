@@ -87,6 +87,29 @@ PlayerApplication::PlayerApplication() {
         throw std::runtime_error("ImGui_ImplOpenGL3_Init fallo");
     }
 
+    // F2H45 Bloque B: Lato como default font (paridad con el editor desde
+    // F2H38). Pre-fix usaba ProggyClean (bitmap 13px Basic Latin) — el HUD
+    // (HEALTH / MUNICION / etc) era pixely y `MUNICION` no podia llevar
+    // tilde en `MUNICIÓN` por charset limitado. Rango: Basic Latin +
+    // Latin-1 Supplement (acentos espanol) + General Punctuation
+    // (em-dash, ellipsis). FA NO mergeado: el HUD del Player usa DrawList
+    // procedural (F2H39+), no necesita iconos.
+    {
+        ImFontAtlas* atlas = io.Fonts;
+        static const ImWchar k_latoRange[] = {
+            0x0020, 0x00FF, // Basic Latin + Latin-1 Sup
+            0x2010, 0x2027, // General Punctuation subset
+            0
+        };
+        ImFontConfig latoCfg;
+        latoCfg.PixelSnapH = false;
+        atlas->AddFontFromFileTTF(
+            "assets/ui/fonts/LatoLatin-Regular.ttf",
+            15.0f,
+            &latoCfg,
+            k_latoRange);
+    }
+
     m_sceneRenderer = std::make_unique<SceneRenderer>();
 
     m_assetManager = std::make_unique<AssetManager>(

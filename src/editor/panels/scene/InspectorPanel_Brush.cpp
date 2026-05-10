@@ -66,13 +66,6 @@ void InspectorPanel::renderBrushSection(Entity e) {
         I18n::T(bc.dirty ? "editor.panel.inspector.brush.dirty_yes"
                           : "editor.panel.inspector.brush.dirty_no").c_str());
 
-    // Recompute mesh: util para debug si la mesh quedo stale por
-    // un cambio que no marcamos dirty (no deberia pasar pero es
-    // breadcrumb util cuando F2H12+ agreguen booleanos).
-    if (ImGui::Button(I18n::T("editor.panel.inspector.brush.recompute_mesh").c_str())) {
-        bc.dirty = true;
-    }
-
     ImGui::Separator();
 
     // --- F2H15 + F2H17 + F2H33: UV editor ---
