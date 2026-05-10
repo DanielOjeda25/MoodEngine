@@ -221,6 +221,13 @@ private:
     // Diagnostico one-shot.
     bool m_shadowEnabledLastFrame = false;
     u32  m_lastLoggedPointLightCount = 9999u;
+
+    // F2H42: shadow map caching por hash de escena. Si el hash de
+    // (lightDir + transforms de meshes con MeshRenderer + mesh ids) no
+    // cambia entre frames, se reusa la depth texture del frame anterior
+    // saltando ShadowPass::record (54.7% del frame en escenas estaticas).
+    u64  m_lastShadowSceneHash = 0;
+    bool m_shadowMapValid       = false;
 };
 
 } // namespace Mood

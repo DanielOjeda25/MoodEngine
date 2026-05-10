@@ -88,7 +88,6 @@ void SceneRenderer::renderScene(Scene& scene,
             });
     }
     if (shadowEnabled) {
-        MOOD_PROFILE_SCOPE("ShadowPass::record");
         // Bounding sphere fijo amplio para cubrir el mapa + props. Cuando
         // llegue CSM se reemplaza por una serie de cascadas. El centro y
         // radio los fijamos aproximadamente al origen del mundo: el caller
@@ -96,8 +95,43 @@ void SceneRenderer::renderScene(Scene& scene,
         // del Hito 20 alcanza.
         const glm::vec3 sceneCenter(0.0f, 0.0f, 0.0f);
         const f32 sceneRadius = 30.0f;
-        m_shadowPass->record(scene, assets, *m_renderer,
-                             shadowLightDir, sceneCenter, sceneRadius);
+
+        // F2H42: hash incremental (FNV-1a 64) de los inputs que afectan
+        // la depth texture. Si no cambia, reusamos el shadow map del
+        // frame anterior (la GLTexture sigue valida) y skipeamos record.
+        u64 sceneHash = 14695981039346656037ULL; // FNV offset basis
+        constexpr u64 kFnvPrime = 1099511628211ULL;
+        auto mix = [&](const void* data, size_t bytes) {
+            const auto* p = static_cast<const unsigned char*>(data);
+            for (size_t i = 0; i < bytes; ++i) {
+                sceneHash ^= p[i];
+                sceneHash *= kFnvPrime;
+            }
+        };
+        {
+            MOOD_PROFILE_SCOPE("ShadowPass::hash");
+            mix(&shadowLightDir, sizeof(shadowLightDir));
+            mix(&sceneCenter,    sizeof(sceneCenter));
+            mix(&sceneRadius,    sizeof(sceneRadius));
+            scene.forEach<TransformComponent, MeshRendererComponent>(
+                [&](Entity, TransformComponent& t, MeshRendererComponent& mr) {
+                    mix(&t.position,      sizeof(t.position));
+                    mix(&t.rotationEuler, sizeof(t.rotationEuler));
+                    mix(&t.scale,         sizeof(t.scale));
+                    mix(&mr.mesh,         sizeof(mr.mesh));
+                });
+        }
+
+        // Si la activacion de sombras cambio (off->on), forzar regenerado.
+        if (!m_shadowEnabledLastFrame) m_shadowMapValid = false;
+
+        if (sceneHash != m_lastShadowSceneHash || !m_shadowMapValid) {
+            MOOD_PROFILE_SCOPE("ShadowPass::record");
+            m_shadowPass->record(scene, assets, *m_renderer,
+                                 shadowLightDir, sceneCenter, sceneRadius);
+            m_lastShadowSceneHash = sceneHash;
+            m_shadowMapValid       = true;
+        }
     }
     if (shadowEnabled != m_shadowEnabledLastFrame) {
         if (shadowEnabled) {
