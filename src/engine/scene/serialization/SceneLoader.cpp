@@ -138,6 +138,23 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<RigidBodyComponent>(rb);
         }
 
+        // F2H39 fix lateral: proyectos guardados pre-Hito 12 no
+        // serializaron RigidBodyComponent en el Floor — al cargarlos el
+        // player atraviesa el piso y cae infinito en Play Mode. Auto-add
+        // un Static Box body con halfExtents derivados del scale del
+        // Transform (que SI persiste en todos los schema). Solo aplica
+        // a auto-generadas con tag "Floor" y "Tile_X_Y" para no sumar
+        // colision a entidades user-creadas que la omitan a proposito.
+        if (!e.hasComponent<RigidBodyComponent>() &&
+            (se.tag == "Floor" || parseTileCoords(se.tag.c_str(), tileX, tileY))) {
+            RigidBodyComponent autoRb{};
+            autoRb.type        = RigidBodyComponent::Type::Static;
+            autoRb.shape       = RigidBodyComponent::Shape::Box;
+            autoRb.halfExtents = se.scale * 0.5f;
+            autoRb.mass        = 0.0f;
+            e.addComponent<RigidBodyComponent>(autoRb);
+        }
+
         if (se.environment.has_value()) {
             const auto& s = *se.environment;
             EnvironmentComponent env{};
