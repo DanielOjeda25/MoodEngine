@@ -9,17 +9,64 @@
 
 ---
 
-## Post-F2H38 (2026-05-09) — Default font ImGui a Lato cerrado
+## Post-F2H39 (2026-05-09) — HUD framework extensible cerrado
 
 ### Próximo a atacar
 
-- **F2H39 — optimización runtime** (definido con el dev). Plan
-  emergerá de un Bloque A de profiling Tracy + Performance HUD
-  sobre escenas reales — la infra existe desde F2H2. Candidatos
-  sin profilar todavía: skinned animation pass, particle update,
-  brush mesh rebuild on dirty, físicas con N rigidbodies, audio
-  3D attenuation con N sources. Plan a redactar en
-  `docs/PLAN_HITO_F2H39.md` cuando arranquemos.
+- **TBD — definir con el dev**. **HUD framework activo + 8 widgets
+  funcionando + arquitectura preparada para CompassBar / ObjectiveText /
+  KillFeed / HUD diegetic 3D futuros.** Opciones a considerar:
+  - **Optimización runtime sobre la PC de escritorio** (era F2H39
+    original, postergado al hardware del baseline F2H2-F2H6 — la
+    notebook actual da números no comparables).
+  - **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
+  - **Bug físicas Floor scale-RigidBody desync** (descubierto en
+    validación F2H39, fix lateral propio).
+  - **Más widgets HUD de la lista diferida** (CompassBar, ObjectiveText,
+    KillFeed, Stamina, Mini-map, CRT scanline, themes alternativos,
+    HUD diegetic 3D — este último requiere FPS arms primero).
+
+### Activos sin orden definido (siguiente ola)
+
+- **Bug físicas Floor scale-RigidBody desync** (descubierto en
+  validación F2H39): cuando el dev cambia `Transform.scale` del
+  Floor (o cualquier entidad con RigidBody) en Inspector o gizmo, el
+  `RigidBody.halfExtents` no se sincroniza — el visual cambia pero
+  la colisión queda con el size original del body creation. Player
+  puede caer fuera del body si la enlargada fue significativa, o el
+  body queda con tamaño desactualizado. Fix razonable: en
+  `Inspector_Transform.cpp::renderTransformSection` o
+  `EditorScene::updateRigidBodies`, detectar delta de `Transform.scale`
+  desde la última creación del body y re-crear o llamar
+  `setBodyShape` con halfExtents proporcional. Hito chico (~30-60
+  min). El fix lateral de F2H39 solo cubre el caso específico de
+  proyectos pre-Hito 12 cargados sin RigidBody serializado.
+
+- **HUD widgets diferidos** (extensiones del framework F2H39):
+  - **CompassBar** (Skyrim/CoD): barra horizontal arriba con marker
+    N/S/E/W + objective markers proyectados.
+  - **ObjectiveText** (HL2/CoD): texto persistente lateral con el
+    objetivo actual.
+  - **KillFeed** (Doom/CoD): lista de kills transient arriba derecha.
+  - **Stamina/MagicBar** (Skyrim/Metro): segunda barra al lado del
+    HP para estamina/magia/oxígeno.
+  - **Mini-map / Radar** (CoD/Fallout): topdown view del mundo
+    cercano.
+  - **CRT scanline overlay** (Fallout Pip-Boy effect global):
+    post-process tipo scanline + chromatic aberration sobre todo el
+    HUD para feel retro. Toggleable.
+  - **Themes alternativos** (Doom paleta saturada / Fallout monocromo
+    verde): toggle desde Lua. v1 hardcodea HL paleta.
+  Cada uno se agrega extendiendo el registry de widgets en
+  `GameOverlay.cpp` + bindings Lua si necesita state.
+
+- **HUD diegetic 3D** (Pip-Boy / Metro muñequera / Doom plasma rifle
+  display): geometría 3D enganchada al brazo del player + render-to-
+  texture del HUD a una textura del modelo. **Hito propio mayor** —
+  requiere FPS arms (mesh + animator del brazo) primero. La
+  arquitectura del widget framework F2H39 deja la puerta abierta:
+  un widget puede ser "DiegeticArmHud" que dispatchea su draw a un
+  mundo 3D en lugar de a un overlay 2D, sin tocar nada del framework.
 
 ### Activos sin orden definido (siguiente ola)
 

@@ -6,7 +6,44 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H38 cerrado: Default font ImGui a Lato.**
+**🚀 Fase 2 — F2H39 cerrado: HUD framework extensible + paquete inicial estilo HL/Doom/Fallout.**
+Tag: `v1.29.0-fase2-hito39`.
+Verificado visualmente por dev: *"los widgets se ven bien, vi la mayoria, validalo, cerra y vamos a lo siguiente"*. HEALTH naranja+barra, AMMO mag/reserve+ícono procedural de bala, crosshair, hit marker cyan, damage vignette rojo direccional, pickup notifications, interact prompt, pause menu Doom-style con título "PAUSED" gigante.
+
+**🏁 HUD framework extensible activo + 8 widgets estilo HL/Doom/Fallout + arquitectura para CompassBar/ObjectiveText/KillFeed/HUD diegetic 3D futuros.** 37/44 hitos de Fase 2.
+
+**Decisiones clave de F2H39:**
+- **Sustituye al F2H39 original "optimización runtime"**: pospuesto a hito futuro sobre la PC de escritorio del dev (GTX 1660 / Ryzen 5 5600G del baseline F2H2-F2H6). La notebook actual (Iris Xe) daría números no comparables. PERFORMANCE.md ya marca que sub-fase 2.1 cumplió: *"el motor está listo para contenido real"* — los próximos hitos son features.
+- **Half-Life como estética base + influencias Doom/Fallout/Metro/CoD**. Paleta naranja Valve `#F58220` + amarillo HL `#FFCC00` + cyan hit marker `#10F0FF` + rojo damage `#FF3030`. Tipografía grande para HP/AMMO (font scale 2.8x).
+- **Widget framework extensible** (`HudWidget { name, draw_fn }` + registry + `HudContext` struct), no clase con vtable. Razón: ~10 widgets → vtable overhead innecesario; función pura es testeable + sin estado oculto. Custom widgets futuros (Lua-driven, diegetic 3D) extienden la lista.
+- **Helpers de mutación viven en `GameState`, no `GameOverlay`**. Razón: `LuaBindings` necesita invocar `triggerHitMarker / pushPickup / etc` y `GameOverlay` depende de ImGui. Mover los helpers a `GameState` permite que el módulo de tests (que NO linkea ImGui) compile LuaBindings sin `mood_tests.exe` con unresolved externals.
+- **`pickup_queue` usa `ttl` countdown** (no `spawnTime` absoluto). Razón: evitar dependencia de `ImGui::GetTime()` en `GameState::pushPickup` — el overlay decrementa el ttl con `dt` cada frame y popea cuando ttl≤0.
+- **Lua bindings: 18 funciones nuevas en la tabla `hud`** preservando las 6 originales del Hito 20. State-based (no draw calls directos) — el patrón existente del Hito 20 escala perfecto al framework expandido.
+- **Pause menu rediseñado Doom-style**: título "PAUSED" font scale 4x + 3 botones con border geométrico + chevrons en las 4 esquinas en hover. Sustituye el rectángulo gris-azul plano del Hito 20.
+- **SaveLoad backward-compat**: campos nuevos opcionales en JSON. Saves pre-F2H39 cargan con defaults. Transient state (timers, queue) NO persiste.
+- **Diferidos explícitamente** (anotados en PENDIENTES como hito propio futuro): CompassBar (Skyrim/CoD), ObjectiveText (HL2/CoD), KillFeed (Doom/CoD), Stamina/MagicBar (Skyrim/Metro), Mini-map/Radar (CoD/Fallout), CRT scanline overlay (Fallout Pip-Boy), themes alternativos (Doom paleta saturada / Fallout verde), HUD diegetic 3D (Pip-Boy / Metro muñequera / Doom plasma rifle display — requiere FPS arms primero).
+
+**Implementación (F2H39 Bloques A-G):**
+
+- **Bloque A**: plan en [`archive/plans/PLAN_HITO_F2H39.md`](archive/plans/PLAN_HITO_F2H39.md).
+- **Bloques B-E unificados**: arquitectura widget framework + 8 widgets implementados + bindings Lua + SaveLoad + demo lua extendido.
+- **Fix lateral SceneLoader**: auto-RigidBody Static al Floor cargado sin uno (proyectos pre-Hito 12). Cubre escenarios donde el `.moodproj` viejo perdía físicas del piso.
+- **Bloque F — validación visual**: dev confirma widgets renderean bien.
+- **Bloque G (este commit)**: docs + tag.
+
+**Pendientes conocidos** (post-F2H39):
+- **Optimización runtime sobre la PC de escritorio** (era F2H39 original, postergado al hardware del baseline F2H2-F2H6). Se ataca cuando el dev esté en la desktop.
+- **Bug físicas Floor scale-RigidBody desync** (descubierto durante validación F2H39): cuando el dev cambia `Transform.scale` del Floor en Inspector o gizmo, el `RigidBody.halfExtents` no se sincroniza automáticamente — el visual cambia pero la colisión no. Player puede caer fuera del body. Fix lateral propio si emerge presión real.
+- **HUD diegetic 3D** (Pip-Boy / Metro muñequera): requiere FPS arms (mesh + animator del brazo) primero. Hito propio mayor futuro.
+- **Más widgets HUD de la lista diferida**: CompassBar, ObjectiveText, KillFeed, Stamina, Mini-map, CRT scanline overlay.
+- **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+
+**Próximo paso**: **TBD — definir con el dev**.
+
+### F2H38 (anterior, ya cerrado)
+
+**🚀 F2H38 cerrado: Default font ImGui a Lato.**
 Tag: `v1.28.0-fase2-hito38`.
 Verificado visualmente por dev: *"todo se ve perfecto"*. Lato a 15px legible inmediato; Console text-heavy es donde más se nota el upgrade. Sin re-flow / overflow / truncate en ningún panel.
 

@@ -11,6 +11,52 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-09: F2H39 cierre — HUD framework extensible + paquete inicial estilo HL/Doom/Fallout
+
+**Contexto:** El F2H39 original era "optimización runtime", pospuesto a hito futuro porque el dev está en notebook (Iris Xe) y el baseline de profiling de F2H2-F2H6 se hizo en su desktop (GTX 1660 / Ryzen 5 5600G) — números no comparables. PERFORMANCE.md además explícitamente concluye que sub-fase 2.1 cumplió: *"el motor está listo para contenido real"*. F2H39 pivota al pendiente "HUD del juego procedural/minimalista" anotado post-F2H35. Dev confirma estética **Half-Life como inspiración base** del motor + influencias Doom/Doom Eternal/Fallout/Metro/CoD: *"abarcar todas las posibles cosas de HUD que necesitaremos para futuro, y que se puedan ir agregando más"*. Hito mediano (~3h, ~700 LOC neto) que entrega framework extensible + 8 widgets default + bindings Lua + bug fix lateral.
+
+**Decisiones técnicas clave:**
+
+- **Widget pattern como struct simple, no clase con vtable.** `HudWidget { const char* name, void (*draw)(HudContext&) }` en array hardcoded ordenado back-to-front. Razón: ~10 widgets → vtable overhead innecesario; función pura es testeable + sin estado oculto. Alternativa descartada: `class HudWidget { virtual void draw() = 0; }` con registry dinámico de unique_ptr — mayor complejidad sin ganancia para 10 widgets stable.
+
+- **Helpers de mutación de HudState viven en `GameState`, no `GameOverlay`.** `triggerHitMarker / triggerDamageFlash / pushPickup / clearInteractPrompt` se movieron de `GameOverlay::*` (donde inicialmente los puse) a `GameState::*` durante implementación, tras encontrar **link error en `mood_tests.exe`**: LuaBindings linkea contra GameState (puro state) pero NO contra GameOverlay (depende de ImGui). Pasar los helpers a GameState (sin deps gráficas) los hace invocables desde Lua sin arrastrar ImGui al modulo de tests. Costo: división conceptual entre state mutation (GameState) vs rendering (GameOverlay) — limpia, no convoluta.
+
+- **`PickupNotification` usa `ttl` countdown, no `spawnTime` absoluto.** Refactor durante el fix anterior: la versión inicial usaba `spawnTime = ImGui::GetTime()` en `pushPickup`, pero al moverse a GameState (sin ImGui) hay que sustituir. Patrón ttl: `pushPickup` setea `ttl=2.5f`, el overlay decrementa `n.ttl -= dt` cada frame y popea cuando ttl<=0. Fade in/out se computa de `(k_lifetime - ttl)` para age in y `ttl` directo para age out. Limpio + sin clock dependency.
+
+- **Lua bindings expandidos en la misma tabla `hud`**, no nueva tabla. 18 funciones nuevas (`setMaxHp`, `setMag`, `setMaxMag`, `setReserve`, `setInteractPrompt`/`clearInteractPrompt`/`getInteractPrompt`, `showHitMarker`, `flashDamage(x,y)`, `pushPickup`, `setWidget(name, on)`, `isWidgetEnabled`) preservando las 6 originales del Hito 20 (`setHp`/`setAmmo`/`setPaused` + getters). Razón: scripts pre-F2H39 siguen funcionando sin cambios; nuevos pueden mezclar libre. State-based (no draw calls directos) — el patrón existente escala perfecto al framework expandido. Alternativa descartada: tabla nueva `hud2` o `hud_ext` — segmentaría la API confusamente.
+
+- **Paleta Half-Life hardcoded en `palette` namespace** (no theming runtime). Razón: F2H39 v1 enfoca arquitectura + paquete inicial; theming es scope secundario. Si emerge necesidad real (modo Doom Eternal saturado, modo Fallout monocromo verde), agregar `HudTheme` struct + `setTheme` binding como hito propio. Mientras tanto, el dev edita `palette::*` constexprs si quiere ajustar.
+
+- **`PixelSnapH = false` en Lato + `true` en FA** (heredado de F2H38). HUD usa el mismo atlas, los icons FA salen con snap-to-pixel y el texto Lato smooth. Sin override en GameOverlay.
+
+- **Pause menu rediseño Doom-style con chevrons en hover**: 4 líneas naranjas externas marcando las 4 esquinas del rect del botón. Solo visibles en hover — efecto "geometric Doom" sin saturar el feel. Alternativa descartada: glow shader para el botón hovered — requiere shader pass, scope mayor.
+
+- **SaveLoad: campos nuevos opcionales solo se serializan si difieren del default** (ej. `if (d.hud.max_hp != 100) j["hud"]["max_hp"] = d.hud.max_hp`). Razón: saves chicas para gameplay basico — un save de demo no incluye 7 keys nuevas si los valores son default. Patrón mismo que `coyoteWindowSec` del Hito 40 G y `showEntityLabels` de F2H35.
+
+- **State transient (timers, queue) NO se persiste** en SaveLoad. Razón: no tiene sentido restaurar un hit marker a medio fade tras load. Si emerge necesidad (ej. continuidad cinematográfica de un game over con damage vignette frozen), agregar después.
+
+- **Fix lateral SceneLoader: auto-RigidBody al Floor cargado sin uno.** Descubierto durante validación F2H39 (dev no podía pararse para ver los widgets dinámicos — caía infinito). Causa: proyectos guardados pre-Hito 12 (cuando se introdujo `RigidBodyComponent`) no tenían el body serializado en el Floor, y `EntitySerializer` solo lo agrega si está en el JSON. Fix: en `SceneLoader::applyOneEntity`, si la entidad cargada tiene tag `Floor` o `Tile_X_Y` y NO tiene RigidBody, auto-add un Static Box con `halfExtents = scale * 0.5`. Solo aplica a auto-generadas para no contaminar entities user-creadas que omitan colisión a propósito. Ataca el caso de "loaded project sin RigidBody"; el caso "new project con scale modificado" sigue abierto (ver pendientes).
+
+- **Bug físicas conocido fuera de scope**: cuando el dev cambia `Transform.scale` del Floor en Inspector o vía gizmo, el `RigidBody.halfExtents` no se sincroniza — el visual cambia pero la colisión no. Player puede caer fuera del body. **NO atacado en F2H39** porque está fuera del dominio HUD; documentado como pendiente para hito propio futuro. Fix razonable: en `Inspector_Transform.cpp` o `EditorScene::updateRigidBodies`, detectar el delta `Transform.scale` desde la última creación del body y re-crear o `setBodyShape` con halfExtents proporcional.
+
+**Alternativas descartadas explícitamente:**
+
+- **Hito de optimización runtime sobre la notebook** (Iris Xe): descartado. PERFORMANCE.md baseline está en GTX 1660 — números no son comparables. Posponer al desktop es sensato.
+- **HUD shader-based (post-process custom para vignette/scanlines)** en lugar de ImGui DrawList: scope mayor — requiere render pipeline custom para el HUD. F2H39 v1 mantiene DrawList para velocidad de iteración + zero-asset. Si emerge necesidad de fidelidad mayor (CRT scanlines genuinos con chromatic aberration), hito propio futuro.
+- **HUD diegetic 3D ahora**: descartado. Requiere FPS arms (mesh + animator del brazo del player) primero — eso es hito propio mayor de gameplay/3D, no HUD overlay.
+- **CompassBar / ObjectiveText / KillFeed / etc en F2H39**: descartado por scope. F2H39 entrega arquitectura + paquete inicial; los demás se agregan extendiendo el registry de widgets.
+- **Themes alternativos** (Doom saturado / Fallout verde): descartado por scope. Paleta hardcoded HL en v1.
+
+**Condiciones de revisión:**
+
+- Si el dev pide más widgets de la lista diferida (CompassBar, KillFeed, etc.), agregar en hitos chicos siguiendo el patrón de los 8 widgets de F2H39.
+- Si emerge necesidad de HUD diegetic 3D (Pip-Boy / muñequera Metro), abrir hito propio: requiere FPS arms primero.
+- Si el dev cambia de paleta (ej. Doom Eternal saturado para un nivel específico), agregar `HudTheme` runtime + binding Lua `hud.set_theme(name)`.
+- Si los widgets crecen >15 y el array hardcoded se vuelve molesto, refactor a `std::vector<HudWidget>` con `registerWidget()` API. Mientras esté <15, hardcoded es claro.
+- Si emerge presión del bug físicas Floor scale-RigidBody desync, abrir hito propio en domain "engine/physics" — el fix natural es en `EditorScene::updateRigidBodies` detectando cambio de Transform.scale.
+
+---
+
 ## 2026-05-09: F2H38 cierre — Default font ImGui a Lato
 
 **Contexto:** F2H37 cerró el polish UX + iconos FA con un fix lateral para el em-dash tofu del Welcome modal (síntoma de que ProggyClean — el default font de ImGui — no cubre General Punctuation). El asset `LatoLatin-Regular.ttf` ya estaba en `assets/ui/fonts/` desde antes pero nunca se había cargado. F2H38 promueve Lato a default y consolida los benefits: legibilidad mejorada (especialmente en Console text-heavy), coverage Unicode más amplio, side effect de resolver problemas de tofu para cualquier punctuation natural del español. Mini-hito chico (~30 min, ~25 LOC neto en un solo archivo).
