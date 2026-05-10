@@ -9,13 +9,74 @@
 
 ---
 
-## Post-F2H43 (2026-05-10) — Sistema de i18n completo cerrado (Editor + HUD + Player)
+## Post-F2H44 (2026-05-10) — Polish onboarding UX cerrado (sin docs externos)
 
 ### Próximo a atacar
 
-- **Orden actualizado por el dev** (2026-05-10 post-F2H43):
+- **Orden actualizado por el dev** (2026-05-10 post-F2H44):
   1. **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
      PLAN_FASE2 líneas 285-303. **Próximo a arrancar.**
+
+### Diferidos sin orden (emergentes post-F2H44)
+
+- **AddComponentCommand undoable**: el popup Add Component agregado en
+  F2H44 NO usa command pattern (mismo patrón que demos de
+  `Ayuda > Demos`). Si emerge presión por undo, implementar templated
+  command genérico que serialice estado pre-add (default values del
+  componente). ~200 LOC estimados.
+- **USER_GUIDE/* + README + GIF + tutorial**: descartado en F2H44 por
+  el dev (*"seguiremos agregando cosas que luego vamos a terminar
+  cambiando"*). Reactivar como hito propio post-Fase 2 cuando el motor
+  estabilice y los workflows queden congelados. Empezar por GIF demo
+  de 30s (motor en acción) + GETTING_STARTED.md (5 pasos: open → spawn
+  brush → texturizar → physics → script).
+- **Material Editor con `ImGui::Tables`**: el modo TwoColumns fue
+  eliminado en F2H44 (preview siempre vertical). Si emerge necesidad
+  de mostrar preview + controles + node-graph lado a lado, migrar a
+  Tables (sincroniza heights correctamente).
+- **Workspaces como definiciones declarativas en JSON**: si los
+  workspaces crecen a >6 (animation/timeline/profile), considerar
+  moverlos a `assets/workspaces/*.json` (icono + ID + layout default).
+- (resto de diferidos heredados de F2H43, ver bloque siguiente)
+
+### Histórico resuelto F2H44
+
+- ~~Workspaces con nombres ambiguos para devs nuevos~~ — resuelto en
+  F2H44 (`v1.34.0-fase2-hito44`). Renombrados a "Layout / Scripting /
+  Materials Library / Level Design" (EN) y "Layout / Scripting /
+  Biblioteca de Materiales / Diseno de Niveles" (ES). Refactor:
+  `Workspace.name` ahora es ID ASCII estable (`"layout"/"scripting"/
+  "materials"/"map_editor"`), label visible viene de `T("workspace.<id>")`.
+  Migración 3 generaciones (F2H7/F2H22/F2H44) preserva iniLayouts
+  custom de proyectos viejos.
+- ~~Sin "Add Component" en Inspector~~ — resuelto en F2H44. Botón
+  centrado al final del Inspector + popup ImGui con search + lista
+  agrupada por categoría (Render/Physics/Audio/Logic/World) + filtra
+  los componentes que la entidad ya tiene. 11 componentes agregables.
+- ~~Demos enterrados en Ayuda > Demos (primera vista = dockspace
+  vacío)~~ — resuelto en F2H44. Botón "Cargar mapa demo (Personaje
+  animado)" en Welcome modal: 1 click → crea proyecto temp + spawnea
+  Fox.glb. Primera vista del editor para devs nuevos = motor en acción.
+- ~~VisGroups sin onboarding contextual~~ — resuelto en F2H44. Marker
+  `(?)` agregado al lado del botón "+ Nuevo grupo" con tooltip
+  multilínea explicando el concepto Hammer/Source.
+- ~~Outline AABB invisible para meshes seleccionados~~ — resuelto en
+  F2H44. Pre-fix usaba cubo unitario hardcoded `(-0.5/0.5)` en
+  `EditorRenderPass.cpp` — el outline del Fox.glb (~3m largo) era
+  invisible. Fix: leer `MeshAsset::aabbMin/aabbMax` real via
+  AssetManager. Para entidades sin mesh ni brush (Light/Audio/Trigger/
+  Camera/ParticleEmitter), AABB chico fijo 0.5m³ alrededor del origen.
+- ~~Material Editor se descuadra al ensanchar el panel~~ — resuelto en
+  F2H44. Modo TwoColumns eliminado (ImGui::Columns no sincroniza
+  alturas, preview quedaba flotando suelto). Layout siempre Vertical
+  (preview arriba + controles abajo) — robusto a cualquier dock.
+- ~~Sin Ctrl+ScrollWheel para snap step en orto~~ — resuelto en F2H44.
+  Atajo paralelo a Ctrl+= / Ctrl+- (más natural cuando el mouse ya
+  está sobre el viewport). Triple gate (workspace `map_editor` +
+  `KMOD_CTRL` + `liveCursor().hovered` en alguno de los 3 ortos) para
+  no robar zoom de cámara perspectiva.
+
+## Post-F2H43 (2026-05-10) — Sistema de i18n completo cerrado (Editor + HUD + Player)
 
 ### Diferidos sin orden (emergentes post-F2H43)
 

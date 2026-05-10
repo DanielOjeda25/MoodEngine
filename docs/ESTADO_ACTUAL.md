@@ -6,11 +6,52 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H43 cerrado: sistema de i18n completo (Editor + HUD + Player).**
+**🚀 Fase 2 — F2H44 cerrado: polish onboarding UX (sin docs externos).**
+Tag: `v1.34.0-fase2-hito44`.
+Validado visualmente por dev *"funciona"*, *"perfecto"*, *"va ok"* tras tour de cada bloque. 5 gaps de UX cerrados sin agregar docs externos (deuda de `USER_GUIDE/` queda diferida intencionalmente — *"seguiremos agregando cosas que luego vamos a terminar cambiando"*).
+
+**🏁 Motor sobrado para contenido real: i18n completo + UX onboarding pulido + Add Component + Welcome demo Fox + workspaces ASCII-id + outline AABB real + Material Editor robusto + Ctrl+wheel snap orto + VisGroups help marker.** 42/44 hitos de Fase 2.
+
+**Decisiones clave de F2H44:**
+
+- **Add Component popup sin command undoable.** Patrón consistente con los demos del menú `Ayuda > Demos` (también sin undo). Razón: la mayoría de los add son de componentes "fáciles de quitar manualmente" (eliminar el componente del Inspector tiene su propio gesto). AddComponentCommand undoable queda anotado como deuda futura por si emerge presión real.
+- **Botón "Cargar mapa demo (Personaje animado)" en Welcome modal.** Un solo click → crea proyecto temp + spawnea Fox.glb. Razón: la primera vista del editor para un dev nuevo NO debería ser dockspace vacío, sino motor en acción. Demo elegido: animated character (visual fuerte sin saturar — Stress Scene completa intimida; Shadow demo es muy estático). El handler dispara `handleNewProject()` (síncrono via pfd) + `requestSpawnAnimatedCharacter()` consumido por el dispatch normal de spawners.
+- **Outline AABB real para meshes seleccionados.** Bug crítico de descubribilidad: pre-F2H44 el outline de meshes usaba `glm::vec3(-0.5f, 0.5f)` hardcoded — cubito 1m³ centrado en el origen del transform, invisible para meshes grandes (Fox.glb ~3m largo). Fix: leer `MeshAsset::aabbMin/aabbMax` via AssetManager. Para entidades sin mesh ni brush (Light/Audio/Trigger/Camera/ParticleEmitter), AABB chico fijo 0.5m³ alrededor del origen → SIEMPRE hay feedback visual de selección (consistencia con orto que ya hacía esto desde F2H35).
+- **Workspaces con ID ASCII estable separado del label visible.** Pre-F2H44 el `Workspace.name` era a la vez ID + label (`"Programar"`/`"Materiales"`/`"Editor de mapas"`) → traducir el label rompía la identidad persistida en `.moodproj`. F2H44 separa: `name` ahora es ID ASCII estable (`"layout"/"scripting"/"materials"/"map_editor"`), label visible viene de `T("workspace.<id>")`. Migración extendida en `WorkspaceManager::migrateWorkspaceName` cubre 3 generaciones (F2H7 inglés / F2H22 español / F2H44 ASCII). Comparaciones en código actualizadas en 5 archivos (MenuBar/EditorRenderPass/EditorApplication/EditorUI/EditorOverlay/Dockspace) + 8 tests del WorkspaceManager actualizados.
+- **Material Editor: eliminado modo TwoColumns, siempre Vertical.** Pre-F2H44 el panel tenía layout adaptativo (>= 540px = 2 columnas controles izq | preview der). Pero `ImGui::Columns` no sincroniza alturas, y al docking en otros lados el preview quedaba flotando en el medio del panel desconectado del label "Preview". Solución: layout **siempre vertical** (preview arriba + controles abajo). Robusto a cualquier resize/dock. Trade-off aceptado: en monitores muy anchos se pierde la posibilidad de ver preview + controles lado a lado, pero el modo 2-col estaba roto en práctica.
+- **Ctrl+ScrollWheel cicla snap step sobre orto viewports.** Atajo paralelo a Ctrl+= / Ctrl+- (más natural cuando ya tenes el mouse encima del viewport). Handler en `EditorApplication::processEvents` con triple gate: workspace `map_editor` + `SDL_GetModState() & KMOD_CTRL` + `liveCursor().hovered` en alguno de los 3 ortos. NO roba zoom de cámara perspectiva.
+- **VisGroups help marker `(?)` con tooltip multilínea.** Onboarding contextual mínimo del concepto Hammer/Source para devs nuevos. Hover-only, no agrega ruido visual. Patrón estándar de ImGui (`TextDisabled("(?)") + IsItemHovered + SetTooltip`). Dos paradigmas validados: el panel sigue ofreciendo el control (botón "+ Nuevo grupo" + tooltip propio), y el `(?)` adicional explica el concepto cuando el dev lo necesita.
+- **USER_GUIDE/* + README + GIF descartados explícitamente.** Era el bloque 5 propuesto en mi auditoría inicial. El dev rechazó: *"seguiremos agregando cosas que luego vamos a terminar cambiando"*. Razón sólida: docs externos rotarían más rápido que la implementación. El motor seguirá evolucionando hasta sub-fase 2.5+; documentar ahora sería re-trabajo. Hito propio cuando el motor estabilice (post-Fase 2 likely).
+- **Subagente NO usado en F2H44.** A diferencia de F2H43 (255 keys en 23 archivos = caso textbook de delegación), F2H44 fueron 5 cambios pequeños y heterogéneos que no encajaban en un patrón mecánico. Cada bloque requirió judgment calls puntuales (categorías Add Component, choice del demo, mappings de migración workspaces, layout del Material Editor, gates del Ctrl+wheel). Hacer todo en main context fue lo correcto.
+
+**Implementación (F2H44 Bloques A-E):**
+
+- **Bloque A — Add Component button + popup**: nuevo método `InspectorPanel::renderAddComponentSection(Entity)` + helper `drawAddComponentPopup(Entity)`. Llamado al final del dispatch en `onImGuiRender`. Lista de 11 componentes con functors lambda capturando entity by mutable copy (entt handles son stable refs, capture by value es seguro). Search case-insensitive con std::tolower. ~170 LOC en InspectorPanel.cpp + ~10 LOC en .h.
+- **Bloque B — Welcome demo button + outline fix**: `requestOpenDemoMap()` + `consumeOpenDemoMapRequest()` en EditorUI.h (~20 LOC). Botón en `EditorUI::drawWelcomeModal`. Handler en `EditorApplication_Run.cpp` consume el flag + llama `handleNewProject` + dispara spawn. Fix outline en `EditorRenderPass.cpp` línea ~600: branch nuevo `else if (sel.hasComponent<MeshRendererComponent>())` lee `MeshAsset::aabbMin/Max` via `m_assetManager->getMesh(mr.mesh)`. Else fallback a 0.5m³ para point entities.
+- **Bloque C — Workspaces ID/label split**: `WorkspaceManager::defaultWorkspaces` retorna IDs ASCII. `migrateWorkspaceName` extendida con 4 mappings nuevos (`Layout→layout`, `Programar→scripting`, `Materiales→materials`, `Editor de mapas→map_editor`) + preserva los IDs nuevos como passthrough. `isValidWorkspaceName` valida los IDs nuevos. 5 archivos del editor con comparaciones actualizadas. **Material Editor**: eliminadas líneas del enum `LayoutMode::TwoColumns`, columnas, NextColumn — ~20 LOC neto eliminadas. **Ctrl+wheel**: bloque `else if` adicional en `processEvents` con triple gate (workspace + KMOD_CTRL + hovered). 4 keys i18n nuevas en JSONs + `OrthoViewportPanel.h` incluido en EditorApplication.cpp para acceder a `liveCursor()`.
+- **Bloque D — VisGroups help (?)**: ~10 LOC en VisGroupsPanel.cpp tras el botón "+ Nuevo grupo" (`SameLine + TextDisabled("(?)") + IsItemHovered + SetTooltip`). 1 key i18n nueva `editor.panel.visgroups.help_tooltip` con explicación multilínea (`\n` literal en JSON).
+- **Bloque E (este commit)**: docs + commits + tag + push.
+
+**Pendientes conocidos** (post-F2H44):
+- **Sub-fase 2.5 gameplay** (diálogos / quests / inventario). PLAN_FASE2 líneas 285-303.
+- **AddComponentCommand undoable**: nuevo command genérico templated. Bajo, sin urgencia (mismo patrón que demos del Help menu).
+- **Cambiar font del MoodPlayer a Lato** (deuda crónica desde F2H38, presión nueva en F2H43): habilita tildes en `es.json` sin tofu en gameplay.
+- **Lua scripts traducibles** (deuda F2H43): binding `T("...")` desde sol2 + sweep de `assets/scripts/*.lua`.
+- **Console tooltip multilínea i18n** (deuda C2 del subagente F2H43).
+- **USER_GUIDE/ + README + GIF + tutorial** (era F2H7 + F2H44 Bloque 5, descartado por el dev): hito propio post-Fase 2 cuando el motor estabilice y docs no roten.
+- **Mini-map / Radar** (CoD/Fallout): requiere render-to-texture topdown.
+- **Themes alternativos del HUD** (Doom saturado / Fallout verde): theme runtime + bindings Lua.
+- **HUD diegetic 3D** (Pip-Boy / muñequera Metro): requiere FPS arms primero.
+- **Optimizaciones GPU side** (de F2H42): timestamp queries / CSM / frustum cull shadow. Sin urgencia con headroom 17x.
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+
+**Próximo paso**: **TBD — definir con el dev**.
+
+### F2H43 (anterior, ya cerrado)
+
+**🚀 F2H43 cerrado: sistema de i18n completo (Editor + HUD + Player).**
 Tag: `v1.33.0-fase2-hito43`.
 Validado visualmente por dev *"cambia bien"* + *"todo va ok de momento"* tras tour completo en inglés y español. Switch live de idioma vía `Ver > Idioma > [English / Español]` que persiste en `%APPDATA%\MoodEngine\settings.json` (compartido Editor↔Player).
-
-**🏁 HUD framework + físicas robustas + walk feel pulido + shadow cache + VSync toggle + i18n full (~347 keys en 2 diccionarios JSON, switch live EN↔ES).** 41/44 hitos de Fase 2.
 
 **Decisiones clave de F2H43:**
 

@@ -11,6 +11,53 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-10: F2H44 cierre — polish onboarding UX (sin docs)
+
+**Contexto:** tras cerrar F2H43 (i18n), el dev pidió evaluación crítica honesta de la UI desde la perspectiva de un dev de juegos nuevo. La auditoría identificó 5 gaps de descubribilidad/UX que limitaban la primera impresión del editor: (1) workspaces con nombres ambiguos al usuario nuevo, (2) sin "Add Component" en Inspector — el dev solo podía agregar componentes via demos hardcoded del menú Help, (3) demos enterrados en `Ayuda > Demos` (primera vista del editor era dockspace vacío), (4) VisGroups sin onboarding contextual del concepto Hammer/Source, (5) outline AABB de meshes seleccionados invisible (cubo unitario hardcoded que se perdía dentro de meshes grandes como Fox.glb). Bloque originalmente planeado #5 (USER_GUIDE/* + README + GIF) fue descartado por el dev: *"seguiremos agregando cosas que luego vamos a terminar cambiando"* — docs externos rotarían más rápido que la implementación.
+
+**Decisión clave 1 — outline AABB usa `MeshAsset::aabbMin/aabbMax` real (no cubo unitario hardcoded):** pre-F2H44 el outline en perspectiva (introducido en F2H13) tenía un comentario *"compromise historico, no usa el AABB real del MeshAsset"* — usaba `glm::vec3(-0.5f, 0.5f)` para todos los meshes. Con un mesh de ~3m de largo (Fox.glb), el outline era un cubito de 1m³ centrado en el origen del transform: invisible al ojo. Fix: `else if (sel.hasComponent<MeshRendererComponent>())` lee el AABB real via `m_assetManager->getMesh(mr.mesh)`. Para entidades sin mesh ni brush (Light/Audio/Trigger/Camera/ParticleEmitter), AABB chico fijo 0.5m³ alrededor del origen → SIEMPRE hay feedback visual de selección (consistencia con orto que ya hacía esto desde F2H35).
+
+- **Razón vs OBB rotado:** el AABB se sigue calculando world-space tomando 8 corners locales y transformándolos por `t.worldMatrix()`. Eso da un OBB real (rotado), no un AABB axis-aligned al mundo. El nombre "AABB" en el código es del input (local space del mesh), no del output renderizado.
+- **Razón AABB chico fijo para point entities:** uniformidad visual. Si un dev clickea una luz puntual, espera ver UNA forma marcada — no un gizmo flotante sin contexto. 0.5m³ es suficiente para verse pero pequeño para no taparlas.
+
+**Decisión clave 2 — Add Component popup sin AddComponentCommand undoable:** el botón "+ Agregar Componente" al final del Inspector abre un popup con search + lista agrupada (Render/Physics/Audio/Logic/World) de los 11 componentes agregables. El click llama directamente `e.addComponent<X>()` sin pasar por la HistoryStack del undo system.
+
+- **Razón vs implementar AddComponentCommand:** consistencia con el patrón actual del motor — los demos del menú `Ayuda > Demos > Agregar luz puntual demo` (etc.) también hacen `e.addComponent` directo sin command. Crear un AddComponentCommand templated por cada uno de los 13 component types + serialización del estado pre-add para el undo es scope significativo (~200 LOC) para un caso que el dev puede revertir manualmente: clickear el icono X del header del componente (que el Inspector renderiza como parte del CollapsingHeader). Anotado como deuda futura por si emerge presión real.
+- **Trade-off aceptado:** el dev no puede deshacer un Add Component con Ctrl+Z. Tiene que removerlo manualmente. Aceptable porque la operación es "creativa" (no destructiva) y reversible en 1 click.
+
+**Decisión clave 3 — workspaces con ID ASCII estable separado del label visible:** pre-F2H44 el `Workspace.name` era a la vez el ID persistido en `.moodproj` y el label visible en la pestaña (`"Programar"`/`"Materiales"`/`"Editor de mapas"`). Cuando F2H43 introdujo i18n del editor, intentar traducir esos labels rompía la identidad del workspace (la persistencia en `.moodproj` esperaba el nombre español) — quedó documentado como deuda en F2H43. F2H44 separa: `name` ahora es ID ASCII estable (`"layout"/"scripting"/"materials"/"map_editor"`), label visible viene de `T("workspace.<id>")`.
+
+- **Razón ID ASCII (no más enum):** `.moodproj` se persiste como JSON. Strings ASCII estables son grep-friendly + immune a re-renames de un enum. Si en el futuro se agrega un workspace `"animation"`, no requiere migrar nada del schema — solo agregar la key `workspace.animation` al JSON i18n.
+- **Migración robusta:** `migrateWorkspaceName` extendida cubre 3 generaciones: F2H7 (inglés original, ej `"Scripting"→"scripting"`), F2H22 (español task-oriented, ej `"Programar"→"scripting"`), F2H44 (IDs ASCII, passthrough). Proyectos viejos abren sin perder iniLayouts custom del usuario.
+- **Decisión paralela: NO eliminé el campo `name` por uno explícito `id`:** habría requerido tocar Workspace.h + ProjectSerializer (schema bump) + re-deserialización de proyectos viejos. El campo `name` sigue funcionando como ID — solo cambio su semántica vía comentario en el header. Refactor mecánico en lugar de cirugía profunda.
+
+**Decisión clave 4 — Material Editor: eliminado modo TwoColumns, layout siempre Vertical:** pre-F2H44 el panel tenía layout adaptativo: `>= 540px` = 2 columnas (controles izq | preview der), `< 540px` = vertical (preview arriba). El modo TwoColumns estaba roto en práctica: `ImGui::Columns` no sincroniza alturas, y al docking en otros lados (workspace `materials` lo ensancha) el preview quedaba flotando en el medio del panel desconectado del label "Preview" — el dev reportó *"si se mueve el panel, ya se rompe"*.
+
+- **Razón eliminar vs arreglar:** arreglar requería sincronizar alturas manualmente (`ImGui::SetCursorPosY` calculado) o migrar a `ImGui::Tables` (refactor mayor). Eliminar es más simple y robusto: ~20 LOC menos, layout vertical funciona en cualquier ancho/dock sin sorpresas.
+- **Trade-off aceptado:** en monitores muy anchos no se puede ver preview + controles lado a lado. Marginal: el panel se usa en bursts cortos (ajustar metallic, ver preview, repetir), el scroll vertical en cualquier ancho es aceptable.
+
+**Decisión clave 5 — USER_GUIDE/* + README + GIF descartados:** era el bloque 5 propuesto en mi auditoría inicial. El dev rechazó textualmente: *"seguiremos agregando cosas que luego vamos a terminar cambiando"*. Razón sólida: el motor sigue evolucionando hacia sub-fase 2.5+ (diálogos/quests/inventario). Documentar workflows ahora generaría docs que rotan más rápido que la implementación. Hito propio post-Fase 2 cuando el motor estabilice y los workflows queden congelados.
+
+**Decisión clave 6 — Welcome modal carga "Personaje animado" (Fox.glb) como demo, no Stress Scene:** opciones consideradas: (a) Stress Scene completa, (b) Shadow demo, (c) Personaje animado, (d) Combo Floor + columna + luz + Fox + trigger. Elegido (c).
+
+- **Razón:** visual fuerte sin saturar. Stress Scene (200 cubos + 64 luces + esferas + Fox + CesiumMan + fuego + trigger) intimida y ralentiza editores low-end al primer arranque. Shadow demo es estático (poco impactante). Combo es excesivo para "primera impresión". Personaje animado: 1 entidad, animación visible inmediatamente, demuestra render + animación + assets sin sobrecargar.
+
+**Decisión clave 7 — subagente NO usado en F2H44:** a diferencia de F2H43 (255 keys en 23 archivos = caso textbook de delegación), F2H44 fueron 5 cambios pequeños y heterogéneos que no encajaban en un patrón mecánico. Cada bloque requirió judgment calls puntuales (categorías Add Component, choice del demo, mappings de migración workspaces, layout del Material Editor, gates del Ctrl+wheel). Hacer todo en main context fue lo correcto.
+
+**Alternativas descartadas en F2H44:**
+- **AddComponentCommand undoable:** ver decisión 2.
+- **Top-level menú "Ejemplos" en MenuBar:** descartado a favor del botón en Welcome modal. El menú top-level requiere otro click + menos descubrible (un dev nuevo no abre "Ejemplos" antes de saber qué es). El botón en Welcome es VISIBLE inmediatamente al primer arranque.
+- **Migrar workspaces a `Workspace { id, name }` con campos separados:** ver decisión 3 (paralela). Demasiado refactor para ganancia chica. Mantener un solo campo `name` (semánticamente ID ahora) es más simple.
+- **Material Editor con `ImGui::Tables` en lugar de `Columns`:** Tables sincroniza heights mejor pero es más verbose y el problema (preview separado del label) se resuelve sin él. Hito futuro si emerge presión real (ej. necesidad de mostrar preview + controles + node-graph).
+- **Tooltip toolbar tools:** mi crítica original incluía esto pero al verificar el código (`Toolbar.cpp` línea 29-31) ya tenía tooltips wired desde F2H36+F2H43. Falsa alarma; no se hizo nada.
+
+**Condiciones de revisión:**
+- Si emerge necesidad de undo del Add Component → implementar AddComponentCommand templated genérico + serializar el estado pre-add (default values del componente).
+- Si los workspaces crecen a >6 (ej. animation/timeline/profile) → considerar moverlos a `assets/workspaces/*.json` con definiciones declarativas (icono, ID, layout default).
+- Si el dev en algún momento habilita docs externos (post-Fase 2) → empezar por GIF demo de 30s (motor en acción, primer arranque a juego corriendo) + docs/USER_GUIDE/GETTING_STARTED.md (5 pasos: open → spawn brush → texturizar → physics → script).
+
+---
+
 ## 2026-05-10: F2H43 cierre — sistema de i18n completo (Editor + HUD + Player)
 
 **Contexto:** el plan F2 original tenía F2H5 (i18n del editor, ~500 strings) + F2H34 (i18n de gameplay, diálogos/items/quests) que nunca se hicieron — la deuda se acumuló durante 40 hitos. F2H41 unificó los strings del HUD a inglés *"sienta baseline para futura selección de idioma"* con la promesa explícita de hacer i18n después. F2H43 ataca los dos hitos originales fusionados en uno: infra + barrido completo del editor + barrido del HUD/Player + Player MainMenu.
