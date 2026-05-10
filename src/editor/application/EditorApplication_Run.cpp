@@ -270,6 +270,19 @@ int EditorApplication::run() {
             case ProjectAction::ExportObj:               handleExportObj();                break;
             case ProjectAction::None:           break;
         }
+
+        // F2H44: Welcome modal demo. Crea proyecto vacio + spawnea Fox.
+        // Sincronia: handleNewProject bloquea con un pfd::save_file
+        // dialog; cuando retorna ya hay m_project (o el dev cancelo).
+        // Si hubo proyecto creado, agendamos el spawn via flag — la
+        // dispatch de spawners corre mas abajo en el mismo frame.
+        if (m_ui.consumeOpenDemoMapRequest()) {
+            handleNewProject();
+            if (m_project.has_value()) {
+                m_ui.requestSpawnAnimatedCharacter();
+            }
+        }
+
         // F2H8: open map request (con payload del path).
         if (auto openMap = m_ui.consumeOpenMapRequest()) {
             handleOpenMap(*openMap);

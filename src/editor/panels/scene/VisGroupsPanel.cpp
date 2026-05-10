@@ -86,6 +86,15 @@ void VisGroupsPanel::onImGuiRender() {
         ImGui::SetTooltip("%s",
             I18n::T("editor.panel.visgroups.new_group_tooltip").c_str());
     }
+    // F2H44 Bloque D: marker (?) con tooltip explicativo del concepto.
+    // Onboarding para devs nuevos que no conocen el patron VisGroup
+    // (Hammer/Source). Hover-only, no agrega ruido visual.
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.panel.visgroups.help_tooltip").c_str());
+    }
     ImGui::Separator();
 
     if (m_scene->visgroups().empty()) {

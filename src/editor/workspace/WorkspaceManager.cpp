@@ -14,52 +14,50 @@ Workspace& dummyWorkspace() {
 }
 
 std::vector<Workspace> defaultWorkspaces() {
-    // F2H22: nombres orientados a TAREAS, no a categorias de panels.
-    // Cada workspace describe que hace el dev ahi, no que contiene.
-    // F2H23 polish: "Modelar" -> "Layout" (pedido del dev), workspace
-    // "Optimizar" eliminado (era para benchmark Fase 1, no flujo
-    // cotidiano del dev de juegos). Los iniLayout vacios fuerzan que
-    // la primera activacion pase por DockBuilder para construir el
-    // layout default.
-    // F2H28: agregado "Editor de mapas" para el layout 4-viewport
-    // estilo Valve Hammer Editor (mismo concepto, label propio).
-    // Los iniLayout vacios fuerzan que la primera activacion pase
-    // por DockBuilder.
+    // F2H44: el `name` ahora es un **ID ASCII estable** (no un label
+    // visible). Razon: el label se traduce en runtime via `T("workspace.<id>")`
+    // (ver MenuBar.cpp). Asi cambiar de idioma no rompe persistencia
+    // del activo en `.moodproj` (que se guarda por `name`/ID).
+    // Migration de IDs viejos (espanol/legacy) en `migrateWorkspaceName`.
     return {
-        Workspace{"Layout",          {}},
-        Workspace{"Programar",       {}},
-        Workspace{"Materiales",      {}},
-        Workspace{"Editor de mapas", {}},
+        Workspace{"layout",     {}},
+        Workspace{"scripting",  {}},
+        Workspace{"materials",  {}},
+        Workspace{"map_editor", {}},
     };
 }
 
-/// @brief F2H22: migra nombres viejos del workspace (F2H7 originales)
-///        al esquema F2H22 orientado a tareas. Si el nombre es
-///        actualmente reconocido como nuevo, se preserva tal cual.
-///        El `iniLayout` se conserva intacto (la migracion es solo
-///        del label).
-///        F2H23 polish: la migracion ahora apunta de F2H22 -> F2H23:
-///        "Modelar" -> "Layout" (revert del rename) y filtra
-///        "Optimizar"/"Profile" (ya no existe el workspace; iniLayout
-///        del usuario para esos se descarta — el indice se queda con
-///        los 3 workspaces actuales).
+/// @brief F2H22+F2H23+F2H44: migra nombres viejos del workspace al ID
+///        ASCII actual. Acumula tres generaciones de mapeo:
+///          F2H7 originales: ya eran IDs ingles → mapean al actual.
+///          F2H22 task-oriented (espanol): "Modelar"/"Programar"/etc.
+///          F2H44 normalize a IDs ASCII: el label visible viene de T().
+///        El `iniLayout` se conserva intacto en todos los casos.
 std::string migrateWorkspaceName(const std::string& oldName) {
-    if (oldName == "Layout")    return "Layout";     // F2H7 original
-    if (oldName == "Modelar")   return "Layout";     // F2H22 -> F2H23
-    if (oldName == "Scripting") return "Programar";
-    if (oldName == "Materials") return "Materiales";
-    return oldName;  // ya nuevo o custom — preservar.
+    // F2H44 IDs nuevos (ya migrados): preservar.
+    if (oldName == "layout"     ) return "layout";
+    if (oldName == "scripting"  ) return "scripting";
+    if (oldName == "materials"  ) return "materials";
+    if (oldName == "map_editor" ) return "map_editor";
+    // F2H22-F2H23 labels espanoles: mappear a IDs F2H44.
+    if (oldName == "Layout"          ) return "layout";      // F2H7/F2H23
+    if (oldName == "Modelar"         ) return "layout";      // F2H22 → F2H23
+    if (oldName == "Programar"       ) return "scripting";   // F2H22
+    if (oldName == "Materiales"      ) return "materials";   // F2H22
+    if (oldName == "Editor de mapas" ) return "map_editor";  // F2H28
+    // F2H22 ingles original (algunos saves muy antiguos):
+    if (oldName == "Scripting"  ) return "scripting";
+    if (oldName == "Materials"  ) return "materials";
+    return oldName;  // custom — preservar (filtrado por isValidWorkspaceName).
     // Nota: "Profile" / "Optimizar" caen aqui — el filtro en
     // setWorkspaces() los descarta (workspace ya no existe).
 }
 
-/// @brief F2H23 polish: workspaces validos del esquema actual. Para
-///        filtrar entries del .moodproj que apuntan a workspaces
-///        eliminados (Optimizar/Profile).
-///        F2H28: "Editor de mapas" se suma a la lista valida.
+/// @brief F2H23 polish + F2H44: workspaces validos del esquema actual.
+///        Comparacion contra IDs ASCII (no labels visibles).
 bool isValidWorkspaceName(const std::string& name) {
-    return name == "Layout"     || name == "Programar"
-        || name == "Materiales" || name == "Editor de mapas";
+    return name == "layout"    || name == "scripting"
+        || name == "materials" || name == "map_editor";
 }
 
 } // namespace

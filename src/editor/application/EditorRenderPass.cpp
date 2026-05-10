@@ -18,6 +18,7 @@
 
 #include "core/math/AABB.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/render/resources/MeshAsset.h"  // F2H44: AABB del mesh para outline
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/render/backend/opengl/OpenGLDebugRenderer.h"
 #include "engine/scene/components/BrushComponent.h"  // F2H13
@@ -77,7 +78,9 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     // dedicado. Skip en otros workspaces para no pagar el ~3x costo
     // CPU del render extra.
     const auto& activeWs = m_ui.workspaceManager().activeWorkspace();
-    if (activeWs.name == "Editor de mapas") {
+    // F2H44: comparacion contra ID ASCII (`map_editor`), no contra el
+    // label visible que cambia con el idioma.
+    if (activeWs.name == "map_editor") {
         const std::vector<Entity>& selected = m_ui.selectionSet().selected;
         const f32 snapStep = static_cast<f32>(m_hammerSnapStep);
         OrthoViewportPanel* orthoPanels[3] = {
@@ -593,10 +596,15 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
             const auto& tf = sel.getComponent<TransformComponent>();
             const glm::mat4 model = tf.worldMatrix();
 
-            // Corners locales: para mesh = cubo unitario (compromise
-            // historico, no usa el AABB real del MeshAsset);
-            // para brush = AABB local del brush (preciso, F2H11
-            // ya lo computa).
+            // Corners locales: para brush = AABB local del brush
+            // (F2H11 ya lo computa); para mesh = AABB real del
+            // MeshAsset (F2H44: antes era cubo unitario hardcoded
+            // -0.5/0.5, lo que hacia que el outline de meshes grandes
+            // como Fox.glb fuera invisible — un cubito de 1m perdido
+            // en el centro). Para entidades sin mesh ni brush (Light/
+            // Audio/Trigger/Camera/ParticleEmitter) usamos un AABB
+            // chico fijo centrado en el origen para que el outline
+            // tambien aparezca y haya feedback de seleccion uniforme.
             glm::vec3 localMin(-0.5f), localMax(0.5f);
             if (sel.hasComponent<BrushComponent>()) {
                 const auto& bc = sel.getComponent<BrushComponent>();
@@ -604,8 +612,20 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                     localMin = bc.brush.localAabb.min;
                     localMax = bc.brush.localAabb.max;
                 }
-            } else if (!sel.hasComponent<MeshRendererComponent>()) {
-                continue;  // sin mesh ni brush -> no outline
+            } else if (sel.hasComponent<MeshRendererComponent>()) {
+                if (m_assetManager) {
+                    const auto& mr = sel.getComponent<MeshRendererComponent>();
+                    if (const MeshAsset* asset = m_assetManager->getMesh(mr.mesh)) {
+                        localMin = asset->aabbMin;
+                        localMax = asset->aabbMax;
+                    }
+                }
+            } else {
+                // Point entity (Light/Audio/Trigger/Camera/ParticleEmitter):
+                // marker chico fijo de 0.5m^3 alrededor del origen para
+                // que el outline tambien marque la seleccion.
+                localMin = glm::vec3(-0.25f);
+                localMax = glm::vec3(0.25f);
             }
 
             const glm::vec3 corners[8] = {

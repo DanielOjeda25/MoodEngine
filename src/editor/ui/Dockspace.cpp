@@ -143,10 +143,11 @@ void buildMapEditorWorkspace(ImGuiID dockspaceId) {
 ///        layout default de Layout.
 ///        Default = Layout para nombres desconocidos.
 void buildLayoutForWorkspace(const std::string& name, ImGuiID dockspaceId) {
-    if      (name == "Editor de mapas")                   buildMapEditorWorkspace(dockspaceId);
-    else if (name == "Programar"  || name == "Scripting") buildScriptingWorkspace(dockspaceId);
-    else if (name == "Materiales" || name == "Materials") buildMaterialsWorkspace(dockspaceId);
-    else                                                    buildLayoutWorkspace(dockspaceId);
+    // F2H44: comparacion contra IDs ASCII (no labels visibles).
+    if      (name == "map_editor") buildMapEditorWorkspace(dockspaceId);
+    else if (name == "scripting" ) buildScriptingWorkspace(dockspaceId);
+    else if (name == "materials" ) buildMaterialsWorkspace(dockspaceId);
+    else                            buildLayoutWorkspace(dockspaceId);
 }
 
 void rebuildLayout(ImGuiID dockspaceId, const ImVec2& size,

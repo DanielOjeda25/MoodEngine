@@ -392,6 +392,17 @@ public:
         return r;
     }
 
+    /// @brief F2H44: request del Welcome modal para "demo onboarding".
+    ///        Dispara NewProject (sincrono via dialog) + si el dev no
+    ///        cancela, encadena requestSpawnAnimatedCharacter para que
+    ///        la primera vista del editor sea el Fox animado caminando.
+    void requestOpenDemoMap() { m_openDemoMapRequested = true; }
+    bool consumeOpenDemoMapRequest() {
+        const bool r = m_openDemoMapRequested;
+        m_openDemoMapRequested = false;
+        return r;
+    }
+
     /// @brief Hito 19: request para spawnear `assets/meshes/Fox.glb`
     ///        (CC0, glTF Sample Assets) con AnimatorComponent + clip
     ///        default ("Survey"/"Walk"/"Run" segun viene en el archivo).
@@ -616,6 +627,7 @@ private:
     bool m_spawnPbrSpheresRequested = false; // Hito 17
     bool m_spawnLightStressRequested = false; // Hito 18
     bool m_spawnAnimatedCharacterRequested = false; // Hito 19
+    bool m_openDemoMapRequested = false; // F2H44: Welcome modal demo
     bool m_spawnFireParticlesRequested = false;     // Hito 29
     bool m_spawnTriggerRequested = false;           // Hito 33
     int  m_spawnStressTrisRequested = 0;             // F2H2 (target tris)

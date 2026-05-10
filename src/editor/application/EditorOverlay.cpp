@@ -403,7 +403,7 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
         }
 
         const bool modalCanFire =
-            m_ui.workspaceManager().activeWorkspace().name != "Programar"
+            m_ui.workspaceManager().activeWorkspace().name != "scripting"
             && !m_polyDraw.active
             && selected && selected.hasComponent<TransformComponent>();
         const f32 now = static_cast<f32>(ImGui::GetTime());
@@ -473,14 +473,14 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
         // activo en workspace "Editor de mapas" (atajo seria
         // confuso en otros).
         if (ImGui::IsKeyPressed(ImGuiKey_B, false) &&
-            m_ui.workspaceManager().activeWorkspace().name == "Editor de mapas") {
+            m_ui.workspaceManager().activeWorkspace().name == "map_editor") {
             togglePolygonDrawMode();
         }
         // F2H31 Bloque C: tecla V toggle snap-to-vertex. Solo en
         // workspace "Editor de mapas" — fuera de ese contexto V no
         // tiene significado y podria pisar inputs futuros.
         if (ImGui::IsKeyPressed(ImGuiKey_V, false) &&
-            m_ui.workspaceManager().activeWorkspace().name == "Editor de mapas") {
+            m_ui.workspaceManager().activeWorkspace().name == "map_editor") {
             m_snapToVertexEnabled = !m_snapToVertexEnabled;
             Log::editor()->info("[snap] vertex snap = {}",
                 m_snapToVertexEnabled ? "on" : "off");

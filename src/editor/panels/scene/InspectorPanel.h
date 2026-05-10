@@ -59,6 +59,12 @@ private:
     void renderTriggerSection(Entity e);
     void renderBrushSection(Entity e);
 
+    /// F2H44 Bloque A: boton "+ Add Component" + popup con lista
+    /// agrupada por categoria + search. Solo lista los componentes que
+    /// `e` NO tiene aun.
+    void renderAddComponentSection(Entity e);
+    void drawAddComponentPopup(Entity e);
+
     EditorUI* m_ui = nullptr;
     AssetManager* m_assets = nullptr;
     bool m_editedThisFrame = false;
@@ -82,6 +88,9 @@ private:
     /// Sheet. Visible solo si hay > 1 caras seleccionadas; al bajar a
     /// single se resetea a false.
     bool m_treatAsOneFace = false;
+
+    /// F2H44 Bloque A: buffer del search input del popup Add Component.
+    char m_addComponentSearch[64]{};
 };
 
 } // namespace Mood

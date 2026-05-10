@@ -27,7 +27,7 @@ TEST_CASE("WorkspaceManager: ctor crea 4 defaults con activo = 0") {
     CHECK(m.count() == 4u);
     CHECK(m.activeIndex() == 0);
     // F2H28: 4 workspaces (era 3 en F2H23; "Editor de mapas" agregado).
-    CHECK(m.activeWorkspace().name == "Layout");
+    CHECK(m.activeWorkspace().name == "layout");
     // Los iniLayout estan vacios — DockBuilder los construye al activar.
     for (const auto& w : m.workspaces()) {
         CHECK(w.iniLayout.empty());
@@ -36,20 +36,20 @@ TEST_CASE("WorkspaceManager: ctor crea 4 defaults con activo = 0") {
 
 TEST_CASE("WorkspaceManager: nombres de los 4 defaults (F2H28)") {
     WorkspaceManager m;
-    CHECK(m.workspaces()[0].name == "Layout");
-    CHECK(m.workspaces()[1].name == "Programar");
-    CHECK(m.workspaces()[2].name == "Materiales");
-    CHECK(m.workspaces()[3].name == "Editor de mapas");
+    CHECK(m.workspaces()[0].name == "layout");
+    CHECK(m.workspaces()[1].name == "scripting");
+    CHECK(m.workspaces()[2].name == "materials");
+    CHECK(m.workspaces()[3].name == "map_editor");
 }
 
 TEST_CASE("WorkspaceManager: setActiveByIndex valida cambia el activo") {
     WorkspaceManager m;
     m.setActiveByIndex(2);
     CHECK(m.activeIndex() == 2);
-    CHECK(m.activeWorkspace().name == "Materiales");
+    CHECK(m.activeWorkspace().name == "materials");
     m.setActiveByIndex(0);
     CHECK(m.activeIndex() == 0);
-    CHECK(m.activeWorkspace().name == "Layout");
+    CHECK(m.activeWorkspace().name == "layout");
 }
 
 TEST_CASE("WorkspaceManager: setActiveByIndex out-of-bounds es no-op") {
@@ -92,7 +92,7 @@ TEST_CASE("WorkspaceManager: setWorkspaces con vector vacio cae a defaults") {
     m.setWorkspaces({});
     CHECK(m.count() == 4u);
     CHECK(m.activeIndex() == 0);
-    CHECK(m.activeWorkspace().name == "Layout");
+    CHECK(m.activeWorkspace().name == "layout");
 }
 
 // ============================================================
@@ -115,10 +115,10 @@ TEST_CASE("WorkspaceManager: setWorkspaces migra nombres F2H7 a F2H28") {
     // F2H28: Profile/Optimizar filtrado + "Editor de mapas" completado
     // por defaults -> 4 workspaces totales.
     REQUIRE(m.count() == 4u);
-    CHECK(m.workspaces()[0].name == "Layout");
-    CHECK(m.workspaces()[1].name == "Programar");
-    CHECK(m.workspaces()[2].name == "Materiales");
-    CHECK(m.workspaces()[3].name == "Editor de mapas");
+    CHECK(m.workspaces()[0].name == "layout");
+    CHECK(m.workspaces()[1].name == "scripting");
+    CHECK(m.workspaces()[2].name == "materials");
+    CHECK(m.workspaces()[3].name == "map_editor");
 
     // iniLayout preservado para los 3 que vinieron del .moodproj viejo.
     CHECK(m.workspaces()[0].iniLayout == "ini1");
@@ -139,10 +139,10 @@ TEST_CASE("WorkspaceManager: setWorkspaces migra nombres F2H22 a F2H28") {
 
     // F2H28: + "Editor de mapas" completado por defaults.
     REQUIRE(m.count() == 4u);
-    CHECK(m.workspaces()[0].name == "Layout");      // Modelar -> Layout
-    CHECK(m.workspaces()[1].name == "Programar");
-    CHECK(m.workspaces()[2].name == "Materiales");
-    CHECK(m.workspaces()[3].name == "Editor de mapas");
+    CHECK(m.workspaces()[0].name == "layout");      // Modelar -> Layout
+    CHECK(m.workspaces()[1].name == "scripting");
+    CHECK(m.workspaces()[2].name == "materials");
+    CHECK(m.workspaces()[3].name == "map_editor");
 
     CHECK(m.workspaces()[0].iniLayout == "a");
     CHECK(m.workspaces()[1].iniLayout == "b");
@@ -160,14 +160,14 @@ TEST_CASE("WorkspaceManager: setWorkspaces con set incompleto completa con defau
     m.setWorkspaces(std::move(partial));
 
     REQUIRE(m.count() == 4u);
-    CHECK(m.workspaces()[0].name == "Layout");
+    CHECK(m.workspaces()[0].name == "layout");
     CHECK(m.workspaces()[0].iniLayout == "x");
     // Programar + Materiales + "Editor de mapas" agregados con iniLayout vacio.
-    CHECK(m.workspaces()[1].name == "Programar");
+    CHECK(m.workspaces()[1].name == "scripting");
     CHECK(m.workspaces()[1].iniLayout.empty());
-    CHECK(m.workspaces()[2].name == "Materiales");
+    CHECK(m.workspaces()[2].name == "materials");
     CHECK(m.workspaces()[2].iniLayout.empty());
-    CHECK(m.workspaces()[3].name == "Editor de mapas");
+    CHECK(m.workspaces()[3].name == "map_editor");
     CHECK(m.workspaces()[3].iniLayout.empty());
 }
 
@@ -183,10 +183,10 @@ TEST_CASE("WorkspaceManager: setWorkspaces filtra nombres custom no reconocidos"
     m.setWorkspaces(std::move(custom));
 
     REQUIRE(m.count() == 4u);
-    CHECK(m.workspaces()[0].name == "Layout");
-    CHECK(m.workspaces()[1].name == "Programar");
-    CHECK(m.workspaces()[2].name == "Materiales");
-    CHECK(m.workspaces()[3].name == "Editor de mapas");
+    CHECK(m.workspaces()[0].name == "layout");
+    CHECK(m.workspaces()[1].name == "scripting");
+    CHECK(m.workspaces()[2].name == "materials");
+    CHECK(m.workspaces()[3].name == "map_editor");
 }
 
 TEST_CASE("WorkspaceManager: captureCurrentLayout en idx invalido es no-op") {

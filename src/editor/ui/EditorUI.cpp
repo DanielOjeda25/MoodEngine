@@ -172,7 +172,8 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Grupos",     false);  // F2H33: VisGroups panel
     };
 
-    if (name == "Programar") {
+    // F2H44: comparacion contra IDs ASCII (no labels visibles).
+    if (name == "scripting") {
         setVisible("Viewport",        true);
         setVisible("Escena",          true);  // F2H23: era Hierarchy
         setVisible("Inspector",       true);
@@ -184,7 +185,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Material Editor", false);
         setVisible("Tools",           false);
         hideOrthoPanels();
-    } else if (name == "Materiales") {
+    } else if (name == "materials") {
         setVisible("Viewport",        true);
         setVisible("Escena",          false);
         setVisible("Inspector",       true);
@@ -196,7 +197,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Material Editor", true);
         setVisible("Tools",           false);
         hideOrthoPanels();
-    } else if (name == "Editor de mapas") {
+    } else if (name == "map_editor") {
         // F2H28: workspace 4-viewport inspirado en Valve Hammer Editor.
         // Viewport (perspectiva en top-right) + 3 ortos. Inspector y
         // Escena ocultos por default — el dev los abre flotantes desde
@@ -311,6 +312,20 @@ void EditorUI::drawWelcomeModal() {
         if (ImGui::Button(I18n::T("editor.welcome.open_project").c_str(), ImVec2(240.0f, 32.0f))) {
             requestProjectAction(ProjectAction::OpenProject);
             ImGui::CloseCurrentPopup();
+        }
+
+        // F2H44: shortcut para devs nuevos. Crea proyecto vacio + spawnea
+        // Fox animado en una sola accion. Asi la primera vista NO es
+        // dockspace vacio, sino motor en accion.
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        if (ImGui::Button(I18n::T("editor.welcome.demo_map").c_str(),
+                            ImVec2(490.0f, 32.0f))) {
+            requestOpenDemoMap();
+            ImGui::CloseCurrentPopup();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s",
+                I18n::T("editor.welcome.demo_map_hint").c_str());
         }
 
         ImGui::Dummy(ImVec2(0.0f, 10.0f));

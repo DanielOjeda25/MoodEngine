@@ -16,14 +16,16 @@ namespace Mood {
 
 namespace {
 
-// F2H37: mapping de nombre de workspace a icono FA. Hardcoded porque
-// los nombres son fijos en `WorkspaceManager.cpp` y un mapping
-// generico requeriria que cada workspace declarara su icon — overkill.
-const char* iconForWorkspace(const std::string& name) {
-    if (name == "Layout")          return ICON_FA_TABLE_COLUMNS;
-    if (name == "Programar")        return ICON_FA_CODE;
-    if (name == "Materiales")       return ICON_FA_PALETTE;
-    if (name == "Editor de mapas")  return ICON_FA_MAP;
+// F2H37: mapping de ID de workspace a icono FA. Hardcoded porque los
+// IDs son fijos en `WorkspaceManager.cpp` y un mapping generico
+// requeriria que cada workspace declarara su icon — overkill.
+// F2H44: comparacion contra IDs ASCII (no labels visibles, que ahora
+// vienen de `T("workspace.<id>")` y cambian con idioma).
+const char* iconForWorkspace(const std::string& id) {
+    if (id == "layout"    ) return ICON_FA_TABLE_COLUMNS;
+    if (id == "scripting" ) return ICON_FA_CODE;
+    if (id == "materials" ) return ICON_FA_PALETTE;
+    if (id == "map_editor") return ICON_FA_MAP;
     return ICON_FA_TABLE_COLUMNS; // fallback razonable
 }
 
@@ -329,12 +331,16 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                     const ImVec4 dim = ImGui::GetStyleColorVec4(ImGuiCol_Tab);
                     ImGui::PushStyleColor(ImGuiCol_Button, dim);
                 }
-                // F2H37: prefijo icon segun el nombre del workspace.
+                // F2H37+F2H44: prefijo icon + label visible traducido.
+                // `ws.name` es el ID ASCII estable; el label muestra la
+                // traduccion via `T("workspace.<id>")`.
+                const std::string visibleLabel =
+                    I18n::T("workspace." + ws.name);
                 std::string label;
-                label.reserve(ws.name.size() + 8);
+                label.reserve(visibleLabel.size() + 8);
                 label += iconForWorkspace(ws.name);
                 label += ' ';
-                label += ws.name;
+                label += visibleLabel;
                 if (ImGui::Button(label.c_str())) {
                     if (!isActive) ui.requestWorkspaceSwitch(i);
                 }

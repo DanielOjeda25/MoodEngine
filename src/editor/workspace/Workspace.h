@@ -15,7 +15,12 @@
 namespace Mood {
 
 struct Workspace {
-    /// Nombre visible en la pestaña ("Layout", "Scripting", etc).
+    /// F2H44: ID ASCII estable del workspace. Valores actuales:
+    /// `"layout"` / `"scripting"` / `"materials"` / `"map_editor"`. El
+    /// label visible para la pestana viene de `T("workspace.<id>")` y
+    /// cambia con el idioma activo. El ID se persiste en `.moodproj`
+    /// — `WorkspaceManager::migrateWorkspaceName` mappea labels viejos
+    /// (espanol pre-F2H44, F2H22 originales) a los IDs nuevos.
     std::string name;
 
     /// Layout completo de ImGui serializado (output de

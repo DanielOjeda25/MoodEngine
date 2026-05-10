@@ -105,18 +105,15 @@ void MaterialEditorPanel::onImGuiRender() {
 
     ImGui::Separator();
 
-    // --- F2H21: layout adaptativo segun ancho del panel ---
-    // Modos:
-    //   - 2 columnas (>= 540px): controles izq | preview der.
-    //   - Vertical (panel angosto): preview ARRIBA, controles abajo.
-    //   - Sin preview (m_preview == nullptr): solo controles.
-    enum class LayoutMode { TwoColumns, Vertical, ControlsOnly };
-    const f32 availWidth = ImGui::GetContentRegionAvail().x;
-    LayoutMode layout = LayoutMode::ControlsOnly;
-    if (m_preview != nullptr) {
-        layout = (availWidth >= 540.0f) ? LayoutMode::TwoColumns
-                                         : LayoutMode::Vertical;
-    }
+    // F2H21+F2H44: layout SIEMPRE vertical (preview arriba, controles
+    // abajo). El modo TwoColumns previo se descartó: ImGui::Columns no
+    // sincroniza alturas y al docking en otro lado el preview quedaba
+    // suspendido en el medio del panel, descuadrado del label. Vertical
+    // es robusto a cualquier resize/dock.
+    enum class LayoutMode { Vertical, ControlsOnly };
+    const LayoutMode layout = (m_preview != nullptr)
+        ? LayoutMode::Vertical
+        : LayoutMode::ControlsOnly;
 
     // Helper interno: dibuja el preview con la esfera. Compartido entre
     // los dos layouts que muestran preview.
@@ -154,12 +151,7 @@ void MaterialEditorPanel::onImGuiRender() {
         ImGui::Separator();
     }
 
-    if (layout == LayoutMode::TwoColumns) {
-        ImGui::Columns(2, "##material_editor_cols", false);
-        ImGui::SetColumnWidth(0, ImGui::GetWindowContentRegionMax().x - 280.0f);
-    }
-
-    // ===== Controles (siempre se dibujan; en TwoColumns van en col izq) =====
+    // ===== Controles =====
 
     // --- Sliders escalares ---
     // Patron F2H21 tracking: capturamos el valor PRE al `IsItemActivated`
@@ -324,18 +316,6 @@ void MaterialEditorPanel::onImGuiRender() {
             : "editor.panel.material.save_fail").c_str());
         ImGui::PopStyleColor();
         --m_saveStatusFrames;
-    }
-
-    // ===== Columna derecha: preview (solo en TwoColumns) =====
-    if (layout == LayoutMode::TwoColumns) {
-        ImGui::NextColumn();
-
-        ImGui::TextUnformatted(I18n::T("editor.panel.material.preview").c_str());
-        ImGui::Separator();
-
-        drawPreviewBlock();
-
-        ImGui::Columns(1);
     }
 
     ImGui::End();

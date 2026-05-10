@@ -19,6 +19,7 @@
 
 #include "core/Log.h"
 #include "core/Profiler.h"
+#include "editor/panels/scene/OrthoViewportPanel.h"  // F2H44: Ctrl+wheel snap step
 #include "engine/game/state/GameState.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
@@ -125,7 +126,7 @@ void EditorApplication::processEvents() {
                    ev.key.repeat == 0 &&
                    m_mode == EditorMode::Editor &&
                    m_ui.workspaceManager().activeWorkspace().name
-                       == "Editor de mapas" &&
+                       == "map_editor" &&
                    !ImGui::GetIO().WantTextInput) {
             // F2H28 Bloque G: ciclar snap step del workspace orto.
             // Acepta:
@@ -153,6 +154,34 @@ void EditorApplication::processEvents() {
             if (!up && idx - 1 >= 0) --idx;
             m_hammerSnapStep = k_steps[idx];
             Log::editor()->info("[hammer] snap step -> {}", m_hammerSnapStep);
+        }
+        // F2H44: Ctrl+ScrollWheel sobre cualquiera de los 3 ortho
+        // viewports tambien cicla el snap step (atajo paralelo a Ctrl+=
+        // / Ctrl+-, mas natural cuando ya tenes el mouse encima del
+        // viewport). Solo en Editor Mode + workspace map_editor + cursor
+        // hovered en alguno de los ortos. Mismo set de pasos.
+        else if (ev.type == SDL_MOUSEWHEEL &&
+                  ev.wheel.y != 0 &&
+                  (SDL_GetModState() & KMOD_CTRL) != 0 &&
+                  m_mode == EditorMode::Editor &&
+                  m_ui.workspaceManager().activeWorkspace().name == "map_editor" &&
+                  (m_ui.orthoTop().liveCursor().hovered ||
+                   m_ui.orthoFront().liveCursor().hovered ||
+                   m_ui.orthoSide().liveCursor().hovered)) {
+            static constexpr u32 k_wheelSteps[] = {1u, 2u, 4u, 8u, 16u,
+                                                     32u, 64u, 128u};
+            constexpr int k_wheelStepsCount =
+                static_cast<int>(sizeof(k_wheelSteps) / sizeof(k_wheelSteps[0]));
+            int idx = 4;
+            for (int i = 0; i < k_wheelStepsCount; ++i) {
+                if (k_wheelSteps[i] == m_hammerSnapStep) { idx = i; break; }
+            }
+            const bool up = ev.wheel.y > 0;
+            if (up && idx + 1 < k_wheelStepsCount) ++idx;
+            if (!up && idx - 1 >= 0) --idx;
+            m_hammerSnapStep = k_wheelSteps[idx];
+            Log::editor()->info("[hammer] snap step -> {} (Ctrl+wheel)",
+                                  m_hammerSnapStep);
         }
     }
 }
