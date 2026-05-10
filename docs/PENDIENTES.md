@@ -9,17 +9,69 @@
 
 ---
 
-## Post-F2H42 (2026-05-10) — Optimización runtime cerrada (shadow caching + VSync toggle)
+## Post-F2H43 (2026-05-10) — Sistema de i18n completo cerrado (Editor + HUD + Player)
 
 ### Próximo a atacar
 
-- **Orden actualizado por el dev** (2026-05-10 post-F2H42):
-  1. **Sistema de i18n** (translation table + lookup en HUD strings,
-     ahora que están unificadas a inglés. Refactor mecánico: wrap de
-     literals en `tr()` + JSON con traducciones por idioma). **Próximo
-     a arrancar.**
-  2. **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
-     PLAN_FASE2 líneas 285-303. Después de i18n.
+- **Orden actualizado por el dev** (2026-05-10 post-F2H43):
+  1. **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
+     PLAN_FASE2 líneas 285-303. **Próximo a arrancar.**
+
+### Diferidos sin orden (emergentes post-F2H43)
+
+- **Cambiar font del MoodPlayer a Lato** (deuda crónica desde F2H38, con
+  presión nueva en F2H43): el Player usa init propio en
+  `PlayerApplication_Init.cpp` que sigue con ProggyClean (charset Basic
+  Latin solo). En F2H43 dejamos `es.json` SIN tildes para mantener
+  paridad con el Player — agregar tildes correctas requiere primero
+  cargar Lato. Fix chico, mismo patrón que F2H38 pero en
+  `PlayerApplication_Init.cpp`. Después: find-and-replace mecánico en
+  `assets/i18n/es.json` (`a→á`, `e→é`, etc en palabras como
+  `MUNICION→MUNICIÓN`, `RESERVA→RESERVA`, `RESISTENCIA→RESISTENCIA`).
+- **Workspace names traducibles** (deuda F2H43): los nombres
+  `Layout`/`Programar`/`Materiales`/`Editor de mapas` viven en
+  `WorkspaceManager.cpp` con el nombre como ID persistido en
+  `.moodproj`. Traducirlos requiere refactor: separar nombre INTERNO
+  estable (ej `"map_editor"`) del label MOSTRADO (`T("workspace.map_editor")`).
+  Hito chico cuando emerja necesidad real (un usuario reportando que
+  los tabs de workspace siguen en español/mezclados).
+- **Lua scripts traducibles** (deuda F2H43): los string literals dentro
+  de `assets/scripts/*.lua` (ej. `hud_demo.lua` con `"Demo: explore the
+  test map"`, `"[E] Pick up demo item"`) quedaron sin envolver. Requiere
+  binding Lua `T("...")` desde sol2 + sweep de los .lua. Hito chico
+  cuando aparezcan scripts gameplay reales (no demos).
+- **Console tooltip multilínea i18n** (deuda C2 del subagente): el
+  tooltip de la leyenda de log levels en `ConsolePanel.cpp` tiene
+  `ICON_FA_BUG` etc. concatenados al string literal, no triviales de
+  pasar al JSON sin perder los icons embebidos. Solución: dividir el
+  tooltip en segmentos, cada uno con su key + icon en código.
+- **Plurales en i18n**: ej. "1 entity" vs "5 entities" en HUD se
+  resuelve hoy con la misma key `editor.panel.hierarchy.count` que dice
+  "{} entidades" (siempre plural). Si emerge presión visual, evaluar
+  lib externa (gettext) o resolver inline con condicional.
+- **Mini-map / Radar** (CoD/Fallout — requiere render-to-texture
+  topdown del mundo cercano. Hito propio mediano).
+- **Themes alternativos del HUD** (Doom saturado / Fallout verde —
+  requiere theme runtime + bindings Lua. Hito chico propio).
+- **Optimizaciones GPU side** diferidas en F2H42: GPU timestamp
+  queries, CSM cascadas, frustum cull shadow pass. Sin urgencia con
+  headroom 17x actual.
+
+### Histórico resuelto
+
+- ~~Sistema de i18n completo (Editor + HUD + Player)~~ — resuelto en
+  F2H43 (`v1.33.0-fase2-hito43`). **Infra**: `engine/i18n/I18n.h/cpp`
+  con API namespaced `Mood::I18n::T("key")` + JSON loader + fallback
+  inglés + warn-once por key faltante + interpolación fmt-style.
+  **Persistencia**: `core/UserSettings.h/cpp` en
+  `%APPDATA%\MoodEngine\settings.json` (compartido Editor↔Player).
+  **Selector**: menú `Ver > Idioma > [English / Español]` en MenuBar.
+  **Barrido**: ~347 keys totales en cada JSON (en + es), 24 archivos
+  del editor + 4 del HUD/Player envueltos en `T()`. Bloque C2
+  delegado a subagente (refactor mecánico voluminoso). Tests: 7
+  unitarios nuevos (6 i18n + 1 UserSettings), 640/8475 verde.
+
+## Post-F2H42 (2026-05-10) — Optimización runtime cerrada (shadow caching + VSync toggle)
 
 - **Diferidos sin orden** (emergentes post-F2H39 + post-F2H42, no en
   PLAN_FASE2):

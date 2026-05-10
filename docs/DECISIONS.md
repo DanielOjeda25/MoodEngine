@@ -11,6 +11,52 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-10: F2H43 cierre — sistema de i18n completo (Editor + HUD + Player)
+
+**Contexto:** el plan F2 original tenía F2H5 (i18n del editor, ~500 strings) + F2H34 (i18n de gameplay, diálogos/items/quests) que nunca se hicieron — la deuda se acumuló durante 40 hitos. F2H41 unificó los strings del HUD a inglés *"sienta baseline para futura selección de idioma"* con la promesa explícita de hacer i18n después. F2H43 ataca los dos hitos originales fusionados en uno: infra + barrido completo del editor + barrido del HUD/Player + Player MainMenu.
+
+**Decisión clave 1 — API namespaced `Mood::I18n::T("key")` (no clase singleton):** mismo patrón que `Mood::Log::engine()` y el nuevo `Mood::UserSettings::*`. Funciones libres en namespace, estado privado en `namespace { ... }` del .cpp. La función se llama `T()` (corta a propósito porque se usa 500+ veces). Variante con interpolación `T("key", args...)` usa `fmt::runtime` + `fmt::format` para placeholders `{}` estilo Python/Rust.
+
+- **Razón vs `gettext` lib externa:** una dependencia menos. La app no necesita `_()`, plurales, contextos, ni catalogos compilados `.mo` — un `unordered_map<string, string>` por idioma alcanza para los ~500 strings actuales.
+- **Razón vs clase singleton instanciable:** las clases singleton requieren `I18n::instance()->T(...)` que es ruidoso visualmente. La función libre `Mood::I18n::T(...)` lee como llamada a función pura.
+- **Razón warn-once por key faltante:** spammar el log con cada frame de render que pase por una key faltante haría el log inutil. `unordered_set<string> s_warnedKeys` registra los warns ya emitidos; reseteable al `setLanguage()`.
+
+**Decisión clave 2 — keys flat con dot notation (no nested JSON):** `"editor.menu.file": "Archivo"` en lugar de `{"editor": {"menu": {"file": "Archivo"}}}`. El JSON se carga a un `unordered_map<string, string>` lineal con la key como literal completo. La dot notation es solo convención de naming para grep + agrupación visual.
+
+- **Razón vs JSON nested:** lookup directo O(1) en map plano sin traversal recursivo. Diff visual más fácil (cada key en su línea, no anidamiento). Permite que `_comment` (metadata) coexista con keys reales sin estructura especial.
+- **Trade-off:** más verboso al editar (todas las keys del namespace `editor.menu.file.*` están dispersas alfabéticamente, no agrupadas por sub-objeto). Mitigado: agrupamos manualmente con líneas en blanco entre namespaces.
+
+**Decisión clave 3 — diccionarios SIN tildes en `es.json`:** `MUNICION` en vez de `MUNICIÓN`, `RESISTENCIA` en vez de `RESISTENCIA` (correcto), `PROXIMO` en vez de `PRÓXIMO`. Reemplazos sistemáticos: `á→a / é→e / í→i / ó→o / ú→u / ñ→n / ¿→? / ¡→!`.
+
+- **Razón:** la font del MoodPlayer (ProggyClean default ImGui, charset Basic Latin solo) no cubre Latin-1. Los caracteres con tilde se renderizarían como tofu (`?`) durante gameplay. El editor (Lato F2H38) sí soporta Latin-1, pero mantenemos paridad para tener UNA fuente de verdad consistente.
+- **Mitigación de la deuda:** cuando se cambie el Player a Lato (deuda anotada en pendientes desde F2H38), agregar tildes es un find-and-replace mecánico en `es.json` sin tocar código. Hito chico cuando emerja presión visual (un usuario hispanohablante reportando que el HUD se ve raro).
+
+**Decisión clave 4 — persistencia GLOBAL del idioma (`%APPDATA%\MoodEngine\settings.json`), no per-proyecto:** `core/UserSettings.cpp` con un singleton namespaced minimalista. Editor + Player ambos llaman `UserSettings::init() + I18n::init(UserSettings::language())` al arrancar. Path resolver usa `std::getenv("APPDATA")` (Windows) con fallback al cwd.
+
+- **Razón vs per-proyecto en `.moodproj`:** el idioma es preferencia del USUARIO, no del proyecto. Un colaborador hispanohablante abriendo un proyecto creado por un brasileño NO debería ver portugués. La preferencia es de la persona, debe persistir entre proyectos.
+- **Razón abre la puerta:** futuro `settings.json` puede crecer con `theme`, `recent_files_limit`, `editor_font_size`, etc. sin tener que reinventar la infra.
+- **Trade-off:** el `.moodproj` no recuerda el idioma del autor. Si el dev cierra el proyecto y lo reabre meses después en otra máquina con otro idioma activo, ve la UI en el otro idioma. Aceptable: las traducciones son consistentes (no se "pierde" información), solo cambian las labels visuales.
+
+**Decisión clave 5 — workspace names NO traducidos en F2H43:** `Layout`/`Programar`/`Materiales`/`Editor de mapas` quedan sin envolver en `T()`. Razón: viven en `WorkspaceManager.cpp` con el nombre como ID persistido en `.moodproj` (la selección del workspace activo se guarda como string `"name": "Editor de mapas"`). Traducirlos requiere refactor: separar nombre INTERNO (ID estable, ej `"map_editor"`) del label MOSTRADO (`T("workspace.map_editor")`). Diferido a hito propio chico cuando emerja necesidad.
+
+**Decisión clave 6 — subagente para barrido masivo del editor:** 23 archivos / 255 keys con misma transformación mecánica = caso textbook de delegación según la regla global del repo (>15 archivos misma transformación = subagente). Estrategia: bloque C1 (MenuBar, ~60 keys) hecho manual primero como piloto del patrón → bloque C2 con subagente con la convención ya validada (naming, qué traducir, qué no, IDs internos de ImGui, iconos FA fuera del JSON, etc).
+
+**Alternativas descartadas en F2H43:**
+- **`gettext` o `ICU`:** dep externa innecesaria para 500 strings. Plurales, contextos, catalogos `.mo` compilados → overengineering para el scope actual.
+- **i18n via Qt `tr()`:** Qt no es nuestro UI framework (usamos ImGui). El `tr()` de Qt está acoplado al meta-object system.
+- **Default Inglés:** descartado. El dev trabaja en español, arrancar en su idioma evita un click extra al iniciar el editor.
+- **Selector de idioma en menu top-level Settings:** descartado. No tenemos panel Settings y crearlo solo para el idioma sería overkill. `Ver > Idioma` es donde el dev mira primero.
+- **Lua scripts traducibles en F2H43:** descartado por scope. Los string literals dentro de `assets/scripts/*.lua` (ej. `hud_demo.lua` con `"Demo: explore the test map"`) requieren un binding Lua adicional `T("...")` + sweep de los .lua. Hito chico futuro cuando aparezca uno con scripts gameplay reales (no demos).
+- **Hot-reload del JSON al cambiar el archivo en disco:** descartado. Útil para developers de traducciones pero overhead innecesario para el caso de uso (devs editan JSON + reinician editor para ver cambios).
+
+**Condiciones de revisión:**
+- Si aparece presión de un usuario hispanohablante reportando tofu en el HUD del Player → ejecutar el fix Lato Player (anotado pendiente desde F2H38) + agregar tildes a `es.json`.
+- Si el catálogo de keys crece a >2000 (ej. con scripts Lua + diálogos + items + quests de Sub-fase 2.5) → considerar partir el JSON por dominio (`editor.json` / `hud.json` / `gameplay.json`) o migrar a un formato compilado (binary keyset map) para arranque más rápido.
+- Si emerge necesidad de un 3er idioma (portugués, inglés UK, etc) → solo agregar `pt.json` / `en_uk.json` y entradas en el menú. La infra ya soporta arbitrarios via `enum class Language` extensible.
+- Si emerge necesidad de plurales (ej. "1 entity" vs "5 entities" en HUD), evaluar agregar lib externa (gettext) o resolver inline con condicional en el caller (overhead chico).
+
+---
+
 ## 2026-05-10: F2H42 cierre — optimización runtime (shadow caching + VSync toggle)
 
 **Contexto:** F2H39 original "optimización runtime" diferido para PC de escritorio (GTX 1660 / Ryzen 5 5600G del baseline F2H2-F2H6) — el dev movió el trabajo a la desktop. Tracy Profiler v0.11.1 ya integrado vía CPM con `MOOD_PROFILE` cmake option (estaba OFF por default en Release; F2H42 lo activa). Stress scene generada por nuevo handler `processSpawnFullStressSceneRequest` que dispara los 8 spawners individuales: 200 cubos + 64 point lights + 9 esferas PBR + shadow demo + Fox + CesiumMan + fuego + trigger Lua = 285 entidades / 17K tris.

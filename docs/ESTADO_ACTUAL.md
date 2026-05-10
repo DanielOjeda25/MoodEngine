@@ -6,11 +6,54 @@
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H42 cerrado: optimización runtime (shadow map caching + VSync toggle).**
+**🚀 Fase 2 — F2H43 cerrado: sistema de i18n completo (Editor + HUD + Player).**
+Tag: `v1.33.0-fase2-hito43`.
+Validado visualmente por dev *"cambia bien"* + *"todo va ok de momento"* tras tour completo en inglés y español. Switch live de idioma vía `Ver > Idioma > [English / Español]` que persiste en `%APPDATA%\MoodEngine\settings.json` (compartido Editor↔Player).
+
+**🏁 HUD framework + físicas robustas + walk feel pulido + shadow cache + VSync toggle + i18n full (~347 keys en 2 diccionarios JSON, switch live EN↔ES).** 41/44 hitos de Fase 2.
+
+**Decisiones clave de F2H43:**
+
+- **API namespaced `Mood::I18n::T("key")` (mismo patrón que `Mood::Log::*`)**, no clase singleton instanciable. Razón: el resto del proyecto usa funciones libres en namespaces para subsistemas globales del proceso (Log, GameState, ahora UserSettings + I18n). Coherencia + zero overhead vs `Singleton::instance()->T(...)`. La convención `T()` es corta a propósito — se llama 500+ veces y la brevedad importa.
+- **Keys flat con dot notation**, no nested JSON (`"editor.menu.file": "Archivo"`, no `{"editor": {"menu": {"file": "Archivo"}}}`). Razón: lookup O(1) directo en `unordered_map<string, string>` sin recursión + grep-friendly + el _comment de metadata se mezcla con keys reales sin estructura especial.
+- **Default Spanish (idioma del dev), fallback siempre Inglés**. Razón: el dev trabaja en español, arrancar en su idioma evita un click extra. Fallback inglés porque es el lingua franca de devtools y porque hay más probabilidad de que un colaborador internacional traduzca al inglés primero (las keys nuevas siempre van a en.json).
+- **Diccionarios SIN tildes en `es.json`** (`MUNICION` en vez de `MUNICIÓN`, `RESISTENCIA` en vez de la versión correcta con acento). Razón: la font del MoodPlayer (ProggyClean default ImGui) no cubre Latin-1; los caracteres con tilde se verían como tofu (?) en gameplay. El editor (Lato F2H38) sí soporta Latin-1, pero mantenemos paridad para no tener UNA fuente de verdad partida en dos. Cuando se cambie el Player a Lato (deuda anotada), agregar tildes es un find-and-replace en es.json sin tocar código.
+- **Persistencia GLOBAL del idioma** (`%APPDATA%\MoodEngine\settings.json`), no per-proyecto. Razón: el idioma es preferencia del USUARIO, no del proyecto — un colaborador brasileño abriendo un proyecto creado por vos esperaría su idioma. Abre la puerta a futuras settings globales (theme, recent-files límite, etc) sin meterlas dentro del `.moodproj`.
+- **Iconos FontAwesome quedan FUERA del JSON**, se concatenan en código: `(std::string(ICON_FA_FOLDER " ") + I18n::T("editor.menu.file")).c_str()`. Razón: las constantes `ICON_FA_*` son `\uefxx` y meterlas en JSON requeriría escapado UTF-8 frágil + el icon NO depende del idioma (es universal).
+- **Términos técnicos PBR (`metallic`/`roughness`/`albedo`/`ao`) NO se traducen**. Razón: nomenclatura PBR estándar internacional, los devs los reconocen en cualquier idioma + la API del MaterialAsset usa esos nombres como keys de schema (traducirlos rompería persistencia).
+- **IDs internos de ImGui (popups/windows) usan `##nombre_modal`** en vez del título visible. Razón: si el title cambia entre idiomas, `BeginPopupModal` perdería identidad y el popup se cerraría/recrearía cada switch. El `##` prefix oculta el ID al usuario y mantiene identidad estable.
+- **Logs (`Log::*->info/warn/error/debug`) NO se traducen** — quedan en inglés siempre. Razón: convención dev tools (los logs son para devs/colaboradores, no para usuarios finales) + son grep-friendly + no necesitan localización para Issue tracking.
+- **Workspace names (`Layout`/`Programar`/`Materiales`/`Editor de mapas`) NO se traducen** en F2H43. Razón: viven en `WorkspaceManager.cpp` con el nombre como ID persistido en `.moodproj` (selección del workspace activo se guarda por nombre). Traducirlos requiere refactor: separar nombre interno (ID estable) del label mostrado. Diferido.
+- **Subagente para barrido masivo del editor**: 23 archivos / 255 keys con misma transformación mecánica = caso de uso textbook de delegación. Bloque C1 (MenuBar) hecho manual primero como piloto del patrón → bloque C2 con subagente con la convención ya validada.
+
+**Implementación (F2H43 Bloques A-E):**
+
+- **Bloque A — infra i18n**: `engine/i18n/I18n.h/cpp` (singleton namespaced + JSON loader + fallback inglés + warn-once + interpolación fmt). 6 tests unitarios (init/fallback/missing/switch/fmt/ISO roundtrip). 11 keys ejemplo iniciales en `assets/i18n/{en,es}.json`.
+- **Bloque B — selector + persistencia**: `core/UserSettings.h/cpp` con persistencia en `%APPDATA%\MoodEngine\settings.json`. Wire-up en EditorApplication_Init.cpp + PlayerApplication_Init.cpp (cargar settings + arrancar I18n con idioma persistido). Menú `Ver > Idioma > [English / Español]` en MenuBar con check del activo + save al click. 1 test extra del path resolver.
+- **Bloque C1 — barrido MenuBar piloto** (~60 keys, manual): valida convención antes de escalar. Files/Map/Brush/Edit/View/Help submenús + Boolean ops + popups About/NotImpl + botones Play/Stop.
+- **Bloque C2 — barrido editor con subagente** (~255 keys, 23 archivos): Hierarchy + Inspector (12 partials) + AssetBrowser + MaterialEditor + ScriptEditor + Console + LuaApi + Performance + Viewport + VisGroups + MapEditorTopBar + StatusBar + Toolbar + EditorUI (Welcome modal). Build verificado por subagente, suite re-corrida por mí.
+- **Bloque D — HUD + Player + callers** (~20 keys, manual): GameOverlay HEALTH/AMMO/RESERVE/STAMINA/OBJECTIVE/PAUSED/CONTINUE/OPTIONS + EditorPlayMode/PlayerApplication_Frame exitLabel + PlayerApplication_SaveLoad menu (New Game/Load Game/Quit + dialogs).
+- **Bloque E (este commit)**: docs + commits + tag + push.
+
+**Pendientes conocidos** (post-F2H43):
+- **Sub-fase 2.5 gameplay** (diálogos / quests / inventario).
+- **Mini-map / Radar** (CoD/Fallout): requiere render-to-texture topdown del mundo cercano.
+- **Themes alternativos del HUD** (Doom saturado / Fallout verde): requiere theme runtime + bindings Lua.
+- **HUD diegetic 3D** (Pip-Boy / muñequera Metro): requiere FPS arms primero.
+- **Cambiar font del MoodPlayer a Lato** (deuda crónica desde F2H38): permitiría agregar tildes a `es.json` sin tofu en gameplay. Fix chico, mismo patrón que F2H38 pero en `PlayerApplication_Init.cpp`.
+- **Workspace names traducibles** (deuda F2H43): separar nombre interno persistido en `.moodproj` del label mostrado. Refactor mediano.
+- **Lua scripts traducibles** (deuda F2H43): los string literals dentro de `assets/scripts/*.lua` (ej. `hud_demo.lua` con "Demo: explore the test map") quedaron sin envolver. Requiere binding `T("...")` desde Lua + sweep.
+- **Console tooltip multilínea i18n** (deuda C2): tiene `ICON_FA_BUG` etc. concatenados al string literal, no triviales de pasar al JSON sin perder los icons.
+- **Optimizaciones GPU side** (de F2H42): GPU timestamp queries / CSM / frustum cull shadow. Sin urgencia con headroom 17x actual.
+- Validación full del Player con compiledMesh: deuda menor heredada de F2H26.
+
+**Próximo paso**: **TBD — definir con el dev**.
+
+### F2H42 (anterior, ya cerrado)
+
+**🚀 F2H42 cerrado: optimización runtime (shadow map caching + VSync toggle).**
 Tag: `v1.32.0-fase2-hito42`.
 Validado por Tracy + CSV: stress scene (285 entidades / 17K tris) corre a **780 FPS sin VSync** (1.27 ms/frame), **17x mejor** que pre-fix. Cache hit rate del shadow: **99.996%** (1 record en 22317 frames de captura).
-
-**🏁 HUD framework + físicas robustas + walk feel pulido + i18n inglés + shadow cache + VSync toggle (motor sobrado para contenido real con headroom 17x sobre baseline).** 40/44 hitos de Fase 2.
 
 **Decisiones clave de F2H42:**
 
