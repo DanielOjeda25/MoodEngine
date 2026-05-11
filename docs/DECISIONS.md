@@ -11,6 +11,52 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-10: F2H47 cierre — Dialog Editor (autoría: schema + visual editor + inspector + browser)
+
+**Contexto:** Segundo hito real de Sub-fase 2.5 (Bloque 2 del plan `PLAN_SUBFASE_2_5.md`). Construye el primer editor de contenido sobre la infra del node-graph framework de F2H46. Entrega herramienta de autoría completa end-to-end (schema + asset + 3 paneles del editor + sample demo) pero NO el runtime — el state machine del dialog que corre en Play Mode + HUD widget + Lua bindings + DialogComponent quedan para F2H48. Split editor/runtime deliberado para validar el schema antes de atar el runtime.
+
+**Decisiones técnicas clave:**
+
+- **Schema v1 con un solo tipo de nodo (`dialog_line`).** Razón: simplicidad — los hooks `condition_lua` y `on_select_lua` por choice cubren el 80% de los casos prácticos. Tipos `condition` (nodo de branching puro), `action` (nodo de hook sin texto), `jump` (saltar a otro `.mooddialog`) emergen como necesidad real cuando un caso de juego concreto los pida. Alternativa descartada: incluir los 4 tipos en v1 — schema más rico pero la mayoría no se usaría, y agregar nodos en v2 es non-breaking.
+
+- **Auto-sync invariante: N choices == N output sockets.** Razón: el dev edita choices en el Inspector contextual; el grafo debe reflejar visualmente que un nodo con 3 opciones tiene 3 outputs (uno para cada destino). Si el dev tuviera que agregar/borrar sockets manualmente en paralelo al array de choices, sufriría desync errors. Implementación: `Asset::writeLine()` re-crea sockets para matchear `choices.size()` (o exactamente 1 "continue" si vacío), borrando los sobrantes (cascade de links incidentes via `Graph::removeSocket` que tuve que agregar como extensión a F2H46). Alternativa descartada: dejarlo manual + validator que detecte el desync — propenso a frustrar al dev con errores constantes.
+
+- **Toggle text_key vs text_literal por línea (y por choice).** Razón: prototyping flow real — el dev escribe el texto inline al armar el diálogo y promueve a i18n key después cuando el contenido se estabiliza. Forzar i18n key desde el día 1 friccionaría el prototyping; forzar literal eliminaría la opción de localización. El toggle deja al dev elegir cuándo promover. UI: checkbox "Usar i18n key" en el Inspector — al togglear, el valor previo se mueve al otro campo (no se pierde). Alternativa descartada: dos campos visibles siempre — clutter visual y ambiguo cuál gana en runtime.
+
+- **Cycles permitidos pero reportados como Warning (no Error).** Razón: algunos diseños de diálogo (loops controlados por flags Lua, "el NPC vuelve al menú principal hasta que el jugador elija X") usan ciclos intencionalmente. Bloquearlos como Error frustraría esos casos. Reportar como Warning informa al dev sin impedir guardar. Detección via DFS iterativa con coloring blanco/gris/negro (back edge = ciclo). Alternativa descartada: análisis estático que descarte ciclos "escapables" — feature de v2 cuando los ciclos sean comunes.
+
+- **Save explícito v1 (no auto-save).** Razón: el dev necesita control durante experimentación — auto-save sobrescribe el archivo mientras el dev prueba ideas que quizás revertirá. Auto-save con debounce + undo a-disco es feature de polish para v2.
+
+- **Path absoluto `<cwd>/assets/dialogs/` para el Browser.** Razón: convención del editor existente (Material Editor F2H42 usa `<cwd>/assets/materials/`). El cwd se setea al directorio del proyecto cuando se abre uno; reusar el patrón existente evita inventar abstractions del filesystem específicas para Dialog.
+
+- **Sample demo generado programáticamente en lugar de shipped como archivo.** Razón: hacer commit de un `demo_intro.mooddialog` agregaría un asset al repo con texto pre-cocinado, que después habría que mantener traducido + sincronizado con cambios de schema. Generarlo en `processSpawnDialogDemoRequest()` (DemoSpawners_Basic.cpp) usa el API real del Asset y queda automáticamente up-to-date con cualquier evolución del schema. El archivo se persiste a disco la primera vez para que reabrir el demo no lo regenere (el dev podría haberlo editado y queremos preservar sus cambios).
+
+- **Split editor (F2H47) vs runtime (F2H48).** Razón: checkpoint de validación. Si encerramos editor + runtime en un solo hito mega, cambios al schema durante el desarrollo del runtime requerirían re-trabajar el editor. Con split, F2H47 estabiliza el schema (con tests), F2H48 implementa el runtime sabiendo qué consume. Aceptado por el dev pre-implementación.
+
+- **Window IDs estables (sin `###` ni i18n) para que matchee DockBuilder.** Lección de F2H46 aplicada: el window name pasado a `ImGui::Begin` es lo que `DockBuilderDockWindow` hashea. Si el title se traduce, el hash cambia y el dock no se aplica. Convención: `name()` de cada panel retorna inglés estable; el contenido del panel sí es i18n.
+
+- **Inspector contextual como panel separado (no inline en Editor).** Razón: separación clara de concerns — el Editor maneja el grafo, el Inspector maneja los campos del nodo seleccionado. Beneficio adicional: el Inspector puede docked a la derecha del Editor (consistente con el flujo Inspector/Hierarchy del editor general). Alternativa descartada: campos del nodo dentro de un ImGui::CollapsingHeader en el Editor mismo — agrega clutter al canvas y ocupa espacio que va a ser premium cuando los grafos crezcan.
+
+- **Sandbox queda como Debug-only, NO default del workspace Narrativa post-F2H47.** Razón: el Sandbox era placeholder de F2H46; con F2H47 el workspace tiene un editor real. Mantener el Sandbox visible confundiría al dev sobre cuál es la herramienta principal. Sigue accesible vía Ver > Debug para inspección del framework subyacente — utilidad permanente para futuros devs que extiendan node-graph.
+
+**Alternativas descartadas explícitamente:**
+
+- **Tipos de nodo `condition`/`action`/`jump` en v1**: descartado por scope. Hooks Lua en choices cubren los casos prácticos.
+- **Voiceover sync (highlight de palabras con audio timing)**: descartado por scope. customData ya tiene `audio` path; v2 puede agregar timing data si emerge necesidad.
+- **Animation wait_for flag**: el customData tiene `animation` pero v1 solo dispara; no espera a que termine. Polish de v2.
+- **Theming custom del grafo (paleta narrativa)**: herencia de F2H46 sin urgencia hasta que el grafo se vuelva confuso visualmente.
+- **String tables dedicadas para gameplay (vs reusar i18n actual)**: descartado en v1. Las keys de dialog viven en el mismo `assets/i18n/{en,es}.json` que el editor — funciona, no agrega infra.
+- **AssetManager::loadDialog**: descartado para F2H47. Se agrega en F2H48 cuando el runtime necesita resolver paths logicos para DialogComponent. F2H47 usa I/O directo de filesystem.
+
+**Condiciones de revisión:**
+
+- Si emerge necesidad real de tipos `condition`/`action`/`jump`: agregar en F2H48 o hito propio antes de que los devs externos los pidan ad-hoc.
+- Si auto-sync de choices causa pérdida de links accidental (el dev borra un choice y pierde el link a un nodo importante): considerar agregar warning de confirmación antes del remove en el Inspector.
+- Si el Browser con muchos diálogos (>50) se vuelve lento al refresh: paginar o filtrar.
+- Si emerge demand por preview en-vivo del diálogo dentro del editor (sin entrar a Play Mode): agregar como feature de F2H48 una vez que el runtime exista.
+
+---
+
 ## 2026-05-10: F2H46 cierre — node-graph framework (integración `imgui-node-editor`) + workspace "Narrativa"
 
 **Contexto:** Primer hito real de Sub-fase 2.5 (Bloque 0.1 del plan `PLAN_SUBFASE_2_5.md`). Pre-requisito de los Dialog Editor (F2H47) y Quest Editor (F2H4X) que vienen — comparten arquitectura de grafo, implementar UN framework reutilizable evita duplicación. Estimación inicial ~8h en 8 bloques (A-H); realizado en ~1 sesión con 3 fixes técnicos reactivos al feedback del dev durante validación visual.

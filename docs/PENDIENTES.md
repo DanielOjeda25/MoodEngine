@@ -9,6 +9,44 @@
 
 ---
 
+## Post-F2H47 (2026-05-10) — Dialog Editor (autoría) cerrado
+
+### Próximo a atacar
+
+- **F2H48 — Dialog runtime** (segunda mitad del par editor/runtime del sistema de diálogos).
+  - **Origen**: continuación natural de F2H47 — el editor produce `.mooddialog` pero todavía no hay sistema que los interprete en Play Mode.
+  - **Scope esperado**:
+    - **`engine/dialog/DialogSystem.h/cpp`**: state machine que recorre el árbol según el flow. Mantiene `current_node_id`, evalúa `condition_lua` por choice (filtra las visibles), aplica `on_select_lua` al elegir, salta al nodo destino vía el link del output socket correspondiente. Variables persistentes via `dialog.set_var/get_var` (map key-value tipo i18n pero por session de dialog).
+    - **`AssetManager::loadDialog(logicalPath)`**: integración con VFS para que `DialogComponent` apunte a paths lógicos (`"dialogs/intro.mooddialog"`).
+    - **HUD widget default** en el framework F2H39: caja inferior estilo HL2 con texto del NPC + opciones clickeables (con condition_lua aplicado para filtrar). Override-able vía `dialog.set_renderer(callback)` para juegos con HUD propio (engine-grade principle).
+    - **Lua bindings nuevos** en tabla `dialog`: `start("npc_id")`, `is_active()`, `current_node()`, `advance(choice_index)`, `set_var/get_var`, `on_node_enter(callback)`, `on_choice(callback)`, `set_renderer(callback)`.
+    - **`DialogComponent`** entity-side: campo `std::string dialog_path` + opcional `auto_start_on_interact`. Inspector del editor general permite asignar un `.mooddialog` por NPC.
+    - **Tests de integración runtime**: state machine recorre asset de prueba, condiciones filtran choices, hooks Lua se invocan.
+  - **Decisión técnica abierta para F2H48**: cómo se dispara el dialog en Play Mode. Opciones: (a) script Lua del NPC llama `dialog.start("npc_id")` cuando un trigger collide con player; (b) `DialogComponent` con flag `auto_start_on_interact` que el motor detecta automáticamente cuando player presiona E cerca del NPC; (c) combinación de ambos. Recomendación inicial: (c) — auto-start es ergonómico para casos típicos, Lua start es escape hatch para casos custom.
+
+- **Después de F2H48**: continuar con **Inventario** (F2H4X) y **Quest Editor** (F2H4Y) según `PLAN_SUBFASE_2_5.md`. Inventario es UI propia (grid + 3D preview, no node-graph); Quest Editor reusa el framework de F2H46 con flowchart de objetivos.
+
+### Diferidos sin orden (emergentes post-F2H47)
+
+- **Tipos de nodo dialog adicionales** (`condition`, `action`, `jump`): el schema v1 tiene solo `dialog_line`. Los hooks `condition_lua`/`on_select_lua` por choice cubren el 80%. Agregar tipos si emerge necesidad real en proyectos de devs externos.
+- **Voiceover sync** (highlight de palabras según timing del audio): customData ya tiene `audio` path; sumar timing data + UI de waveform en hito propio de polish.
+- **Animation `wait_for` flag**: customData tiene `animation` pero v1 solo dispara, no espera. Polish.
+- **Theming custom del grafo** (paleta naranja Valve / temática narrativa): herencia de F2H46.
+- **String tables dedicadas para gameplay** (vs reusar `assets/i18n/`): considerar si los devs externos piden separación por contexto. v1 reusa i18n existente.
+- **Preview en-vivo dentro del editor** (sin entrar a Play Mode): feature de F2H48+.
+- **Auto-save del Dialog Editor**: explícito en v1 por seguridad; auto-save con debounce + undo-a-disco para v2.
+- **AssetManager::loadDialog**: pendiente para F2H48 (runtime). F2H47 usa I/O directo del filesystem.
+
+### Histórico resuelto F2H47
+
+- ~~Schema `.mooddialog` versionado + serialización JSON~~ — resuelto. `Asset { Graph + Metadata }` con `_version=1`, `Node::customData` con typed accessors `parseLine`/`writeLine`.
+- ~~Auto-sync sockets ↔ choices array~~ — resuelto. `writeLine()` mantiene invariante N choices = N output sockets automáticamente.
+- ~~`Graph::removeSocket(SocketId)`~~ — resuelto. Extension a F2H46 con cascade de links incidentes.
+- ~~`DialogValidator`~~ — resuelto. 6 reglas (start_node, input/output sockets, choices sync, cycles via DFS, orphans) — cycles y orphans son Warning, no Error.
+- ~~`DialogBrowserPanel` + `DialogEditorPanel` + `DialogNodeInspectorPanel`~~ — resueltos. 3 panels en categoría Narrative + accessors en EditorUI.
+- ~~Sample demo `.mooddialog`~~ — resuelto. Menu "Ayuda > Demos > Cargar diálogo demo" genera programáticamente con 3 nodos pre-armados.
+- ~~Regresión `test_workspace_manager.cpp` count==4 vs 5~~ — resuelto. Tests actualizados a 5 workspaces (narrative agregado en F2H46).
+
 ## Post-F2H46 (2026-05-10) — Node-graph framework + workspace "Narrativa" cerrado
 
 ### Próximo a atacar

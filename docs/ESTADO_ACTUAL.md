@@ -4,7 +4,45 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H46 cerrado (2026-05-10)
+## 0. ACTUALIZACIÓN F2H47 cerrado (2026-05-10)
+
+**Segundo hito real de Sub-fase 2.5 cerrado — Dialog Editor (autoría) activo.**
+Tag: `v1.37.0-fase2-hito47`. Cita verbatim del dev al validar: *"todo ok"*.
+
+**Qué entrega F2H47** (editor side completo end-to-end, sin runtime):
+- **Schema `.mooddialog`** versionado (v1) con `Asset { Graph + Metadata }` puro testeable.
+  - Tipo de nodo único en v1: `dialog_line` con customData `{text_key/literal, portrait, audio, animation, choices[]}`.
+  - Cada `Choice = {label_key/literal, condition_lua, on_select_lua}` — los hooks Lua cubren el 80% de gameplay sin necesidad de tipos `condition`/`action` dedicados (diferidos a v2).
+  - **Invariante crucial auto-sync**: N choices = N output sockets; mantenido por `writeLine()` automáticamente.
+- **`DialogValidator`** con 6 reglas (start_node, input/output sockets, choices sync, cycles via DFS, orphans).
+- **3 paneles del editor** (categoría Narrative):
+  - `DialogBrowserPanel`: lista `*.mooddialog` de `assets/dialogs/` + New (popup con sanitización) + Refresh.
+  - `DialogEditorPanel`: reusa `NodeGraphEditor` de F2H46 + toolbar (Save / + Línea / Marcar Inicio / Validar / Cerrar) + dirty tracking + Events → NodeGraphCommand (undoable).
+  - `DialogNodeInspectorPanel`: contextual, toggle text_key↔text_literal, choices con add/remove inline → trigger auto-sync.
+- **Workspace "Narrativa" rediseñado** (v6 ini): Dialog Editor central + Inspector der ~28% + Browser/Intro bottom tabulados ~28%. Sandbox queda solo en Ver > Debug.
+- **Sample demo** en menú Ayuda > Demos > "Cargar diálogo demo" — genera `demo_intro.mooddialog` con 3 nodos + 2 choices ("¿qué te trae a estas tierras?" → heroico/casual) y lo abre.
+- **35 tests nuevos + 109 assertions** (test_dialog_asset.cpp + test_dialog_validator.cpp). Suite total: **708/8694** verde.
+
+**Lo que falta para que el sistema sea utilizable in-game** (F2H48):
+- DialogSystem runtime que interprete el árbol durante Play Mode.
+- HUD widget default (caja inferior estilo HL2) — override-able vía Lua.
+- Lua bindings: `dialog.start("npc_id")`, `dialog.set_var/get_var`, `dialog.on_node_enter/on_choice` hooks.
+- `DialogComponent` para entidades — un NPC en la escena con un `.mooddialog` apuntado dispara el dialog al interactuar.
+
+**Fixes técnicos durante F2H47:**
+- **Regresión F2H46 corregida**: `test_workspace_manager.cpp` tenía `count == 4` hardcoded → ahora 5 (workspace narrative agregado en F2H46). 7 assertions actualizadas.
+- **Bump `imgui_layout_v5.ini → v6.ini`** porque el layout del workspace Narrativa cambió.
+- **Extender NodeGraph::Graph** con `removeSocket(SocketId)` (cascade de links incidentes) — necesario para auto-sync de choices.
+
+**Pendientes conocidos** (post-F2H47):
+- **F2H48 — Dialog runtime**: ver arriba.
+- Después de F2H48, **F2H4X — Inventory** (UI propia con grid + 3D preview, no node-graph).
+- Después, **F2H4Y — Quest Editor** (reusa node-graph de F2H46 con flowchart de objetivos).
+- Theming custom del grafo (paleta narrativa) diferido hasta que emerja necesidad visual.
+
+---
+
+## 0bis. ACTUALIZACIÓN F2H46 cerrado (2026-05-10)
 
 **Sub-fase 2.5 arrancada con su primer hito real (Bloque 0.1 del plan).**
 Tag: `v1.36.0-fase2-hito46`. Cita verbatim del dev al validar: *"todo ok"*.
