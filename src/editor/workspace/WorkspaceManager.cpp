@@ -24,6 +24,7 @@ std::vector<Workspace> defaultWorkspaces() {
         Workspace{"scripting",  {}},
         Workspace{"materials",  {}},
         Workspace{"map_editor", {}},
+        Workspace{"narrative",  {}},  // F2H46: Sub-fase 2.5 (dialogs/quests/inventory)
     };
 }
 
@@ -39,6 +40,7 @@ std::string migrateWorkspaceName(const std::string& oldName) {
     if (oldName == "scripting"  ) return "scripting";
     if (oldName == "materials"  ) return "materials";
     if (oldName == "map_editor" ) return "map_editor";
+    if (oldName == "narrative"  ) return "narrative";   // F2H46
     // F2H22-F2H23 labels espanoles: mappear a IDs F2H44.
     if (oldName == "Layout"          ) return "layout";      // F2H7/F2H23
     if (oldName == "Modelar"         ) return "layout";      // F2H22 → F2H23
@@ -57,7 +59,8 @@ std::string migrateWorkspaceName(const std::string& oldName) {
 ///        Comparacion contra IDs ASCII (no labels visibles).
 bool isValidWorkspaceName(const std::string& name) {
     return name == "layout"    || name == "scripting"
-        || name == "materials" || name == "map_editor";
+        || name == "materials" || name == "map_editor"
+        || name == "narrative";  // F2H46
 }
 
 } // namespace

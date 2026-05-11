@@ -44,6 +44,8 @@ void EditorUI::pruneMissingRecents() {
 EditorUI::EditorUI() {
     m_panels = {&m_viewport, &m_hierarchy, &m_inspector, &m_assetBrowser,
                 &m_console, &m_luaApi, &m_performanceHud,
+                &m_nodeGraphSandbox,  // F2H46
+                &m_narrativeIntro,    // F2H46
                 &m_scriptEditor, &m_materialEditor, &m_toolbar,
                 // F2H28: paneles del workspace "Editor de mapas".
                 // Arrancan ocultos; se hacen visibles via
@@ -61,6 +63,7 @@ EditorUI::EditorUI() {
     m_toolbar.setEditorUi(this);  // F2H22: la toolbar emite requests a UI
     m_mapEditorTopBar.setEditorUi(this);  // F2H30 Bloque C
     m_visGroupsPanel.setEditorUi(this);  // F2H33
+    m_nodeGraphSandbox.setEditorUi(this);  // F2H46
 
     // F2H7: el dockspace arranca apuntando al workspace default
     // (F2H22: Modelar, era Layout).
@@ -171,6 +174,12 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Map Tools",  false);  // F2H30 Bloque C: top toolbar
         setVisible("Grupos",     false);  // F2H33: VisGroups panel
     };
+    // F2H46: en cualquier workspace que NO sea "narrative", ocultamos
+    // el Node Graph Sandbox (queda accesible desde Ver > Debug).
+    auto hideNarrativePanels = [&]() {
+        setVisible("Node Graph Sandbox", false);  // F2H46
+        setVisible("Narrative Intro",    false);  // F2H46
+    };
 
     // F2H44: comparacion contra IDs ASCII (no labels visibles).
     if (name == "scripting") {
@@ -185,6 +194,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Material Editor", false);
         setVisible("Tools",           false);
         hideOrthoPanels();
+        hideNarrativePanels();
     } else if (name == "materials") {
         setVisible("Viewport",        true);
         setVisible("Escena",          false);
@@ -196,6 +206,31 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Script Editor",   false);
         setVisible("Material Editor", true);
         setVisible("Tools",           false);
+        hideOrthoPanels();
+        hideNarrativePanels();
+    } else if (name == "narrative") {
+        // F2H46: workspace "Narrativa" para Sub-fase 2.5 (Sistemas de
+        // juego). v1 solo contiene infra del framework + panel intro
+        // explicativo. Editores reales (Dialog/Quest/Inventory) llegan
+        // en hitos siguientes y traeran sus propios panels.
+        //
+        // Pedido del dev (post-F2H46 validacion 1): NO mostrar panels
+        // de scene/3D aca — el workspace tiene que ser limpio, dedicado
+        // a contenido narrativo. Inspector/Asset Browser/Console se
+        // pueden abrir flotantes desde menu Ver si emerge necesidad,
+        // pero no son default.
+        setVisible("Viewport",            false);
+        setVisible("Escena",              false);
+        setVisible("Inspector",           false);
+        setVisible("Asset Browser",       false);
+        setVisible("Console",             false);
+        setVisible("Lua API",             false);
+        setVisible("Performance",         false);
+        setVisible("Script Editor",       false);
+        setVisible("Material Editor",     false);
+        setVisible("Tools",               false);
+        setVisible("Node Graph Sandbox",  true);
+        setVisible("Narrative Intro",     true);
         hideOrthoPanels();
     } else if (name == "map_editor") {
         // F2H28: workspace 4-viewport inspirado en Valve Hammer Editor.
@@ -219,6 +254,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Script Editor",   false);
         setVisible("Material Editor", false);
         setVisible("Tools",           false);
+        hideNarrativePanels();
     } else {
         // "Layout" (default) — flow general de mapping. Tools visible.
         // Console explicitamente FALSE (pedido del dev: "no quiero
@@ -235,6 +271,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Material Editor", false);
         setVisible("Tools",           true);
         hideOrthoPanels();
+        hideNarrativePanels();
     }
 }
 

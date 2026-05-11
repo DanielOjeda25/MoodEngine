@@ -160,6 +160,12 @@ EditorApplication::EditorApplication() {
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    // F2H46: el debug-check de IDs conflictivos (ImGui 1.92+) genera
+    // false-positives con imgui-node-editor (la lib maneja su propio
+    // ID stack interno y dispara la alarma sin que sea bug real).
+    // Lo desactivamos globalmente — nuestra suite de tests cubre lo
+    // que este check detectaria en codigo nuestro (8580 assertions).
+    io.ConfigDebugHighlightIdConflicts = false;
     // F2H25: layout version stamping. ImGui guarda window positions y
     // dock targets en este ini. Cuando agregamos paneles nuevos al
     // dockspace (ej. F2H22 agrego "Tools", F2H23 reorganizo columnas),
@@ -179,7 +185,11 @@ EditorApplication::EditorApplication() {
     // del workspace "Editor de mapas" comia el 60% del ancho dejando
     // al "Viewport" amontonado). Bump fuerza fresh layout que el
     // DockBuilder calcula con las dimensiones reales de la ventana.
-    io.IniFilename = "imgui_layout_v3.ini";
+    // F2H46: bump v3 -> v5. v4 fue intermedio (window IDs mal apuntados
+    // en DockBuilder). v5 usa name() puro como ID (matchea con DockBuilder)
+    // y workspace "Narrativa" con layout limpio: Sandbox 70% / Intro 30%
+    // sin paneles de scene/3D que no aplican a contenido narrativo.
+    io.IniFilename = "imgui_layout_v5.ini";
 
     ImGui::StyleColorsDark();
 

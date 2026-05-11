@@ -85,6 +85,50 @@ CPMAddPackage(
     DOWNLOAD_ONLY YES
 )
 
+# imgui-node-editor (F2H46): editor de grafos visuales reutilizable.
+# Base de los Dialog Editor y Quest Editor de Sub-fase 2.5. Header-only-ish:
+# 4 .cpp + headers. No tiene CMakeLists utilizable, asi que armamos
+# nuestro propio target estatico (mismo patron que `imgui`). License MIT.
+# Pinned a v0.9.3 stable; bump manual cuando emerja necesidad.
+CPMAddPackage(
+    NAME imgui_node_editor
+    GITHUB_REPOSITORY thedmd/imgui-node-editor
+    # Pinned a master commit del 2025 que compila contra ImGui docking
+    # branch actual. v0.9.3 (Aug 2023) es muy vieja: usaba ImRect::Floor
+    # + GetKeyIndex que el ImGui actual ya removio. Cuando aparezca una
+    # v0.9.4+ tag estable, migrar a ese tag.
+    GIT_TAG 021aa0ea4da13fed864bafb2a92d4c5205076866
+    DOWNLOAD_ONLY YES
+)
+
+# v0.9.3 (Aug 2023) define operator==(ImVec2), operator!=(ImVec2) y
+# operator*(float, ImVec2) en imgui_extra_math.inl que colisionan con
+# el ImGui docking branch actual (los provee desde imgui.h:3038-3054).
+# Patch idempotente: envuelve el bloque de los 3 operadores en
+# #ifndef IMGUI_DEFINE_MATH_OPERATORS_IMPLEMENTED. Al re-configurar
+# detectamos el guard y no se reaplica.
+set(_ne_extra_inl "${imgui_node_editor_SOURCE_DIR}/imgui_extra_math.inl")
+if(EXISTS "${_ne_extra_inl}")
+    file(READ "${_ne_extra_inl}" _ne_content)
+    if(NOT _ne_content MATCHES "MOOD_NE_OPS_GUARD")
+        # Estrategia: 2 reemplazos single-line (CRLF-safe). Marcador de
+        # inicio: la linea de operator==. Marcador de fin: la siguiente
+        # linea unica conocida post-bloque (`# if IMGUI_VERSION_NUM`).
+        set(_start_line "inline bool operator==(const ImVec2& lhs, const ImVec2& rhs)")
+        set(_end_line   "# if IMGUI_VERSION_NUM < 18955")
+        string(REPLACE
+            "${_start_line}"
+            "// MOOD_NE_OPS_GUARD start\n#ifndef IMGUI_DEFINE_MATH_OPERATORS_IMPLEMENTED\n${_start_line}"
+            _ne_content "${_ne_content}")
+        string(REPLACE
+            "${_end_line}"
+            "#endif // MOOD_NE_OPS_GUARD end\n${_end_line}"
+            _ne_content "${_ne_content}")
+        file(WRITE "${_ne_extra_inl}" "${_ne_content}")
+        message(STATUS "[F2H46] Patched imgui_extra_math.inl: guarded 3 ImVec2 operators against ImGui docking-branch duplicates")
+    endif()
+endif()
+
 CPMAddPackage(
     NAME doctest
     GITHUB_REPOSITORY doctest/doctest
@@ -261,6 +305,28 @@ target_link_libraries(imgui PUBLIC
 )
 
 # ---------------------------------------------------------------------------
+# imgui-node-editor (F2H46): node-graph editor library. Base de Dialog
+# Editor + Quest Editor + Material Editor pro version futura. Cuatro
+# .cpp + headers; linkea contra `imgui` para los draw calls.
+# ---------------------------------------------------------------------------
+add_library(imgui_node_editor STATIC
+    ${imgui_node_editor_SOURCE_DIR}/crude_json.cpp
+    ${imgui_node_editor_SOURCE_DIR}/imgui_canvas.cpp
+    ${imgui_node_editor_SOURCE_DIR}/imgui_node_editor.cpp
+    ${imgui_node_editor_SOURCE_DIR}/imgui_node_editor_api.cpp
+)
+target_include_directories(imgui_node_editor PUBLIC
+    ${imgui_node_editor_SOURCE_DIR}
+)
+target_link_libraries(imgui_node_editor PUBLIC imgui)
+# Suprimir warnings de la lib externa (no son nuestro codigo).
+if(MSVC)
+    target_compile_options(imgui_node_editor PRIVATE /W0)
+else()
+    target_compile_options(imgui_node_editor PRIVATE -w)
+endif()
+
+# ---------------------------------------------------------------------------
 # Libreria estatica del motor: compartida por MoodEditor + MoodPlayer
 # (Hito 21 Bloque 3). Contiene todo `core/`, `platform/`, `engine/`,
 # `systems/`. Lo unico que NO esta aca es `src/editor/` (paneles +
@@ -298,6 +364,9 @@ add_library(mood_engine_lib STATIC
     src/engine/game/state/GameState.cpp
 
     src/engine/i18n/I18n.cpp  # F2H43
+
+    src/engine/nodegraph/Graph.cpp           # F2H46
+    src/engine/nodegraph/NodeGraphEditor.cpp # F2H46
 
     src/engine/packaging/PackageBuilder.cpp
 
@@ -381,6 +450,7 @@ target_link_libraries(mood_engine_lib PUBLIC
     glm::glm
     spdlog::spdlog
     imgui
+    imgui_node_editor  # F2H46
     glad
     stb
     nlohmann_json::nlohmann_json
@@ -454,6 +524,7 @@ add_executable(MoodEditor
     src/editor/commands/EditMeshRendererMaterialCommand.cpp
     src/editor/commands/EditScriptComponentCommand.cpp
     src/editor/commands/VisGroupCommands.cpp  # F2H33
+    src/editor/commands/NodeGraphCommand.cpp  # F2H46
     src/editor/panels/scene/ViewportPanel.cpp
     src/editor/panels/scene/OrthoViewportPanel.cpp  # F2H28
     src/editor/panels/scene/InspectorPanel.cpp
@@ -474,6 +545,8 @@ add_executable(MoodEditor
     src/editor/panels/scene/VisGroupsPanel.cpp  # F2H33
     src/editor/panels/debug/LuaApiPanel.cpp
     src/editor/panels/debug/PerformanceHudPanel.cpp
+    src/editor/panels/debug/NodeGraphSandboxPanel.cpp     # F2H46
+    src/editor/panels/narrative/NarrativeIntroPanel.cpp   # F2H46
     src/editor/panels/assets/ScriptEditorPanel.cpp
     src/editor/panels/assets/MaterialEditorPanel.cpp
 )

@@ -14,7 +14,9 @@
 #include "editor/panels/debug/ConsolePanel.h"
 #include "editor/panels/scene/HierarchyPanel.h"
 #include "editor/panels/debug/LuaApiPanel.h"
+#include "editor/panels/debug/NodeGraphSandboxPanel.h"  // F2H46
 #include "editor/panels/debug/PerformanceHudPanel.h"
+#include "editor/panels/narrative/NarrativeIntroPanel.h"  // F2H46
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/assets/MaterialEditorPanel.h"  // Hito 42
 #include "editor/panels/assets/ScriptEditorPanel.h"
@@ -588,6 +590,8 @@ private:
     ConsolePanel m_console;
     LuaApiPanel m_luaApi;
     PerformanceHudPanel m_performanceHud;  // F2H2
+    NodeGraphSandboxPanel m_nodeGraphSandbox;  // F2H46
+    NarrativeIntroPanel   m_narrativeIntro;    // F2H46
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     MaterialEditorPanel m_materialEditor;  // Hito 42
     Toolbar m_toolbar;  // F2H22: tools de edicion (gizmo modes + brushes + face)

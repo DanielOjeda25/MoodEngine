@@ -132,6 +132,22 @@ void buildMapEditorWorkspace(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("Side (ZY)",   dockBottomRight);  // bottom-right
 }
 
+/// @brief F2H46: workspace "Narrativa" — base de Sub-fase 2.5 (Sistemas
+///        de juego: Dialog Editor, Quest Editor, Inventory). v1 solo
+///        contiene el Node Graph Sandbox (infra) + panel "Narrative
+///        Intro" que explica que los editores reales vienen en proximos
+///        hitos. Layout limpio: Sandbox grande a la izquierda (~70%),
+///        intro panel a la derecha (~30%). Sin Inspector/Asset Browser/
+///        Console — son scene/3D tools, no narrativa.
+void buildNarrativeWorkspace(ImGuiID dockspaceId) {
+    ImGuiID dockMain = dockspaceId;
+    ImGuiID dockRight = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Right, 0.30f, nullptr, &dockMain);
+
+    ImGui::DockBuilderDockWindow("Node Graph Sandbox", dockMain);   // F2H46
+    ImGui::DockBuilderDockWindow("Narrative Intro",    dockRight);  // F2H46
+}
+
 /// @brief Dispatcher: elige el builder segun el nombre del workspace
 ///        activo. F2H23: 3 workspaces — Layout / Programar / Materiales.
 ///        F2H28: + "Editor de mapas" 4-viewport.
@@ -147,6 +163,7 @@ void buildLayoutForWorkspace(const std::string& name, ImGuiID dockspaceId) {
     if      (name == "map_editor") buildMapEditorWorkspace(dockspaceId);
     else if (name == "scripting" ) buildScriptingWorkspace(dockspaceId);
     else if (name == "materials" ) buildMaterialsWorkspace(dockspaceId);
+    else if (name == "narrative" ) buildNarrativeWorkspace(dockspaceId);  // F2H46
     else                            buildLayoutWorkspace(dockspaceId);
 }
 
