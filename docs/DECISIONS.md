@@ -11,6 +11,73 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-10: F2H48 cierre — Dialog runtime + HUD HL2-style + Lua bindings + DialogComponent
+
+**Contexto:** continuación natural de F2H47 — el editor producía `.mooddialog` pero no había sistema que los interpretara en Play Mode. Bloque 2.3 + 2.4 del `PLAN_SUBFASE_2_5.md` fusionados (runtime y Lua bindings van de la mano). El dev confirmó 3 decisiones pre-implementación que abajo se detallan.
+
+**Decisión clave 1 — DialogSystem como singleton namespace (no clase instanciable):** mismo patrón que `Mood::GameState::*`. El motor es single-threaded y una sola conversación activa a la vez basta para v1 (player no puede hablar con dos NPCs simultáneamente).
+
+- **Razón vs clase con múltiples instancias:** simplifica el acceso desde cualquier punto (HUD widget, Lua bindings, DialogInteractSystem, char controller lock) sin pasarse el puntero. El patrón `GameState` ya está consolidado en el motor.
+- **Trade-off aceptado:** si en el futuro el juego necesita "dialog en background con NPC X mientras player camina hacia NPC Y", habrá que refactorizar a clase con N instancias. v1 no lo necesita.
+
+**Decisión clave 2 — `DialogSystem` sin deps de sol2 (callbacks `std::function`):** los hooks `LuaEvaluator/LuaExecutor/NodeEnterHook/ChoiceHook` son `std::function` inyectables. El módulo en `engine/dialog/DialogSystem.h/cpp` NO incluye `<sol/sol.hpp>`. Los tests headless lo prueban end-to-end sin Lua.
+
+- **Razón:** mismo principio que `Graph` (F2H46) y `DialogAsset` (F2H47) — el state model es puro, la integración con Lua vive en `LuaBindings.cpp`. Testeable + se puede usar el sistema desde C++ directo (ej. tutorial in-engine que avanza dialogs sin script Lua).
+- **Trade-off aceptado:** los `condition_lua`/`on_select_lua` declarados en los choices del DialogAsset NO se ejecutan en v1 — no hay sol::state inyectado. Los choices se asumen siempre disponibles. Para v2 se necesita una sol::state global del juego (deferred hasta caso real).
+
+**Decisión clave 3 — Variables del dialog persisten en `GameState::dialogVars()`:** map global `unordered_map<string, string>` accesible desde Lua (`dialog.set_var/get_var/has_var/clear_vars`). Sobreviven entre dialogs.
+
+- **Razón vs session-only (clear al stop):** habilita "el NPC recuerda que ya hablaste". Patrón clásico en RPG (Skyrim, Fallout, BG3): la state del mundo persiste entre conversaciones.
+- **Persistencia en save:** **NO en v1** — vive solo en memoria. Sumar al `SaveLoad.cpp` cuando emerja necesidad real ("el guardia recuerda al cargar partida"). Sin urgencia.
+- **Stringly-typed (value = string):** simplifica binding Lua + JSON serialization futuro sin variant. Si el script necesita int o bool, hace `tonumber()` / `s == "true"` — convención aceptable para v1.
+
+**Decisión clave 4 — Trigger de start = `DialogComponent.autoStartOnInteract` + Lua escape hatch:** un NPC en escena con `DialogComponent` + `TriggerComponent` auto-muestra "[E] Hablar" cuando player entra al trigger; al apretar E, `DialogSystem::start` arranca con el `.mooddialog` apuntado. Como alternativa, `dialog.start("path")` desde Lua arranca cualquier dialog desde donde sea (cinemáticas, custom triggers, scripted events).
+
+- **Razón vs (a) "solo Lua" o (b) "solo auto-trigger":** combinación cubre 80% de casos (NPCs estándar) con cero código + escape hatch para los casos custom. Patrón usado en HL2 (entity NPCs vs scripted_sequence).
+- **`autoStartOnInteract=true` por default:** opt-out cuando el dev quiere control total via Lua.
+- **`cachedDialogId` en runtime para evitar `loadDialog` por frame:** el primer trigger carga, el resto reusa. Reseteado cuando se cambia el path desde Inspector.
+
+**Decisión clave 5 — HUD widget `dialog_box` HL2-style con choices numeradas 1-9 (no mouse clic):** caja inferior centrada (max 800px o 70% del ancho), NPC text con wrap, "1) opción / 2) opción" listadas en amarillo HL. Tecla 1-9 = `advance(idx)`. Tecla E (cuando no hay choices) = `continueNext`.
+
+- **Razón vs clic con mouse:** simplifica v1 sin handling de hover/click del DrawList (el widget se renderea con `ImDrawList::AddText`, no es interactivo). Patrón HL2/Mass Effect Classic = teclado numérico. Si en el futuro el dev pide mouse clic, agregar `ImGui::IsMouseClicked + AABB test` sobre cada choice — incremento pequeño.
+- **Cap visual 9 choices:** suficiente para 99% de los casos (típicamente 2-4). Si emerge un caso con 10+, falla por design — split en sub-dialogs.
+
+**Decisión clave 6 — Char controller lock via flag `GameState::dialogActive()`:** WASD/jump/crouch ignorados mientras dialog activo. Mouse-look queda libre (el player puede mirar al NPC con naturalidad mientras conversa). Editor + Player ambos respetan el flag.
+
+- **Razón vs (a) input completamente desactivado (mouse incluido) o (b) congelar physics entero:** mouse-look libre es ergonómico (jugadores quieren mirar al NPC sin perder agencia visual). Congelar physics entero rompe simulaciones de fondo (NPCs patrullando, partículas, etc.) — innecesario.
+- **Reseteo en `GameState::reset()`:** al salir de Play Mode el flag se limpia automáticamente (preservación de invariantes del editor).
+
+**Decisión clave 7 — Workspace Narrativa con viewport 3D (no NarrativeIntro placeholder):** pedido del dev tras tour visual de F2H47. Layout final 3 columnas: Viewport (3D) 30% izq / Dialog Editor 40% centro / col der vertical con Node Inspector arriba + Dialog Browser abajo. NarrativeIntro removido del default (sigue accesible via `Ver`).
+
+- **Razón:** Sub-fase 2.5 va a producir NPCs reales (F2H49). El workspace puro de canvas era abstracto — el dev necesita ver el NPC en escena mientras edita su dialog (posicionar trigger, validar anim, etc.). Patrón estándar de editores narrativos (RenPy con preview, Inkle con scene viz).
+- **Trade-off aceptado:** menos espacio para el canvas del Dialog Editor (40% vs 100% previo). Si los grafos crecen, el dev puede expandir el panel con drag — el layout es solo el default.
+- **Persistencia por workspace:** cada workspace guarda su propio `iniLayout` en `captureCurrentLayout` al switch + restaura via `LoadIniSettingsFromMemory` al volver. Confirmado al dev: layouts independientes — cambios en Narrativa NO afectan a Layout.
+
+**Decisión clave 8 — `DialogComponent` en popup Add Component (categoría Logic):** descubrible como componente normal del Inspector, junto a Script + NavAgent. Descripción i18n: "Linkea un asset .mooddialog; auto-arranca al interactuar el player si hay un Trigger."
+
+- **Razón:** sin esto, asignar dialog a una entity requeriría Lua o hacks. El popup Add Component es el flujo discoverable estándar.
+- **Categoría Logic:** vive con Script + NavAgent — todos cubren behavior/data del entity vs Render/Physics/Audio/World.
+
+**Alternativas descartadas:**
+
+- **DialogSystem como clase con N instancias:** YAGNI v1 (no hay caso de uso).
+- **Inyectar `LuaEvaluator/LuaExecutor` desde una sol::state global ya en F2H48:** scope creep — requiere crear infra de sol::state global del juego compartida (no existe hoy). Deferred hasta que un caso real lo pida (probablemente F2H50+ con inventory + quest condition predicates).
+- **Persistir `dialogVars` en `.moodsave` desde F2H48:** YAGNI — el demo de F2H49 no lo necesita. Sumar cuando emerja.
+- **Mouse clic sobre choices:** complica el v1 sin valor crítico. Teclado numérico es estándar HL2.
+- **Workspace con tabs Viewport+Dialog en center:** menos usable que side-by-side. El dev prefiere ambos visibles.
+- **Inspector general en Narrativa:** no entra — el workspace se enfoca en canvas + 3D. El dev puede abrir Inspector via `Ver` si lo necesita puntualmente.
+
+**Condiciones de revisión:**
+
+- Si emerge necesidad de dos conversaciones simultáneas (NPC patrullaje + cinemática), refactorizar DialogSystem a clase con N instancias.
+- Si los `condition_lua`/`on_select_lua` empiezan a tener uso real en demos/juegos del dev, inyectar `LuaEvaluator/LuaExecutor` con sol::state global dedicada.
+- Si el dev valida un caso donde `dialogVars` deben sobrevivir entre Save/Load (guardian recuerda al cargar), agregar serialización al `SaveLoad.cpp`.
+- Si emerge un grafo de dialog con 10+ choices en un solo nodo, agregar overflow (scroll en el HUD) o forzar split en sub-dialogs (decisión de pipeline).
+- Si el dev pide mouse-clic sobre choices en el HUD (más ergonómico para gamepad? touch?), agregar handler de `IsMouseClicked + AABB test` por choice.
+- Si el workspace Narrativa con viewport 3D se siente apretado en monitores chicos (<= 1600px), reconsiderar tabs en center.
+
+---
+
 ## 2026-05-10: F2H47 cierre — Dialog Editor (autoría: schema + visual editor + inspector + browser)
 
 **Contexto:** Segundo hito real de Sub-fase 2.5 (Bloque 2 del plan `PLAN_SUBFASE_2_5.md`). Construye el primer editor de contenido sobre la infra del node-graph framework de F2H46. Entrega herramienta de autoría completa end-to-end (schema + asset + 3 paneles del editor + sample demo) pero NO el runtime — el state machine del dialog que corre en Play Mode + HUD widget + Lua bindings + DialogComponent quedan para F2H48. Split editor/runtime deliberado para validar el schema antes de atar el runtime.

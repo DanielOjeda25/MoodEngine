@@ -9,22 +9,49 @@
 
 ---
 
-## Post-F2H47 (2026-05-10) — Dialog Editor (autoría) cerrado
+## Post-F2H48 (2026-05-10) — Dialog runtime + HUD HL2-style + Lua bindings cerrado
 
 ### Próximo a atacar
 
-- **F2H48 — Dialog runtime** (segunda mitad del par editor/runtime del sistema de diálogos).
-  - **Origen**: continuación natural de F2H47 — el editor produce `.mooddialog` pero todavía no hay sistema que los interprete en Play Mode.
-  - **Scope esperado**:
-    - **`engine/dialog/DialogSystem.h/cpp`**: state machine que recorre el árbol según el flow. Mantiene `current_node_id`, evalúa `condition_lua` por choice (filtra las visibles), aplica `on_select_lua` al elegir, salta al nodo destino vía el link del output socket correspondiente. Variables persistentes via `dialog.set_var/get_var` (map key-value tipo i18n pero por session de dialog).
-    - **`AssetManager::loadDialog(logicalPath)`**: integración con VFS para que `DialogComponent` apunte a paths lógicos (`"dialogs/intro.mooddialog"`).
-    - **HUD widget default** en el framework F2H39: caja inferior estilo HL2 con texto del NPC + opciones clickeables (con condition_lua aplicado para filtrar). Override-able vía `dialog.set_renderer(callback)` para juegos con HUD propio (engine-grade principle).
-    - **Lua bindings nuevos** en tabla `dialog`: `start("npc_id")`, `is_active()`, `current_node()`, `advance(choice_index)`, `set_var/get_var`, `on_node_enter(callback)`, `on_choice(callback)`, `set_renderer(callback)`.
-    - **`DialogComponent`** entity-side: campo `std::string dialog_path` + opcional `auto_start_on_interact`. Inspector del editor general permite asignar un `.mooddialog` por NPC.
-    - **Tests de integración runtime**: state machine recorre asset de prueba, condiciones filtran choices, hooks Lua se invocan.
-  - **Decisión técnica abierta para F2H48**: cómo se dispara el dialog en Play Mode. Opciones: (a) script Lua del NPC llama `dialog.start("npc_id")` cuando un trigger collide con player; (b) `DialogComponent` con flag `auto_start_on_interact` que el motor detecta automáticamente cuando player presiona E cerca del NPC; (c) combinación de ambos. Recomendación inicial: (c) — auto-start es ergonómico para casos típicos, Lua start es escape hatch para casos custom.
+- **F2H49 — Demo characters Mixamo + escena narrativa completa** (Bloque 2.5 del plan).
+  - **Origen**: pedido del dev post-F2H47/F2H48: *"que sentido tiene crear un sistema de diálogo, sino tenemos a quien asignar ni como sentir"*. F2H48 cerró el runtime técnico — ahora hace falta validar end-to-end con assets reales.
 
-- **Después de F2H48**: **F2H49 — Demo characters Mixamo + escena narrativa completa** (Bloque 2.5 nuevo del plan, scope nivel B). Pedido del dev: *"que sentido tiene crear un sistema de diálogo, sino tenemos a quien asignar ni como sentir"*. Materializa el caso de uso end-to-end con assets reales:
+- **Después de F2H49**: continuar con **Inventario** (F2H50) y **Quest Editor** (F2H51) según `PLAN_SUBFASE_2_5.md`.
+
+### Diferidos sin orden (emergentes post-F2H48)
+
+- **Inyección real de hooks `LuaEvaluator/LuaExecutor` en DialogSystem**: la API existe (`setEvaluator`/`setExecutor`) pero v1 no la wirea — los `condition_lua`/`on_select_lua` declarados en los choices se ignoran. Requiere crear una sol::state global del juego (compartida entre los scripts de entity). Sumar cuando emerja necesidad real (probablemente F2H50+ con inventory + quest condition predicates).
+- **Persistencia de `GameState::dialogVars` en `.moodsave`**: las vars sobreviven en memoria entre dialogs pero se pierden al cerrar el juego. Sumar al `SaveLoad.cpp` cuando emerja necesidad de "el guardia recuerda al cargar partida".
+- **Mouse clic sobre choices del HUD `dialog_box`**: v1 usa teclas 1-9 (HL2 style). Si el dev pide gamepad/touch, agregar `ImGui::IsMouseClicked + AABB test` por choice — incremento pequeño.
+- **Persistir `DialogComponent` en `.moodmap`**: SceneSerializer no lo conoce en v1 (asignación via Lua o demo programático). Sumar cuando el dev configure dialogs desde el Inspector + esperar persistir.
+- **Voiceover sync waveform**: customData ya tiene `audio` path; sumar timing + UI cuando emerja gameplay con voz real.
+- **Animation `wait_for` flag**: customData tiene `animation` pero v1 solo dispara, no espera al final.
+
+### Histórico resuelto F2H48
+
+- ~~`engine/dialog/DialogSystem.h/cpp` state machine~~ — resuelto. Singleton namespace + hooks `std::function` inyectables, sin deps sol2. 15 tests unitarios.
+- ~~`AssetManager::loadDialog(logicalPath)` con VFS + cache~~ — resuelto. Nuevo partial `AssetManager_Dialog.cpp` + slot 0 vacío.
+- ~~`DialogComponent` entity-side con `autoStartOnInteract`~~ — resuelto. Agregable desde popup Add Component (categoría Logic) + cacheo runtime de `cachedDialogId`.
+- ~~HUD widget default HL2-style~~ — resuelto. `drawDialogBox` en GameOverlay con texto NPC + choices numeradas 1-9 + hint `[E] Continuar`. Toggleable via `hud.set_widget("dialog_box", false)`.
+- ~~Lua bindings tabla `dialog`~~ — resuelto. 10 funciones: `isActive/currentNode/advance/continueNext/stop/set_var/get_var/has_var/clear_vars/start`. `start(path)` requiere AssetManager (propagado por ScriptSystem::update).
+- ~~Char controller lock durante dialog~~ — resuelto. Flag global `GameState::dialogActive()` chequeado por EditorPlayMode + PlayerApplication — WASD/jump/crouch off, mouse-look libre.
+- ~~Trigger interact (player + E → start)~~ — resuelto. Nuevo `DialogInteractSystem` con `tick(scene, assets, eJustPressed) -> bool` (señala si dialog arrancó este frame para no double-consumir flanco) + `tickActiveDialog(eJustPressed, digitJustPressed)`.
+- ~~Workspace Narrativa con viewport 3D~~ — resuelto. 3 columnas: Viewport 30% / Dialog Editor 40% / col der vertical con Inspector + Browser. NarrativeIntro removido del default layout.
+- ~~DialogComponent en popup Add Component~~ — resuelto. 12vo componente, categoría Logic.
+
+## Post-F2H47 (2026-05-10) — Dialog Editor (autoría) cerrado
+
+### Diferidos sin orden (emergentes post-F2H47, no resueltos en F2H48)
+
+- **Tipos de nodo dialog adicionales** (`condition`, `action`, `jump`): cubierto al 80% por hooks por choice. Agregar si emerge demand real.
+- **Theming custom del grafo** (paleta naranja Valve / temática narrativa): herencia de F2H46.
+- **String tables dedicadas para gameplay** (vs reusar `assets/i18n/`): considerar si emerge separación por contexto.
+- **Preview en-vivo dentro del editor** (sin entrar a Play Mode).
+- **Auto-save del Dialog Editor** con debounce + undo-a-disco.
+
+### Histórico — F2H49 movido a "próximo a atacar" arriba
+
+- **F2H49 — Demo characters Mixamo + escena narrativa completa** (Bloque 2.5 del plan, scope nivel B). Materializa el caso de uso end-to-end con assets reales:
   - **Player char** Mixamo con 5 anims (idle/walk/run/jump/wave).
   - **NPC char** Mixamo (medieval/fantasy) con 4 anims (idle/talking/wave/look_around).
   - **Pipeline FBX → glb** (Blender o gltf-pipeline CLI, decidir al arrancar).

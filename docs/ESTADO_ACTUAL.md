@@ -4,7 +4,44 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H47 cerrado (2026-05-10)
+## 0. ACTUALIZACIÓN F2H48 cerrado (2026-05-10)
+
+**Tercer hito real de Sub-fase 2.5 cerrado — Dialog runtime + HUD HL2-style + Lua bindings activos.**
+Tag: `v1.36.0-fase2-hito48`. Cita verbatim del dev al validar: *"ya funciona"*.
+
+**Qué entrega F2H48** (runtime completo + HUD + Lua + locking del char controller):
+- **`DialogSystem`** state machine pura (`engine/dialog/DialogSystem.h/cpp`) — singleton namespace paridad con `GameState`. API completa: `start/advance/continueNext/stop/isActive/currentLine/availableChoices` + hooks inyectables `setEvaluator/setExecutor/setNodeEnterHook/setChoiceHook` (callbacks `std::function`, módulo sin deps sol2). Recorrido del graph via output sockets (`addLink` del F2H46 + invariante auto-sync de F2H47).
+- **`AssetManager::loadDialog`** + cache + slot 0 (asset vacío) + nuevo partial `AssetManager_Dialog.cpp` (mismo patrón que `_Prefab.cpp`).
+- **`DialogComponent`** entity-side: `{dialogPath, autoStartOnInteract, cachedDialogId}` agregable desde el popup "Add Component" (categoría Logic).
+- **`DialogInteractSystem`** que conecta `TriggerComponent + DialogComponent + tecla E` con el state machine. Setea `hud.interact_prompt = "[E] Hablar"` cuando player adentro del trigger + dialog no activo; auto-arranca dialog al apretar E. Maneja también `tickActiveDialog` para digitos 1-9 → `advance(idx)`.
+- **HUD widget `dialog_box`** HL2-style en `GameOverlay.cpp` — caja inferior 800px max o 70% de ancho, NPC text con wrap, choices numeradas, naranja Valve + amarillo HL. Toggleable via `hud.set_widget("dialog_box", false)`.
+- **Char controller lock** via flag global `GameState::dialogActive()`: WASD/jump/crouch ignorados mientras hay dialog activo; mouse-look queda libre. Editor + Player ambos respetan el flag.
+- **Lua bindings tabla `dialog`** con 10 funciones (`isActive/currentNode/advance/continueNext/stop/set_var/get_var/has_var/clear_vars/start`). `set_var/get_var` operan sobre `GameState::dialogVars()` (sobreviven entre dialogs por decisión).
+- **Workspace Narrativa rediseñado** (3 columnas): Viewport 3D izq 30% / Dialog Editor centro 40% / col der dividida vertical con Node Inspector arriba + Dialog Browser abajo. Pedido del dev tras tour visual: necesita ver NPCs reales + posicionar triggers en escena 3D mientras edita el contenido narrativo.
+- **18 tests nuevos + ~120 assertions**: `test_dialog_system.cpp` (15 tests) + 3 tests Lua en `test_lua_bindings.cpp`. Suite total: **726/8797** verde.
+
+**Decisiones clave (confirmadas pre-implementación)**:
+1. Trigger de start = `DialogComponent.autoStartOnInteract` + Lua escape hatch `dialog.start(path)` — opción (c) recomendada.
+2. Vars persistencia: sobreviven en `GameState::dialogVars()` entre dialogs (habilita "el NPC recuerda que ya hablaste"). Persistencia en save deferred.
+3. Sandbox Lua para condition/on_select: global del juego (acceso a inventory/quest/dialog/etc.).
+4. DialogSystem singleton namespace (no clase instanciable) — paridad con GameState. Una sola conversación activa a la vez en v1.
+5. Choice keys 1-9 (HL2 style, no clic con mouse en v1) + E para continueNext en nodos sin choices.
+6. Hooks `LuaEvaluator/LuaExecutor` disponibles pero NO inyectados en v1 — `condition_lua`/`on_select_lua` se ignoran silenciosamente. Inyección real requiere sol::state global dedicada, deferred hasta caso real.
+7. Workspace Narrativa con viewport 3D (no NarrativeIntro placeholder) — pedido del dev como prep para F2H49 (demo characters).
+
+**Lo que falta para validación end-to-end real con personajes** (F2H49):
+- Demo characters Mixamo (player + NPC) con anims (idle/walk/run/wave/talking).
+- Pipeline FBX → glb (Blender o `gltf-pipeline` CLI).
+- Demo scene `narrative_demo.moodmap` con player spawn + NPC con `DialogComponent` + trigger interact.
+- Update demo dialog a 5-7 nodos con branching real.
+- Animator state machines (player + NPC).
+- Welcome modal: botón "Cargar demo narrativo" separado del Fox.
+
+**Próximo a atacar**: **F2H49 — Demo characters Mixamo + escena narrativa completa** (Bloque 2.5 del plan). Tag previsto `v1.39.0-fase2-hito49`.
+
+---
+
+## 0.1. F2H47 cerrado (2026-05-10)
 
 **Segundo hito real de Sub-fase 2.5 cerrado — Dialog Editor (autoría) activo.**
 Tag: `v1.37.0-fase2-hito47`. Cita verbatim del dev al validar: *"todo ok"*.
