@@ -373,6 +373,7 @@ add_library(mood_engine_lib STATIC
     src/engine/dialog/DialogValidator.cpp       # F2H47
     src/engine/dialog/DialogSystem.cpp          # F2H48
     src/engine/dialog/DialogInteractSystem.cpp  # F2H48
+    src/engine/dialog/DialogScriptHost.cpp      # F2H48.1
 
     src/engine/packaging/PackageBuilder.cpp
 

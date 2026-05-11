@@ -124,6 +124,15 @@ struct SavedTrigger {
     glm::vec3 halfExtents{1.0f, 1.0f, 1.0f};
 };
 
+/// @brief F2H48.1: copia persistida de un DialogComponent.
+///        Solo dialogPath + autoStartOnInteract; el cachedDialogId
+///        runtime no se persiste (el AssetManager lo recompone al
+///        primer trigger via loadDialog).
+struct SavedDialog {
+    std::string dialogPath;
+    bool        autoStartOnInteract = true;
+};
+
 /// @brief Copia persistida de un ParticleEmitterComponent (Hito 29).
 ///        Solo la configuracion editable; el estado runtime (positions,
 ///        ages, rngState, etc.) no se persiste — la simulacion arranca
@@ -171,6 +180,7 @@ struct SavedEntity {
     std::optional<SavedScript> script;            // Hito 24
     std::optional<SavedParticleEmitter> particleEmitter; // Hito 29
     std::optional<SavedTrigger> trigger;                  // Hito 33
+    std::optional<SavedDialog>  dialog;                   // F2H48.1
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.

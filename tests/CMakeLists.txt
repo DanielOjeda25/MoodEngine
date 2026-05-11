@@ -73,7 +73,8 @@ add_executable(mood_tests
     test_nodegraph.cpp  # F2H46
     test_dialog_asset.cpp      # F2H47
     test_dialog_validator.cpp  # F2H47
-    test_dialog_system.cpp     # F2H48
+    test_dialog_system.cpp        # F2H48
+    test_dialog_script_host.cpp   # F2H48.1
 
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/Brush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/BrushMesh.cpp
@@ -154,6 +155,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogAsset.cpp      # F2H47
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogValidator.cpp  # F2H47
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogSystem.cpp     # F2H48
+    ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogScriptHost.cpp # F2H48.1
 )
 
 # AssetManager.cpp usa spdlog (via core/Log). JsonHelpers requiere nlohmann_json.

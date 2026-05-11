@@ -219,6 +219,18 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<TriggerComponent>(tc);
         }
 
+        // F2H48.1: DialogComponent. cachedDialogId arranca en 0 — el
+        // DialogInteractSystem llama loadDialog en el primer frame que
+        // el player entra al trigger.
+        if (se.dialog.has_value()) {
+            const auto& s = *se.dialog;
+            DialogComponent dc{};
+            dc.dialogPath           = s.dialogPath;
+            dc.autoStartOnInteract  = s.autoStartOnInteract;
+            dc.cachedDialogId       = 0;
+            e.addComponent<DialogComponent>(dc);
+        }
+
         // Hito 24: ScriptComponent + overrides. El script se carga
         // perezosamente desde `ScriptSystem` (mtime-based), aca solo
         // adjuntamos el path + overrides; `engine.exposed` los lee en

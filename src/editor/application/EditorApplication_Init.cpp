@@ -10,6 +10,7 @@
 #include "core/Log.h"
 #include "core/UserSettings.h"  // F2H43
 #include "engine/audio/device/AudioDevice.h"
+#include "engine/dialog/DialogScriptHost.h"  // F2H48.1
 #include "engine/i18n/I18n.h"  // F2H43
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/render/preview/MaterialPreviewRenderer.h"
@@ -97,6 +98,14 @@ EditorApplication::EditorApplication() {
     // y arrancar I18n con ese idioma como activo. Fallback siempre Ingles.
     UserSettings::init();
     I18n::init(UserSettings::language());
+
+    // F2H48.1: inicializar el DialogScriptHost — registra los hooks
+    // evaluator/executor en DialogSystem para que los condition_lua /
+    // on_select_lua de las choices se evaluen contra una sol::state
+    // dedicada (compartida con todos los scripts del juego). Sin
+    // este wireup, los hooks se ignoran silenciosamente (paridad con
+    // tests headless).
+    Dialog::DialogScriptHost::init();
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0) {
         throw std::runtime_error(std::string("SDL_Init fallo: ") + SDL_GetError());

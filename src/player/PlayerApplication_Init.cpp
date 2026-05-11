@@ -10,6 +10,7 @@
 #include "core/Log.h"
 #include "core/UserSettings.h"  // F2H43
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/dialog/DialogScriptHost.h"  // F2H48.1
 #include "engine/i18n/I18n.h"  // F2H43
 #include "engine/audio/device/AudioDevice.h"
 #include "engine/game/manifest/GameManifest.h"
@@ -56,6 +57,7 @@ PlayerApplication::PlayerApplication() {
     // %APPDATA%\MoodEngine\settings.json) y arrancar I18n.
     UserSettings::init();
     I18n::init(UserSettings::language());
+    Dialog::DialogScriptHost::init();  // F2H48.1
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0) {
         throw std::runtime_error(std::string("SDL_Init fallo: ") + SDL_GetError());

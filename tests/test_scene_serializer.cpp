@@ -534,3 +534,88 @@ TEST_CASE("SceneSerializer: friction default (0.5) NO se persiste en JSON (Hito 
 
     std::filesystem::remove(path);
 }
+
+// ============================================================
+// F2H48.1: DialogComponent round-trip
+// ============================================================
+
+TEST_CASE("SceneSerializer: round-trip de DialogComponent (F2H48.1)") {
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    {
+        Entity npc = scene.createEntity("NPC_guard");
+        DialogComponent dc{};
+        dc.dialogPath           = "dialogs/intro.mooddialog";
+        dc.autoStartOnInteract  = false;  // override del default
+        dc.cachedDialogId       = 99;     // runtime; NO debe persistir
+        npc.addComponent<DialogComponent>(dc);
+        // MeshRenderer para que la entidad no sea filtrada por
+        // tag-prefix (no es "Tile_").
+        npc.addComponent<MeshRendererComponent>(
+            MeshAssetId{0}, std::vector<MaterialAssetId>{0});
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("dialog_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1u);
+    const auto& se = loaded->entities[0];
+    CHECK(se.tag == "NPC_guard");
+    REQUIRE(se.dialog.has_value());
+    CHECK(se.dialog->dialogPath == "dialogs/intro.mooddialog");
+    CHECK_FALSE(se.dialog->autoStartOnInteract);  // override preservado
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: DialogComponent con path vacio NO se persiste (F2H48.1)") {
+    // Mismo patron que ScriptComponent: si path vacio, el componente
+    // no se serializa (no aporta nada al round-trip).
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    {
+        Entity npc = scene.createEntity("NPC_sin_path");
+        npc.addComponent<DialogComponent>();  // dialogPath = ""
+        npc.addComponent<MeshRendererComponent>(MeshAssetId{0},
+            std::vector<MaterialAssetId>{0});
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("dialog_empty_path.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1u);
+    // El dialog NO debe estar en el JSON ni en el load.
+    CHECK_FALSE(loaded->entities[0].dialog.has_value());
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: autoStartOnInteract default=true se persiste igual (F2H48.1)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+    {
+        Entity npc = scene.createEntity("NPC_default");
+        DialogComponent dc{};
+        dc.dialogPath = "dialogs/x.mooddialog";
+        // autoStartOnInteract queda en true (default)
+        npc.addComponent<DialogComponent>(dc);
+        npc.addComponent<MeshRendererComponent>(MeshAssetId{0},
+            std::vector<MaterialAssetId>{0});
+    }
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("dialog_default_flag.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities[0].dialog.has_value());
+    CHECK(loaded->entities[0].dialog->autoStartOnInteract);
+    std::filesystem::remove(path);
+}

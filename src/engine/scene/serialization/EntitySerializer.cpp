@@ -229,6 +229,19 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         je["trigger"] = jtr;
     }
 
+    // F2H48.1: DialogComponent. Solo dialogPath + autoStartOnInteract;
+    // el cachedDialogId runtime no se persiste (loadDialog al primer
+    // tick del DialogInteractSystem lo repuebla via VFS).
+    if (entity.hasComponent<DialogComponent>()) {
+        const auto& dc = entity.getComponent<DialogComponent>();
+        if (!dc.dialogPath.empty()) {
+            json jd;
+            jd["path"]              = dc.dialogPath;
+            jd["autoStartOnInteract"] = dc.autoStartOnInteract;
+            je["dialog"] = jd;
+        }
+    }
+
     // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la
     // entidad tiene un `PrefabLinkComponent`. Sin propagacion bidireccional
     // por ahora; es solo un breadcrumb para futuras features ("revertir a
@@ -335,6 +348,17 @@ SavedEntity parseEntityFromJson(const json& j) {
         SavedTrigger st;
         st.halfExtents = jtr.value("halfExtents", glm::vec3{1.0f});
         se.trigger = std::move(st);
+    }
+
+    // F2H48.1: dialog.
+    if (j.contains("dialog")) {
+        const auto& jd = j.at("dialog");
+        SavedDialog sd;
+        sd.dialogPath = jd.value("path", std::string{});
+        sd.autoStartOnInteract = jd.value("autoStartOnInteract", true);
+        if (!sd.dialogPath.empty()) {
+            se.dialog = std::move(sd);
+        }
     }
 
     if (j.contains("script")) {
