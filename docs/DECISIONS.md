@@ -11,6 +11,55 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-10: F2H46 cierre — node-graph framework (integración `imgui-node-editor`) + workspace "Narrativa"
+
+**Contexto:** Primer hito real de Sub-fase 2.5 (Bloque 0.1 del plan `PLAN_SUBFASE_2_5.md`). Pre-requisito de los Dialog Editor (F2H47) y Quest Editor (F2H4X) que vienen — comparten arquitectura de grafo, implementar UN framework reutilizable evita duplicación. Estimación inicial ~8h en 8 bloques (A-H); realizado en ~1 sesión con 3 fixes técnicos reactivos al feedback del dev durante validación visual.
+
+**Decisiones técnicas clave:**
+
+- **Lib externa `thedmd/imgui-node-editor` vs framework propio.** Decisión confirmada con dev pre-implementación: usar la lib. Razones: ~10x menos esfuerzo (~1 hito integración vs ~3-5 propio), battle-tested (usado en herramientas Unreal-like), header-only-ish, license MIT. Trade-off: control limitado del look-and-feel (theming custom es feature futura), dependencia externa nueva (aceptable — sigue el patrón de imgui/glm/EnTT/Lua/Jolt/etc en `_deps/`). Alternativa descartada: framework propio sobre ImGui DrawList — control total pero scope explotaría fácil con feature creep (animaciones, snap, multi-select, etc) que la lib ya da gratis.
+
+- **Pinned a commit master post-v0.9.3** en lugar del tag v0.9.3 (Aug 2023). Razón: v0.9.3 usa APIs ImGui ya removidas en docking branch actual (`ImRect::Floor`, `ImGui::GetKeyIndex`). Master tiene los fixes. Cuando aparezca v0.9.4+ tag estable, migrar — por ahora pin a hash 2025-era para reproducibilidad. Documentado en CMakeLists.txt.
+
+- **Patch idempotente al header de la lib via CMake `file(READ/WRITE)` en configure-time.** `imgui_extra_math.inl` define `operator==/!=/operator*(float, ImVec2)` para ImVec2 que colisionan con el ImGui docking branch que ya los provee (`imgui.h:3038-3054`). Patch envuelve el bloque problemático en `#ifndef IMGUI_DEFINE_MATH_OPERATORS_IMPLEMENTED` con guard `MOOD_NE_OPS_GUARD`. Idempotente — re-config detecta el guard y no reaplica. Alternativa descartada: fork del repo + maintenance overhead, o aplicar patch via `PATCH_COMMAND` en CPM (más frágil con git apply en Windows). El `file(REPLACE)` directo es portable + idempotente + auto-documentado en el log de configure.
+
+- **Separación dura state vs rendering: `engine/nodegraph/Graph.h` puro + `NodeGraphEditor.h` con pImpl.** Razón: Dialog/Quest van a serializar grafos a JSON. La serialización no debe depender de ImGui. Tests unitarios del data model no necesitan ImGui linkeado en `mood_tests`. Mismo patrón que F2H39 GameState ↔ GameOverlay. El pImpl en `NodeGraphEditor` evita que clientes del header incluyan `imgui_node_editor.h` ni ImGui — solo `Graph.h`. Alternativa descartada: una sola clase mezclando state + draw — perdés testabilidad y el header se contamina.
+
+- **IDs propios `u32` con `k_invalid = 0` como sentinel, monotonicos sin reuso post-delete.** Razón: simpler than tombstones / generational indices; `u32` cabe en el `uintptr_t` que usa la lib internamente para sus NodeId/PinId/LinkId (cast directo en helpers). Generadores `m_next*Id` se serializan en JSON para que cargar un grafo + agregar nuevos nodos siga IDs frescos (no reusa IDs de nodos borrados). Alternativa descartada: indices en arrays — frágil ante deletes y reordenamientos.
+
+- **5 reglas de `canConnect` estrictas v1.** (1) ambos sockets existen, (2) kinds correctos (Output → Input, no Output→Output ni Input→Output), (3) typeTag idéntico (sin coerciones / casts entre tipos), (4) no duplicar link existente con mismo from+to, (5) un input acepta solo 1 link entrante (outputs pueden fan-out a N). Razón: los editores específicos (Dialog/Quest) van a definir su propia taxonomía de typeTag — coerciones automáticas en el framework crearían ambigüedad. v2 podría agregar matriz de compatibilidad si emerge necesidad real. Test coverage exhaustivo de las 5 reglas en `test_nodegraph.cpp`.
+
+- **`draw()` no-mutating + retorna `std::vector<EditorEvent>`.** Razón: desacopla el wrapper del sistema de undo/redo. El caller (Sandbox panel, eventualmente Dialog/Quest Editor) traduce eventos a Commands y los pushea al `HistoryStack` para undo. Alternativa descartada: mutar el grafo dentro de draw — el wrapper necesitaría conocer HistoryStack, agregando dependencia transitiva. Eventos suficientes para v1: NodeMoved, NodeDeleted, LinkCreated, LinkDeleted. AddNode no es event (la lib no dispara "create node" implícito — el caller lo dispara explícito via botón/menu y construye directo el `AddNodeCommand`).
+
+- **Sync `graph → lib` unconditional cada frame cuando `!ne::IsActive()`.** Razón: garantizar que un undo de MoveNodeCommand revierta la pos visualmente. La lib mantiene su propio storage de posiciones; si después de `Command::undo()` el graph.position cambia pero la lib sigue mostrando la pos vieja → bug visual. La gate `!IsActive()` evita override durante un drag activo (en ese caso la lib es source of truth temporal hasta drag-end). Alternativa descartada: track explícito de "graph mutated externally" con dirty flags — más invasivo y propenso a perder un evento. Polling con epsilon-compare es trivial.
+
+- **Window titles de paneles nuevos = `name()` directo (English estable, sin `###StableID`).** Razón: convención con el resto del editor (Inspector, Console, Performance — ninguno traduce su title bar). `DockBuilderDockWindow(window_name)` hashea el string completo — debe matchear con lo que `ImGui::Begin` pasa. Si usaramos `"Título###StableID"` traducido, las traducciones romperían el hash → dock no se aplicaría. Solución: title fijo, contenido traducido. Decisión post-fix tras dev reportar "ambos siguen flotando" — el ###suffix initial design no matcheaba con DockBuilder lookup.
+
+- **Workspace "Narrativa" SIN paneles de scene/3D.** Cita del dev (post-validación 1): *"si se trata de narrativa no tiene sentido que muestre paneles que no tienen sentido"*. Workspace contiene SOLO `NodeGraphSandbox` (izq 70%) + `NarrativeIntroPanel` (der 30%). Inspector, Asset Browser, Console quedan accesibles desde Ver pero no son default. Razón: el workspace tiene que ser dedicado a su tarea, no un cajón de sastre.
+
+- **`io.ConfigDebugHighlightIdConflicts = false` global.** Razón: el debug-check nuevo de ImGui 1.92 da false-positives con imgui-node-editor (la lib manipula su propio ID stack internamente). Nuestra suite de 8580 assertions cubre lo que el check detectaría en código nuestro. Desactivar globalmente vs por-panel: el flag se chequea cada widget submission, suprimirlo local fue insuficiente porque la alarma se dispara en otra fase del frame. Trade-off aceptado: perder el check de debug para code real nuestro — los tests + revisiones del agente mitigan.
+
+- **`NarrativeIntroPanel` como placeholder explicativo.** Cita del dev al ver el Sandbox por primera vez: *"como esto conecta con el 3D, como creo yo conversaciones o que puedo crear con esto, no entiendo aun"*. Sin un panel que explique que F2H46 es **infra** y los editores reales vienen en F2H47+, el workspace parece roto / abstractamente inútil. Panel con título en amarillo HL + body explicando + roadmap de F2H47/F2H4X/F2H4Y + footer engine-grade philosophy. Se reemplaza/oculta cuando los editores reales aterricen — temporal pero crítico para handoff a la próxima sesión / dev nuevo.
+
+**Alternativas descartadas explícitamente:**
+
+- **Framework propio sobre ImGui DrawList**: descartado pre-implementación. Justificado por scope (~3-5 hitos extra) sin ganancia clara para v1.
+- **v0.9.3 tag estable de imgui-node-editor**: descartado tras encontrar APIs ImGui removidas. Master post-fixes es la opción viable hasta que aparezca v0.9.4+.
+- **Coerciones automáticas entre typeTags de sockets**: descartado en v1. Tipos estrictos forzan decisiones explícitas del dev del editor específico (Dialog/Quest). Agregar coerciones más tarde si emerge necesidad.
+- **Sync bidireccional lib ↔ graph cada frame**: descartado. Source of truth claro (graph siempre, lib durante drag). Bidireccional crearía race conditions.
+- **Theming custom del grafo en F2H46**: descartado por scope. El default de la lib es funcional; theming a la paleta Valve es feature de polish — se agrega cuando los Dialog/Quest Editor lo pidan.
+- **Menu contextual para "Add Node" en el canvas**: descartado en v1. Los botones del toolbar (+Source/+Process/+Sink) cubren v1; el contextual menu es feature de ergonomía que aterriza con Dialog Editor cuando los tipos de nodo emerjan.
+
+**Condiciones de revisión:**
+
+- Si la lib master rompe build en update futuro: pinear a commit anterior verificado, o evaluar fork.
+- Si el patch al `imgui_extra_math.inl` falla por cambio upstream del header (renombran o cambian estructura del bloque): adaptar el `string(REPLACE)` o eliminar el patch (la versión upstream eventualmente arregla el conflicto en su lado).
+- Si emerge necesidad de coerciones entre typeTags (ej. socket "int" conecta a "float"): agregar matriz de compatibilidad en `canConnect`.
+- Si la performance con grafos grandes (>500 nodos) se vuelve cuello: profilear, considerar lazy rendering / culling fuera del viewport.
+- Si los Dialog/Quest Editor descubren que el evento-based dispatch del wrapper es restrictivo (ej. necesitan interceptar drag mid-action): agregar callbacks adicionales en NodeGraphEditor, sin romper la API de `draw()`.
+
+---
+
 ## 2026-05-10: Sub-fase 2.5 — commitment estratégico (scope Pro Tools + filosofía engine-grade)
 
 **Contexto:** Post-F2H45 el dev confirma Sub-fase 2.5 (diálogos / quests / inventario) como next-up. Pre-implementación arranca conversación estratégica: el dev quiere alineamiento del agente con la filosofía del motor antes de tocar código. Esta entrada documenta los compromisos de diseño que aplican a TODA la sub-fase (no a un hito específico) y que cualquier decisión técnica futura en la sub-fase debe respetar. **NO es decisión de implementación** — es marco de diseño no-negociable que precede a la implementación.

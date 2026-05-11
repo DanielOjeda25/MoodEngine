@@ -4,7 +4,36 @@
 
 ---
 
-## 0. HANDOFF ACTIVO — Sub-fase 2.5 confirmada con scope Pro Tools (2026-05-10)
+## 0. ACTUALIZACIÓN F2H46 cerrado (2026-05-10)
+
+**Sub-fase 2.5 arrancada con su primer hito real (Bloque 0.1 del plan).**
+Tag: `v1.36.0-fase2-hito46`. Cita verbatim del dev al validar: *"todo ok"*.
+
+**Qué entrega F2H46:**
+- **Framework de node-graph reutilizable** (`engine/nodegraph/`): data model puro (`Graph.h/cpp`) + wrapper visual con pImpl (`NodeGraphEditor.h/cpp`) sobre la lib `thedmd/imgui-node-editor`. Patrón state-vs-rendering separados (testable sin ImGui).
+- **5 NodeGraphCommands undoable** (`editor/commands/NodeGraphCommand.h/cpp`): Add/Remove Node, Move, Add/Remove Link. Snapshot-based undo para reconstruir nodos con sockets + links incidentes (con socket-ID remap).
+- **Workspace nuevo "Narrativa"** (5to tab al lado de "Diseño de Niveles") con dock layout limpio 70/30: Sandbox a la izquierda + `NarrativeIntroPanel` informativo a la derecha. Sin paneles de scene/3D contaminando.
+- **`NodeGraphSandboxPanel`** debug-only que ejercita el framework end-to-end (demo de 4 nodos + toolbar i18n + save/load JSON).
+- **25 tests del data model** (76 assertions): CRUD, 5 reglas de canConnect con bad-input rejection, cascade delete, roundtrip JSON con schema versioning, fan-out validation.
+
+**Cómo conecta con los próximos editores:**
+- **F2H47 (Dialog Editor)**: cada `Node` = una línea hablada por NPC. Sockets `flow` para conexiones entre líneas, sockets `choice` para opciones del jugador. `customData` JSON contiene texto, audio path, portrait, animation hook.
+- **F2H4X (Quest Editor)**: cada `Node` = un objetivo. Sockets `dependency`. `customData` con tipo de predicado + parámetros.
+- **F2H4Y (Inventory)**: NO usa node-graph (UI propia con grid + 3D preview). Usa el HUD framework F2H39 para inventory widget.
+
+**3 fixes técnicos aplicados durante la validación:**
+1. **`ConfigDebugHighlightIdConflicts = false`** global en `EditorApplication_Init.cpp`. El debug-check nuevo de ImGui 1.92 da false-positives con imgui-node-editor (la lib maneja su propio ID stack). Nuestra suite de 8580 assertions cubre lo que él detectaría.
+2. **Patch idempotente al header de la lib** (CMake configure-time, `file(READ/WRITE)`): `imgui_extra_math.inl` define `operator==/!=/(float, ImVec2)` que colisionan con `imgui.h` docking branch — guard con `MOOD_NE_OPS_GUARD + #ifndef IMGUI_DEFINE_MATH_OPERATORS_IMPLEMENTED`.
+3. **Bump `imgui_layout_v3.ini → v5.ini`** + cambio de window titles en panels nuevos: usar `name()` directo (estable English, sin `###`) que matchea con `DockBuilderDockWindow`. La convención del editor es panel titles en inglés estable + contenido i18n.
+
+**Pendientes conocidos** (post-F2H46):
+- **F2H47 — Dialog Editor**: primer editor real construido sobre la infra de F2H46. Cita del dev: *"como creo conversaciones?"* → eso es F2H47.
+- **Theming custom del grafo** (paleta naranja Valve del motor): diferido a cuando los Dialog/Quest Editor lo pidan, no especulativo.
+- **Lua scripts traducibles** (deuda F2H43): sin urgencia hasta tener scripts de gameplay reales.
+
+---
+
+## 0bis. HANDOFF ACTIVO — Sub-fase 2.5 confirmada con scope Pro Tools (2026-05-10)
 
 > **Mensaje para la próxima sesión del agente** (probablemente en otra máquina del dev — escritorio).
 > El dev quiere arrancar Sub-fase 2.5 (diálogos / quests / inventario) y antes de tocar código exigió alineamiento estratégico. Esta sección es el resumen de esa conversación. **Leerla antes de hacer cualquier propuesta de implementación.**

@@ -9,24 +9,50 @@
 
 ---
 
-## Post-F2H45 (2026-05-10) — Cierre de deudas pre-Sub-fase 2.5 (AddComponentCommand undoable + Lato Player con tildes + Console tooltip i18n)
+## Post-F2H46 (2026-05-10) — Node-graph framework + workspace "Narrativa" cerrado
 
 ### Próximo a atacar
 
-- **Orden actualizado por el dev** (2026-05-10 post-F2H45 + decisión estratégica de scope):
-  1. **Sub-fase 2.5 gameplay** (diálogos / quests / inventario)
-     — **scope confirmado nivel B (Pro Tools)**, no nivel A.
-     **El roadmap original en `PLAN_FASE2.md:285-303` queda obsoleto**
-     porque fue planeado con scope A en mente (~3 hitos para los 3
-     sistemas). Con scope B son ~15-20 hitos, organizados en 5 bloques
-     según el plan nuevo en [`PLAN_SUBFASE_2_5.md`](PLAN_SUBFASE_2_5.md).
-     Filosofía no-negociable: **motor que crea juegos, no juego concreto**
-     (data-driven + sin semántica hardcodeada de gameplay + hooks Lua +
-     editor visual real por sistema + engine-agnostic respecto al género).
-     Ver detalle en `ESTADO_ACTUAL.md` sección 0 (handoff activo) +
-     `DECISIONS.md` entry 2026-05-10 commitment estratégico.
-     **Próximo paso concreto**: completar el plan (hitos individuales
-     todavía marcados `[TBD]` en el skeleton) **antes de tocar código**.
+- **F2H47 — Dialog Editor** (primer editor real construido sobre el framework F2H46).
+  - **Origen**: continuación natural de Sub-fase 2.5 Bloque 0.1 → Bloque 2 según `PLAN_SUBFASE_2_5.md`. F2H46 cerró la infra reutilizable; F2H47 la consume para producir el primer editor real de contenido.
+  - **Scope esperado**:
+    - **DialogTree schema + serialización `.mooddialog`**: JSON con lista de nodos `{id, text (i18n key), portrait, audio, animation, options[]}`, donde cada option tiene `{label, next_node_id, condition_predicate, on_select_hook}`.
+    - **Dialog Editor panel** sobre el framework F2H46: nodos `dialog_line` con sockets `flow` para conexiones entre líneas, sockets `choice` para opciones del jugador. `customData` JSON contiene texto, audio path, portrait.
+    - **Dialog runtime + HUD widget default** (caja inferior con texto + opciones clickeables, estilo HL2). Override via Lua `dialog.set_renderer(callback)`.
+    - **Bindings Lua**: `dialog.start("npc_id")`, `dialog.is_active()`, `dialog.set_var/get_var`, `dialog.on_node_enter`, `dialog.on_choice`.
+    - **DialogComponent** entity-side: un NPC en escena con `DialogComponent` apunta a un `.mooddialog` que el Editor armó visualmente.
+  - **Inventario antes de F2H47?**: La recomendación original era inventario primero (diálogos dependen de "tengo X item" para predicados), pero el dev pidió explícitamente "conversaciones" como caso de uso entendible — F2H47 puede arrancar con condiciones simples (flags booleanos `dialog.set_var/get_var`) sin esperar inventario. Predicados `item_count >= N` se agregan cuando inventario aterrice.
+
+- **Decisión técnica abierta para F2H47**: cómo persistir el `customData` rico del nodo (texto multilínea, audio path, portrait selection, optional hooks). Opciones:
+  - (a) Inspector contextual al seleccionar un nodo del grafo: muestra campos editables del schema según `typeTag` del nodo. Reusa InspectorPanel del editor.
+  - (b) Panel dedicado "Dialog Properties" docked al lado del grafo.
+  - (c) Modal popup al double-click sobre un nodo.
+  - Recomendación: (a) — consistencia con el flujo de InspectorPanel del resto del editor (clickeás entidad → editás properties).
+
+### Diferidos sin orden (emergentes post-F2H46)
+
+- **Theming custom del grafo** (paleta naranja Valve del motor): el default de imgui-node-editor es funcional pero gris/azul genérico. Cuando los Dialog/Quest Editor estén operativos y el grafo sea visualmente prominente, agregar styling para matchear el resto del editor (orange selected outline, HL-yellow accents).
+- **Animaciones de flow en links** (la lib soporta `ne::Flow(linkId)` para animar partículas a lo largo del link — útil para mostrar "data flowing" en debug del dialog tree).
+- **Hierarchical grouping de nodos** (collapsible meta-nodes — útil para diálogos muy largos donde se quiere agrupar branches).
+- **Export-to-image** del grafo (PNG para docs).
+- **Copy/paste cross-graph** (un mismo node template usado en múltiples diálogos).
+- **Search/filter de nodos por nombre** en grafos grandes.
+- **Auto-layout** ("organize nodes" button que reordena automáticamente).
+- **Comments / sticky notes** sobre el canvas.
+
+### Histórico resuelto F2H46
+
+- ~~Node-graph framework reutilizable~~ — resuelto. `engine/nodegraph/Graph.h/cpp` (puro) + `NodeGraphEditor.h/cpp` (pImpl sobre imgui-node-editor). 5 reglas de canConnect estrictas, IDs `u32` monotonicos sin reuso, serialización JSON con schema versionado.
+- ~~5 NodeGraphCommands undoable~~ — resuelto. AddNode (con socket specs), RemoveNode (snapshot con socket-ID remap en undo), Move, AddLink, RemoveLink. Mismo patrón ICommand que el resto.
+- ~~Workspace "Narrativa"~~ — resuelto. 5to tab al lado de "Diseño de Niveles", id ASCII `narrative`, dock layout 70/30 con Sandbox + Intro panel, sin paneles de scene/3D contaminando.
+- ~~NodeGraphSandboxPanel debug~~ — resuelto. Demo de 4 nodos pre-cargado, toolbar i18n, save/load JSON a `node_graph_sandbox.json`.
+- ~~Tests del data model~~ — resuelto. 25 test cases + 76 assertions cubren CRUD, las 5 reglas, cascade delete, roundtrip JSON, schema versioning.
+- ~~Warning false-positive ImGui 1.92 ID conflict~~ — resuelto. `io.ConfigDebugHighlightIdConflicts = false` global en init.
+- ~~Conflicto operators ImVec2 con ImGui docking~~ — resuelto. Patch idempotente al `imgui_extra_math.inl` via CMake `file(READ/WRITE)` en configure-time.
+
+## Post-F2H45 (2026-05-10) — Cierre de deudas pre-Sub-fase 2.5 (AddComponentCommand undoable + Lato Player con tildes + Console tooltip i18n)
+
+### Histórico resuelto F2H45 — completado, ver detalles abajo
 
 ### Diferidos sin orden (emergentes post-F2H45)
 
