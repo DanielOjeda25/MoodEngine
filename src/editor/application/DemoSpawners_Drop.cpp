@@ -21,8 +21,12 @@
 #include "engine/scene/queries/ScenePick.h"
 #include "engine/scene/queries/ViewportPick.h"
 
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -105,6 +109,93 @@ FaceDropResult tryAssignMaterialToSelectedFaces(
         std::move(newMaterials), std::move(newFaceMatIndices),
         label);
     return r;
+}
+
+// F2H50 Bloque B: al spawnear un mesh skinneado, autoadjuntar todos los
+// clips de animacion standalone hermanos del rig (`<rig>/anim_*.fbx`) al
+// `AnimatorComponent.externalClips`. Convencion engine-grade:
+//
+//   assets/characters/<name>/<name>.fbx         <- rig (mesh + skin)
+//   assets/characters/<name>/anim_<alias>.fbx   <- clip standalone
+//
+// El alias se deriva del filename stem (sin prefijo `anim_`). Si "idle"
+// esta presente, se setea como `clipName` por default para que el char
+// arranque animado en lugar del primer clip embedded (que en Mixamo
+// "With Skin" suele ser el T-pose estatico llamado `mixamo_com`).
+//
+// El scan no es exclusivo de Mixamo ni de `assets/characters/`: funciona
+// con CUALQUIER mesh cuya carpeta padre tenga `anim_*.fbx` siblings. Para
+// chars sin esa estructura (Fox.glb, Kenney props), `externalClips` queda
+// vacio y el comportamiento es identico al pre-F2H50 (primer embedded).
+void attachSiblingAnimClips(AssetManager& am,
+                              const std::string& meshLogicalPath,
+                              AnimatorComponent& outAnim) {
+    namespace fs = std::filesystem;
+    const fs::path meshLogical(meshLogicalPath);
+    const fs::path fsDir = fs::path("assets") / meshLogical.parent_path();
+
+    std::error_code ec;
+    auto it = fs::directory_iterator(fsDir, ec);
+    if (ec) return;
+
+    constexpr std::string_view k_prefix = "anim_";
+    int attachedCount = 0;
+    for (const auto& entry : it) {
+        if (!entry.is_regular_file()) continue;
+        const fs::path& p = entry.path();
+
+        // Filtrar .fbx (case-insensitive).
+        std::string ext = p.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char c) {
+                           return static_cast<char>(std::tolower(c));
+                       });
+        if (ext != ".fbx") continue;
+
+        // Prefijo `anim_` (case-insensitive).
+        const std::string stem = p.stem().string();
+        std::string stemLower = stem;
+        std::transform(stemLower.begin(), stemLower.end(), stemLower.begin(),
+                       [](unsigned char c) {
+                           return static_cast<char>(std::tolower(c));
+                       });
+        if (stemLower.rfind(k_prefix, 0) != 0) continue;
+
+        // Alias = stem sin prefijo (preserva el case del filename).
+        std::string alias = stem.substr(k_prefix.size());
+        if (alias.empty()) continue;
+
+        // Logical path para el AssetManager.
+        const std::string clipLogicalPath =
+            (meshLogical.parent_path() / p.filename()).generic_string();
+
+        const AnimationClipAssetId id =
+            am.loadAnimationClip(clipLogicalPath);
+        if (id == am.missingAnimationClipId()) continue;
+
+        outAnim.externalClips.emplace_back(std::move(alias), id);
+        ++attachedCount;
+    }
+
+    // Orden estable por alias (determinismo en serializacion + UI).
+    std::sort(outAnim.externalClips.begin(), outAnim.externalClips.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    // Default a "idle" si esta entre los attached. Asi el char arranca
+    // animado en lugar del T-pose embedded del Mixamo "With Skin".
+    for (const auto& [alias, id] : outAnim.externalClips) {
+        if (alias == "idle") {
+            outAnim.clipName = "idle";
+            break;
+        }
+    }
+
+    if (attachedCount > 0) {
+        Log::editor()->info(
+            "MeshDrop: auto-attached {} sibling anim_*.fbx -> '{}' "
+            "(clipName='{}')",
+            attachedCount, meshLogicalPath, outAnim.clipName);
+    }
 }
 
 } // namespace
@@ -267,15 +358,20 @@ void EditorApplication::processViewportMeshDrop() {
     auto mats = m_assetManager->createMaterialsForMesh(meshId);
     e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
 
-    // Hito 19: si el mesh tiene esqueleto + animaciones, auto-agregar
-    // Animator + Skeleton para que se anime al instante. Sin esto el
-    // mesh queda en bind pose estatico, lo cual es confuso para el
-    // usuario que espera ver el zorro caminar.
-    if (asset != nullptr && asset->hasSkeleton() && !asset->animations.empty()) {
+    // Hito 19: si el mesh tiene esqueleto, auto-agregar Animator +
+    // Skeleton para que se anime al instante (sin esto el mesh queda
+    // en bind pose estatico, lo cual es confuso para el usuario que
+    // espera ver el zorro caminar). F2H50 Bloque B: ademas escanea
+    // `anim_*.fbx` hermanos del rig y los enchufa al
+    // `AnimatorComponent.externalClips`, defaulteando a `idle` si esta.
+    // Esto vale para CUALQUIER rig (no solo Mixamo) — convencion por
+    // filename, no por carpeta.
+    if (asset != nullptr && asset->hasSkeleton()) {
         AnimatorComponent anim{};
-        anim.clipName = "";   // primer clip
+        anim.clipName = "";   // primer clip (override si auto-attach encuentra "idle")
         anim.playing  = true;
         anim.loop     = true;
+        attachSiblingAnimClips(*m_assetManager, meshName, anim);
         e.addComponent<AnimatorComponent>(anim);
         e.addComponent<SkeletonComponent>(SkeletonComponent{});
     }
