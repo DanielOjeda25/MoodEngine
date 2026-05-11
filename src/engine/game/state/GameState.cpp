@@ -14,9 +14,21 @@ bool& paused() {
     return s_paused;
 }
 
+bool& dialogActive() {
+    static bool s_active = false;
+    return s_active;
+}
+
+std::unordered_map<std::string, std::string>& dialogVars() {
+    static std::unordered_map<std::string, std::string> s_vars;
+    return s_vars;
+}
+
 void reset() {
-    hud()    = HudState{};
-    paused() = false;
+    hud()           = HudState{};
+    paused()        = false;
+    dialogActive()  = false;
+    dialogVars().clear();
 }
 
 // --- F2H39: helpers puros ---

@@ -12,7 +12,8 @@
 
 namespace Mood {
 
-void ScriptSystem::update(Scene& scene, f32 dt, PhysicsWorld* physics) {
+void ScriptSystem::update(Scene& scene, f32 dt, PhysicsWorld* physics,
+                            AssetManager* assets) {
     // Throttle del check de mtime: una vez cada k_hotReloadInterval. El
     // flag se aplica al lookup dentro del forEach.
     m_hotReloadAccumulator += dt;
@@ -33,7 +34,7 @@ void ScriptSystem::update(Scene& scene, f32 dt, PhysicsWorld* physics) {
             // las redescubre. Asi un script que removio un `engine.exposed`
             // entre reloads no deja la prop fantasma en el Inspector.
             sc.exposedProps.clear();
-            setupLuaBindings(*state, e, &sc, physics);
+            setupLuaBindings(*state, e, &sc, physics, assets);
 
             sol::protected_function_result r = state->safe_script_file(
                 sc.path, sol::script_pass_on_error);

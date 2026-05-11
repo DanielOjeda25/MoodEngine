@@ -32,6 +32,8 @@ struct MeshAsset;
 struct MaterialAsset;
 struct SavedPrefab;
 
+namespace Dialog { class Asset; }  // F2H48
+
 /// @brief Identificador estable de una textura dentro de un `AssetManager`.
 ///        Valor 0 se reserva para la textura "missing": pedir `getTexture(0)`
 ///        siempre devuelve algo renderizable.
@@ -57,6 +59,12 @@ using PrefabAssetId = u32;
 ///        reservado para el "default material" (albedo blanco, metallic=0,
 ///        roughness=0.5) — `getMaterial(0)` nunca es null.
 using MaterialAssetId = u32;
+
+/// @brief F2H48: Identificador estable de un DialogAsset (.mooddialog).
+///        Valor 0 reservado para el "dialog vacio" (Asset sin nodos, sin
+///        start_node) — `getDialog(0)` nunca es null. Loadeo lazy + cache
+///        por path logico, mismo patron que Prefab.
+using DialogAssetId = u32;
 
 class AssetManager {
 public:
@@ -314,6 +322,28 @@ public:
     ///        para una entidad nueva.
     std::vector<MaterialAssetId> createMaterialsForMesh(MeshAssetId meshId);
 
+    // ---- Dialog (F2H48) ----
+
+    /// @brief Carga (o devuelve cacheado) un dialog asset por path logico
+    ///        (p.ej. "dialogs/intro.mooddialog"). En fallo devuelve
+    ///        `missingDialogId()` (asset vacio) y loguea al canal `assets`.
+    ///        Mismo patron que `loadPrefab`.
+    DialogAssetId loadDialog(std::string_view logicalPath);
+
+    /// @brief Devuelve el Asset del id. Nunca null: ids invalidos caen al
+    ///        slot 0 (asset vacio).
+    const Dialog::Asset* getDialog(DialogAssetId id) const;
+
+    /// @brief Id del dialog vacio (slot 0). Asset sin nodos.
+    DialogAssetId missingDialogId() const { return 0; }
+
+    /// @brief Path logico con el que se cargo el dialog. Slot 0 devuelve
+    ///        el sentinela `"__empty_dialog"`.
+    std::string dialogPathOf(DialogAssetId id) const;
+
+    /// @brief Cantidad de dialogs cacheados (incluye slot 0).
+    usize dialogCount() const;
+
 private:
     VFS m_vfs;
     TextureFactory m_textureFactory;
@@ -345,6 +375,11 @@ private:
     std::unordered_map<std::string, MaterialAssetId> m_materialCache;
     std::vector<std::unique_ptr<MaterialAsset>> m_materials;
     std::vector<std::string> m_materialPaths; // paralelo a m_materials
+
+    // Dialog (F2H48). [0] = asset vacio (sin nodos / sin start_node).
+    std::unordered_map<std::string, DialogAssetId> m_dialogCache;
+    std::vector<std::unique_ptr<Dialog::Asset>> m_dialogs;
+    std::vector<std::string> m_dialogPaths; // paralelo a m_dialogs
 };
 
 } // namespace Mood

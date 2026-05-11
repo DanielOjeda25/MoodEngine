@@ -1,0 +1,154 @@
+{
+  "_version": 1,
+  "graph": {
+    "_version": 1,
+    "links": [
+      {
+        "from": 2,
+        "id": 1,
+        "to": 4
+      },
+      {
+        "from": 3,
+        "id": 2,
+        "to": 6
+      }
+    ],
+    "next_link_id": 3,
+    "next_node_id": 4,
+    "next_socket_id": 8,
+    "nodes": [
+      {
+        "custom_data": {
+          "animation": "",
+          "audio": "",
+          "choices": [
+            {
+              "condition_lua": "",
+              "label_key": "",
+              "label_literal": "Vengo a derrotar al dragon.",
+              "on_select_lua": ""
+            },
+            {
+              "condition_lua": "",
+              "label_key": "",
+              "label_literal": "Solo estoy de paso.",
+              "on_select_lua": ""
+            }
+          ],
+          "portrait": "",
+          "text_key": "",
+          "text_literal": "Hola viajero. Es peligroso ir solo... pero veo que tienes agallas. Que te trae a estas tierras?"
+        },
+        "id": 1,
+        "inputs": [
+          {
+            "id": 1,
+            "kind": 0,
+            "name": "in",
+            "owner_node": 1,
+            "type_tag": "flow"
+          }
+        ],
+        "outputs": [
+          {
+            "id": 2,
+            "kind": 1,
+            "name": "choice_0",
+            "owner_node": 1,
+            "type_tag": "flow"
+          },
+          {
+            "id": 3,
+            "kind": 1,
+            "name": "choice_1",
+            "owner_node": 1,
+            "type_tag": "flow"
+          }
+        ],
+        "position": [
+          40.0,
+          200.0
+        ],
+        "title": "",
+        "type_tag": "dialog_line"
+      },
+      {
+        "custom_data": {
+          "animation": "",
+          "audio": "",
+          "choices": [],
+          "portrait": "",
+          "text_key": "",
+          "text_literal": "Valiente! Lleva esta espada — el dragon ha quemado mi aldea."
+        },
+        "id": 2,
+        "inputs": [
+          {
+            "id": 4,
+            "kind": 0,
+            "name": "in",
+            "owner_node": 2,
+            "type_tag": "flow"
+          }
+        ],
+        "outputs": [
+          {
+            "id": 5,
+            "kind": 1,
+            "name": "continue",
+            "owner_node": 2,
+            "type_tag": "flow"
+          }
+        ],
+        "position": [
+          360.0,
+          100.0
+        ],
+        "title": "",
+        "type_tag": "dialog_line"
+      },
+      {
+        "custom_data": {
+          "animation": "",
+          "audio": "",
+          "choices": [],
+          "portrait": "",
+          "text_key": "",
+          "text_literal": "Como quieras. Que los caminos te traten bien."
+        },
+        "id": 3,
+        "inputs": [
+          {
+            "id": 6,
+            "kind": 0,
+            "name": "in",
+            "owner_node": 3,
+            "type_tag": "flow"
+          }
+        ],
+        "outputs": [
+          {
+            "id": 7,
+            "kind": 1,
+            "name": "continue",
+            "owner_node": 3,
+            "type_tag": "flow"
+          }
+        ],
+        "position": [
+          360.0,
+          300.0
+        ],
+        "title": "",
+        "type_tag": "dialog_line"
+      }
+    ]
+  },
+  "metadata": {
+    "default_audio_bus": "voice",
+    "default_portrait": "characters/demo_npc.png",
+    "name": "demo_intro",
+    "start_node_id": 1
+  }
+}

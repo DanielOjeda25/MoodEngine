@@ -623,6 +623,15 @@ private:
     f32 m_coyoteTimer = 0.0f;
     f32 m_jumpBufferTimer = 0.0f;
     bool m_spacePrevFrame = false;
+    // F2H48: flanco up->down de tecla E para interactuar con NPCs/
+    // triggers de dialog. Se actualiza en el frame loop antes del
+    // DialogInteractSystem::tick.
+    bool m_ePlayPrevFrame    = false;
+    bool m_ePlayJustPressed  = false;
+    // F2H48: prev-frame state de las teclas 1..9 para detectar el digito
+    // recien presionado durante un dialog activo. Indice 0..8 = teclas
+    // 1..9 (`SDL_SCANCODE_1` + i).
+    bool m_digitPrevFrame[9] = {false, false, false, false, false, false, false, false, false};
     bool m_crouching = false;
     // Hito 31 D: crouch lerp visual (1 = crouched, 0 = standing). El
     // shape de Jolt sigue siendo binario — solo la altura del eye se

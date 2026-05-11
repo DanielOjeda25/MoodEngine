@@ -103,6 +103,11 @@ private:
     f32 m_coyoteTimer = 0.0f;
     f32 m_jumpBufferTimer = 0.0f;
     bool m_spacePrevFrame = false;
+    // F2H48: flanco up->down de la tecla E para interact con NPCs +
+    // estados prev-frame de digits 1..9 para elegir choices durante
+    // dialog activo.
+    bool m_ePrevFrame = false;
+    bool m_digitPrevFrame[9] = {false, false, false, false, false, false, false, false, false};
     bool m_crouching = false;
     // Hito 40 G: ventanas configurables per-proyecto (cargadas del
     // `.moodproj`). Defaults coinciden con los hardcoded del Hito 34 C.

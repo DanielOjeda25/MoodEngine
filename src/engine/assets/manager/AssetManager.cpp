@@ -18,6 +18,7 @@
 #include "core/Log.h"
 #include "engine/assets/primitives/PrimitiveMeshes.h"
 #include "engine/audio/clips/AudioClip.h"
+#include "engine/dialog/DialogAsset.h"  // F2H48
 #include "engine/render/rhi/IMesh.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MaterialAsset.h"
@@ -41,6 +42,8 @@ constexpr const char* k_missingMeshPath    = "__missing_cube";
 // AssetManager genera un SavedPrefab vacio para que `getPrefab(0)` no sea
 // null.
 constexpr const char* k_emptyPrefabPath    = "__empty_prefab";
+// F2H48: sentinela del dialog fallback (slot 0). Asset sin nodos.
+constexpr const char* k_emptyDialogPath    = "__empty_dialog";
 // Sentinela del material fallback (slot 0). Albedo blanco, mate medio.
 constexpr const char* k_defaultMaterialPath = "__default_material";
 
@@ -212,6 +215,19 @@ AssetManager::AssetManager(std::string rootDir,
         m_materialCache.emplace(k_defaultMaterialPath, missingMaterialId());
     }
     Log::assets()->info("AssetManager: material default generado en slot 0");
+
+    // ---- Slot 0 dialog (F2H48): asset vacio sin nodos / sin start_node.
+    //      Sirve como fallback cuando un id es invalido o el archivo no
+    //      se pudo parsear. DialogSystem::start lo rechaza por start_node
+    //      invalido — el caller espera ese path.
+    {
+        auto empty = std::make_unique<Dialog::Asset>();
+        empty->metadata().name = "(empty)";
+        m_dialogs.emplace_back(std::move(empty));
+        m_dialogPaths.emplace_back(k_emptyDialogPath);
+        m_dialogCache.emplace(k_emptyDialogPath, missingDialogId());
+    }
+    Log::assets()->info("AssetManager: dialog 'vacio' generado en slot 0");
 }
 
 AssetManager::~AssetManager() = default;

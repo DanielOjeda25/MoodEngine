@@ -1,6 +1,9 @@
 #include "engine/scripting/bindings/LuaBindings.h"
 
 #include "core/Log.h"
+#include "engine/assets/manager/AssetManager.h"  // F2H48
+#include "engine/dialog/DialogAsset.h"           // F2H48
+#include "engine/dialog/DialogSystem.h"          // F2H48
 #include "engine/game/state/GameState.h"  // F2H39: triggerHitMarker / pushPickup / etc viven aqui
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/components/Components.h"
@@ -16,7 +19,8 @@ namespace Mood {
 
 void setupLuaBindings(sol::state& lua, Entity self,
                        ScriptComponent* scriptComponent,
-                       PhysicsWorld* physics) {
+                       PhysicsWorld* physics,
+                       AssetManager* assets) {
     // Libs basicas. `io`/`os` quedan fuera: los scripts no deberian hacer
     // I/O al FS ni ejecutar procesos. `package` tampoco (sin require).
     lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string);
@@ -264,6 +268,70 @@ void setupLuaBindings(sol::state& lua, Entity self,
                 result["normal"] = n;
                 return sol::make_object(lua, result);
             });
+    }
+
+    // F2H48 — tabla `dialog`: control de la state machine + variables
+    // persistentes accesibles desde cualquier script. AssetManager solo
+    // es necesario para `dialog.start(path)` (carga el .mooddialog); el
+    // resto de funciones operan sobre estado global.
+    {
+        sol::table dialogTable = lua.create_named_table("dialog");
+
+        dialogTable.set_function("isActive",
+            []() { return Dialog::DialogSystem::isActive(); });
+        dialogTable.set_function("currentNode",
+            []() { return Dialog::DialogSystem::currentNodeId(); });
+        dialogTable.set_function("advance",
+            [](int choiceIndex) {
+                return Dialog::DialogSystem::advance(choiceIndex);
+            });
+        dialogTable.set_function("continueNext",
+            []() { return Dialog::DialogSystem::continueNext(); });
+        dialogTable.set_function("stop",
+            []() { Dialog::DialogSystem::stop(); });
+
+        // Variables persistentes (sobreviven entre dialogs, decision F2H48 #2).
+        dialogTable.set_function("set_var",
+            [](const std::string& key, const std::string& value) {
+                GameState::dialogVars()[key] = value;
+            });
+        dialogTable.set_function("get_var",
+            [](const std::string& key) -> std::string {
+                auto& vars = GameState::dialogVars();
+                auto it = vars.find(key);
+                return it != vars.end() ? it->second : std::string{};
+            });
+        dialogTable.set_function("has_var",
+            [](const std::string& key) {
+                return GameState::dialogVars().count(key) > 0;
+            });
+        dialogTable.set_function("clear_vars",
+            []() { GameState::dialogVars().clear(); });
+
+        // start(path): carga el asset via AssetManager y arranca el dialog.
+        // Si no hay AssetManager (tests headless), loggea warn y retorna false.
+        if (assets != nullptr) {
+            AssetManager* assetsCap = assets;
+            dialogTable.set_function("start",
+                [assetsCap](const std::string& logicalPath) {
+                    const DialogAssetId id = assetsCap->loadDialog(logicalPath);
+                    if (id == assetsCap->missingDialogId()) {
+                        Log::script()->warn(
+                            "[dialog.start] no se pudo cargar '{}'", logicalPath);
+                        return false;
+                    }
+                    const Dialog::Asset* asset = assetsCap->getDialog(id);
+                    return Dialog::DialogSystem::start(asset);
+                });
+        } else {
+            dialogTable.set_function("start",
+                [](const std::string& logicalPath) {
+                    Log::script()->warn(
+                        "[dialog.start] no hay AssetManager (test mode); '{}' ignorado",
+                        logicalPath);
+                    return false;
+                });
+        }
     }
 
     // self como global.

@@ -351,6 +351,7 @@ add_library(mood_engine_lib STATIC
     src/engine/assets/manager/AssetManager_Mesh.cpp
     src/engine/assets/manager/AssetManager_Prefab.cpp
     src/engine/assets/manager/AssetManager_Material.cpp
+    src/engine/assets/manager/AssetManager_Dialog.cpp  # F2H48
     src/engine/assets/loaders/MeshLoader.cpp
     src/engine/assets/primitives/PrimitiveMeshes.cpp
     src/engine/assets/loaders/stb_impl.cpp
@@ -368,8 +369,10 @@ add_library(mood_engine_lib STATIC
     src/engine/nodegraph/Graph.cpp           # F2H46
     src/engine/nodegraph/NodeGraphEditor.cpp # F2H46
 
-    src/engine/dialog/DialogAsset.cpp        # F2H47
-    src/engine/dialog/DialogValidator.cpp    # F2H47
+    src/engine/dialog/DialogAsset.cpp           # F2H47
+    src/engine/dialog/DialogValidator.cpp       # F2H47
+    src/engine/dialog/DialogSystem.cpp          # F2H48
+    src/engine/dialog/DialogInteractSystem.cpp  # F2H48
 
     src/engine/packaging/PackageBuilder.cpp
 

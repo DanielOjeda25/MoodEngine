@@ -16,6 +16,8 @@
 #include "core/Profiler.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/game/overlay/GameOverlay.h"
+#include "engine/dialog/DialogInteractSystem.h"  // F2H48
+#include "engine/dialog/DialogSystem.h"          // F2H48
 #include "engine/game/state/GameState.h"
 #include "engine/i18n/I18n.h"  // F2H43
 #include "engine/physics/world/PhysicsWorld.h"
@@ -184,16 +186,21 @@ void PlayerApplication::updateCamera(f32 dt) {
 
     // Input WASD → velocidad horizontal m/s; LCtrl = crouch; Space = jump.
     const Uint8* keys = SDL_GetKeyboardState(nullptr);
+    // F2H48: lock de input mientras hay dialog activo (paridad con
+    // EditorPlayMode). Mouse-look queda libre.
+    const bool dialogLocked = Mood::GameState::dialogActive();
     glm::vec3 inputDir(0.0f);
-    if (keys[SDL_SCANCODE_W]) inputDir.z += 1.0f;
-    if (keys[SDL_SCANCODE_S]) inputDir.z -= 1.0f;
-    if (keys[SDL_SCANCODE_D]) inputDir.x += 1.0f;
-    if (keys[SDL_SCANCODE_A]) inputDir.x -= 1.0f;
+    if (!dialogLocked) {
+        if (keys[SDL_SCANCODE_W]) inputDir.z += 1.0f;
+        if (keys[SDL_SCANCODE_S]) inputDir.z -= 1.0f;
+        if (keys[SDL_SCANCODE_D]) inputDir.x += 1.0f;
+        if (keys[SDL_SCANCODE_A]) inputDir.x -= 1.0f;
+    }
 
     // Crouch toggle por hold. SetShape NO mueve el centro del char —
     // hay que ajustar manualmente para mantener la base al ras del
     // piso. El delta del centro = standHalf - crouchHalf = 0.4.
-    const bool wantCrouch = keys[SDL_SCANCODE_LCTRL] != 0;
+    const bool wantCrouch = !dialogLocked && keys[SDL_SCANCODE_LCTRL] != 0;
     constexpr f32 k_centerDelta = k_charHalfHeightStand - k_charHalfHeightCrouch;
     if (wantCrouch && !m_crouching) {
         // Crouch: shape primero, luego bajar el centro (la capsule
@@ -239,7 +246,7 @@ void PlayerApplication::updateCamera(f32 dt) {
     // Jump: si SPACE + onGround + cooldown OK, usamos desired.y como
     // impulse. El step interno suma desired.y a la velocidad acumulada.
     // Hito 34 C: coyote + jump buffer (mismo patron que EditorPlayMode).
-    const bool spacePressed = keys[SDL_SCANCODE_SPACE] != 0;
+    const bool spacePressed = !dialogLocked && keys[SDL_SCANCODE_SPACE] != 0;
     const bool spaceJustPressed = spacePressed && !m_spacePrevFrame;
     m_spacePrevFrame = spacePressed;
     if (spaceJustPressed) m_jumpBufferTimer = k_jumpBufferWindow;
@@ -458,7 +465,8 @@ int PlayerApplication::run() {
         // pero el audio sigue su flow normal — TBD si se quiere mute
         // global en pausa.
         if (gameUpdating && m_scene && m_scriptSystem) {
-            m_scriptSystem->update(*m_scene, dt, m_physicsWorld.get());
+            m_scriptSystem->update(*m_scene, dt, m_physicsWorld.get(),
+                                    m_assetManager.get());  // F2H48: dialog bindings
         }
         // Hito 33: triggers — solo cuando el char del player ya existe.
         if (gameUpdating && m_scene && m_scriptSystem && m_physicsWorld
@@ -466,6 +474,33 @@ int PlayerApplication::run() {
             m_triggerSystem.update(*m_scene, *m_physicsWorld,
                                     *m_scriptSystem, m_playerCharId);
         }
+
+        // F2H48: DialogInteractSystem (paridad con EditorPlayMode).
+        // Detecta tecla E + player-inside-trigger + DialogComponent.
+        if (gameUpdating && m_scene && m_assetManager) {
+            const Uint8* frameKeys = SDL_GetKeyboardState(nullptr);
+            const bool ePressed = frameKeys[SDL_SCANCODE_E] != 0;
+            const bool eJustPressed = ePressed && !m_ePrevFrame;
+            m_ePrevFrame = ePressed;
+            const bool dialogStarted = Mood::Dialog::DialogInteractSystem::tick(
+                *m_scene, *m_assetManager, eJustPressed);
+
+            if (!dialogStarted && Mood::Dialog::DialogSystem::isActive()) {
+                int digitJustPressed = -1;
+                for (int i = 0; i < 9; ++i) {
+                    const bool pressed = frameKeys[SDL_SCANCODE_1 + i] != 0;
+                    if (pressed && !m_digitPrevFrame[i]) {
+                        digitJustPressed = i + 1;
+                    }
+                    m_digitPrevFrame[i] = pressed;
+                }
+                Mood::Dialog::DialogInteractSystem::tickActiveDialog(
+                    eJustPressed, digitJustPressed);
+            } else {
+                for (int i = 0; i < 9; ++i) m_digitPrevFrame[i] = false;
+            }
+        }
+
         if (gameUpdating && m_scene && m_animationSystem && m_assetManager) {
             m_animationSystem->update(*m_scene, *m_assetManager, dt);
         }

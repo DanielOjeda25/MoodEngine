@@ -122,7 +122,23 @@ HudState& hud();
 ///        muestra el menu modal en `drawGameOverlay`.
 bool& paused();
 
-/// @brief Resetea HUD a defaults y paused=false.
+/// @brief F2H48: flag global "hay un dialog activo". El char controller
+///        (Editor + Player) lo chequea para desactivar input mientras
+///        el jugador esta hablando con un NPC. Se setea on/off desde
+///        `DialogSystem::start/stop`; el caller NO lo debe tocar
+///        manualmente.
+bool& dialogActive();
+
+/// @brief F2H48: variables persistentes del dialog. `set_var/get_var`
+///        de Lua escriben aca. Sobreviven entre dialogs (decision F2H48
+///        #2) — habilita "el NPC recuerda que ya hablaste". Persistencia
+///        en save: TODO en F2H48 si emerge necesidad inmediata, por
+///        ahora vive solo en memoria.
+std::unordered_map<std::string, std::string>& dialogVars();
+
+/// @brief Resetea HUD a defaults y paused=false. F2H48: tambien limpia
+///        dialogActive=false + dialogVars (al salir de Play Mode no
+///        deberia quedar dialog state colgando).
 void reset();
 
 // --- F2H39: helpers de mutacion del HUD (puros, sin deps graficas) ---

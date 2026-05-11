@@ -236,6 +236,13 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
         [](Entity en, std::string lbl) {
             return makeAddComponentCommand<NavAgentComponent>(en, std::move(lbl));
         });
+    // F2H48: DialogComponent en Logic (mismo grupo que Script/NavAgent).
+    add("component.name.dialog", "component.desc.dialog",
+        "editor.panel.inspector.add.cat.logic",
+        e.hasComponent<DialogComponent>(),
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<DialogComponent>(en, std::move(lbl));
+        });
 
     // World
     add("component.name.brush", "component.desc.brush",

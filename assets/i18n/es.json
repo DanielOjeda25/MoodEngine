@@ -152,6 +152,7 @@
   "component.name.audio_source": "Fuente de Audio",
   "component.name.script": "Script",
   "component.name.nav_agent": "NavAgent",
+  "component.name.dialog": "Diálogo",
   "component.name.brush": "Brush",
 
   "component.desc.mesh_renderer": "Renderiza un mesh con un material por submesh.",
@@ -165,6 +166,7 @@
   "component.desc.audio_source": "Reproduce un clip de audio. 3D posicional o 2D.",
   "component.desc.script": "Adjunta un script Lua con hooks onUpdate/onStart.",
   "component.desc.nav_agent": "Agente de navegación que rutea vía grid del NavSystem.",
+  "component.desc.dialog": "Linkea un asset .mooddialog; auto-arranca al interactuar el player si hay un Trigger.",
   "component.desc.brush": "Brush CSG (Box/Cylinder/etc) editable con herramientas Hammer-style.",
 
   "editor.panel.inspector.transform.position": "posición",
@@ -510,6 +512,8 @@
   "hud.menu.options": "OPCIONES",
   "hud.menu.exit_to_editor": "SALIR AL EDITOR",
   "hud.menu.exit_to_menu": "SALIR AL MENÚ",
+  "hud.dialog.interact_prompt": "[E] Hablar",
+  "hud.dialog.continue_hint": "[E] Continuar",
 
   "player.menu.new_game": "Juego Nuevo",
   "player.menu.load_game": "Cargar Partida",

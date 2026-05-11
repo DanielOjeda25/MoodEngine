@@ -218,17 +218,15 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         hideOrthoPanels();
         hideNarrativePanels();
     } else if (name == "narrative") {
-        // F2H46: workspace "Narrativa" para Sub-fase 2.5 (Sistemas de
-        // juego). v1 solo contiene infra del framework + panel intro
-        // explicativo. Editores reales (Dialog/Quest/Inventory) llegan
-        // en hitos siguientes y traeran sus propios panels.
-        //
-        // Pedido del dev (post-F2H46 validacion 1): NO mostrar panels
-        // de scene/3D aca — el workspace tiene que ser limpio, dedicado
-        // a contenido narrativo. Inspector/Asset Browser/Console se
-        // pueden abrir flotantes desde menu Ver si emerge necesidad,
-        // pero no son default.
-        setVisible("Viewport",            false);
+        // F2H46: workspace "Narrativa" para Sub-fase 2.5.
+        // F2H47: Dialog Editor + Browser + Node Inspector default.
+        // F2H48: + Viewport 3D para ver NPCs reales y posicionar
+        // triggers de dialog en la escena (pedido del dev: *"vamos a
+        // necesitar un area 3D, yo reemplazaria el narrative intro por
+        // un viewport 3D"*). Inspector/Escena se abren flotantes via
+        // Ver si emerge necesidad — el workspace Narrativa se enfoca
+        // en escena 3D + dialog editing.
+        setVisible("Viewport",            true);   // F2H48: 3D activo
         setVisible("Escena",              false);
         setVisible("Inspector",           false);
         setVisible("Asset Browser",       false);
@@ -238,11 +236,8 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Script Editor",       false);
         setVisible("Material Editor",     false);
         setVisible("Tools",               false);
-        // F2H47: el workspace Narrativa ahora muestra el flujo Dialog
-        // Editor por default. El Sandbox queda accesible desde Ver >
-        // Debug si se necesita inspeccionar el framework subyacente.
         setVisible("Node Graph Sandbox",      false);
-        setVisible("Narrative Intro",         true);
+        setVisible("Narrative Intro",         false);  // F2H48: removido del default
         setVisible("Dialog Browser",          true);  // F2H47
         setVisible("Dialog Editor",           true);  // F2H47
         setVisible("Dialog Node Inspector",   true);  // F2H47

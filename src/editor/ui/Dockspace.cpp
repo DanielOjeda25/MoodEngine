@@ -132,25 +132,33 @@ void buildMapEditorWorkspace(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("Side (ZY)",   dockBottomRight);  // bottom-right
 }
 
-/// @brief F2H46/F2H47: workspace "Narrativa" — Sub-fase 2.5.
+/// @brief F2H46/F2H47/F2H48: workspace "Narrativa" — Sub-fase 2.5.
 ///        v1 (F2H46): Sandbox + Intro placeholder.
-///        v2 (F2H47): Dialog Editor activo. Layout:
-///          - Dialog Editor: center (canvas grande).
-///          - Dialog Node Inspector: right column.
-///          - Dialog Browser + Narrative Intro: bottom (tabulados).
-///        Sin Inspector general / Asset Browser / Console — son scene/3D
-///        tools, no narrativa.
+///        v2 (F2H47): Dialog Editor activo + Intro tabulado abajo.
+///        v3 (F2H48): viewport 3D arriba, Dialog Editor abajo.
+///        v3.1 (F2H48 polish): 3 columnas — viewport izq / Dialog Editor
+///        centro / columna der dividida en Node Inspector arriba + Dialog
+///        Browser abajo. Pedido del dev: *"prefiero dividamos en 3
+///        columnas, una del 3D luego la narrativa, y otro dialog node
+///        inspector ... arriba node inspector y abajo dialog browser"*.
+///        Layout permite ver NPC + canvas de dialog + inspector
+///        simultaneo sin tabs.
 void buildNarrativeWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockMain = dockspaceId;
+    // Col izq (viewport 3D): 30% del ancho.
+    ImGuiID dockLeft = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Left, 0.30f, nullptr, &dockMain);
+    // Col der (Inspector + Browser): 25% del ancho remanente.
     ImGuiID dockRight = ImGui::DockBuilderSplitNode(
-        dockMain, ImGuiDir_Right, 0.28f, nullptr, &dockMain);
-    ImGuiID dockBottom = ImGui::DockBuilderSplitNode(
-        dockMain, ImGuiDir_Down, 0.28f, nullptr, &dockMain);
+        dockMain, ImGuiDir_Right, 0.30f, nullptr, &dockMain);
+    // Col der: split vertical, Browser abajo 40%.
+    ImGuiID dockRightBottom = ImGui::DockBuilderSplitNode(
+        dockRight, ImGuiDir_Down, 0.40f, nullptr, &dockRight);
 
-    ImGui::DockBuilderDockWindow("Dialog Editor",            dockMain);    // F2H47
-    ImGui::DockBuilderDockWindow("Dialog Node Inspector",    dockRight);   // F2H47
-    ImGui::DockBuilderDockWindow("Dialog Browser",           dockBottom);  // F2H47
-    ImGui::DockBuilderDockWindow("Narrative Intro",          dockBottom);  // F2H46 (tab)
+    ImGui::DockBuilderDockWindow("Viewport",                 dockLeft);
+    ImGui::DockBuilderDockWindow("Dialog Editor",            dockMain);
+    ImGui::DockBuilderDockWindow("Dialog Node Inspector",    dockRight);
+    ImGui::DockBuilderDockWindow("Dialog Browser",           dockRightBottom);
 }
 
 /// @brief Dispatcher: elige el builder segun el nombre del workspace

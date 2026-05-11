@@ -121,11 +121,18 @@ void EditorApplication::updateCameras(f32 dt) {
         }
 
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
+        // F2H48: si hay dialog activo, ignorar input de movimiento + jump
+        // + crouch (el jugador esta hablando — no deberia caminar). El
+        // mouse-look queda libre para que pueda mirar al NPC con
+        // naturalidad mientras conversa.
+        const bool dialogLocked = Mood::GameState::dialogActive();
         glm::vec3 inputDir(0.0f);
-        if (keys[SDL_SCANCODE_W]) inputDir.z += 1.0f;
-        if (keys[SDL_SCANCODE_S]) inputDir.z -= 1.0f;
-        if (keys[SDL_SCANCODE_D]) inputDir.x += 1.0f;
-        if (keys[SDL_SCANCODE_A]) inputDir.x -= 1.0f;
+        if (!dialogLocked) {
+            if (keys[SDL_SCANCODE_W]) inputDir.z += 1.0f;
+            if (keys[SDL_SCANCODE_S]) inputDir.z -= 1.0f;
+            if (keys[SDL_SCANCODE_D]) inputDir.x += 1.0f;
+            if (keys[SDL_SCANCODE_A]) inputDir.x -= 1.0f;
+        }
 
         // Crouch toggle. SetShape NO mueve el centro del char — ajusta
         // pos manual para mantener base al ras (mismo patron que en
@@ -174,7 +181,7 @@ void EditorApplication::updateCameras(f32 dt) {
         // - Buffer: el flanco up->down de SPACE resetea el timer; saltar
         //   un instante ANTES de aterrizar igual gatilla cuando el char
         //   toque el suelo.
-        const bool spacePressed = keys[SDL_SCANCODE_SPACE] != 0;
+        const bool spacePressed = !dialogLocked && keys[SDL_SCANCODE_SPACE] != 0;
         const bool spaceJustPressed = spacePressed && !m_spacePrevFrame;
         m_spacePrevFrame = spacePressed;
         if (spaceJustPressed) m_jumpBufferTimer = k_jumpBufferWindow;

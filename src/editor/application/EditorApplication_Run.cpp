@@ -23,6 +23,8 @@
 #include "editor/commands/MultiEditTransformCommand.h"  // F2H29 Bloque B: drag-edit undo agrupado.
 #include "editor/panels/debug/PerformanceHudPanel.h"
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28 Bloque F: click-select desde ortos
+#include "engine/dialog/DialogInteractSystem.h"  // F2H48
+#include "engine/dialog/DialogSystem.h"          // F2H48
 #include "engine/render/backend/opengl/OpenGLDebugRenderer.h"  // F2H29 Bloque C: drawAabb preview.
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/physics/world/PhysicsWorld.h"
@@ -1389,7 +1391,8 @@ int EditorApplication::run() {
         //      Transform se vean este mismo frame.
         if (m_scene && m_scriptSystem) {
             MOOD_PROFILE_SCOPE("ScriptSystem::update");
-            m_scriptSystem->update(*m_scene, dt, m_physicsWorld.get());
+            m_scriptSystem->update(*m_scene, dt, m_physicsWorld.get(),
+                                    m_assetManager.get());  // F2H48: dialog bindings
         }
 
         // Hito 33: triggers detectan al player char entrando/saliendo y
@@ -1401,6 +1404,42 @@ int EditorApplication::run() {
             MOOD_PROFILE_SCOPE("TriggerSystem::update");
             m_triggerSystem.update(*m_scene, *m_physicsWorld,
                                     *m_scriptSystem, m_playerCharId);
+        }
+
+        // F2H48: el DialogInteractSystem consume el `playerInside` de los
+        // triggers + busca DialogComponent en la misma entidad. Si el
+        // player presiono E este frame, arranca el dialog. Tambien
+        // mantiene el HUD interact_prompt sincronizado con la presencia
+        // del player en el trigger.
+        if (m_scene && m_assetManager && m_mode == EditorMode::Play) {
+            // Detectar flanco up->down de E (mismo patron que SPACE).
+            const Uint8* keys = SDL_GetKeyboardState(nullptr);
+            const bool ePressed = keys[SDL_SCANCODE_E] != 0;
+            m_ePlayJustPressed   = ePressed && !m_ePlayPrevFrame;
+            m_ePlayPrevFrame     = ePressed;
+
+            MOOD_PROFILE_SCOPE("DialogInteractSystem::tick");
+            const bool dialogStarted = Dialog::DialogInteractSystem::tick(
+                *m_scene, *m_assetManager, m_ePlayJustPressed);
+
+            // Si dialog ya esta activo (no recien arrancado), detectar
+            // teclas 1-9 para choices + E para continueNext.
+            if (!dialogStarted && Dialog::DialogSystem::isActive()) {
+                int digitJustPressed = -1;
+                for (int i = 0; i < 9; ++i) {
+                    const bool pressed = keys[SDL_SCANCODE_1 + i] != 0;
+                    if (pressed && !m_digitPrevFrame[i]) {
+                        digitJustPressed = i + 1;
+                    }
+                    m_digitPrevFrame[i] = pressed;
+                }
+                Dialog::DialogInteractSystem::tickActiveDialog(
+                    m_ePlayJustPressed, digitJustPressed);
+            } else {
+                // Sin dialog activo: reset prev state de digitos para que
+                // el primer digit que se presione sea "just pressed".
+                for (int i = 0; i < 9; ++i) m_digitPrevFrame[i] = false;
+            }
         }
 
         // 3.55) Animacion (Hito 19): avanza time del Animator y rellena el

@@ -12,6 +12,7 @@
 
 namespace Mood {
 
+class AssetManager;
 class Entity;
 class PhysicsWorld;
 struct ScriptComponent;
@@ -26,8 +27,15 @@ struct ScriptComponent;
 ///        `physics.raycast`. Si nullptr, la tabla no existe y los scripts
 ///        que llaman `physics.raycast` van a fallar — los tests headless
 ///        sin Jolt pasan nullptr.
+/// @param assets F2H48: si presente, registra `dialog.start(path)` que
+///        carga el `.mooddialog` via `AssetManager::loadDialog`. Si
+///        nullptr, `dialog.start` loggea warn y retorna false. Tests
+///        headless sin AssetManager pueden pasar nullptr y usar las
+///        funciones que no dependen de assets (set_var/get_var/isActive/
+///        advance/continueNext/stop).
 void setupLuaBindings(sol::state& lua, Entity self,
                        ScriptComponent* scriptComponent = nullptr,
-                       PhysicsWorld* physics = nullptr);
+                       PhysicsWorld* physics = nullptr,
+                       AssetManager* assets = nullptr);
 
 } // namespace Mood

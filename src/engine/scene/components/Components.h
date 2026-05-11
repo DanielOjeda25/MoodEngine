@@ -409,4 +409,19 @@ struct TriggerComponent {
     std::unordered_set<u32> bodiesInside;
 };
 
+/// F2H48: marca una entidad como NPC con un dialog asociado. `dialogPath`
+/// es el path logico del `.mooddialog` (resolvible por AssetManager via
+/// VFS). `autoStartOnInteract`: si true y la entidad tambien tiene un
+/// `TriggerComponent`, el sistema de dialog auto-dispara `start()` cuando
+/// el player presiona E dentro del trigger. Si false (o sin trigger), el
+/// caller debe llamar `dialog.start("npc_id")` desde Lua.
+struct DialogComponent {
+    std::string dialogPath;                  // p.ej. "dialogs/intro.mooddialog"
+    bool        autoStartOnInteract = true;  // default = ergonomico
+    // Estado runtime (no serializado): hash del path ya cargado para
+    // evitar `loadDialog` redundante por frame mientras el player esta
+    // dentro del trigger. 0 = no cargado todavia.
+    u32         cachedDialogId = 0;
+};
+
 } // namespace Mood

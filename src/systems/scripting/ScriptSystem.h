@@ -26,6 +26,7 @@
 
 namespace Mood {
 
+class AssetManager;
 class PhysicsWorld;
 class Scene;
 
@@ -37,7 +38,12 @@ public:
     ///        `physics` de Lua (raycast + futuros). Tests sin Jolt pasan
     ///        nullptr y los scripts que no usen `physics.*` siguen
     ///        funcionando.
-    void update(Scene& scene, f32 dt, PhysicsWorld* physics = nullptr);
+    /// @param assets F2H48: opcional. Si presente, los scripts pueden
+    ///        llamar `dialog.start("path")`. Si nullptr, dialog.start
+    ///        loggea warn y retorna false (resto de la API dialog
+    ///        funciona igual — el state es global).
+    void update(Scene& scene, f32 dt, PhysicsWorld* physics = nullptr,
+                 AssetManager* assets = nullptr);
 
     /// @brief Tira todos los sol::state. Se llama desde
     ///        `EditorApplication::rebuildSceneFromMap` porque al hacer
