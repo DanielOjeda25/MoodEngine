@@ -4,7 +4,32 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H48 cerrado (2026-05-10)
+## 0. ACTUALIZACIÓN F2H48.1 cerrado (2026-05-10)
+
+**Cierre crítico pre-F2H49: serialización DialogComponent + DialogScriptHost (condition_lua reales).**
+Tag: `v1.36.1-fase2-hito48-1`. Cita verbatim del dev: *"me gustaría que la demo sea completa como la B"*.
+
+**Por qué F2H48.1**: tras cerrar F2H48 listé 4 deudas como "diferidas". El dev pidió evaluación honesta — 2 eran bloqueantes para una demo F2H49 creíble (serialización + hooks Lua reales), 2 eran YAGNI legítimo (persist dialogVars / mouse-clic). F2H48.1 ataca las 2 bloqueantes.
+
+**Qué entrega F2H48.1**:
+- **Serialización completa de `DialogComponent`** (`SavedDialog` + write/read EntitySerializer + apply SceneLoader). El NPC con dialog persiste en `.moodmap`. Tests roundtrip nuevos.
+- **`DialogScriptHost`** singleton namespace con sol::state dedicada del juego. Bindings: tabla `dialog` (vars + read-only state), `hud`, `log`. NO bindings de entity (sin `self`). Wrap defensivo `"return (" + expr + ")"` + fail-safe a false en errores.
+- **Wireup en init del editor + player**: `Dialog::DialogScriptHost::init()` post-I18n. Idempotente. Registra los hooks de `DialogSystem::setEvaluator/setExecutor` automáticamente.
+- **`condition_lua`/`on_select_lua` ahora EJECUTAN realmente** — el dev puede escribir `dialog.get_var('met_guard') == 'true'` en una choice y aparece/desaparece según el state. `dialog.set_var('answered', 'yes')` desde un `on_select_lua` muta el var antes de la transición.
+- **10 tests nuevos** en `test_dialog_script_host.cpp` + 3 en `test_scene_serializer.cpp`. Suite **739/8836** verde.
+
+**Decisiones**:
+1. Sol::state separada del per-entity de `ScriptSystem` — el host es global del juego, no de un script específico. Sin `self`, sin `physics`, sin `engine.exposed`.
+2. NO exponer `dialog.start/advance/continueNext/stop` desde el host — riesgo de recursión durante `on_select_lua` (control de flujo viene del DialogSystem o de scripts de entity, no de los hooks).
+3. Fail-safe a false en errores de Lua: ante parse error o runtime error de un `condition_lua`, la choice no aparece. Filosofía defensiva — el dev ve el warn en el log y arregla.
+4. `reset()` del host NO toca `GameState::dialogVars()` (preserva la decisión F2H48 #2: vars sobreviven entre dialogs).
+5. NO se ataca persistencia de `dialogVars` en save ni mouse-clic en choices — quedaron como diferidos sin urgencia. La demo F2H49 no los necesita.
+
+**Próximo a atacar**: **F2H49 — Demo characters Mixamo + escena narrativa completa** (Bloque 2.5 del plan). Ahora con infra real para choices condicionales + escena guardable + .mooddialog persistido.
+
+---
+
+## 0.2. F2H48 cerrado (2026-05-10)
 
 **Tercer hito real de Sub-fase 2.5 cerrado — Dialog runtime + HUD HL2-style + Lua bindings activos.**
 Tag: `v1.36.0-fase2-hito48`. Cita verbatim del dev al validar: *"ya funciona"*.

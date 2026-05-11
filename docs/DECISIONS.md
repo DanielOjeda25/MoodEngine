@@ -11,6 +11,60 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-10: F2H48.1 cierre — Serialización DialogComponent + DialogScriptHost (condition_lua reales pre-F2H49)
+
+**Contexto:** tras cerrar F2H48 listé 4 deudas como "diferidas" (inyección hooks Lua reales, persist dialogVars en save, mouse-clic en choices, persist DialogComponent en .moodmap). El dev preguntó: *"Y NO DEBERIAMOS HACER ESTO ANTES DE LO DE LA DEMO DE MIXAMO?"*. Triage honesto en respuesta identificó 2 bloqueantes para una demo F2H49 creíble (serialización + hooks Lua) y 2 YAGNI legítimos (save vars, mouse-clic). El dev confirmó scope completo (B): *"me gustaria que la demo sea completa como la B"*. F2H48.1 es mini-hito (~3h, sin tag mayor — bump patch a `v1.36.1`).
+
+**Decisión clave 1 — Sol::state dedicada del host (NO reusar la per-entity de ScriptSystem):** nueva `DialogScriptHost::g_state` (singleton namespace). Bindings minimal: `dialog` (vars + read-only state) + `hud` (interact_prompt + getters HP/mag/reserve) + `log`. Sin `self`, sin `physics`, sin `engine.exposed`.
+
+- **Razón vs reusar la sol::state de un ScriptComponent específico:** los `condition_lua`/`on_select_lua` son del DIALOG, no de un entity. Si los corro contra el sol::state del NPC, las globales del script del NPC (`hp`, `pathFinding`, etc.) contaminan el sandbox del dialog — y peor: si el NPC NO tiene script, no hay sol::state contra qué evaluar.
+- **Razón vs sol::state global por ScriptSystem:** ScriptSystem maneja una sol::state por entity (cada script Lua aislado, decisión F2H8 del plan original). Agregar una "global" rompe esa convención + mezcla responsabilidades.
+- **Trade-off aceptado:** los dialog hooks NO pueden acceder a `self.transform` ni `engine.exposed` directamente. Si necesitan eso, el dev usa `dialog.set_var` desde el script del NPC + `dialog.get_var` desde el hook. Patrón clásico de event-bus con state intermedio.
+
+**Decisión clave 2 — NO exponer `dialog.start/advance/continueNext/stop` desde el host:** las funciones de control de flujo del DialogSystem viven solo en la tabla `dialog` de los scripts de entity (LuaBindings.cpp F2H48 Bloque E), NO en el host del F2H48.1.
+
+- **Razón:** si un `on_select_lua` llama `dialog.advance(1)` mientras estamos en medio de `DialogSystem::advance(0)` (el que dispara el hook), entramos en recursión + state machine inconsistente. El host debe ser READ + WRITE de vars, NO control de flujo.
+- **Caso futuro:** si un dev pide "saltar al nodo X desde un on_select_lua" (skip directo sin link), agregar `dialog.jump_to(nodeId)` que difiere la transición al final del frame. v1 no lo necesita.
+
+**Decisión clave 3 — Wrap defensivo `"return (" + expr + ")"`:** los `condition_lua` se escriben como expresiones (`dialog.get_var('x') == 'true'`) sin `return` explícito. El host wrappea automáticamente para que el dev no tenga que escribir `"return dialog.get_var(...)"` en cada choice.
+
+- **Razón:** ergonomía. Las expresiones de condition leídas por humanos parecen condiciones (`a == b`), no statements (`return a == b`). Sol2 requiere `return` para capturar el valor.
+- **Edge case:** si el dev escribe `"return x"` literal, el wrap produce `"return (return x)"` que es parse error → la choice no aparece (fail-safe loggea). Aceptable — esos casos son raros y el log dirige al dev.
+
+**Decisión clave 4 — Fail-safe a `false` en errores de evaluate:** si el `condition_lua` tiene parse error o runtime error, la choice NO aparece (return false del evaluator). Log a `script` channel para que el dev vea.
+
+- **Razón:** filosofía defensiva. Una choice con condition rota es probablemente "no debería estar visible". Mostrarla y permitir avanzar a un nodo basura es peor que esconderla. El warn en el log es alta señal: el dev ve el error inmediatamente.
+- **Alternativa descartada:** mostrar la choice + ejecutar igual el `on_select_lua` rota cuando la elijan → side effects impredecibles. NO.
+
+**Decisión clave 5 — `DialogScriptHost::reset()` NO toca `GameState::dialogVars()`:** la reset del host tira la sol::state (eventuales globals del juego que el dev haya creado) pero las vars del dialog persisten.
+
+- **Razón:** consistencia con la decisión F2H48 #2 (vars sobreviven entre dialogs). Si un `Save/Load` del juego empuja vars al disco (deferred), reset del host NO debería borrarlas.
+
+**Decisión clave 6 — `cachedDialogId` NO se persiste en `.moodmap`:** solo `dialogPath + autoStartOnInteract` van al JSON. El `cachedDialogId` arranca en 0 al load — el DialogInteractSystem llama `loadDialog(dialogPath)` la primera vez que el player entra al trigger.
+
+- **Razón:** los IDs del AssetManager no son estables entre sesiones (depende del orden de loads). Persistir un ID viejo apuntaría a slots equivocados. Recompoer via `loadDialog(path)` es robusto + barato (cache hit tras el primer load).
+
+**Decisión clave 7 — `dialogPath` vacío → NO se serializa el componente:** mismo patrón que `ScriptComponent::path`. Si el dev agrega un `DialogComponent` pero no le asigna path, el JSON queda limpio.
+
+- **Razón:** evitar contaminación del .moodmap con componentes inertes. Un dev que olvida configurar el path no debería ver "dialog: {}" en el archivo.
+
+**Alternativas descartadas:**
+
+- **Persistir `dialogVars` en `.moodsave` como parte de F2H48.1:** YAGNI confirmado por el dev — la demo F2H49 no usa save/load. Sumar cuando emerja "guardia recuerda al cargar partida".
+- **Mouse-clic sobre choices del HUD:** YAGNI — teclas 1-9 HL2-style son válidas estilísticamente. Sumar tras feedback de usabilidad post-F2H49.
+- **Exponer físicas (`physics.raycast` etc.) en el host:** scope creep — los hooks de dialog NO deberían hacer raycasts. Si emerge caso real, agregar.
+- **Cargar el host una vez por NPC en lugar de global:** complica + scope (init+teardown por NPC), sin ganancia (las vars son globales igual).
+- **Persistir `cachedDialogId` directo:** rompe entre sesiones (IDs no son estables — depende del orden de loads del AssetManager).
+
+**Condiciones de revisión:**
+
+- Si un dev pide acceso a `physics.raycast` desde un `on_select_lua` (ej. "si el player está a < 2m del NPC, opción extra"), agregar el binding al host con cuidado de no abrir surface innecesario.
+- Si emerge necesidad real de `dialog.jump_to(nodeId)` desde un hook (sin link), implementar con deferred transition (queue + flush al final del frame).
+- Si los errores de `condition_lua` se vuelven comunes y el log es ruidoso, considerar un "modo estricto" toggleable que muestre las choices con error en rojo (para developer feedback durante demo time).
+- Si un dev escribe `condition_lua` con efectos colaterales (`dialog.set_var(...)` dentro), el sandbox lo permite pero es mala práctica. Documentar en la convención del schema (no enforced).
+
+---
+
 ## 2026-05-10: F2H48 cierre — Dialog runtime + HUD HL2-style + Lua bindings + DialogComponent
 
 **Contexto:** continuación natural de F2H47 — el editor producía `.mooddialog` pero no había sistema que los interpretara en Play Mode. Bloque 2.3 + 2.4 del `PLAN_SUBFASE_2_5.md` fusionados (runtime y Lua bindings van de la mano). El dev confirmó 3 decisiones pre-implementación que abajo se detallan.

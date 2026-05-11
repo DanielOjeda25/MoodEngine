@@ -9,23 +9,30 @@
 
 ---
 
-## Post-F2H48 (2026-05-10) — Dialog runtime + HUD HL2-style + Lua bindings cerrado
+## Post-F2H48.1 (2026-05-10) — Cierre crítico pre-F2H49: serialización DialogComponent + DialogScriptHost
 
 ### Próximo a atacar
 
 - **F2H49 — Demo characters Mixamo + escena narrativa completa** (Bloque 2.5 del plan).
-  - **Origen**: pedido del dev post-F2H47/F2H48: *"que sentido tiene crear un sistema de diálogo, sino tenemos a quien asignar ni como sentir"*. F2H48 cerró el runtime técnico — ahora hace falta validar end-to-end con assets reales.
+  - **Origen**: pedido del dev post-F2H47/F2H48: *"que sentido tiene crear un sistema de diálogo, sino tenemos a quien asignar ni como sentir"*. Ahora con infra realmente lista: F2H48 cerró el runtime técnico + F2H48.1 cerró las deudas críticas pre-demo (persistencia + condition_lua reales).
 
 - **Después de F2H49**: continuar con **Inventario** (F2H50) y **Quest Editor** (F2H51) según `PLAN_SUBFASE_2_5.md`.
 
-### Diferidos sin orden (emergentes post-F2H48)
+### Diferidos sin orden (emergentes post-F2H48.1)
 
-- **Inyección real de hooks `LuaEvaluator/LuaExecutor` en DialogSystem**: la API existe (`setEvaluator`/`setExecutor`) pero v1 no la wirea — los `condition_lua`/`on_select_lua` declarados en los choices se ignoran. Requiere crear una sol::state global del juego (compartida entre los scripts de entity). Sumar cuando emerja necesidad real (probablemente F2H50+ con inventory + quest condition predicates).
-- **Persistencia de `GameState::dialogVars` en `.moodsave`**: las vars sobreviven en memoria entre dialogs pero se pierden al cerrar el juego. Sumar al `SaveLoad.cpp` cuando emerja necesidad de "el guardia recuerda al cargar partida".
-- **Mouse clic sobre choices del HUD `dialog_box`**: v1 usa teclas 1-9 (HL2 style). Si el dev pide gamepad/touch, agregar `ImGui::IsMouseClicked + AABB test` por choice — incremento pequeño.
-- **Persistir `DialogComponent` en `.moodmap`**: SceneSerializer no lo conoce en v1 (asignación via Lua o demo programático). Sumar cuando el dev configure dialogs desde el Inspector + esperar persistir.
+- **Persistencia de `GameState::dialogVars` en `.moodsave`**: vars sobreviven en memoria entre dialogs pero se pierden al cerrar el juego. YAGNI confirmado para F2H49 (demo no usa save/load). Sumar cuando emerja necesidad de "guardia recuerda al cargar partida".
+- **Mouse clic sobre choices del HUD `dialog_box`**: v1 usa teclas 1-9 (HL2 style). YAGNI confirmado. Si el dev pide gamepad/touch tras F2H49, agregar `ImGui::IsMouseClicked + AABB test` por choice — incremento pequeño.
+- **`physics.raycast` desde DialogScriptHost**: el host expone solo `dialog`, `hud`, `log`. Si emerge caso "si el player está a < 2m, opción extra", agregar con cuidado.
+- **`dialog.jump_to(nodeId)` desde un on_select_lua**: control de flujo restringido en el host por riesgo de recursión. Si emerge demand, implementar con deferred transition (queue al final del frame).
 - **Voiceover sync waveform**: customData ya tiene `audio` path; sumar timing + UI cuando emerja gameplay con voz real.
 - **Animation `wait_for` flag**: customData tiene `animation` pero v1 solo dispara, no espera al final.
+
+### Histórico resuelto F2H48.1
+
+- ~~Serialización `DialogComponent` en `.moodmap`~~ — resuelto. `SavedDialog { dialogPath, autoStartOnInteract }` + write/read en EntitySerializer + apply en SceneLoader. Convención `dialogPath.empty() → no se serializa` (paridad con ScriptComponent). 3 tests de roundtrip.
+- ~~Inyección real de hooks `LuaEvaluator/LuaExecutor`~~ — resuelto via `DialogScriptHost` singleton namespace con sol::state dedicada del juego. `init()` se llama en EditorApplication_Init + PlayerApplication_Init y registra los hooks. `evaluate("")` → true. `evaluate("dialog.get_var('x') == 'true'")` → bool real. `execute("dialog.set_var('y','1')")` → muta state. Fail-safe a false en errores. 10 tests nuevos.
+
+## Post-F2H48 (2026-05-10) — Dialog runtime + HUD HL2-style + Lua bindings cerrado
 
 ### Histórico resuelto F2H48
 
