@@ -174,10 +174,13 @@ clickeables, estilo Half-Life 2). Override via Lua.
 
 ---
 
-### Bloque 2.5 — Demo characters + escena narrativa completa (F2H49 + F2H50)
+### Bloque 2.5 — Demo characters + escena narrativa completa (F2H49 + F2H50) ✅ CERRADO
 
-> **Estado (2026-05-11)**: **F2H49 cerrado** — re-scopeado a "Soporte de animaciones standalone (FBX anim-only)" tras descubrir que el motor no podía cargar clips Mixamo "Without Skin". Pipeline standalone funcionando + Asset Browser tab Animations + Inspector external clips + X Bot/Y Bot demo rigs commiteados. Ver [`HITOS.md`](HITOS.md) entry F2H49 + [`DECISIONS.md`](DECISIONS.md) entry 2026-05-11.
-> **F2H50 (próximo)**: la demo narrativa original — escena `narrative_demo.moodmap` con player X Bot + NPC Y Bot armados con `DialogComponent` + trigger interact + clips `anim_*` adjuntos en sus `AnimatorComponent.externalClips`.
+> **Estado (2026-05-11)**: **F2H49 + F2H50 cerrados.**
+> - **F2H49**: pipeline animaciones standalone (FBX anim-only) + Asset Browser tab Animations + Inspector external clips + X Bot/Y Bot demo rigs commiteados.
+> - **F2H49.1**: extracción de diffuse color del aiMaterial cuando no hay texture map (template chars Mixamo).
+> - **F2H50**: auto-attach de sibling `anim_*.fbx` al spawn + generator `narrative_demo.moodmap` + Welcome modal button + persistencia full de AnimatorComponent (`SavedAnimator` + `externalClips`) + regen de materiales auto en SceneLoader. Demo end-to-end: spawn NPC, walk + E para hablar, dialog HL2-style funcionando.
+> Ver [`HITOS.md`](HITOS.md) entries F2H49/49.1/50 + [`DECISIONS.md`](DECISIONS.md) entries 2026-05-11.
 
 
 **Origen**: pedido del dev post-F2H47 (2026-05-10): *"que sentido tiene

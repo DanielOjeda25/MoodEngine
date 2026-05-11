@@ -242,6 +242,32 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         }
     }
 
+    // F2H50 Bloque D: AnimatorComponent. clipName/speed/playing/loop +
+    // lista `externalClips` (alias + path logico del .fbx standalone).
+    // El `externalBindCache` runtime no se persiste — el AnimationSystem
+    // lo re-genera al primer evaluate via `bindClipToSkeleton`. El `time`
+    // tampoco se persiste (siempre arranca en 0 al cargar — comportamiento
+    // estandar de "respawn" en motores: la anim empieza desde el frame 1
+    // cuando la escena se restaura).
+    if (entity.hasComponent<AnimatorComponent>()) {
+        const auto& a = entity.getComponent<AnimatorComponent>();
+        json ja;
+        ja["clip_name"] = a.clipName;
+        ja["speed"]     = a.speed;
+        ja["playing"]   = a.playing;
+        ja["loop"]      = a.loop;
+        if (!a.externalClips.empty()) {
+            ja["external_clips"] = json::array();
+            for (const auto& [alias, clipId] : a.externalClips) {
+                json jc;
+                jc["alias"] = alias;
+                jc["path"]  = assets.animationClipPathOf(clipId);
+                ja["external_clips"].push_back(jc);
+            }
+        }
+        je["animator"] = ja;
+    }
+
     // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la
     // entidad tiene un `PrefabLinkComponent`. Sin propagacion bidireccional
     // por ahora; es solo un breadcrumb para futuras features ("revertir a
@@ -359,6 +385,27 @@ SavedEntity parseEntityFromJson(const json& j) {
         if (!sd.dialogPath.empty()) {
             se.dialog = std::move(sd);
         }
+    }
+
+    // F2H50 Bloque D: animator.
+    if (j.contains("animator")) {
+        const auto& ja = j.at("animator");
+        SavedAnimator sa;
+        sa.clipName = ja.value("clip_name", std::string{});
+        sa.speed    = ja.value("speed", 1.0f);
+        sa.playing  = ja.value("playing", true);
+        sa.loop     = ja.value("loop", true);
+        if (ja.contains("external_clips") && ja.at("external_clips").is_array()) {
+            for (const auto& jc : ja.at("external_clips")) {
+                SavedAnimatorExternalClip ec;
+                ec.alias = jc.value("alias", std::string{});
+                ec.path  = jc.value("path", std::string{});
+                if (!ec.alias.empty() && !ec.path.empty()) {
+                    sa.externalClips.push_back(std::move(ec));
+                }
+            }
+        }
+        se.animator = std::move(sa);
     }
 
     if (j.contains("script")) {

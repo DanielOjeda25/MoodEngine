@@ -10,9 +10,37 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <limits>
+#include <string>
+
+namespace Mood {
+class AssetManager;
+struct AnimatorComponent;
+} // namespace Mood
 
 namespace Mood::detail {
+
+/// @brief F2H50 Bloque B: dado un mesh con esqueleto (`meshLogicalPath`),
+///        escanea la carpeta padre por archivos `anim_<alias>.fbx`
+///        siblings y los enchufa a `outAnim.externalClips`. Si `idle`
+///        esta entre los aliases encontrados, setea `outAnim.clipName`
+///        a `"idle"` por default. Convencion por filename — funciona
+///        con cualquier rig que siga el patron. Para meshes sin
+///        siblings (Fox.glb, props Kenney), no toca `outAnim`.
+void attachSiblingAnimClips(AssetManager& am,
+                              const std::string& meshLogicalPath,
+                              AnimatorComponent& outAnim);
+
+/// @brief F2H50 Bloque A: asegura que el `.mooddialog` demo exista en disco.
+///        Si no existe, genera 3 nodos (saludo + 2 ramas) y lo guarda.
+///        Compartido entre el handler "Cargar dialogo demo" (que despues
+///        abre el DialogEditor) y el handler "Cargar demo narrativo" (que
+///        lo usa como dependencia del NPC de la escena).
+///        Devuelve true si el archivo existe al retornar (ya estaba o se
+///        creo ok), false si la generacion fallo (loguea el motivo).
+bool ensureDemoIntroDialogExists(const std::filesystem::path& demoPath);
+
 
 // Hito 23: rota un AABB por un Euler en orden YXZ (mismo que
 // TransformComponent::worldMatrix) y devuelve el rango Y resultante en

@@ -69,9 +69,27 @@ Entity applyOneEntity(const SavedEntity& se,
             // back-compat). Detectamos por extension.
             std::vector<MaterialAssetId> mats;
             mats.reserve(mr.materials.size());
-            for (const auto& path : mr.materials) {
+
+            // F2H50 Bloque D: cuando un slot tiene path vacio (caso de
+            // materiales runtime auto-generados, ej. los `__runtime#`
+            // que el EntitySerializer nukea), regeneramos via
+            // `createMaterialsForMesh` lazy. Eso preserva las texturas
+            // embedded del FBX + los diffuse colors (F2H49.1) sin
+            // perderlos en el roundtrip save/load.
+            std::vector<MaterialAssetId> regenAuto;
+            auto autoMatFor = [&](size_t slot) -> MaterialAssetId {
+                if (regenAuto.empty()) {
+                    regenAuto = assets.createMaterialsForMesh(meshId);
+                }
+                return (slot < regenAuto.size())
+                        ? regenAuto[slot]
+                        : assets.missingMaterialId();
+            };
+
+            for (size_t i = 0; i < mr.materials.size(); ++i) {
+                const auto& path = mr.materials[i];
                 if (path.empty()) {
-                    mats.push_back(assets.missingMaterialId());
+                    mats.push_back(autoMatFor(i));
                     continue;
                 }
                 const bool isMaterial =
@@ -91,13 +109,29 @@ Entity applyOneEntity(const SavedEntity& se,
             }
             e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
 
-            // Hito 22 fix arrastrado del Hito 19: si el mesh trae
-            // skeleton + clips, auto-agregar Animator + Skeleton igual
-            // que `processViewportMeshDrop`. Sin esto, un Fox.glb
-            // guardado en `.moodmap` reaparece en bind pose porque
-            // esos dos componentes no se serializan.
+            // F2H50 Bloque D: si el JSON trae `animator` (saved), usar
+            // sus valores. Sino, fallback al path legacy: auto-add con
+            // primer clip embedded cuando el mesh trae skeleton + anims
+            // (compat con mapas pre-F2H50). El SkeletonComponent se
+            // agrega siempre que haya skeleton — sin el, el render
+            // skinneado no funciona.
             const MeshAsset* asset = assets.getMesh(meshId);
-            if (asset != nullptr && asset->hasSkeleton()
+            if (se.animator.has_value()) {
+                const auto& sa = *se.animator;
+                AnimatorComponent anim{};
+                anim.clipName = sa.clipName;
+                anim.speed    = sa.speed;
+                anim.playing  = sa.playing;
+                anim.loop     = sa.loop;
+                anim.externalClips.reserve(sa.externalClips.size());
+                for (const auto& ec : sa.externalClips) {
+                    const AnimationClipAssetId clipId =
+                        assets.loadAnimationClip(ec.path);
+                    anim.externalClips.emplace_back(ec.alias, clipId);
+                }
+                e.addComponent<AnimatorComponent>(anim);
+                e.addComponent<SkeletonComponent>(SkeletonComponent{});
+            } else if (asset != nullptr && asset->hasSkeleton()
                 && !asset->animations.empty()) {
                 AnimatorComponent anim{};
                 anim.clipName = "";   // primer clip

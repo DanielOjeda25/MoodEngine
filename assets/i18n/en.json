@@ -61,6 +61,7 @@
   "editor.menu.help.demo.fire_particles": "Add fire particles demo",
   "editor.menu.help.demo.trigger": "Add trigger demo",
   "editor.menu.help.demo.dialog": "Load dialog demo (Narrative)",
+  "editor.menu.help.demo.narrative_map": "Load narrative demo (scene + NPC + dialog)",
   "editor.menu.help.stress": "Polygon stress test",
   "editor.menu.help.stress.10k": "Spawn 10K tris (cubes)",
   "editor.menu.help.stress.100k": "Spawn 100K tris (cubes)",
@@ -101,6 +102,8 @@
 
   "editor.welcome.demo_map": "Load demo map (Animated character)",
   "editor.welcome.demo_map_hint": "Creates a fresh project + spawns the Fox.glb animated character so you can immediately see the engine in action.",
+  "editor.welcome.demo_narrative": "Load narrative demo (NPC + dialog)",
+  "editor.welcome.demo_narrative_hint": "Creates a fresh project + generates narrative_demo.moodmap with an NPC armed with Animator + DialogComponent + Trigger. Walk to the NPC and press E to chat.",
   "editor.welcome.no_recent": "No recent projects yet.",
   "editor.welcome.recents": "Recent:",
   "editor.welcome.clean_missing": "Clean missing",

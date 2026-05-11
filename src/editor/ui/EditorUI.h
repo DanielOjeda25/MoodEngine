@@ -415,6 +415,17 @@ public:
         return r;
     }
 
+    /// @brief F2H50 Bloque C: Welcome modal — crea proyecto fresco +
+    ///        carga la escena narrative_demo.moodmap (genera si falta).
+    ///        Equivalente al boton F2H44 pero apuntando al demo narrativo
+    ///        (NPC Y Bot + Dialog + Trigger) en vez del stress scene.
+    void requestOpenNarrativeDemo() { m_openNarrativeDemoRequested = true; }
+    bool consumeOpenNarrativeDemoRequest() {
+        const bool r = m_openNarrativeDemoRequested;
+        m_openNarrativeDemoRequested = false;
+        return r;
+    }
+
     /// @brief Hito 19: request para spawnear `assets/meshes/Fox.glb`
     ///        (CC0, glTF Sample Assets) con AnimatorComponent + clip
     ///        default ("Survey"/"Walk"/"Run" segun viene en el archivo).
@@ -457,6 +468,19 @@ public:
     bool consumeSpawnDialogDemoRequest() {
         const bool r = m_spawnDialogDemoRequested;
         m_spawnDialogDemoRequested = false;
+        return r;
+    }
+
+    /// @brief F2H50 Bloque A: request para generar (si falta) + abrir el
+    ///        mapa demo de narrativa (`assets/maps/narrative_demo.moodmap`).
+    ///        El handler arma 1 NPC con MeshRenderer + Animator + Dialog
+    ///        + Trigger apuntando al `demo_intro.mooddialog`. La idea es
+    ///        que el dev pueda ver el flujo dialog end-to-end con un char
+    ///        real out-of-the-box. Editable como cualquier mapa.
+    void requestGenerateNarrativeDemoMap() { m_generateNarrativeDemoMapRequested = true; }
+    bool consumeGenerateNarrativeDemoMapRequest() {
+        const bool r = m_generateNarrativeDemoMapRequested;
+        m_generateNarrativeDemoMapRequested = false;
         return r;
     }
 
@@ -656,9 +680,11 @@ private:
     bool m_spawnLightStressRequested = false; // Hito 18
     bool m_spawnAnimatedCharacterRequested = false; // Hito 19
     bool m_openDemoMapRequested = false; // F2H44: Welcome modal demo
+    bool m_openNarrativeDemoRequested = false; // F2H50 Bloque C
     bool m_spawnFireParticlesRequested = false;     // Hito 29
     bool m_spawnTriggerRequested = false;           // Hito 33
     bool m_spawnDialogDemoRequested = false;        // F2H47
+    bool m_generateNarrativeDemoMapRequested = false; // F2H50 Bloque A
     int  m_spawnStressTrisRequested = 0;             // F2H2 (target tris)
     bool m_spawnFullStressSceneRequested = false;   // F2H42
     bool m_recentsDirty = false; // Hito 15 polish: edicion manual de la lista de recientes

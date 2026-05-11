@@ -1,0 +1,470 @@
+{
+  "brushes": [],
+  "entities": [
+    {
+      "animator": {
+        "clip_name": "idle",
+        "external_clips": [
+          {
+            "alias": "idle",
+            "path": "characters/npc/anim_idle.fbx"
+          },
+          {
+            "alias": "look_around",
+            "path": "characters/npc/anim_look_around.fbx"
+          },
+          {
+            "alias": "talk",
+            "path": "characters/npc/anim_talk.fbx"
+          }
+        ],
+        "loop": true,
+        "playing": true,
+        "speed": 1.0
+      },
+      "dialog": {
+        "autoStartOnInteract": true,
+        "path": "dialogs/demo_intro.mooddialog"
+      },
+      "mesh_renderer": {
+        "materials": [
+          "",
+          ""
+        ],
+        "mesh_path": "characters/npc/npc.fbx"
+      },
+      "tag": "NPC",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          0.0
+        ],
+        "rotationEuler": [
+          0.0,
+          -90.0,
+          0.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "trigger": {
+        "halfExtents": [
+          1.5,
+          1.0,
+          1.5
+        ]
+      }
+    }
+  ],
+  "height": 10,
+  "name": "narrative_demo",
+  "tileSize": 3.0,
+  "tiles": [
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    }
+  ],
+  "version": 14,
+  "width": 10
+}

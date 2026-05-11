@@ -572,6 +572,96 @@ TEST_CASE("SceneSerializer: round-trip de DialogComponent (F2H48.1)") {
     std::filesystem::remove(path);
 }
 
+// ============================================================
+// F2H50 Bloque D: AnimatorComponent persistence (clipName, speed, playing,
+// loop, externalClips) sobrevive al roundtrip save+load.
+// ============================================================
+
+TEST_CASE("SceneSerializer: round-trip de AnimatorComponent (F2H50)") {
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    {
+        Entity npc = scene.createEntity("NPC_anim");
+        npc.addComponent<MeshRendererComponent>(
+            MeshAssetId{0}, std::vector<MaterialAssetId>{0});
+        AnimatorComponent anim{};
+        anim.clipName = "walk";
+        anim.speed    = 1.5f;
+        anim.playing  = false;
+        anim.loop     = false;
+        // 3 external clips usando los rigs demo Mixamo X Bot que vienen
+        // commiteados en el repo (assets/characters/player/anim_*.fbx).
+        // Necesitamos archivos reales porque el serializer usa
+        // `animationClipPathOf(id)` que devuelve "__empty_clip" para ids
+        // que cayeron al slot 0 (missing). Persistir paths reales valida
+        // el roundtrip correctamente.
+        anim.externalClips.emplace_back(
+            "idle", assets.loadAnimationClip("characters/player/anim_idle.fbx"));
+        anim.externalClips.emplace_back(
+            "walk", assets.loadAnimationClip("characters/player/anim_walk.fbx"));
+        anim.externalClips.emplace_back(
+            "wave", assets.loadAnimationClip("characters/player/anim_wave.fbx"));
+        npc.addComponent<AnimatorComponent>(std::move(anim));
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("animator_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1u);
+    const auto& se = loaded->entities[0];
+    REQUIRE(se.animator.has_value());
+    CHECK(se.animator->clipName == "walk");
+    CHECK(se.animator->speed == doctest::Approx(1.5f));
+    CHECK_FALSE(se.animator->playing);
+    CHECK_FALSE(se.animator->loop);
+    REQUIRE(se.animator->externalClips.size() == 3u);
+    CHECK(se.animator->externalClips[0].alias == "idle");
+    CHECK(se.animator->externalClips[0].path == "characters/player/anim_idle.fbx");
+    CHECK(se.animator->externalClips[1].alias == "walk");
+    CHECK(se.animator->externalClips[1].path == "characters/player/anim_walk.fbx");
+    CHECK(se.animator->externalClips[2].alias == "wave");
+    CHECK(se.animator->externalClips[2].path == "characters/player/anim_wave.fbx");
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: AnimatorComponent sin externalClips se persiste igual (F2H50)") {
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    {
+        Entity e = scene.createEntity("Anim_no_clips");
+        e.addComponent<MeshRendererComponent>(
+            MeshAssetId{0}, std::vector<MaterialAssetId>{0});
+        AnimatorComponent anim{};
+        anim.clipName = "embedded_clip";
+        anim.playing  = true;
+        anim.loop     = true;
+        // externalClips vacio — caso comun de meshes con embedded animations
+        // (Fox.glb, etc.). El roundtrip preserva los flags pero la lista
+        // sigue vacia.
+        e.addComponent<AnimatorComponent>(std::move(anim));
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("animator_no_external_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1u);
+    const auto& se = loaded->entities[0];
+    REQUIRE(se.animator.has_value());
+    CHECK(se.animator->clipName == "embedded_clip");
+    CHECK(se.animator->externalClips.empty());
+
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("SceneSerializer: DialogComponent con path vacio NO se persiste (F2H48.1)") {
     // Mismo patron que ScriptComponent: si path vacio, el componente
     // no se serializa (no aporta nada al round-trip).

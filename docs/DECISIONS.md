@@ -11,6 +11,61 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-11: F2H50 cierre — Demo narrativa end-to-end + persistencia AnimatorComponent + regen materiales auto
+
+**Contexto:** F2H49 cerró el pipeline de animaciones standalone (FBX anim-only). F2H50 cierra el Bloque 2.5 del `PLAN_SUBFASE_2_5.md` atando esas animaciones al sistema de diálogo + character controller para validar el flow narrativo end-to-end con un NPC tangible (dev: *"que sentido tiene crear un sistema de dialogo, sino tenemos a quien asignar"*).
+
+**Decisión clave 1 — Auto-attach de sibling `anim_*.fbx` al spawn de mesh skinneado:** cuando el dev dropea un FBX con skeleton en el viewport, el motor escanea la carpeta padre del mesh y enchufa todos los `anim_<alias>.fbx` siblings al `AnimatorComponent.externalClips` automáticamente, defaulteando `clipName = "idle"` si existe ese alias.
+
+- **Razón:** sin esto, el dev tiene que drag-drop manualmente cada clip desde el Inspector tras spawnear un rig. Para un demo de 3-6 clips por personaje es tedioso. La convención de filename (`anim_*`) ya estaba documentada en `assets/characters/README.md`.
+- **Generalización (no exclusivo de Mixamo):** funciona con cualquier rig (`assets/heroes/hero/hero.fbx` + `anim_*.fbx` siblings). Convención por filename, no por carpeta.
+- **No-op para FBX sin siblings (Fox.glb, Kenney props):** la lista queda vacía → comportamiento Hito 19 preservado (primer clip embedded).
+- **Default `clipName = "idle"`:** asume convención que "idle" es la pose neutral. Para chars sin idle, queda `""` (primer embedded, típicamente T-pose para Mixamo "With Skin").
+
+**Decisión clave 2 — Condición de auto-add de AnimatorComponent al spawn relajada a solo `hasSkeleton()`:** antes era `hasSkeleton() && !animations.empty()`. Ahora cualquier rig con esqueleto recibe AnimatorComponent + SkeletonComponent.
+
+- **Razón:** el log existente `"(skinned + animator)"` ya usaba la condición floja (visible incluso para meshes sin embedded anims), creando inconsistencia entre log y comportamiento. Más importante: con el auto-attach (decisión 1), un rig sin embedded anims + con sibling `anim_*.fbx` puede igual usar esos clips externos. La condición vieja le negaba el AnimatorComponent y perdía esos clips.
+- **Trade-off:** rigs con skeleton + sin clips de ningún tipo tienen AnimatorComponent inerte. Cero costo runtime (el AnimationSystem retorna early si no hay clip activo).
+
+**Decisión clave 3 — `SavedAnimator` agrega persistencia completa del `AnimatorComponent` en el `.moodmap`:** bump aditivo del schema. Persiste `clipName`, `speed`, `playing`, `loop`, y la lista `externalClips` como pares `{alias, path}`.
+
+- **Razón:** pre-F2H50 el AnimatorComponent NUNCA se serializaba — el SceneLoader auto-agregaba uno con defaults (`clipName=""`, `playing=true`, `loop=true`) cuando el mesh tenía skeleton + embedded anims. Eso significaba que editar `anim.speed = 2.0` en el Inspector, save, load → speed back to 1.0. Más crítico: los `externalClips` agregados via drop o via inspector se perdían en cada save.
+- **Path persistido vs ID:** los `AnimationClipAssetId` no son estables entre sesiones (dependen del orden de loads del AssetManager). Persistimos el path lógico (`assets.animationClipPathOf(clipId)`); al cargar, `loadAnimationClip(path)` lo re-resuelve. Mismo patrón que MeshRenderer.meshPath.
+- **`externalBindCache` NO se persiste:** runtime state que `AnimationSystem` regenera al primer evaluate via `bindClipToSkeleton`. Mismo criterio que `cachedDialogId` (F2H48.1) — IDs cacheados no sobreviven sesiones.
+- **`time` NO se persiste:** siempre arranca en 0 al cargar. Convención "respawn" de motores 3D. Si emerge necesidad de "remember anim time" (ej. cinemática pausable), agregar como flag.
+- **Fallback path para mapas pre-F2H50:** si el JSON no trae `animator`, el SceneLoader cae al auto-add con primer embedded — same behavior as Hito 19. Cero regression.
+
+**Decisión clave 4 — Regen lazy de materiales auto en SceneLoader cuando el slot tiene path vacío:** descubierto al validar el flow save→load del demo F2H50. Los X/Y Bot aparecían magenta tras un roundtrip.
+
+- **Causa:** el EntitySerializer (línea ~86) nukea cualquier path que empiece con `__` a string vacío (handling de paths internos). Eso incluye los `__runtime#<id>` que `createMaterialsForMesh` asigna a materiales auto-generados con diffuse color de F2H49.1. El SceneLoader al ver path vacío caía a `missingMaterialId()` (magenta).
+- **Fix:** en SceneLoader, cuando un slot tiene path vacío Y la mesh tiene auto-materials disponibles, regenerar lazy via `createMaterialsForMesh(meshId)`. Eso preserva textures embedded del FBX (Fox.glb) + diffuse colors (X/Y Bot) sin perderlos en el roundtrip — y sin tener que serializar el material como JSON inline (overhead).
+- **Determinismo:** `createMaterialsForMesh(meshId)` es determinístico para un mesh dado — el resultado es función de los `materialAlbedoTextures` + `materialAlbedoColors` del MeshAsset. Reload del mismo mesh produce los mismos materiales.
+
+**Decisión clave 5 — Demo scene minimalista (sin walls CSG):** el handler genera SOLO el NPC con sus componentes. Sin floor brushes, sin walls, sin lighting custom.
+
+- **Razón:** filosofía engine-grade — el `.moodmap` es DATA. Hardcodear walls en el generator obliga al dev a editarlas si quiere distinta arquitectura. Mejor: minimal scaffold que el dev decora editando el .moodmap como cualquier mapa. La tile floor implícita es suficiente para el demo.
+- **Alternativa descartada:** room rectangular con 4 walls + floor brush + RigidBody Static. Hubiera requerido también integración con el "compile map" flow para que las walls colisionen. Scope creep para el demo.
+
+**Decisión clave 6 — Helper `ensureDemoIntroDialogExists` extraído del handler F2H47:** refactor del `processSpawnDialogDemoRequest` para reuso entre "Cargar diálogo demo" (que abre el DialogEditor) y "Cargar demo narrativo" (que lo usa como dependencia del NPC, sin side effects de UI).
+
+- **Razón:** evitar copy-paste de ~50 LOC de generación de `.mooddialog`. El helper devuelve `bool` (existía ya / se creó OK / falla) para que ambos handlers tomen decisiones de continuar.
+
+**Alternativas descartadas:**
+
+- **Walls CSG + RigidBody Static en el demo (room cerrada):** scope creep + complica el flow (los brushes no colisionan automáticamente; necesitan "compile map"). Sin ganancia para el demo.
+- **Animator state machine / blending en F2H50:** prematuro. El demo solo necesita un loop de idle. Locomotion blending (idle ↔ walk ↔ run) emerge cuando el player se mueva como char skinneado, no como capsule.
+- **Serializar materiales runtime como JSON inline:** considerado para fixear la magenta de X/Y Bot. Descartado en favor de la regen lazy — JSON inline duplica datos del FBX (que ya tiene la info en `aiMaterial`), y obliga a versionar el formato del material en el `.moodmap`. La regen es declarativa y determinística.
+- **Preservar path original cuando un clip standalone está missing al save:** requiere extender `AnimatorComponent.externalClips` de `pair<alias, id>` a `tuple<alias, path, id>`. Limitación que aparece solo si un asset referenciado fue borrado entre save y load. Sin caso real todavía — backlog si emerge.
+- **Drop-on-viewport para anim clips:** nice-to-have UX. Drag clip → soltar sobre la entidad bajo el cursor → add a su `externalClips`. Requiere extender picking del viewport para detectar entity durante drag activo. Backlog.
+
+**Condiciones de revisión:**
+
+- Si emerge un caso donde el dev quiere "remember anim time" entre save/load (ej. cinemática que pausa + retoma), agregar `time` al SavedAnimator.
+- Si la convención `anim_<alias>.fbx` se vuelve restrictiva (ej. dev quiere `walk_north.fbx` sin prefijo), agregar una segunda heurística (file inspection para "es anim-only") como complemento.
+- Si los rigs futuros tienen embedded anims que el dev quiere usar EN LUGAR de siblings con mismo alias, agregar un toggle "embedded prioritario" o pedir al dev que use aliases distintos para los siblings.
+
+---
+
 ## 2026-05-11: F2H49 cierre — Animaciones standalone (FBX anim-only) + bind pass + tab Animations + Inspector external clips
 
 **Contexto:** el plan original de F2H49 era "Demo characters Mixamo + escena narrativa completa" (Bloque 2.5 del `PLAN_SUBFASE_2_5.md`). Al intentar cargar los `*.fbx` de Mixamo descargados a `assets/characters/`, descubrimos que el motor no soportaba clips de animación sin malla adjunta (caso "Without Skin" de Mixamo, 1 FBX por clip). Sin esto el NPC se quedaba congelado en T-pose durante el diálogo. F2H49 se re-scopea a habilitar el pipeline standalone; la demo narrativa pasa a F2H50.

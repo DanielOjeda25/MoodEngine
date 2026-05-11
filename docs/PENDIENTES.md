@@ -9,25 +9,38 @@
 
 ---
 
-## Post-F2H49 (2026-05-11) — Animaciones standalone FBX + bind pass + Asset Browser tab Animations + Inspector external clips
+## Post-F2H50 (2026-05-11) — Demo narrativa end-to-end + persistencia AnimatorComponent + regen materiales auto
 
 ### Próximo a atacar
 
-- **F2H50 — Demo characters Mixamo + escena narrativa completa** (lo que era F2H49 originalmente). Ya con animations standalone funcionando, el NPC puede hacer idle/talk durante el diálogo. Plan: escena `narrative_demo.moodmap` con player X Bot + NPC Y Bot armados con `DialogComponent` + trigger interact + clips `anim_*` adjuntos en sus `AnimatorComponent.externalClips`. Incluye persistir `externalClips` en `.moodmap` (bump schema aditivo).
+- **F2H51 — Inventario** (Bloque 1 del `PLAN_SUBFASE_2_5.md`). ItemAsset schema + serialización + Item Browser panel + InventoryComponent + pickup/drop integrado + HUD widget inventory.
+- **Después de F2H51**: F2H52 (Quest Editor con node-graph reusando F2H46/47 framework) y cerrar Sub-fase 2.5.
+- **Sub-fase 3 — Render Polish** (diferida, ver entry abajo): tonemap + bloom + SSAO + CSM + material node-graph + shader graph runtime.
 
-- **Después de F2H50**: continuar con **Inventario** (F2H51) y **Quest Editor** (F2H52) según `PLAN_SUBFASE_2_5.md`.
+### Diferidos sin orden (emergentes post-F2H50)
 
-### Diferidos sin orden (emergentes post-F2H49)
-
-- **~~Texturas embedded de los FBX Mixamo (X/Y Bot)~~** — resuelto en **F2H49.1** (2026-05-11) pero el fix real fue distinto al esperado: los template chars Mixamo (Beta/Alpha) **no embeben texture maps**, solo exponen un `aiColor4D` plano por material. `MeshLoader_Geometry.cpp::extractDiffuseColor` extrae ese color cuando no hay textura y `createMaterialsForMesh` lo aplica como `albedoTint` puro. **Lo que SÍ sigue pendiente**: extracción de texture maps embedded reales (`*N` refs) para FBX que SÍ las traen — caso de chars Mixamo detallados como Ely/Mousey, modelos Sketchfab con textures embedded en glTF/FBX. El código ya existe en `extractAlbedo` (`scene.GetEmbeddedTexture` + `loadEmbeddedTexture`) pero **necesita verificación visual** con un asset real que use texture maps embedded — todavía no se probó porque ningún demo lo requiere. Cuando emerja: spawnear un char con texture maps reales, validar que el render aplique la textura correcta.
-
-- **Sub-fase 3 — Render Polish (diferida)**: el `PLAN_FASE2.md` original tenía Sub-fase 2.3 (F2H17-F2H22) dedicada a render next-gen (Material editor node-graph, Shader graph runtime, SSAO, SSR, Bloom HDR, CSM cascades). Esos slots se reasignaron a otras prioridades y la intención sigue válida pero sin slot concreto. Decisión 2026-05-11: cerrar **Sub-fase 2.5 completa** (F2H50 demo narrativa + F2H51 inventario + F2H52 quests) y después abrir **Sub-fase 3 — Render Polish** con 4-5 hitos chicos. Orden tentativo cuando llegue: (1) Tonemap HDR + bloom (más bang/buck), (2) SSAO sample-based, (3) CSM cascades para shadows lejos, (4) Material node-graph editor visual, (5) Shader graph runtime compilation.
-- **Persistencia de `externalClips` en `.moodmap`**: deferred a F2H50 (donde un NPC va a vivir en escena persistida con clips adjuntos). Bump aditivo: `SavedAnimator.externalClips: [{alias, path}]`. Convención: si vacío, no se serializa.
-- **Drop-on-viewport para anim clips**: nice-to-have UX. Drag clip desde Asset Browser → soltar sobre la entidad bajo el cursor → add a su `externalClips`. Requiere extender picking del viewport para detectar entity durante drag activo. Backlog si no emerge en F2H50.
-- **Animation state machines / blending (cross-fade clip A → B)**: scope creep para F2H49. Sumar si F2H50 o F2H51 lo necesita (ej. locomoción idle ↔ walk ↔ run con threshold de velocidad). Diseño tentativo: `AnimatorComponent.blendStack: vector<{clipId, weight, fadeTime}>`.
+- **Drop-on-viewport para anim clips**: drag clip desde Asset Browser → soltar sobre la entidad bajo el cursor → add a su `externalClips`. Nice-to-have UX. Requiere extender picking del viewport para detectar entity durante drag activo. Backlog.
+- **Animation state machines / blending (cross-fade clip A → B)**: para locomotion idle ↔ walk ↔ run con threshold de velocidad cuando el player se mueva como char skinneado. Sumar si F2H51/52 lo necesita. Diseño tentativo: `AnimatorComponent.blendStack: vector<{clipId, weight, fadeTime}>`.
+- **`time` del AnimatorComponent persistido en `.moodmap`**: actualmente arranca en 0 al cargar (convención "respawn"). Si emerge necesidad de cinemática pausable que retoma desde el frame guardado, agregar `time` a `SavedAnimator`.
+- **Path original preservado cuando un clip está missing al save**: si un dev borra un `anim_*.fbx` entre save y load, el path persistido pierde la info original (queda como `__empty_clip`). Fix requiere extender `AnimatorComponent.externalClips` a tuple `<alias, path, id>`. Sin caso real todavía.
+- **Walls CSG + RigidBody Static automático en el demo narrativo**: el demo es minimalista (NPC sobre tile floor). Si emerge UX feedback "el demo se ve muy vacío", agregar room rectangular + RigidBody. Requiere integración con "compile map" para colisión.
+- **Texturas embedded de FBX con texture maps reales (no template chars)**: el código ya existe en `extractAlbedo` (`scene.GetEmbeddedTexture` + `loadEmbeddedTexture`) pero falta verificación visual con un asset real que use texture maps embedded — todavía no se probó porque ningún demo lo requiere.
 - **`useRootMotion` flag por clip**: todos los clips de F2H49 son In Place (locomoción controlada por `CharacterController`). Si emerge cinemática o finishers con root motion, agregar como flag opcional por clip standalone (`AnimationClip.useRootMotion: bool`).
 - **Skeleton fingerprinting para detección automática de mesh-swap**: actualmente el cache `externalBindCache` requiere `clear()` manual del consumidor cuando se cambia el mesh. Si emerge bug por cache stale, hashear (bone count + nombres) y comparar por frame.
-- **Mostrar embedded vs external clips en un único combo**: hoy el combo de `clipName` lista embedded; los external están en sección separada con botón ▶. UX más unificado sería un dropdown que mergee ambas fuentes con un divider visual. Sumar si emerge feedback.
+- **Mostrar embedded vs external clips en un único combo del Inspector**: hoy el combo de `clipName` lista embedded; los external están en sección separada con botón ▶. UX más unificado sería un dropdown que mergee ambas fuentes con un divider visual. Sumar si emerge feedback.
+- **Sub-fase 3 — Render Polish (diferida)**: el `PLAN_FASE2.md` original tenía Sub-fase 2.3 (F2H17-F2H22) dedicada a render next-gen. Decisión 2026-05-11: cerrar Sub-fase 2.5 completa (F2H51 + F2H52) y después abrir Sub-fase 3 con 4-5 hitos chicos. Orden tentativo: (1) Tonemap HDR + bloom, (2) SSAO sample-based, (3) CSM cascades, (4) Material node-graph editor visual, (5) Shader graph runtime compilation.
+
+### Histórico resuelto F2H50
+
+- ~~Demo characters Mixamo + escena narrativa completa~~ — resuelto. `assets/maps/narrative_demo.moodmap` generador programático + Welcome modal button + menu item.
+- ~~Auto-attach de sibling `anim_*.fbx` al spawn~~ — resuelto. `detail::attachSiblingAnimClips` en DemoSpawners_Internal.h, llamado desde `processViewportMeshDrop` y `processGenerateNarrativeDemoMapRequest`.
+- ~~Persistencia de `externalClips` en `.moodmap`~~ — resuelto. `SavedAnimator { clipName, speed, playing, loop, externalClips: [{alias, path}] }` + EntitySerializer write/parse + SceneLoader apply.
+- ~~Bug magenta del NPC tras roundtrip~~ — resuelto. SceneLoader regenera materiales auto via `createMaterialsForMesh(meshId)` cuando el slot tiene path vacío.
+- ~~Tests roundtrip animator~~ — resuelto. 2 tests nuevos en `test_scene_serializer.cpp` cubriendo con y sin externalClips.
+
+---
+
+## Post-F2H49 (2026-05-11) — Animaciones standalone FBX + bind pass + Asset Browser tab Animations + Inspector external clips
 
 ### Histórico resuelto F2H49
 

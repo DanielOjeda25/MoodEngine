@@ -375,6 +375,18 @@ void EditorUI::drawWelcomeModal() {
                 I18n::T("editor.welcome.demo_map_hint").c_str());
         }
 
+        // F2H50 Bloque C: segundo demo button — narrativa.
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        if (ImGui::Button(I18n::T("editor.welcome.demo_narrative").c_str(),
+                            ImVec2(490.0f, 32.0f))) {
+            requestOpenNarrativeDemo();
+            ImGui::CloseCurrentPopup();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s",
+                I18n::T("editor.welcome.demo_narrative_hint").c_str());
+        }
+
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
         ImGui::Separator();
         ImGui::Dummy(ImVec2(0.0f, 6.0f));

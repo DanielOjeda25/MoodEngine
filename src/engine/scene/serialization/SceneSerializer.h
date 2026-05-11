@@ -162,6 +162,33 @@ struct SavedParticleEmitter {
     glm::vec3   emissionConeAxis{0.0f, 1.0f, 0.0f};
 };
 
+/// @brief F2H50 Bloque D: una entrada de la lista `externalClips` del
+///        AnimatorComponent persistida. Guarda alias + path logico del
+///        `.fbx` standalone. Al cargar, el path se re-resuelve via
+///        `AssetManager::loadAnimationClip` y se rebuilda el pair.
+struct SavedAnimatorExternalClip {
+    std::string alias; // ej. "walk", "idle"
+    std::string path;  // ej. "characters/player/anim_walk.fbx"
+};
+
+/// @brief F2H50 Bloque D: copia persistida de un AnimatorComponent.
+///        Antes los animators eran efimeros (auto-regenerados al load
+///        cuando el mesh traia skeleton + embedded anims). Con F2H50 se
+///        empezo a usar `externalClips` para clips standalone que NO
+///        viven en el mesh — habia que persistirlos para que el
+///        save/load roundtrip funcione.
+///
+///        Si el `.moodmap` no trae el campo `animator` (mapas pre-F2H50),
+///        el SceneLoader cae al path legacy: auto-add con `clipName=""`
+///        + `playing/loop = true` cuando el mesh tiene skeleton + anims.
+struct SavedAnimator {
+    std::string clipName;
+    f32 speed = 1.0f;
+    bool playing = true;
+    bool loop = true;
+    std::vector<SavedAnimatorExternalClip> externalClips;
+};
+
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh
 ///        renderer; Hito 11 agrega light; Hito 12 agrega rigid body;
 ///        Hito 14 agrega prefabPath (link suave al asset del que se
@@ -181,6 +208,7 @@ struct SavedEntity {
     std::optional<SavedParticleEmitter> particleEmitter; // Hito 29
     std::optional<SavedTrigger> trigger;                  // Hito 33
     std::optional<SavedDialog>  dialog;                   // F2H48.1
+    std::optional<SavedAnimator> animator;                // F2H50 Bloque D
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.

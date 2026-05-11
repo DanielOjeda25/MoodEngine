@@ -229,6 +229,7 @@ private:
     void processSpawnFireParticlesRequest();     // Hito 29
     void processSpawnTriggerRequest();           // Hito 33
     void processSpawnDialogDemoRequest();        // F2H47
+    void processGenerateNarrativeDemoMapRequest(); // F2H50 Bloque A
     void processSpawnStressTrisRequest();        // F2H2
     void processSpawnFullStressSceneRequest();   // F2H42
 

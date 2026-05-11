@@ -111,6 +111,8 @@ FaceDropResult tryAssignMaterialToSelectedFaces(
     return r;
 }
 
+} // namespace
+
 // F2H50 Bloque B: al spawnear un mesh skinneado, autoadjuntar todos los
 // clips de animacion standalone hermanos del rig (`<rig>/anim_*.fbx`) al
 // `AnimatorComponent.externalClips`. Convencion engine-grade:
@@ -127,9 +129,9 @@ FaceDropResult tryAssignMaterialToSelectedFaces(
 // con CUALQUIER mesh cuya carpeta padre tenga `anim_*.fbx` siblings. Para
 // chars sin esa estructura (Fox.glb, Kenney props), `externalClips` queda
 // vacio y el comportamiento es identico al pre-F2H50 (primer embedded).
-void attachSiblingAnimClips(AssetManager& am,
-                              const std::string& meshLogicalPath,
-                              AnimatorComponent& outAnim) {
+void detail::attachSiblingAnimClips(AssetManager& am,
+                                       const std::string& meshLogicalPath,
+                                       AnimatorComponent& outAnim) {
     namespace fs = std::filesystem;
     const fs::path meshLogical(meshLogicalPath);
     const fs::path fsDir = fs::path("assets") / meshLogical.parent_path();
@@ -197,8 +199,6 @@ void attachSiblingAnimClips(AssetManager& am,
             attachedCount, meshLogicalPath, outAnim.clipName);
     }
 }
-
-} // namespace
 
 void EditorApplication::processViewportTextureDrop() {
     const ViewportPanel::TextureDrop drop = m_ui.viewport().consumeTextureDrop();
@@ -371,7 +371,7 @@ void EditorApplication::processViewportMeshDrop() {
         anim.clipName = "";   // primer clip (override si auto-attach encuentra "idle")
         anim.playing  = true;
         anim.loop     = true;
-        attachSiblingAnimClips(*m_assetManager, meshName, anim);
+        detail::attachSiblingAnimClips(*m_assetManager, meshName, anim);
         e.addComponent<AnimatorComponent>(anim);
         e.addComponent<SkeletonComponent>(SkeletonComponent{});
     }

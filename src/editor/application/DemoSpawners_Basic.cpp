@@ -4,6 +4,7 @@
 // DemoSpawners_Stress.cpp.
 
 #include "editor/application/EditorApplication.h"
+#include "editor/application/DemoSpawners_Internal.h"     // F2H50
 
 #include "core/Log.h"
 #include "editor/panels/narrative/DialogBrowserPanel.h"   // F2H47
@@ -11,13 +12,18 @@
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/dialog/DialogAsset.h"                    // F2H47
+#include "engine/render/resources/MeshAsset.h"            // F2H50
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
+#include "engine/scene/serialization/SceneSerializer.h"   // F2H50
+#include "engine/world/grid/GridMap.h"                    // F2H50
 
 #include <cstdio>
+#include <exception>
 #include <filesystem>
 #include <string>
+#include <utility>
 
 namespace Mood {
 
@@ -180,74 +186,193 @@ void EditorApplication::processSpawnFireParticlesRequest() {
     pushCreatedEntities({e}, "Spawn particulas demo");
 }
 
+// F2H50: extraido del handler original para que `processGenerateNarrative
+// DemoMapRequest` tambien pueda asegurar que el .mooddialog existe sin
+// disparar los side effects de UI (abrir el DialogEditor + refresh del
+// browser). Devuelve true si el archivo ya existia o se genero ok.
+bool detail::ensureDemoIntroDialogExists(const std::filesystem::path& demoPath) {
+    namespace fs = std::filesystem;
+    if (fs::exists(demoPath)) return true;
+
+    Dialog::Asset a;
+    a.metadata().name = "demo_intro";
+    a.metadata().default_portrait = "characters/demo_npc.png";
+    a.metadata().default_audio_bus = "voice";
+
+    // Nodo 1: saludo inicial con 2 choices.
+    const NodeGraph::NodeId greet = a.addLine(glm::vec2(40.0f, 200.0f));
+    {
+        Dialog::Line line;
+        line.text_literal = "Hola viajero. Es peligroso ir solo... pero veo que tienes "
+                            "agallas. Que te trae a estas tierras?";
+        line.choices = {
+            Dialog::Choice{"", "Vengo a derrotar al dragon.", "", ""},
+            Dialog::Choice{"", "Solo estoy de paso.",          "", ""},
+        };
+        a.writeLine(greet, line);
+    }
+
+    // Nodo 2: respuesta heroica.
+    const NodeGraph::NodeId hero = a.addLine(glm::vec2(360.0f, 100.0f));
+    {
+        Dialog::Line line;
+        line.text_literal = "Valiente! Lleva esta espada — el dragon ha quemado mi aldea.";
+        a.writeLine(hero, line);
+    }
+
+    // Nodo 3: respuesta despreocupada.
+    const NodeGraph::NodeId casual = a.addLine(glm::vec2(360.0f, 300.0f));
+    {
+        Dialog::Line line;
+        line.text_literal = "Como quieras. Que los caminos te traten bien.";
+        a.writeLine(casual, line);
+    }
+
+    // Linkear: greet.choice_0 -> hero.in; greet.choice_1 -> casual.in.
+    const NodeGraph::Node* nGreet  = a.graph().findNode(greet);
+    const NodeGraph::Node* nHero   = a.graph().findNode(hero);
+    const NodeGraph::Node* nCasual = a.graph().findNode(casual);
+    if (nGreet && nHero && nCasual &&
+        nGreet->outputs.size() >= 2 &&
+        !nHero->inputs.empty() &&
+        !nCasual->inputs.empty()) {
+        a.graph().addLink(nGreet->outputs[0].id, nHero->inputs[0].id);
+        a.graph().addLink(nGreet->outputs[1].id, nCasual->inputs[0].id);
+    }
+
+    if (!a.saveToFile(demoPath)) {
+        Log::editor()->error("[DialogDemo] no pude guardar '{}'",
+                              demoPath.generic_string());
+        return false;
+    }
+    Log::editor()->info("[DialogDemo] generado en '{}'",
+                          demoPath.generic_string());
+    return true;
+}
+
 void EditorApplication::processSpawnDialogDemoRequest() {
     if (!m_ui.consumeSpawnDialogDemoRequest()) return;
 
     namespace fs = std::filesystem;
     const fs::path demoPath = fs::current_path() / "assets" / "dialogs" / "demo_intro.mooddialog";
 
-    // Si el demo ya existe en disco, lo abrimos directo. Si no, lo
-    // generamos programaticamente con 3 nodos + 2 choices y lo guardamos.
-    if (!fs::exists(demoPath)) {
-        Dialog::Asset a;
-        a.metadata().name = "demo_intro";
-        a.metadata().default_portrait = "characters/demo_npc.png";
-        a.metadata().default_audio_bus = "voice";
-
-        // Nodo 1: saludo inicial con 2 choices.
-        const NodeGraph::NodeId greet = a.addLine(glm::vec2(40.0f, 200.0f));
-        {
-            Dialog::Line line;
-            line.text_literal = "Hola viajero. Es peligroso ir solo... pero veo que tienes "
-                                "agallas. Que te trae a estas tierras?";
-            line.choices = {
-                Dialog::Choice{"", "Vengo a derrotar al dragon.", "", ""},
-                Dialog::Choice{"", "Solo estoy de paso.",          "", ""},
-            };
-            a.writeLine(greet, line);
-        }
-
-        // Nodo 2: respuesta heroica.
-        const NodeGraph::NodeId hero = a.addLine(glm::vec2(360.0f, 100.0f));
-        {
-            Dialog::Line line;
-            line.text_literal = "Valiente! Lleva esta espada — el dragon ha quemado mi aldea.";
-            // Sin choices: termina la conversacion via socket "continue".
-            a.writeLine(hero, line);
-        }
-
-        // Nodo 3: respuesta despreocupada.
-        const NodeGraph::NodeId casual = a.addLine(glm::vec2(360.0f, 300.0f));
-        {
-            Dialog::Line line;
-            line.text_literal = "Como quieras. Que los caminos te traten bien.";
-            a.writeLine(casual, line);
-        }
-
-        // Linkear: greet.choice_0 -> hero.in; greet.choice_1 -> casual.in.
-        const NodeGraph::Node* nGreet  = a.graph().findNode(greet);
-        const NodeGraph::Node* nHero   = a.graph().findNode(hero);
-        const NodeGraph::Node* nCasual = a.graph().findNode(casual);
-        if (nGreet && nHero && nCasual &&
-            nGreet->outputs.size() >= 2 &&
-            !nHero->inputs.empty() &&
-            !nCasual->inputs.empty()) {
-            a.graph().addLink(nGreet->outputs[0].id, nHero->inputs[0].id);
-            a.graph().addLink(nGreet->outputs[1].id, nCasual->inputs[0].id);
-        }
-
-        if (!a.saveToFile(demoPath)) {
-            Log::editor()->error("[DialogDemo] no pude guardar '{}'",
-                                   demoPath.generic_string());
-            return;
-        }
-        Log::editor()->info("[DialogDemo] generado en '{}'",
-                              demoPath.generic_string());
-    }
+    if (!detail::ensureDemoIntroDialogExists(demoPath)) return;
 
     // Refrescar el browser + abrir en el editor.
     m_ui.dialogBrowser().refresh();
     m_ui.dialogEditor().openFromFile(demoPath);
+}
+
+// F2H50 Bloque A: genera un .moodmap demo de narrativa con 1 NPC armado
+// con MeshRenderer (Y Bot) + Animator (auto-attach de anim_idle/talk/look_around)
+// + DialogComponent (-> dialogs/demo_intro.mooddialog) + TriggerComponent (E
+// para conversar). Asegura que el .mooddialog tambien exista. Despues abre
+// el mapa en el editor.
+//
+// Por que generador programatico: el .moodmap resultante es DATA puro
+// (editable como cualquier mapa, sin codigo). El generador es scaffold
+// — un dev cualquiera puede usar el mismo flujo con sus propios assets:
+// drag-drop su FBX, add DialogComponent + Trigger, save. Lo que hace este
+// handler es automatizar ese setup para el demo.
+//
+// Scope minimal: solo el NPC. La grid de tiles default sirve de piso
+// implicito (built-in en el editor). El dev puede ampliar la escena
+// editando el .moodmap (agregar walls CSG, lighting, mas NPCs, etc.).
+void EditorApplication::processGenerateNarrativeDemoMapRequest() {
+    if (!m_ui.consumeGenerateNarrativeDemoMapRequest()) return;
+    if (m_assetManager == nullptr) return;
+
+    namespace fs = std::filesystem;
+    const fs::path mapsDir   = fs::current_path() / "assets" / "maps";
+    const fs::path mapPath   = mapsDir / "narrative_demo.moodmap";
+    const fs::path dialogPath = fs::current_path() / "assets" / "dialogs" /
+                                  "demo_intro.mooddialog";
+
+    // Dependencia: el NPC apunta al demo_intro.mooddialog. Si no existe,
+    // generarlo (mismo helper que el handler "Cargar dialogo demo").
+    if (!detail::ensureDemoIntroDialogExists(dialogPath)) {
+        Log::editor()->error(
+            "[NarrativeDemo] no pude asegurar el .mooddialog en '{}'",
+            dialogPath.generic_string());
+        return;
+    }
+
+    // Si el .moodmap no existe todavia, lo armamos programaticamente
+    // y lo guardamos a disco. Si existe (corrida previa), reabrimos
+    // directamente — preserva edits que el dev haya hecho post-gen.
+    if (!fs::exists(mapPath)) {
+        std::error_code ec;
+        fs::create_directories(mapsDir, ec);
+        if (ec) {
+            Log::editor()->error(
+                "[NarrativeDemo] no pude crear '{}': {}",
+                mapsDir.generic_string(), ec.message());
+            return;
+        }
+
+        // Scene + GridMap locales (no tocan el estado del editor — el
+        // .moodmap se serializa con paths logicos, asi al cargar se
+        // re-resuelven contra el AssetManager destino). GridMap 10x10
+        // tiles de 3m = 30x30m de piso implicito (default del motor).
+        GridMap localMap(10, 10);
+        Scene localScene;
+
+        // NPC: Y Bot a 3m del spawn (origin), mirando hacia el player.
+        const std::string npcMeshLogical = "characters/npc/npc.fbx";
+        const MeshAssetId npcMeshId = m_assetManager->loadMesh(npcMeshLogical);
+        const MeshAsset* npcAsset = m_assetManager->getMesh(npcMeshId);
+
+        Entity npc = localScene.createEntity("NPC");
+        auto& npcT = npc.getComponent<TransformComponent>();
+        npcT.position = glm::vec3(3.0f, 0.0f, 0.0f);
+        // Mirar al player spawn (origin) -> 180° en Y. Y Bot import lo
+        // deja mirando -Z, queremos +X mirando hacia -X (el player).
+        npcT.rotationEuler = (npcAsset != nullptr)
+            ? (npcAsset->importRotationEuler + glm::vec3(0.0f, -90.0f, 0.0f))
+            : glm::vec3(0.0f, -90.0f, 0.0f);
+
+        // MeshRenderer con materiales colorizados (F2H49.1 maneja el
+        // diffuse color de Mixamo cuando no hay texture maps).
+        auto npcMats = m_assetManager->createMaterialsForMesh(npcMeshId);
+        npc.addComponent<MeshRendererComponent>(npcMeshId, std::move(npcMats));
+
+        // Animator + Skeleton + auto-attach siblings (F2H50 Bloque B).
+        if (npcAsset != nullptr && npcAsset->hasSkeleton()) {
+            AnimatorComponent anim{};
+            anim.playing = true;
+            anim.loop    = true;
+            detail::attachSiblingAnimClips(*m_assetManager, npcMeshLogical, anim);
+            npc.addComponent<AnimatorComponent>(anim);
+            npc.addComponent<SkeletonComponent>(SkeletonComponent{});
+        }
+
+        // DialogComponent: linkea al .mooddialog generado.
+        DialogComponent dc;
+        dc.dialogPath = "dialogs/demo_intro.mooddialog";
+        dc.autoStartOnInteract = true;
+        npc.addComponent<DialogComponent>(dc);
+
+        // TriggerComponent: 3x2x3m alrededor del NPC. Cuando el player
+        // entra + presiona E, el DialogInteractSystem arranca el dialog.
+        TriggerComponent tc;
+        tc.halfExtents = glm::vec3(1.5f, 1.0f, 1.5f);
+        npc.addComponent<TriggerComponent>(tc);
+
+        // Persistir.
+        try {
+            SceneSerializer::save(localMap, mapPath.stem().generic_string(),
+                                    &localScene, *m_assetManager, mapPath);
+            Log::editor()->info("[NarrativeDemo] mapa generado: '{}'",
+                                  mapPath.generic_string());
+        } catch (const std::exception& e) {
+            Log::editor()->error("[NarrativeDemo] save fallo: {}", e.what());
+            return;
+        }
+    }
+
+    // Abrir en el editor (existing open-map flow maneja el dirty prompt
+    // si el user tenia cambios sin guardar en el proyecto actual).
+    m_ui.requestOpenMap(mapPath);
 }
 
 void EditorApplication::processSpawnTriggerRequest() {

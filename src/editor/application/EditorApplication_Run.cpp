@@ -285,6 +285,16 @@ int EditorApplication::run() {
             }
         }
 
+        // F2H50 Bloque C: Welcome modal — demo narrativo. Crea proyecto
+        // fresco y agenda la generacion/apertura del narrative_demo.moodmap
+        // (genera el .moodmap + el .mooddialog si faltan, despues lo abre).
+        if (m_ui.consumeOpenNarrativeDemoRequest()) {
+            handleNewProject();
+            if (m_project.has_value()) {
+                m_ui.requestGenerateNarrativeDemoMap();
+            }
+        }
+
         // F2H8: open map request (con payload del path).
         if (auto openMap = m_ui.consumeOpenMapRequest()) {
             handleOpenMap(*openMap);
@@ -339,6 +349,7 @@ int EditorApplication::run() {
         processSpawnFireParticlesRequest();
         processSpawnTriggerRequest();
         processSpawnDialogDemoRequest();  // F2H47
+        processGenerateNarrativeDemoMapRequest();  // F2H50 Bloque A
         processSpawnStressTrisRequest();
         processSpawnPointLightRequest();
         processSpawnAudioSourceRequest();

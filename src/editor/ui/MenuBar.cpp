@@ -291,6 +291,14 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                 if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.dialog").c_str())) {
                     ui.requestSpawnDialogDemo();
                 }
+                // F2H50 Bloque A: demo end-to-end de narrativa. Genera
+                // (si falta) `assets/maps/narrative_demo.moodmap` con un
+                // NPC armado con DialogComponent + Trigger + Animator,
+                // y lo abre. El player puede entrar a Play Mode y hablar
+                // con el NPC presionando E.
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.narrative_map").c_str())) {
+                    ui.requestGenerateNarrativeDemoMap();
+                }
 
                 ImGui::Separator();
                 if (ImGui::BeginMenu(I18n::T("editor.menu.help.stress").c_str())) {

@@ -4,7 +4,31 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H49 cerrado (2026-05-11)
+## 0. ACTUALIZACIÓN F2H50 cerrado (2026-05-11)
+
+**Quinto hito real de Sub-fase 2.5 cerrado — Demo characters Mixamo + escena narrativa completa + persistencia AnimatorComponent.**
+Tag: `v1.38.0-fase2-hito50`. Cita verbatim del dev al validar: *"va ok"* (después de fixear el roundtrip animator + materiales auto-regen).
+
+**Qué entrega F2H50**:
+- **Auto-attach al spawn**: cuando se dropea un FBX skinneado en el viewport, el motor escanea `anim_*.fbx` siblings y los enchufa al `AnimatorComponent.externalClips` automáticamente. Default a `idle` si existe. Convención por filename — funciona con cualquier rig.
+- **Generador de demo narrativa**: nuevo menu item "Ayuda > Demos > Cargar demo narrativo" + botón Welcome modal. Crea `assets/maps/narrative_demo.moodmap` con un NPC Y Bot armado con MeshRenderer + Animator (anim_idle/talk/look_around) + DialogComponent (→ `demo_intro.mooddialog`) + Trigger. El `.mooddialog` se genera si falta (helper compartido `ensureDemoIntroDialogExists`).
+- **Persistencia full de AnimatorComponent**: `SavedAnimator { clipName, speed, playing, loop, externalClips: [{alias, path}] }` agregado al schema `.moodmap`. EntitySerializer write + parse. SceneLoader restaura el animator + re-resuelve los paths via `loadAnimationClip`. Fallback al path legacy para mapas pre-F2H50.
+- **Regen de materiales auto en SceneLoader**: si un slot de material tiene path vacío, regenerar via `createMaterialsForMesh(meshId)` — preserva textures embedded del FBX + diffuse colors de F2H49.1 sin perderlos en el roundtrip. Fix crítico para los X/Y Bot.
+- **2 tests roundtrip** en `test_scene_serializer.cpp` cubriendo AnimatorComponent con + sin externalClips. Suite **748/8875** verde.
+
+**Decisiones**:
+1. **Escena demo minimalista (sin walls CSG)**: el demo es un NPC en el tile floor. La idea es que el dev edite el .moodmap para decorar — no hardcodear arquitectura.
+2. **Helper `ensureDemoIntroDialogExists` extraído**: refactor del handler F2H47 para reuso entre "Cargar diálogo demo" y "Cargar demo narrativo". El .mooddialog es dependencia del NPC del demo.
+3. **`externalBindCache` NO se persiste**: regenerado por `AnimationSystem` al primer evaluate. Mismo criterio que el `cachedDialogId` del DialogComponent (F2H48.1) — runtime state.
+4. **`time` del animator no se persiste**: arranca siempre en 0 al cargar. Convención de "respawn" de motores 3D — la anim empieza desde el frame 1 al restaurar la escena.
+5. **Auto-attach generalizado a cualquier mesh con skeleton** (relajado de `hasSkeleton() && !animations.empty()`): el log "(skinned + animator)" ya usaba la condición floja, ahora código y log son consistentes. Rigs sin embedded anims + sin siblings tienen Animator inerte (mejor que no tenerlo — el dev puede dragear clips después).
+6. **Path persistido es el logical path canónico del AssetManager**: `animationClipPathOf(clipId)`. Limitación conocida: si un asset está missing al save, persistir el path original requiere refactor de AnimatorComponent (agregar campo `path` al pair). No emerge caso real todavía.
+
+**Próximo a atacar**: **F2H51 — Inventario** (Bloque 1 del `PLAN_SUBFASE_2_5.md`). ItemAsset schema + serialización + Item Browser panel + InventoryComponent + pickup/drop integrado + HUD widget inventory. Después F2H52 (Quest Editor) y cerrar Sub-fase 2.5.
+
+---
+
+## 0bis. ACTUALIZACIÓN F2H49 cerrado (2026-05-11)
 
 **Cuarto hito real de Sub-fase 2.5 cerrado — Animaciones standalone (FBX anim-only) + Asset Browser tab Animations + Inspector external clips.**
 Tag: `v1.37.0-fase2-hito49`. Cita verbatim del dev al validar: *"las animaciones van bien"* (después de fixear `AI_SCENE_FLAGS_INCOMPLETE` que abortaba el load).
