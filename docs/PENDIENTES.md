@@ -24,7 +24,18 @@
     - **Tests de integración runtime**: state machine recorre asset de prueba, condiciones filtran choices, hooks Lua se invocan.
   - **Decisión técnica abierta para F2H48**: cómo se dispara el dialog en Play Mode. Opciones: (a) script Lua del NPC llama `dialog.start("npc_id")` cuando un trigger collide con player; (b) `DialogComponent` con flag `auto_start_on_interact` que el motor detecta automáticamente cuando player presiona E cerca del NPC; (c) combinación de ambos. Recomendación inicial: (c) — auto-start es ergonómico para casos típicos, Lua start es escape hatch para casos custom.
 
-- **Después de F2H48**: continuar con **Inventario** (F2H4X) y **Quest Editor** (F2H4Y) según `PLAN_SUBFASE_2_5.md`. Inventario es UI propia (grid + 3D preview, no node-graph); Quest Editor reusa el framework de F2H46 con flowchart de objetivos.
+- **Después de F2H48**: **F2H49 — Demo characters Mixamo + escena narrativa completa** (Bloque 2.5 nuevo del plan, scope nivel B). Pedido del dev: *"que sentido tiene crear un sistema de diálogo, sino tenemos a quien asignar ni como sentir"*. Materializa el caso de uso end-to-end con assets reales:
+  - **Player char** Mixamo con 5 anims (idle/walk/run/jump/wave).
+  - **NPC char** Mixamo (medieval/fantasy) con 4 anims (idle/talking/wave/look_around).
+  - **Pipeline FBX → glb** (Blender o gltf-pipeline CLI, decidir al arrancar).
+  - **Demo scene `narrative_demo.moodmap`** con player spawn + NPC con `DialogComponent` + trigger interact "[E] Hablar".
+  - **Update demo dialog** a 5-7 nodos con branching real (heroico/casual/agresivo).
+  - **Animator state machines** (idle ↔ walk ↔ run ↔ jump del player; idle ↔ talking ↔ look_around del NPC).
+  - **Welcome modal**: botón "Cargar demo narrativo" separado del Fox.
+  - Validación tour completo: walk al NPC → press E → dialog → choice → branch → cierre.
+  - **Estimado ~10-11h**, tag `v1.39.0-fase2-hito49`.
+  - **NO confundir con F2H35 original** (Mixamo importer pipeline auto-detect/canonical skeleton) — F2H49 es content production específico para validar; F2H35 sería infra masiva diferida hasta que emerja necesidad real.
+- **Después de F2H49**: continuar con **Inventario** (F2H50) y **Quest Editor** (F2H51) según `PLAN_SUBFASE_2_5.md`. Inventario es UI propia (grid + 3D preview, no node-graph); Quest Editor reusa el framework de F2H46 con flowchart de objetivos.
 
 ### Diferidos sin orden (emergentes post-F2H47)
 

@@ -174,6 +174,197 @@ clickeables, estilo Half-Life 2). Override via Lua.
 
 ---
 
+### Bloque 2.5 — Demo characters + escena narrativa completa (F2H49)
+
+**Origen**: pedido del dev post-F2H47 (2026-05-10): *"que sentido tiene
+crear un sistema de diálogo, sino tenemos a quien asignar ni como
+sentir"*. El dialog runtime sin un NPC tangible para probar es
+abstracto — "press E al cubo gris" no tiene la misma sensación que
+"press E al guardián con animación de saludo". Este Bloque materializa
+el caso de uso end-to-end con assets reales.
+
+**Slot**: entre Bloque 2 (Diálogos: F2H48 cierra el runtime técnico) y
+Bloque 1 (Inventario, próximo en el orden lógico). Razón: una vez que
+F2H48 cierra, queremos validar el sistema con un demo creíble antes de
+avanzar a sistemas adicionales — si el feel del dialog está mal lo
+descubrimos acá, no después de armar inventory + quests encima.
+
+**Distinción importante**: NO es el F2H35 original ("Mixamo importer
+pipeline") del `PLAN_FASE2.md` — ese sería infrastructure para que
+devs externos importen rigs Mixamo arbitrarios masivamente (auto-detect
++ canonical skeleton mapping + pack imports). Este Bloque es **content
+production** para validar nuestros sistemas: bajamos 2 chars
+específicos, los integramos manualmente, listo. El importer mayor
+queda diferido a hito propio futuro si emerge demand real.
+
+#### 2.5.1 Adquisición de assets Mixamo — `[TBD hito chico]`
+
+**Player character**: humanoide cualquiera (sugerencia: "Ely",
+"Mousey" o similar — figura clara para identificarse).
+- Animaciones: **idle**, **walk**, **run**, **jump** (al menos
+  jump-start), **wave** (saludo). 5 anims mínimo.
+
+**NPC character**: humanoide distinguible del player (sugerencia: un
+character medieval/fantasy para encajar con el demo dialog actual del
+"guardián que enfrenta al dragón").
+- Animaciones: **idle**, **talking** (gestos al hablar), **wave**,
+  **look_around** (NPC reacciona pasivamente cuando no hay
+  interacción). 4 anims mínimo.
+
+**License**: Mixamo es free para uso comercial vía cuenta Adobe (la
+licencia cubre exporte como FBX/glTF y uso en juegos). Credit no es
+required por la TOS de Mixamo pero conviene documentar la fuente para
+trazabilidad (en `assets/meshes/demo_characters/CREDITS.md`).
+
+**Pipeline FBX → glb**:
+- Mixamo exporta FBX nativo. El motor consume glTF/glb via Assimp
+  (F2H10 pipeline existente, ya validado con Fox.glb del F2H44).
+- Conversión via Blender (UI tradicional) o `gltf-pipeline` CLI
+  (automatizable en `tools/`). Decidir al arrancar — Blender es más
+  flexible para fixes manuales (orientation/scale/material tweaks),
+  CLI es más reproducible.
+- Validar: skeleton importa OK, todas las anims preservadas, scale
+  correcto (Mixamo default es ~1 unit per cm; nuestro motor usa
+  metros — escalado 0.01x al importar).
+
+#### 2.5.2 Shipping de assets + organización — `[TBD]`
+
+- `assets/meshes/demo_characters/player.glb` con todas sus anims
+  embebidas (o como `.bin` separado si emerge size issue).
+- `assets/meshes/demo_characters/npc.glb` mismo patrón.
+- `assets/meshes/demo_characters/CREDITS.md` con source Mixamo +
+  links + license note.
+- Texturas embebidas (Mixamo exporta con diffuse + normal típicamente);
+  el `AssetManager` ya extrae embedded textures desde F2H26.
+
+#### 2.5.3 Demo scene `narrative_demo.moodmap` — `[TBD]`
+
+Mapa pequeño dedicado al test narrativo:
+- **Plano grande** (Floor brush 20x20m) con material básico.
+- **Spawn point del player** en (0, 1, 0).
+- **NPC entity** posicionada a ~4m del spawn (`(4, 0, 0)`) con:
+  - `MeshRendererComponent` apuntando a `npc.glb`.
+  - `AnimatorComponent` con clip default "idle" + state machine
+    contextual (cambia a "talking" cuando dialog activo).
+  - `DialogComponent` (F2H48) apuntando a `dialogs/demo_intro.mooddialog`.
+  - `TriggerComponent` esfera radius 2m alrededor — cuando player
+    entra, se muestra interact prompt "[E] Hablar".
+- **Iluminación**: directional sun + ambient. Sin gimmicks.
+- **Skybox**: el del Fox demo o uno simple.
+
+#### 2.5.4 Update demo dialog con branching — `[TBD]`
+
+El `demo_intro.mooddialog` actual tiene 3 nodos lineales. Para nivel B
+expandirlo a 5-7 nodos con branching real:
+- Nodo greeting (NPC saluda) con 3 choices.
+- Choice "heroico" → nodo respuesta heroica + 2 sub-choices.
+- Choice "casual" → nodo respuesta casual + 1 cierre.
+- Choice "agresivo" (con condition_lua `dialog.get_var('aggressive') == true`)
+  → nodo amenaza (sólo visible si flag previo seteado) → cierre.
+- Branches eventualmente convergen a un nodo "fin" único.
+
+Las choices que disparan animaciones específicas en el NPC quedan
+explícitas: `animation = "talking"` por default; choice "agresivo"
+podría disparar "look_around" en el NPC como reacción.
+
+#### 2.5.5 Welcome modal: botón "Cargar demo narrativo" — `[TBD]`
+
+Nuevo botón abajo del Fox demo (no reemplaza el Fox):
+- Click → crea proyecto temp + carga `narrative_demo.moodmap` +
+  abre el `.mooddialog` en el Dialog Editor.
+- Tooltip: "Demo narrativo: NPC con diálogo y elección de jugador.
+  Press E al guardián en Play Mode."
+
+#### 2.5.6 Animator state machines para los chars — `[TBD]`
+
+**Player char**:
+- State `idle` cuando velocidad horizontal < 0.1 m/s.
+- State `walk` cuando velocidad 0.1-3 m/s.
+- State `run` cuando velocidad > 3 m/s.
+- State `jump` triggered cuando space + grounded; auto-vuelve a
+  idle/walk al aterrizar.
+- Wave: triggered manualmente por tecla específica (Z?) o automático
+  al primer encuentro con el NPC.
+
+**NPC char**:
+- State `idle` default.
+- State `talking` cuando `DialogSystem::isActive() && currentSpeaker == this`.
+- State `wave` triggered cuando dialog arranca por primera vez (greet).
+- State `look_around` con timer aleatorio (cada 8-15s mira a un lado
+  random) cuando idle prolongado.
+
+#### 2.5.7 Validación end-to-end — `[TBD]`
+
+Tour visual con el dev:
+1. Welcome modal → "Cargar demo narrativo" → escena se carga.
+2. Player char visible en el spawn, animación idle corriendo.
+3. NPC visible a unos metros, animación idle con look_around
+   periódicamente.
+4. WASD para caminar → animación walk transition.
+5. Acercarse al NPC → trigger entra → interact prompt "[E] Hablar"
+   aparece en HUD.
+6. Presionar E → dialog box aparece, NPC animación cambia a "talking".
+7. Choices visibles → click en una → dialog avanza, NPC sigue talking.
+8. Branch heroico → 2 sub-choices con condition_lua aplicado.
+9. Branch agresivo solo visible si seteamos flag manualmente (test
+   del condition system).
+10. Cierre dialog → NPC vuelve a idle, prompt desaparece.
+
+#### 2.5.8 Estimaciones de scope nivel B
+
+**Bloques de implementación** (preliminar, refinar al escribir
+`PLAN_HITO_F2H49.md`):
+
+| # | Bloque | Estim. |
+|---|--------|--------|
+| A | Plan específico F2H49 | 30 min |
+| B | Pipeline FBX→glb decisión + setup (Blender o CLI) | ~1h |
+| C | Bajada de assets (manual, dev hace login Mixamo) + conversión | ~1.5h |
+| D | Shipping + CREDITS.md + validación visual de los chars statics | ~30 min |
+| E | Demo scene `.moodmap` | ~1.5h |
+| F | Update `demo_intro.mooddialog` con branching | ~30 min |
+| G | Welcome modal botón + handler | ~30 min |
+| H | Animator state machines (player + NPC) | ~2-3h |
+| I | Validación tour completo con dev | ~30 min |
+| J | Cierre docs + commit + tag + push | ~1h |
+
+**Total estimado**: ~10-11h. Hito mediano-largo.
+
+**Tag previsto**: `v1.39.0-fase2-hito49` (asumiendo F2H48 toma
+`v1.38.0`).
+
+#### 2.5.9 Decisiones técnicas abiertas para F2H49
+
+- **Pipeline FBX → glb**: Blender manual vs `gltf-pipeline` CLI.
+  Recomendación: Blender en F2H49 (flexibilidad para fixes), evaluar
+  CLI cuando F2H35 (Mixamo importer pipeline) emerja.
+- **Anim retargeting**: si las anims de Mixamo no calzan exactamente
+  con nuestro AnimationSystem (offset de root motion, root bone
+  naming, scale), evaluar fixes en Blender pre-export vs runtime.
+- **Char controller del player en la demo scene**: reusar el char
+  controller F2H30 (capsule + WASD/jump) o setup propio. Reusar
+  porque ya está validado.
+- **Interact prompt**: usar el `interact_prompt` del HUD F2H39 (ya
+  tenemos infra). El "press E" lo dispara el TriggerComponent del NPC.
+- **Locking del player durante dialog**: cuando dialog activo,
+  desactivar input del char controller para que no camine mientras
+  habla. Decidir el mecanismo en F2H48 (probablemente flag global
+  `GameState::dialog_active` que char controller chequea).
+
+#### 2.5.10 NO entra en F2H49
+
+- Mixamo importer pipeline general (F2H35 — auto-detect rigs +
+  canonical skeleton + masivo packs).
+- NPC AI behavior (pathfinding patrullaje + decision making). El NPC
+  está parado en su posición — animado pero no se mueve. Para hacerlo
+  patrullar usaríamos NavSystem (F2H23) en un hito separado.
+- Combat anims (attack, hit, die). El demo es narrativo, no de combate.
+- Facial expressions / lipsync. Estilo Half-Life pero ese feature es
+  mayor.
+- Multiple NPCs en la escena. Un solo NPC es suficiente para validar.
+
+---
+
 ### Bloque 3 — Quests
 
 #### 3.1 Quest schema + serialización — `[TBD hitos]`
