@@ -29,6 +29,7 @@ namespace Mood {
 class IMesh;
 class AssetManager;
 struct MeshAsset;
+struct AnimationClip;
 
 /// @brief Factoria que produce un IMesh a partir de datos interleaved +
 ///        layout. Igual firma que usa `OpenGLMesh` directo; permite inyectar
@@ -56,5 +57,20 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
                                                 const std::string& filesystemPath,
                                                 const MeshFactory& meshFactory,
                                                 AssetManager* assetManager = nullptr);
+
+/// @brief F2H49: carga un FBX/glTF "anim-only" (sin mesh) y devuelve el
+///        primer `AnimationClip` encontrado. Las `BoneTrack` quedan con
+///        `boneName` poblado y `boneIndex = -1` (sin bindar). Es el
+///        `AnimationSystem` el que resuelve el `boneIndex` contra el
+///        esqueleto destino al primer frame de reproduccion (bind pass).
+///
+///        Funciona tambien con FBX que SI tengan mesh (en ese caso saca
+///        el clip del array de animations del aiScene); pero el caso de
+///        uso primario son los FBX "Without Skin" de Mixamo.
+/// @return nullptr si el archivo no se pudo abrir, no tiene animaciones,
+///         o assimp reporto un error. Loguea al canal `assets`.
+std::unique_ptr<AnimationClip> loadAnimationClipWithAssimp(
+    const std::string& logicalPath,
+    const std::string& filesystemPath);
 
 } // namespace Mood

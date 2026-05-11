@@ -31,6 +31,7 @@ class ITexture;
 struct MeshAsset;
 struct MaterialAsset;
 struct SavedPrefab;
+struct AnimationClip;  // F2H49
 
 namespace Dialog { class Asset; }  // F2H48
 
@@ -65,6 +66,13 @@ using MaterialAssetId = u32;
 ///        start_node) — `getDialog(0)` nunca es null. Loadeo lazy + cache
 ///        por path logico, mismo patron que Prefab.
 using DialogAssetId = u32;
+
+/// @brief F2H49: Identificador estable de un `AnimationClip` cargado standalone
+///        (FBX/glTF anim-only, ej. los de Mixamo "Without Skin"). Valor 0
+///        reservado para un clip vacio (duracion 0, sin tracks) que el
+///        `AnimationSystem` puede recibir sin crashear cuando un asset
+///        falla al cargar. Loadeo lazy + cache por path logico.
+using AnimationClipAssetId = u32;
 
 class AssetManager {
 public:
@@ -344,6 +352,31 @@ public:
     /// @brief Cantidad de dialogs cacheados (incluye slot 0).
     usize dialogCount() const;
 
+    // ---- AnimationClip standalone (F2H49) ----
+
+    /// @brief Carga (o devuelve cacheado) un AnimationClip standalone por
+    ///        path logico (p.ej. "characters/npc_a/anim_idle.fbx"). En
+    ///        fallo devuelve `missingAnimationClipId()` (clip vacio,
+    ///        duration=0) y loguea al canal `assets`. Los clips se
+    ///        cargan con `loadAnimationClipWithAssimp` — las tracks
+    ///        quedan con `boneIndex = -1`; el bind contra un esqueleto
+    ///        destino lo hace el `AnimationSystem` al primer frame de
+    ///        reproduccion.
+    AnimationClipAssetId loadAnimationClip(std::string_view logicalPath);
+
+    /// @brief Devuelve el clip del id. Nunca null: ids invalidos caen al
+    ///        slot 0 (clip vacio).
+    AnimationClip* getAnimationClip(AnimationClipAssetId id) const;
+
+    /// @brief Id del clip vacio (slot 0). Sin tracks, duration=0.
+    AnimationClipAssetId missingAnimationClipId() const { return 0; }
+
+    /// @brief Path logico con el que se cargo. Slot 0 = "__empty_clip".
+    std::string animationClipPathOf(AnimationClipAssetId id) const;
+
+    /// @brief Cantidad de clips cacheados (incluye slot 0).
+    usize animationClipCount() const;
+
 private:
     VFS m_vfs;
     TextureFactory m_textureFactory;
@@ -380,6 +413,11 @@ private:
     std::unordered_map<std::string, DialogAssetId> m_dialogCache;
     std::vector<std::unique_ptr<Dialog::Asset>> m_dialogs;
     std::vector<std::string> m_dialogPaths; // paralelo a m_dialogs
+
+    // AnimationClip standalone (F2H49). [0] = clip vacio (sin tracks).
+    std::unordered_map<std::string, AnimationClipAssetId> m_animationClipCache;
+    std::vector<std::unique_ptr<AnimationClip>> m_animationClips;
+    std::vector<std::string> m_animationClipPaths; // paralelo a m_animationClips
 };
 
 } // namespace Mood

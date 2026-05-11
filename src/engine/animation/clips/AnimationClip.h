@@ -41,7 +41,21 @@ struct QuatKey {
 };
 
 struct BoneTrack {
-    int boneIndex = -1; // indice en `Skeleton::bones`; -1 = track huerfano
+    // F2H49: `boneName` se llena SIEMPRE desde el FBX/glTF (el nombre del
+    // nodo que assimp expone via `aiNodeAnim::mNodeName`). `boneIndex` se
+    // resuelve contra el esqueleto destino.
+    //
+    // Para clips embedded (cargados junto con un MeshAsset), `boneIndex`
+    // se llena al parse-time porque el esqueleto destino YA esta disponible
+    // (es el del mesh del mismo FBX).
+    //
+    // Para clips standalone (FBX anim-only), `boneIndex = -1` hasta que un
+    // "bind pass" del AnimationSystem lo resuelva contra el esqueleto del
+    // personaje destino via `Skeleton::boneIndex(boneName)`. Eso permite
+    // compartir un clip de Mixamo (`anim_idle.fbx`) con cualquier humanoide
+    // que use la convencion `mixamorig:Hips` etc.
+    std::string boneName;
+    int boneIndex = -1; // indice en `Skeleton::bones`; -1 = track huerfano o sin bindar
     std::vector<VectorKey> positionKeys;
     std::vector<QuatKey>   rotationKeys;
     std::vector<VectorKey> scaleKeys;

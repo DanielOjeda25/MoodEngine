@@ -18,6 +18,7 @@
 #include "engine/render/resources/MeshAsset.h"
 
 #include <assimp/Importer.hpp>
+#include <assimp/config.h>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
@@ -40,6 +41,22 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
     }
 
     Assimp::Importer importer;
+
+    // F2H49: configuracion especifica para FBX (especialmente Mixamo).
+    // - PRESERVE_PIVOTS=false: sin esto, assimp inserta nodos intermedios
+    //   `$AssimpFbx$_Translation/_Rotation/_Scaling` por cada pivote del FBX.
+    //   Eso rompe la topologia del esqueleto Mixamo (los bones quedan a 4
+    //   niveles de profundidad cada uno) y desincroniza los tracks de
+    //   animacion. Apagandolo, assimp colapsa todo al nodo de bone real.
+    // - READ_ALL_GEOMETRY_LAYERS=false: Mixamo a veces deja layers UV
+    //   extra vacios; nos quedamos con el primario solamente.
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_READ_ALL_GEOMETRY_LAYERS, false);
+    // Mixamo exporta en cm (×100). aiProcess_GlobalScale lee el
+    // mUnitScaleFactor del header FBX y normaliza a 1.0 unidad = 1 metro.
+    // glTF ya viene en metros: el flag es no-op cuando UnitScale es 1.0.
+    importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, 1.0f);
+
     // Flags:
     // - Triangulate: garantiza 3 indices por cara (convierte quads/n-gons).
     // - GenNormals: genera normales planas si el modelo no las trae.
@@ -47,6 +64,8 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
     // - LimitBoneWeights: assimp recorta a 4 huesos por vertice (matchea
     //   nuestro k_maxInfluencesPerVertex). Igual mantenemos nuestro
     //   trim+normalize defensivo arriba.
+    // - GlobalScale (F2H49): aplica AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY * unit
+    //   scale del archivo. Mixamo viene en cm → divide entre 100; glTF/m → no-op.
     //
     // Hito 26: REMOVIDO `aiProcess_FlipUVs`. Antes lo usabamos para
     // compensar el origin top-left de glTF/DirectX vs el bottom-left de
@@ -57,13 +76,24 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
     const u32 flags = aiProcess_Triangulate
                     | aiProcess_GenNormals
                     | aiProcess_CalcTangentSpace
-                    | aiProcess_LimitBoneWeights;
+                    | aiProcess_LimitBoneWeights
+                    | aiProcess_GlobalScale;
 
     const aiScene* scene = importer.ReadFile(filesystemPath, flags);
     if (scene == nullptr || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) != 0
-        || scene->mRootNode == nullptr || scene->mNumMeshes == 0) {
+        || scene->mRootNode == nullptr) {
         Log::assets()->warn("MeshLoader: fallo '{}' ({})", logicalPath,
                              importer.GetErrorString());
+        return nullptr;
+    }
+    // F2H49: rechazamos archivos que no traen NI mesh NI animacion (ej. un
+    // FBX vacio). Si tiene aunque sea animacion sola, seguimos: caso anim-only
+    // de Mixamo. Lo expone `loadAnimationClipWithAssimp` (Bloque B) — la ruta
+    // de loadMesh sigue retornando nullptr cuando no hay submeshes, pero al
+    // menos no aborta y deja al caller de animation-only obtener los clips.
+    if (scene->mNumMeshes == 0 && scene->mNumAnimations == 0) {
+        Log::assets()->warn("MeshLoader: '{}' no tiene meshes ni animaciones",
+                             logicalPath);
         return nullptr;
     }
 

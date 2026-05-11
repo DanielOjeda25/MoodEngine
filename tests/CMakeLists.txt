@@ -126,10 +126,12 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Prefab.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Texture.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Dialog.cpp  # F2H48
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_AnimationClip.cpp  # F2H49
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Animation.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Geometry.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Skeleton.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_StandaloneClip.cpp  # F2H49
     ${CMAKE_SOURCE_DIR}/src/engine/assets/cache/LodCache.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/primitives/PrimitiveMeshes.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/EntitySerializer.cpp

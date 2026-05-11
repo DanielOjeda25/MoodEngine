@@ -17,6 +17,7 @@
 
 #include "core/Log.h"
 #include "engine/assets/primitives/PrimitiveMeshes.h"
+#include "engine/animation/clips/AnimationClip.h"  // F2H49
 #include "engine/audio/clips/AudioClip.h"
 #include "engine/dialog/DialogAsset.h"  // F2H48
 #include "engine/render/rhi/IMesh.h"
@@ -44,6 +45,8 @@ constexpr const char* k_missingMeshPath    = "__missing_cube";
 constexpr const char* k_emptyPrefabPath    = "__empty_prefab";
 // F2H48: sentinela del dialog fallback (slot 0). Asset sin nodos.
 constexpr const char* k_emptyDialogPath    = "__empty_dialog";
+// F2H49: sentinela del AnimationClip fallback (slot 0). Sin tracks.
+constexpr const char* k_emptyAnimClipPath  = "__empty_clip";
 // Sentinela del material fallback (slot 0). Albedo blanco, mate medio.
 constexpr const char* k_defaultMaterialPath = "__default_material";
 
@@ -228,6 +231,21 @@ AssetManager::AssetManager(std::string rootDir,
         m_dialogCache.emplace(k_emptyDialogPath, missingDialogId());
     }
     Log::assets()->info("AssetManager: dialog 'vacio' generado en slot 0");
+
+    // ---- Slot 0 AnimationClip (F2H49): clip vacio sin tracks.
+    //      `AnimationSystem` puede recibir este id sin crashear cuando un
+    //      asset falla al cargar — al no haber tracks, el evaluate
+    //      mantiene el localBindTransform de todos los huesos (T-pose).
+    {
+        auto empty = std::make_unique<AnimationClip>();
+        empty->name = "(empty)";
+        empty->duration = 0.0f;
+        m_animationClips.emplace_back(std::move(empty));
+        m_animationClipPaths.emplace_back(k_emptyAnimClipPath);
+        m_animationClipCache.emplace(k_emptyAnimClipPath,
+                                      missingAnimationClipId());
+    }
+    Log::assets()->info("AssetManager: animation clip 'vacio' generado en slot 0");
 }
 
 AssetManager::~AssetManager() = default;

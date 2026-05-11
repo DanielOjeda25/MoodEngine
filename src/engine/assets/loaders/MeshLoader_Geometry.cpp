@@ -148,8 +148,18 @@ TextureAssetId extractAlbedo(const aiScene& scene,
     // `.mtl` + `map_Kd ../textures/brick.png` produce "meshes/../textures/
     // brick.png" que el VFS rechaza por leak. Normalizar lo deja en
     // "textures/brick.png" — el VFS lo acepta como path lógico válido.
+    //
+    // F2H49: FBXs (especialmente de Mixamo) a veces guardan el path
+    // absoluto del filesystem del autor original: "C:\Users\Mixamo\textures\
+    // ch11_body.png" o "/Users/joe/Desktop/textures/...". Esos paths no
+    // existen en nuestra VFS — si detectamos que es absoluto, caemos al
+    // basename y buscamos relativo a la carpeta del mesh.
+    std::filesystem::path texPath(path);
+    if (texPath.is_absolute()) {
+        texPath = texPath.filename();  // "C:\foo\bar\diff.png" -> "diff.png"
+    }
     const auto baseDir = std::filesystem::path(meshLogicalPath).parent_path();
-    const auto resolved = (baseDir / path).lexically_normal().generic_string();
+    const auto resolved = (baseDir / texPath).lexically_normal().generic_string();
     return am.loadTexture(resolved);
 }
 

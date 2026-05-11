@@ -32,6 +32,13 @@ CMakeUserPresets.json
 # instalado del dev y de los mtimes de los sources.
 assets/.cache/
 
+# F2H49: FBX de personajes (Mixamo). Pesan >100MB cuando vienen con
+# texturas embedded y GitHub bloquea archivos individuales >100MB.
+# Cada dev baja los suyos siguiendo assets/characters/README.md.
+# README, configs .json, .moodprefab y demas si se commitean.
+assets/characters/**/*.fbx
+assets/characters/**/*.FBX
+
 # Logs
 logs/
 *.log

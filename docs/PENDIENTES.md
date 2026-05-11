@@ -11,12 +11,40 @@
 
 ## Post-F2H48.1 (2026-05-10) — Cierre crítico pre-F2H49: serialización DialogComponent + DialogScriptHost
 
-### Próximo a atacar
+### F2H49 en progreso (2026-05-11) — RE-SCOPED
 
-- **F2H49 — Demo characters Mixamo + escena narrativa completa** (Bloque 2.5 del plan).
-  - **Origen**: pedido del dev post-F2H47/F2H48: *"que sentido tiene crear un sistema de diálogo, sino tenemos a quien asignar ni como sentir"*. Ahora con infra realmente lista: F2H48 cerró el runtime técnico + F2H48.1 cerró las deudas críticas pre-demo (persistencia + condition_lua reales).
+- **Re-scope crítico**: F2H49 cambió de "Demo characters Mixamo + escena narrativa" a **"Soporte de animaciones standalone (FBX anim-only)"** después de descubrir, al intentar cargar los FBX de Mixamo, que **el motor no soporta clips de animación sin mesh adjunto** (caso "Without Skin" de Mixamo). Sin esto el NPC se queda en T-pose congelado.
+- **Demo narrativa renumerada a F2H50** (sigue todo lo planificado de NPC + cuarto CSG + guion armas/decisiones; se ataca después de F2H49).
 
-- **Después de F2H49**: continuar con **Inventario** (F2H50) y **Quest Editor** (F2H51) según `PLAN_SUBFASE_2_5.md`.
+#### Estado de F2H49 — Bloques A-C completos, suite verde
+
+- ✅ **Setup FBX Mixamo (pre-bloques)**: `aiProcess_GlobalScale` + `FBX_PRESERVE_PIVOTS=false` + `FBX_READ_ALL_GEOMETRY_LAYERS=false` + `extractAlbedo` con fallback a basename para paths absolutos de Mixamo (`../../home/app/mixamo-mini/...`). AssetBrowser ahora escanea `assets/characters/`. `.gitignore` para `*.fbx` en characters/.
+- ✅ **Bloque A** — `BoneTrack` gana campo `boneName`; `parseAnimations` lo puebla siempre; `loadMeshWithAssimp` ya no aborta si `mNumMeshes==0 && mNumAnimations>0`.
+- ✅ **Bloque B** — `loadAnimationClipWithAssimp(path)` standalone: devuelve `AnimationClip` con `BoneTrack.boneIndex = -1` (sin bindar), filtra `$AssimpFbx$_*` residuales, hereda los flags FBX del loader principal.
+- ✅ **Bloque C** — `AssetManager::loadAnimationClip / getAnimationClip / animationClipPathOf / animationClipCount` + tipo `AnimationClipAssetId` + slot 0 = clip vacío + cache por path lógico. `AssetManager_AnimationClip.cpp` partial.
+
+#### Bloques pendientes para retomar
+
+- ⏳ **Bloque D — `AnimatorComponent.externalClips` + bind cache**: agregar a `Components.h:269` un `std::vector<std::pair<std::string, AnimationClipAssetId>> externalClips` para que cada entidad declare sus clips externos por nombre amigable, y un `std::unordered_map<AnimationClipAssetId, std::vector<int>> externalBindCache` para cachear el remapeo `track→boneIndex` post bind pass (invalidar por `bones.size()` mismatch). Tener cuidado: `unordered_map` requiere include en `Components.h` (ya está). Y `AnimationClipAssetId` viene de `AssetManager.h` que ya está incluido.
+- ⏳ **Bloque E — `AnimationSystem` bind pass**: en `resolveActiveClip` (`src/systems/animation/AnimationSystem.cpp:24-33`), prioridad nueva — primero buscar en `externalClips` del component, si match: chequear si hay `externalBindCache[id]` válido (matchea `bones.size()`); si no, ejecutar bind pass — para cada track del clip externo, `targetIdx[i] = skeleton.boneIndex(track.boneName)` (devuelve `-1` si no existe). Cachear. Después aplicar al evaluate pero usando los `targetIdx[i]` en lugar de `track.boneIndex` (porque el clip externo tiene `-1`). Implementación cuidadosa: el `evaluate` actual itera `clip.tracks` con `tr.boneIndex` — habrá que pasar el `targetIdx` como override o duplicar la lógica del evaluate para clips externos. Decidir: ¿mutar `track.boneIndex` cuando se binda? Más simple pero el clip queda específicamente bindeado a UN esqueleto (no reusable entre 2 NPCs distintos). Mejor: keep cache externa en el component (no mutar el asset).
+- ⏳ **Bloque F — AssetBrowser tab "Animations"**: heurística por convención `anim_*.fbx` en `assets/characters/`. O escanear durante rescan y clasificar por extensión + naming. Drag-drop con payload nuevo `MOOD_ANIMCLIP_ASSET` que envía `AnimationClipAssetId`.
+- ⏳ **Bloque G — `InspectorPanel_Animation.cpp`**: agregar sección "External clips" debajo del combo de clip embedded — lista los pares `(name, id)` con botón eliminar; drop target para `MOOD_ANIMCLIP_ASSET`; el combo principal de selección de clip incluye ambas fuentes (embedded + external).
+- ⏳ **Bloque H — Tests + docs + cierre**: tests unitarios — sanitizeClipName edge cases, convertChannel sin filtrar, AssetManager slot 0 vacío, bind pass con bones missing (boneIndex=-1 queda). Actualizar `assets/characters/README.md` con uso de external clips. HITOS/ESTADO/DECISIONS/PENDIENTES + tag `v1.37-fase2-hito49`.
+
+#### Notas técnicas críticas para retomar
+
+- **Bone names Mixamo**: convención `mixamorig:Hips`, `mixamorig:Spine`, `mixamorig:Spine1`, etc. El `Skeleton::boneIndex(name)` ya hace lookup por nombre — basta llamarlo en el bind pass.
+- **Decisión confirmada con dev**: `BoneTrack` agrega `boneName` (string ~10-30 chars) en lugar de cambiar `boneIndex` a string — cuesta ~3 KB extra por clip Mixamo (50 tracks × 50 chars), negligible.
+- **`AnimationClip::evaluate` actual** asume `boneIndex` válido (`< skeleton.bones.size()`). Cuando llegue el clip externo bindeado vía cache, hay que sustituir el index. Opción A: nuevo método `evaluateExternal(t, skeleton, bindCache, localPoseOut)`. Opción B: el AnimationSystem hace una copia mutable del clip con índices remapeados (más costosa por frame pero sin tocar el header).
+- **Archivos nuevos creados ya en disco**: `src/engine/assets/loaders/MeshLoader_StandaloneClip.cpp`, `src/engine/assets/manager/AssetManager_AnimationClip.cpp`. Ambos registrados en CMake top + tests.
+- **FBX descargados de Mixamo** (en `assets/characters/`, gitignored): `npc_a/npc_a.fbx` (142 MB Ch35 con skin + T-pose), `npc_b/npc_b.fbx` (115 MB Ch15 con skin + T-pose), `npc_a/anim_idle.fbx`, `anim_talk.fbx`, `anim_greeting.fbx` (~700 KB cada uno, Without Skin). El editor los lista en Asset Browser → Meshes; los 2 personajes spawnean en T-pose con texturas magenta (texturas Mixamo apuntan a su filesystem temp; `extractAlbedo` ya cae a basename si encontra path absoluto, pero los PNG no están en disco aún — F2H49.X o aceptarlo).
+- **`F2H49 Demo characters Mixamo + escena narrativa` ya NO es el goal de F2H49**: pasó a F2H50.
+
+### Próximo a atacar (después de F2H49)
+
+- **F2H50 — Demo characters Mixamo + escena narrativa completa** (lo que era F2H49). Ya con animations standalone funcionando, el NPC podrá hacer idle/talk durante el diálogo.
+
+- **Después de F2H50**: continuar con **Inventario** (F2H51) y **Quest Editor** (F2H52) según `PLAN_SUBFASE_2_5.md`.
 
 ### Diferidos sin orden (emergentes post-F2H48.1)
 

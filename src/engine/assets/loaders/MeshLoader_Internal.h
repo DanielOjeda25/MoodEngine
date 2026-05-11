@@ -87,6 +87,17 @@ std::vector<f32> generateLodFlatVertices(const std::vector<f32>& sourceFlat,
                                             f32 errorRatio);
 
 // Animation (definidas en MeshLoader_Animation.cpp).
+
+/// @brief Sanitiza nombres feos de clips ("Armature|mixamo.com" -> "mixamo_com").
+///        Expuesto para reuso desde el loader standalone (F2H49).
+std::string sanitizeClipName(std::string raw);
+
+/// @brief Convierte un `aiNodeAnim` a `BoneTrack`. `boneName` se llena
+///        siempre con el nombre del nodo. `boneIndex` queda en -1 — el
+///        caller lo resuelve (parseAnimations contra el skeleton del mesh
+///        embedded; el loader standalone lo deja en -1 para bind pass).
+BoneTrack convertChannel(const aiNodeAnim& ch, float tps);
+
 void parseAnimations(const aiScene& scene,
                       const std::unordered_map<std::string, int>& indexByName,
                       std::vector<AnimationClip>& outClips);

@@ -345,6 +345,7 @@ add_library(mood_engine_lib STATIC
     src/engine/assets/loaders/MeshLoader_Skeleton.cpp
     src/engine/assets/loaders/MeshLoader_Geometry.cpp
     src/engine/assets/loaders/MeshLoader_Animation.cpp
+    src/engine/assets/loaders/MeshLoader_StandaloneClip.cpp  # F2H49
     src/engine/assets/manager/AssetManager.cpp
     src/engine/assets/manager/AssetManager_Texture.cpp
     src/engine/assets/manager/AssetManager_Audio.cpp
@@ -352,6 +353,7 @@ add_library(mood_engine_lib STATIC
     src/engine/assets/manager/AssetManager_Prefab.cpp
     src/engine/assets/manager/AssetManager_Material.cpp
     src/engine/assets/manager/AssetManager_Dialog.cpp  # F2H48
+    src/engine/assets/manager/AssetManager_AnimationClip.cpp  # F2H49
     src/engine/assets/loaders/MeshLoader.cpp
     src/engine/assets/primitives/PrimitiveMeshes.cpp
     src/engine/assets/loaders/stb_impl.cpp

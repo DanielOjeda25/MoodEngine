@@ -10,10 +10,12 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 
 namespace Mood {
 
@@ -21,19 +23,21 @@ namespace {
 
 // Directorio relativo al cwd donde buscamos texturas. Cuando el VFS soporte
 // lookup inverso, esto sale de ahi.
-constexpr const char* k_textureDir  = "assets/textures";
-constexpr const char* k_audioDir    = "assets/audio";
-constexpr const char* k_meshDir     = "assets/meshes";
-constexpr const char* k_prefabDir   = "assets/prefabs";
-constexpr const char* k_materialDir = "assets/materials";
-constexpr const char* k_scriptDir   = "assets/scripts";
+constexpr const char* k_textureDir    = "assets/textures";
+constexpr const char* k_audioDir      = "assets/audio";
+constexpr const char* k_meshDir       = "assets/meshes";
+constexpr const char* k_charactersDir = "assets/characters";  // F2H49
+constexpr const char* k_prefabDir     = "assets/prefabs";
+constexpr const char* k_materialDir   = "assets/materials";
+constexpr const char* k_scriptDir     = "assets/scripts";
 constexpr float k_thumbSize = 64.0f;
-constexpr const char* k_logicalPrefix         = "textures/";
-constexpr const char* k_audioLogicalPrefix    = "audio/";
-constexpr const char* k_meshLogicalPrefix     = "meshes/";
-constexpr const char* k_prefabLogicalPrefix   = "prefabs/";
-constexpr const char* k_materialLogicalPrefix = "materials/";
-constexpr const char* k_scriptLogicalPrefix   = "scripts/";
+constexpr const char* k_logicalPrefix           = "textures/";
+constexpr const char* k_audioLogicalPrefix      = "audio/";
+constexpr const char* k_meshLogicalPrefix       = "meshes/";
+constexpr const char* k_charactersLogicalPrefix = "characters/";  // F2H49
+constexpr const char* k_prefabLogicalPrefix     = "prefabs/";
+constexpr const char* k_materialLogicalPrefix   = "materials/";
+constexpr const char* k_scriptLogicalPrefix     = "scripts/";
 
 bool isPng(const std::filesystem::path& p) {
     auto ext = p.extension().string();
@@ -141,24 +145,34 @@ void AssetBrowserPanel::rescan() {
     // como Kenney Survival Kit (assets/meshes/kenney_survival/*.glb)
     // aparezcan en la lista. El displayName usa el path relativo
     // ("kenney_survival/barrel.glb") para distinguir entre packs.
+    //
+    // F2H49: tambien escaneamos assets/characters/ (FBX de Mixamo). Mismo
+    // tipo de asset (mesh con esqueleto + animaciones) pero separado del
+    // directorio de meshes estaticos para mantener orden semantico. El
+    // logicalPath conserva el prefijo "characters/" para distinguirlos.
     m_meshEntries.clear();
-    std::error_code mesh_ec;
-    auto mesh_it = std::filesystem::recursive_directory_iterator(k_meshDir, mesh_ec);
-    if (!mesh_ec) {
+    const std::array<std::pair<const char*, const char*>, 2> meshDirs{{
+        {k_meshDir,       k_meshLogicalPrefix},
+        {k_charactersDir, k_charactersLogicalPrefix},
+    }};
+    for (const auto& [dir, prefix] : meshDirs) {
+        std::error_code mesh_ec;
+        auto mesh_it = std::filesystem::recursive_directory_iterator(dir, mesh_ec);
+        if (mesh_ec) continue;
         for (const auto& entry : mesh_it) {
             if (!entry.is_regular_file() || !isMesh(entry.path())) continue;
             MeshEntry me;
-            const auto rel = std::filesystem::relative(entry.path(), k_meshDir);
+            const auto rel = std::filesystem::relative(entry.path(), dir);
             me.displayName = rel.generic_string();
-            me.logicalPath = std::string(k_meshLogicalPrefix) + me.displayName;
+            me.logicalPath = std::string(prefix) + me.displayName;
             me.id = m_assetManager->loadMesh(me.logicalPath);
             m_meshEntries.push_back(std::move(me));
         }
-        std::sort(m_meshEntries.begin(), m_meshEntries.end(),
-                  [](const MeshEntry& a, const MeshEntry& b) {
-                      return a.displayName < b.displayName;
-                  });
     }
+    std::sort(m_meshEntries.begin(), m_meshEntries.end(),
+              [](const MeshEntry& a, const MeshEntry& b) {
+                  return a.displayName < b.displayName;
+              });
 
     // Prefabs: busca en assets/prefabs/ por *.moodprefab. AssetManager
     // los lazy-parsea con `loadPrefab`; si alguno falla cae a `missingPrefabId()`.
