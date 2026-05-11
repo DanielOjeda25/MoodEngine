@@ -176,11 +176,17 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
     // quedan sin texturas y los spawn caen al material default.
     if (assetManager != nullptr) {
         asset->materialAlbedoTextures.resize(scene->mNumMaterials, 0);
+        asset->materialAlbedoColors.resize(scene->mNumMaterials, std::nullopt);
         for (u32 mi = 0; mi < scene->mNumMaterials; ++mi) {
             const aiMaterial* mat = scene->mMaterials[mi];
             if (mat == nullptr) continue;
             asset->materialAlbedoTextures[mi] =
                 detail::extractAlbedo(*scene, *mat, logicalPath, *assetManager);
+            // F2H49.1: si el material no trae texture map, intentamos un
+            // diffuse color plano (caso template Mixamo X/Y Bot).
+            if (asset->materialAlbedoTextures[mi] == 0) {
+                asset->materialAlbedoColors[mi] = detail::extractDiffuseColor(*mat);
+            }
         }
     }
 

@@ -82,6 +82,11 @@ TextureAssetId extractAlbedo(const aiScene& scene,
                               const std::string& meshLogicalPath,
                               AssetManager& am);
 
+/// @brief F2H49.1: extrae el diffuse/base color del material cuando no hay
+///        texture map. Devuelve nullopt si el material no expone color o
+///        el color es blanco puro default (sentinel "sin color real").
+std::optional<glm::vec3> extractDiffuseColor(const aiMaterial& mat);
+
 std::vector<f32> generateLodFlatVertices(const std::vector<f32>& sourceFlat,
                                             f32 reductionRatio,
                                             f32 errorRatio);

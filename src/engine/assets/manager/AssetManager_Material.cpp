@@ -168,16 +168,35 @@ std::vector<MaterialAssetId> AssetManager::createMaterialsForMesh(MeshAssetId me
         if (tex != 0) {
             // Material instance unico envolviendo la textura extraida del archivo.
             out.push_back(createMaterialFromTexture(tex));
-        } else {
-            // Sin textura -> clone del default; mostrara missing.png como
-            // warning visible (Hito 25).
-            MaterialAsset proto{};
-            if (const MaterialAsset* def = getMaterial(missingMaterialId());
-                def != nullptr) {
-                proto = *def;
-            }
-            out.push_back(createMaterial(proto));
+            continue;
         }
+        // F2H49.1: sin texture map. Si el material trae un diffuse color plano
+        // (caso template Mixamo X/Y Bot: blanco/gris/negro via aiColor4D), lo
+        // usamos como `albedoTint` puro con `useAlbedoMap=false`. Asi el
+        // personaje se ve con sus colores reales en lugar del missing magenta.
+        std::optional<glm::vec3> color;
+        if (sm.materialIndex < mesh->materialAlbedoColors.size()) {
+            color = mesh->materialAlbedoColors[sm.materialIndex];
+        }
+        if (color.has_value()) {
+            MaterialAsset proto{};
+            proto.albedo        = 0;
+            proto.useAlbedoMap  = false;
+            proto.albedoTint    = *color;
+            proto.metallicMult  = 0.0f;
+            proto.roughnessMult = 0.7f;
+            proto.aoMult        = 1.0f;
+            out.push_back(createMaterial(proto));
+            continue;
+        }
+        // Sin textura ni color -> clone del default; mostrara missing.png como
+        // warning visible (Hito 25).
+        MaterialAsset proto{};
+        if (const MaterialAsset* def = getMaterial(missingMaterialId());
+            def != nullptr) {
+            proto = *def;
+        }
+        out.push_back(createMaterial(proto));
     }
     return out;
 }

@@ -99,6 +99,15 @@ struct MeshAsset {
     using TextureAssetId = u32;
     std::vector<TextureAssetId> materialAlbedoTextures;
 
+    /// F2H49.1: diffuse/base color por cada material cuando NO hay texture map.
+    /// Tipico caso de los rigs template de Mixamo (X Bot, Y Bot) — sus
+    /// materiales tienen `aiColor4D` directo (gris/blanco/negro) y 0 texturas.
+    /// `nullopt` = material sin color real → `createMaterialsForMesh` cae al
+    /// missing-texture magenta como warning visual. Algun valor → el material
+    /// se crea con `albedoTint = *color` + `useAlbedoMap = false`.
+    /// Paralelo a `materialAlbedoTextures` (size = scene->mNumMaterials).
+    std::vector<std::optional<glm::vec3>> materialAlbedoColors;
+
     /// Suma de vertices de todos los submeshes. Uso: logs, Inspector.
     u32 totalVertexCount() const {
         u32 n = 0;

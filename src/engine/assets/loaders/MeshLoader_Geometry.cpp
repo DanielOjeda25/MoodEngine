@@ -13,7 +13,9 @@
 #include <meshoptimizer.h>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
+#include <optional>
 
 namespace Mood::detail {
 
@@ -161,6 +163,35 @@ TextureAssetId extractAlbedo(const aiScene& scene,
     const auto baseDir = std::filesystem::path(meshLogicalPath).parent_path();
     const auto resolved = (baseDir / texPath).lexically_normal().generic_string();
     return am.loadTexture(resolved);
+}
+
+// F2H49.1: para meshes cuyo material NO tiene texture map (caso clasico de
+// los rigs template de Mixamo — X Bot/Y Bot tienen `Alpha_Body_MAT` con
+// `aiColor4D` directo y 0 texturas), extraemos el diffuse color base. Asi
+// el render lo aplica como `albedoTint` puro en lugar de caer al magenta
+// missing-texture.
+//
+// Devuelve `nullopt` si el material no expone color ni en BASE_COLOR (PBR)
+// ni en COLOR_DIFFUSE (legacy). Algunos materiales tienen el slot BASE seteado
+// pero a (1,1,1,1) por default — eso lo tratamos como "sin color real"
+// (sentinel) porque mezclar con texture-missing tint blanco no aporta info.
+std::optional<glm::vec3> extractDiffuseColor(const aiMaterial& mat) {
+    aiColor4D color(0.0f, 0.0f, 0.0f, 0.0f);
+    aiReturn ok = mat.Get(AI_MATKEY_BASE_COLOR, color);
+    if (ok != AI_SUCCESS) {
+        ok = mat.Get(AI_MATKEY_COLOR_DIFFUSE, color);
+    }
+    if (ok != AI_SUCCESS) return std::nullopt;
+    // Default puro blanco (1,1,1) en muchos exporters significa "sin color
+    // real" — discriminamos por proximidad a (1,1,1) Y alpha=1 (la combinacion
+    // tipica). Si el dev SI quiere blanco puro, que asigne (0.999,0.999,0.999)
+    // — el motor lo respeta.
+    const f32 eps = 1e-4f;
+    if (std::abs(color.r - 1.0f) < eps && std::abs(color.g - 1.0f) < eps &&
+        std::abs(color.b - 1.0f) < eps && std::abs(color.a - 1.0f) < eps) {
+        return std::nullopt;
+    }
+    return glm::vec3(color.r, color.g, color.b);
 }
 
 std::vector<f32> generateLodFlatVertices(const std::vector<f32>& sourceFlat,
