@@ -178,4 +178,50 @@ struct AnimationClip {
     }
 };
 
+/// @brief F2H49 bind pass para clips standalone. Llena `outRemap` con un
+///        vector `[clip.tracks.size()]` tal que
+///        `outRemap[i] = skel.boneIndex(clip.tracks[i].boneName)`. Indices
+///        `-1` corresponden a tracks "huerfanos" cuyo bone no existe en el
+///        esqueleto destino (comun cuando hay desencaje entre rigs — el
+///        track simplemente se ignora en la evaluacion).
+///
+///        El clip nunca se muta. La idea es poder compartir un mismo clip
+///        (ej. `anim_idle.fbx` de Mixamo) entre varios esqueletos sin
+///        contaminar el track con un boneIndex skeleton-especifico.
+inline void bindClipToSkeleton(const AnimationClip& clip, const Skeleton& skel,
+                                std::vector<int>& outRemap) {
+    outRemap.resize(clip.tracks.size());
+    for (usize i = 0; i < clip.tracks.size(); ++i) {
+        outRemap[i] = skel.boneIndex(clip.tracks[i].boneName);
+    }
+}
+
+/// @brief F2H49 evaluador para clips standalone. Mismo contrato que
+///        `AnimationClip::evaluate`, pero en lugar de leer
+///        `track.boneIndex` (que en clips standalone es `-1`) usa un
+///        remap explicito calculado por `bindClipToSkeleton`.
+///
+///        Defensa: si `remap.size() != clip.tracks.size()`, la pose se
+///        rellena con `localBindTransform` y no se aplica nada del clip
+///        — eso evita lecturas fuera de rango si el remap quedo stale.
+inline void evaluateClipWithRemap(const AnimationClip& clip, float t,
+                                   const Skeleton& skel,
+                                   const std::vector<int>& remap,
+                                   std::vector<glm::mat4>& localPoseOut) {
+    const usize n = skel.bones.size();
+    localPoseOut.resize(n);
+    for (usize i = 0; i < n; ++i) {
+        localPoseOut[i] = skel.bones[i].localBindTransform;
+    }
+    if (remap.size() != clip.tracks.size()) return;
+    for (usize i = 0; i < clip.tracks.size(); ++i) {
+        const int bi = remap[i];
+        if (bi < 0) continue;
+        if (static_cast<usize>(bi) >= n) continue;
+        const BoneTrack& tr = clip.tracks[i];
+        if (tr.empty()) continue;
+        localPoseOut[static_cast<usize>(bi)] = sampleLocalTRS(tr, t);
+    }
+}
+
 } // namespace Mood

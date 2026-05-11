@@ -4,7 +4,39 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H48.1 cerrado (2026-05-10)
+## 0. ACTUALIZACIÓN F2H49 cerrado (2026-05-11)
+
+**Cuarto hito real de Sub-fase 2.5 cerrado — Animaciones standalone (FBX anim-only) + Asset Browser tab Animations + Inspector external clips.**
+Tag: `v1.37.0-fase2-hito49`. Cita verbatim del dev al validar: *"las animaciones van bien"* (después de fixear `AI_SCENE_FLAGS_INCOMPLETE` que abortaba el load).
+
+**Por qué F2H49 re-scoped**: el plan original era "Demo characters Mixamo + escena narrativa", pero al intentar cargar los `*.fbx` de Mixamo el motor no soportaba clips sin malla adjunta (caso "Without Skin"). Sin esto el NPC se quedaba congelado en T-pose durante el diálogo. La demo narrativa pasó a **F2H50** y F2H49 se reenfocó en habilitar el pipeline standalone.
+
+**Qué entrega F2H49**:
+- **Pipeline FBX standalone funcionando**: archivos `anim_*.fbx` de Mixamo (Without Skin, In Place, 30fps) se cargan via `AssetManager::loadAnimationClip`, devuelven `AnimationClip` con tracks `boneIndex=-1`. Confirmado con los rigs demo: 52 tracks por clip + duraciones reales (idle 8.33s, walk 0.97s, talk 3.93s, look_around 13.33s).
+- **`AnimatorComponent` extendido con `externalClips` + `externalBindCache`**: cada entidad puede declarar clips adjuntos por alias lógico (`"walk"`, `"idle"`), el remap `track→bone` se cachea on-demand al primer uso. **El clip nunca se muta** — el mismo `anim_idle.fbx` se reusa entre player y npc sin contaminar tracks.
+- **`AnimationSystem` con path dual de evaluación**: 2 funciones libres nuevas (`bindClipToSkeleton` + `evaluateClipWithRemap`) en `AnimationClip.h`. `resolveActiveClip` prioriza external alias sobre embedded. Path embedded (Hito 19) intacto.
+- **Asset Browser tab Animations** con `ICON_FA_PERSON_RUNNING`, drag-source emite payload `MOOD_ANIMCLIP_ASSET` (AnimationClipAssetId, 4 bytes). El tab Meshes ahora filtra `anim_*.fbx` (antes aparecían como meshes vacíos).
+- **Inspector → AnimatorComponent → sección "Clips externos"**: drop target acepta el payload, alias auto-derivado del filename (`anim_walk.fbx → walk`), por fila: ▶ Play (setea clipName), input editable, path + metadata, ➖ Remove (limpia cache también).
+- **Asset shipping**: X Bot (player) + Y Bot (npc) con 6 clips totales (~7.5 MB) commiteados al repo con excepción en `.gitignore` — out-of-the-box working characters.
+- **7 tests nuevos + 14 assertions** en `test_animation.cpp` cubriendo bind pass + evaluate con remap, incluyendo el caso clave de F2H49: **mismo clip + 2 esqueletos = 2 remaps válidos sin mutar el clip**. Suite **746/8865** verde.
+
+**Decisiones**:
+1. **Cache externo vs mutar `track.boneIndex`**: cache externo (preferido). Mutar haría el clip skeleton-específico y rompería el caso de reuso. Invalidación = responsabilidad del consumidor al swappear mesh.
+2. **Alias por defecto al droppear**: filename stem sin prefijo `anim_` (`anim_walk.fbx → walk`). Si el alias colisiona con uno existente → tooltip de error, no se agrega.
+3. **`AI_SCENE_FLAGS_INCOMPLETE` ignorado** en el standalone loader: assimp setea ese flag para FBX "Without Skin" porque no hay geometría, pero las animaciones están bien parseadas. El flag es informativo, no error.
+4. **Drop target en Inspector, NO en Viewport**: un clip standalone no es entidad espacial. El viewport drop (drag → entidad bajo cursor) queda como nice-to-have backlog.
+5. **Filtro `anim_*.fbx` en tab Meshes**: convención de nombre, no análisis de contenido. Devs con FBX no-Mixamo pueden seguir agregando libremente — solo el prefijo dispara la separación.
+
+**Limitaciones conocidas (no regresiones)**:
+- **Texturas magenta en X/Y Bot**: los FBX traen texturas embedded pero el `MeshLoader` no las extrae del `aiScene::mTextures`. Limitación pre-existente del pipeline FBX, no introducida por F2H49. Documentada en `assets/characters/README.md`. Queda en PENDIENTES.
+- **Persistencia de `externalClips` en `.moodmap`**: deferred. Los demos no lo necesitan todavía; F2H50 lo va a empujar cuando el NPC viva en una escena persistida.
+- **Drop-on-viewport**: nice-to-have UX, no estaba en el plan F2H49.
+
+**Próximo a atacar**: **F2H50 — Demo characters Mixamo + escena narrativa completa** (lo que era F2H49 originalmente). Player + NPC con anims adjuntos + DialogComponent + escena `narrative_demo.moodmap` validable end-to-end.
+
+---
+
+## 0.1. F2H48.1 cerrado (2026-05-10)
 
 **Cierre crítico pre-F2H49: serialización DialogComponent + DialogScriptHost (condition_lua reales).**
 Tag: `v1.36.1-fase2-hito48-1`. Cita verbatim del dev: *"me gustaría que la demo sea completa como la B"*.

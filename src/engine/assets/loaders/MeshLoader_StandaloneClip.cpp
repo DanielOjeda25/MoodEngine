@@ -42,12 +42,15 @@ std::unique_ptr<AnimationClip> loadAnimationClipWithAssimp(
     // Solo necesitamos animaciones — no procesamos geometria.
     const u32 flags = aiProcess_GlobalScale;
     const aiScene* scene = importer.ReadFile(filesystemPath, flags);
-    if (scene == nullptr || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) != 0
-        || scene->mRootNode == nullptr) {
+    if (scene == nullptr || scene->mRootNode == nullptr) {
         Log::assets()->warn("AnimationClipLoader: fallo '{}' ({})", logicalPath,
                              importer.GetErrorString());
         return nullptr;
     }
+    // NOTA: NO chequeamos AI_SCENE_FLAGS_INCOMPLETE. Para FBX "Without Skin"
+    // de Mixamo (que es exactamente nuestro caso de uso) assimp setea ese
+    // flag porque no hay geometria — pero la jerarquia + animaciones estan
+    // bien parseadas. El flag es informativo, no un error.
     if (scene->mNumAnimations == 0) {
         Log::assets()->warn(
             "AnimationClipLoader: '{}' no contiene animaciones",

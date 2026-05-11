@@ -266,12 +266,33 @@ struct AudioSourceComponent {
 ///        El esqueleto vive en el MeshAsset (no se duplica acá). El time
 ///        avanza por delta cada frame en `AnimationSystem`. `clipName`
 ///        vacio -> primer clip del MeshAsset (default sensato).
+///
+/// F2H49: ademas de los clips embebidos en el MeshAsset (resueltos por
+/// `clipName`), se pueden adjuntar clips standalone cargados desde FBX
+/// sin malla (anim_walk.fbx, anim_idle.fbx, etc.) via `externalClips`.
+/// El AnimationSystem resuelve los `BoneTrack.boneName` de cada clip al
+/// indice de bone del esqueleto destino la primera vez que se usa y
+/// cachea el remap en `externalBindCache` (invalidado por consumidor si
+/// el skeleton cambia).
 struct AnimatorComponent {
     std::string clipName;          // vacio = primer clip del MeshAsset
     float time = 0.0f;              // segundos desde el inicio del clip
     float speed = 1.0f;             // escala temporal (1=normal, 2=doble, 0=pause)
     bool playing = true;
     bool loop = true;
+
+    /// Clips standalone adjuntos por alias logico ("walk", "idle", ...).
+    /// El alias es la clave que el gameplay / CharacterController usa para
+    /// pedir reproduccion; el AssetId apunta al `AnimationClip` cacheado
+    /// en `AssetManager`. Vacio = no hay clips externos, el animator solo
+    /// usa los embebidos del MeshAsset.
+    std::vector<std::pair<std::string, AnimationClipAssetId>> externalClips;
+
+    /// Remap `clipBoneIndex -> skeletonBoneIndex` por clip, calculado por
+    /// `AnimationSystem` en el primer uso (lookup de `track.boneName` en
+    /// el esqueleto destino). Vacio = todavia no bindeado. Misma key que
+    /// los AssetIds de `externalClips`.
+    std::unordered_map<AnimationClipAssetId, std::vector<int>> externalBindCache;
 };
 
 /// @brief Hito 19: matrices de skinning ya compuestas (= globalPose *

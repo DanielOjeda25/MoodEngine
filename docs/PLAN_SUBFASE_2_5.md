@@ -174,7 +174,11 @@ clickeables, estilo Half-Life 2). Override via Lua.
 
 ---
 
-### Bloque 2.5 — Demo characters + escena narrativa completa (F2H49)
+### Bloque 2.5 — Demo characters + escena narrativa completa (F2H49 + F2H50)
+
+> **Estado (2026-05-11)**: **F2H49 cerrado** — re-scopeado a "Soporte de animaciones standalone (FBX anim-only)" tras descubrir que el motor no podía cargar clips Mixamo "Without Skin". Pipeline standalone funcionando + Asset Browser tab Animations + Inspector external clips + X Bot/Y Bot demo rigs commiteados. Ver [`HITOS.md`](HITOS.md) entry F2H49 + [`DECISIONS.md`](DECISIONS.md) entry 2026-05-11.
+> **F2H50 (próximo)**: la demo narrativa original — escena `narrative_demo.moodmap` con player X Bot + NPC Y Bot armados con `DialogComponent` + trigger interact + clips `anim_*` adjuntos en sus `AnimatorComponent.externalClips`.
+
 
 **Origen**: pedido del dev post-F2H47 (2026-05-10): *"que sentido tiene
 crear un sistema de diálogo, sino tenemos a quien asignar ni como

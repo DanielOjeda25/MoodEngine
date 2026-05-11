@@ -82,6 +82,15 @@ private:
         u32 lineCount = 0;
     };
 
+    // F2H49: clips de animacion standalone (FBX anim-only, convencion
+    // `anim_*.fbx`). El AssetManager los carga via MeshLoader_StandaloneClip
+    // y devuelve un `AnimationClipAssetId` que apunta al cache compartido.
+    struct AnimationClipEntry {
+        std::string logicalPath; // "characters/player/anim_walk.fbx"
+        std::string displayName; // "player/anim_walk.fbx"
+        AnimationClipAssetId id = 0;
+    };
+
     AssetManager* m_assetManager = nullptr;
     std::vector<Entry> m_entries;
     std::vector<AudioEntry> m_audioEntries;
@@ -89,6 +98,7 @@ private:
     std::vector<PrefabEntry> m_prefabEntries;
     std::vector<MaterialEntry> m_materialEntries;
     std::vector<ScriptEntry> m_scriptEntries;
+    std::vector<AnimationClipEntry> m_animClipEntries;
     std::optional<std::string> m_selected;
     bool m_scanned = false;
     bool m_reloadRequested = false;

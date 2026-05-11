@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons en tabs + filas
+#include "engine/animation/clips/AnimationClip.h"  // F2H49: metadata de clips
 #include "engine/audio/clips/AudioClip.h"
 #include "engine/i18n/I18n.h"  // F2H43
 #include "engine/render/rhi/ITexture.h"
@@ -58,6 +59,20 @@ bool isMesh(const std::filesystem::path& p) {
     std::transform(ext.begin(), ext.end(), ext.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return ext == ".obj" || ext == ".gltf" || ext == ".glb" || ext == ".fbx";
+}
+
+// F2H49: archivos `anim_*.fbx` son clips standalone (Mixamo "Without Skin"),
+// no meshes con esqueleto. El tab Meshes los filtra y el tab Animations los
+// recoge — asi un anim_walk.fbx no aparece como "mesh vacio" en el browser.
+bool isAnimClip(const std::filesystem::path& p) {
+    auto ext = p.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (ext != ".fbx") return false;
+    auto stem = p.stem().string();
+    std::transform(stem.begin(), stem.end(), stem.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return stem.rfind("anim_", 0) == 0;
 }
 
 bool isPrefab(const std::filesystem::path& p) {
@@ -161,6 +176,8 @@ void AssetBrowserPanel::rescan() {
         if (mesh_ec) continue;
         for (const auto& entry : mesh_it) {
             if (!entry.is_regular_file() || !isMesh(entry.path())) continue;
+            // F2H49: los `anim_*.fbx` los agarra el tab Animations.
+            if (isAnimClip(entry.path())) continue;
             MeshEntry me;
             const auto rel = std::filesystem::relative(entry.path(), dir);
             me.displayName = rel.generic_string();
@@ -173,6 +190,31 @@ void AssetBrowserPanel::rescan() {
               [](const MeshEntry& a, const MeshEntry& b) {
                   return a.displayName < b.displayName;
               });
+
+    // F2H49: clips standalone. Recursivo sobre assets/characters/ filtrando
+    // por convencion de nombre `anim_*.fbx`. Los carga via
+    // `AssetManager::loadAnimationClip` (MeshLoader_StandaloneClip) — devuelven
+    // un AnimationClip con tracks `boneIndex=-1`; el bind contra un skeleton
+    // concreto lo hace AnimationSystem on demand.
+    m_animClipEntries.clear();
+    std::error_code clip_ec;
+    auto clip_it = std::filesystem::recursive_directory_iterator(
+        k_charactersDir, clip_ec);
+    if (!clip_ec) {
+        for (const auto& entry : clip_it) {
+            if (!entry.is_regular_file() || !isAnimClip(entry.path())) continue;
+            AnimationClipEntry ce;
+            const auto rel = std::filesystem::relative(entry.path(), k_charactersDir);
+            ce.displayName = rel.generic_string();
+            ce.logicalPath = std::string(k_charactersLogicalPrefix) + ce.displayName;
+            ce.id = m_assetManager->loadAnimationClip(ce.logicalPath);
+            m_animClipEntries.push_back(std::move(ce));
+        }
+        std::sort(m_animClipEntries.begin(), m_animClipEntries.end(),
+                  [](const AnimationClipEntry& a, const AnimationClipEntry& b) {
+                      return a.displayName < b.displayName;
+                  });
+    }
 
     // Prefabs: busca en assets/prefabs/ por *.moodprefab. AssetManager
     // los lazy-parsea con `loadPrefab`; si alguno falla cae a `missingPrefabId()`.
@@ -239,10 +281,10 @@ void AssetBrowserPanel::rescan() {
     m_scanned = true;
     Log::assets()->info(
         "AssetBrowserPanel: {} texturas, {} audios, {} meshes, {} prefabs, "
-        "{} materiales, {} scripts listados",
+        "{} materiales, {} scripts, {} clips de animacion listados",
         m_entries.size(), m_audioEntries.size(), m_meshEntries.size(),
         m_prefabEntries.size(), m_materialEntries.size(),
-        m_scriptEntries.size());
+        m_scriptEntries.size(), m_animClipEntries.size());
 }
 
 void AssetBrowserPanel::onImGuiRender() {
@@ -391,6 +433,43 @@ void AssetBrowserPanel::onImGuiRender() {
                         I18n::T("editor.panel.assets.mesh_meta",
                                 static_cast<u32>(asset->submeshes.size()),
                                 asset->totalVertexCount()).c_str());
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
+
+        // ============================================================
+        // TAB: Animations (F2H49)
+        // ============================================================
+        // Clips standalone listados con metadata (tracks + duration). El
+        // drag-source emite `MOOD_ANIMCLIP_ASSET` con el AssetId — el
+        // Inspector del AnimatorComponent (Bloque G) lo recibe y agrega
+        // una entrada a `externalClips` con alias derivado del filename
+        // (`anim_walk.fbx` → "walk", o lo edita el usuario).
+        const std::string animTabLabel = std::string(ICON_FA_PERSON_RUNNING " ") +
+            I18n::T("editor.panel.assets.tab.animations");
+        if (ImGui::BeginTabItem(animTabLabel.c_str())) {
+            ImGui::TextDisabled("%s",
+                I18n::T("editor.panel.assets.count.anim_clips",
+                        m_animClipEntries.size()).c_str());
+            ImGui::BeginChild("##anim_clips_scroll", ImVec2(0.0f, 0.0f), false);
+            for (const auto& ce : m_animClipEntries) {
+                AnimationClip* clip = m_assetManager->getAnimationClip(ce.id);
+                ImGui::PushID(ce.logicalPath.c_str());
+                ImGui::Selectable(ce.displayName.c_str(), false);
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                    ImGui::SetDragDropPayload("MOOD_ANIMCLIP_ASSET",
+                                                &ce.id, sizeof(ce.id));
+                    ImGui::TextUnformatted(ce.displayName.c_str());
+                    ImGui::EndDragDropSource();
+                }
+                if (clip != nullptr) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("[%u tracks, %.2fs]",
+                                          static_cast<u32>(clip->tracks.size()),
+                                          clip->duration);
                 }
                 ImGui::PopID();
             }

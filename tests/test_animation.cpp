@@ -233,3 +233,140 @@ TEST_CASE("BoneTrack: track sin keys es 'empty'") {
     tr.positionKeys.push_back({0.0f, glm::vec3(0.0f)});
     CHECK_FALSE(tr.empty());
 }
+
+// ---------------------------------------------------------------------------
+// F2H49: bind pass + evaluate con remap (clips standalone skeleton-agnosticos).
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Helper: clip que pone al hueso `boneName` en (5, 6, 7) al final del clip.
+// Track con position keys solamente; boneIndex queda en -1 (clip standalone).
+AnimationClip makeClipWithTrackOn(std::string_view boneName) {
+    AnimationClip clip;
+    clip.name = "anim_test";
+    clip.duration = 1.0f;
+
+    BoneTrack tr;
+    tr.boneName = std::string(boneName);
+    tr.boneIndex = -1; // standalone: lo resuelve el bind pass
+    tr.positionKeys.push_back({0.0f, glm::vec3(0.0f)});
+    tr.positionKeys.push_back({1.0f, glm::vec3(5.0f, 6.0f, 7.0f)});
+    clip.tracks.push_back(std::move(tr));
+    return clip;
+}
+
+} // namespace
+
+TEST_CASE("bindClipToSkeleton: clip vacio produce remap vacio") {
+    Skeleton skel = makeChainSkeleton();
+    AnimationClip empty;
+    empty.duration = 1.0f;
+
+    std::vector<int> remap;
+    bindClipToSkeleton(empty, skel, remap);
+    CHECK(remap.empty());
+}
+
+TEST_CASE("bindClipToSkeleton: tracks matchean al esqueleto destino") {
+    Skeleton skel = makeChainSkeleton(); // huesos: "root", "child"
+    AnimationClip clip = makeClipWithTrackOn("child");
+
+    std::vector<int> remap;
+    bindClipToSkeleton(clip, skel, remap);
+    REQUIRE(remap.size() == 1);
+    CHECK(remap[0] == 1); // "child" es indice 1 en makeChainSkeleton
+}
+
+TEST_CASE("bindClipToSkeleton: track huerfano queda en -1") {
+    Skeleton skel = makeChainSkeleton();
+    AnimationClip clip = makeClipWithTrackOn("nonexistent_bone");
+
+    std::vector<int> remap;
+    bindClipToSkeleton(clip, skel, remap);
+    REQUIRE(remap.size() == 1);
+    CHECK(remap[0] == -1);
+}
+
+TEST_CASE("evaluateClipWithRemap: remap stale (mismatch size) cae al bind pose") {
+    Skeleton skel = makeChainSkeleton();
+    skel.bones[0].localBindTransform =
+        glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 0.0f, 0.0f));
+
+    AnimationClip clip = makeClipWithTrackOn("child");
+
+    // Remap intencionalmente con tamano distinto a tracks.size().
+    std::vector<int> badRemap; // size = 0, tracks.size() = 1
+
+    std::vector<glm::mat4> localPose;
+    evaluateClipWithRemap(clip, 1.0f, skel, badRemap, localPose);
+    REQUIRE(localPose.size() == 2);
+    // Root debe estar en su localBindTransform (2, 0, 0).
+    CHECK(localPose[0][3][0] == doctest::Approx(2.0f));
+}
+
+TEST_CASE("evaluateClipWithRemap: orphan remap deja el hueso en bind") {
+    Skeleton skel = makeChainSkeleton();
+    skel.bones[1].localBindTransform =
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 99.0f, 0.0f));
+
+    AnimationClip clip = makeClipWithTrackOn("child");
+    std::vector<int> remap = {-1}; // track huerfano
+
+    std::vector<glm::mat4> localPose;
+    evaluateClipWithRemap(clip, 1.0f, skel, remap, localPose);
+    REQUIRE(localPose.size() == 2);
+    // child no se evaluo (orphan) → bind: y=99.
+    CHECK(localPose[1][3][1] == doctest::Approx(99.0f));
+}
+
+TEST_CASE("evaluateClipWithRemap: track resuelto evalua sobre el hueso correcto") {
+    Skeleton skel = makeChainSkeleton();
+    AnimationClip clip = makeClipWithTrackOn("child");
+    std::vector<int> remap = {1}; // track -> child (indice 1)
+
+    std::vector<glm::mat4> localPose;
+    evaluateClipWithRemap(clip, 1.0f, skel, remap, localPose);
+    REQUIRE(localPose.size() == 2);
+    // En t=1.0 la posicion es (5, 6, 7) — el sample del ultimo key.
+    CHECK(localPose[1][3][0] == doctest::Approx(5.0f));
+    CHECK(localPose[1][3][1] == doctest::Approx(6.0f));
+    CHECK(localPose[1][3][2] == doctest::Approx(7.0f));
+}
+
+TEST_CASE("evaluateClipWithRemap: mismo clip + 2 esqueletos = remaps distintos, ambos validos") {
+    // El punto F2H49: un mismo clip standalone se reusa entre distintos
+    // esqueletos compatibles. El bind genera remaps distintos sin mutar el clip.
+    AnimationClip clip = makeClipWithTrackOn("child");
+
+    // Esqueleto A: "child" es indice 1 (orden chain root, child).
+    Skeleton skelA = makeChainSkeleton();
+    std::vector<int> remapA;
+    bindClipToSkeleton(clip, skelA, remapA);
+    REQUIRE(remapA.size() == 1);
+    CHECK(remapA[0] == 1);
+
+    // Esqueleto B: "child" es indice 0 (un solo hueso llamado "child").
+    Skeleton skelB;
+    Bone single;
+    single.name = "child";
+    single.parent = -1;
+    single.inverseBind = glm::mat4(1.0f);
+    single.localBindTransform = glm::mat4(1.0f);
+    skelB.bones.push_back(single);
+
+    std::vector<int> remapB;
+    bindClipToSkeleton(clip, skelB, remapB);
+    REQUIRE(remapB.size() == 1);
+    CHECK(remapB[0] == 0); // mismo nombre, indice distinto
+
+    // Verificacion clave: el clip no se mutó.
+    CHECK(clip.tracks[0].boneIndex == -1);
+
+    // Y ambos remaps producen poses validas sobre sus esqueletos.
+    std::vector<glm::mat4> poseA, poseB;
+    evaluateClipWithRemap(clip, 1.0f, skelA, remapA, poseA);
+    evaluateClipWithRemap(clip, 1.0f, skelB, remapB, poseB);
+    CHECK(poseA[1][3][0] == doctest::Approx(5.0f)); // A: child es bone 1
+    CHECK(poseB[0][3][0] == doctest::Approx(5.0f)); // B: child es bone 0
+}

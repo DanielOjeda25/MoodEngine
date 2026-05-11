@@ -11,6 +11,70 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-11: F2H49 cierre — Animaciones standalone (FBX anim-only) + bind pass + tab Animations + Inspector external clips
+
+**Contexto:** el plan original de F2H49 era "Demo characters Mixamo + escena narrativa completa" (Bloque 2.5 del `PLAN_SUBFASE_2_5.md`). Al intentar cargar los `*.fbx` de Mixamo descargados a `assets/characters/`, descubrimos que el motor no soportaba clips de animación sin malla adjunta (caso "Without Skin" de Mixamo, 1 FBX por clip). Sin esto el NPC se quedaba congelado en T-pose durante el diálogo. F2H49 se re-scopea a habilitar el pipeline standalone; la demo narrativa pasa a F2H50.
+
+**Decisión clave 1 — Cache externo (`externalBindCache` en `AnimatorComponent`) vs mutar `track.boneIndex`:** el bind pass calcula `outRemap[i] = skel.boneIndex(clip.tracks[i].boneName)` para cada track. El remap NO se escribe sobre `clip.tracks[i].boneIndex` (que queda permanentemente en `-1` para clips standalone) — se guarda en un `unordered_map<AnimationClipAssetId, vector<int>>` por entidad.
+
+- **Razón vs mutar el clip:** mutar haría el clip skeleton-específico. Caso de uso central de F2H49: el mismo `anim_idle.fbx` se reusa entre player y npc (mismo `mixamorig:*` naming pero esqueletos físicamente distintos en memoria). Si mutamos el primer bind contamina al segundo personaje.
+- **Razón vs vivir en una global por path:** el cache vive en el componente porque la invalidación es por-entidad (si una entidad swappea su mesh con un skeleton incompatible, solo SU cache es inválido). Cache global por clip-asset no podría discriminar.
+- **Trade-off aceptado:** cache duplicado entre N entidades con mismo (clip, skeleton). Despreciable — 1 entry × ~50 ints × N entidades es trivial.
+- **Invalidación:** responsabilidad del consumidor cuando swappea mesh (`anim.externalBindCache.clear()`). El runtime no detecta automáticamente — chequear `bones.size()` mid-frame por cada entidad sería caro y el caso de mesh-swap mid-frame es raro.
+
+**Decisión clave 2 — 2 funciones libres en `AnimationClip.h` (`bindClipToSkeleton` + `evaluateClipWithRemap`) vs nuevo método en `AnimationClip`:** las funciones quedan como inline en el namespace, no como miembros del struct.
+
+- **Razón:** mantener `AnimationClip::evaluate()` con su contrato Hito 19 intacto (lee `track.boneIndex` interno). Agregar un parámetro opcional `remap` mutaría su firma y obligaría a fixear callers downstream.
+- **Bonus:** las funciones libres siguen el patrón existente de `samplePosition/sampleRotation/sampleScale` del mismo header — naturalmente extensible.
+- **Header-only:** ambas funciones son inline, sin dependencias nuevas. Testeables en `mood_tests` sin enlazar `AnimationSystem`.
+
+**Decisión clave 3 — `resolveActiveClip` devuelve `ClipResolution { clip*, remap* }` en lugar de mutar `AnimatorComponent`:** la función signature pasa de `const AnimationClip*` a un struct con 2 punteros (clip + remap opcional).
+
+- **Razón:** keep `update()` con un único punto de decisión sobre qué `evaluate*` llamar. Si retornara solo el clip, habría que duplicar el lookup del remap en `update()`.
+- **`remap=nullptr` semantica:** "este es un clip embedded, usá el `evaluate()` legacy". `remap=&cacheEntry` → "este es standalone, usá `evaluateClipWithRemap`". Reglas claras.
+
+**Decisión clave 4 — Drop target en Inspector, NO en Viewport:** el `MOOD_ANIMCLIP_ASSET` payload se acepta solo desde el botón "Arrastrá un clip aquí" dentro del Inspector.
+
+- **Razón:** un clip standalone no es entidad espacial — no se puede "spawnear" en el mapa. Necesita un personaje al que animar. Drop en viewport no tiene semántica clara (¿crear entity nueva? ¿asignar a la entity bajo el cursor?).
+- **Alternativa diferida:** drop sobre la entidad bajo el cursor → add a `externalClips` de esa entity. Es nice-to-have UX, queda en backlog. Requiere extender el picking del viewport para detectar entity durante drag activo.
+
+**Decisión clave 5 — Alias auto-derivado del filename con strip `anim_` prefijo:** al droppear `characters/player/anim_walk.fbx`, el alias defecto es `walk` (no `anim_walk` ni el path completo).
+
+- **Razón:** el alias es lo que el gameplay/scripts usan para pedir reproducción (`animator.play("walk")`, `clipName = "walk"`). Mantenerlo corto y semántico mejora ergonomía. La convención `anim_<accion>.fbx` está documentada en `assets/characters/README.md`.
+- **Defensa anti-colisión:** si el alias defecto ya existe en `externalClips`, NO se agrega (tooltip "alias ya en uso"). El user puede renombrar el conflicto primero.
+
+**Decisión clave 6 — Filtro `anim_*.fbx` en tab Meshes (convención de nombre, no análisis de contenido):** la heurística para separar meshes de animaciones es el prefijo del filename, no inspeccionar el FBX.
+
+- **Razón:** análisis de contenido (chequear si `aiScene::mNumMeshes==0`) sería más robusto pero requiere abrir el archivo cada scan — caro y se ejecuta varias veces durante el ciclo de vida del editor. Convención de nombre es O(1) sobre el path.
+- **Trade-off aceptado:** un FBX sin animaciones llamado `anim_static.fbx` aparecería incorrectamente en Animations. El nombre es contractual con la convención del README — devs que ignoren la convención son responsables.
+
+**Decisión clave 7 — `AI_SCENE_FLAGS_INCOMPLETE` ignorado en el standalone loader:** el chequeo original `if (... AI_SCENE_FLAGS_INCOMPLETE != 0 ...) abort()` se removió.
+
+- **Razón:** assimp setea ese flag para FBX "Without Skin" porque no hay geometría — pero las animaciones están bien parseadas. El flag es informativo, no error. El check causó que los 6 clips iniciales devolvieran `[0 tracks, 0.00s]`. Quitar el check fue suficiente — `scene == nullptr` y `mRootNode == nullptr` siguen siendo guards reales.
+- **Documentado in-line** en el cpp para que nadie reintroduzca el chequeo "porque el mesh loader lo tiene".
+
+**Decisión clave 8 — Shipping de X/Y Bot demo rigs en el repo + `.gitignore` con excepciones:** los rigs Mixamo X Bot + Y Bot + sus 6 clips (~7.5 MB) se commitearon al repo.
+
+- **Razón:** out-of-the-box working characters. Un dev clonando el repo tiene personajes funcionales sin tener que registrarse en Mixamo + descargar manualmente. El motor "tiene contenido" desde el primer clone.
+- **`.gitignore` mantiene regla genérica `**/*.fbx`** (los FBX "With Skin + textures embedded" pueden pesar >100 MB, sobre el límite de GitHub) **pero exceptúa** `!assets/characters/player/*.fbx` y `!assets/characters/npc/*.fbx`. Devs que dropeen sus propios FBX en `hero/`, `enemy/`, etc., siguen gitignored.
+- **Licencia:** X Bot / Y Bot son redistribuibles bajo el uso libre de Mixamo. README documenta esto.
+
+**Alternativas descartadas:**
+
+- **Texturas embedded del FBX al cargar:** los X/Y Bot se ven magenta sin texture map. Limitación pre-existente del `MeshLoader` (no extrae `aiScene::mTextures`). Queda en PENDIENTES — ataque cuando emerja necesidad real o cuando F2H50 lo pida visualmente.
+- **Persistencia de `externalClips` en `.moodmap`:** deferred. Ningún demo lo usa todavía; F2H50 lo va a empujar cuando el NPC viva en escena persistida.
+- **Animation state machines / blending (clip A → clip B con cross-fade):** scope creep para F2H49. F2H50/F2H51 si emerge necesidad real (ej. locomoción idle ↔ walk ↔ run).
+- **`useRootMotion` flag por clip:** todos los clips de F2H49 son In Place (locomoción controlada por `CharacterController`). Si emerge cinemática o finishers con root motion, agregar como flag opcional por clip.
+- **Bumping schema version de `.moodmap`:** `AnimatorComponent` no se serializa todavía con los campos nuevos. Cuando se sume persistencia (F2H50+), bumpear schema `.moodmap` aditivo.
+
+**Condiciones de revisión:**
+
+- Si el bind pass se vuelve hot path (N personajes × M clips × K frames), considerar skeleton fingerprinting (bone count + hash de nombres) para detectar mesh swap sin pedir al consumidor que lo gestione.
+- Si emerge un caso donde el alias debería resolver dinámicamente (ej. múltiples versiones por género/edad: `walk_male`/`walk_female`), considerar un nivel de indirección — pero antes verificar si el caso real lo necesita.
+- Si Mixamo decide cambiar la convención `mixamorig:*` o agregar prefijos extra, la búsqueda por `boneName` cae sin warning (todos los tracks quedan `-1`). Agregar un warn de "0 tracks bindeados" después del primer evaluate sería defensivo.
+
+---
+
 ## 2026-05-10: F2H48.1 cierre — Serialización DialogComponent + DialogScriptHost (condition_lua reales pre-F2H49)
 
 **Contexto:** tras cerrar F2H48 listé 4 deudas como "diferidas" (inyección hooks Lua reales, persist dialogVars en save, mouse-clic en choices, persist DialogComponent en .moodmap). El dev preguntó: *"Y NO DEBERIAMOS HACER ESTO ANTES DE LO DE LA DEMO DE MIXAMO?"*. Triage honesto en respuesta identificó 2 bloqueantes para una demo F2H49 creíble (serialización + hooks Lua) y 2 YAGNI legítimos (save vars, mouse-clic). El dev confirmó scope completo (B): *"me gustaria que la demo sea completa como la B"*. F2H48.1 es mini-hito (~3h, sin tag mayor — bump patch a `v1.36.1`).

@@ -18,18 +18,48 @@ namespace Mood {
 
 namespace {
 
-// Devuelve el clip activo del MeshAsset segun el name del Animator. Si
-// `clipName` es vacio o no matchea, cae al primer clip. nullptr si el
-// asset no trae animaciones.
-const AnimationClip* resolveActiveClip(const MeshAsset& mesh,
-                                        const AnimatorComponent& anim) {
-    if (mesh.animations.empty()) return nullptr;
-    if (!anim.clipName.empty()) {
-        for (const AnimationClip& c : mesh.animations) {
-            if (c.name == anim.clipName) return &c;
+/// @brief Resultado de la resolucion del clip activo. `remap` no-null indica
+///        un clip standalone (F2H49) que debe evaluarse con
+///        `evaluateClipWithRemap`; null = clip embedded del MeshAsset y se
+///        usa la `evaluate()` interna que lee `track.boneIndex`.
+struct ClipResolution {
+    const AnimationClip* clip = nullptr;
+    const std::vector<int>* remap = nullptr;
+};
+
+/// @brief Resuelve el clip activo del Animator con prioridad:
+///        1) Alias en `externalClips` (F2H49) → clip standalone del
+///           AssetManager + remap cacheado en `externalBindCache`.
+///        2) Match por nombre en `mesh.animations` (clips embedded).
+///        3) Primer clip embedded como default.
+///
+///        El bind contra el esqueleto se hace lazy: la primera vez que
+///        un clipId aparece (o cuando el cache quedo stale por tamano)
+///        se llena `externalBindCache[clipId]` via `bindClipToSkeleton`.
+///        La invalidacion ante cambio de skeleton es responsabilidad del
+///        consumidor (limpia `externalBindCache.clear()` al swappear mesh).
+ClipResolution resolveActiveClip(const MeshAsset& mesh,
+                                  AnimatorComponent& anim,
+                                  AssetManager& assets) {
+    if (!anim.clipName.empty() && mesh.skeleton.has_value()) {
+        for (const auto& [alias, clipId] : anim.externalClips) {
+            if (alias != anim.clipName) continue;
+            const AnimationClip* clip = assets.getAnimationClip(clipId);
+            if (clip == nullptr || clip->tracks.empty()) break;
+            std::vector<int>& remap = anim.externalBindCache[clipId];
+            if (remap.size() != clip->tracks.size()) {
+                bindClipToSkeleton(*clip, *mesh.skeleton, remap);
+            }
+            return {clip, &remap};
         }
     }
-    return &mesh.animations.front();
+    if (mesh.animations.empty()) return {};
+    if (!anim.clipName.empty()) {
+        for (const AnimationClip& c : mesh.animations) {
+            if (c.name == anim.clipName) return {&c, nullptr};
+        }
+    }
+    return {&mesh.animations.front(), nullptr};
 }
 
 // Buffer scratch reutilizable para evitar realloc por entidad. No es
@@ -50,7 +80,8 @@ void AnimationSystem::update(Scene& scene, AssetManager& assets, f32 dt) {
             }
             const Skeleton& skeleton = *asset->skeleton;
 
-            const AnimationClip* clip = resolveActiveClip(*asset, anim);
+            const ClipResolution res = resolveActiveClip(*asset, anim, assets);
+            const AnimationClip* clip = res.clip;
             if (clip == nullptr || clip->duration <= 0.0f) {
                 // Sin clips: pose en bind. Igual computamos el skinning para
                 // que el shader skinneado vea matrices identity-equivalent.
@@ -78,7 +109,12 @@ void AnimationSystem::update(Scene& scene, AssetManager& assets, f32 dt) {
                 anim.time = std::clamp(anim.time, 0.0f, dur);
             }
 
-            clip->evaluate(anim.time, skeleton, g_localPose);
+            if (res.remap != nullptr) {
+                evaluateClipWithRemap(*clip, anim.time, skeleton, *res.remap,
+                                       g_localPose);
+            } else {
+                clip->evaluate(anim.time, skeleton, g_localPose);
+            }
             computeSkinningMatrices(skeleton, g_localPose,
                                      skel.skinningMatrices);
         });
