@@ -285,6 +285,12 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                 if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.trigger").c_str())) {
                     ui.requestSpawnTrigger();
                 }
+                // F2H47: demo de un .mooddialog pre-armado (3 nodos +
+                // 2 choices). Lo abre directo en el DialogEditor sin
+                // necesidad de crear un asset desde cero.
+                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.dialog").c_str())) {
+                    ui.requestSpawnDialogDemo();
+                }
 
                 ImGui::Separator();
                 if (ImGui::BeginMenu(I18n::T("editor.menu.help.stress").c_str())) {

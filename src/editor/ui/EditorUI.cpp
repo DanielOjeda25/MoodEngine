@@ -46,6 +46,9 @@ EditorUI::EditorUI() {
                 &m_console, &m_luaApi, &m_performanceHud,
                 &m_nodeGraphSandbox,  // F2H46
                 &m_narrativeIntro,    // F2H46
+                &m_dialogBrowser,     // F2H47
+                &m_dialogEditor,      // F2H47
+                &m_dialogInspector,   // F2H47
                 &m_scriptEditor, &m_materialEditor, &m_toolbar,
                 // F2H28: paneles del workspace "Editor de mapas".
                 // Arrancan ocultos; se hacen visibles via
@@ -64,6 +67,9 @@ EditorUI::EditorUI() {
     m_mapEditorTopBar.setEditorUi(this);  // F2H30 Bloque C
     m_visGroupsPanel.setEditorUi(this);  // F2H33
     m_nodeGraphSandbox.setEditorUi(this);  // F2H46
+    m_dialogBrowser.setEditorUi(this);     // F2H47
+    m_dialogEditor.setEditorUi(this);      // F2H47
+    m_dialogInspector.setEditorUi(this);   // F2H47
 
     // F2H7: el dockspace arranca apuntando al workspace default
     // (F2H22: Modelar, era Layout).
@@ -177,8 +183,11 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
     // F2H46: en cualquier workspace que NO sea "narrative", ocultamos
     // el Node Graph Sandbox (queda accesible desde Ver > Debug).
     auto hideNarrativePanels = [&]() {
-        setVisible("Node Graph Sandbox", false);  // F2H46
-        setVisible("Narrative Intro",    false);  // F2H46
+        setVisible("Node Graph Sandbox",       false);  // F2H46
+        setVisible("Narrative Intro",          false);  // F2H46
+        setVisible("Dialog Browser",           false);  // F2H47
+        setVisible("Dialog Editor",            false);  // F2H47
+        setVisible("Dialog Node Inspector",    false);  // F2H47
     };
 
     // F2H44: comparacion contra IDs ASCII (no labels visibles).
@@ -229,8 +238,14 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Script Editor",       false);
         setVisible("Material Editor",     false);
         setVisible("Tools",               false);
-        setVisible("Node Graph Sandbox",  true);
-        setVisible("Narrative Intro",     true);
+        // F2H47: el workspace Narrativa ahora muestra el flujo Dialog
+        // Editor por default. El Sandbox queda accesible desde Ver >
+        // Debug si se necesita inspeccionar el framework subyacente.
+        setVisible("Node Graph Sandbox",      false);
+        setVisible("Narrative Intro",         true);
+        setVisible("Dialog Browser",          true);  // F2H47
+        setVisible("Dialog Editor",           true);  // F2H47
+        setVisible("Dialog Node Inspector",   true);  // F2H47
         hideOrthoPanels();
     } else if (name == "map_editor") {
         // F2H28: workspace 4-viewport inspirado en Valve Hammer Editor.

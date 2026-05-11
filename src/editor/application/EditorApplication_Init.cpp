@@ -185,11 +185,11 @@ EditorApplication::EditorApplication() {
     // del workspace "Editor de mapas" comia el 60% del ancho dejando
     // al "Viewport" amontonado). Bump fuerza fresh layout que el
     // DockBuilder calcula con las dimensiones reales de la ventana.
-    // F2H46: bump v3 -> v5. v4 fue intermedio (window IDs mal apuntados
-    // en DockBuilder). v5 usa name() puro como ID (matchea con DockBuilder)
-    // y workspace "Narrativa" con layout limpio: Sandbox 70% / Intro 30%
-    // sin paneles de scene/3D que no aplican a contenido narrativo.
-    io.IniFilename = "imgui_layout_v5.ini";
+    // F2H46: v5 — workspace Narrativa con Sandbox 70% / Intro 30%.
+    // F2H47: bump v5 -> v6. Workspace Narrativa rediseñado con
+    // Dialog Editor central + Inspector right + Browser/Intro bottom.
+    // Layouts v5 mostrarian estos panels nuevos flotantes.
+    io.IniFilename = "imgui_layout_v6.ini";
 
     ImGui::StyleColorsDark();
 

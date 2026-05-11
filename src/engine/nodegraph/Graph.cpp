@@ -89,6 +89,31 @@ const Socket* Graph::findSocket(SocketId id) const {
     return nullptr;
 }
 
+bool Graph::removeSocket(SocketId id) {
+    if (id == k_invalidSocketId) return false;
+    // Borrar links incidentes (donde from o to == este socket).
+    m_links.erase(
+        std::remove_if(m_links.begin(), m_links.end(),
+            [id](const Link& l) { return l.from == id || l.to == id; }),
+        m_links.end());
+    // Buscar y borrar el socket del nodo dueno.
+    for (Node& n : m_nodes) {
+        auto itIn = std::find_if(n.inputs.begin(), n.inputs.end(),
+                                   [id](const Socket& s) { return s.id == id; });
+        if (itIn != n.inputs.end()) {
+            n.inputs.erase(itIn);
+            return true;
+        }
+        auto itOut = std::find_if(n.outputs.begin(), n.outputs.end(),
+                                    [id](const Socket& s) { return s.id == id; });
+        if (itOut != n.outputs.end()) {
+            n.outputs.erase(itOut);
+            return true;
+        }
+    }
+    return false;
+}
+
 // =============================================================
 // CRUD de links
 // =============================================================

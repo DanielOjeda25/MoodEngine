@@ -132,20 +132,25 @@ void buildMapEditorWorkspace(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("Side (ZY)",   dockBottomRight);  // bottom-right
 }
 
-/// @brief F2H46: workspace "Narrativa" — base de Sub-fase 2.5 (Sistemas
-///        de juego: Dialog Editor, Quest Editor, Inventory). v1 solo
-///        contiene el Node Graph Sandbox (infra) + panel "Narrative
-///        Intro" que explica que los editores reales vienen en proximos
-///        hitos. Layout limpio: Sandbox grande a la izquierda (~70%),
-///        intro panel a la derecha (~30%). Sin Inspector/Asset Browser/
-///        Console — son scene/3D tools, no narrativa.
+/// @brief F2H46/F2H47: workspace "Narrativa" — Sub-fase 2.5.
+///        v1 (F2H46): Sandbox + Intro placeholder.
+///        v2 (F2H47): Dialog Editor activo. Layout:
+///          - Dialog Editor: center (canvas grande).
+///          - Dialog Node Inspector: right column.
+///          - Dialog Browser + Narrative Intro: bottom (tabulados).
+///        Sin Inspector general / Asset Browser / Console — son scene/3D
+///        tools, no narrativa.
 void buildNarrativeWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockMain = dockspaceId;
     ImGuiID dockRight = ImGui::DockBuilderSplitNode(
-        dockMain, ImGuiDir_Right, 0.30f, nullptr, &dockMain);
+        dockMain, ImGuiDir_Right, 0.28f, nullptr, &dockMain);
+    ImGuiID dockBottom = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Down, 0.28f, nullptr, &dockMain);
 
-    ImGui::DockBuilderDockWindow("Node Graph Sandbox", dockMain);   // F2H46
-    ImGui::DockBuilderDockWindow("Narrative Intro",    dockRight);  // F2H46
+    ImGui::DockBuilderDockWindow("Dialog Editor",            dockMain);    // F2H47
+    ImGui::DockBuilderDockWindow("Dialog Node Inspector",    dockRight);   // F2H47
+    ImGui::DockBuilderDockWindow("Dialog Browser",           dockBottom);  // F2H47
+    ImGui::DockBuilderDockWindow("Narrative Intro",          dockBottom);  // F2H46 (tab)
 }
 
 /// @brief Dispatcher: elige el builder segun el nombre del workspace

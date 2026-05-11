@@ -6,12 +6,17 @@
 #include "editor/application/EditorApplication.h"
 
 #include "core/Log.h"
+#include "editor/panels/narrative/DialogBrowserPanel.h"   // F2H47
+#include "editor/panels/narrative/DialogEditorPanel.h"    // F2H47
+#include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/dialog/DialogAsset.h"                    // F2H47
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 
 #include <cstdio>
+#include <filesystem>
 #include <string>
 
 namespace Mood {
@@ -173,6 +178,76 @@ void EditorApplication::processSpawnFireParticlesRequest() {
         "lifetime={:.1f}-{:.1f}s, additive blend",
         em.emitRate, em.lifetimeMin, em.lifetimeMax);
     pushCreatedEntities({e}, "Spawn particulas demo");
+}
+
+void EditorApplication::processSpawnDialogDemoRequest() {
+    if (!m_ui.consumeSpawnDialogDemoRequest()) return;
+
+    namespace fs = std::filesystem;
+    const fs::path demoPath = fs::current_path() / "assets" / "dialogs" / "demo_intro.mooddialog";
+
+    // Si el demo ya existe en disco, lo abrimos directo. Si no, lo
+    // generamos programaticamente con 3 nodos + 2 choices y lo guardamos.
+    if (!fs::exists(demoPath)) {
+        Dialog::Asset a;
+        a.metadata().name = "demo_intro";
+        a.metadata().default_portrait = "characters/demo_npc.png";
+        a.metadata().default_audio_bus = "voice";
+
+        // Nodo 1: saludo inicial con 2 choices.
+        const NodeGraph::NodeId greet = a.addLine(glm::vec2(40.0f, 200.0f));
+        {
+            Dialog::Line line;
+            line.text_literal = "Hola viajero. Es peligroso ir solo... pero veo que tienes "
+                                "agallas. Que te trae a estas tierras?";
+            line.choices = {
+                Dialog::Choice{"", "Vengo a derrotar al dragon.", "", ""},
+                Dialog::Choice{"", "Solo estoy de paso.",          "", ""},
+            };
+            a.writeLine(greet, line);
+        }
+
+        // Nodo 2: respuesta heroica.
+        const NodeGraph::NodeId hero = a.addLine(glm::vec2(360.0f, 100.0f));
+        {
+            Dialog::Line line;
+            line.text_literal = "Valiente! Lleva esta espada — el dragon ha quemado mi aldea.";
+            // Sin choices: termina la conversacion via socket "continue".
+            a.writeLine(hero, line);
+        }
+
+        // Nodo 3: respuesta despreocupada.
+        const NodeGraph::NodeId casual = a.addLine(glm::vec2(360.0f, 300.0f));
+        {
+            Dialog::Line line;
+            line.text_literal = "Como quieras. Que los caminos te traten bien.";
+            a.writeLine(casual, line);
+        }
+
+        // Linkear: greet.choice_0 -> hero.in; greet.choice_1 -> casual.in.
+        const NodeGraph::Node* nGreet  = a.graph().findNode(greet);
+        const NodeGraph::Node* nHero   = a.graph().findNode(hero);
+        const NodeGraph::Node* nCasual = a.graph().findNode(casual);
+        if (nGreet && nHero && nCasual &&
+            nGreet->outputs.size() >= 2 &&
+            !nHero->inputs.empty() &&
+            !nCasual->inputs.empty()) {
+            a.graph().addLink(nGreet->outputs[0].id, nHero->inputs[0].id);
+            a.graph().addLink(nGreet->outputs[1].id, nCasual->inputs[0].id);
+        }
+
+        if (!a.saveToFile(demoPath)) {
+            Log::editor()->error("[DialogDemo] no pude guardar '{}'",
+                                   demoPath.generic_string());
+            return;
+        }
+        Log::editor()->info("[DialogDemo] generado en '{}'",
+                              demoPath.generic_string());
+    }
+
+    // Refrescar el browser + abrir en el editor.
+    m_ui.dialogBrowser().refresh();
+    m_ui.dialogEditor().openFromFile(demoPath);
 }
 
 void EditorApplication::processSpawnTriggerRequest() {

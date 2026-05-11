@@ -228,6 +228,7 @@ private:
     void processSpawnAnimatedCharacterRequest(); // Hito 19
     void processSpawnFireParticlesRequest();     // Hito 29
     void processSpawnTriggerRequest();           // Hito 33
+    void processSpawnDialogDemoRequest();        // F2H47
     void processSpawnStressTrisRequest();        // F2H2
     void processSpawnFullStressSceneRequest();   // F2H42
 

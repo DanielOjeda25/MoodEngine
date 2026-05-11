@@ -17,6 +17,9 @@
 #include "editor/panels/debug/NodeGraphSandboxPanel.h"  // F2H46
 #include "editor/panels/debug/PerformanceHudPanel.h"
 #include "editor/panels/narrative/NarrativeIntroPanel.h"  // F2H46
+#include "editor/panels/narrative/DialogBrowserPanel.h"    // F2H47
+#include "editor/panels/narrative/DialogEditorPanel.h"     // F2H47
+#include "editor/panels/narrative/DialogNodeInspectorPanel.h"  // F2H47
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/assets/MaterialEditorPanel.h"  // Hito 42
 #include "editor/panels/assets/ScriptEditorPanel.h"
@@ -224,6 +227,13 @@ public:
     ///        triangulos / entity count). EditorApplication le pasa las
     ///        metricas cada frame con `setMetrics`.
     PerformanceHudPanel& performanceHud() { return m_performanceHud; }
+
+    /// @brief F2H47: accessors a los panels de la sub-fase 2.5
+    ///        (Narrativa). Inspector contextual + Browser hablan con
+    ///        Editor via estos getters.
+    DialogEditorPanel&         dialogEditor()    { return m_dialogEditor; }
+    DialogBrowserPanel&        dialogBrowser()   { return m_dialogBrowser; }
+    DialogNodeInspectorPanel&  dialogInspector() { return m_dialogInspector; }
 
     /// @brief Hito 27: HistoryStack del editor inyectado desde
     ///        EditorApplication. La MenuBar lo usa para los items
@@ -439,6 +449,17 @@ public:
         return r;
     }
 
+    /// @brief F2H47: request para cargar un .mooddialog demo (3 nodos
+    ///        + 2 choices) y abrirlo en el DialogEditor. Si el archivo
+    ///        ya existe en assets/dialogs/, lo abre; si no, lo genera
+    ///        programaticamente en disk + lo abre.
+    void requestSpawnDialogDemo() { m_spawnDialogDemoRequested = true; }
+    bool consumeSpawnDialogDemoRequest() {
+        const bool r = m_spawnDialogDemoRequested;
+        m_spawnDialogDemoRequested = false;
+        return r;
+    }
+
     /// @brief F2H42: request para spawnear UNA escena completa de stress
     ///        (cubos + 64 luces + esferas PBR + sombras + 2 chars
     ///        animados + particulas + trigger). El handler setea todos
@@ -591,7 +612,10 @@ private:
     LuaApiPanel m_luaApi;
     PerformanceHudPanel m_performanceHud;  // F2H2
     NodeGraphSandboxPanel m_nodeGraphSandbox;  // F2H46
-    NarrativeIntroPanel   m_narrativeIntro;    // F2H46
+    NarrativeIntroPanel       m_narrativeIntro;    // F2H46
+    DialogBrowserPanel        m_dialogBrowser;     // F2H47
+    DialogEditorPanel         m_dialogEditor;      // F2H47
+    DialogNodeInspectorPanel  m_dialogInspector;   // F2H47
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     MaterialEditorPanel m_materialEditor;  // Hito 42
     Toolbar m_toolbar;  // F2H22: tools de edicion (gizmo modes + brushes + face)
@@ -634,6 +658,7 @@ private:
     bool m_openDemoMapRequested = false; // F2H44: Welcome modal demo
     bool m_spawnFireParticlesRequested = false;     // Hito 29
     bool m_spawnTriggerRequested = false;           // Hito 33
+    bool m_spawnDialogDemoRequested = false;        // F2H47
     int  m_spawnStressTrisRequested = 0;             // F2H2 (target tris)
     bool m_spawnFullStressSceneRequested = false;   // F2H42
     bool m_recentsDirty = false; // Hito 15 polish: edicion manual de la lista de recientes

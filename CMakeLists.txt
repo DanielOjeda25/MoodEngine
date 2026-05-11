@@ -368,6 +368,9 @@ add_library(mood_engine_lib STATIC
     src/engine/nodegraph/Graph.cpp           # F2H46
     src/engine/nodegraph/NodeGraphEditor.cpp # F2H46
 
+    src/engine/dialog/DialogAsset.cpp        # F2H47
+    src/engine/dialog/DialogValidator.cpp    # F2H47
+
     src/engine/packaging/PackageBuilder.cpp
 
     src/engine/physics/world/PhysicsWorld.cpp
@@ -546,7 +549,10 @@ add_executable(MoodEditor
     src/editor/panels/debug/LuaApiPanel.cpp
     src/editor/panels/debug/PerformanceHudPanel.cpp
     src/editor/panels/debug/NodeGraphSandboxPanel.cpp     # F2H46
-    src/editor/panels/narrative/NarrativeIntroPanel.cpp   # F2H46
+    src/editor/panels/narrative/NarrativeIntroPanel.cpp        # F2H46
+    src/editor/panels/narrative/DialogBrowserPanel.cpp         # F2H47
+    src/editor/panels/narrative/DialogEditorPanel.cpp          # F2H47
+    src/editor/panels/narrative/DialogNodeInspectorPanel.cpp   # F2H47
     src/editor/panels/assets/ScriptEditorPanel.cpp
     src/editor/panels/assets/MaterialEditorPanel.cpp
 )

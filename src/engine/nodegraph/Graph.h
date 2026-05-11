@@ -112,6 +112,14 @@ public:
     /// @brief Busqueda O(n) por ID. nullptr si no existe.
     const Socket* findSocket(SocketId id) const;
 
+    /// @brief Borra el socket + todos los links incidentes a el. Util
+    ///        para casos donde el contenido del nodo dicta cuantos
+    ///        sockets debe tener (ej. Dialog: 1 socket output por
+    ///        choice del nodo dialog_line; al borrar un choice del
+    ///        Inspector, este metodo borra el socket asociado).
+    /// @return true si borro, false si el socket no existia.
+    bool removeSocket(SocketId id);
+
     // ----- CRUD de links -----
 
     /// @brief Conecta `from` (output) a `to` (input). Reglas v1:
