@@ -31,21 +31,53 @@ Blender.
 
 ```
 assets/characters/
-  npc_demo/
-    npc_demo.fbx          ← personaje base con T-pose
-    anim_idle.fbx         ← clip idle (without skin)
-    anim_talk.fbx         ← clip talking (without skin)
-    textures/             ← texturas externas que Mixamo zippea aparte
-      diffuse.png
+  player/
+    player.fbx              ← personaje base con T-pose + skin
+    anim_idle.fbx           ← clip idle (without skin)
+    anim_walk.fbx           ← clip walking In Place
+    anim_wave.fbx           ← clip standing greeting
+  npc/
+    npc.fbx                 ← personaje base con T-pose + skin
+    anim_idle.fbx           ← clip idle (without skin)
+    anim_talk.fbx           ← clip talking
+    anim_look_around.fbx    ← clip look around
+  textures/                 ← texturas externas que Mixamo zippea aparte
+    diffuse.png
 ```
+
+**Convención de nombres**:
+- `<carpeta>/<carpeta>.fbx` para el rig base (skin + T-pose).
+- `<carpeta>/anim_<accion>.fbx` para clips standalone (sin skin, In Place).
+- Locomoción (walk/run/jump) **siempre In Place** — el `CharacterController`
+  desplaza, la animación solo "pisa".
+
+## Demos incluidos en el repo
+
+Por default los `.fbx` están gitignorados (Mixamo "with skin + textures
+embedded" puede pesar >100 MB, sobre el límite de GitHub). Excepción: los
+rigs **X Bot** (player) y **Y Bot** (npc) — pesan ~7.5 MB total y son
+redistribuibles bajo el uso libre de Mixamo, así que vienen commiteados
+para que el motor tenga personajes funcionales out-of-the-box:
+
+```
+assets/characters/player/*.fbx   ← X Bot + 3 clips
+assets/characters/npc/*.fbx      ← Y Bot + 3 clips
+```
+
+Si dropeás tus propios FBX en otras subcarpetas (`assets/characters/hero/`,
+`assets/characters/enemy/`, etc.), van a quedar gitignorados igual que antes.
 
 ## Cómo carga el motor
 
-- `AssetManager::loadMesh("characters/npc_demo/npc_demo.fbx")` devuelve un
-  `MeshAsset` con `submeshes`, `skeleton` y la primera animación embebida.
-- Los clips adicionales se cargan como meshes separados — `parseAnimations`
-  les extrae el `AnimationClip` y se asigna al mismo esqueleto compartido.
-  (Hito futuro: cargar solo animation tracks sin reabrir geometry).
+- **Rig base** (skin + T-pose):
+  `AssetManager::loadMesh("characters/player/player.fbx")` devuelve un
+  `MeshAsset` con `submeshes`, `skeleton` y (si trae) la primera animación
+  embebida.
+- **Clips standalone** (sin skin, F2H49):
+  `AssetManager::loadAnimationClip("characters/player/anim_walk.fbx")`
+  devuelve un `AnimationClipAsset` con tracks por `boneName`. Al bindearse
+  contra un esqueleto concreto, el `AnimationSystem` resuelve los nombres
+  a índices de bone (cacheado por skeleton).
 
 ## Nombres de clips
 

@@ -32,12 +32,18 @@ CMakeUserPresets.json
 # instalado del dev y de los mtimes de los sources.
 assets/.cache/
 
-# F2H49: FBX de personajes (Mixamo). Pesan >100MB cuando vienen con
-# texturas embedded y GitHub bloquea archivos individuales >100MB.
-# Cada dev baja los suyos siguiendo assets/characters/README.md.
-# README, configs .json, .moodprefab y demas si se commitean.
+# F2H49: FBX de personajes (Mixamo). Por default gitignorados porque
+# los rigs "con piel + texturas embedded" suelen pesar >100MB y GitHub
+# bloquea archivos individuales >100MB. Cada dev baja los suyos
+# siguiendo assets/characters/README.md.
+#
+# Excepcion: los rigs demo X Bot / Y Bot (~7.5 MB total, redistribuibles
+# bajo el uso libre de Mixamo) si se commitean para que el motor tenga
+# personajes funcionales out-of-the-box.
 assets/characters/**/*.fbx
 assets/characters/**/*.FBX
+!assets/characters/player/*.fbx
+!assets/characters/npc/*.fbx
 
 # Logs
 logs/
