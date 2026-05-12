@@ -163,3 +163,93 @@ TEST_CASE("Lua hud: dos scripts comparten el mismo GameState") {
     std::filesystem::remove(pathReader);
     GameState::reset();
 }
+
+// ============================================================
+// F2H52 Bloque I: hud.open_container / close_container
+// ============================================================
+
+#include "engine/scripting/bindings/LuaBindings.h"
+
+TEST_CASE("hud.open_container: setea container_open + container_target + enable widget") {
+    GameState::reset();
+    Scene scene;
+    Entity chest = scene.createEntity("chest");
+    chest.addComponent<InventoryComponent>();
+
+    sol::state lua;
+    lua.open_libraries(sol::lib::base);
+    setupLuaBindings(lua, chest);
+
+    REQUIRE_FALSE(GameState::hud().container_open);
+    REQUIRE_FALSE(GameState::hud().isWidgetEnabled("inventory_panel"));
+
+    lua["target"] = chest;
+    lua.safe_script("hud.open_container(target)");
+
+    CHECK(GameState::hud().container_open);
+    CHECK(GameState::hud().container_target ==
+          static_cast<u32>(chest.handle()));
+    CHECK(GameState::hud().isWidgetEnabled("inventory_panel"));
+
+    GameState::reset();
+}
+
+TEST_CASE("hud.close_container: limpia container_open sin afectar widget") {
+    GameState::reset();
+    Scene scene;
+    Entity chest = scene.createEntity("chest");
+    chest.addComponent<InventoryComponent>();
+
+    sol::state lua;
+    lua.open_libraries(sol::lib::base);
+    setupLuaBindings(lua, chest);
+
+    lua["target"] = chest;
+    lua.safe_script("hud.open_container(target)");
+    REQUIRE(GameState::hud().container_open);
+
+    lua.safe_script("hud.close_container()");
+    CHECK_FALSE(GameState::hud().container_open);
+    // close_container NO desactiva el widget (el dev puede preferir
+    // dejarlo abierto en single-mode tras cerrar el cofre).
+    CHECK(GameState::hud().isWidgetEnabled("inventory_panel"));
+
+    GameState::reset();
+}
+
+TEST_CASE("hud.has_container + hud.container_entity") {
+    GameState::reset();
+    Scene scene;
+    Entity chest = scene.createEntity("chest");
+    chest.addComponent<InventoryComponent>();
+
+    sol::state lua;
+    lua.open_libraries(sol::lib::base);
+    setupLuaBindings(lua, chest);
+
+    lua.safe_script(R"(
+        v_has_pre = hud.has_container()
+        v_ent_pre = hud.container_entity()  -- nil sin container
+    )");
+    CHECK(lua["v_has_pre"].get<bool>() == false);
+    CHECK(lua["v_ent_pre"].get<sol::optional<u32>>().has_value() == false);
+
+    lua["target"] = chest;
+    lua.safe_script(R"(
+        hud.open_container(target)
+        v_has_post = hud.has_container()
+        v_ent_post = hud.container_entity()
+    )");
+    CHECK(lua["v_has_post"].get<bool>() == true);
+    CHECK(lua["v_ent_post"].get<u32>() == static_cast<u32>(chest.handle()));
+
+    GameState::reset();
+}
+
+TEST_CASE("GameState::reset() limpia container_open + container_target") {
+    GameState::hud().container_open   = true;
+    GameState::hud().container_target = 42u;
+    GameState::reset();
+    CHECK_FALSE(GameState::hud().container_open);
+    CHECK(GameState::hud().container_target == 0u);
+}

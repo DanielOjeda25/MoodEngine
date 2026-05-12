@@ -870,18 +870,19 @@ void drawInventoryPanel(const HudContext& ctx) {
 
     auto& inv = player.getComponent<InventoryComponent>().state;
 
-    // F2H52 Bloque I: container split. Si hud.container_target apunta a
+    // F2H52 Bloque I: container split. Si hud.container_open apunta a
     // un entity vivo con InventoryComponent, renderear split mode en vez
     // del single-mode. Si el handle es stale (entity borrada / sin
     // inventory), auto-close para volver a single-mode sin warn ruidoso.
     Entity containerEntity;
-    if (ctx.hud != nullptr && ctx.hud->container_target != 0) {
+    if (ctx.hud != nullptr && ctx.hud->container_open) {
         auto& reg = ctx.scene->registry();
         const entt::entity h =
             static_cast<entt::entity>(ctx.hud->container_target);
         if (reg.valid(h) && reg.all_of<InventoryComponent>(h)) {
             containerEntity = Entity(h, ctx.scene);
         } else {
+            ctx.hud->container_open   = false;
             ctx.hud->container_target = 0;
         }
     }

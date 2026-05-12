@@ -150,14 +150,23 @@ void setupLuaBindings(sol::state& lua, Entity self,
     // del widget para que el dev no tenga que llamar setWidget aparte.
     hudTable.set_function("open_container",
         [](Entity e) {
-            GameState::hud().container_target =
-                static_cast<u32>(e.handle());
+            GameState::hud().container_open   = true;
+            GameState::hud().container_target = static_cast<u32>(e.handle());
             GameState::hud().widget_enabled["inventory_panel"] = true;
         });
     hudTable.set_function("close_container",
-        []() { GameState::hud().container_target = 0; });
+        []() {
+            GameState::hud().container_open   = false;
+            GameState::hud().container_target = 0;
+        });
     hudTable.set_function("container_entity",
-        []() { return GameState::hud().container_target; });
+        []() -> sol::optional<u32> {
+            auto& h = GameState::hud();
+            if (!h.container_open) return sol::nullopt;
+            return h.container_target;
+        });
+    hudTable.set_function("has_container",
+        []() { return GameState::hud().container_open; });
 
     // --- engine.exposed (Hito 24) ---
     // Registra una exposed property + devuelve el override de la

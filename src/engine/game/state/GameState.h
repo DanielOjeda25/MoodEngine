@@ -108,14 +108,18 @@ struct HudState {
     };
 
     // --- F2H52 Bloque I: container split del inventory_panel ---
+    /// @brief Si true, el widget `inventory_panel` renderea en split mode
+    ///        (player izquierda, container derecha). Drag entre lados
+    ///        transfiere 1 unidad. False = single mode default.
+    ///        Usamos un bool separado porque entt::entity 0 es un handle
+    ///        VALIDO (la primera entity creada) — no podemos usar 0 como
+    ///        sentinel de "no container".
+    bool container_open = false;
     /// @brief Handle del entity-container actualmente abierto (cofre, mesa
-    ///        de comercio, drop pile, etc.). 0 = no hay container.
-    ///        Cuando != 0 y el entity tiene `InventoryComponent`, el widget
-    ///        `inventory_panel` renderea en modo split: inventario del
-    ///        player a la izquierda, del container a la derecha. Drag
-    ///        entre ambos lados transfiere 1 unidad.
-    ///        El raw u32 es el underlying de `entt::entity` — el caller
-    ///        (Lua binding `hud.open_container`) hace el cast.
+    ///        de comercio, drop pile, etc.). Solo valido si
+    ///        `container_open == true`. Es el u32 underlying de
+    ///        `entt::entity` — el caller (Lua binding `hud.open_container`)
+    ///        hace el cast.
     u32 container_target = 0;
 
     /// @brief Ayuda al overlay: testea si un widget esta enabled

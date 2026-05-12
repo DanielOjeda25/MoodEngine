@@ -447,3 +447,100 @@ TEST_CASE("Hooks::setXxxHook(nullptr): limpia el callback") {
     // (Si llega como sol::nil_t, sol::function::valid()==false.)
     CHECK_FALSE(Inventory::Hooks::hasPickupHook());
 }
+
+// ============================================================
+// F2H52 Bloque J: inventory.set_renderer / clear_renderer
+// ============================================================
+
+TEST_CASE("inventory.set_renderer: registra hook + hasRenderHook=true") {
+    auto fx = makeFixture("renderer_set");
+    CHECK_FALSE(Inventory::Hooks::hasRenderHook());
+    fx->lua.safe_script(R"(
+        inventory.set_renderer(function(player, container)
+            -- noop
+        end)
+    )");
+    CHECK(Inventory::Hooks::hasRenderHook());
+}
+
+TEST_CASE("inventory.set_renderer: invokeRender pasa player + nil container") {
+    auto fx = makeFixture("renderer_invoke_nil");
+    fx->lua["calls"] = 0;
+    fx->lua["got_player_tag"] = "";
+    fx->lua["got_container_nil"] = false;
+    fx->lua.safe_script(R"(
+        inventory.set_renderer(function(player, container)
+            calls = calls + 1
+            got_player_tag = player.tag
+            got_container_nil = (container == nil)
+        end)
+    )");
+    Inventory::Hooks::invokeRender(fx->player, Entity{});  // container vacio
+    CHECK(fx->lua["calls"].get<int>() == 1);
+    CHECK(fx->lua["got_player_tag"].get<std::string>() == "Player");
+    CHECK(fx->lua["got_container_nil"].get<bool>() == true);
+}
+
+TEST_CASE("inventory.set_renderer: invokeRender con container valido lo pasa") {
+    auto fx = makeFixture("renderer_invoke_container");
+    Entity chest = fx->scene.createEntity("chest");
+    chest.addComponent<InventoryComponent>();
+    fx->lua["got_container_tag"] = "";
+    fx->lua["got_container_nil"] = true;
+    fx->lua.safe_script(R"(
+        inventory.set_renderer(function(player, container)
+            if container ~= nil then
+                got_container_tag = container.tag
+                got_container_nil = false
+            end
+        end)
+    )");
+    Inventory::Hooks::invokeRender(fx->player, chest);
+    CHECK(fx->lua["got_container_nil"].get<bool>() == false);
+    CHECK(fx->lua["got_container_tag"].get<std::string>() == "chest");
+}
+
+TEST_CASE("inventory.clear_renderer: limpia el hook") {
+    auto fx = makeFixture("renderer_clear");
+    fx->lua.safe_script(R"(
+        inventory.set_renderer(function(p, c) end)
+    )");
+    REQUIRE(Inventory::Hooks::hasRenderHook());
+    fx->lua.safe_script("inventory.clear_renderer()");
+    CHECK_FALSE(Inventory::Hooks::hasRenderHook());
+}
+
+TEST_CASE("inventory.set_renderer(nil): tambien limpia el hook") {
+    auto fx = makeFixture("renderer_set_nil");
+    fx->lua.safe_script(R"(
+        inventory.set_renderer(function(p, c) end)
+    )");
+    REQUIRE(Inventory::Hooks::hasRenderHook());
+    fx->lua.safe_script("inventory.set_renderer(nil)");
+    CHECK_FALSE(Inventory::Hooks::hasRenderHook());
+}
+
+TEST_CASE("Hooks::clearAll: tambien limpia el render hook") {
+    auto fx = makeFixture("renderer_clearall");
+    fx->lua.safe_script(R"(
+        inventory.on_pickup(function(p, q) end)
+        inventory.set_renderer(function(p, c) end)
+    )");
+    REQUIRE(Inventory::Hooks::hasPickupHook());
+    REQUIRE(Inventory::Hooks::hasRenderHook());
+    Inventory::Hooks::clearAll();
+    CHECK_FALSE(Inventory::Hooks::hasPickupHook());
+    CHECK_FALSE(Inventory::Hooks::hasRenderHook());
+}
+
+TEST_CASE("inventory.set_renderer: error en callback se logea y NO crashea") {
+    auto fx = makeFixture("renderer_error");
+    fx->lua.safe_script(R"(
+        inventory.set_renderer(function(player, container)
+            error("simulated render fail")
+        end)
+    )");
+    // No deberia tirar excepcion al invocar — el binding usa
+    // protected_function_result + warn al log.
+    CHECK_NOTHROW(Inventory::Hooks::invokeRender(fx->player, Entity{}));
+}
