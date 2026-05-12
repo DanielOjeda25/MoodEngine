@@ -1,10 +1,16 @@
 #include "engine/game/overlay/GameOverlay.h"
 
 #include "core/Log.h"
+#include "engine/assets/manager/AssetManager.h"  // F2H52 H
 #include "engine/dialog/DialogAsset.h"   // F2H48
 #include "engine/dialog/DialogSystem.h"  // F2H48
 #include "engine/game/state/GameState.h"
 #include "engine/i18n/I18n.h"  // F2H43
+#include "engine/inventory/InventoryState.h"   // F2H52 H
+#include "engine/inventory/ItemAsset.h"        // F2H52 H
+#include "engine/scene/components/Components.h"  // F2H52 H
+#include "engine/scene/core/Entity.h"            // F2H52 H
+#include "engine/scene/core/Scene.h"             // F2H52 H
 
 #include <imgui.h>
 
@@ -835,6 +841,166 @@ void drawDialogBox(const HudContext& ctx) {
     }
 }
 
+// F2H52 H: INVENTORY PANEL — panel del inventario del player.
+// Toggle con tecla Tab (input handler en el caller cambia
+// widget_enabled["inventory_panel"]) o via Lua `hud.set_widget`.
+// Default OFF. Skipea silenciosamente si scene/assets son null o
+// no hay entity con tag "Player" + InventoryComponent.
+//
+// 3 modes segun `InventoryComponent.state.mode`:
+//   - FlatList: tabla con icono(reservado) + nombre + qty.
+//   - Grid2D: grid WxH de cells (TODO H3).
+//   - EquipmentSlots: lista vertical labeled (TODO H4).
+//
+// Engine-grade: el widget SOLO lee `Inventory::State` y `Inventory::Asset`.
+// Las acciones (use/drop) van por right-click menu (H5) que invoca los
+// hooks Lua o llama directo a `inventory.remove` para drop.
+namespace {
+
+/// @brief Busca el primer entity con TagComponent.name == "Player" y
+///        InventoryComponent. Devuelve Entity falsy si no esta.
+Entity findPlayerForHud(Scene& scene) {
+    Entity result;
+    scene.forEach<TagComponent>([&](Entity e, TagComponent& tag) {
+        if (result) return;
+        if (tag.name == "Player" && e.hasComponent<InventoryComponent>()) {
+            result = e;
+        }
+    });
+    return result;
+}
+
+/// @brief Nombre legible del item (mismo orden de fallback que el editor):
+///        name_literal -> i18n(name_key) -> id -> path stem -> "(unknown)".
+std::string displayNameOfItem(const Inventory::Asset& asset,
+                               const std::string& pathFallback) {
+    if (!asset.name_literal.empty()) return asset.name_literal;
+    if (!asset.name_key.empty())     return Mood::I18n::T(asset.name_key);
+    if (!asset.id.empty())           return asset.id;
+    if (!pathFallback.empty()) {
+        // Stem del path (sin extension).
+        const auto slash = pathFallback.find_last_of('/');
+        const auto dot   = pathFallback.find_last_of('.');
+        const auto beg   = (slash == std::string::npos) ? 0 : slash + 1;
+        const auto end   = (dot == std::string::npos || dot < beg)
+                                ? pathFallback.size() : dot;
+        return pathFallback.substr(beg, end - beg);
+    }
+    return "(unknown)";
+}
+
+/// @brief Renderea el modo FlatList: lista vertical de filas
+///        "nombre x qty". Cada fila es un rect clickeable (placeholder
+///        para H5 — right-click menu).
+void drawInventoryFlatList(const HudContext& ctx,
+                            const Inventory::State& inv,
+                            AssetManager& assets) {
+    constexpr float panelW = 360.0f;
+    constexpr float rowH   = 28.0f;
+    constexpr float padX   = 12.0f;
+    constexpr float padY   = 10.0f;
+    constexpr float titleH = 28.0f;
+
+    const int nRows = static_cast<int>(inv.entries.size());
+    const float panelH = titleH + padY + std::max(1, nRows) * rowH + padY;
+    const float panelX = ctx.x0 + ctx.w - panelW - 20.0f;
+    const float panelY = ctx.y0 + 80.0f;
+
+    // Background + border.
+    ctx.dl->AddRectFilled(ImVec2(panelX, panelY),
+                           ImVec2(panelX + panelW, panelY + panelH),
+                           palette::k_bg_panel, 4.0f);
+    ctx.dl->AddRect(ImVec2(panelX, panelY),
+                     ImVec2(panelX + panelW, panelY + panelH),
+                     palette::k_border, 4.0f, 0, 1.5f);
+
+    // Titulo.
+    const std::string title = I18n::T("hud.inventory.title");
+    drawTextCentered(ctx.dl, panelX + panelW * 0.5f, panelY + 6.0f,
+                      title.c_str(), palette::k_orange);
+
+    if (inv.entries.empty()) {
+        const std::string empty = I18n::T("hud.inventory.empty");
+        drawTextCentered(ctx.dl, panelX + panelW * 0.5f,
+                          panelY + titleH + padY + 4.0f,
+                          empty.c_str(), palette::k_white_dim);
+        return;
+    }
+
+    // Filas.
+    float y = panelY + titleH + padY;
+    for (const auto& e : inv.entries) {
+        const Inventory::Asset* asset = assets.getItem(e.itemId);
+        const std::string path = assets.itemPathOf(e.itemId);
+        const std::string name = asset != nullptr
+            ? displayNameOfItem(*asset, path)
+            : path;
+
+        // Hover detection (placeholder para tooltip H5).
+        const ImVec2 rowA(panelX + padX, y);
+        const ImVec2 rowB(panelX + panelW - padX, y + rowH - 4.0f);
+        const bool hovered = ImGui::IsMouseHoveringRect(rowA, rowB);
+        if (hovered) {
+            ctx.dl->AddRectFilled(rowA, rowB, palette::k_orange_dim, 2.0f);
+        }
+
+        // Nombre a la izquierda.
+        ctx.dl->AddText(ImVec2(panelX + padX + 4.0f, y + 4.0f),
+                          palette::k_white, name.c_str());
+
+        // qty a la derecha (formato "x N", solo si > 1).
+        if (e.quantity > 1) {
+            char qtyBuf[32];
+            std::snprintf(qtyBuf, sizeof(qtyBuf), "x %d", e.quantity);
+            const ImVec2 sz = ImGui::CalcTextSize(qtyBuf);
+            ctx.dl->AddText(
+                ImVec2(panelX + panelW - padX - 4.0f - sz.x, y + 4.0f),
+                palette::k_yellow, qtyBuf);
+        }
+
+        y += rowH;
+    }
+}
+
+/// @brief Placeholder para Grid2D — sera H3.
+void drawInventoryGrid2D(const HudContext& ctx,
+                          const Inventory::State&,
+                          AssetManager&) {
+    drawTextCentered(ctx.dl,
+                      ctx.x0 + ctx.w * 0.5f, ctx.y0 + ctx.h * 0.5f,
+                      "[Grid2D inventory — TODO H3]", palette::k_yellow);
+}
+
+/// @brief Placeholder para EquipmentSlots — sera H4.
+void drawInventoryEquipment(const HudContext& ctx,
+                             const Inventory::State&,
+                             AssetManager&) {
+    drawTextCentered(ctx.dl,
+                      ctx.x0 + ctx.w * 0.5f, ctx.y0 + ctx.h * 0.5f,
+                      "[EquipmentSlots inventory — TODO H4]", palette::k_yellow);
+}
+
+} // namespace
+
+/// @brief Widget principal del inventory_panel. Decide el modo y delega.
+void drawInventoryPanel(const HudContext& ctx) {
+    // Defensive: sin scene o sin assets no podemos resolver nada.
+    if (ctx.scene == nullptr || ctx.assets == nullptr) return;
+
+    Entity player = findPlayerForHud(*ctx.scene);
+    if (!player) return;
+
+    const auto& inv = player.getComponent<InventoryComponent>().state;
+    switch (inv.mode) {
+        case Inventory::LayoutMode::FlatList:
+            drawInventoryFlatList(ctx, inv, *ctx.assets); break;
+        case Inventory::LayoutMode::Grid2D:
+            drawInventoryGrid2D(ctx, inv, *ctx.assets); break;
+        case Inventory::LayoutMode::EquipmentSlots:
+            drawInventoryEquipment(ctx, inv, *ctx.assets); break;
+    }
+}
+
 // =============================================================
 // REGISTRY DE WIDGETS — orden = orden de dibujado (back-to-front)
 // =============================================================
@@ -857,6 +1023,7 @@ const HudWidget k_widgets[] = {
     { "interact_prompt",  &drawInteractPrompt },
     { "pickup_queue",     &drawPickupNotifications },
     { "dialog_box",       &drawDialogBox },        // F2H48
+    { "inventory_panel",  &drawInventoryPanel },   // F2H52 H (default OFF)
     { "crt_scanline",     &drawCrtScanline },      // F2H41 (default OFF)
 };
 
@@ -871,7 +1038,9 @@ void draw(::ImDrawList* dl,
           float dt,
           const glm::vec3& cameraForward,
           const char* exitButtonLabel,
-          const std::function<void()>& onExitRequested) {
+          const std::function<void()>& onExitRequested,
+          Scene* scene,
+          AssetManager* assets) {
     HudState& hudRef = GameState::hud();
     HudContext ctx;
     ctx.dl = dl;
@@ -880,6 +1049,8 @@ void draw(::ImDrawList* dl,
     ctx.hud = &hudRef;
     ctx.now = static_cast<float>(ImGui::GetTime());
     ctx.cameraForward = cameraForward;
+    ctx.scene = scene;     // F2H52 H: inventory_panel + futuros widgets
+    ctx.assets = assets;
 
     // Iterar widgets enabled. El default es enabled; Lua puede togglear.
     for (const HudWidget& wd : k_widgets) {

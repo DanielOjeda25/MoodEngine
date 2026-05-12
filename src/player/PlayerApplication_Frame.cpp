@@ -126,7 +126,8 @@ void PlayerApplication::endFrame() {
                                        "[MainMenu] Exit to menu -> back to MainMenu");
                                    m_inMainMenu = true;
                                    GameState::paused() = false;
-                               });
+                               },
+                               m_scene.get(), m_assetManager.get());  // F2H52 H
         }
 
         ImGui::End();
@@ -510,6 +511,19 @@ int PlayerApplication::run() {
                 Mood::Inventory::ItemPickupSystem::tick(
                     *m_scene, *m_assetManager,
                     eJustPressed, dialogActive);
+            }
+
+            // F2H52 Bloque H: Tab togglea el widget `inventory_panel`.
+            // Flanco up->down. Skipea si hay dialog abierto.
+            {
+                const bool tabPressed = frameKeys[SDL_SCANCODE_TAB] != 0;
+                const bool tabJustPressed = tabPressed && !m_tabPrevFrame;
+                m_tabPrevFrame = tabPressed;
+                if (tabJustPressed && !Mood::Dialog::DialogSystem::isActive()) {
+                    auto& hud = Mood::GameState::hud();
+                    const bool nowOn = !hud.isWidgetEnabled("inventory_panel");
+                    hud.widget_enabled["inventory_panel"] = nowOn;
+                }
             }
         }
 

@@ -103,7 +103,8 @@ struct HudState {
     /// estar OFF por default (ej. crt_scanline — efecto opcional
     /// que pocos juegos quieren prendido siempre).
     std::unordered_map<std::string, bool> widget_enabled{
-        {"crt_scanline", false},
+        {"crt_scanline",    false},
+        {"inventory_panel", false},  // F2H52 H: default OFF; Tab lo togglea
     };
 
     /// @brief Ayuda al overlay: testea si un widget esta enabled

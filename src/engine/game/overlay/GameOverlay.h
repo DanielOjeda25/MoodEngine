@@ -31,6 +31,8 @@ struct ImDrawList;
 namespace Mood {
 
 struct HudState;
+class Scene;          // F2H52 H: inventory_panel widget necesita scene
+class AssetManager;   // F2H52 H: + assets para resolver items
 
 /// @brief Contexto pasado a cada widget. Vida del frame actual —
 ///        no guardar referencias entre frames.
@@ -45,6 +47,13 @@ struct HudContext {
     /// para derivar yaw. Default `(0,0,-1)` = mirando -Z (convencion
     /// OpenGL right-handed). Caller pasa `m_playCamera.forward()`.
     glm::vec3 cameraForward{0.0f, 0.0f, -1.0f};
+    /// F2H52 H: scene + assets opcionales para widgets que leen estado
+    /// del mundo (ej. `inventory_panel` necesita el InventoryComponent
+    /// del player + ItemAsset metadata para mostrar nombres/iconos).
+    /// Default nullptr; widgets que los necesitan deben chequear antes
+    /// de usar. En tests headless quedan vacios y el widget se skipea.
+    Scene* scene = nullptr;
+    AssetManager* assets = nullptr;
 };
 
 namespace GameOverlay {
@@ -68,7 +77,9 @@ void draw(::ImDrawList* dl,
           float dt,
           const glm::vec3& cameraForward,
           const char* exitButtonLabel,
-          const std::function<void()>& onExitRequested);
+          const std::function<void()>& onExitRequested,
+          Scene* scene = nullptr,
+          AssetManager* assets = nullptr);
 
 // NOTA: los helpers de mutacion (triggerHitMarker, triggerDamageFlash,
 // pushPickup, clearInteractPrompt) viven en `GameState::*` (no aqui)

@@ -108,6 +108,8 @@ private:
     // dialog activo.
     bool m_ePrevFrame = false;
     bool m_digitPrevFrame[9] = {false, false, false, false, false, false, false, false, false};
+    // F2H52 H: Tab toggle del widget `inventory_panel`.
+    bool m_tabPrevFrame = false;
     bool m_crouching = false;
     // Hito 40 G: ventanas configurables per-proyecto (cargadas del
     // `.moodproj`). Defaults coinciden con los hardcoded del Hito 34 C.

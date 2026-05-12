@@ -266,7 +266,8 @@ void EditorApplication::drawGameOverlay(ImDrawList* dl,
                        ImGui::GetIO().DeltaTime,
                        m_playCamera.forward(),
                        exitLbl.c_str(),
-                       [this]() { exitPlayMode(); });
+                       [this]() { exitPlayMode(); },
+                       m_scene.get(), m_assetManager.get());  // F2H52 H
 }
 
 } // namespace Mood

@@ -584,6 +584,8 @@
   "hud.dialog.continue_hint": "[E] Continue",
   "hud.pickup.interact_prompt": "[E] Pick up {}",
   "hud.pickup.notification": "+ {} x{}",
+  "hud.inventory.title": "INVENTORY",
+  "hud.inventory.empty": "(empty)",
 
   "player.menu.new_game": "New Game",
   "player.menu.load_game": "Load Game",

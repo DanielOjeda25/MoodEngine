@@ -1467,6 +1467,21 @@ int EditorApplication::run() {
                     *m_scene, *m_assetManager,
                     m_ePlayJustPressed, dialogActive);
             }
+
+            // F2H52 Bloque H: Tab togglea el widget `inventory_panel`.
+            // Flanco up->down (no spam mientras se mantiene). Skipea si
+            // hay un dialog abierto (Tab le pertenece al dialog si en el
+            // futuro lo usa para skip).
+            {
+                const bool tabPressed = keys[SDL_SCANCODE_TAB] != 0;
+                const bool tabJustPressed = tabPressed && !m_tabPrevFrame;
+                m_tabPrevFrame = tabPressed;
+                if (tabJustPressed && !Dialog::DialogSystem::isActive()) {
+                    auto& hud = Mood::GameState::hud();
+                    const bool nowOn = !hud.isWidgetEnabled("inventory_panel");
+                    hud.widget_enabled["inventory_panel"] = nowOn;
+                }
+            }
         }
 
         // 3.55) Animacion (Hito 19): avanza time del Animator y rellena el
