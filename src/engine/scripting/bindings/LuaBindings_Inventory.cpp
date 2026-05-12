@@ -39,6 +39,7 @@
 #include "engine/inventory/InventoryHooks.h"   // F2H52 Bloque F
 #include "engine/inventory/InventoryState.h"
 #include "engine/inventory/ItemAsset.h"
+#include "engine/inventory/ItemSpawn.h"        // F2H52 H5 (helper compartido)
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -275,68 +276,8 @@ void setupInventoryBindings(sol::state& lua, Scene* scene,
         [scene, assets](const std::string& path,
                        float x, float y, float z,
                        sol::optional<int> qty) -> bool {
-            if (scene == nullptr) {
-                Log::script()->warn("[inventory.spawn_pickup] no hay scene");
-                return false;
-            }
-            if (assets == nullptr) {
-                Log::script()->warn("[inventory.spawn_pickup] no hay AssetManager");
-                return false;
-            }
-            const ItemAssetId id = resolveItem(assets, path);
-            if (id == 0) {
-                Log::script()->warn("[inventory.spawn_pickup] item '{}' no existe", path);
-                return false;
-            }
-            const Inventory::Asset* asset = assets->getItem(id);
-            const int q = qty.value_or(1);
-
-            // Mesh: model_path o cubo fallback.
-            MeshAssetId meshId = 0;
-            const bool hasModel = (asset != nullptr && !asset->model_path.empty());
-            if (hasModel) {
-                meshId = assets->loadMesh(asset->model_path);
-            }
-            // Material: si tiene model_path usa createMaterialsForMesh; si tiene
-            // icon_path lo usa como albedo del cubo placeholder; sino default.
-            std::vector<MaterialAssetId> mats;
-            const bool hasIcon = (asset != nullptr && !asset->icon_path.empty());
-            if (hasModel) {
-                mats = assets->createMaterialsForMesh(meshId);
-            } else if (hasIcon) {
-                const TextureAssetId tex = assets->loadTexture(asset->icon_path);
-                mats.push_back(assets->createMaterialFromTexture(tex));
-            } else {
-                mats = assets->createMaterialsForMesh(meshId);
-            }
-
-            // displayName para el Tag.
-            std::string displayName;
-            if (asset != nullptr && !asset->name_literal.empty()) {
-                displayName = asset->name_literal;
-            } else if (asset != nullptr && !asset->id.empty()) {
-                displayName = asset->id;
-            } else {
-                displayName = "item";
-            }
-
-            Entity e = scene->createEntity("Pickup_" + displayName);
-            auto& t = e.getComponent<TransformComponent>();
-            t.position = glm::vec3(x, y, z);
-            t.scale    = glm::vec3(1.0f);
-
-            e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
-
-            TriggerComponent trig;
-            trig.halfExtents = glm::vec3(0.5f);
-            e.addComponent<TriggerComponent>(trig);
-
-            ItemPickupComponent ip;
-            ip.itemPath = path;
-            ip.quantity = q;
-            e.addComponent<ItemPickupComponent>(ip);
-
-            return true;
+            return Inventory::spawnPickupInWorld(
+                scene, assets, path, glm::vec3(x, y, z), qty.value_or(1));
         });
 
     // -------- Hooks: on_pickup / on_drop / on_use (F2H52 Bloque F) --------

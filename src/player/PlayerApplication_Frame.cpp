@@ -127,7 +127,8 @@ void PlayerApplication::endFrame() {
                                    m_inMainMenu = true;
                                    GameState::paused() = false;
                                },
-                               m_scene.get(), m_assetManager.get());  // F2H52 H
+                               m_scene.get(), m_assetManager.get(),  // F2H52 H
+                               m_playCamera.position());              // F2H52 H5
         }
 
         ImGui::End();

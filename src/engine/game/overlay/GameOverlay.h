@@ -47,6 +47,10 @@ struct HudContext {
     /// para derivar yaw. Default `(0,0,-1)` = mirando -Z (convencion
     /// OpenGL right-handed). Caller pasa `m_playCamera.forward()`.
     glm::vec3 cameraForward{0.0f, 0.0f, -1.0f};
+    /// F2H52 H5: posicion world-space de la camara del player. Usado por
+    /// el "Tirar" del inventory_panel para spawnear el pickup enfrente
+    /// del player (cameraPos + cameraForward * 1.5). Default origen.
+    glm::vec3 cameraPosition{0.0f, 0.0f, 0.0f};
     /// F2H52 H: scene + assets opcionales para widgets que leen estado
     /// del mundo (ej. `inventory_panel` necesita el InventoryComponent
     /// del player + ItemAsset metadata para mostrar nombres/iconos).
@@ -79,7 +83,8 @@ void draw(::ImDrawList* dl,
           const char* exitButtonLabel,
           const std::function<void()>& onExitRequested,
           Scene* scene = nullptr,
-          AssetManager* assets = nullptr);
+          AssetManager* assets = nullptr,
+          const glm::vec3& cameraPosition = glm::vec3(0.0f));
 
 // NOTA: los helpers de mutacion (triggerHitMarker, triggerDamageFlash,
 // pushPickup, clearInteractPrompt) viven en `GameState::*` (no aqui)

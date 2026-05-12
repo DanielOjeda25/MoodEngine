@@ -586,6 +586,8 @@
   "hud.pickup.notification": "+ {} x{}",
   "hud.inventory.title": "INVENTARIO",
   "hud.inventory.empty": "(vacío)",
+  "hud.inventory.use": "Usar",
+  "hud.inventory.drop": "Tirar",
 
   "player.menu.new_game": "Juego Nuevo",
   "player.menu.load_game": "Cargar Partida",

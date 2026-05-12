@@ -365,6 +365,7 @@ add_library(mood_engine_lib STATIC
 
     src/engine/game/manifest/GameManifest.cpp
     src/engine/game/overlay/GameOverlay.cpp
+    src/engine/game/overlay/GameOverlay_Inventory.cpp  # F2H52 H
     src/engine/game/state/GameState.cpp
 
     src/engine/i18n/I18n.cpp  # F2H43
@@ -382,6 +383,7 @@ add_library(mood_engine_lib STATIC
     src/engine/inventory/InventoryState.cpp     # F2H51
     src/engine/inventory/ItemPickupSystem.cpp   # F2H52
     src/engine/inventory/InventoryHooks.cpp     # F2H52 Bloque F
+    src/engine/inventory/ItemSpawn.cpp          # F2H52 H5
 
     src/engine/packaging/PackageBuilder.cpp
 

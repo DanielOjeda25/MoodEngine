@@ -167,6 +167,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/inventory/InventoryState.cpp # F2H51
     ${CMAKE_SOURCE_DIR}/src/engine/inventory/ItemPickupSystem.cpp # F2H52
     ${CMAKE_SOURCE_DIR}/src/engine/inventory/InventoryHooks.cpp # F2H52 F
+    ${CMAKE_SOURCE_DIR}/src/engine/inventory/ItemSpawn.cpp      # F2H52 H5
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Inventory.cpp # F2H52 E
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogScriptHost.cpp # F2H48.1
 )
