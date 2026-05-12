@@ -580,6 +580,8 @@
   "hud.menu.exit_to_menu": "SALIR AL MENÚ",
   "hud.dialog.interact_prompt": "[E] Hablar",
   "hud.dialog.continue_hint": "[E] Continuar",
+  "hud.pickup.interact_prompt": "[E] Levantar {}",
+  "hud.pickup.notification": "+ {} x{}",
 
   "player.menu.new_game": "Juego Nuevo",
   "player.menu.load_game": "Cargar Partida",

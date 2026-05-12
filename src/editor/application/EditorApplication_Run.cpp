@@ -25,6 +25,7 @@
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28 Bloque F: click-select desde ortos
 #include "engine/dialog/DialogInteractSystem.h"  // F2H48
 #include "engine/dialog/DialogSystem.h"          // F2H48
+#include "engine/inventory/ItemPickupSystem.h"   // F2H52 Bloque C
 #include "engine/render/backend/opengl/OpenGLDebugRenderer.h"  // F2H29 Bloque C: drawAabb preview.
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/physics/world/PhysicsWorld.h"
@@ -1450,6 +1451,20 @@ int EditorApplication::run() {
                 // Sin dialog activo: reset prev state de digitos para que
                 // el primer digit que se presione sea "just pressed".
                 for (int i = 0; i < 9; ++i) m_digitPrevFrame[i] = false;
+            }
+
+            // F2H52 Bloque C: ItemPickupSystem. Consume el mismo flanco
+            // de E que el dialog system (si hay dialog activo, el pickup
+            // sistema lo skipea para no robarle la tecla). Engine-grade:
+            // el motor SOLO mueve items entre containers + dispara el
+            // hook on_pickup (registrado por Lua en Bloque F).
+            {
+                MOOD_PROFILE_SCOPE("ItemPickupSystem::tick");
+                const bool dialogActive =
+                    dialogStarted || Dialog::DialogSystem::isActive();
+                Inventory::ItemPickupSystem::tick(
+                    *m_scene, *m_assetManager,
+                    m_ePlayJustPressed, dialogActive);
             }
         }
 

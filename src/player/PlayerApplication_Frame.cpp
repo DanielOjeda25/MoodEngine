@@ -18,6 +18,7 @@
 #include "engine/game/overlay/GameOverlay.h"
 #include "engine/dialog/DialogInteractSystem.h"  // F2H48
 #include "engine/dialog/DialogSystem.h"          // F2H48
+#include "engine/inventory/ItemPickupSystem.h"   // F2H52 Bloque C
 #include "engine/game/state/GameState.h"
 #include "engine/i18n/I18n.h"  // F2H43
 #include "engine/physics/world/PhysicsWorld.h"
@@ -498,6 +499,17 @@ int PlayerApplication::run() {
                     eJustPressed, digitJustPressed);
             } else {
                 for (int i = 0; i < 9; ++i) m_digitPrevFrame[i] = false;
+            }
+
+            // F2H52 Bloque C: ItemPickupSystem — paridad con Editor.
+            // Comparte el flanco de E con el dialog (el sistema skipea
+            // si dialog activo para no robar la tecla).
+            {
+                const bool dialogActive =
+                    dialogStarted || Mood::Dialog::DialogSystem::isActive();
+                Mood::Inventory::ItemPickupSystem::tick(
+                    *m_scene, *m_assetManager,
+                    eJustPressed, dialogActive);
             }
         }
 
