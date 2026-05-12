@@ -251,6 +251,13 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
         [](Entity en, std::string lbl) {
             return makeAddComponentCommand<InventoryComponent>(en, std::move(lbl));
         });
+    // F2H52: ItemPickupComponent en Logic.
+    add("component.name.item_pickup", "component.desc.item_pickup",
+        "editor.panel.inspector.add.cat.logic",
+        e.hasComponent<ItemPickupComponent>(),
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<ItemPickupComponent>(en, std::move(lbl));
+        });
 
     // World
     add("component.name.brush", "component.desc.brush",

@@ -158,6 +158,7 @@
   "component.name.nav_agent": "NavAgent",
   "component.name.dialog": "Diálogo",
   "component.name.inventory": "Inventario",
+  "component.name.item_pickup": "Item Recogible",
   "component.name.brush": "Brush",
 
   "component.desc.mesh_renderer": "Renderiza un mesh con un material por submesh.",
@@ -173,6 +174,7 @@
   "component.desc.nav_agent": "Agente de navegación que rutea vía grid del NavSystem.",
   "component.desc.dialog": "Linkea un asset .mooddialog; auto-arranca al interactuar el player si hay un Trigger.",
   "component.desc.inventory": "Contenedor de items con 3 modos de layout (lista plana / grid 2D / slots de equipo).",
+  "component.desc.item_pickup": "Marca a la entidad como item recogible del mundo; el player lo levanta con [E] dentro de un Trigger.",
   "component.desc.brush": "Brush CSG (Box/Cylinder/etc) editable con herramientas Hammer-style.",
 
   "editor.panel.inspector.transform.position": "posición",

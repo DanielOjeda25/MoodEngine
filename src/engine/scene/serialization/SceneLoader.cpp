@@ -265,6 +265,18 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<DialogComponent>(dc);
         }
 
+        // F2H52: ItemPickupComponent. cachedItemId arranca en 0 — el
+        // ItemPickupSystem llama loadItem al primer trigger del player.
+        if (se.itemPickup.has_value()) {
+            const auto& s = *se.itemPickup;
+            ItemPickupComponent ip{};
+            ip.itemPath        = s.itemPath;
+            ip.quantity        = s.quantity;
+            ip.destroyOnPickup = s.destroyOnPickup;
+            ip.cachedItemId    = 0;
+            e.addComponent<ItemPickupComponent>(ip);
+        }
+
         // F2H51 Bloque I: InventoryComponent. Mode + capacity + entries
         // restaurados; cada itemPath se re-resuelve via loadItem (paths
         // logicos, no IDs — mismo patron que animator externalClips).

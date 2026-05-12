@@ -573,6 +573,99 @@ TEST_CASE("SceneSerializer: round-trip de DialogComponent (F2H48.1)") {
 }
 
 // ============================================================
+// F2H52: ItemPickupComponent round-trip — itemPath + quantity +
+// destroyOnPickup sobreviven; cachedItemId runtime no se persiste.
+// ============================================================
+
+TEST_CASE("SceneSerializer: round-trip de ItemPickupComponent (F2H52)") {
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    {
+        Entity pickup = scene.createEntity("HealthPotion_drop");
+        ItemPickupComponent ip{};
+        ip.itemPath        = "items/health_potion.mooditem";
+        ip.quantity        = 3;
+        ip.destroyOnPickup = false;  // override del default (=true)
+        ip.cachedItemId    = 42;     // runtime; NO debe persistir
+        pickup.addComponent<ItemPickupComponent>(ip);
+        // MeshRenderer para que la entity no caiga al filtrado tag-prefix.
+        pickup.addComponent<MeshRendererComponent>(
+            MeshAssetId{0}, std::vector<MaterialAssetId>{0});
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("item_pickup_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1u);
+    const auto& se = loaded->entities[0];
+    CHECK(se.tag == "HealthPotion_drop");
+    REQUIRE(se.itemPickup.has_value());
+    CHECK(se.itemPickup->itemPath == "items/health_potion.mooditem");
+    CHECK(se.itemPickup->quantity == 3);
+    CHECK_FALSE(se.itemPickup->destroyOnPickup);  // override preservado
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: ItemPickupComponent vacio NO se serializa (F2H52)") {
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    {
+        Entity pickup = scene.createEntity("EmptyPickup");
+        ItemPickupComponent ip{};  // itemPath vacio
+        pickup.addComponent<ItemPickupComponent>(ip);
+        pickup.addComponent<MeshRendererComponent>(
+            MeshAssetId{0}, std::vector<MaterialAssetId>{0});
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("item_pickup_empty.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1u);
+    // Convencion: pickup sin itemPath no entra al .moodmap (mismo patron
+    // que DialogComponent vacio). Reload deja la entity sin el component.
+    CHECK_FALSE(loaded->entities[0].itemPickup.has_value());
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: ItemPickupComponent defaults sensatos al reload (F2H52)") {
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    {
+        Entity pickup = scene.createEntity("MinimalPickup");
+        ItemPickupComponent ip{};
+        ip.itemPath = "items/key.mooditem";
+        // quantity, destroyOnPickup quedan en default → no override en JSON.
+        pickup.addComponent<ItemPickupComponent>(ip);
+        pickup.addComponent<MeshRendererComponent>(
+            MeshAssetId{0}, std::vector<MaterialAssetId>{0});
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("item_pickup_defaults.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities[0].itemPickup.has_value());
+    CHECK(loaded->entities[0].itemPickup->itemPath == "items/key.mooditem");
+    CHECK(loaded->entities[0].itemPickup->quantity == 1);             // default
+    CHECK(loaded->entities[0].itemPickup->destroyOnPickup == true);   // default
+
+    std::filesystem::remove(path);
+}
+
+// ============================================================
 // F2H50 Bloque D: AnimatorComponent persistence (clipName, speed, playing,
 // loop, externalClips) sobrevive al roundtrip save+load.
 // ============================================================

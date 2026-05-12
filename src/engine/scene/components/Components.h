@@ -455,4 +455,28 @@ struct InventoryComponent {
     Inventory::State state;  // mode + config + entries
 };
 
+/// F2H52: Marca a una entidad como "item pickeable en el mundo". Cuando el
+/// player entra al `TriggerComponent` adjunto y presiona E, el
+/// `ItemPickupSystem` agrega el item a su `InventoryComponent` (via
+/// `inventory.add(player, itemPath, quantity)`) y dispara el hook Lua
+/// `on_pickup`. Si `destroyOnPickup=true` (default), la entidad se elimina.
+///
+/// El motor NO sabe que un "iron_sword" hace daño — solo conoce `itemPath`
+/// (logico, ej. "items/iron_sword.mooditem") y deja que el dev defina la
+/// semantica en Lua sobre los hooks. Engine-grade strict (VISION 2026-05-12).
+struct ItemPickupComponent {
+    std::string itemPath;       // p.ej. "items/iron_sword.mooditem"
+    int         quantity = 1;
+    /// @brief Default true: pickup desaparece del mundo al levantarlo. Caso
+    ///        comun (~90% de los items). False permite "dispenser infinito"
+    ///        para test fixtures, maquinas que dan pociones, etc.
+    bool        destroyOnPickup = true;
+    /// @brief Estado runtime (no serializado): cache del `ItemAssetId`
+    ///        re-resuelto via `AssetManager::loadItem` al primer trigger
+    ///        para evitar lookups por frame mientras el player esta dentro.
+    ///        Mismo patron que `DialogComponent::cachedDialogId`. 0 = no
+    ///        cargado todavia.
+    u32         cachedItemId = 0;
+};
+
 } // namespace Mood

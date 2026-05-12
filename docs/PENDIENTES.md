@@ -9,11 +9,44 @@
 
 ---
 
-## Post-F2H51 (2026-05-12) — Inventario engine-grade: ItemAsset + Item Browser + InventoryComponent + persistencia `.moodmap`
+## F2H52 en progreso (2026-05-12) — Inventory runtime
 
-### Próximo a atacar
+### Decisiones del dev confirmadas (Bloque A)
 
-- **F2H52 — Inventory runtime** (continúa Bloque 1 del PLAN_SUBFASE_2_5): `ItemPickupComponent` (item entities en el mundo pickeables vía TriggerComponent + tecla E) + HUD widget inventario (open/close con Tab + grid visual + tooltips) + Lua bindings (`inventory.add/remove/has/count` + hooks `on_pickup`/`on_drop`) + integración con DialogScriptHost para choices condicionales por items.
+1. **Player implicit**: scan por `TagComponent.name == "Player"` (convención del demo F2H50, ya establecida).
+2. **`destroyOnPickup` default**: `true` (pickup desaparece al levantar; flag `false` para items infinitos/test).
+3. **Tecla del inventario**: **Tab** default; configurable via `inventory.set_toggle_key(SDLK_*)`.
+4. **`inventory.use` semantic**: callback Lua decide consumo (no auto-remove). Pociones llaman `inventory.remove(...)` dentro del callback; armas equipables no.
+
+### Estado de F2H52 — Bloque A-B cerrados, suite verde 795/9100
+
+- ✅ **Bloque A** — Plan aprobado + 4 decisiones cerradas. Plan en [docs/PLAN_HITO_F2H52.md](PLAN_HITO_F2H52.md).
+- ✅ **Bloque B** — `ItemPickupComponent` (itemPath + quantity + destroyOnPickup + cachedItemId runtime) + popup "Add Component" en categoría Logic + `SavedItemPickup` con write/read en EntitySerializer + apply en SceneLoader + 3 tests roundtrip (override / vacío no-serializa / defaults sensatos) + i18n keys es/en (`component.name.item_pickup`, `component.desc.item_pickup`).
+
+### Bloques pendientes para retomar (C-N)
+
+- ⏳ **Bloque C — `ItemPickupSystem`**: mismo patrón que `DialogInteractSystem` (F2H48). Detecta player con tag "Player" dentro de `TriggerComponent` de la entity con `ItemPickupComponent` → `hud.interact_prompt = "[E] Pick up <name>"` → tecla E → `inventory.add(player, itemPath, quantity)` → si `destroyOnPickup=true` destruye la entity → dispara hook Lua `on_pickup(entity, item_path, qty)`. Necesita resolver `cachedItemId` via `AssetManager::loadItem` al primer trigger (igual que DialogInteractSystem con loadDialog).
+- ⏳ **Bloque D — Drag-drop viewport spawn pickup**: extiende `DemoSpawners_Drop.cpp` con handler `MOOD_ITEM_ASSET` payload del Item Browser → crea entity con `TransformComponent` + `MeshRenderer` (usa `ItemAsset.model_path` si está, sino cubo default) + `TriggerComponent` (halfExtents 0.5x0.5x0.5) + `ItemPickupComponent`. **SIN RigidBody** v1 (el item flota — si el dev quiere físicas, agrega RB manual).
+- ⏳ **Bloque E — Lua bindings tabla `inventory`**: lecturas (`has/count/sum_stat/entries`) + mutaciones (`add/remove/move_slot`) + `spawn_pickup(item_path, x, y, z, qty)` + shortcuts player-implicit (sin entity en primer arg → scan tag "Player"). Mismo patrón que tabla `dialog` de F2H48.
+- ⏳ **Bloque F — Hooks Lua + `inventory.use`**: `on_pickup/on_drop/on_use` como `std::function` inyectables (mismo modelo `setEvaluator/Executor` de F2H48.1). `inventory.use` invoca callback `on_use` sin auto-consume (callback decide).
+- ⏳ **Bloque G — `DialogScriptHost` + inventory bindings**: sumar tabla `inventory` al sol::state global del juego para que `condition_lua = "inventory.has('items/key.mooditem')"` funcione en dialog choices. ~30 min.
+- ⏳ **Bloque H — HUD widget `inventory_panel`** (3 modes: FlatList / Grid2D / EquipmentSlots) + Tab toggle + tooltip + drag entre slots. 16vo widget del registry F2H39. Default OFF. Right-click → menú "Use / Drop".
+- ⏳ **Bloque I — Container split mode**: `hud.open_container(entity_id)` renderea 2 columnas (player inv ↔ container inv) con drag entre las dos. Reusa renderer del Bloque H con flag.
+- ⏳ **Bloque J — `inventory.set_renderer(callback)`**: override engine-grade del rendering (HUD Pip-Boy custom / RE rotador 3D). Si callback registrado, motor lo llama en lugar del default.
+- ⏳ **Bloque K — Tests**: Lua bindings (has/count/add/remove/sum_stat) + dialog gating con items + ItemPickupComponent runtime (no solo serializer). `test_inventory_runtime.cpp` nuevo.
+- ⏳ **Bloque L — Sample `inventory_demo.lua`**: ejercita pickup → use heal potion → dialog choice por evidence. Sirve de doc viva del flow.
+- ⏳ **Bloque M — Tour visual con dev**: spawn item desde browser → walk → press E → ver HUD → use potion → trigger dialog choice por key.
+- ⏳ **Bloque N — Cierre + tag `v1.40.0-fase2-hito52`**: docs HITOS/ESTADO/DECISIONS/PENDIENTES.
+
+### Notas técnicas para retomar
+
+- **Mismo patrón que `DialogComponent` + `DialogInteractSystem` (F2H48)**: copy-paste con renombre. `ItemPickupSystem::tick(scene, assets, eJustPressed) -> bool` (señala si pickup ocurrió en este frame para no double-consumir el flanco E con el `DialogInteractSystem` que ya está allí). Decisión de prioridad si ambos triggers están activos: probablemente pickup primero (más raro tener ambos solapados).
+- **Convención del demo F2H50 "Player tag"**: la entity del player principal lleva `TagComponent.name = "Player"`. El binding `inventory.has(item_path)` sin entity scanea por ese tag al primer call. Si emerge feedback "mi player se llama Nick", documentar la convención en CLAUDE.md del proyecto.
+- **Hook `on_pickup` no es veto-style** (igual que F2H48.1 dialog hooks): se dispara DESPUÉS del `inventory.add` exitoso. Si el dev necesita veto (ej. "no podés agarrar la espada hasta que termines la quest"), implementa con `inventory.has` check + return false desde Lua antes del trigger.
+- **Drag-drop spawn (Bloque D)**: payload `MOOD_ITEM_ASSET` con `ItemAssetId` ya existe (F2H51 Bloque F). Solo hay que extender `DemoSpawners_Drop.cpp` para crear la entity completa al drop.
+
+### Próximo a atacar (después de F2H52)
+
 - **Después de F2H52**: F2H53 (Quest Editor con node-graph reusando F2H46/47 framework) y cerrar Sub-fase 2.5.
 - **Sub-fase 3 — Render Polish** (diferida): tonemap + bloom + SSAO + CSM + material node-graph + shader graph runtime.
 - **Sub-fase 3 — Localization Pipeline** (candidato nuevo, pedido del dev 2026-05-12): el dev escribe texto en su idioma nativo en el editor → editor auto-genera la i18n key + la guarda en `es.json` (su locale) → toggle key/literal del Property Editor desaparece + todo se trata como key implícita → listing UI de "keys sin traducción" para que un traductor humano (o el dev) complete `en.json`/`fr.json`/etc después. Match con patrón industry-standard (Crowdin/Lokalise/Phrase) — NO auto-translate machine. Scope mediano (~6-8h), abrir cuando emerja necesidad real de multi-idioma.

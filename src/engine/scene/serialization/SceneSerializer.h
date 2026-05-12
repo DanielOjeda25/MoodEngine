@@ -133,6 +133,16 @@ struct SavedDialog {
     bool        autoStartOnInteract = true;
 };
 
+/// @brief F2H52: copia persistida de un ItemPickupComponent.
+///        Solo itemPath + quantity + destroyOnPickup; el cachedItemId
+///        runtime se re-resuelve via AssetManager::loadItem en el
+///        primer trigger del ItemPickupSystem.
+struct SavedItemPickup {
+    std::string itemPath;       // ej. "items/iron_sword.mooditem"
+    int         quantity = 1;
+    bool        destroyOnPickup = true;
+};
+
 /// @brief Copia persistida de un ParticleEmitterComponent (Hito 29).
 ///        Solo la configuracion editable; el estado runtime (positions,
 ///        ages, rngState, etc.) no se persiste — la simulacion arranca
@@ -241,6 +251,7 @@ struct SavedEntity {
     std::optional<SavedDialog>  dialog;                   // F2H48.1
     std::optional<SavedAnimator> animator;                // F2H50 Bloque D
     std::optional<SavedInventory> inventory;              // F2H51 Bloque I
+    std::optional<SavedItemPickup> itemPickup;            // F2H52 Bloque B
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.

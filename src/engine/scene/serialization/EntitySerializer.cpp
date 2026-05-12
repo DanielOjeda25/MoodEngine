@@ -242,6 +242,22 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         }
     }
 
+    // F2H52: ItemPickupComponent. itemPath + quantity + destroyOnPickup;
+    // cachedItemId runtime no se persiste (loadItem al primer trigger
+    // del ItemPickupSystem lo repuebla via VFS). Convencion identica a
+    // DialogComponent: si itemPath esta vacio NO se serializa (no tiene
+    // sentido un pickup sin target).
+    if (entity.hasComponent<ItemPickupComponent>()) {
+        const auto& ip = entity.getComponent<ItemPickupComponent>();
+        if (!ip.itemPath.empty()) {
+            json ji;
+            ji["path"]            = ip.itemPath;
+            ji["quantity"]        = ip.quantity;
+            ji["destroyOnPickup"] = ip.destroyOnPickup;
+            je["item_pickup"] = ji;
+        }
+    }
+
     // F2H50 Bloque D: AnimatorComponent. clipName/speed/playing/loop +
     // lista `externalClips` (alias + path logico del .fbx standalone).
     // El `externalBindCache` runtime no se persiste — el AnimationSystem
@@ -427,6 +443,18 @@ SavedEntity parseEntityFromJson(const json& j) {
         sd.autoStartOnInteract = jd.value("autoStartOnInteract", true);
         if (!sd.dialogPath.empty()) {
             se.dialog = std::move(sd);
+        }
+    }
+
+    // F2H52: item_pickup.
+    if (j.contains("item_pickup")) {
+        const auto& ji = j.at("item_pickup");
+        SavedItemPickup sip;
+        sip.itemPath        = ji.value("path", std::string{});
+        sip.quantity        = ji.value("quantity", 1);
+        sip.destroyOnPickup = ji.value("destroyOnPickup", true);
+        if (!sip.itemPath.empty()) {
+            se.itemPickup = std::move(sip);
         }
     }
 
