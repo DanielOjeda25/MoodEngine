@@ -6,6 +6,19 @@
 
 ---
 
+## VISIÓN (anclar todas las decisiones acá — 2026-05-12)
+
+MoodEngine: motor 3D opinionated con **vibra Valve** (CSG-Hammer + simplicidad + level design first). Toma primitivas granulares del cookbook de juegos (inventario, durabilidad, stats, quests, dialog) y las expone como sistemas **data-driven + Lua hooks**. Engine-grade: el motor no asume género — el dev del juego combina las primitivas como quiera (Valve-style FPS, Fallout-like RPG, RE-like survival, walking sim, etc).
+
+**Target user:** el dev del juego (vos + colegas). **NO compite con Unity/Godot**; cubre un nicho distinto (motor narrativo 3D con sistemas integrados de gameplay-toolbox).
+
+**Implicancias para decisiones técnicas:**
+- Nuevos sistemas se justifican como **primitivas** (engine-grade, data-driven), no como gameplay completo. Ej.: Inventory expone Grid2D/EquipmentSlots/FlatList porque son primitivas de inventario que cualquiera puede usar — pero NO trae crafting hardcoded, NO trae VATS, NO trae sistemas atados a un género específico. Esos los hace el dev en Lua/data sobre las primitivas.
+- Antes de abrir un hito nuevo, preguntar: *"¿esto es una primitiva reusable o estoy hardcodeando un género?"* Si es lo segundo, no entra al motor — entra al juego.
+- NO planificar sub-fases especulativas con sistemas "tipo Fallout" o "tipo RE". Cerrar lo empezado primero; ver qué emerge.
+
+---
+
 ## ÍNDICE
 
 1. Contexto general del proyecto
