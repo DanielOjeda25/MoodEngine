@@ -80,6 +80,7 @@ add_executable(mood_tests
     test_item_pickup_system.cpp   # F2H52 Bloque C
     test_primitive_meshes.cpp     # F2H52 D investigacion: winding cubo
     test_lua_bindings_inventory.cpp  # F2H52 Bloque E
+    test_item_spawn.cpp           # F2H52 Bloque H5
 
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/Brush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/BrushMesh.cpp
