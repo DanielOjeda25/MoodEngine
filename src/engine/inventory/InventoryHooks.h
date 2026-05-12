@@ -61,19 +61,30 @@ using DropHook = std::function<void(const std::string& item_path, int quantity)>
 ///        Args: (entity, item_path).
 using UseHook = std::function<void(Entity entity, const std::string& item_path)>;
 
+/// @brief F2H52 Bloque J — Renderer custom del `inventory_panel`. Si se
+///        registra, el motor cede todo el render del widget al dev y
+///        skipea su render default. El callback se invoca cada frame
+///        mientras el widget este enabled (Tab presionado).
+///        Args: (player_entity, container_entity_or_falsy).
+///        Engine-grade: el dev decide layout, drag/drop, tooltip, etc.
+///        — el motor no impone ninguno cuando hay hook activo.
+using RenderHook = std::function<void(Entity player, Entity container)>;
+
 /// @brief Registra el callback de pickup. Reemplaza el anterior si ya
 ///        habia uno (warn al log). nullptr para limpiar.
 void setPickupHook(PickupHook fn);
 void setDropHook  (DropHook   fn);
 void setUseHook   (UseHook    fn);
+void setRenderHook(RenderHook fn);  // F2H52 J
 
-/// @brief Limpia los 3 hooks. Llamar al final de la escena / tests.
+/// @brief Limpia los 4 hooks. Llamar al final de la escena / tests.
 void clearAll();
 
 /// @brief Invocan los hooks registrados (no-op si no hay).
 void invokePickup(const std::string& item_path, int quantity);
 void invokeDrop  (const std::string& item_path, int quantity);
 void invokeUse   (Entity entity, const std::string& item_path);
+void invokeRender(Entity player, Entity container);  // F2H52 J
 
 /// @brief Para tests: `hasXxxHook()` retorna true si hay callback
 ///        registrado. Las invocadas no se exponen para inspeccion
@@ -81,5 +92,6 @@ void invokeUse   (Entity entity, const std::string& item_path);
 bool hasPickupHook();
 bool hasDropHook  ();
 bool hasUseHook   ();
+bool hasRenderHook();  // F2H52 J
 
 } // namespace Mood::Inventory::Hooks

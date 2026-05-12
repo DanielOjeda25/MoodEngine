@@ -9,6 +9,7 @@ namespace {
 PickupHook g_pickup;
 DropHook   g_drop;
 UseHook    g_use;
+RenderHook g_render;  // F2H52 J
 } // namespace
 
 void setPickupHook(PickupHook fn) {
@@ -38,10 +39,20 @@ void setUseHook(UseHook fn) {
     g_use = std::move(fn);
 }
 
+void setRenderHook(RenderHook fn) {
+    if (g_render && fn) {
+        Log::script()->warn(
+            "[inventory.set_renderer] sobrescribiendo renderer previo "
+            "(v1 = solo 1 renderer activo a la vez)");
+    }
+    g_render = std::move(fn);
+}
+
 void clearAll() {
     g_pickup = nullptr;
     g_drop   = nullptr;
     g_use    = nullptr;
+    g_render = nullptr;
 }
 
 void invokePickup(const std::string& item_path, int quantity) {
@@ -56,8 +67,13 @@ void invokeUse(Entity entity, const std::string& item_path) {
     if (g_use) g_use(entity, item_path);
 }
 
+void invokeRender(Entity player, Entity container) {
+    if (g_render) g_render(player, container);
+}
+
 bool hasPickupHook() { return static_cast<bool>(g_pickup); }
 bool hasDropHook()   { return static_cast<bool>(g_drop);   }
 bool hasUseHook()    { return static_cast<bool>(g_use);    }
+bool hasRenderHook() { return static_cast<bool>(g_render); }
 
 } // namespace Mood::Inventory::Hooks

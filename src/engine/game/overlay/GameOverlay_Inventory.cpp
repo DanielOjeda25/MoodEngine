@@ -886,6 +886,14 @@ void drawInventoryPanel(const HudContext& ctx) {
         }
     }
 
+    // F2H52 Bloque J: si el dev registro un renderer custom, cederle todo
+    // el control y skipear nuestro render default. El context menu / tooltip
+    // del motor tampoco se dibujan — el dev se encarga de su UX.
+    if (Inventory::Hooks::hasRenderHook()) {
+        Inventory::Hooks::invokeRender(player, containerEntity);
+        return;
+    }
+
     if (containerEntity) {
         auto& containerInv =
             containerEntity.getComponent<InventoryComponent>().state;

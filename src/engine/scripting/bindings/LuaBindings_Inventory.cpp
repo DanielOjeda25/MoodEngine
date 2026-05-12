@@ -345,6 +345,43 @@ void setupInventoryBindings(sol::state& lua, Scene* scene,
                 });
         });
 
+    // -------- F2H52 Bloque J: set_renderer / clear_renderer --------
+    //
+    // `inventory.set_renderer(callback)` cede el render del widget
+    // `inventory_panel` al dev. Cuando hay un renderer registrado, el
+    // motor SKIPea su render default (FlatList / Grid2D / Equipment /
+    // split) y llama al callback cada frame.
+    //
+    // El callback recibe `(player_entity, container_entity_or_nil)`:
+    //   - player_entity: la entity con tag "Player" + InventoryComponent.
+    //   - container_entity: si `hud.open_container(...)` esta activo,
+    //     la entity-container; sino `nil`.
+    //
+    // Engine-grade: el dev tiene control total — puede usar sus propios
+    // bindings de UI (si los tiene), mutar HUD state, o ignorar (panel
+    // vacio). Para volver al render default: `inventory.set_renderer(nil)`.
+    inv.set_function("set_renderer",
+        [](sol::function fn) {
+            if (!fn.valid()) {
+                Inventory::Hooks::setRenderHook(nullptr);
+                return;
+            }
+            Inventory::Hooks::setRenderHook(
+                [fn](Entity player, Entity container) {
+                    sol::protected_function_result r = container
+                        ? fn(player, container)
+                        : fn(player, sol::lua_nil);
+                    if (!r.valid()) {
+                        sol::error err = r;
+                        Log::script()->warn(
+                            "[inventory.set_renderer] callback error: {}",
+                            err.what());
+                    }
+                });
+        });
+    inv.set_function("clear_renderer",
+        []() { Inventory::Hooks::setRenderHook(nullptr); });
+
     // -------- inventory.use(entity, path) / inventory.use(path) --------
     //
     // Verifica que el entity tenga InventoryComponent + count >= 1 del
