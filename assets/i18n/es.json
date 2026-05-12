@@ -588,6 +588,7 @@
   "hud.inventory.empty": "(vacío)",
   "hud.inventory.use": "Usar",
   "hud.inventory.drop": "Tirar",
+  "hud.inventory.container_title": "CONTENEDOR",
 
   "player.menu.new_game": "Juego Nuevo",
   "player.menu.load_game": "Cargar Partida",

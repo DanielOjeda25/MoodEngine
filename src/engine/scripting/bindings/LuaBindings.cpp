@@ -138,6 +138,27 @@ void setupLuaBindings(sol::state& lua, Entity self,
             GameState::pushKillColored(s.c_str(), col);
         });
 
+    // F2H52 Bloque I — Container split del inventory_panel.
+    //
+    //   hud.open_container(entity)    -- abre split player <-> entity
+    //   hud.close_container()         -- vuelve a single-mode
+    //   hud.container_entity()        -- numeric id (0 = no container)
+    //
+    // Setea container_target = entt::entity handle cast a u32. El widget
+    // valida cada frame que el entity siga vivo + tenga InventoryComponent;
+    // si falla, vuelve a single-mode automaticamente. Tambien autoenable
+    // del widget para que el dev no tenga que llamar setWidget aparte.
+    hudTable.set_function("open_container",
+        [](Entity e) {
+            GameState::hud().container_target =
+                static_cast<u32>(e.handle());
+            GameState::hud().widget_enabled["inventory_panel"] = true;
+        });
+    hudTable.set_function("close_container",
+        []() { GameState::hud().container_target = 0; });
+    hudTable.set_function("container_entity",
+        []() { return GameState::hud().container_target; });
+
     // --- engine.exposed (Hito 24) ---
     // Registra una exposed property + devuelve el override de la
     // entidad (si existe) o el default. Inferencia de tipo del default:
