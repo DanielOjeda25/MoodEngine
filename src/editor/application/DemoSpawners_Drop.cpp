@@ -13,6 +13,7 @@
 #include "editor/commands/HistoryStack.h"
 #include "editor/commands/SetTileCommand.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/inventory/ItemAsset.h"   // F2H52 Bloque D
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/Components.h"
@@ -517,6 +518,100 @@ void EditorApplication::processViewportScriptDrop() {
     Log::editor()->info("Drop script '{}' -> entidad '{}'",
                          drop.scriptPath, tagName);
     markDirty();
+}
+
+// F2H52 Bloque D: drop de un item asset al viewport -> crea entity
+// pickeable en el mundo. Components:
+//   - TransformComponent (centro del tile bajo el cursor + offset Y para
+//     que el bottom del cubo descanse en y=0).
+//   - MeshRendererComponent (mesh tomado del `ItemAsset.model_path` via
+//     loadMesh; si vacio o load fail, slot 0 = cubo primitivo, asi el
+//     dev siempre ve algo aunque no haya configurado un modelo).
+//   - TriggerComponent (halfExtents 0.5x0.5x0.5 — volumen detector del
+//     player). SIN escala-del-Transform: halfExtents son metros directos.
+//   - ItemPickupComponent (itemPath logico + quantity=1 + destroyOnPickup=true).
+//
+// SIN RigidBody en v1: el item flota en su posicion. Si el dev quiere
+// fisicas (item que cae al piso), agrega RB Dynamic manual via Inspector.
+//
+// Engine-grade: el spawn solo configura componentes; el flow runtime de
+// "presionar E para levantar" vive en `ItemPickupSystem` (Bloque C).
+void EditorApplication::processViewportItemDrop() {
+    const ViewportPanel::ItemDrop drop = m_ui.viewport().consumeItemDrop();
+    if (!(drop.pending && m_mode == EditorMode::Editor && m_scene
+          && m_assetManager)) {
+        return;
+    }
+
+    const float aspect = viewportAspect();
+    const glm::mat4 view = m_editorCamera.viewMatrix();
+    const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
+    const TilePickResult hit = pickTile(m_map, mapWorldOrigin(), view, projection,
+                                        glm::vec2(drop.ndcX, drop.ndcY));
+    if (!hit.hit) {
+        Log::editor()->info("Drop item '{}': cursor fuera del mapa",
+                             drop.itemPath);
+        return;
+    }
+
+    // Resolver el asset para saber si tiene model_path. Si fail, getItem
+    // cae al slot 0 (item vacio) — igual creamos la entity con cubo
+    // default para que el flow no se rompa.
+    const ItemAssetId itemId = m_assetManager->loadItem(drop.itemPath);
+    const Inventory::Asset* asset = m_assetManager->getItem(itemId);
+
+    // Mesh: model_path del ItemAsset o cubo default. Si el ItemAsset es
+    // vacio o el load fail, meshId=0 = cubo primitivo (no romper la UX).
+    MeshAssetId meshId = 0;
+    if (asset != nullptr && !asset->model_path.empty()) {
+        meshId = m_assetManager->loadMesh(asset->model_path);
+    }
+
+    // Nombre humano para el TagComponent. Preferencia: name_literal del
+    // asset; si vacio, id; si vacio, filename.
+    namespace fs = std::filesystem;
+    std::string displayName;
+    if (asset != nullptr && !asset->name_literal.empty()) {
+        displayName = asset->name_literal;
+    } else if (asset != nullptr && !asset->id.empty()) {
+        displayName = asset->id;
+    } else {
+        displayName = fs::path(drop.itemPath).stem().string();
+    }
+
+    // Crear entity con Transform en el centro del tile.
+    Entity e = m_scene->createEntity("Pickup_" + displayName);
+    auto& t = e.getComponent<TransformComponent>();
+    const glm::vec3 origin = mapWorldOrigin();
+    const f32 tileSize = m_map.tileSize();
+    t.position = glm::vec3(
+        origin.x + (static_cast<f32>(hit.tileX) + 0.5f) * tileSize,
+        origin.y + 0.5f,  // bottom del cubo 1x1x1 descansa en y=0
+        origin.z + (static_cast<f32>(hit.tileY) + 0.5f) * tileSize);
+    t.scale = glm::vec3(1.0f);
+
+    // MeshRenderer (mesh + materiales auto del mesh si tiene textures).
+    auto mats = m_assetManager->createMaterialsForMesh(meshId);
+    e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
+
+    // TriggerComponent — volumen detector del player. halfExtents 0.5m
+    // = cubo 1x1x1 = tile estandar, suficiente para que el player roce
+    // al pasar cerca. Si el dev quiere triggers mas amplios (item que
+    // se detecta desde lejos), edita el componente en el Inspector.
+    TriggerComponent trig;
+    trig.halfExtents = glm::vec3(0.5f, 0.5f, 0.5f);
+    e.addComponent<TriggerComponent>(trig);
+
+    // ItemPickupComponent — la marca de "pickeable". Los defaults
+    // (quantity=1, destroyOnPickup=true) ya son los del POD.
+    ItemPickupComponent ip;
+    ip.itemPath = drop.itemPath;
+    e.addComponent<ItemPickupComponent>(ip);
+
+    Log::editor()->info(
+        "Drop item '{}' -> tile ({}, {}) [mesh={}, displayName='{}']",
+        drop.itemPath, hit.tileX, hit.tileY, meshId, displayName);
+    pushCreatedEntities({e}, "Drop item '" + displayName + "'");
 }
 
 } // namespace Mood

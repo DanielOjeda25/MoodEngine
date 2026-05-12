@@ -33,6 +33,7 @@ void ViewportPanel::onImGuiRender() {
         else if (p->IsDataType("MOOD_PREFAB_ASSET"))   m_assetDragKind = AssetDragKind::Prefab;
         else if (p->IsDataType("MOOD_MATERIAL_ASSET")) m_assetDragKind = AssetDragKind::Material;
         else if (p->IsDataType("MOOD_SCRIPT_ASSET"))   m_assetDragKind = AssetDragKind::Script;
+        else if (p->IsDataType("MOOD_ITEM_ASSET"))     m_assetDragKind = AssetDragKind::Item;
     }
 
     if (!visible) return;
@@ -141,6 +142,20 @@ void ViewportPanel::onImGuiRender() {
                         float ndcY = 0.0f;
                         mousePosToNdc(ImGui::GetMousePos(), ndcX, ndcY);
                         m_pendingScriptDrop = ScriptDrop{
+                            true, ndcX, ndcY, std::string{str}};
+                    }
+                }
+                if (const ImGuiPayload* payload =
+                        ImGui::AcceptDragDropPayload("MOOD_ITEM_ASSET")) {
+                    // F2H52 Bloque D: payload es el path logico
+                    // null-terminated emitido por ItemBrowserPanel
+                    // (relativo a assets/, ej. "items/iron_sword.mooditem").
+                    if (payload->DataSize > 0) {
+                        const char* str = static_cast<const char*>(payload->Data);
+                        float ndcX = 0.0f;
+                        float ndcY = 0.0f;
+                        mousePosToNdc(ImGui::GetMousePos(), ndcX, ndcY);
+                        m_pendingItemDrop = ItemDrop{
                             true, ndcX, ndcY, std::string{str}};
                     }
                 }

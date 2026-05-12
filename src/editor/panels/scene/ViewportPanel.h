@@ -49,7 +49,7 @@ public:
     ///        - Material apunta a UNA ENTIDAD -> outline OBB sobre el
     ///          mesh bajo el cursor.
     ///        `None` significa que no hay drag activo (no se dibuja nada).
-    enum class AssetDragKind { None, Texture, Mesh, Prefab, Material, Script };
+    enum class AssetDragKind { None, Texture, Mesh, Prefab, Material, Script, Item };
     AssetDragKind assetDragKind() const { return m_assetDragKind; }
 
     /// @brief Helper booleano para callsites que solo necesitan saber si
@@ -147,6 +147,27 @@ public:
         return r;
     }
 
+    /// @brief Drop de un item asset sobre el viewport (F2H52 Bloque D).
+    ///        El payload `MOOD_ITEM_ASSET` emitido por `ItemBrowserPanel`
+    ///        es el path logico relativo a `assets/` (ej.
+    ///        "items/iron_sword.mooditem"). El consumidor
+    ///        (`EditorApplication::processViewportItemDrop`) hace
+    ///        pickTile + crea entity con TransformComponent + MeshRenderer
+    ///        (mesh tomado de `ItemAsset.model_path` si esta; sino cubo
+    ///        default) + TriggerComponent + ItemPickupComponent.
+    struct ItemDrop {
+        bool pending = false;
+        float ndcX = 0.0f;
+        float ndcY = 0.0f;
+        std::string itemPath; // path logico, ej. "items/iron_sword.mooditem"
+    };
+
+    ItemDrop consumeItemDrop() {
+        ItemDrop r = std::move(m_pendingItemDrop);
+        m_pendingItemDrop = ItemDrop{};
+        return r;
+    }
+
     /// @brief Click izquierdo sobre la imagen del viewport (Hito 13).
     ///        Distingue click puro de drag: dispara solo si el mouse bajó
     ///        y subió sin desplazarse más de 4 pixeles.
@@ -196,6 +217,7 @@ private:
     PrefabDrop m_pendingPrefabDrop{};
     MaterialDrop m_pendingMaterialDrop{};
     ScriptDrop m_pendingScriptDrop{};
+    ItemDrop m_pendingItemDrop{};  // F2H52 Bloque D
     ClickSelect m_pendingClick{};
     OverlayDraw m_overlayDraw{};
 

@@ -1383,6 +1383,7 @@ int EditorApplication::run() {
         processViewportPrefabDrop();
         processViewportMaterialDrop();
         processViewportScriptDrop();
+        processViewportItemDrop();   // F2H52 Bloque D
 
         // 3) Input -> camaras.
         {
