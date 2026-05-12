@@ -162,28 +162,31 @@ void buildNarrativeWorkspace(ImGuiID dockspaceId) {
 }
 
 /// @brief F2H51: workspace "Gameplay" — Sub-fase 2.5 Bloque 1 (Inventario).
-///        3 columnas: Item Browser izq (25%) / Viewport 3D centro (45%) /
-///        Property Editor + Inspector der (30%). Property Editor arriba,
-///        Inspector abajo (tabuladear si el dev lo prefiere).
-///        Permite ver simultaneo: lista de items + 3D del nivel +
-///        edicion del item activo + entity inspector cuando se selecciona
-///        una entidad con InventoryComponent en el viewport.
+///        4 columnas: Item Browser izq (22%) / Viewport 3D centro (36%) /
+///        Item Property Editor (21%) / Inspector der (21%).
+///        F2H52 D fix: el Inspector se movio de abajo del Property
+///        Editor al costado, ambos visibles simultaneamente. El dev
+///        edita item assets + ve el inspector de la entidad seleccionada
+///        sin tener que cambiar de tab.
 void buildGameplayWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockMain = dockspaceId;
-    // Col izq (Item Browser): 25%.
+    // Col izq (Item Browser): 22%.
     ImGuiID dockLeft = ImGui::DockBuilderSplitNode(
-        dockMain, ImGuiDir_Left, 0.25f, nullptr, &dockMain);
-    // Col der (Item Property Editor + Inspector): ~33% del remanente.
+        dockMain, ImGuiDir_Left, 0.22f, nullptr, &dockMain);
+    // Col der-extrema (Inspector): split del remanente. Despues del
+    // split izq, el remanente es ~78% — pedimos 27% del remanente
+    // (~21% absoluto).
+    ImGuiID dockFarRight = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Right, 0.27f, nullptr, &dockMain);
+    // Col der (Item Property Editor): otro split del remanente. Tras
+    // sacar Inspector, queda ~57%; pedimos 37% (~21% absoluto).
     ImGuiID dockRight = ImGui::DockBuilderSplitNode(
-        dockMain, ImGuiDir_Right, 0.33f, nullptr, &dockMain);
-    // Col der: split vertical, Inspector abajo 45%.
-    ImGuiID dockRightBottom = ImGui::DockBuilderSplitNode(
-        dockRight, ImGuiDir_Down, 0.45f, nullptr, &dockRight);
+        dockMain, ImGuiDir_Right, 0.37f, nullptr, &dockMain);
 
     ImGui::DockBuilderDockWindow("Item Browser",          dockLeft);
     ImGui::DockBuilderDockWindow("Viewport",              dockMain);
     ImGui::DockBuilderDockWindow("Item Property Editor",  dockRight);
-    ImGui::DockBuilderDockWindow("Inspector",             dockRightBottom);
+    ImGui::DockBuilderDockWindow("Inspector",             dockFarRight);
 }
 
 /// @brief Dispatcher: elige el builder segun el nombre del workspace

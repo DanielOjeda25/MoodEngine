@@ -1,0 +1,27 @@
+{
+  "_version": 1,
+  "description_key": "",
+  "description_literal": "una simple",
+  "icon_path": "icons/items/placeholder.png",
+  "id": "metal sword",
+  "model_path": "",
+  "name_key": "",
+  "name_literal": "metal sword",
+  "slot_size": {
+    "height": 2,
+    "width": 2
+  },
+  "stack": {
+    "max_stack": 2,
+    "stackable": true
+  },
+  "stats": {
+    "damage": 0.0,
+    "durability_max": 100.0,
+    "weight": 0.0
+  },
+  "tags": [
+    "weapon",
+    "arma"
+  ]
+}

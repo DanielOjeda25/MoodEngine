@@ -201,7 +201,11 @@ EditorApplication::EditorApplication() {
     // F2H51: bump v6 -> v7. Workspace "Gameplay" nuevo con Item Browser
     // + Item Property Editor + Inspector. Layouts v6 los mostrarian
     // flotantes en lugar de docked.
-    io.IniFilename = "imgui_layout_v7.ini";
+    // F2H52 D fix: bump v7 -> v8. Workspace Gameplay reorganizado a 4
+    // columnas (Item Browser / Viewport / Property Editor / Inspector).
+    // Inspector ahora al costado del Property Editor en lugar de abajo
+    // — ambos importantes y siempre visibles.
+    io.IniFilename = "imgui_layout_v8.ini";
 
     ImGui::StyleColorsDark();
 

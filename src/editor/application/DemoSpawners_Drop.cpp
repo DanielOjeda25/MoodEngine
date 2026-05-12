@@ -590,8 +590,27 @@ void EditorApplication::processViewportItemDrop() {
         origin.z + (static_cast<f32>(hit.tileY) + 0.5f) * tileSize);
     t.scale = glm::vec3(1.0f);
 
-    // MeshRenderer (mesh + materiales auto del mesh si tiene textures).
-    auto mats = m_assetManager->createMaterialsForMesh(meshId);
+    // MeshRenderer. F2H52 D fix #4 (Opcion C):
+    //   1) Si el item define model_path, createMaterialsForMesh extrae
+    //      las texturas embebidas en ese mesh.
+    //   2) Si NO hay model_path pero SI hay icon_path, usamos el icono
+    //      como albedo del cubo placeholder — asi el dev ve el item
+    //      identificable en el mundo sin tener que modelar nada.
+    //   3) Sino fallback al material default (missing.png checkerboard
+    //      magenta+negro — señal honesta "te falta material/icono").
+    std::vector<MaterialAssetId> mats;
+    const bool hasModelPath = (asset != nullptr && !asset->model_path.empty());
+    const bool hasIconPath  = (asset != nullptr && !asset->icon_path.empty());
+    if (hasModelPath) {
+        mats = m_assetManager->createMaterialsForMesh(meshId);
+    } else if (hasIconPath) {
+        const TextureAssetId iconTex = m_assetManager->loadTexture(asset->icon_path);
+        const MaterialAssetId iconMat =
+            m_assetManager->createMaterialFromTexture(iconTex);
+        mats.push_back(iconMat);
+    } else {
+        mats = m_assetManager->createMaterialsForMesh(meshId);
+    }
     e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
 
     // TriggerComponent — volumen detector del player. halfExtents 0.5m
@@ -609,8 +628,11 @@ void EditorApplication::processViewportItemDrop() {
     e.addComponent<ItemPickupComponent>(ip);
 
     Log::editor()->info(
-        "Drop item '{}' -> tile ({}, {}) [mesh={}, displayName='{}']",
-        drop.itemPath, hit.tileX, hit.tileY, meshId, displayName);
+        "Drop item '{}' -> tile ({}, {}) [mesh={}, displayName='{}', "
+        "albedo='{}']",
+        drop.itemPath, hit.tileX, hit.tileY, meshId, displayName,
+        hasModelPath ? "from model" :
+        hasIconPath  ? asset->icon_path : "default (missing)");
     pushCreatedEntities({e}, "Drop item '" + displayName + "'");
 }
 

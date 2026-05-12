@@ -51,6 +51,10 @@
 - **Sub-fase 3 — Render Polish** (diferida): tonemap + bloom + SSAO + CSM + material node-graph + shader graph runtime.
 - **Sub-fase 3 — Localization Pipeline** (candidato nuevo, pedido del dev 2026-05-12): el dev escribe texto en su idioma nativo en el editor → editor auto-genera la i18n key + la guarda en `es.json` (su locale) → toggle key/literal del Property Editor desaparece + todo se trata como key implícita → listing UI de "keys sin traducción" para que un traductor humano (o el dev) complete `en.json`/`fr.json`/etc después. Match con patrón industry-standard (Crowdin/Lokalise/Phrase) — NO auto-translate machine. Scope mediano (~6-8h), abrir cuando emerja necesidad real de multi-idioma.
 
+### Diferidos sin orden (emergentes durante tour F2H52 Bloque D)
+
+- **File picker para `icon_path` y `model_path` del Item Property Editor**: hoy el dev tipea el path a mano (string libre). Pedido del dev (2026-05-12): boton "Browse..." que abra un file dialog con root en `assets/` (icons/ y models/ separadas), filtros por extension (.png/.jpg para icon, .glb/.fbx/.obj para model). Misma UX que el Asset Browser tiene para texturas. Scope chico (~30 min); hito propio o lo metemos en un fix de UX al cierre de F2H52.
+
 ### Diferidos sin orden (emergentes post-F2H51)
 
 - **`ItemAsset.slot_size` (width × height) ignorado en `Grid2D`**: v1 asume todos los items ocupan 1 cell. Si emerge necesidad de items 2x1 / 1x2 (Resident Evil style real), implementar packing rectangular en `InventoryState::add/placeAt`. Schema persiste el campo para no romper roundtrip.

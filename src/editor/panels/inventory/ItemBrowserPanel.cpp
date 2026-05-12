@@ -279,6 +279,21 @@ void ItemBrowserPanel::drawNewItemPopup() {
     if (ImGui::InputText("##new_id", buf, sizeof(buf))) {
         m_newId = buf;
     }
+    // F2H52 D fix: feedback explicito si el ID no es valido. Antes el
+    // boton "Crear" se quedaba gris sin razon visible — el dev pensaba
+    // que el editor no respondia. Ahora le decimos exactamente que
+    // arreglar. Permitimos espacios (validos en filesystems modernos);
+    // solo bloqueamos los chars que de verdad rompen el filename.
+    const bool idEmpty = m_newId.empty();
+    const auto badPos = m_newId.find_first_of("/\\:*?\"<>|");
+    if (idEmpty) {
+        ImGui::TextColored(ImVec4(0.95f, 0.55f, 0.25f, 1.0f), "%s",
+            I18n::T("editor.panel.item_browser.new_error.empty").c_str());
+    } else if (badPos != std::string::npos) {
+        ImGui::TextColored(ImVec4(0.95f, 0.55f, 0.25f, 1.0f), "%s '%c'",
+            I18n::T("editor.panel.item_browser.new_error.bad_char").c_str(),
+            m_newId[badPos]);
+    }
     // F2H51 fix #4: dropdown de plantilla. El dev elige una categoria
     // pre-armada (Arma / Pocion / Armadura / Quest / Objeto) que poblara
     // tags + stats + stack rules con valores iniciales razonables.
@@ -300,8 +315,7 @@ void ItemBrowserPanel::drawNewItemPopup() {
         }
         ImGui::EndCombo();
     }
-    const bool idOk = !m_newId.empty() &&
-        m_newId.find_first_of("/\\:*?\"<>| ") == std::string::npos;
+    const bool idOk = !idEmpty && badPos == std::string::npos;
     ImGui::BeginDisabled(!idOk);
     if (ImGui::Button(I18n::T("editor.panel.item_browser.create").c_str())) {
         const auto dir = itemsDir();
@@ -352,8 +366,19 @@ void ItemBrowserPanel::drawRenamePopup() {
     if (ImGui::InputText("##rename_id", buf, sizeof(buf))) {
         m_renameNewId = buf;
     }
-    const bool idOk = !m_renameNewId.empty() &&
-        m_renameNewId.find_first_of("/\\:*?\"<>| ") == std::string::npos;
+    // F2H52 D fix: paridad con drawNewItemPopup — mensaje rojo si el
+    // ID es invalido, espacios permitidos.
+    const bool rEmpty = m_renameNewId.empty();
+    const auto rBadPos = m_renameNewId.find_first_of("/\\:*?\"<>|");
+    if (rEmpty) {
+        ImGui::TextColored(ImVec4(0.95f, 0.55f, 0.25f, 1.0f), "%s",
+            I18n::T("editor.panel.item_browser.new_error.empty").c_str());
+    } else if (rBadPos != std::string::npos) {
+        ImGui::TextColored(ImVec4(0.95f, 0.55f, 0.25f, 1.0f), "%s '%c'",
+            I18n::T("editor.panel.item_browser.new_error.bad_char").c_str(),
+            m_renameNewId[rBadPos]);
+    }
+    const bool idOk = !rEmpty && rBadPos == std::string::npos;
     ImGui::BeginDisabled(!idOk);
     if (ImGui::Button(I18n::T("editor.panel.item_browser.rename_confirm").c_str())) {
         namespace fs = std::filesystem;

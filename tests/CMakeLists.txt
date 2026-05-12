@@ -78,6 +78,7 @@ add_executable(mood_tests
     test_item_asset.cpp           # F2H51
     test_inventory_state.cpp      # F2H51
     test_item_pickup_system.cpp   # F2H52 Bloque C
+    test_primitive_meshes.cpp     # F2H52 D investigacion: winding cubo
 
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/Brush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/BrushMesh.cpp

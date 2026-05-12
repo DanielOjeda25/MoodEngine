@@ -11,38 +11,48 @@ MeshData createCubeMesh() {
     // sombreen con caras "duras" estilo Wolfenstein/AAA-2010.
     //
     // Orden de caras (derecha-mano): +X, -X, +Y, -Y, +Z, -Z.
+    //
+    // F2H52 D fix: las caras +X, -X, +Y, -Y tenian winding CW desde
+    // afuera (inconsistente con glFrontFace(GL_CCW)). Las +Z, -Z
+    // estaban bien — solo se patcharon 4 caras (swap v1<->v2 en cada
+    // triangulo). Bug silencioso desde Hito 10: los tiles del Hito 6
+    // usan brush meshes (con winding propio), no este primitivo, asi
+    // que solo se hizo visible cuando F2H52 D empezo a spawnear pickups
+    // con este cubo + textura `missing.png` contrastada (el dev veia el
+    // cubo "al reves" desde varios angulos). Validado por
+    // test_primitive_meshes.cpp.
     const std::vector<f32> vertices = {
-        // +X (derecha) -- normal (1, 0, 0)
+        // +X (derecha) -- normal (1, 0, 0). Swap v1<->v2 cada triangulo.
          0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 1.0f,  0.0f, 0.0f,   1.0f, 0.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 1.0f,  1.0f, 1.0f,   1.0f, 0.0f, 0.0f,
          0.5f, -0.5f,  0.5f,  1.0f, 1.0f, 1.0f,  1.0f, 0.0f,   1.0f, 0.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 1.0f,  1.0f, 1.0f,   1.0f, 0.0f, 0.0f,
          0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 1.0f,  0.0f, 0.0f,   1.0f, 0.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 1.0f,  1.0f, 1.0f,   1.0f, 0.0f, 0.0f,
          0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 1.0f,  0.0f, 1.0f,   1.0f, 0.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 1.0f,  1.0f, 1.0f,   1.0f, 0.0f, 0.0f,
 
-        // -X (izquierda) -- normal (-1, 0, 0)
+        // -X (izquierda) -- normal (-1, 0, 0). Swap v1<->v2.
         -0.5f, -0.5f,  0.5f,  1.0f, 0.9f, 0.9f,  0.0f, 0.0f,  -1.0f, 0.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f,  1.0f, 0.9f, 0.9f,  1.0f, 1.0f,  -1.0f, 0.0f, 0.0f,
         -0.5f, -0.5f, -0.5f,  1.0f, 0.9f, 0.9f,  1.0f, 0.0f,  -1.0f, 0.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f,  1.0f, 0.9f, 0.9f,  1.0f, 1.0f,  -1.0f, 0.0f, 0.0f,
         -0.5f, -0.5f,  0.5f,  1.0f, 0.9f, 0.9f,  0.0f, 0.0f,  -1.0f, 0.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f,  1.0f, 0.9f, 0.9f,  1.0f, 1.0f,  -1.0f, 0.0f, 0.0f,
         -0.5f,  0.5f,  0.5f,  1.0f, 0.9f, 0.9f,  0.0f, 1.0f,  -1.0f, 0.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f,  1.0f, 0.9f, 0.9f,  1.0f, 1.0f,  -1.0f, 0.0f, 0.0f,
 
-        // +Y (arriba) -- normal (0, 1, 0)
+        // +Y (arriba) -- normal (0, 1, 0). Swap v1<->v2.
         -0.5f,  0.5f, -0.5f,  0.95f, 1.0f, 0.95f,  0.0f, 0.0f,  0.0f, 1.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  0.95f, 1.0f, 0.95f,  1.0f, 1.0f,  0.0f, 1.0f, 0.0f,
          0.5f,  0.5f, -0.5f,  0.95f, 1.0f, 0.95f,  1.0f, 0.0f,  0.0f, 1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  0.95f, 1.0f, 0.95f,  1.0f, 1.0f,  0.0f, 1.0f, 0.0f,
         -0.5f,  0.5f, -0.5f,  0.95f, 1.0f, 0.95f,  0.0f, 0.0f,  0.0f, 1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  0.95f, 1.0f, 0.95f,  1.0f, 1.0f,  0.0f, 1.0f, 0.0f,
         -0.5f,  0.5f,  0.5f,  0.95f, 1.0f, 0.95f,  0.0f, 1.0f,  0.0f, 1.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  0.95f, 1.0f, 0.95f,  1.0f, 1.0f,  0.0f, 1.0f, 0.0f,
 
-        // -Y (abajo) -- normal (0, -1, 0)
+        // -Y (abajo) -- normal (0, -1, 0). Swap v1<->v2.
         -0.5f, -0.5f,  0.5f,  0.9f, 0.9f, 0.95f,  0.0f, 0.0f,  0.0f, -1.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  0.9f, 0.9f, 0.95f,  1.0f, 1.0f,  0.0f, -1.0f, 0.0f,
          0.5f, -0.5f,  0.5f,  0.9f, 0.9f, 0.95f,  1.0f, 0.0f,  0.0f, -1.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,  0.9f, 0.9f, 0.95f,  1.0f, 1.0f,  0.0f, -1.0f, 0.0f,
         -0.5f, -0.5f,  0.5f,  0.9f, 0.9f, 0.95f,  0.0f, 0.0f,  0.0f, -1.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,  0.9f, 0.9f, 0.95f,  1.0f, 1.0f,  0.0f, -1.0f, 0.0f,
         -0.5f, -0.5f, -0.5f,  0.9f, 0.9f, 0.95f,  0.0f, 1.0f,  0.0f, -1.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  0.9f, 0.9f, 0.95f,  1.0f, 1.0f,  0.0f, -1.0f, 0.0f,
 
         // +Z (frente) -- normal (0, 0, 1)
         -0.5f, -0.5f,  0.5f,  1.0f, 1.0f, 1.0f,  0.0f, 0.0f,   0.0f, 0.0f, 1.0f,
