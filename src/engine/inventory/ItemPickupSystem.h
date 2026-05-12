@@ -27,9 +27,6 @@
 
 #include "engine/scene/components/Components.h"  // Para ItemPickupComponent fwd...
 
-#include <functional>
-#include <string>
-
 namespace Mood {
 
 class AssetManager;
@@ -50,20 +47,11 @@ namespace Mood::Inventory::ItemPickupSystem {
 bool tick(Scene& scene, AssetManager& assets, bool eJustPressed,
           bool dialogActiveThisFrame);
 
-/// @brief Callback invocado tras un pickup exitoso (despues de add() y
-///        antes de destroyEntity). Firma: (itemPath, quantity). El dev
-///        del juego lo registra una vez al start via Lua (Bloque F).
-///        Si no esta seteado, el motor sigue funcionando — solo no
-///        dispara reacciones game-specific.
-using PickupHook = std::function<void(const std::string& itemPath, int quantity)>;
-void setPickupHook(PickupHook fn);
-
-/// @brief Limpia el hook (testing).
-void clearHooks();
-
 /// @brief Resetea el cache del player entity. Llamar al cargar un
 ///        proyecto / cambiar de escena para forzar re-scan al proximo
 ///        tick. Idempotente.
+/// @note El hook on_pickup vive en `Mood::Inventory::Hooks` (Bloque F).
+///       Esta funcion solo limpia el cache de la entity del player.
 void resetPlayerCache();
 
 } // namespace Mood::Inventory::ItemPickupSystem

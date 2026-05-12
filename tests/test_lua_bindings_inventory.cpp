@@ -6,6 +6,7 @@
 #include <doctest/doctest.h>
 
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/inventory/InventoryHooks.h"
 #include "engine/inventory/InventoryState.h"
 #include "engine/inventory/ItemAsset.h"
 #include "engine/render/rhi/ITexture.h"
@@ -89,6 +90,8 @@ std::unique_ptr<InvLuaFixture> makeFixture(const std::string& tag) {
 
     fx->lua.open_libraries(sol::lib::base);
     setupInventoryBindings(fx->lua, fx->scriptEntity, fx->am.get());
+    // Clear hooks entre tests (estado global).
+    Inventory::Hooks::clearAll();
     return fx;
 }
 
@@ -308,4 +311,139 @@ TEST_CASE("inventory.count: item path inexistente -> 0") {
     auto fx = makeFixture("count_invalid");
     fx->lua.safe_script("c = inventory.count('items/inexistente.mooditem')");
     CHECK(fx->lua["c"] == 0);
+}
+
+// ============================================================
+// F2H52 Bloque F — Hooks Lua: on_pickup / on_drop / on_use + inventory.use
+// ============================================================
+
+TEST_CASE("inventory.on_pickup: registra callback Lua que se dispara desde C++") {
+    auto fx = makeFixture("hook_pickup");
+    fx->lua.safe_script(R"(
+        log_path = nil
+        log_qty  = nil
+        inventory.on_pickup(function(path, qty)
+            log_path = path
+            log_qty  = qty
+        end)
+    )");
+    CHECK(Inventory::Hooks::hasPickupHook());
+
+    // El ItemPickupSystem (Bloque C) llama Hooks::invokePickup tras un
+    // pickup exitoso. Aca lo invocamos directo para aislar el test del
+    // sistema.
+    Inventory::Hooks::invokePickup("items/health_potion.mooditem", 3);
+
+    CHECK(fx->lua["log_path"].get<std::string>() == "items/health_potion.mooditem");
+    CHECK(fx->lua["log_qty"] == 3);
+}
+
+TEST_CASE("inventory.on_drop: registra y dispara con qty") {
+    auto fx = makeFixture("hook_drop");
+    fx->lua.safe_script(R"(
+        drop_path = nil
+        drop_qty  = nil
+        inventory.on_drop(function(path, qty)
+            drop_path = path
+            drop_qty  = qty
+        end)
+    )");
+    Inventory::Hooks::invokeDrop("items/iron_sword.mooditem", 1);
+
+    CHECK(fx->lua["drop_path"].get<std::string>() == "items/iron_sword.mooditem");
+    CHECK(fx->lua["drop_qty"] == 1);
+}
+
+TEST_CASE("inventory.on_use: registra y recibe (entity, path)") {
+    auto fx = makeFixture("hook_use");
+    auto& inv = fx->player.getComponent<InventoryComponent>();
+    inv.state.add(fx->potionId, 1, *fx->am);
+
+    fx->lua.safe_script(R"(
+        used_path = nil
+        used_tag  = nil
+        inventory.on_use(function(entity, path)
+            used_path = path
+            used_tag  = entity.tag
+        end)
+        ok = inventory.use('items/health_potion.mooditem')
+    )");
+    CHECK(fx->lua["ok"] == true);
+    CHECK(fx->lua["used_path"].get<std::string>() == "items/health_potion.mooditem");
+    CHECK(fx->lua["used_tag"].get<std::string>() == "Player");
+}
+
+TEST_CASE("inventory.use: callback decide consumo (engine NO auto-remove)") {
+    auto fx = makeFixture("use_no_autoremove");
+    auto& inv = fx->player.getComponent<InventoryComponent>();
+    inv.state.add(fx->potionId, 3, *fx->am);
+
+    // Callback que CONSUME el item (caso pocion).
+    fx->lua.safe_script(R"(
+        inventory.on_use(function(entity, path)
+            inventory.remove(entity, path, 1)
+        end)
+        inventory.use('items/health_potion.mooditem')
+    )");
+    CHECK(inv.state.count(fx->potionId) == 2);  // consumio 1
+
+    // Callback que NO consume (caso arma equipable).
+    inv.state.add(fx->swordId, 1, *fx->am);
+    fx->lua.safe_script(R"(
+        inventory.on_use(function(entity, path)
+            -- no remove: equip pero no consume
+        end)
+        inventory.use('items/iron_sword.mooditem')
+    )");
+    CHECK(inv.state.count(fx->swordId) == 1);  // sigue 1
+}
+
+TEST_CASE("inventory.use: sin hook registrado -> false + log warn") {
+    auto fx = makeFixture("use_no_hook");
+    auto& inv = fx->player.getComponent<InventoryComponent>();
+    inv.state.add(fx->potionId, 1, *fx->am);
+    // Sin on_use registrado.
+    fx->lua.safe_script("r = inventory.use('items/health_potion.mooditem')");
+    CHECK(fx->lua["r"] == false);
+    CHECK(inv.state.count(fx->potionId) == 1);  // no se toco
+}
+
+TEST_CASE("inventory.use: item que no tiene -> false") {
+    auto fx = makeFixture("use_missing_item");
+    fx->lua.safe_script(R"(
+        called = false
+        inventory.on_use(function(entity, path) called = true end)
+        r = inventory.use('items/iron_sword.mooditem')
+    )");
+    CHECK(fx->lua["r"] == false);
+    CHECK(fx->lua["called"] == false);  // no se invoco
+}
+
+TEST_CASE("inventory.use: explicito con entity") {
+    auto fx = makeFixture("use_explicit");
+    auto& inv = fx->player.getComponent<InventoryComponent>();
+    inv.state.add(fx->potionId, 1, *fx->am);
+
+    fx->lua["target"] = fx->player;
+    fx->lua.safe_script(R"(
+        used_via_explicit = false
+        inventory.on_use(function(entity, path)
+            used_via_explicit = true
+        end)
+        inventory.use(target, 'items/health_potion.mooditem')
+    )");
+    CHECK(fx->lua["used_via_explicit"] == true);
+}
+
+TEST_CASE("Hooks::setXxxHook(nullptr): limpia el callback") {
+    auto fx = makeFixture("hook_clear");
+    fx->lua.safe_script(R"(
+        inventory.on_pickup(function(p, q) end)
+    )");
+    CHECK(Inventory::Hooks::hasPickupHook());
+    fx->lua.safe_script("inventory.on_pickup(nil)");
+    // sol::function nil queda como invalid -> binding lo trata como
+    // setPickupHook(nullptr). Resultado: el hook queda limpio.
+    // (Si llega como sol::nil_t, sol::function::valid()==false.)
+    CHECK_FALSE(Inventory::Hooks::hasPickupHook());
 }

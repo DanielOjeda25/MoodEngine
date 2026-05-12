@@ -381,6 +381,7 @@ add_library(mood_engine_lib STATIC
     src/engine/inventory/ItemAsset.cpp          # F2H51
     src/engine/inventory/InventoryState.cpp     # F2H51
     src/engine/inventory/ItemPickupSystem.cpp   # F2H52
+    src/engine/inventory/InventoryHooks.cpp     # F2H52 Bloque F
 
     src/engine/packaging/PackageBuilder.cpp
 

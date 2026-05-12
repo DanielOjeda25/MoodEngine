@@ -4,6 +4,7 @@
 #include "engine/dialog/DialogSystem.h"      // isActive() check (defensive)
 #include "engine/game/state/GameState.h"
 #include "engine/i18n/I18n.h"
+#include "engine/inventory/InventoryHooks.h"  // F2H52 Bloque F
 #include "engine/inventory/ItemAsset.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
@@ -16,10 +17,6 @@
 namespace Mood::Inventory::ItemPickupSystem {
 
 namespace {
-
-// Hook Lua registrado por el dev del juego (Bloque F). nullptr = no
-// registrado, el motor sigue funcionando sin disparar reacciones.
-PickupHook g_pickupHook;
 
 // Cache del player entity. Re-scanea si el handle cacheado se invalida
 // (scene reload / destroy / nueva escena). Mismo patron que el cache
@@ -75,14 +72,6 @@ std::string displayNameOf(const Inventory::Asset& asset) {
 }
 
 } // namespace
-
-void setPickupHook(PickupHook fn) {
-    g_pickupHook = std::move(fn);
-}
-
-void clearHooks() {
-    g_pickupHook = nullptr;
-}
 
 void resetPlayerCache() {
     g_cachedPlayer = entt::null;
@@ -145,10 +134,10 @@ bool tick(Scene& scene, AssetManager& assets, bool eJustPressed,
                 "hud.pickup.notification", name, ip.quantity);
             Mood::GameState::pushPickup(notif.c_str());
 
-            // Hook Lua (si registrado por el dev del juego).
-            if (g_pickupHook) {
-                g_pickupHook(ip.itemPath, ip.quantity);
-            }
+            // Hook Lua (Bloque F): invoca el callback `on_pickup` si el
+            // dev lo registro. Hooks viven en Mood::Inventory::Hooks
+            // (compartido con drop/use). No-op si nadie registro.
+            Mood::Inventory::Hooks::invokePickup(ip.itemPath, ip.quantity);
 
             pickedUpThisFrame = true;
 

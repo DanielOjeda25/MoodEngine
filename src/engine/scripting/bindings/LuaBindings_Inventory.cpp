@@ -36,6 +36,7 @@
 
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/inventory/InventoryHooks.h"   // F2H52 Bloque F
 #include "engine/inventory/InventoryState.h"
 #include "engine/inventory/ItemAsset.h"
 #include "engine/scene/components/Components.h"
@@ -108,6 +109,21 @@ sol::table entriesAsTable(sol::state_view lua, const Inventory::State& inv,
 
 void setupInventoryBindings(sol::state& lua, Entity self,
                              AssetManager* assets) {
+    // F2H52 F: registrar Entity usertype si no esta ya, para que los
+    // callbacks Lua puedan leer `entity.tag` cuando reciben una Entity
+    // como arg (caso `inventory.on_use(function(entity, path) ... end)`).
+    // En produccion `setupLuaBindings` ya lo registro antes; en tests
+    // que solo llaman `setupInventoryBindings`, esto evita un crash si
+    // el callback toca `entity.tag`. Idempotente — sol2 sobrescribe.
+    if (!lua["Entity"].valid()) {
+        lua.new_usertype<Entity>("Entity",
+            "tag", sol::property([](Entity& e) -> std::string {
+                return e.hasComponent<TagComponent>()
+                    ? e.getComponent<TagComponent>().name
+                    : std::string{};
+            }));
+    }
+
     sol::table inv = lua.create_named_table("inventory");
 
     // -------- Lecturas --------
@@ -322,6 +338,116 @@ void setupInventoryBindings(sol::state& lua, Entity self,
 
             return true;
         });
+
+    // -------- Hooks: on_pickup / on_drop / on_use (F2H52 Bloque F) --------
+    //
+    // El dev registra UNA vez al inicio del juego (NO cada frame). Los
+    // hooks se mantienen vivos via sol::function capturada — el Lua state
+    // que registro el hook debe seguir vivo mientras se invoque (si el
+    // dev recarga el script en hot-reload, el sol::function vieja queda
+    // colgando; los hooks se sobreescriben al re-registrarse). Si nadie
+    // registra, el motor sigue funcionando sin disparar nada.
+    //
+    // Mismo patron que F2H48.1 DialogSystem::setEvaluator/Executor.
+
+    inv.set_function("on_pickup",
+        [](sol::function fn) {
+            if (!fn.valid()) {
+                Inventory::Hooks::setPickupHook(nullptr);
+                return;
+            }
+            Inventory::Hooks::setPickupHook(
+                [fn](const std::string& itemPath, int quantity) {
+                    sol::protected_function_result r = fn(itemPath, quantity);
+                    if (!r.valid()) {
+                        sol::error err = r;
+                        Log::script()->warn(
+                            "[inventory.on_pickup] callback error: {}",
+                            err.what());
+                    }
+                });
+        });
+
+    inv.set_function("on_drop",
+        [](sol::function fn) {
+            if (!fn.valid()) {
+                Inventory::Hooks::setDropHook(nullptr);
+                return;
+            }
+            Inventory::Hooks::setDropHook(
+                [fn](const std::string& itemPath, int quantity) {
+                    sol::protected_function_result r = fn(itemPath, quantity);
+                    if (!r.valid()) {
+                        sol::error err = r;
+                        Log::script()->warn(
+                            "[inventory.on_drop] callback error: {}",
+                            err.what());
+                    }
+                });
+        });
+
+    inv.set_function("on_use",
+        [](sol::function fn) {
+            if (!fn.valid()) {
+                Inventory::Hooks::setUseHook(nullptr);
+                return;
+            }
+            Inventory::Hooks::setUseHook(
+                [fn](Entity entity, const std::string& itemPath) {
+                    sol::protected_function_result r = fn(entity, itemPath);
+                    if (!r.valid()) {
+                        sol::error err = r;
+                        Log::script()->warn(
+                            "[inventory.on_use] callback error: {}",
+                            err.what());
+                    }
+                });
+        });
+
+    // -------- inventory.use(entity, path) / inventory.use(path) --------
+    //
+    // Verifica que el entity tenga InventoryComponent + count >= 1 del
+    // item. Si si, invoca el hook on_use(entity, item_path) — el callback
+    // decide si consume el item (caso pocion: hace `inventory.remove`
+    // adentro) o no (caso arma equipable: lo mantiene). Retorna true si
+    // el hook fue invocado, false si:
+    //   - El entity no tiene InventoryComponent.
+    //   - No tiene >=1 unidad del item.
+    //   - No hay hook on_use registrado.
+    inv.set_function("use", sol::overload(
+        [assets](Entity ent, const std::string& path) -> bool {
+            if (!ent.hasComponent<InventoryComponent>()) return false;
+            const ItemAssetId id = resolveItem(assets, path);
+            if (id == 0) return false;
+            if (!ent.getComponent<InventoryComponent>().state.has(id, 1)) {
+                return false;
+            }
+            if (!Inventory::Hooks::hasUseHook()) {
+                Log::script()->warn(
+                    "[inventory.use] no hay callback on_use registrado");
+                return false;
+            }
+            Inventory::Hooks::invokeUse(ent, path);
+            return true;
+        },
+        [self, assets](const std::string& path) -> bool {
+            if (self.scene() == nullptr || assets == nullptr) return false;
+            Entity player = findPlayer(*self.scene());
+            if (!player) return false;
+            const ItemAssetId id = resolveItem(assets, path);
+            if (id == 0) return false;
+            if (!player.getComponent<InventoryComponent>().state.has(id, 1)) {
+                return false;
+            }
+            if (!Inventory::Hooks::hasUseHook()) {
+                Log::script()->warn(
+                    "[inventory.use] no hay callback on_use registrado");
+                return false;
+            }
+            Inventory::Hooks::invokeUse(player, path);
+            return true;
+        }
+    ));
 }
 
 } // namespace Mood

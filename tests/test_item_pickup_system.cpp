@@ -17,6 +17,7 @@
 
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/game/state/GameState.h"
+#include "engine/inventory/InventoryHooks.h"
 #include "engine/inventory/InventoryState.h"
 #include "engine/inventory/ItemAsset.h"
 #include "engine/inventory/ItemPickupSystem.h"
@@ -99,7 +100,7 @@ std::unique_ptr<PickupFixture> makeFixture(
     // Estado inicial: reset el cache del sistema + HUD + hooks para
     // evitar contaminacion entre tests.
     Pickup::resetPlayerCache();
-    Pickup::clearHooks();
+    Mood::Inventory::Hooks::clearAll();
     GameState::reset();
     return fx;
 }
@@ -132,7 +133,7 @@ TEST_CASE("ItemPickupSystem: player en trigger + E -> add + destroy + notif + ho
     int hookCalls = 0;
     std::string hookPath;
     int hookQty = 0;
-    Pickup::setPickupHook([&](const std::string& p, int q) {
+    Mood::Inventory::Hooks::setPickupHook([&](const std::string& p, int q) {
         ++hookCalls;
         hookPath = p;
         hookQty = q;
@@ -183,7 +184,7 @@ TEST_CASE("ItemPickupSystem: add fail (capacity) no destruye ni notifica") {
 
     tr.playerInside = true;
     int hookCalls = 0;
-    Pickup::setPickupHook([&](const std::string&, int) { ++hookCalls; });
+    Mood::Inventory::Hooks::setPickupHook([&](const std::string&, int) { ++hookCalls; });
     const bool any = Pickup::tick(fx->scene, *fx->am,
                                    /*eJustPressed=*/true, false);
     CHECK(!any);
@@ -300,7 +301,7 @@ TEST_CASE("ItemPickupSystem: quantity custom respeta stackable del item") {
 
 TEST_CASE("ItemPickupSystem: sin hook registrado el pickup sigue funcionando") {
     auto fx = makeFixture("no_hook");
-    Pickup::clearHooks();
+    Mood::Inventory::Hooks::clearAll();
     auto& tr = fx->pickup.getComponent<TriggerComponent>();
     auto& inv = fx->player.getComponent<InventoryComponent>();
 
