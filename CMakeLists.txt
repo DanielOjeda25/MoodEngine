@@ -424,6 +424,7 @@ add_library(mood_engine_lib STATIC
 
     src/engine/scripting/exposed/ExposedProperty.cpp
     src/engine/scripting/bindings/LuaBindings.cpp
+    src/engine/scripting/bindings/LuaBindings_Inventory.cpp  # F2H52 Bloque E
 
     src/engine/render/backend/opengl/OpenGLMesh.cpp
     src/engine/render/backend/opengl/OpenGLShader.cpp

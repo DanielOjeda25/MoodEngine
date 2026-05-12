@@ -38,4 +38,12 @@ void setupLuaBindings(sol::state& lua, Entity self,
                        PhysicsWorld* physics = nullptr,
                        AssetManager* assets = nullptr);
 
+/// @brief F2H52 Bloque E: registra la tabla `inventory` en `lua`.
+///        Implementado en LuaBindings_Inventory.cpp (split por tamaño del
+///        archivo principal). Llamado por `setupLuaBindings` al final.
+///        Requiere `self` (para resolver el Scene* de las queries) y
+///        `assets` para mapear path logico -> ItemAssetId.
+void setupInventoryBindings(sol::state& lua, Entity self,
+                             AssetManager* assets);
+
 } // namespace Mood
