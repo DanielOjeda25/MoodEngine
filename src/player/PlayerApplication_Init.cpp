@@ -157,6 +157,13 @@ PlayerApplication::PlayerApplication() {
         rebuildSceneFromMap();
     }
 
+    // F2H52 G: inyectar scene + assets al DialogScriptHost para que las
+    // choices con `condition_lua = "inventory.has(...)"` funcionen
+    // contra el inventario REAL del player. El player corre todo Play
+    // Mode desde el inicio (no hay exit), asi que esto persiste.
+    Dialog::DialogScriptHost::setSceneAndAssets(
+        m_scene.get(), m_assetManager.get());
+
     if (m_sceneRenderer && m_scene) {
         // Aplicar Environment del proyecto YA, en lugar de esperar al
         // primer renderScene. Asi la primera frame muestra fog/exposure/

@@ -12,10 +12,20 @@
 
 #include <doctest/doctest.h>
 
+#include "engine/assets/manager/AssetManager.h"
 #include "engine/dialog/DialogAsset.h"
 #include "engine/dialog/DialogScriptHost.h"
 #include "engine/dialog/DialogSystem.h"
 #include "engine/game/state/GameState.h"
+#include "engine/inventory/InventoryState.h"
+#include "engine/inventory/ItemAsset.h"
+#include "engine/render/rhi/ITexture.h"
+#include "engine/scene/components/Components.h"
+#include "engine/scene/core/Entity.h"
+#include "engine/scene/core/Scene.h"
+
+#include <filesystem>
+#include <memory>
 
 using namespace Mood;
 using namespace Mood::Dialog;
@@ -166,4 +176,119 @@ TEST_CASE("DialogScriptHost: on_select_lua se ejecuta via executor + muta state"
     REQUIRE(DialogSystem::advance(0));  // disparar on_select_lua
     CHECK(GameState::dialogVars()["answered"] == "yes");
     CHECK(DialogSystem::currentNodeId() == n2);
+}
+
+// ============================================================
+// F2H52 Bloque G: gating de dialog choices con inventory.has()
+// ============================================================
+
+namespace {
+
+class DummyTexture : public ITexture {
+public:
+    void bind(u32 = 0) const override {}
+    void unbind() const override {}
+    u32 width() const override { return 1; }
+    u32 height() const override { return 1; }
+    TextureHandle handle() const override { return nullptr; }
+};
+
+AssetManager::TextureFactory dummyTexFactory() {
+    return [](const std::string&) { return std::make_unique<DummyTexture>(); };
+}
+
+/// Helper: setea scene + assets con un player que tiene InventoryComponent
+/// y un item de quest en el AssetManager. Devuelve la fixture viva (el
+/// caller la mantiene mientras corre el test).
+struct DialogInvFixture {
+    std::filesystem::path tmpRoot;
+    std::unique_ptr<AssetManager> am;
+    Scene scene;
+    Entity player;
+    ItemAssetId keyId = 0;
+};
+
+std::unique_ptr<DialogInvFixture> makeDialogInvFixture(const std::string& tag) {
+    namespace fs = std::filesystem;
+    auto fx = std::make_unique<DialogInvFixture>();
+    fx->tmpRoot = fs::temp_directory_path() / ("mood_dialog_inv_" + tag);
+    fs::remove_all(fx->tmpRoot);
+    fs::create_directories(fx->tmpRoot / "items");
+
+    Inventory::Asset key;
+    key.id = "quest_key";
+    key.name_literal = "Quest Key";
+    key.tags = {"quest_item"};
+    key.saveToFile(fx->tmpRoot / "items" / "quest_key.mooditem");
+
+    fx->am = std::make_unique<AssetManager>(fx->tmpRoot.string(), dummyTexFactory());
+    fx->keyId = fx->am->loadItem("items/quest_key.mooditem");
+    REQUIRE(fx->keyId != fx->am->missingItemId());
+
+    fx->player = fx->scene.createEntity("Player");
+    fx->player.getComponent<TagComponent>().name = "Player";
+    fx->player.addComponent<InventoryComponent>();
+    return fx;
+}
+
+} // namespace
+
+TEST_CASE("DialogScriptHost: condition_lua con inventory.has() gateaa choices") {
+    freshState();
+    auto fx = makeDialogInvFixture("gate_by_inv");
+    DialogScriptHost::init();
+    DialogScriptHost::setSceneAndAssets(&fx->scene, fx->am.get());
+
+    // Sin la key: la choice no aparece.
+    CHECK_FALSE(DialogScriptHost::evaluate(
+        "inventory.has('items/quest_key.mooditem')"));
+
+    // Agregar la key: la choice aparece.
+    auto& inv = fx->player.getComponent<InventoryComponent>();
+    inv.state.add(fx->keyId, 1, *fx->am);
+    CHECK(DialogScriptHost::evaluate(
+        "inventory.has('items/quest_key.mooditem')"));
+
+    // Limpiar scene/assets: queries vuelven a false (estado post-Play
+    // Mode).
+    DialogScriptHost::setSceneAndAssets(nullptr, nullptr);
+    CHECK_FALSE(DialogScriptHost::evaluate(
+        "inventory.has('items/quest_key.mooditem')"));
+}
+
+TEST_CASE("DialogScriptHost: on_select_lua puede llamar inventory.remove") {
+    freshState();
+    auto fx = makeDialogInvFixture("on_select_remove");
+    DialogScriptHost::init();
+    DialogScriptHost::setSceneAndAssets(&fx->scene, fx->am.get());
+
+    auto& inv = fx->player.getComponent<InventoryComponent>();
+    inv.state.add(fx->keyId, 1, *fx->am);
+    CHECK(inv.state.count(fx->keyId) == 1);
+
+    // Caso "el NPC te quita la llave al elegir esa opcion":
+    DialogScriptHost::execute(
+        "inventory.remove('items/quest_key.mooditem', 1)");
+    CHECK(inv.state.count(fx->keyId) == 0);
+}
+
+TEST_CASE("DialogScriptHost: condition_lua complejo combina vars + inventory") {
+    freshState();
+    auto fx = makeDialogInvFixture("combine_vars_inv");
+    DialogScriptHost::init();
+    DialogScriptHost::setSceneAndAssets(&fx->scene, fx->am.get());
+
+    auto& inv = fx->player.getComponent<InventoryComponent>();
+    inv.state.add(fx->keyId, 1, *fx->am);
+    GameState::dialogVars()["spoke_to_guard"] = "true";
+
+    // Choice aparece solo si tenes la llave Y hablaste con el guardia.
+    const std::string expr =
+        "inventory.has('items/quest_key.mooditem') and "
+        "dialog.get_var('spoke_to_guard') == 'true'";
+    CHECK(DialogScriptHost::evaluate(expr));
+
+    // Sin var seteada -> false.
+    GameState::dialogVars().erase("spoke_to_guard");
+    CHECK_FALSE(DialogScriptHost::evaluate(expr));
 }

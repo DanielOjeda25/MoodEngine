@@ -3,6 +3,7 @@
 #include "core/Log.h"
 #include "engine/dialog/DialogSystem.h"
 #include "engine/game/state/GameState.h"
+#include "engine/scripting/bindings/LuaBindings.h"  // F2H52 G: setupInventoryBindings
 
 #include <sol/sol.hpp>
 
@@ -14,6 +15,17 @@ namespace {
 
 std::unique_ptr<sol::state> g_state;
 bool g_hooksRegistered = false;
+
+// F2H52 Bloque G: scene + assets opcionales para que la tabla
+// `inventory` del host pueda hacer queries del player (tag scan) y
+// resolver items. Inyectados por `setSceneAndAssets(...)` antes de
+// arrancar Play Mode. nullptr = queries silenciosas (false/0/{}).
+Mood::Scene*        g_scene  = nullptr;
+Mood::AssetManager* g_assets = nullptr;
+
+void buildInventoryBindings(sol::state& lua) {
+    Mood::setupInventoryBindings(lua, g_scene, g_assets);
+}
 
 /// Construye los bindings de la sol::state del host. Subset minimo
 /// para que un dev pueda escribir `condition_lua` / `on_select_lua`
@@ -64,6 +76,16 @@ void buildBindings(sol::state& lua) {
     hudTable.set_function("getHp",   []() { return Mood::GameState::hud().hp; });
     hudTable.set_function("getMag",  []() { return Mood::GameState::hud().mag; });
     hudTable.set_function("getReserve", []() { return Mood::GameState::hud().reserve; });
+
+    // --- F2H52 Bloque G: tabla `inventory` (lecturas + sum_stat). Las
+    // mutaciones (add/remove) tambien estan disponibles para que un
+    // `on_select_lua` pueda hacer `inventory.remove('items/foo', 1)`
+    // cuando el dev tipea "el NPC se queda con tu item" en el dialog.
+    // Si g_scene/g_assets son nullptr (init temprano, antes de Play
+    // Mode), las queries player-implicit silenciosamente retornan
+    // false/0/{}. El dev SIEMPRE puede usar la forma con entity-explicita
+    // si tiene una referencia (raro en condition_lua de dialog choices).
+    buildInventoryBindings(lua);
 }
 
 void ensureState() {
@@ -87,6 +109,21 @@ void init() {
     g_hooksRegistered = true;
     Mood::Log::script()->info(
         "[DialogScriptHost] hooks evaluator/executor registrados en DialogSystem");
+}
+
+void setSceneAndAssets(Mood::Scene* scene, Mood::AssetManager* assets) {
+    g_scene  = scene;
+    g_assets = assets;
+    // Si la state ya esta viva, re-bindear la tabla `inventory` con los
+    // nuevos punteros. Si la state no esta inicializada, no-op — al
+    // primer ensureState() se construyen los bindings completos (incluido
+    // inventory) con los g_scene/g_assets ya seteados.
+    if (g_state != nullptr) {
+        buildInventoryBindings(*g_state);
+        Mood::Log::script()->info(
+            "[DialogScriptHost] tabla `inventory` re-bindeada (scene={}, assets={})",
+            static_cast<void*>(scene), static_cast<void*>(assets));
+    }
 }
 
 bool evaluate(const std::string& expr) {
@@ -128,6 +165,8 @@ void reset() {
     if (g_state == nullptr) return;
     g_state.reset();
     g_hooksRegistered = false;
+    g_scene  = nullptr;
+    g_assets = nullptr;
     Mood::Log::script()->info("[DialogScriptHost] sol::state tirada (reset)");
 }
 

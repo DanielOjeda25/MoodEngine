@@ -40,10 +40,14 @@ void setupLuaBindings(sol::state& lua, Entity self,
 
 /// @brief F2H52 Bloque E: registra la tabla `inventory` en `lua`.
 ///        Implementado en LuaBindings_Inventory.cpp (split por tamaño del
-///        archivo principal). Llamado por `setupLuaBindings` al final.
-///        Requiere `self` (para resolver el Scene* de las queries) y
-///        `assets` para mapear path logico -> ItemAssetId.
-void setupInventoryBindings(sol::state& lua, Entity self,
+///        archivo principal). Llamado por `setupLuaBindings` al final
+///        Y por `DialogScriptHost::init` (sandbox de dialog) para que
+///        las choices puedan usar `inventory.has(...)` en `condition_lua`.
+///        Requiere `scene` para resolver el player (tag scan) y `assets`
+///        para mapear path logico -> ItemAssetId. Ambos pueden ser
+///        nullptr en tests headless; las queries player-implicit retornan
+///        false/0/{} silenciosamente.
+void setupInventoryBindings(sol::state& lua, class Scene* scene,
                              AssetManager* assets);
 
 } // namespace Mood

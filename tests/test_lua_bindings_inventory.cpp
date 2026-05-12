@@ -89,7 +89,7 @@ std::unique_ptr<InvLuaFixture> makeFixture(const std::string& tag) {
     fx->scriptEntity = fx->scene.createEntity("script_owner");
 
     fx->lua.open_libraries(sol::lib::base);
-    setupInventoryBindings(fx->lua, fx->scriptEntity, fx->am.get());
+    setupInventoryBindings(fx->lua, &fx->scene, fx->am.get());
     // Clear hooks entre tests (estado global).
     Inventory::Hooks::clearAll();
     return fx;

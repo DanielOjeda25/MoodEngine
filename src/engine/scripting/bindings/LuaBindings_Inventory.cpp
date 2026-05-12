@@ -107,7 +107,7 @@ sol::table entriesAsTable(sol::state_view lua, const Inventory::State& inv,
 
 } // namespace
 
-void setupInventoryBindings(sol::state& lua, Entity self,
+void setupInventoryBindings(sol::state& lua, Scene* scene,
                              AssetManager* assets) {
     // F2H52 F: registrar Entity usertype si no esta ya, para que los
     // callbacks Lua puedan leer `entity.tag` cuando reciben una Entity
@@ -138,10 +138,10 @@ void setupInventoryBindings(sol::state& lua, Entity self,
             if (id == 0) return false;
             return ent.getComponent<InventoryComponent>().state.has(id, q);
         },
-        [self, assets](const std::string& path,
+        [scene, assets](const std::string& path,
                        sol::optional<int> minQty) -> bool {
-            if (self.scene() == nullptr) return false;
-            Entity player = findPlayer(*self.scene());
+            if (scene == nullptr) return false;
+            Entity player = findPlayer(*scene);
             if (!player) {
                 Log::script()->warn(
                     "[inventory.has] no hay entity con tag 'Player' + InventoryComponent");
@@ -162,9 +162,9 @@ void setupInventoryBindings(sol::state& lua, Entity self,
             if (id == 0) return 0;
             return ent.getComponent<InventoryComponent>().state.count(id);
         },
-        [self, assets](const std::string& path) -> int {
-            if (self.scene() == nullptr) return 0;
-            Entity player = findPlayer(*self.scene());
+        [scene, assets](const std::string& path) -> int {
+            if (scene == nullptr) return 0;
+            Entity player = findPlayer(*scene);
             if (!player) return 0;
             const ItemAssetId id = resolveItem(assets, path);
             if (id == 0) return 0;
@@ -182,12 +182,12 @@ void setupInventoryBindings(sol::state& lua, Entity self,
             return entriesAsTable(L,
                 ent.getComponent<InventoryComponent>().state, *assets);
         },
-        [self, assets, &lua]() -> sol::table {
+        [scene, assets, &lua]() -> sol::table {
             sol::state_view L(lua);
-            if (self.scene() == nullptr || assets == nullptr) {
+            if (scene == nullptr || assets == nullptr) {
                 return L.create_table();
             }
-            Entity player = findPlayer(*self.scene());
+            Entity player = findPlayer(*scene);
             if (!player) return L.create_table();
             return entriesAsTable(L,
                 player.getComponent<InventoryComponent>().state, *assets);
@@ -203,9 +203,9 @@ void setupInventoryBindings(sol::state& lua, Entity self,
             return sumStat(ent.getComponent<InventoryComponent>().state,
                             *assets, statName);
         },
-        [self, assets](const std::string& statName) -> float {
-            if (self.scene() == nullptr || assets == nullptr) return 0.0f;
-            Entity player = findPlayer(*self.scene());
+        [scene, assets](const std::string& statName) -> float {
+            if (scene == nullptr || assets == nullptr) return 0.0f;
+            Entity player = findPlayer(*scene);
             if (!player) return 0.0f;
             return sumStat(player.getComponent<InventoryComponent>().state,
                             *assets, statName);
@@ -224,9 +224,9 @@ void setupInventoryBindings(sol::state& lua, Entity self,
             if (id == 0) return false;
             return ent.getComponent<InventoryComponent>().state.add(id, qty, *assets);
         },
-        [self, assets](const std::string& path, int qty) -> bool {
-            if (self.scene() == nullptr || assets == nullptr) return false;
-            Entity player = findPlayer(*self.scene());
+        [scene, assets](const std::string& path, int qty) -> bool {
+            if (scene == nullptr || assets == nullptr) return false;
+            Entity player = findPlayer(*scene);
             if (!player) {
                 Log::script()->warn(
                     "[inventory.add] no hay entity con tag 'Player' + InventoryComponent");
@@ -248,9 +248,9 @@ void setupInventoryBindings(sol::state& lua, Entity self,
             if (id == 0) return false;
             return ent.getComponent<InventoryComponent>().state.remove(id, qty);
         },
-        [self, assets](const std::string& path, int qty) -> bool {
-            if (self.scene() == nullptr || assets == nullptr) return false;
-            Entity player = findPlayer(*self.scene());
+        [scene, assets](const std::string& path, int qty) -> bool {
+            if (scene == nullptr || assets == nullptr) return false;
+            Entity player = findPlayer(*scene);
             if (!player) return false;
             const ItemAssetId id = resolveItem(assets, path);
             if (id == 0) return false;
@@ -272,10 +272,10 @@ void setupInventoryBindings(sol::state& lua, Entity self,
     // expone bien refs no-owning hacia entities recien creadas; si
     // emerge necesidad, sumar getter `inventory.last_spawned()`).
     inv.set_function("spawn_pickup",
-        [self, assets](const std::string& path,
+        [scene, assets](const std::string& path,
                        float x, float y, float z,
                        sol::optional<int> qty) -> bool {
-            if (self.scene() == nullptr) {
+            if (scene == nullptr) {
                 Log::script()->warn("[inventory.spawn_pickup] no hay scene");
                 return false;
             }
@@ -320,7 +320,7 @@ void setupInventoryBindings(sol::state& lua, Entity self,
                 displayName = "item";
             }
 
-            Entity e = self.scene()->createEntity("Pickup_" + displayName);
+            Entity e = scene->createEntity("Pickup_" + displayName);
             auto& t = e.getComponent<TransformComponent>();
             t.position = glm::vec3(x, y, z);
             t.scale    = glm::vec3(1.0f);
@@ -430,9 +430,9 @@ void setupInventoryBindings(sol::state& lua, Entity self,
             Inventory::Hooks::invokeUse(ent, path);
             return true;
         },
-        [self, assets](const std::string& path) -> bool {
-            if (self.scene() == nullptr || assets == nullptr) return false;
-            Entity player = findPlayer(*self.scene());
+        [scene, assets](const std::string& path) -> bool {
+            if (scene == nullptr || assets == nullptr) return false;
+            Entity player = findPlayer(*scene);
             if (!player) return false;
             const ItemAssetId id = resolveItem(assets, path);
             if (id == 0) return false;

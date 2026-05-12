@@ -336,8 +336,9 @@ void setupLuaBindings(sol::state& lua, Entity self,
 
     // F2H52 Bloque E — tabla `inventory` (split a LuaBindings_Inventory.cpp
     // por tamaño). Registra has/count/add/remove/entries/sum_stat (con
-    // overloads player-implicit) + spawn_pickup.
-    setupInventoryBindings(lua, self, assets);
+    // overloads player-implicit) + spawn_pickup. La firma toma Scene*
+    // directo desde Bloque G; pasamos el scene de la entity self.
+    setupInventoryBindings(lua, self.scene(), assets);
 
     // self como global.
     lua["self"] = self;

@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "core/math/AABB.h"
+#include "engine/dialog/DialogScriptHost.h"  // F2H52 G
 #include "engine/game/overlay/GameOverlay.h"
 #include "engine/game/state/GameState.h"
 #include "engine/i18n/I18n.h"  // F2H43
@@ -30,6 +31,12 @@ void EditorApplication::enterPlayMode() {
     // Reset del tracker de pausa: arrancamos sin pausa, asi que la
     // primera transicion seria paused=true y el sync mostrara el cursor.
     m_pausedLastFrame = false;
+    // F2H52 G: inyectar scene + assets al DialogScriptHost para que las
+    // choices con `condition_lua = "inventory.has('items/x')"` funcionen
+    // contra el inventario REAL del player en este Play Mode. Sin esto,
+    // las queries player-implicit retornarian false silenciosamente.
+    Dialog::DialogScriptHost::setSceneAndAssets(
+        m_scene.get(), m_assetManager.get());
     Log::editor()->info("Play Mode activo (WASD + mouse. Esc para pausar)");
 }
 
@@ -58,6 +65,10 @@ void EditorApplication::exitPlayMode() {
     // infinito otra vez. Reset evita esto. Mismo patron que
     // PlayerApplication_SaveLoad.cpp:139.
     m_playCamera = FpsCamera(glm::vec3(0.0f, 1.6f, 0.0f), -90.0f, 0.0f);
+    // F2H52 G: limpiar scene/assets del DialogScriptHost — el inventory
+    // queryable se pone a null para que un eventual dialog que dispare
+    // post-Play no opere contra una scene que dejo de ser la activa.
+    Dialog::DialogScriptHost::setSceneAndAssets(nullptr, nullptr);
     Log::editor()->info("Editor Mode activo");
 }
 

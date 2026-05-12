@@ -26,6 +26,11 @@
 
 #include <string>
 
+namespace Mood {
+class Scene;
+class AssetManager;
+} // namespace Mood
+
 namespace Mood::Dialog::DialogScriptHost {
 
 /// @brief Inicializa la sol::state (si no existe) y registra los
@@ -33,6 +38,16 @@ namespace Mood::Dialog::DialogScriptHost {
 ///        — llamadas repetidas no recrean la state, solo re-registran.
 ///        Llamar una vez al arrancar el editor/player.
 void init();
+
+/// @brief F2H52 Bloque G: setea `Scene*` + `AssetManager*` que la tabla
+///        `inventory` del host usa para resolver player + items. Llamar
+///        cuando una scene/assets nueva esta lista (entrar Play Mode en
+///        el editor, cargar mapa en el player). Si `init()` ya corrio,
+///        re-bindea la tabla `inventory` con los nuevos punteros. Pasar
+///        nullptr/nullptr deja la tabla pero las queries player-implicit
+///        retornan false/0/{} silenciosamente — util para reset al
+///        exitPlayMode.
+void setSceneAndAssets(Mood::Scene* scene, Mood::AssetManager* assets);
 
 /// @brief Evalua una expresion Lua boolean. Si la expr es vacia,
 ///        retorna true (paridad con el contrato del DialogSystem).
