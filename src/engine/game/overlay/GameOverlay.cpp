@@ -962,22 +962,314 @@ void drawInventoryFlatList(const HudContext& ctx,
     }
 }
 
-/// @brief Placeholder para Grid2D — sera H3.
+/// @brief F2H52 H3: estado de drag entre cells del Grid2D. Persiste
+///        cross-frame (static local). slot_index = -1 = no drag activo.
+///        Reset al exitPlayMode via `GameState::reset()` no toca esto,
+///        pero el mouse up siempre limpia, asi que en la practica no
+///        sobrevive entre sesiones de play.
+struct GridDragState {
+    int  fromSlot = -1;    // slot origen del drag (-1 = no drag)
+    bool wasDown  = false; // tracker del flanco mouse-down
+};
+
+/// @brief Renderea el modo Grid2D (Resident Evil 4 style): grid WxH de
+///        cells 64x64 con item placeholder + badge qty + drag entre cells
+///        (moveSlot). Cells vacios son slots disponibles. Items sin
+///        slot asignado (-1) se reparten al primer cell libre on-the-fly
+///        para el render — pero NO mutan state.entries (es solo display).
 void drawInventoryGrid2D(const HudContext& ctx,
-                          const Inventory::State&,
-                          AssetManager&) {
-    drawTextCentered(ctx.dl,
-                      ctx.x0 + ctx.w * 0.5f, ctx.y0 + ctx.h * 0.5f,
-                      "[Grid2D inventory — TODO H3]", palette::k_yellow);
+                          Inventory::State& inv,
+                          AssetManager& assets) {
+    static GridDragState s_drag;
+
+    const int W = std::max(1, inv.config.grid_width);
+    const int H = std::max(1, inv.config.grid_height);
+    constexpr float cellSize = 60.0f;
+    constexpr float cellGap  = 4.0f;
+    constexpr float padX     = 12.0f;
+    constexpr float padY     = 12.0f;
+    constexpr float titleH   = 28.0f;
+
+    const float gridW = W * cellSize + (W - 1) * cellGap;
+    const float gridH = H * cellSize + (H - 1) * cellGap;
+    const float panelW = gridW + 2 * padX;
+    const float panelH = titleH + padY + gridH + padY;
+    const float panelX = ctx.x0 + ctx.w - panelW - 20.0f;
+    const float panelY = ctx.y0 + 80.0f;
+
+    // Background + border.
+    ctx.dl->AddRectFilled(ImVec2(panelX, panelY),
+                           ImVec2(panelX + panelW, panelY + panelH),
+                           palette::k_bg_panel, 4.0f);
+    ctx.dl->AddRect(ImVec2(panelX, panelY),
+                     ImVec2(panelX + panelW, panelY + panelH),
+                     palette::k_border, 4.0f, 0, 1.5f);
+
+    const std::string title = I18n::T("hud.inventory.title");
+    drawTextCentered(ctx.dl, panelX + panelW * 0.5f, panelY + 6.0f,
+                      title.c_str(), palette::k_orange);
+
+    // Map slot_index -> Entry para lookup O(1).
+    std::vector<const Inventory::Entry*> slotMap(W * H, nullptr);
+    for (const auto& e : inv.entries) {
+        if (e.slot_index >= 0 && e.slot_index < W * H) {
+            slotMap[e.slot_index] = &e;
+        }
+    }
+
+    // Estado del mouse para drag detection.
+    const ImVec2 mousePos = ImGui::GetMousePos();
+    const bool   mouseDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    const bool   mouseClicked = mouseDown && !s_drag.wasDown;  // edge down
+    const bool   mouseReleased = !mouseDown && s_drag.wasDown; // edge up
+    s_drag.wasDown = mouseDown;
+
+    int hoveredSlot = -1;
+
+    // Render cells + hit-test.
+    const float gridX0 = panelX + padX;
+    const float gridY0 = panelY + titleH + padY;
+    for (int row = 0; row < H; ++row) {
+        for (int col = 0; col < W; ++col) {
+            const int slot = row * W + col;
+            const float x = gridX0 + col * (cellSize + cellGap);
+            const float y = gridY0 + row * (cellSize + cellGap);
+            const ImVec2 a(x, y), b(x + cellSize, y + cellSize);
+            const bool cellHovered = ImGui::IsMouseHoveringRect(a, b);
+            if (cellHovered) hoveredSlot = slot;
+
+            // Background del cell.
+            const ImU32 cellBg = cellHovered
+                ? palette::k_orange_dim
+                : palette::k_bg_box;
+            ctx.dl->AddRectFilled(a, b, cellBg, 2.0f);
+            ctx.dl->AddRect(a, b, palette::k_border, 2.0f, 0, 1.0f);
+
+            // Contenido del cell si hay item.
+            const Inventory::Entry* entry = slotMap[slot];
+            if (entry == nullptr) continue;
+            // Si estoy dragueando este slot, dibujarlo "transparente" en
+            // su pos original — el "ghost" va al cursor.
+            const bool isDragSource = (s_drag.fromSlot == slot);
+            const ImU32 textCol = isDragSource
+                ? palette::k_white_dim
+                : palette::k_white;
+
+            // Placeholder "icon" = primera letra del nombre.
+            const Inventory::Asset* asset = assets.getItem(entry->itemId);
+            const std::string path = assets.itemPathOf(entry->itemId);
+            const std::string name = asset != nullptr
+                ? displayNameOfItem(*asset, path)
+                : path;
+            char iconBuf[8] = {0};
+            if (!name.empty()) iconBuf[0] = name[0];
+            const ImVec2 iconSz = calcTextSizeScaled(iconBuf, 2.5f);
+            drawTextScaled(ctx.dl,
+                            ImVec2(x + cellSize * 0.5f - iconSz.x * 0.5f,
+                                   y + cellSize * 0.5f - iconSz.y * 0.5f),
+                            iconBuf, textCol, 2.5f);
+
+            // Badge qty si > 1 (esquina inferior-derecha).
+            if (entry->quantity > 1) {
+                char qtyBuf[16];
+                std::snprintf(qtyBuf, sizeof(qtyBuf), "x%d", entry->quantity);
+                const ImVec2 qsz = ImGui::CalcTextSize(qtyBuf);
+                ctx.dl->AddText(
+                    ImVec2(x + cellSize - qsz.x - 4.0f,
+                           y + cellSize - qsz.y - 2.0f),
+                    palette::k_yellow, qtyBuf);
+            }
+        }
+    }
+
+    // Drag logic — flank events.
+    if (mouseClicked && hoveredSlot >= 0 && slotMap[hoveredSlot] != nullptr) {
+        s_drag.fromSlot = hoveredSlot;
+    }
+    if (mouseReleased) {
+        if (s_drag.fromSlot >= 0 && hoveredSlot >= 0
+            && hoveredSlot != s_drag.fromSlot) {
+            inv.moveSlot(s_drag.fromSlot, hoveredSlot);
+        }
+        s_drag.fromSlot = -1;
+    }
+    // Cancelar drag si mouse salio del grid sin release pendiente.
+    // (No cancelamos automaticamente — se cancela en mouseReleased fuera
+    // del slot destino. mejor UX: el drag persiste mientras el boton
+    // siga apretado, sin importar donde este el cursor.)
+
+    // Dibujar el "ghost" del item dragueado en el cursor.
+    if (s_drag.fromSlot >= 0
+        && s_drag.fromSlot < static_cast<int>(slotMap.size())) {
+        const Inventory::Entry* dragged = slotMap[s_drag.fromSlot];
+        if (dragged != nullptr) {
+            const Inventory::Asset* asset = assets.getItem(dragged->itemId);
+            const std::string path = assets.itemPathOf(dragged->itemId);
+            const std::string name = asset != nullptr
+                ? displayNameOfItem(*asset, path)
+                : path;
+            char iconBuf[8] = {0};
+            if (!name.empty()) iconBuf[0] = name[0];
+            const ImVec2 sz = calcTextSizeScaled(iconBuf, 2.5f);
+            // Translucent rect + text bajo el cursor.
+            const ImVec2 ga(mousePos.x - 20, mousePos.y - 20);
+            const ImVec2 gb(mousePos.x + 20, mousePos.y + 20);
+            ctx.dl->AddRectFilled(ga, gb, palette::k_orange_dim, 4.0f);
+            drawTextScaled(ctx.dl,
+                ImVec2(mousePos.x - sz.x * 0.5f, mousePos.y - sz.y * 0.5f),
+                iconBuf, palette::k_white, 2.5f);
+        }
+    }
 }
 
-/// @brief Placeholder para EquipmentSlots — sera H4.
+/// @brief F2H52 H4: EquipmentSlots mode (Skyrim equipment-style). Slots
+///        nombrados verticales, cada uno con tag_filter visible en
+///        tooltip (la implementacion de tooltip llega en H5). Drag entre
+///        slots solo si el item arrastrado tiene el tag del slot destino.
+///        Hover destaca el slot. Mismo patron de drag que Grid2D — state
+///        local static.
 void drawInventoryEquipment(const HudContext& ctx,
-                             const Inventory::State&,
-                             AssetManager&) {
-    drawTextCentered(ctx.dl,
-                      ctx.x0 + ctx.w * 0.5f, ctx.y0 + ctx.h * 0.5f,
-                      "[EquipmentSlots inventory — TODO H4]", palette::k_yellow);
+                             Inventory::State& inv,
+                             AssetManager& assets) {
+    static GridDragState s_drag;
+
+    const auto& slots = inv.config.equipment_slots;
+    constexpr float rowH    = 56.0f;
+    constexpr float padX    = 12.0f;
+    constexpr float padY    = 12.0f;
+    constexpr float titleH  = 28.0f;
+    constexpr float labelW  = 120.0f;
+    constexpr float slotW   = 220.0f;
+
+    const int nSlots = static_cast<int>(slots.size());
+    const float panelW = padX + labelW + 8.0f + slotW + padX;
+    const float panelH = titleH + padY + std::max(1, nSlots) * rowH + padY;
+    const float panelX = ctx.x0 + ctx.w - panelW - 20.0f;
+    const float panelY = ctx.y0 + 80.0f;
+
+    ctx.dl->AddRectFilled(ImVec2(panelX, panelY),
+                           ImVec2(panelX + panelW, panelY + panelH),
+                           palette::k_bg_panel, 4.0f);
+    ctx.dl->AddRect(ImVec2(panelX, panelY),
+                     ImVec2(panelX + panelW, panelY + panelH),
+                     palette::k_border, 4.0f, 0, 1.5f);
+
+    const std::string title = I18n::T("hud.inventory.title");
+    drawTextCentered(ctx.dl, panelX + panelW * 0.5f, panelY + 6.0f,
+                      title.c_str(), palette::k_orange);
+
+    if (slots.empty()) {
+        const std::string empty = I18n::T("hud.inventory.empty");
+        drawTextCentered(ctx.dl, panelX + panelW * 0.5f,
+                          panelY + titleH + padY + 4.0f,
+                          empty.c_str(), palette::k_white_dim);
+        return;
+    }
+
+    // Map slot_index -> Entry (mismo idiom que Grid2D).
+    std::vector<const Inventory::Entry*> slotMap(slots.size(), nullptr);
+    for (const auto& e : inv.entries) {
+        if (e.slot_index >= 0
+            && e.slot_index < static_cast<int>(slots.size())) {
+            slotMap[e.slot_index] = &e;
+        }
+    }
+
+    const ImVec2 mousePos = ImGui::GetMousePos();
+    const bool   mouseDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    const bool   mouseClicked  = mouseDown && !s_drag.wasDown;
+    const bool   mouseReleased = !mouseDown && s_drag.wasDown;
+    s_drag.wasDown = mouseDown;
+
+    // Si hay drag activo, conocer su tag para validar drops.
+    std::string dragItemFirstTag;
+    if (s_drag.fromSlot >= 0
+        && s_drag.fromSlot < static_cast<int>(slotMap.size())
+        && slotMap[s_drag.fromSlot] != nullptr) {
+        const Inventory::Asset* asset =
+            assets.getItem(slotMap[s_drag.fromSlot]->itemId);
+        if (asset != nullptr && !asset->tags.empty()) {
+            dragItemFirstTag = asset->tags.front();
+        }
+    }
+
+    int hoveredSlot = -1;
+    float y = panelY + titleH + padY;
+    for (int i = 0; i < nSlots; ++i) {
+        const auto& slot = slots[i];
+
+        // Label del slot a la izquierda.
+        ctx.dl->AddText(ImVec2(panelX + padX, y + rowH * 0.5f - 7.0f),
+                          palette::k_yellow_dim, slot.name.c_str());
+
+        // Slot box a la derecha.
+        const float sx = panelX + padX + labelW + 8.0f;
+        const ImVec2 a(sx, y), b(sx + slotW, y + rowH - 4.0f);
+        const bool slotHovered = ImGui::IsMouseHoveringRect(a, b);
+        if (slotHovered) hoveredSlot = i;
+
+        // Validacion del drag para colorear el slot.
+        const bool dragOk = s_drag.fromSlot >= 0
+            && (slot.tag_filter.empty() || slot.tag_filter == dragItemFirstTag);
+        const ImU32 slotBg = slotHovered
+            ? (dragOk ? palette::k_stamina : palette::k_orange_dim)
+            : palette::k_bg_box;
+        ctx.dl->AddRectFilled(a, b, slotBg, 2.0f);
+        ctx.dl->AddRect(a, b, palette::k_border, 2.0f, 0, 1.0f);
+
+        // Contenido.
+        const Inventory::Entry* entry = slotMap[i];
+        if (entry != nullptr) {
+            const Inventory::Asset* asset = assets.getItem(entry->itemId);
+            const std::string path = assets.itemPathOf(entry->itemId);
+            const std::string name = asset != nullptr
+                ? displayNameOfItem(*asset, path)
+                : path;
+            const bool isDragSource = (s_drag.fromSlot == i);
+            ctx.dl->AddText(ImVec2(sx + 8.0f, y + 8.0f),
+                              isDragSource
+                                ? palette::k_white_dim
+                                : palette::k_white,
+                              name.c_str());
+        } else if (!slot.tag_filter.empty()) {
+            // Hint del tag_filter cuando el slot esta vacio.
+            const std::string hint = "(" + slot.tag_filter + ")";
+            ctx.dl->AddText(ImVec2(sx + 8.0f, y + 8.0f),
+                              palette::k_white_dim, hint.c_str());
+        }
+
+        y += rowH;
+    }
+
+    // Drag flank events.
+    if (mouseClicked && hoveredSlot >= 0 && slotMap[hoveredSlot] != nullptr) {
+        s_drag.fromSlot = hoveredSlot;
+    }
+    if (mouseReleased) {
+        if (s_drag.fromSlot >= 0 && hoveredSlot >= 0
+            && hoveredSlot != s_drag.fromSlot) {
+            // moveSlot tiene validacion interna del tag_filter — si no
+            // matchea, retorna false sin mutar.
+            inv.moveSlot(s_drag.fromSlot, hoveredSlot);
+        }
+        s_drag.fromSlot = -1;
+    }
+
+    // Ghost del item dragueado bajo el cursor.
+    if (s_drag.fromSlot >= 0 && slotMap[s_drag.fromSlot] != nullptr) {
+        const auto* dragged = slotMap[s_drag.fromSlot];
+        const Inventory::Asset* asset = assets.getItem(dragged->itemId);
+        const std::string path = assets.itemPathOf(dragged->itemId);
+        const std::string name = asset != nullptr
+            ? displayNameOfItem(*asset, path)
+            : path;
+        const ImVec2 sz = ImGui::CalcTextSize(name.c_str());
+        const ImVec2 ga(mousePos.x - sz.x * 0.5f - 6, mousePos.y - 12);
+        const ImVec2 gb(mousePos.x + sz.x * 0.5f + 6, mousePos.y + 12);
+        ctx.dl->AddRectFilled(ga, gb, palette::k_orange_dim, 4.0f);
+        ctx.dl->AddText(ImVec2(mousePos.x - sz.x * 0.5f, mousePos.y - 7),
+                          palette::k_white, name.c_str());
+    }
 }
 
 } // namespace
@@ -990,7 +1282,8 @@ void drawInventoryPanel(const HudContext& ctx) {
     Entity player = findPlayerForHud(*ctx.scene);
     if (!player) return;
 
-    const auto& inv = player.getComponent<InventoryComponent>().state;
+    // Mutable porque Grid2D/Equipment llaman moveSlot (drag entre cells).
+    auto& inv = player.getComponent<InventoryComponent>().state;
     switch (inv.mode) {
         case Inventory::LayoutMode::FlatList:
             drawInventoryFlatList(ctx, inv, *ctx.assets); break;

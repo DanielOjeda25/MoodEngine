@@ -25,6 +25,7 @@
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28 Bloque F: click-select desde ortos
 #include "engine/dialog/DialogInteractSystem.h"  // F2H48
 #include "engine/dialog/DialogSystem.h"          // F2H48
+#include "engine/game/state/GameState.h"         // F2H52 H: Tab toggle inventory_panel
 #include "engine/inventory/ItemPickupSystem.h"   // F2H52 Bloque C
 #include "engine/render/backend/opengl/OpenGLDebugRenderer.h"  // F2H29 Bloque C: drawAabb preview.
 #include "engine/assets/manager/AssetManager.h"
@@ -1477,9 +1478,9 @@ int EditorApplication::run() {
                 const bool tabJustPressed = tabPressed && !m_tabPrevFrame;
                 m_tabPrevFrame = tabPressed;
                 if (tabJustPressed && !Dialog::DialogSystem::isActive()) {
-                    auto& hud = Mood::GameState::hud();
-                    const bool nowOn = !hud.isWidgetEnabled("inventory_panel");
-                    hud.widget_enabled["inventory_panel"] = nowOn;
+                    auto& hudRef = Mood::GameState::hud();
+                    const bool nowOn = !hudRef.isWidgetEnabled("inventory_panel");
+                    hudRef.widget_enabled["inventory_panel"] = nowOn;
                 }
             }
         }
