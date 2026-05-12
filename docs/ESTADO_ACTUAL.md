@@ -33,7 +33,26 @@ Tag: `v1.39.0-fase2-hito51`. Cita verbatim del dev al validar: *"lo demas va bie
 7. **3 fixes UX post-validación**: tooltip i18n, `%.3f` → `%g`, plantillas en `+ Nuevo Item` (presets de editor, no del motor).
 8. **Localization Pipeline diferida a Sub-fase 3**: las grandes (Riot/Blizzard) NO usan auto-translation. Para MoodEngine quedaría como hito propio en Sub-fase 3.
 
-**Próximo a atacar**: **F2H52 — Inventory runtime**. `ItemPickupComponent` (entities pickeables vía Trigger + tecla E) + HUD widget inventario (open/close con Tab + grid visual + tooltips) + Lua bindings + integración con DialogScriptHost para choices condicionales por items. Estimado ~8-10h. Después F2H53 (Quest Editor) cierra Sub-fase 2.5.
+**Próximo a atacar**: **F2H52 — Inventory runtime**. Plan completo escrito en [`PLAN_HITO_F2H52.md`](PLAN_HITO_F2H52.md). El dev migró a su PC de escritorio (2026-05-12). **Estado: aprobación pendiente del dev**.
+
+**Handoff para retomar en otra máquina:**
+1. Abrir `docs/PLAN_HITO_F2H52.md` y leer la sección 🎮 **"Preguntas para el dev"** al tope (4 preguntas en lenguaje de mecánicas — la convención del dev es comunicar en mecánicas, no jerga técnica; ver `feedback_communication_mechanics.md` en la memoria de Claude).
+2. Confirmar / ajustar las 4 propuestas con el dev.
+3. Arrancar con Bloque B (items pickeables + tecla E + persistencia + tests).
+4. Estimado total ~17-18h, 14 bloques A-N.
+
+**Lo que F2H52 va a entregar (en mecánicas)**:
+- Items en el mundo levantables con E.
+- HUD inventario con Tab + tooltips + drag entre slots.
+- Click derecho "Usar" → hook Lua que el dev del juego programa.
+- Cofres / contenedores split panel (player ↔ cofre).
+- Diálogos con choices condicionales por items (la opción aparece solo si tenés cierto item).
+- Spawn de items desde el editor (drag al viewport, sin código).
+- Hooks Lua `on_pickup` / `on_drop` / `on_use`.
+- HUD del inventario reemplazable via `inventory.set_renderer(callback)` (para Pip-Boy / RE rotador 3D custom).
+- `inventory.sum_stat(entity, "weight")` para que el dev escriba encumbrance en Lua si quiere.
+
+Después F2H53 (Quest editor reusando node-graph F2H46/47) cierra Sub-fase 2.5.
 
 ---
 
