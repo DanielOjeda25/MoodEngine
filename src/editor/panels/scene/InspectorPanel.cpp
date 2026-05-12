@@ -95,6 +95,7 @@ void InspectorPanel::onImGuiRender() {
     if (e.hasComponent<ParticleEmitterComponent>())  renderParticleEmitterSection(e);
     if (e.hasComponent<TriggerComponent>())          renderTriggerSection(e);
     if (e.hasComponent<BrushComponent>())            renderBrushSection(e);
+    if (e.hasComponent<InventoryComponent>())        renderInventorySection(e);  // F2H51
 
     // F2H44 Bloque A: boton "+ Add Component" + popup. Al final del
     // dispatch para no interrumpir el flow de lectura de los componentes
@@ -242,6 +243,13 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
         e.hasComponent<DialogComponent>(),
         [](Entity en, std::string lbl) {
             return makeAddComponentCommand<DialogComponent>(en, std::move(lbl));
+        });
+    // F2H51: InventoryComponent en Logic.
+    add("component.name.inventory", "component.desc.inventory",
+        "editor.panel.inspector.add.cat.logic",
+        e.hasComponent<InventoryComponent>(),
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<InventoryComponent>(en, std::move(lbl));
         });
 
     // World

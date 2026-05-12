@@ -9,13 +9,43 @@
 
 ---
 
-## Post-F2H50 (2026-05-11) — Demo narrativa end-to-end + persistencia AnimatorComponent + regen materiales auto
+## Post-F2H51 (2026-05-12) — Inventario engine-grade: ItemAsset + Item Browser + InventoryComponent + persistencia `.moodmap`
 
 ### Próximo a atacar
 
-- **F2H51 — Inventario** (Bloque 1 del `PLAN_SUBFASE_2_5.md`). ItemAsset schema + serialización + Item Browser panel + InventoryComponent + pickup/drop integrado + HUD widget inventory.
-- **Después de F2H51**: F2H52 (Quest Editor con node-graph reusando F2H46/47 framework) y cerrar Sub-fase 2.5.
-- **Sub-fase 3 — Render Polish** (diferida, ver entry abajo): tonemap + bloom + SSAO + CSM + material node-graph + shader graph runtime.
+- **F2H52 — Inventory runtime** (continúa Bloque 1 del PLAN_SUBFASE_2_5): `ItemPickupComponent` (item entities en el mundo pickeables vía TriggerComponent + tecla E) + HUD widget inventario (open/close con Tab + grid visual + tooltips) + Lua bindings (`inventory.add/remove/has/count` + hooks `on_pickup`/`on_drop`) + integración con DialogScriptHost para choices condicionales por items.
+- **Después de F2H52**: F2H53 (Quest Editor con node-graph reusando F2H46/47 framework) y cerrar Sub-fase 2.5.
+- **Sub-fase 3 — Render Polish** (diferida): tonemap + bloom + SSAO + CSM + material node-graph + shader graph runtime.
+- **Sub-fase 3 — Localization Pipeline** (candidato nuevo, pedido del dev 2026-05-12): el dev escribe texto en su idioma nativo en el editor → editor auto-genera la i18n key + la guarda en `es.json` (su locale) → toggle key/literal del Property Editor desaparece + todo se trata como key implícita → listing UI de "keys sin traducción" para que un traductor humano (o el dev) complete `en.json`/`fr.json`/etc después. Match con patrón industry-standard (Crowdin/Lokalise/Phrase) — NO auto-translate machine. Scope mediano (~6-8h), abrir cuando emerja necesidad real de multi-idioma.
+
+### Diferidos sin orden (emergentes post-F2H51)
+
+- **`ItemAsset.slot_size` (width × height) ignorado en `Grid2D`**: v1 asume todos los items ocupan 1 cell. Si emerge necesidad de items 2x1 / 1x2 (Resident Evil style real), implementar packing rectangular en `InventoryState::add/placeAt`. Schema persiste el campo para no romper roundtrip.
+- **3D preview widget reusable** (Bloque 0.2 del PLAN_SUBFASE_2_5): render-to-texture con cámara orbital. v1 del `ItemPropertyEditorPanel` sólo muestra `model_path` como texto. Sumar cuando emerja Material Editor pro.
+- **Iconos en cards del Item Browser**: v1 muestra solo nombre + categoría. Falta cargar la textura `icon_path` via AssetManager y renderizar con `ImGui::Image`. Pipeline ya existe (`loadTexture` + bind), solo hace falta wireup + handle del `TextureHandle` opaco a `ImTextureID`.
+- **Auto-extracción de i18n keys de `name_literal`/`description_literal`**: ver entry "Sub-fase 3 — Localization Pipeline" arriba.
+- **Hot reload por filesystem watcher del Item Browser**: v1 es refresh manual. Si emerge feedback "edité un `.mooditem` desde código y no se refleja", agregar `std::filesystem::last_write_time` watcher (mismo patrón que ScriptSystem F2H22).
+- **StatsComponent + sistema de modifiers** (Bloque 4.1 del PLAN_SUBFASE_2_5): equipar un item con tag `equipment_slot/*` aplica sus stats como buffs al owner. Deferred porque requiere arquitectura propia de modifiers (duration / source tracking / stacking rules).
+- **Currency/economy/crafting/vendor NPCs**: fuera de scope Sub-fase 2.5 entera.
+- **Bulk operations en Item Browser** (multi-select + delete múltiple, batch rename, batch tag-add): YAGNI v1.
+- **Drag source desde el Item Browser hacia el Viewport 3D para spawn pickup**: en F2H52 cuando se implemente `ItemPickupComponent`. Drop sobre tile del grid → crea entity con `ItemPickupComponent` referenciando el `.mooditem`.
+
+### Histórico resuelto F2H51
+
+- ~~`.mooditem` schema + serialización JSON~~ — resuelto. `Inventory::Asset` (id/name/desc i18n-able/icon_path/model_path/tags/stats key-value libre/stack/slot_size) + `toJson`/`fromJson`/`loadFromFile`/`saveToFile` en `engine/inventory/ItemAsset.h`. 15 tests del schema.
+- ~~`AssetManager::loadItem` + cache + slot 0 fallback~~ — resuelto. Partial `AssetManager_Item.cpp` (mismo patrón que `_Dialog`/`_AnimationClip`). Sentinel `__empty_item`.
+- ~~`InventoryState` lógica pura con 3 layout modes~~ — resuelto. `FlatList` / `Grid2D` / `EquipmentSlots`. `add`/`remove`/`has`/`count`/`placeAt`/`moveSlot`/`clear` atómicos. 22 tests cubriendo cada modo + edge cases.
+- ~~`InventoryComponent` + popup Add Component~~ — resuelto. `engine/scene/components/Components.h` + entry en InspectorPanel categoría Logic.
+- ~~Item Browser + Item Property Editor panels (workspace nuevo "Gameplay")~~ — resuelto. Grid de cards + filtros search/tag + new/duplicate/rename/delete + drag source `MOOD_ITEM_ASSET`. Property Editor con 6 secciones: identity/visual/tags/stats/stack/slot_size + Save explícito.
+- ~~`InventoryInspectorSection` con drop target del browser~~ — resuelto. `InspectorPanel_Inventory.cpp` + dispatch en InspectorPanel.cpp. Soporta los 3 modes con UI condicional.
+- ~~Persistencia `.moodmap` del InventoryComponent~~ — resuelto. `SavedInventory { layoutMode, maxItems, gridWidth/Height, equipmentSlots, entries }` con paths-no-ids (clavadito al patrón F2H50). Bump aditivo. 4 tests roundtrip cubriendo los 3 modes + ausencia. `InventoryComponent` agregado al whitelist de SceneSerializer (entidades container-puros sin mesh se persisten).
+- ~~3 sample items + workspace "Gameplay" nuevo + layout v6 → v7~~ — resuelto. `iron_sword`/`health_potion`/`mysterious_key` en `assets/items/` + `buildGameplayWorkspace` en Dockspace.cpp + 6 workspaces totales (era 5).
+- ~~Plantillas "+ Nuevo Item"~~ — resuelto. Dropdown con `Vacío`/`Arma`/`Poción`/`Armadura`/`Quest item`/`Objeto` que pre-puebla tags + stats. Vive sólo en el editor — el motor sigue sin conocer categorías hardcoded (engine-grade principio #2 preservado).
+- ~~Tooltip explicativo del toggle "Usar i18n key"~~ — resuelto. Hover sobre los checkboxes name/description muestra explicación de cuándo activarlo (multi-idioma) vs dejarlo desactivado (juego mono-idioma).
+- ~~Formato float `%.3f` → `%g`~~ — resuelto. `damage: 20` ahora se lee como "20", no "20.000".
+- ~~Cleanup: archivos `imgui_layout_v2..v5.ini` cadáveres locales~~ — resuelto. Borrados (eran gitignored, sólo ensuciaban el root listing). Comentario obsoleto en `EditorUI.cpp:87` actualizado a `vN` genérico.
+
+---
 
 ### Diferidos sin orden (emergentes post-F2H50)
 

@@ -1,0 +1,28 @@
+{
+  "_version": 1,
+  "description_key": "",
+  "description_literal": "A sturdy iron blade.",
+  "icon_path": "icons/items/placeholder.png",
+  "id": "iron_sword",
+  "model_path": "",
+  "name_key": "",
+  "name_literal": "Iron Blade",
+  "slot_size": {
+    "height": 2,
+    "width": 1
+  },
+  "stack": {
+    "max_stack": 1,
+    "stackable": false
+  },
+  "stats": {
+    "damage": 12.5,
+    "durability_max": 100.0,
+    "weight": 3.0
+  },
+  "tags": [
+    "weapon",
+    "metal",
+    "common"
+  ]
+}

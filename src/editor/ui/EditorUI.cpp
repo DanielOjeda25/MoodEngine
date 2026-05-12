@@ -49,6 +49,8 @@ EditorUI::EditorUI() {
                 &m_dialogBrowser,     // F2H47
                 &m_dialogEditor,      // F2H47
                 &m_dialogInspector,   // F2H47
+                &m_itemBrowser,       // F2H51
+                &m_itemPropertyEditor,// F2H51
                 &m_scriptEditor, &m_materialEditor, &m_toolbar,
                 // F2H28: paneles del workspace "Editor de mapas".
                 // Arrancan ocultos; se hacen visibles via
@@ -70,6 +72,8 @@ EditorUI::EditorUI() {
     m_dialogBrowser.setEditorUi(this);     // F2H47
     m_dialogEditor.setEditorUi(this);      // F2H47
     m_dialogInspector.setEditorUi(this);   // F2H47
+    m_itemBrowser.setEditorUi(this);       // F2H51
+    m_itemPropertyEditor.setEditorUi(this);// F2H51
 
     // F2H7: el dockspace arranca apuntando al workspace default
     // (F2H22: Modelar, era Layout).
@@ -84,7 +88,7 @@ EditorUI::EditorUI() {
     applyDefaultVisibilityForWorkspace(initialWs);
 
     // F2H29 fix lateral: forzar rebuild fresh del dockspace al ctor
-    // para que la `imgui_layout_v2.ini` auto-loadeada de la sesion
+    // para que el `imgui_layout_vN.ini` auto-loadeado de la sesion
     // previa NO muestre windows en posiciones stale durante la
     // pantalla Welcome. Sin esto, el dev veia el dockspace en
     // posiciones del ultimo workspace de la sesion previa mientras
@@ -189,6 +193,12 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Dialog Editor",            false);  // F2H47
         setVisible("Dialog Node Inspector",    false);  // F2H47
     };
+    // F2H51: en cualquier workspace que NO sea "gameplay", ocultamos
+    // los paneles de inventario.
+    auto hideGameplayPanels = [&]() {
+        setVisible("Item Browser",          false);  // F2H51
+        setVisible("Item Property Editor",  false);  // F2H51
+    };
 
     // F2H44: comparacion contra IDs ASCII (no labels visibles).
     if (name == "scripting") {
@@ -204,6 +214,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Tools",           false);
         hideOrthoPanels();
         hideNarrativePanels();
+        hideGameplayPanels();
     } else if (name == "materials") {
         setVisible("Viewport",        true);
         setVisible("Escena",          false);
@@ -217,6 +228,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Tools",           false);
         hideOrthoPanels();
         hideNarrativePanels();
+        hideGameplayPanels();
     } else if (name == "narrative") {
         // F2H46: workspace "Narrativa" para Sub-fase 2.5.
         // F2H47: Dialog Editor + Browser + Node Inspector default.
@@ -242,6 +254,25 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Dialog Editor",           true);  // F2H47
         setVisible("Dialog Node Inspector",   true);  // F2H47
         hideOrthoPanels();
+        hideGameplayPanels();
+    } else if (name == "gameplay") {
+        // F2H51: workspace "Gameplay" para Sub-fase 2.5 Bloque 1 (Inventario).
+        // Item Browser izq + Viewport 3D centro + Item Property Editor + Inspector der.
+        // El Inspector cuando hay InventoryComponent muestra la seccion de inventario.
+        setVisible("Viewport",              true);
+        setVisible("Escena",                false);
+        setVisible("Inspector",             true);
+        setVisible("Asset Browser",         false);
+        setVisible("Console",               false);
+        setVisible("Lua API",               false);
+        setVisible("Performance",           false);
+        setVisible("Script Editor",         false);
+        setVisible("Material Editor",       false);
+        setVisible("Tools",                 false);
+        setVisible("Item Browser",          true);   // F2H51
+        setVisible("Item Property Editor",  true);   // F2H51
+        hideOrthoPanels();
+        hideNarrativePanels();
     } else if (name == "map_editor") {
         // F2H28: workspace 4-viewport inspirado en Valve Hammer Editor.
         // Viewport (perspectiva en top-right) + 3 ortos. Inspector y
@@ -265,6 +296,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Material Editor", false);
         setVisible("Tools",           false);
         hideNarrativePanels();
+        hideGameplayPanels();
     } else {
         // "Layout" (default) — flow general de mapping. Tools visible.
         // Console explicitamente FALSE (pedido del dev: "no quiero
@@ -282,6 +314,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Tools",           true);
         hideOrthoPanels();
         hideNarrativePanels();
+        hideGameplayPanels();
     }
 }
 

@@ -33,7 +33,8 @@ struct MaterialAsset;
 struct SavedPrefab;
 struct AnimationClip;  // F2H49
 
-namespace Dialog { class Asset; }  // F2H48
+namespace Dialog { class Asset; }     // F2H48
+namespace Inventory { class Asset; }  // F2H51
 
 /// @brief Identificador estable de una textura dentro de un `AssetManager`.
 ///        Valor 0 se reserva para la textura "missing": pedir `getTexture(0)`
@@ -73,6 +74,12 @@ using DialogAssetId = u32;
 ///        `AnimationSystem` puede recibir sin crashear cuando un asset
 ///        falla al cargar. Loadeo lazy + cache por path logico.
 using AnimationClipAssetId = u32;
+
+/// @brief F2H51: Identificador estable de un ItemAsset (.mooditem).
+///        Valor 0 reservado para un "item vacio" (id "" + tags vacios) que
+///        permite que `getItem(0)` nunca sea null. Loadeo lazy + cache por
+///        path logico, mismo patron que Dialog.
+using ItemAssetId = u32;
 
 class AssetManager {
 public:
@@ -377,6 +384,28 @@ public:
     /// @brief Cantidad de clips cacheados (incluye slot 0).
     usize animationClipCount() const;
 
+    // ---- Item (F2H51) ----
+
+    /// @brief Carga (o devuelve cacheado) un item asset por path logico
+    ///        (p.ej. "items/iron_sword.mooditem"). En fallo devuelve
+    ///        `missingItemId()` (asset vacio) y loguea al canal `assets`.
+    ///        Mismo patron que `loadDialog`.
+    ItemAssetId loadItem(std::string_view logicalPath);
+
+    /// @brief Devuelve el Asset del id. Nunca null: ids invalidos caen al
+    ///        slot 0 (asset vacio).
+    const Inventory::Asset* getItem(ItemAssetId id) const;
+
+    /// @brief Id del item vacio (slot 0). Asset con id "" y tags vacios.
+    ItemAssetId missingItemId() const { return 0; }
+
+    /// @brief Path logico con el que se cargo el item. Slot 0 devuelve el
+    ///        sentinela `"__empty_item"`.
+    std::string itemPathOf(ItemAssetId id) const;
+
+    /// @brief Cantidad de items cacheados (incluye slot 0).
+    usize itemCount() const;
+
 private:
     VFS m_vfs;
     TextureFactory m_textureFactory;
@@ -418,6 +447,11 @@ private:
     std::unordered_map<std::string, AnimationClipAssetId> m_animationClipCache;
     std::vector<std::unique_ptr<AnimationClip>> m_animationClips;
     std::vector<std::string> m_animationClipPaths; // paralelo a m_animationClips
+
+    // Item (F2H51). [0] = asset vacio (id "", tags vacios).
+    std::unordered_map<std::string, ItemAssetId> m_itemCache;
+    std::vector<std::unique_ptr<Inventory::Asset>> m_items;
+    std::vector<std::string> m_itemPaths; // paralelo a m_items
 };
 
 } // namespace Mood

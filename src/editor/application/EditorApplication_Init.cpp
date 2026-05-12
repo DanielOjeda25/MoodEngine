@@ -198,7 +198,10 @@ EditorApplication::EditorApplication() {
     // F2H47: bump v5 -> v6. Workspace Narrativa rediseñado con
     // Dialog Editor central + Inspector right + Browser/Intro bottom.
     // Layouts v5 mostrarian estos panels nuevos flotantes.
-    io.IniFilename = "imgui_layout_v6.ini";
+    // F2H51: bump v6 -> v7. Workspace "Gameplay" nuevo con Item Browser
+    // + Item Property Editor + Inspector. Layouts v6 los mostrarian
+    // flotantes en lugar de docked.
+    io.IniFilename = "imgui_layout_v7.ini";
 
     ImGui::StyleColorsDark();
 

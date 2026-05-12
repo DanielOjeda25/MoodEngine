@@ -189,6 +189,37 @@ struct SavedAnimator {
     std::vector<SavedAnimatorExternalClip> externalClips;
 };
 
+/// @brief F2H51 Bloque I: una entrada de la lista de items pre-cargados
+///        del InventoryComponent. Path logico del .mooditem en lugar de
+///        ItemAssetId (los IDs no son estables entre sesiones — mismo
+///        patron que SavedAnimatorExternalClip).
+struct SavedInventoryEntry {
+    std::string itemPath;   // ej. "items/iron_sword.mooditem"
+    int         quantity   = 0;
+    int         slotIndex  = -1;  // -1 = sin slot (FlatList lo ignora)
+};
+
+/// @brief F2H51 Bloque I: un slot del modo EquipmentSlots persistido
+///        (name + tag opcional).
+struct SavedInventoryEquipmentSlot {
+    std::string name;
+    std::string tagFilter;
+};
+
+/// @brief F2H51 Bloque I: copia persistida de un InventoryComponent.
+///        Soporta los 3 layout modes (FlatList / Grid2D / EquipmentSlots).
+///        Si el `.moodmap` no trae el campo `inventory` (mapas pre-F2H51),
+///        SceneLoader no auto-agrega el componente — convencion paths-no-ids
+///        igual que SavedDialog.
+struct SavedInventory {
+    std::string layoutMode = "flat_list";   // "flat_list" / "grid_2d" / "equipment_slots"
+    int  maxItems    = 20;                  // para FlatList
+    int  gridWidth   = 4;                   // para Grid2D
+    int  gridHeight  = 6;                   // para Grid2D
+    std::vector<SavedInventoryEquipmentSlot> equipmentSlots; // para EquipmentSlots
+    std::vector<SavedInventoryEntry>         entries;
+};
+
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh
 ///        renderer; Hito 11 agrega light; Hito 12 agrega rigid body;
 ///        Hito 14 agrega prefabPath (link suave al asset del que se
@@ -209,6 +240,7 @@ struct SavedEntity {
     std::optional<SavedTrigger> trigger;                  // Hito 33
     std::optional<SavedDialog>  dialog;                   // F2H48.1
     std::optional<SavedAnimator> animator;                // F2H50 Bloque D
+    std::optional<SavedInventory> inventory;              // F2H51 Bloque I
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.

@@ -11,6 +11,59 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-12: F2H51 cierre — Inventario engine-grade (autoría + state + persistencia)
+
+**Contexto:** Bloque 1 del `PLAN_SUBFASE_2_5.md`, sexto hito real de Sub-fase 2.5. F2H50 cerró el flow narrativo end-to-end con NPC tangible; F2H51 abre el sistema de inventario (Bloque 1 del plan macro, pedido del dev: *"recuerda la idea es crear una base solida para que a futuro cualquiera pueda crear su sistema de conversaciones, misiones, o inventario y asignar a modelos 3D"*). Split editor/runtime aplicado: F2H51 = autoría + state + persistencia; F2H52 = runtime (pickup + HUD + Lua).
+
+**Decisión clave 1 — Engine-grade strict: motor sin semántica hardcoded de "weapon"/"potion"/"armor".** El schema `.mooditem` tiene `tags` (`std::vector<std::string>` libre) + `stats` (`std::map<string, float>` libre). El motor NO interpreta ni "damage" ni "heal_amount" — solo los almacena. Cada dev del juego define su propia ontología.
+
+- **Razón:** principio #2 del marco estratégico de Sub-fase 2.5 (*"Sin semántica hardcodeada de gameplay"*). Devs futuros de juegos distintos (RPG/shooter/walking sim/etc) configuran su propia semántica sin recompilar.
+- **Tensión con UX:** el dev nuevo no sabe qué stats ponerle a un arma. Resuelto en Bloque K post-validación con **plantillas** (dropdown "Plantilla" en `+ Nuevo Item` con `Vacío`/`Arma`/`Poción`/`Armadura`/`Quest item`/`Objeto`). Las plantillas son presets del editor (`applyTemplate` en anonymous namespace de `ItemBrowserPanel.cpp`) — el motor sigue sin conocerlas. Como punto de partida, no semántica.
+- **Alternativa rechazada:** hardcodear categorías como enum en el schema. Hubiera roto principio #2 + obligado a tocar C++ cada vez que un dev quiere una categoría nueva ("alchemy_reagent", "spell_focus", "trinket"). Imposible engine-grade.
+
+**Decisión clave 2 — Split editor/runtime F2H51 vs F2H52 (mismo patrón F2H47→F2H48).** F2H51 cierra: ItemAsset schema, AssetManager loader, InventoryState pure logic, InventoryComponent, Item Browser, Property Editor, Inspector section, persistencia `.moodmap`, workspace "Gameplay". F2H52 hará: ItemPickupComponent, HUD widget, Lua bindings, integración con DialogScriptHost.
+
+- **Razón:** checkpoint natural de validación del schema antes de atarlo al runtime. Si el runtime emerge con requisitos extras del schema, bumpear `.mooditem` v1→v2 cuesta poco antes de tener saves reales. Hitos mantenibles (~10-12h cada uno) en lugar de uno gigante (~20h).
+- **Validado en Bloque K:** el dev pudo probar el flow end-to-end de autoría (crear, editar, persistir items + inventarios en entidades + roundtrip save/load) sin necesitar el runtime de pickup. Validación temprana.
+
+**Decisión clave 3 — 3 layout modes (FlatList / Grid2D / EquipmentSlots) en v1, NO solo FlatList.** Resistí la tentación de hacer solo FlatList para v1 y agregar los otros cuando emerjan.
+
+- **Razón:** PLAN_SUBFASE_2_5 sección 1.3 los lista como fundacional. Implementar solo FlatList sería deuda inmediata cuando F2H52 HUD widget necesite Grid2D estilo Resident Evil para el caso "inventario tetris" + EquipmentSlots para el caso "RPG slots de armadura". Costo extra ~3-4h vale la pena.
+- **Default:** FlatList max_items=20. Universal, se entiende sin contexto del género del juego.
+- **Trade-off polimorfismo simple:** la lógica de `add`/`remove`/`placeAt` tiene 3 ramas (switch sobre `LayoutMode`). Encapsulado en `InventoryState`. Si emerge complejidad real, refactor a `std::variant` + visitor.
+
+**Decisión clave 4 — Paths-no-ids en persistencia `.moodmap` (mismo patrón F2H50 AnimatorComponent).** El `SavedInventoryEntry` persiste `itemPath` (string lógico) y NO `itemId` (`ItemAssetId`).
+
+- **Razón:** los IDs no son estables entre sesiones (dependen del orden de loads del AssetManager). Persistir el path lógico (`assets.itemPathOf(id)`); al cargar, `assets.loadItem(path)` lo re-resuelve y reconstruye el `Entry`.
+- **Bump aditivo:** mapas pre-F2H51 cargan sin componente (`std::optional<SavedInventory>` ausente — no se auto-agrega). Sin regression.
+- **Limitación conocida:** si el dev borra un `.mooditem` entre save y load, el path persistido pierde info (queda como `__empty_item`). Mismo patrón F2H50 — sin caso real todavía.
+
+**Decisión clave 5 — `InventoryComponent` agregado al whitelist de `SceneSerializer::save`.** Antes el whitelist solo incluía Mesh/Light/RigidBody/Environment/Script/Particle. Una entidad con solo `InventoryComponent` no se persistía.
+
+- **Razón:** principio engine-grade — un entity puede ser un chest/container/vendor SIN mesh visible (logic-only entity). No asumir que el inventario implica un visual.
+- **Trade-off:** abre la puerta a entidades "fantasmas" (logic-only) en el .moodmap. Acepto — es la dirección correcta. Si emergen issues (entidades huérfanas), se filtran en futuro.
+
+**Decisión clave 6 — `slot_size > 1x1` IGNORADO en v1 del `InventoryState`.** El schema persiste `slot_size {width, height}` pero la lógica de `add`/`placeAt` para Grid2D asume cada item ocupa 1 cell.
+
+- **Razón:** el packing rectangular real (Resident Evil 4 inventory style) requiere algoritmo de "bin packing" que no es trivial. Implementarlo bien suma ~3-4h adicionales para un caso de uso que ningún demo necesita todavía. YAGNI v1.
+- **Schema persiste el campo** para roundtrip — cuando v2 lo implemente, no rompe assets existentes. Documentado en hint del Property Editor: *"Sólo se respeta en layout grid_2d. v1 ignora width/height (cada item ocupa 1 cell)."*
+
+**Decisión clave 7 — 3 fixes UX post-validación del dev (Bloque K).** El dev validó visualmente el flow + reportó 4 issues. Decisiones:
+
+- **Issue 1 — checkbox "Usar i18n key" confuso:** el dev no entendía qué hacía. **Fix:** tooltip al hover sobre los checkboxes name/description que explica el use-case (juego multi-idioma vs mono-idioma). Mantengo el checkbox (el motor soporta i18n, eso es engine-grade); no lo escondo porque sería romper esa capability.
+- **Issue 2 — i18n del Property Editor:** los strings UI ya se traducen (es.json/en.json). El dev preguntó si traducción automática (Google Translate / DeepL). **Respuesta diferida:** las grandes empresas (Riot/Blizzard/Nintendo) NO usan auto-translation para texto in-game — usan plataformas pro (Crowdin/Lokalise/Phrase) con traductores humanos. Para MoodEngine queda como hito propio "Localization Pipeline" en Sub-fase 3 (~6-8h): dev escribe en su locale → editor auto-genera la i18n key → UI lista keys sin traducir para que un humano complete los otros locales. NO entra en F2H51. Agregado a `PENDIENTES.md`.
+- **Issue 3 — InputFloat `%.3f` mostraba "20.000" leído como "20000":** el separador decimal de Windows en español es coma, y `%.3f` siempre rellena 3 decimales. **Fix:** `%g` smart-format ("20" si entero, "12.5" si decimal real).
+- **Issue 4 — dev pedía categorías predefinidas tipo "armas/pociones/atuendos":** ver Decisión 1. Resuelto con plantillas en `+ Nuevo Item` que pre-pueblan tags + stats típicos. Engine-grade preservado.
+
+**Alternativas descartadas (no entran en F2H51)**:
+- **Iconos en cards del Item Browser:** requieren wireup AssetManager texture + ImTextureID handle. Costo ~1h. Diferido — el dev no lo pidió y es nice-to-have.
+- **3D preview del modelo en Property Editor:** requiere Bloque 0.2 del PLAN_SUBFASE_2_5 (widget reusable de render-to-texture con cámara orbital). Diferido a hito propio cuando emerja Material Editor pro.
+- **Drag-source desde Item Browser → spawn pickup en Viewport:** requiere `ItemPickupComponent` (F2H52). Lógico que vaya juntos.
+
+**Revisión:** si en F2H52 emerge un requisito que invalida alguna de estas decisiones (ej. el runtime de pickup necesita un campo nuevo en el schema), bumpear `.mooditem` v1→v2 con fallback en `fromJson`.
+
+---
+
 ## 2026-05-11: F2H50 cierre — Demo narrativa end-to-end + persistencia AnimatorComponent + regen materiales auto
 
 **Contexto:** F2H49 cerró el pipeline de animaciones standalone (FBX anim-only). F2H50 cierra el Bloque 2.5 del `PLAN_SUBFASE_2_5.md` atando esas animaciones al sistema de diálogo + character controller para validar el flow narrativo end-to-end con un NPC tangible (dev: *"que sentido tiene crear un sistema de dialogo, sino tenemos a quien asignar"*).

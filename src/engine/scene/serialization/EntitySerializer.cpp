@@ -268,6 +268,49 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         je["animator"] = ja;
     }
 
+    // F2H51 Bloque I: InventoryComponent. layout_mode + capacity per
+    // modo (max_items / grid_w x grid_h / equipment_slots) + entries
+    // como pairs {item_path, quantity, slot_index}. Mismo patron
+    // paths-no-ids del animator: persistimos rutas logicas via
+    // `AssetManager::itemPathOf(id)`. El SceneLoader las re-resuelve
+    // con `loadItem` al cargar.
+    if (entity.hasComponent<InventoryComponent>()) {
+        const auto& inv = entity.getComponent<InventoryComponent>();
+        const auto& st = inv.state;
+        json ji;
+        // Layout mode string.
+        const char* modeStr = "flat_list";
+        if (st.mode == Inventory::LayoutMode::Grid2D)         modeStr = "grid_2d";
+        if (st.mode == Inventory::LayoutMode::EquipmentSlots) modeStr = "equipment_slots";
+        ji["layout_mode"] = modeStr;
+        // Capacity por modo. Persistimos los 3 grupos siempre — costos
+        // bajos y el roundtrip preserva la configuracion aunque el dev
+        // cambie de mode.
+        ji["max_items"]   = st.config.max_items;
+        ji["grid_width"]  = st.config.grid_width;
+        ji["grid_height"] = st.config.grid_height;
+        if (!st.config.equipment_slots.empty()) {
+            ji["equipment_slots"] = json::array();
+            for (const auto& s : st.config.equipment_slots) {
+                json js;
+                js["name"]       = s.name;
+                js["tag_filter"] = s.tag_filter;
+                ji["equipment_slots"].push_back(js);
+            }
+        }
+        if (!st.entries.empty()) {
+            ji["entries"] = json::array();
+            for (const auto& e : st.entries) {
+                json jen;
+                jen["item_path"]  = assets.itemPathOf(e.itemId);
+                jen["quantity"]   = e.quantity;
+                jen["slot_index"] = e.slot_index;
+                ji["entries"].push_back(jen);
+            }
+        }
+        je["inventory"] = ji;
+    }
+
     // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la
     // entidad tiene un `PrefabLinkComponent`. Sin propagacion bidireccional
     // por ahora; es solo un breadcrumb para futuras features ("revertir a
@@ -406,6 +449,36 @@ SavedEntity parseEntityFromJson(const json& j) {
             }
         }
         se.animator = std::move(sa);
+    }
+
+    // F2H51 Bloque I: inventory.
+    if (j.contains("inventory")) {
+        const auto& ji = j.at("inventory");
+        SavedInventory si;
+        si.layoutMode = ji.value("layout_mode", std::string{"flat_list"});
+        si.maxItems   = ji.value("max_items",   20);
+        si.gridWidth  = ji.value("grid_width",   4);
+        si.gridHeight = ji.value("grid_height",  6);
+        if (ji.contains("equipment_slots") && ji.at("equipment_slots").is_array()) {
+            for (const auto& js : ji.at("equipment_slots")) {
+                SavedInventoryEquipmentSlot s;
+                s.name      = js.value("name",       std::string{});
+                s.tagFilter = js.value("tag_filter", std::string{});
+                si.equipmentSlots.push_back(std::move(s));
+            }
+        }
+        if (ji.contains("entries") && ji.at("entries").is_array()) {
+            for (const auto& jen : ji.at("entries")) {
+                SavedInventoryEntry se2;
+                se2.itemPath  = jen.value("item_path", std::string{});
+                se2.quantity  = jen.value("quantity",  0);
+                se2.slotIndex = jen.value("slot_index", -1);
+                if (!se2.itemPath.empty() && se2.quantity > 0) {
+                    si.entries.push_back(std::move(se2));
+                }
+            }
+        }
+        se.inventory = std::move(si);
     }
 
     if (j.contains("script")) {

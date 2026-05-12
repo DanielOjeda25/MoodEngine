@@ -354,6 +354,7 @@ add_library(mood_engine_lib STATIC
     src/engine/assets/manager/AssetManager_Material.cpp
     src/engine/assets/manager/AssetManager_Dialog.cpp  # F2H48
     src/engine/assets/manager/AssetManager_AnimationClip.cpp  # F2H49
+    src/engine/assets/manager/AssetManager_Item.cpp  # F2H51
     src/engine/assets/loaders/MeshLoader.cpp
     src/engine/assets/primitives/PrimitiveMeshes.cpp
     src/engine/assets/loaders/stb_impl.cpp
@@ -376,6 +377,9 @@ add_library(mood_engine_lib STATIC
     src/engine/dialog/DialogSystem.cpp          # F2H48
     src/engine/dialog/DialogInteractSystem.cpp  # F2H48
     src/engine/dialog/DialogScriptHost.cpp      # F2H48.1
+
+    src/engine/inventory/ItemAsset.cpp          # F2H51
+    src/engine/inventory/InventoryState.cpp     # F2H51
 
     src/engine/packaging/PackageBuilder.cpp
 
@@ -547,6 +551,7 @@ add_executable(MoodEditor
     src/editor/panels/scene/InspectorPanel_Animation.cpp
     src/editor/panels/scene/InspectorPanel_Particles.cpp
     src/editor/panels/scene/InspectorPanel_Brush.cpp
+    src/editor/panels/scene/InspectorPanel_Inventory.cpp   # F2H51
     src/editor/panels/assets/AssetBrowserPanel.cpp
     src/editor/panels/debug/ConsolePanel.cpp
     src/editor/panels/scene/HierarchyPanel.cpp
@@ -559,6 +564,8 @@ add_executable(MoodEditor
     src/editor/panels/narrative/DialogBrowserPanel.cpp         # F2H47
     src/editor/panels/narrative/DialogEditorPanel.cpp          # F2H47
     src/editor/panels/narrative/DialogNodeInspectorPanel.cpp   # F2H47
+    src/editor/panels/inventory/ItemBrowserPanel.cpp           # F2H51
+    src/editor/panels/inventory/ItemPropertyEditorPanel.cpp    # F2H51
     src/editor/panels/assets/ScriptEditorPanel.cpp
     src/editor/panels/assets/MaterialEditorPanel.cpp
 )

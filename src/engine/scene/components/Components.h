@@ -12,6 +12,7 @@
 #include "core/Types.h"
 #include "engine/assets/manager/AssetManager.h" // TextureAssetId, AudioAssetId, MeshAssetId
 #include "engine/audio/device/AudioDevice.h"    // SoundHandle
+#include "engine/inventory/InventoryState.h"   // F2H51: estado del InventoryComponent
 #include "engine/scripting/exposed/ExposedProperty.h" // Hito 24
 
 #include <glm/ext/matrix_transform.hpp>
@@ -443,6 +444,15 @@ struct DialogComponent {
     // evitar `loadDialog` redundante por frame mientras el player esta
     // dentro del trigger. 0 = no cargado todavia.
     u32         cachedDialogId = 0;
+};
+
+/// F2H51: Inventario engine-grade attachable a CUALQUIER entidad (player,
+/// NPC, chest, vendor, drop pile). 3 layout modes configurables por
+/// instancia (lista plana / grid 2D / equipment slots). El motor NO impone
+/// semantica de gameplay — el dev del juego decide. Toda la logica vive
+/// en `Inventory::State` (testeable sin ImGui).
+struct InventoryComponent {
+    Inventory::State state;  // mode + config + entries
 };
 
 } // namespace Mood

@@ -4,7 +4,40 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H50 cerrado (2026-05-11)
+## 0. ACTUALIZACIÓN F2H51 cerrado (2026-05-12)
+
+**Sexto hito real de Sub-fase 2.5 cerrado — Inventario engine-grade (autoría + state + persistencia).**
+Tag: `v1.39.0-fase2-hito51`. Cita verbatim del dev al validar: *"lo demas va bien"* (después de fixear 3 issues UX: tooltip i18n + formato float + plantillas en "+ Nuevo Item").
+
+**Qué entrega F2H51**:
+- **`Inventory::Asset` schema `.mooditem`**: nuevo módulo `engine/inventory/` con struct declarativo (id + name/description i18n-able + icon_path + model_path + tags libres + stats key-value libre + stack rules + slot_size). `toJson`/`fromJson`/`loadFromFile`/`saveToFile` con logging defensivo + parse robusto.
+- **`AssetManager::loadItem`** + partial `_Item.cpp` (mismo patrón que `_Dialog`) + `ItemAssetId` typedef + sentinel `__empty_item` para slot 0.
+- **`Inventory::State` lógica pura con 3 layout modes**: `FlatList` / `Grid2D` / `EquipmentSlots`. API atómica `has`/`count`/`add`/`remove`/`placeAt`/`moveSlot`/`clear` respeta `stack.stackable` + `max_stack` consultando el ItemAsset via AssetManager.
+- **`InventoryComponent` + popup Add Component**: wrapper de `Inventory::State` agregable desde Inspector categoría Logic.
+- **`ItemBrowserPanel`** (categoría Assets, workspace nuevo "Gameplay"): grid de cards con search + tag filter + `+ New Item` con plantillas (Vacío/Arma/Poción/Armadura/Quest/Objeto) + right-click rename/duplicate/delete + drag source `MOOD_ITEM_ASSET`.
+- **`ItemPropertyEditorPanel`**: 6 secciones editables (identity/visual/tags/stats/stack/slot_size) + toggle key/literal i18n con tooltip + Save explícito + Revert.
+- **`InventoryInspectorSection`**: sección en InspectorPanel con dropdown mode + capacity por modo + tabla de entries editable + drop target del browser.
+- **Persistencia `.moodmap` (paths-no-ids)**: `SavedInventory` schema + EntitySerializer write/parse + SceneLoader apply. 4 tests roundtrip cubriendo los 3 modes + ausencia.
+- **3 sample items shippados** en `assets/items/`: `iron_sword`, `health_potion`, `mysterious_key`.
+- **Workspace "Gameplay" nuevo**: 3 columnas (Item Browser izq / Viewport centro / Property Editor + Inspector der). 6 workspaces totales. Bump layout v6 → v7.
+- **Cleanup pre-F2H51**: 4 archivos `imgui_layout_v2..v5.ini` cadáveres locales borrados + 1 comentario obsoleto en `EditorUI.cpp:87` actualizado.
+- **44 tests nuevos**: 15 item_asset + 3 item_assetmanager + 22 inventory_state + 4 scene_serializer roundtrip. Suite **792/9085** verde.
+
+**Decisiones**:
+1. **Engine-grade preservado**: motor sin semántica hardcoded de gameplay. Tags = strings libres. Stats = `std::map<string, float>` libre. Plantillas (`Arma`/`Poción`/etc) viven SOLO en el editor — el motor no las conoce.
+2. **Split editor/runtime (F2H51 vs F2H52)**: mismo patrón F2H47→F2H48. F2H51 cierra autoría + state + persistencia; F2H52 hará pickup/drop + HUD widget + Lua bindings.
+3. **3 layout modes en v1 (no solo `FlatList`)**: fundacional desde el inicio. Implementar solo FlatList sería deuda inmediata cuando F2H52 HUD necesite Grid2D Resident Evil style.
+4. **Paths-no-ids en persistencia**: mismo patrón F2H50 AnimatorComponent.externalClips. Los IDs no son estables entre sesiones.
+5. **InventoryComponent en whitelist de SceneSerializer**: entidades container-puros (chests sin mesh) se persisten. No se asume visual.
+6. **`slot_size > 1x1` ignorado v1**: cada item ocupa 1 cell del Grid2D. Schema persiste el campo para roundtrip.
+7. **3 fixes UX post-validación**: tooltip i18n, `%.3f` → `%g`, plantillas en `+ Nuevo Item` (presets de editor, no del motor).
+8. **Localization Pipeline diferida a Sub-fase 3**: las grandes (Riot/Blizzard) NO usan auto-translation. Para MoodEngine quedaría como hito propio en Sub-fase 3.
+
+**Próximo a atacar**: **F2H52 — Inventory runtime**. `ItemPickupComponent` (entities pickeables vía Trigger + tecla E) + HUD widget inventario (open/close con Tab + grid visual + tooltips) + Lua bindings + integración con DialogScriptHost para choices condicionales por items. Estimado ~8-10h. Después F2H53 (Quest Editor) cierra Sub-fase 2.5.
+
+---
+
+## 0bis. ACTUALIZACIÓN F2H50 cerrado (2026-05-11)
 
 **Quinto hito real de Sub-fase 2.5 cerrado — Demo characters Mixamo + escena narrativa completa + persistencia AnimatorComponent.**
 Tag: `v1.38.0-fase2-hito50`. Cita verbatim del dev al validar: *"va ok"* (después de fixear el roundtrip animator + materiales auto-regen).

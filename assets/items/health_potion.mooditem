@@ -1,0 +1,23 @@
+{
+  "_version": 1,
+  "id": "health_potion",
+  "name_key": "",
+  "name_literal": "Health Potion",
+  "description_key": "",
+  "description_literal": "Restores a moderate amount of health when used.",
+  "icon_path": "icons/items/placeholder.png",
+  "model_path": "",
+  "tags": ["consumable", "common"],
+  "stats": {
+    "heal_amount": 50.0,
+    "weight": 0.5
+  },
+  "stack": {
+    "stackable": true,
+    "max_stack": 10
+  },
+  "slot_size": {
+    "width": 1,
+    "height": 1
+  }
+}

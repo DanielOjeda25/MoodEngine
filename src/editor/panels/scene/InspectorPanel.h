@@ -58,6 +58,7 @@ private:
     void renderParticleEmitterSection(Entity e);
     void renderTriggerSection(Entity e);
     void renderBrushSection(Entity e);
+    void renderInventorySection(Entity e);  // F2H51
 
     /// F2H44 Bloque A: boton "+ Add Component" + popup con lista
     /// agrupada por categoria + search. Solo lista los componentes que

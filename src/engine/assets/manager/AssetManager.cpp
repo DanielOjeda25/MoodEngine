@@ -20,6 +20,7 @@
 #include "engine/animation/clips/AnimationClip.h"  // F2H49
 #include "engine/audio/clips/AudioClip.h"
 #include "engine/dialog/DialogAsset.h"  // F2H48
+#include "engine/inventory/ItemAsset.h" // F2H51
 #include "engine/render/rhi/IMesh.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MaterialAsset.h"
@@ -47,6 +48,8 @@ constexpr const char* k_emptyPrefabPath    = "__empty_prefab";
 constexpr const char* k_emptyDialogPath    = "__empty_dialog";
 // F2H49: sentinela del AnimationClip fallback (slot 0). Sin tracks.
 constexpr const char* k_emptyAnimClipPath  = "__empty_clip";
+// F2H51: sentinela del ItemAsset fallback (slot 0). Asset con id "".
+constexpr const char* k_emptyItemPath      = "__empty_item";
 // Sentinela del material fallback (slot 0). Albedo blanco, mate medio.
 constexpr const char* k_defaultMaterialPath = "__default_material";
 
@@ -246,6 +249,16 @@ AssetManager::AssetManager(std::string rootDir,
                                       missingAnimationClipId());
     }
     Log::assets()->info("AssetManager: animation clip 'vacio' generado en slot 0");
+
+    // ---- Slot 0 Item (F2H51): asset vacio (id "", tags vacios). Sirve
+    //      como fallback cuando un id es invalido o el archivo no parsea.
+    {
+        auto empty = std::make_unique<Inventory::Asset>();
+        m_items.emplace_back(std::move(empty));
+        m_itemPaths.emplace_back(k_emptyItemPath);
+        m_itemCache.emplace(k_emptyItemPath, missingItemId());
+    }
+    Log::assets()->info("AssetManager: item 'vacio' generado en slot 0");
 }
 
 AssetManager::~AssetManager() = default;

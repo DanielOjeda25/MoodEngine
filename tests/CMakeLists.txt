@@ -75,6 +75,8 @@ add_executable(mood_tests
     test_dialog_validator.cpp  # F2H47
     test_dialog_system.cpp        # F2H48
     test_dialog_script_host.cpp   # F2H48.1
+    test_item_asset.cpp           # F2H51
+    test_inventory_state.cpp      # F2H51
 
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/Brush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/BrushMesh.cpp
@@ -127,6 +129,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Texture.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Dialog.cpp  # F2H48
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_AnimationClip.cpp  # F2H49
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Item.cpp  # F2H51
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Animation.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Geometry.cpp
@@ -157,6 +160,8 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogAsset.cpp      # F2H47
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogValidator.cpp  # F2H47
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogSystem.cpp     # F2H48
+    ${CMAKE_SOURCE_DIR}/src/engine/inventory/ItemAsset.cpp     # F2H51
+    ${CMAKE_SOURCE_DIR}/src/engine/inventory/InventoryState.cpp # F2H51
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogScriptHost.cpp # F2H48.1
 )
 

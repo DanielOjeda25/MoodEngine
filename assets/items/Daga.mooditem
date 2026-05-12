@@ -1,0 +1,20 @@
+{
+  "_version": 1,
+  "description_key": "",
+  "description_literal": "Daga pesada",
+  "icon_path": "icons/items/placeholder.png",
+  "id": "Daga",
+  "model_path": "",
+  "name_key": "",
+  "name_literal": "Daga",
+  "slot_size": {
+    "height": 1,
+    "width": 1
+  },
+  "stack": {
+    "max_stack": 1,
+    "stackable": false
+  },
+  "stats": {},
+  "tags": []
+}

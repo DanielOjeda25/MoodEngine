@@ -161,6 +161,31 @@ void buildNarrativeWorkspace(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("Dialog Browser",           dockRightBottom);
 }
 
+/// @brief F2H51: workspace "Gameplay" — Sub-fase 2.5 Bloque 1 (Inventario).
+///        3 columnas: Item Browser izq (25%) / Viewport 3D centro (45%) /
+///        Property Editor + Inspector der (30%). Property Editor arriba,
+///        Inspector abajo (tabuladear si el dev lo prefiere).
+///        Permite ver simultaneo: lista de items + 3D del nivel +
+///        edicion del item activo + entity inspector cuando se selecciona
+///        una entidad con InventoryComponent en el viewport.
+void buildGameplayWorkspace(ImGuiID dockspaceId) {
+    ImGuiID dockMain = dockspaceId;
+    // Col izq (Item Browser): 25%.
+    ImGuiID dockLeft = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Left, 0.25f, nullptr, &dockMain);
+    // Col der (Item Property Editor + Inspector): ~33% del remanente.
+    ImGuiID dockRight = ImGui::DockBuilderSplitNode(
+        dockMain, ImGuiDir_Right, 0.33f, nullptr, &dockMain);
+    // Col der: split vertical, Inspector abajo 45%.
+    ImGuiID dockRightBottom = ImGui::DockBuilderSplitNode(
+        dockRight, ImGuiDir_Down, 0.45f, nullptr, &dockRight);
+
+    ImGui::DockBuilderDockWindow("Item Browser",          dockLeft);
+    ImGui::DockBuilderDockWindow("Viewport",              dockMain);
+    ImGui::DockBuilderDockWindow("Item Property Editor",  dockRight);
+    ImGui::DockBuilderDockWindow("Inspector",             dockRightBottom);
+}
+
 /// @brief Dispatcher: elige el builder segun el nombre del workspace
 ///        activo. F2H23: 3 workspaces — Layout / Programar / Materiales.
 ///        F2H28: + "Editor de mapas" 4-viewport.
@@ -177,6 +202,7 @@ void buildLayoutForWorkspace(const std::string& name, ImGuiID dockspaceId) {
     else if (name == "scripting" ) buildScriptingWorkspace(dockspaceId);
     else if (name == "materials" ) buildMaterialsWorkspace(dockspaceId);
     else if (name == "narrative" ) buildNarrativeWorkspace(dockspaceId);  // F2H46
+    else if (name == "gameplay"  ) buildGameplayWorkspace(dockspaceId);   // F2H51
     else                            buildLayoutWorkspace(dockspaceId);
 }
 

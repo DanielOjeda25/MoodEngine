@@ -20,6 +20,8 @@
 #include "editor/panels/narrative/DialogBrowserPanel.h"    // F2H47
 #include "editor/panels/narrative/DialogEditorPanel.h"     // F2H47
 #include "editor/panels/narrative/DialogNodeInspectorPanel.h"  // F2H47
+#include "editor/panels/inventory/ItemBrowserPanel.h"          // F2H51
+#include "editor/panels/inventory/ItemPropertyEditorPanel.h"   // F2H51
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/assets/MaterialEditorPanel.h"  // Hito 42
 #include "editor/panels/assets/ScriptEditorPanel.h"
@@ -234,6 +236,11 @@ public:
     DialogEditorPanel&         dialogEditor()    { return m_dialogEditor; }
     DialogBrowserPanel&        dialogBrowser()   { return m_dialogBrowser; }
     DialogNodeInspectorPanel&  dialogInspector() { return m_dialogInspector; }
+
+    /// @brief F2H51: accessor al Item Browser. El Property Editor + el
+    ///        Inspector section consumen la seleccion via `selectedPath()`.
+    ItemBrowserPanel&          itemBrowser()     { return m_itemBrowser; }
+    ItemPropertyEditorPanel&   itemPropertyEditor() { return m_itemPropertyEditor; }
 
     /// @brief Hito 27: HistoryStack del editor inyectado desde
     ///        EditorApplication. La MenuBar lo usa para los items
@@ -640,6 +647,8 @@ private:
     DialogBrowserPanel        m_dialogBrowser;     // F2H47
     DialogEditorPanel         m_dialogEditor;      // F2H47
     DialogNodeInspectorPanel  m_dialogInspector;   // F2H47
+    ItemBrowserPanel          m_itemBrowser;       // F2H51
+    ItemPropertyEditorPanel   m_itemPropertyEditor;// F2H51
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     MaterialEditorPanel m_materialEditor;  // Hito 42
     Toolbar m_toolbar;  // F2H22: tools de edicion (gizmo modes + brushes + face)

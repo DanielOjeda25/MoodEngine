@@ -1,0 +1,20 @@
+{
+  "_version": 1,
+  "id": "mysterious_key",
+  "name_key": "",
+  "name_literal": "Mysterious Key",
+  "description_key": "",
+  "description_literal": "An ornate key with no markings. It must open something important.",
+  "icon_path": "icons/items/placeholder.png",
+  "model_path": "",
+  "tags": ["quest_item", "key"],
+  "stats": {},
+  "stack": {
+    "stackable": false,
+    "max_stack": 1
+  },
+  "slot_size": {
+    "width": 1,
+    "height": 1
+  }
+}

@@ -224,8 +224,11 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             const bool hasEnv = e.hasComponent<EnvironmentComponent>();
             const bool hasScript = e.hasComponent<ScriptComponent>()
                 && !e.getComponent<ScriptComponent>().path.empty();
-            const bool hasPe = e.hasComponent<ParticleEmitterComponent>();
-            if (!hasMr && !hasLi && !hasRb && !hasEnv && !hasScript && !hasPe) return;
+            const bool hasPe  = e.hasComponent<ParticleEmitterComponent>();
+            // F2H51: InventoryComponent es serializable standalone — un
+            // chest/container puede no tener mesh visible.
+            const bool hasInv = e.hasComponent<InventoryComponent>();
+            if (!hasMr && !hasLi && !hasRb && !hasEnv && !hasScript && !hasPe && !hasInv) return;
             j["entities"].push_back(serializeEntity(e, assets));
         });
     }

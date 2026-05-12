@@ -265,6 +265,37 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<DialogComponent>(dc);
         }
 
+        // F2H51 Bloque I: InventoryComponent. Mode + capacity + entries
+        // restaurados; cada itemPath se re-resuelve via loadItem (paths
+        // logicos, no IDs — mismo patron que animator externalClips).
+        if (se.inventory.has_value()) {
+            const auto& s = *se.inventory;
+            InventoryComponent inv{};
+            // Mode string -> enum.
+            if (s.layoutMode == "grid_2d") {
+                inv.state.mode = Inventory::LayoutMode::Grid2D;
+            } else if (s.layoutMode == "equipment_slots") {
+                inv.state.mode = Inventory::LayoutMode::EquipmentSlots;
+            } else {
+                inv.state.mode = Inventory::LayoutMode::FlatList;
+            }
+            inv.state.config.max_items   = s.maxItems;
+            inv.state.config.grid_width  = s.gridWidth;
+            inv.state.config.grid_height = s.gridHeight;
+            for (const auto& es : s.equipmentSlots) {
+                inv.state.config.equipment_slots.push_back({es.name, es.tagFilter});
+            }
+            for (const auto& en : s.entries) {
+                const ItemAssetId id = assets.loadItem(en.itemPath);
+                Inventory::Entry e2;
+                e2.itemId     = id;
+                e2.quantity   = en.quantity;
+                e2.slot_index = en.slotIndex;
+                inv.state.entries.push_back(e2);
+            }
+            e.addComponent<InventoryComponent>(inv);
+        }
+
         // Hito 24: ScriptComponent + overrides. El script se carga
         // perezosamente desde `ScriptSystem` (mtime-based), aca solo
         // adjuntamos el path + overrides; `engine.exposed` los lee en

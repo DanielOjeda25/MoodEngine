@@ -709,3 +709,133 @@ TEST_CASE("SceneSerializer: autoStartOnInteract default=true se persiste igual (
     CHECK(loaded->entities[0].dialog->autoStartOnInteract);
     std::filesystem::remove(path);
 }
+
+// ============================================================
+// F2H51 Bloque I: InventoryComponent persistence — 3 layout modes
+// ============================================================
+
+TEST_CASE("SceneSerializer: round-trip de InventoryComponent FlatList (F2H51)") {
+    AssetManager assets("assets", nullFactory());
+    const ItemAssetId sword  = assets.loadItem("items/iron_sword.mooditem");
+    const ItemAssetId potion = assets.loadItem("items/health_potion.mooditem");
+    REQUIRE(sword != assets.missingItemId());
+    REQUIRE(potion != assets.missingItemId());
+
+    Scene scene;
+    {
+        Entity player = scene.createEntity("Player_inv");
+        InventoryComponent inv{};
+        inv.state.mode = Inventory::LayoutMode::FlatList;
+        inv.state.config.max_items = 24;
+        REQUIRE(inv.state.add(sword, 1, assets));
+        REQUIRE(inv.state.add(potion, 5, assets));
+        player.addComponent<InventoryComponent>(std::move(inv));
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("inventory_flatlist_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1u);
+    const auto& se = loaded->entities[0];
+    REQUIRE(se.inventory.has_value());
+    CHECK(se.inventory->layoutMode == "flat_list");
+    CHECK(se.inventory->maxItems == 24);
+    REQUIRE(se.inventory->entries.size() == 2u);
+    CHECK(se.inventory->entries[0].itemPath == "items/iron_sword.mooditem");
+    CHECK(se.inventory->entries[0].quantity == 1);
+    CHECK(se.inventory->entries[1].itemPath == "items/health_potion.mooditem");
+    CHECK(se.inventory->entries[1].quantity == 5);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: round-trip de InventoryComponent Grid2D (F2H51)") {
+    AssetManager assets("assets", nullFactory());
+    const ItemAssetId sword = assets.loadItem("items/iron_sword.mooditem");
+
+    Scene scene;
+    {
+        Entity chest = scene.createEntity("Chest_inv");
+        InventoryComponent inv{};
+        inv.state.mode = Inventory::LayoutMode::Grid2D;
+        inv.state.config.grid_width  = 3;
+        inv.state.config.grid_height = 5;
+        REQUIRE(inv.state.placeAt(sword, 1, 7, assets));
+        chest.addComponent<InventoryComponent>(std::move(inv));
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("inventory_grid_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    const auto& se = loaded->entities[0];
+    REQUIRE(se.inventory.has_value());
+    CHECK(se.inventory->layoutMode == "grid_2d");
+    CHECK(se.inventory->gridWidth == 3);
+    CHECK(se.inventory->gridHeight == 5);
+    REQUIRE(se.inventory->entries.size() == 1u);
+    CHECK(se.inventory->entries[0].itemPath == "items/iron_sword.mooditem");
+    CHECK(se.inventory->entries[0].slotIndex == 7);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: round-trip de InventoryComponent EquipmentSlots (F2H51)") {
+    AssetManager assets("assets", nullFactory());
+    const ItemAssetId sword = assets.loadItem("items/iron_sword.mooditem");
+
+    Scene scene;
+    {
+        Entity hero = scene.createEntity("Hero_equip");
+        InventoryComponent inv{};
+        inv.state.mode = Inventory::LayoutMode::EquipmentSlots;
+        inv.state.config.equipment_slots = {
+            {"weapon_main", "weapon"},
+            {"head",        "armor"},
+            {"any",         ""},
+        };
+        REQUIRE(inv.state.placeAt(sword, 1, 0, assets));
+        hero.addComponent<InventoryComponent>(std::move(inv));
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("inventory_equip_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    const auto& se = loaded->entities[0];
+    REQUIRE(se.inventory.has_value());
+    CHECK(se.inventory->layoutMode == "equipment_slots");
+    REQUIRE(se.inventory->equipmentSlots.size() == 3u);
+    CHECK(se.inventory->equipmentSlots[0].name == "weapon_main");
+    CHECK(se.inventory->equipmentSlots[0].tagFilter == "weapon");
+    CHECK(se.inventory->equipmentSlots[2].tagFilter.empty());
+    REQUIRE(se.inventory->entries.size() == 1u);
+    CHECK(se.inventory->entries[0].slotIndex == 0);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: entidad sin InventoryComponent no persiste el campo (F2H51)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+    {
+        Entity e = scene.createEntity("plain");
+        e.addComponent<MeshRendererComponent>(MeshAssetId{0},
+            std::vector<MaterialAssetId>{0});
+        // sin InventoryComponent
+    }
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("inventory_absent.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    CHECK_FALSE(loaded->entities[0].inventory.has_value());
+    std::filesystem::remove(path);
+}
