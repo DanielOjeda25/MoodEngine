@@ -10,6 +10,8 @@
 
 MoodEngine: motor 3D opinionated con **vibra Valve** (CSG-Hammer + simplicidad + level design first). Toma primitivas granulares del cookbook de juegos (inventario, durabilidad, stats, quests, dialog) y las expone como sistemas **data-driven + Lua hooks**. Engine-grade: el motor no asume género — el dev del juego combina las primitivas como quiera (Valve-style FPS, Fallout-like RPG, RE-like survival, walking sim, etc).
 
+**Géneros de referencia para qué primitivas vale la pena exponer:** Valve-style FPS (HL2/Portal), Fallout-like RPG, Resident Evil-like survival horror, GTA-like open world, walking sim narrativo. **El motor no implementa esos géneros** — expone las primitivas que cualquiera de ellos necesitaría (inventario, durabilidad, dialog branching, AI básica, streaming, LOD, day/night, etc) y el dev del juego elige cuáles usa.
+
 **Target user:** el dev del juego (vos + colegas). **NO compite con Unity/Godot**; cubre un nicho distinto (motor narrativo 3D con sistemas integrados de gameplay-toolbox).
 
 **Implicancias para decisiones técnicas:**
