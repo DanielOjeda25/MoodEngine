@@ -208,10 +208,16 @@ void EditorApplication::beginFrame() {
     // escena.
     //
     // Fix: forzar MousePos off-screen mientras Play Mode activo
-    // y NO paused. Cuando paused, el cursor se libera (Esc dispara
-    // SDL_SetRelativeMouseMode(SDL_FALSE)) y queremos hover/click
-    // normales para los botones del pause menu.
-    if (m_mode == EditorMode::Play && !GameState::paused()) {
+    // y el input este capturado (no paused y no inventory abierto).
+    // Cuando hay overlay UI activo (pause menu o inventory_panel),
+    // se libera el cursor (SetRelativeMouseMode(FALSE)) y queremos
+    // hover/click normales para los botones.
+    //
+    // F2H52 M-fix: el chequeo originalmente era `!paused()`; eso
+    // rompia el inventory_panel porque lo forzaba off-screen aunque
+    // el cursor estuviese liberado para hover items. Cambio a
+    // `!isInputBlocked()` que incluye ambos casos (pause + inventory).
+    if (m_mode == EditorMode::Play && !GameState::isInputBlocked()) {
         ImGuiIO& io = ImGui::GetIO();
         io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
     }

@@ -26,6 +26,7 @@
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 
+#include <glm/geometric.hpp>
 #include <imgui.h>
 
 #include <algorithm>
@@ -254,8 +255,21 @@ void drawContextMenu(const HudContext& ctx, Entity player,
         s_ctxMenu.open = false;
     } else if (tirarClicked) {
         if (inv.remove(s_ctxMenu.itemId, 1)) {
+            // F2H52 M-fix: usar solo la componente horizontal del forward
+            // — sin esto, si el jugador esta mirando hacia abajo (ej.
+            // hacia su propio inventario) el item se spawnea atravesando
+            // el piso. Con flat-forward el item siempre cae al nivel del
+            // pecho del jugador, independiente del pitch de la camara.
+            glm::vec3 flatForward = ctx.cameraForward;
+            flatForward.y = 0.0f;
+            const float flatLen = glm::length(flatForward);
+            if (flatLen > 0.001f) {
+                flatForward /= flatLen;
+            } else {
+                flatForward = glm::vec3(0.0f, 0.0f, -1.0f);
+            }
             const glm::vec3 dropPos = ctx.cameraPosition
-                + ctx.cameraForward * 1.8f
+                + flatForward * 1.8f
                 + glm::vec3(0.0f, -0.4f, 0.0f);
             Inventory::spawnPickupInWorld(ctx.scene, ctx.assets,
                                           s_ctxMenu.itemPath, dropPos, 1);
