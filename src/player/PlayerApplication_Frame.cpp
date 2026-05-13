@@ -150,18 +150,19 @@ void PlayerApplication::endFrame() {
 }
 
 void PlayerApplication::updateCamera(f32 dt) {
-    // Sync cursor con paused, igual que en EditorApplication.
-    const bool nowPaused = GameState::paused();
-    if (nowPaused != m_pausedLastFrame) {
-        if (nowPaused) {
+    // Sync cursor con input bloqueado (pausa OR inventory_panel abierto).
+    // F2H52 M-fix: el inventory necesita cursor libre para hover/click.
+    const bool nowBlocked = GameState::isInputBlocked();
+    if (nowBlocked != m_pausedLastFrame) {
+        if (nowBlocked) {
             SDL_SetRelativeMouseMode(SDL_FALSE);
         } else {
             SDL_SetRelativeMouseMode(SDL_TRUE);
             SDL_GetRelativeMouseState(nullptr, nullptr);
         }
-        m_pausedLastFrame = nowPaused;
+        m_pausedLastFrame = nowBlocked;
     }
-    if (nowPaused) return;
+    if (nowBlocked) return;
     if (!m_physicsWorld) return;
 
     // Hito 30: capsule del jugador. Standing total height = 1.8m;

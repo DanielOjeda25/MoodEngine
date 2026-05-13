@@ -83,26 +83,28 @@ void EditorApplication::updateCameras(f32 dt) {
         if (panDx != 0.0f || panDy != 0.0f) m_editorCamera.applyPan(panDx, panDy);
         if (wheel != 0.0f) m_editorCamera.applyWheel(wheel);
     } else {
-        // Sync cursor con paused. Detectamos la transicion (no llamamos
-        // SDL cada frame) para soportar todos los caminos que cambian la
-        // pausa: tecla Esc, click en "Continuar", o un script Lua via
-        // `hud.setPaused`. SDL_SetRelativeMouseMode(FALSE) muestra el
-        // cursor; (TRUE) lo atrapa para gameplay.
-        const bool nowPaused = GameState::paused();
-        if (nowPaused != m_pausedLastFrame) {
-            if (nowPaused) {
+        // Sync cursor con input bloqueado (pausa OR inventory_panel
+        // abierto). Detectamos la transicion (no llamamos SDL cada
+        // frame) para soportar todos los caminos: tecla Esc, click en
+        // "Continuar", tecla Tab para inventario, o un script Lua via
+        // `hud.setPaused` / `hud.setWidget`.
+        // SDL_SetRelativeMouseMode(FALSE) muestra el cursor; (TRUE) lo
+        // atrapa para gameplay.
+        const bool nowBlocked = GameState::isInputBlocked();
+        if (nowBlocked != m_pausedLastFrame) {
+            if (nowBlocked) {
                 SDL_SetRelativeMouseMode(SDL_FALSE);
             } else {
                 SDL_SetRelativeMouseMode(SDL_TRUE);
                 SDL_GetRelativeMouseState(nullptr, nullptr); // descartar delta
             }
-            m_pausedLastFrame = nowPaused;
+            m_pausedLastFrame = nowBlocked;
         }
 
-        // Hito 20: con el menu de pausa visible el gameplay se
-        // congela — no leemos input ni actualizamos posicion del
-        // jugador. El cursor esta libre para clickear botones.
-        if (nowPaused) return;
+        // Con input bloqueado (pausa o inventory abierto) el gameplay
+        // se congela — no leemos input ni actualizamos posicion del
+        // jugador. El cursor esta libre para clickear botones / items.
+        if (nowBlocked) return;
         if (!m_physicsWorld) return;
 
         // Hito 30: shape standing/crouching + lazy create.

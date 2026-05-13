@@ -157,6 +157,17 @@ std::unordered_map<std::string, std::string>& dialogVars();
 ///        deberia quedar dialog state colgando).
 void reset();
 
+/// @brief F2H52 M-fix: true si el input del jugador (camera, movimiento)
+///        deberia estar bloqueado. Pasa cuando:
+///        - `paused()` (Esc / menu de pausa).
+///        - El `inventory_panel` esta abierto (Tab) — necesitamos el
+///          cursor libre para que el dev pueda hover items, right-click,
+///          drag entre slots, etc.
+///        Los callers (EditorApplication::updateCameras + PlayerApplication
+///        ::updateCamera) usan este flag para liberar SDL_SetRelativeMouseMode
+///        y skipear la actualizacion de camera.
+bool isInputBlocked();
+
 // --- F2H39: helpers de mutacion del HUD (puros, sin deps graficas) ---
 // Vivien aqui (no en GameOverlay) para que LuaBindings los pueda llamar
 // sin arrastrar ImGui al modulo de tests.

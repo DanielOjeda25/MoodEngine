@@ -31,6 +31,15 @@ void reset() {
     dialogVars().clear();
 }
 
+bool isInputBlocked() {
+    if (paused()) return true;
+    // F2H52 M-fix: si el inventory_panel esta abierto necesitamos
+    // cursor libre para hover/click/drag — bloqueamos el input de
+    // camara/movimiento como si fuese pausa.
+    if (hud().isWidgetEnabled("inventory_panel")) return true;
+    return false;
+}
+
 // --- F2H39: helpers puros ---
 
 void triggerHitMarker() {
