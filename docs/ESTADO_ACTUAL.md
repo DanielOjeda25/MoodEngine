@@ -319,6 +319,47 @@ Esto significa:
 
 ## 1. ¿Dónde estamos?
 
+**🚀 Fase 2 — F2H52 cerrado: Inventory runtime (pickup entities + HUD widget + Lua bindings + container split + renderer override).**
+Tag: `v1.40.0-fase2-hito52`.
+Validado visualmente por dev *"todo funciona"* tras tour de los Bloques A-N + 3 rounds de bugfixes (mouse capture + drop offset). Cierra el split editor/runtime que F2H51 dejó abierto (auto-ría + state) — F2H52 entrega la mecánica end-to-end al jugador.
+
+**🏁 Mecánica del inventario para el jugador**: caminar sobre un pickup en el mundo → `[E] Levantar <nombre>` → notificación `+ x N` → Tab abre panel a la derecha → hover muestra tooltip con nombre/descripción/tags/stats → click derecho abre menú Usar (invoca hook Lua `on_use`) o Tirar (item sale del inventario y aparece en el piso enfrente, levantable de nuevo). 51/52 hitos de Fase 2 (más F2H49.1 patch).
+
+**Decisiones clave de F2H52:**
+
+- **Engine-grade strict, mismo patrón F2H47/F2H48**: motor mueve items entre containers + dispara hooks; semántica game-specific ("poción cura HP") vive en Lua. Hooks `on_pickup/on_drop/on_use` con 1 callback por evento (overwrite con warn). Helper compartido `Inventory::spawnPickupInWorld` extraído para reuso entre Lua binding `spawn_pickup`, drop del HUD widget, y drag-drop del editor (3 callsites colapsados a 1).
+- **3 layout modes en el widget como first-class** (FlatList / Grid2D / EquipmentSlots): no defer al Bloque K como originalmente planeado, porque el dev quiere validar el motor con los 3 genres referencia (Diablo / RE4 / Skyrim) desde el día 1. Cada uno con drag-flank rolled-own (no ImGui drag-drop API) para consistencia con el draw pattern de los demás widgets HUD.
+- **Container split como mode separado del state** (`HudState::container_open` + `container_target`): no es un cuarto `LayoutMode`. Eso se resolvió post-implementación porque `entt::entity` 0 es un handle VÁLIDO — no se podía usar `container_target = 0` como sentinel "no container". Refactor a `bool container_open` + `u32 container_target`.
+- **`inventory.set_renderer(callback)` opt-out total**: el dev cede TODO el render del widget (modes + context menu + tooltip) al callback Lua. Engine-grade: el motor no impone presentación cuando el dev tiene la suya. Limitación v1 documentada: sin bindings ImGui mínimos, el callback solo puede dibujar via los bindings que el dev ya tenga (Dead Space / sistemas custom). Cuando emerja necesidad, agregar bindings ImGui mínimos en hito propio.
+- **Split de `GameOverlay.cpp` (1358 → 816 lineas)**: regla soft 500 / hard 800 por archivo del agente. Nuevo `GameOverlay_Internal.h` con paleta + helpers de texto, nuevo `GameOverlay_Inventory.cpp` con todo el widget. `drawInventoryPanel` exportado out-of-anonymous-namespace para que el registry de widgets en `GameOverlay.cpp` lo referencie.
+- **HudContext extension pattern (consolidando F2H41 + F2H52)**: `cameraForward` (F2H41 para CompassBar) + `cameraPosition` (F2H52 H5 para drop spawn) + `Scene*` + `AssetManager*` (F2H52 H para resolver player/items). El caller (EditorPlayMode + PlayerApplication) pasa todo al `GameOverlay::draw`.
+- **Mouse capture bug fix descubierto en tour M**: código viejo de F2H41 forzaba `io.MousePos = -FLT_MAX` cada frame con condición `Play && !paused`. NO consideraba inventory_panel abierto. Resultado: ImGui no recibía mouse durante Tab → no hover ni click ni siquiera botón Stop. Fix: cambiar a `Play && !isInputBlocked()` donde `GameState::isInputBlocked()` returns `paused() || widget_enabled["inventory_panel"]`. Mismo helper para gating del SDL_SetRelativeMouseMode en `updateCameras`. Cuando emerja un cuarto overlay UI (ej. trade menu de un NPC), se suma al helper.
+- **Drop horizontal (no diagonal)**: la primera versión spawneaba el item en `cameraPos + cameraForward * 1.8`. Si el jugador miraba hacia abajo (para ver su inventario), el vector forward apuntaba al piso → item atravesado. Fix: proyectar forward al plano horizontal (`forward.y = 0` + normalize) antes de multiplicar. Offset Y de -1.1 desde camera (eye height 1.6) → centro de cube a 0.5m del piso. Item siempre apoya en el piso, mires donde mires.
+- **Cube placeholder winding fix** (bug pre-existente expuesto en tour D): 4 de 6 caras del primitive cube tenían CW winding desde afuera → backface culling las escondía. Test headless `test_primitive_meshes.cpp` validó cross-product de edges vs declared normal. Solo fix en +X/-X/+Y/-Y (+Z/-Z ya estaban bien). Bug solo emergía con primitives visibles — los tiles usan brush meshes con winding correcto.
+
+**Implementación (F2H52 Bloques A-N)**: ver entry detallado en `HITOS.md`. Resumen:
+- B-D: `ItemPickupComponent` + `ItemPickupSystem` + drag-drop del Item Browser al viewport.
+- E-G: bindings Lua tabla `inventory` (has/count/entries/sum_stat/add/remove/spawn_pickup/on_*hooks/use) + acceso desde `DialogScriptHost` para choices con `condition_lua`.
+- H: widget `inventory_panel` (3 modes + tooltip + right-click Usar/Tirar).
+- I: container split mode + `hud.open_container(entity)`.
+- J: `inventory.set_renderer(callback)` override engine-grade.
+- K: 57 tests nuevos (lua_bindings_inventory, item_pickup_system, item_spawn, dialog_script_host inventory gating, game_state container).
+- L: sample `inventory_demo.lua` con USE_HANDLERS map (pocion auto-consume, sword equipable).
+- M: tour con dev + 3 rounds de bugfixes.
+
+**Pendientes conocidos** (post-F2H52):
+- **3D preview en Item Property Editor** (Bloque 0.2 del PLAN_SUBFASE_2_5).
+- **Iconos en cards del Item Browser** (requiere wireup AssetManager texture).
+- **`slot_size > 1x1` packing en Grid2D** (Resident Evil 4-style tetris).
+- **Hot reload por filesystem watcher** del Item Browser.
+- **File picker para icon_path/model_path** en Property Editor (anotado en `PENDIENTES.md`).
+- **Player entity auto-bindeada a la FpsCamera** — workaround manual actual: dev crea entity con tag "Player" + InventoryComponent. Sub-fase 2.5 cierre o Sub-fase 3 si emerge necesidad.
+- **Bindings ImGui mínimos para Lua** (para que `inventory.set_renderer` pueda dibujar custom sin que el dev traiga sus propios bindings).
+
+**Próximo paso**: cerrar **Sub-fase 2.5** con el siguiente hito (F2H53 — quest/objetivos? combate? a definir con el dev). El Bloque 1 del `PLAN_SUBFASE_2_5.md` (Inventario) está completo con F2H51 + F2H52.
+
+### F2H45 (anterior, ya cerrado)
+
 **🚀 Fase 2 — F2H45 cerrado: cierre de deudas pre-Sub-fase 2.5 (AddComponentCommand undoable + Lato en Player con tildes + Console tooltip i18n).**
 Tag: `v1.35.0-fase2-hito45`.
 Validado visualmente por dev *"lo demás está OK"* tras tour de los 3 bloques. 3 deudas reales cerradas (deuda crónica F2H38 Lato Player + sweep i18n F2H43 incompleto + falta de undo en Add Component F2H44). Fix lateral: botón "Recompute mesh" del Inspector eliminado a pedido del dev (era debug breadcrumb sin uso real).

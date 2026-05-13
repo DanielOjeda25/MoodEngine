@@ -74,10 +74,13 @@ eventualmente Material Editor pro.
 
 ---
 
-### Bloque 1 — Inventario (PARCIALMENTE CERRADO 2026-05-12)
+### Bloque 1 — Inventario ✅ CERRADO 2026-05-12
 
-> **Estado**: **F2H51 cerró el lado autoría + state + persistencia.** Queda F2H52 (runtime: pickup/drop + HUD widget + Lua bindings + dialog choice gating por items).
-> Ver [`HITOS.md`](HITOS.md) entry F2H51 + [`DECISIONS.md`](DECISIONS.md) entry 2026-05-12.
+> **Estado**: **F2H51 + F2H52 cerrados.**
+> - **F2H51** (autoría + state): ItemAsset + Item Browser + Property Editor + InventoryComponent (3 layout modes) + persistencia `.moodmap` + workspace "Gameplay".
+> - **F2H52** (runtime): pickup entities + HUD widget (3 modes + tooltip + right-click Usar/Tirar) + Lua bindings (`inventory.*` + hooks `on_pickup/on_drop/on_use`) + dialog choice gating por items + container split mode + renderer override engine-grade.
+>
+> Ver [`HITOS.md`](HITOS.md) entries F2H51 + F2H52 + [`DECISIONS.md`](DECISIONS.md) entries 2026-05-12.
 
 Diálogos y quests dependen de "tengo X item" para condicionales —
 empezar por items evita hardcodear flags `game.has_key` que después

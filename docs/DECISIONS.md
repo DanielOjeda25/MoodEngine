@@ -11,6 +11,52 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-12: F2H52 cierre — Inventory runtime (pickup + HUD + Lua + container split + renderer override)
+
+**Contexto:** cierra el Bloque 1 (Inventario) del `PLAN_SUBFASE_2_5.md`. F2H51 entregó autoría + state + persistencia; F2H52 cierra el lado runtime. Sub-fase 2.5 Bloque 1 ✅ completo.
+
+**Decisión clave 1 — Hooks Lua único callback por evento (no veto, sí after-success).** Los 3 hooks (`on_pickup` / `on_drop` / `on_use`) se sobrescriben con warn si el dev registra dos veces. Motor completa la operación primero (add/remove) y DESPUÉS dispara el callback como "after-success notification". El dev NO puede vetar — si necesita veto, hace `inventory.has` check antes de la acción.
+
+- **Razón:** simplicidad > composability en v1. Patrón identico a `DialogSystem::setEvaluator/Executor` (F2H48.1). Si emerge necesidad de N callbacks, sumar `add_listener(...)` aparte sin deprecar el setter único.
+- **Trade-off aceptado:** el dev tiene que decidir en su Lua dónde meter toda su lógica de pickup (en un solo callback). Para hot reload, el sol::function vieja queda colgando hasta que el nuevo script se cargue + se re-registre.
+
+**Decisión clave 2 — `inventory.use(entity, path)` NO auto-consume.** El motor invoca el hook `on_use(entity, path)` y vuelve. Es el callback del dev quien decide si llama `inventory.remove(...)` adentro (caso poción) o no (caso arma equipable). Idem `inventory.drop` desde el HUD widget: motor remueve + spawnea pickup + invoca `on_drop` notificación.
+
+- **Razón:** engine-grade strict. El motor no conoce "poción se consume al usar". El sample `inventory_demo.lua` muestra el patrón: `USE_HANDLERS` map por path con `health_potion` haciendo `inventory.remove(ent, path, 1)` adentro, y `iron_sword` NO (caso equipar).
+- **Alternativa rechazada:** flag `consume_on_use` en el `.mooditem`. Hubiera obligado al motor a saber qué hacer post-consume (¿devuelve un wrapper vacío? ¿restaura HP automáticamente?). Más simple ceder al script.
+
+**Decisión clave 3 — `Inventory::spawnPickupInWorld` helper compartido (3 callsites → 1).** Misma lógica de "crear entity con Transform + MeshRenderer + Trigger 0.5³ + ItemPickupComponent" se necesitaba en: Lua binding `inventory.spawn_pickup`, drop del HUD widget, drag-drop del Item Browser al viewport. Extraída a `engine/inventory/ItemSpawn.h/cpp`.
+
+- **Razón:** evitar drift entre los 3 callsites cuando el schema del pickup evolucione. Mesh derivado del item: `model_path` → loadMesh + createMaterialsForMesh; sino `icon_path` → cubo + textura icon como albedo; sino default. El dev puede actualizar el helper en un lugar.
+- **Tests:** `test_item_spawn.cpp` con 8 tests cubre creación exitosa, qty custom, scene/assets null, item inexistente, Trigger halfExtents, multi-spawn.
+
+**Decisión clave 4 — Container split visualmente FlatList para ambos lados, sin importar el `mode` del state.** Cuando `hud.open_container(entity)` se llama, el widget renderea 2 columnas (player izq, container der) usando FlatList visual. La layout config del container's `InventoryComponent.state.mode` se IGNORA en el render del split.
+
+- **Razón:** el loot UX (cofre/comercio/drop pile) rara vez quiere el grid spatial del container. Casos como "open chest in RE4 → see chest's grid" son raros; lo común es "open chest → see flat list of items, drag to player".
+- **Limitación documentada:** si el dev quiere split visual respetando el mode del container, registra su renderer custom via `inventory.set_renderer`. El motor expone primitivas; el dev decide presentación.
+
+**Decisión clave 5 — `HudState::container_open` bool + `container_target` u32 (NO sentinel value).** Descubierto bug en testing: `entt::entity` 0 es un handle VÁLIDO (la primera entity creada). No podemos usar `container_target = 0` como sentinel "no container". Refactor a dos campos: `bool container_open` + `u32 container_target`. El widget chequea ambos.
+
+- **Razón:** sin el bool, el primer `hud.open_container(player)` (caso degenerado pero válido) hubiera sido indistinguible de "no hay container abierto". El bool es cero overhead + máxima claridad.
+- **Pattern replicable:** cualquier campo que store un entt handle como "opcionalmente seteado" debería usar un bool paralelo, no un valor sentinel.
+
+**Decisión clave 6 — `inventory.set_renderer(callback)` cede TODO al dev (modes + tooltip + context menu skipeados).** Cuando el dev registra un renderer custom, el motor no dibuja nada del default — el callback recibe `(player, container_or_nil)` y se encarga.
+
+- **Razón:** engine-grade extremo. No tendría sentido mezclar "el motor dibuja la mitad y el dev la otra". Cede o no cede — sin estados intermedios.
+- **Limitación v1 documentada:** sin bindings ImGui mínimos en Lua, el callback solo puede dibujar usando bindings del dev (UI custom Dead Space-style). Cuando emerja necesidad de devs sin sus propios bindings → hito de "bindings ImGui mínimos para Lua".
+
+**Decisión clave 7 — Drop horizontal (forward proyectado al plano XZ), no diagonal.** Primera versión hizo `cameraPos + cameraForward * 1.8`. Si el jugador miraba hacia abajo (cosa común al ver su propio inventario), forward apuntaba al piso → item atravesado. Fix: proyectar al plano horizontal (`forward.y = 0` + normalize) antes de multiplicar. Y offset -1.1 desde camera height.
+
+- **Razón:** UX consistente independiente del pitch de la cámara. El jugador SIEMPRE ve el item caer enfrente, mire donde mire.
+- **Alternativa rechazada:** raycast contra el piso para apoyar el item exactamente al nivel. Sobre-engineering para v1; si el piso es irregular, el item flotará un poco — aceptable para un sistema de inventario, no es un physics-driven drop.
+
+**Decisión clave 8 — Bug fix descubierto en tour M: `MousePos = -FLT_MAX` machacado cada frame.** Código viejo de F2H41 forzaba `io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX)` cada frame con condición `Play && !paused`. La condición NO consideraba inventory_panel abierto, así que cuando el dev abría Tab durante Play, el cursor era liberado por updateCameras pero machacado por beginFrame — ImGui no recibía mouse, ni siquiera el botón Stop respondía.
+
+- **Fix:** nuevo helper `GameState::isInputBlocked()` returns `paused() || widget_enabled["inventory_panel"]`. Reemplaza el chequeo de `!paused()` en beginFrame + el de `paused()` en updateCameras de editor + player. Generalizable: cualquier overlay UI futuro (trade menu, quest log, etc.) se suma al helper sin tocar los 4 callsites.
+- **Lección aprendida:** cuando un fix lateral (F2H41) cambia comportamiento global del input, dejar siempre un helper centralizado en lugar de inlinear el chequeo. El inlining causó que F2H52 no anticipara la interacción.
+
+---
+
 ## 2026-05-12: F2H51 cierre — Inventario engine-grade (autoría + state + persistencia)
 
 **Contexto:** Bloque 1 del `PLAN_SUBFASE_2_5.md`, sexto hito real de Sub-fase 2.5. F2H50 cerró el flow narrativo end-to-end con NPC tangible; F2H51 abre el sistema de inventario (Bloque 1 del plan macro, pedido del dev: *"recuerda la idea es crear una base solida para que a futuro cualquiera pueda crear su sistema de conversaciones, misiones, o inventario y asignar a modelos 3D"*). Split editor/runtime aplicado: F2H51 = autoría + state + persistencia; F2H52 = runtime (pickup + HUD + Lua).
