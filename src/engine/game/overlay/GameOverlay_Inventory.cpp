@@ -268,9 +268,13 @@ void drawContextMenu(const HudContext& ctx, Entity player,
             } else {
                 flatForward = glm::vec3(0.0f, 0.0f, -1.0f);
             }
+            // Camara default a ~1.6m (eye height); centro del pickup
+            // cube a 0.5m del piso = offset -1.1 de la camara. Forward
+            // 1.5m para que el item quede al alcance del E pero sin
+            // que el player lo levante inmediatamente.
             const glm::vec3 dropPos = ctx.cameraPosition
-                + flatForward * 1.8f
-                + glm::vec3(0.0f, -0.4f, 0.0f);
+                + flatForward * 1.5f
+                + glm::vec3(0.0f, -1.1f, 0.0f);
             Inventory::spawnPickupInWorld(ctx.scene, ctx.assets,
                                           s_ctxMenu.itemPath, dropPos, 1);
             Inventory::Hooks::invokeDrop(s_ctxMenu.itemPath, 1);
