@@ -48,6 +48,19 @@ struct InvLuaFixture {
     ItemAssetId swordId = 0;
     ItemAssetId potionId = 0;
     sol::state lua;
+
+    // F2H53 fix: limpiar hooks ANTES de que `sol::state lua` se destruya.
+    // Los hooks (g_pickupHook / g_dropHook / g_useHook / g_renderHook en
+    // `Inventory::Hooks`) son `std::function` global que pueden capturar
+    // `sol::function` de esta `lua`. Si la state muere antes que el hook,
+    // el destructor de la `sol::function` colgada hace `lua_unref()` sobre
+    // un Lua VM muerto -> SIGSEGV en el SIGUIENTE test cuando `clearAll`
+    // intente reset el hook. Limpiando aca, la sol::function se destruye
+    // mientras la state aun vive (orden de miembros: clearAll() corre en
+    // ~InvLuaFixture, antes de la destruccion de `lua` declarada abajo).
+    ~InvLuaFixture() {
+        Inventory::Hooks::clearAll();
+    }
 };
 
 std::unique_ptr<InvLuaFixture> makeFixture(const std::string& tag) {
