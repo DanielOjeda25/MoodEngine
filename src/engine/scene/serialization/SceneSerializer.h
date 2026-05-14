@@ -105,6 +105,13 @@ struct SavedEnvironment {
     f32 exposure = 0.0f;
     std::string tonemapMode{"aces"};       // "none" | "reinhard" | "aces"
     f32 iblIntensity = 1.0f;               // Hito 18, opcional en JSON
+
+    // F2H55: bloom. Campos opcionales en JSON (back-compat con mapas
+    // pre-F2H55: si faltan, defaults razonables).
+    bool bloomEnabled   = true;
+    f32  bloomThreshold = 1.0f;
+    f32  bloomIntensity = 0.6f;
+    f32  bloomRadius    = 1.0f;
 };
 
 /// @brief Copia persistida de un ScriptComponent (Hito 24). Persiste el

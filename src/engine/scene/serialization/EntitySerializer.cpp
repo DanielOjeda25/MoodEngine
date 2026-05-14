@@ -150,6 +150,13 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         // Hito 18: solo persistir si != 1.0 (default) para no ensuciar
         // archivos viejos con un campo nuevo.
         if (env.iblIntensity != 1.0f) je2["ibl_intensity"] = env.iblIntensity;
+        // F2H55: bloom. Solo persistir si difiere del default para
+        // mantener limpios los .moodmap pre-F2H55 que round-tripeen
+        // sin tocar el componente.
+        if (!env.bloomEnabled)              je2["bloom_enabled"]   = env.bloomEnabled;
+        if (env.bloomThreshold != 1.0f)     je2["bloom_threshold"] = env.bloomThreshold;
+        if (env.bloomIntensity != 0.6f)     je2["bloom_intensity"] = env.bloomIntensity;
+        if (env.bloomRadius != 1.0f)        je2["bloom_radius"]    = env.bloomRadius;
         je["environment"] = je2;
     }
 
@@ -401,6 +408,12 @@ SavedEntity parseEntityFromJson(const json& j) {
         se2.exposure       = je.value("exposure",        0.0f);
         se2.tonemapMode    = je.value("tonemap_mode",    std::string{"aces"});
         se2.iblIntensity   = je.value("ibl_intensity",   1.0f); // Hito 18
+        // F2H55: bloom. Defaults explicitos para mapas pre-F2H55 que no
+        // tienen los campos -- se cargan con bloom medio prendido.
+        se2.bloomEnabled   = je.value("bloom_enabled",   true);
+        se2.bloomThreshold = je.value("bloom_threshold", 1.0f);
+        se2.bloomIntensity = je.value("bloom_intensity", 0.6f);
+        se2.bloomRadius    = je.value("bloom_radius",    1.0f);
         se.environment = std::move(se2);
     }
     if (j.contains("particle_emitter")) {

@@ -171,6 +171,48 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
             en.getComponent<EnvironmentComponent>().iblIntensity = v;
         },
         "Editar IBL intensity");
+
+    // F2H55: bloom. Master switch + threshold + intensity + radius.
+    // Cambios propagan en vivo via applyEnvironmentFromScene() que
+    // corre cada frame en renderScene.
+    ImGui::Separator();
+    ImGui::TextUnformatted(I18n::T("editor.panel.inspector.environment.bloom").c_str());
+    const std::string bloomEnabledLabel = I18n::T("editor.panel.inspector.environment.bloom_enabled") + "##env";
+    if (ImGui::Checkbox(bloomEnabledLabel.c_str(), &env.bloomEnabled)) {
+        m_editedThisFrame = true;
+    }
+    if (env.bloomEnabled) {
+        const std::string bloomThLabel = I18n::T("editor.panel.inspector.environment.bloom_threshold") + "##env";
+        if (ImGui::SliderFloat(bloomThLabel.c_str(),
+                                &env.bloomThreshold, 0.0f, 3.0f, "%.2f")) {
+            m_editedThisFrame = true;
+        }
+        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.bloomThreshold,
+            [](Entity& en, const f32& v) {
+                en.getComponent<EnvironmentComponent>().bloomThreshold = v;
+            },
+            "Editar bloom threshold");
+        const std::string bloomIntLabel = I18n::T("editor.panel.inspector.environment.bloom_intensity") + "##env";
+        if (ImGui::SliderFloat(bloomIntLabel.c_str(),
+                                &env.bloomIntensity, 0.0f, 2.0f, "%.2f")) {
+            m_editedThisFrame = true;
+        }
+        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.bloomIntensity,
+            [](Entity& en, const f32& v) {
+                en.getComponent<EnvironmentComponent>().bloomIntensity = v;
+            },
+            "Editar bloom intensity");
+        const std::string bloomRadLabel = I18n::T("editor.panel.inspector.environment.bloom_radius") + "##env";
+        if (ImGui::SliderFloat(bloomRadLabel.c_str(),
+                                &env.bloomRadius, 0.5f, 3.0f, "%.2f")) {
+            m_editedThisFrame = true;
+        }
+        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.bloomRadius,
+            [](Entity& en, const f32& v) {
+                en.getComponent<EnvironmentComponent>().bloomRadius = v;
+            },
+            "Editar bloom radius");
+    }
     ImGui::Separator();
 }
 

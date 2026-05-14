@@ -251,6 +251,11 @@
   "editor.panel.inspector.environment.exposure": "exposure (EV)",
   "editor.panel.inspector.environment.tonemap": "tonemap",
   "editor.panel.inspector.environment.ibl_intensity": "IBL intensity",
+  "editor.panel.inspector.environment.bloom": "Bloom (glow)",
+  "editor.panel.inspector.environment.bloom_enabled": "enable bloom",
+  "editor.panel.inspector.environment.bloom_threshold": "threshold",
+  "editor.panel.inspector.environment.bloom_intensity": "intensity",
+  "editor.panel.inspector.environment.bloom_radius": "halo radius",
 
   "editor.panel.inspector.mesh.mesh_id_path": "mesh: {} (id {})",
   "editor.panel.inspector.mesh.mesh_id": "mesh id: {}",

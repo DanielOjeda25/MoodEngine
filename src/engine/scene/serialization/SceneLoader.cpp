@@ -206,6 +206,11 @@ Entity applyOneEntity(const SavedEntity& se,
             else if (s.tonemapMode == "aces")     env.tonemapMode = 2;
             else                                  env.tonemapMode = 0;
             env.iblIntensity   = s.iblIntensity;
+            // F2H55: bloom params.
+            env.bloomEnabled   = s.bloomEnabled;
+            env.bloomThreshold = s.bloomThreshold;
+            env.bloomIntensity = s.bloomIntensity;
+            env.bloomRadius    = s.bloomRadius;
             e.addComponent<EnvironmentComponent>(env);
         }
 

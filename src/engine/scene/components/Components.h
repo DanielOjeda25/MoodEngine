@@ -227,6 +227,19 @@ struct EnvironmentComponent {
     // 0.4-0.7 para escenas con luces directas; 1.0 para escenas
     // exteriores donde el cielo manda.
     float iblIntensity = 1.0f;
+
+    // F2H55: bloom (glow). Algoritmo COD AW 2014, ver BloomPass.h.
+    //   bloomEnabled:   master switch. Off salta el pass entero (sin costo).
+    //   bloomThreshold: luminance HDR > threshold contribuye al halo.
+    //                   1.0 = solo sobreexpuestos; 0.5 = aporte general.
+    //   bloomIntensity: peso del bloom sobre el HDR. 0 = sin bloom,
+    //                   1 = peso completo.
+    //   bloomRadius:    escala del tent filter al upsamplear.
+    //                   0.5 = ajustado, 2.0 = halo amplio.
+    bool  bloomEnabled   = true;
+    float bloomThreshold = 1.0f;
+    float bloomIntensity = 0.6f;
+    float bloomRadius    = 1.0f;
 };
 
 /// @brief Marca a una entidad como instancia de un prefab (Hito 14).
