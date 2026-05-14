@@ -100,4 +100,10 @@ inline ImU32 withAlpha(ImU32 c, float alpha) {
 ///        scene/assets o no hay player con InventoryComponent.
 void drawInventoryPanel(const HudContext& ctx);
 
+/// @brief Widget `quest_log_panel` (F2H53 G). Definido en
+///        `GameOverlay_Quest.cpp`. Lista todos los quests activos via
+///        `QuestSystem::snapshot()` + permite trackear con click. Skipea
+///        si no hay AssetManager. Default OFF — el dev togglea con `J`.
+void drawQuestLogPanel(const HudContext& ctx);
+
 } // namespace Mood::GameOverlay

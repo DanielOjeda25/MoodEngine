@@ -632,6 +632,13 @@
   "hud.inventory.drop": "Drop",
   "hud.inventory.container_title": "CONTAINER",
 
+  "hud.quest_log.title": "QUEST LOG",
+  "hud.quest_log.empty": "(no active quests)",
+  "hud.quest_log.state.active": "ACTIVE",
+  "hud.quest_log.state.complete": "COMPLETE",
+  "hud.quest_log.state.failed": "FAILED",
+  "hud.quest_log.state.not_started": "—",
+
   "player.menu.new_game": "New Game",
   "player.menu.load_game": "Load Game",
   "player.menu.quit": "Quit",

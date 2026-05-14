@@ -632,6 +632,13 @@
   "hud.inventory.drop": "Tirar",
   "hud.inventory.container_title": "CONTENEDOR",
 
+  "hud.quest_log.title": "DIARIO DE MISIONES",
+  "hud.quest_log.empty": "(sin misiones activas)",
+  "hud.quest_log.state.active": "ACTIVA",
+  "hud.quest_log.state.complete": "COMPLETA",
+  "hud.quest_log.state.failed": "FALLIDA",
+  "hud.quest_log.state.not_started": "—",
+
   "player.menu.new_game": "Juego Nuevo",
   "player.menu.load_game": "Cargar Partida",
   "player.menu.quit": "Salir",

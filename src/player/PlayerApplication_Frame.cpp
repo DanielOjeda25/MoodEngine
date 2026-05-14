@@ -535,6 +535,18 @@ int PlayerApplication::run() {
                     hud.widget_enabled["inventory_panel"] = nowOn;
                 }
             }
+
+            // F2H53 Bloque G: J togglea `quest_log_panel`. Convencion RPG.
+            {
+                const bool jPressed = frameKeys[SDL_SCANCODE_J] != 0;
+                const bool jJustPressed = jPressed && !m_jPrevFrame;
+                m_jPrevFrame = jPressed;
+                if (jJustPressed && !Mood::Dialog::DialogSystem::isActive()) {
+                    auto& hud = Mood::GameState::hud();
+                    const bool nowOn = !hud.isWidgetEnabled("quest_log_panel");
+                    hud.widget_enabled["quest_log_panel"] = nowOn;
+                }
+            }
         }
 
         if (gameUpdating && m_scene && m_animationSystem && m_assetManager) {

@@ -633,6 +633,8 @@ private:
     // F2H52 H: prev-frame de Tab para detectar el flanco up->down y
     // togglear el widget `inventory_panel`.
     bool m_tabPrevFrame      = false;
+    // F2H53 G: prev-frame de J para togglear `quest_log_panel`.
+    bool m_jPrevFrame        = false;
     // F2H48: prev-frame state de las teclas 1..9 para detectar el digito
     // recien presionado durante un dialog activo. Indice 0..8 = teclas
     // 1..9 (`SDL_SCANCODE_1` + i).

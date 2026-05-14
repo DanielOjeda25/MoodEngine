@@ -1498,6 +1498,20 @@ int EditorApplication::run() {
                     hudRef.widget_enabled["inventory_panel"] = nowOn;
                 }
             }
+
+            // F2H53 Bloque G: J togglea el widget `quest_log_panel`.
+            // Mismo patron que Tab para el inventory. Convencion RPG
+            // (Skyrim, Witcher) — J de "Journal".
+            {
+                const bool jPressed = keys[SDL_SCANCODE_J] != 0;
+                const bool jJustPressed = jPressed && !m_jPrevFrame;
+                m_jPrevFrame = jPressed;
+                if (jJustPressed && !Dialog::DialogSystem::isActive()) {
+                    auto& hudRef = Mood::GameState::hud();
+                    const bool nowOn = !hudRef.isWidgetEnabled("quest_log_panel");
+                    hudRef.widget_enabled["quest_log_panel"] = nowOn;
+                }
+            }
         }
 
         // 3.55) Animacion (Hito 19): avanza time del Animator y rellena el

@@ -861,6 +861,7 @@ const HudWidget k_widgets[] = {
     { "pickup_queue",     &drawPickupNotifications },
     { "dialog_box",       &drawDialogBox },        // F2H48
     { "inventory_panel",  &drawInventoryPanel },   // F2H52 H (default OFF)
+    { "quest_log_panel",  &drawQuestLogPanel },    // F2H53 G (default OFF)
     { "crt_scanline",     &drawCrtScanline },      // F2H41 (default OFF)
 };
 

@@ -105,6 +105,7 @@ struct HudState {
     std::unordered_map<std::string, bool> widget_enabled{
         {"crt_scanline",    false},
         {"inventory_panel", false},  // F2H52 H: default OFF; Tab lo togglea
+        {"quest_log_panel", false},  // F2H53 G: default OFF; J lo togglea
     };
 
     // --- F2H52 Bloque I: container split del inventory_panel ---
