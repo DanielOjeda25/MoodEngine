@@ -11,6 +11,50 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-14: F2H56 cierre — SSAO + depth-texture FB + per-scene settings
+
+**Contexto:** segundo hito de **Sub-fase 2.6 — Render polish** (F2H55 = bloom). Continúa el orden de impacto visual planeado: bloom → AO → color grading → god rays. Tag `v1.43.0-fase2-hito56`. Dev validó: *"el SSAO funciona bien"* — esquinas y debajo de objetos se oscurecen sutilmente al default; subiendo intensity a 3.0 el efecto se vuelve marcado.
+
+**Decisión clave 1 — Port de Filament/Godot vs adoptar AMD FidelityFX CACAO.** Mismo dilema que tuvimos con bloom F2H55, pero esta vez SÍ existe una lib externa real (CACAO de AMD, MIT, mantenida, alta calidad). Elegimos **portar** igual.
+
+- **Razón:** consistencia con la filosofía aplicada en F2H55 (no-reinventar = portar de open-source comprobado, no agregar dependencia externa). El port de Filament/Godot 4 cubre el caso base (~150 líneas GLSL) y CACAO sería overkill para v1 cuando ni siquiera sabemos si el dev necesita más calidad.
+- **Alternativa diferida:** CACAO como upgrade futuro si emerge calidad pobre. El swap sería un sub-hito puntual (reemplazar el `ssao.frag` + ajustar uniforms; el wireup C++ no cambia porque el shader interfaz es la misma).
+- **Trade-off documentado:** SSAO básico de Filament tiene noise inherente que el blur 4x4 disimula parcialmente — visualmente queda "OK" pero no "premium". Si el dev pide "se ve raro / noisy", swap a CACAO.
+
+**Decisión clave 2 — Depth attachment como textura solo en modo HDR de OpenGLFramebuffer.** El FB principal de scene render (HDR RGBA16F) ahora crea su depth como `GL_TEXTURE_2D` con formato `GL_DEPTH24_STENCIL8` en lugar de `GL_RENDERBUFFER`. LDR FB (viewport final que muestra ImGui) mantiene renderbuffer.
+
+- **Razón:** SSAO necesita samplear depth desde un fragment shader → requiere textura. LDR FB no necesita samplear su propio depth (solo se usa para Z-test al renderizar, y al final el `glColorTextureId` es lo que ImGui muestra).
+- **Trade-off de memoria:** ~24-32 MB extra a 1920x1080 (textura vs renderbuffer ambos son lo mismo en memoria, el cambio es de tipo de objeto OpenGL, no de tamaño). Sin overhead en runtime.
+- **Compatibilidad:** Shadow pass usa su propio FB (no `OpenGLFramebuffer`), no se afecta. Ortho viewports usan LDR, mantienen renderbuffer.
+- **Revisión:** si en el futuro algún pass LDR necesita samplear depth, agregar flag al constructor de `OpenGLFramebuffer` para forzar textura en LDR. No emerge caso de uso todavía.
+
+**Decisión clave 3 — SSAO multiplica el color HDR final, no solo el término ambient del PBR shader.** Esto es **conscientemente incorrecto físicamente** pero simplifica drásticamente la integración v1.
+
+- **Razón pragmática:** integrar AO en el PBR shader (`pbr.frag`) implica agregar un sampler nuevo + branch para AO opcional + cambiar el flow de iluminación. Tocar el shader crítico del PBR es riesgoso (regresiones en todas las escenas). El composite separado en SSAOPass mantiene el cambio aislado.
+- **Consecuencia visual:** la luz directa también recibe oclusión (las sombras de cualquier directional light se OSCURECEN MÁS donde hay AO), lo cual no es físicamente correcto — solo el ambient/indirect debería ocluirse. En la mayoría de escenas la diferencia visual es sutil (el ojo no nota el over-darkening).
+- **Cuándo refactorizar:** si emerge complaint del dev sobre "los objetos se ven planos / lavados en zonas con AO" — síntoma de over-darkening. El refactor sería pasar el AO texture al PBR shader como uniform + multiplicar solo `iblContribution + ambient * ao` antes del directional lighting. Hito propio (~2-3h).
+
+**Decisión clave 4 — Half-res AO buffer en lugar de full-res.** Los 2 FBs internos de SSAO (raw + blurred) son la mitad del ancho/alto del scene FB. El composite es full-res.
+
+- **Razón:** convención industria — 16 samples por pixel a full-res es caro (~1080p × 16 samples = 32M texture reads por frame solo para SSAO). El blur 4x4 que viene después disimula la pérdida de resolución del downsample. Filament, Unreal, Godot, todos hacen half-res por default.
+- **Trade-off:** en patrones de muy alta frecuencia (líneas finas, texto en el mundo), la resolución de AO puede notarse. No emerge caso de uso real.
+- **Revisión:** si el dev pide "AO más definido en bordes finos", agregar opción full-res al SSAOPass. Improbable para una escena de juego típica.
+
+**Decisión clave 5 — Defaults SSAO ON con intensity=1.0.** Mismo criterio que bloom en F2H55.
+
+- **Razón:** engine-grade no toca semánticas de gameplay pero SÍ provee defaults visuales sensatos. SSAO al default añade "peso" a los objetos sin estilo intrusivo. El dev del juego apaga el slider si quiere look plano vintage.
+- **Alternativa descartada:** default OFF — descartado por la misma razón que bloom (el dev quería "lo visual que podemos sacar bien" — defaults aspiracionales).
+
+**Bugs UX detectados durante el tour (no scope F2H56, flagueados para F2H57):**
+
+- **Vista SIDE (ZY) ortho dibuja brushes con eje invertido.** Arrastrar izquierda-a-derecha mapea al revés en la matemática del editor. Probable causa: confusión de signo en la conversión screen-coords → world-coords del eje Z en la vista lateral. Investigación dirigida al `OrthoViewportPanel.cpp` cuando lleguemos al hito.
+- **Falta "Crear Entidad" button.** El editor no expone un workflow directo para crear entidades — el dev cita Hammer Editor (Source Engine) como referencia: botón "Create Entity" → elegir tipo + importar modelo opcional → editar propiedades en Inspector. Workflow actual obliga a spawn vía Demos del menú Ayuda, lo cual es muleta.
+- **Demos como muleta a eliminar.** Por la falta del workflow anterior, los Demos del menú Ayuda son la única forma práctica de poblar una escena nueva. Pendiente eliminarlos una vez exista el workflow real (F2H57). Mantenerlos hasta entonces para que el editor sea usable.
+
+Estos 3 ítems componen el scope de **F2H57 — Workflow de creación de entidades estilo Hammer + fix SIDE ortho + remove demos**. Pivot temporal de la Sub-fase 2.6 (render polish) a UX del editor antes de continuar con color grading (F2H58) / god rays (F2H59).
+
+---
+
 ## 2026-05-14: F2H55 cierre — Bloom (glow) + Environment per-scene (apertura Sub-fase 2.6 Render polish)
 
 **Contexto:** primer hito de **Sub-fase 2.6 — Render polish** post-cierre de Sub-fase 2.5 (Diálogos / Inventario / Quests, F2H53). El dev pidió "lo visual que podemos sacar bien" — entre 4 candidatos (bloom / AO / color grading / god rays) eligió bloom por mayor impacto inmediato + scope acotado. Tag `v1.42.0-fase2-hito55`. F2H54 quedó **skip** (laptop-only descartado por divergencia con desktop al cerrar F2H53).

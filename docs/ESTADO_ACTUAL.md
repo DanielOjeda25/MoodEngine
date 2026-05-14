@@ -4,7 +4,37 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H55 cerrado (2026-05-14)
+## 0. ACTUALIZACIÓN F2H56 cerrado (2026-05-14)
+
+**Segundo hito de Sub-fase 2.6 cerrado — SSAO (Ambient Occlusion / sombras de rincón) + per-scene settings.**
+Tag: `v1.43.0-fase2-hito56`. Validado por dev tras crear EnvironmentComponent vía demo + manipular sliders. Cita verbatim: *"el SSAO funciona bien"* — las esquinas y debajo de los objetos se oscurecen sutilmente al default; subiendo intensity a 3.0 el efecto se vuelve marcado y obvio.
+
+**Qué entrega F2H56** (Bloques A-F, detalle completo en `HITOS.md`):
+- **4 shaders nuevos en `shaders/`** (Bloque A): `ssao.vert` (compartido fullscreen), `ssao.frag` (16 samples hemisferio + IGN noise rotation + normal reconstruido del depth + range check), `ssao_blur.frag` (4x4 box blur), `ssao_composite.frag` (HDR × AO). Algoritmo Crytek 2007 + reconstrucción estilo Filament/Godot 4. Portados de Filament (Apache 2.0) + Godot 4 (MIT).
+- **`SSAOPass` C++ class** (Bloque B, `src/systems/render/SSAOPass.{h,cpp}`): 2 FBs half-res LDR para AO factor (raw + blurred) + composite a FB HDR full-res. `apply() → bool` mismo patrón que BloomPass.
+- **`OpenGLFramebuffer` extendido**: en modo HDR el depth attachment ahora es **textura sampleable** (necesario para SSAO). LDR mantiene renderbuffer (más eficiente). Nuevo accesor `glDepthTextureId()`.
+- **Pipeline reordenado en `SceneRenderer::endFrame`**: scene HDR → **SSAO** → bloom → post-process. Si SSAO está off o falla, bloom lee directo del scene FB — cero regresión vs F2H55.
+- **`EnvironmentComponent` extendido** (Bloque C) con 3 campos (`ssaoEnabled`, `ssaoRadius`, `ssaoIntensity`). `SavedEnvironment` paralelo. Serialización aditiva + back-compat (mapas pre-F2H56 cargan con defaults).
+- **Panel sliders en el Inspector** (Bloque D): sección "AO (sombras de rincón)" debajo de "Bloom (glow)" con checkbox + 2 sliders. 4 i18n keys nuevas en es.json + en.json.
+- **Suite 926/9705 verde** (sin tests nuevos: SSAO requiere GL context; serialización cubierta por el patrón existente).
+
+**Decisiones**:
+1. **Port de Filament/Godot vs FidelityFX CACAO**: portar pega con la filosofía no-reinventar + consistencia con cómo se hizo bloom F2H55. CACAO queda como upgrade futuro si la calidad pincha.
+2. **Depth attachment como textura solo en HDR**: separación reduce memoria + mantiene path LDR optimizado para ImGui display.
+3. **AO multiplicación al color final, no solo a ambient**: trade-off de simplicidad v1 (no tocar PBR shader). Documentado como limitación conocida. Refactor diferido si emerge calidad pobre.
+4. **Half-res AO buffer**: convención industria — 16 samples por pixel a full-res es caro y el blur 4x4 disimula la pérdida de resolución.
+5. **Default ON con intensity=1.0**: mismo criterio que bloom — engine-grade provee defaults visuales sensatos.
+
+**Bugs UX detectados durante tour de F2H56** (NO scope del hito, flagueados como reactive fix candidates en F2H57):
+1. **Vista ortográfica SIDE (ZY)**: dibuja brushes con eje invertido — arrastrar izquierda-a-derecha mapea al revés en la matemática del editor.
+2. **Falta "Crear Entidad" button**: el editor no tiene un botón claro para crear entidades en la escena. El flujo actual obliga a spawn vía Demos del menú Ayuda. El dev pidió un workflow estilo Hammer Editor (Source Engine): botón "Create Entity" → elegís tipo + importás modelo opcional → editás propiedades en Inspector.
+3. **Demos como muleta**: por la falta del workflow anterior, los Demos del menú Ayuda son la única forma práctica de poblar una escena. El dev quiere eliminarlos una vez exista el workflow real de creación de entidades.
+
+**Próximo hito**: **F2H57 — Workflow de creación de entidades estilo Hammer + fix bug SIDE ortho + eliminar Demos**. Plan en [`PLAN_HITO_F2H57.md`](PLAN_HITO_F2H57.md). NO es un hito de render polish — pivot temporal a UX del editor antes de continuar con color grading (F2H58) / god rays (F2H59).
+
+---
+
+## 0bis. ACTUALIZACIÓN F2H55 cerrado (2026-05-14)
 
 **Primer hito de Sub-fase 2.6 cerrado — Bloom (glow) + Environment settings per scene.**
 Tag: `v1.42.0-fase2-hito55`. Validado por dev tras crear una caja blanca de testing en una escena ad-hoc y mover los sliders en vivo: cita *"el bloom va bien"*. Demo `.moodmap` formal con cubos emissive diferida (el tour ad-hoc cubrió la validación).
