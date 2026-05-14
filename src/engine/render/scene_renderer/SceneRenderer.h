@@ -45,6 +45,7 @@ class OpenGLFramebuffer;
 class OpenGLInstanceBuffer;
 class OpenGLParticleRenderer;
 class OpenGLSSBO;
+class BloomPass;
 class PostProcessPass;
 class Scene;
 class ShadowPass;
@@ -139,6 +140,12 @@ public:
     TonemapMode tonemap()  const { return m_tonemap; }
     f32 iblIntensity()     const { return m_iblIntensity; }
 
+    // F2H55: bloom params (leidos por el panel Environment + tests).
+    bool bloomEnabled()   const { return m_bloomEnabled; }
+    f32  bloomThreshold() const { return m_bloomThreshold; }
+    f32  bloomIntensity() const { return m_bloomIntensity; }
+    f32  bloomRadius()    const { return m_bloomRadius; }
+
     /// @brief Resetea el cache de Environment y aplica el primer
     ///        EnvironmentComponent encontrado en la escena. Util al
     ///        cargar un proyecto para tener los valores antes del
@@ -164,7 +171,9 @@ public:
 private:
     std::unique_ptr<IRenderer> m_renderer;
     std::unique_ptr<OpenGLFramebuffer> m_sceneFb;     // HDR RGBA16F
+    std::unique_ptr<OpenGLFramebuffer> m_bloomFb;     // HDR RGBA16F (F2H55): scene + bloom contribution antes del post-process
     std::unique_ptr<OpenGLFramebuffer> m_viewportFb;  // LDR RGBA8
+    std::unique_ptr<BloomPass>         m_bloomPass;   // F2H55
     std::unique_ptr<PostProcessPass>   m_postProcess;
 
     std::unique_ptr<IShader> m_pbrShader;          // PBR estatico (no instanced)
@@ -217,6 +226,12 @@ private:
     f32 m_exposure = 0.0f;
     TonemapMode m_tonemap;            // ACES en ctor
     f32 m_iblIntensity = 1.0f;
+
+    // F2H55: bloom params (poblados por applyEnvironmentFromScene en Bloque C).
+    bool m_bloomEnabled    = true;
+    f32  m_bloomThreshold  = 1.0f;
+    f32  m_bloomIntensity  = 0.6f;
+    f32  m_bloomRadius     = 1.0f;
 
     // Diagnostico one-shot.
     bool m_shadowEnabledLastFrame = false;

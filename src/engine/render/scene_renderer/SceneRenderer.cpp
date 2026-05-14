@@ -40,6 +40,7 @@
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 #include "systems/light/LightSystem.h"
+#include "systems/render/BloomPass.h"
 #include "systems/render/PostProcessPass.h"
 #include "systems/render/ShadowPass.h"
 #include "systems/render/SkyboxRenderer.h"
@@ -64,6 +65,10 @@ SceneRenderer::SceneRenderer()
     //   - `m_sceneFb`: HDR (RGBA16F). Donde se pinta sky + escena + lit + fog.
     //   - `m_viewportFb`: LDR (RGBA8). Resultado del post-process pass.
     m_sceneFb = std::make_unique<OpenGLFramebuffer>(
+        1280u, 720u, OpenGLFramebuffer::Format::HDR);
+    // F2H55: FB intermedio HDR (scene + bloom contribution) que alimenta
+    // el post-process en lugar de leer directo de m_sceneFb.
+    m_bloomFb = std::make_unique<OpenGLFramebuffer>(
         1280u, 720u, OpenGLFramebuffer::Format::HDR);
     m_viewportFb = std::make_unique<OpenGLFramebuffer>(
         1280u, 720u, OpenGLFramebuffer::Format::LDR);
@@ -167,6 +172,17 @@ SceneRenderer::SceneRenderer()
 
     m_postProcess = std::make_unique<PostProcessPass>();
 
+    // F2H55: bloom pass. Tolera fallo de carga de shaders (silencioso)
+    // - si los .frag no estan en build/shaders/, el editor sigue
+    // renderizando sin bloom.
+    try {
+        m_bloomPass = std::make_unique<BloomPass>();
+    } catch (const std::exception& e) {
+        Log::render()->warn("BloomPass no disponible: {}. Bloom desactivado.",
+                             e.what());
+        m_bloomPass.reset();
+    }
+
     // Shadow pass (Hito 16).
     try {
         m_shadowPass = std::make_unique<ShadowPass>(2048);
@@ -213,6 +229,7 @@ SceneRenderer::~SceneRenderer() {
     m_lightGrid.reset();
     m_shadowPass.reset();
     m_postProcess.reset();
+    m_bloomPass.reset();  // F2H55
     m_debugRenderer.reset();
     // F2H28: tirar FBOs orto + shaders orto antes del contexto GL.
     if (m_grid2dVao != 0) glDeleteVertexArrays(1, &m_grid2dVao);
@@ -224,6 +241,7 @@ SceneRenderer::~SceneRenderer() {
     m_pbrShader.reset();
     m_instanceBuffer.reset();
     m_viewportFb.reset();
+    m_bloomFb.reset();  // F2H55
     m_sceneFb.reset();
     m_renderer.reset();
 }
@@ -239,6 +257,11 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
     m_exposure     = 0.0f;
     m_tonemap      = TonemapMode{2}; // ACES
     m_iblIntensity = 1.0f;
+    // F2H55: defaults bloom.
+    m_bloomEnabled   = true;
+    m_bloomThreshold = 1.0f;
+    m_bloomIntensity = 0.6f;
+    m_bloomRadius    = 1.0f;
 
     bool envFound = false;
     scene.forEach<EnvironmentComponent>(
@@ -253,6 +276,11 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
             m_exposure        = env.exposure;
             m_tonemap         = static_cast<TonemapMode>(env.tonemapMode);
             m_iblIntensity    = env.iblIntensity;
+            // F2H55: bloom params del componente al cache del renderer.
+            m_bloomEnabled    = env.bloomEnabled;
+            m_bloomThreshold  = env.bloomThreshold;
+            m_bloomIntensity  = env.bloomIntensity;
+            m_bloomRadius     = env.bloomRadius;
         });
 }
 
@@ -270,11 +298,31 @@ void SceneRenderer::endFrame() {
     m_renderer->endFrame();
     m_sceneFb->unbind();
 
-    // Hito 15 Bloque 3: post-process pass. Lee `m_sceneFb` (HDR), escribe
-    // a `m_viewportFb` (LDR).
-    if (m_postProcess && m_sceneFb && m_viewportFb) {
+    // F2H55: bloom pass entre scene HDR y post-process. Si esta apagado
+    // o intensity = 0, o el bloom no pudo correr (size invalido), se
+    // skipea y el post-process lee directo del m_sceneFb. Cero regresion
+    // respecto a pre-F2H55.
+    const bool runBloom = m_bloomEnabled
+                       && m_bloomIntensity > 0.0f
+                       && m_bloomPass
+                       && m_bloomFb
+                       && m_sceneFb;
+    OpenGLFramebuffer* postProcessSrc = m_sceneFb.get();
+    if (runBloom) {
+        MOOD_PROFILE_SCOPE("BloomPass::apply");
+        const bool bloomApplied = m_bloomPass->apply(
+            *m_sceneFb, *m_bloomFb,
+            m_bloomThreshold, m_bloomIntensity, m_bloomRadius);
+        if (bloomApplied) {
+            postProcessSrc = m_bloomFb.get();
+        }
+    }
+
+    // Hito 15 Bloque 3: post-process pass. Lee HDR (m_sceneFb o m_bloomFb
+    // segun el flag de arriba), escribe a `m_viewportFb` (LDR).
+    if (m_postProcess && postProcessSrc && m_viewportFb) {
         MOOD_PROFILE_SCOPE("PostProcess::apply");
-        m_postProcess->apply(*m_sceneFb, *m_viewportFb,
+        m_postProcess->apply(*postProcessSrc, *m_viewportFb,
                               m_exposure, m_tonemap);
         m_viewportFb->unbind();
     }

@@ -64,6 +64,7 @@ void SceneRenderer::renderScene(Scene& scene,
     MOOD_PROFILE_FUNCTION();
     if (panelWidth > 0 && panelHeight > 0) {
         m_sceneFb->resize(panelWidth, panelHeight);
+        if (m_bloomFb) m_bloomFb->resize(panelWidth, panelHeight);  // F2H55
         m_viewportFb->resize(panelWidth, panelHeight);
     }
 
