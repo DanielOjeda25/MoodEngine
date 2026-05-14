@@ -12,6 +12,8 @@
 #include "engine/audio/device/AudioDevice.h"
 #include "engine/dialog/DialogScriptHost.h"  // F2H48.1
 #include "engine/i18n/I18n.h"  // F2H43
+#include "engine/inventory/InventoryHooks.h"  // F2H53 shutdown order
+#include "engine/quest/QuestSystem.h"         // F2H53 shutdown order
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/render/preview/MaterialPreviewRenderer.h"
 #include "engine/render/rhi/IFramebuffer.h"
@@ -367,6 +369,18 @@ EditorApplication::~EditorApplication() {
     // samente si no puede escribir — no queremos que un shutdown explote por
     // un archivo de estado corrupto.
     saveEditorState();
+
+    // F2H53: limpiar hooks globales ANTES de destruir el ScriptSystem.
+    // Los hooks (Quest evaluator/executor/on_start/etc + Inventory pickup/
+    // drop/use/render) capturan `sol::function` o `sol::state*` del Lua
+    // VM del ScriptSystem. Si la sol::state muere primero, al terminar el
+    // programa los `std::function` globales (g_onStart, g_evaluator, etc.)
+    // se destruyen y dentro ~sol::function llama `lua_unref` sobre un VM
+    // ya muerto -> SIGSEGV en shutdown. Mismo bug que arreglamos en
+    // ~InvLuaFixture (F2H52 J). DialogSystem ya se autolimpia en
+    // DialogScriptHost::reset() que el destructor del host invoca.
+    Mood::Quest::QuestSystem::clearHooks();
+    Mood::Inventory::Hooks::clearAll();
 
     // Los recursos GL dependen del contexto; liberar ANTES de destruir ImGui
     // y el contexto (el destructor del Window destruye el contexto al final).

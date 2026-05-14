@@ -12,6 +12,8 @@
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/dialog/DialogScriptHost.h"  // F2H48.1
 #include "engine/i18n/I18n.h"  // F2H43
+#include "engine/inventory/InventoryHooks.h"  // F2H53 shutdown order
+#include "engine/quest/QuestSystem.h"         // F2H53 shutdown order
 #include "engine/audio/device/AudioDevice.h"
 #include "engine/game/manifest/GameManifest.h"
 #include "engine/game/state/GameState.h"
@@ -241,6 +243,15 @@ PlayerApplication::~PlayerApplication() {
     // Orden inverso al ctor. Sistemas primero (algunos dependen de
     // m_scene / m_assetManager / m_audioDevice), luego el scene, luego
     // los recursos GL via SceneRenderer, luego el contexto GL.
+
+    // F2H53: limpiar hooks globales ANTES de destruir el ScriptSystem.
+    // Mismo motivo que ~EditorApplication: los hooks de Quest e Inventory
+    // capturan refs al sol::state que va a morir con scriptSystem.reset().
+    // Sin esto, ~sol::function llama lua_unref sobre VM muerto -> SIGSEGV
+    // al terminar el proceso.
+    Mood::Quest::QuestSystem::clearHooks();
+    Mood::Inventory::Hooks::clearAll();
+
     m_scriptSystem.reset();
     m_audioSystem.reset();
     m_audioDevice.reset();

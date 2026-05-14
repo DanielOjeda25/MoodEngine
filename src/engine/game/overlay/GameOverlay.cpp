@@ -1,10 +1,13 @@
 #include "engine/game/overlay/GameOverlay_Internal.h"
 
 #include "core/Log.h"
+#include "engine/assets/manager/AssetManager.h"  // F2H53 F: tracker resuelve QuestAsset
 #include "engine/dialog/DialogAsset.h"   // F2H48
 #include "engine/dialog/DialogSystem.h"  // F2H48
 #include "engine/game/state/GameState.h"
 #include "engine/i18n/I18n.h"  // F2H43
+#include "engine/quest/QuestAsset.h"     // F2H53 F
+#include "engine/quest/QuestSystem.h"    // F2H53 F
 
 #include <imgui.h>
 
@@ -12,6 +15,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace Mood::GameOverlay {
 
@@ -486,22 +490,106 @@ void drawStaminaBar(const HudContext& ctx) {
                      palette::k_white_dim, staminaLbl.c_str());
 }
 
-// 10. OBJECTIVE TEXT — top-left, debajo del MenuBar (~24 px desde
-//     top). Caja oscura con border amarillo HL + texto blanco. El
-//     widget agrega el prefijo "OBJETIVO: " automaticamente.
+// 10. OBJECTIVE TEXT / QUEST TRACKER — top-left, debajo del MenuBar
+//     (~24 px desde top). Caja oscura con border amarillo HL.
+//
+//     F2H53 Bloque F: este widget tiene 2 modos, por prioridad:
+//
+//     (a) QUEST TRACKER (preferido si hay tracked quest activo):
+//         lee `Quest::QuestSystem::tracked()`, resuelve el asset via
+//         AssetManager y dibuja header (nombre del quest) + lista de
+//         objectives marcados con `[x]` (done) o `[ ]` (pending). Los
+//         done se pintan en verde dim.
+//
+//     (b) LEGACY F2H41 (fallback si no hay tracked quest pero si hay
+//         `hud.objective_text`): mismo widget original — caja con
+//         prefijo "OBJETIVO: " + texto libre.
+//
+//     Si no hay ni tracked quest ni objective_text, no dibuja nada.
+//     El name del widget queda como "objective_text" para preservar
+//     compat con scripts que togglean via `hud.set_widget(...)`.
 void drawObjectiveText(const HudContext& ctx) {
+    namespace QS = Mood::Quest::QuestSystem;
     const HudState& h = *ctx.hud;
-    if (h.objective_text.empty()) return;
 
     constexpr float pad = 24.0f;
     const float originX = ctx.x0 + pad;
     const float originY = ctx.y0 + pad;
+    constexpr float padX = 14.0f, padY = 8.0f;
 
-    // F2H43: prefix i18n con interpolacion fmt.
+    // ----- Modo (a): quest tracker -----
+    const QuestAssetId trackedId = QS::tracked();
+    if (trackedId != 0 && ctx.assets != nullptr) {
+        const Mood::Quest::Asset* asset = ctx.assets->getQuest(trackedId);
+        if (asset != nullptr && !asset->objectives.empty()) {
+            // Encontrar el ActiveQuest correspondiente (puede no estar
+            // si el dev seteo tracked sobre un quest no-iniciado — en
+            // ese caso skip silencioso, no dibuja).
+            const QS::ActiveQuest* aq = nullptr;
+            for (const auto& q : QS::snapshot()) {
+                if (q.id == trackedId) { aq = &q; break; }
+            }
+            if (aq != nullptr) {
+                // Resolver nombre del quest (i18n key > literal > id).
+                std::string title = !asset->name_key.empty()
+                    ? I18n::T(asset->name_key)
+                    : (!asset->name_literal.empty()
+                        ? asset->name_literal
+                        : asset->id);
+
+                // Pre-calcular rows + dimensiones de la caja.
+                struct Row { std::string text; bool done; };
+                std::vector<Row> rows;
+                rows.reserve(asset->objectives.size());
+                const ImVec2 titleSz = ImGui::CalcTextSize(title.c_str());
+                float maxW = titleSz.x;
+                for (size_t i = 0; i < asset->objectives.size(); ++i) {
+                    const auto& o = asset->objectives[i];
+                    std::string name = !o.name_key.empty()
+                        ? I18n::T(o.name_key)
+                        : (!o.name_literal.empty()
+                            ? o.name_literal
+                            : o.id);
+                    const bool done = (i < aq->objectives.size())
+                        && aq->objectives[i].completed;
+                    std::string row = (done ? "[x] " : "[ ] ") + name;
+                    const ImVec2 sz = ImGui::CalcTextSize(row.c_str());
+                    if (sz.x > maxW) maxW = sz.x;
+                    rows.push_back({std::move(row), done});
+                }
+                constexpr float rowGap = 4.0f;
+                constexpr float headerGap = 6.0f;
+                const float rowH = ImGui::GetTextLineHeight();
+                const float boxH = padY * 2.0f + titleSz.y + headerGap
+                    + rows.size() * (rowH + rowGap) - rowGap;
+                const float boxW = padX * 2.0f + maxW;
+                const ImVec2 a(originX, originY);
+                const ImVec2 b(originX + boxW, originY + boxH);
+                ctx.dl->AddRectFilled(a, b, palette::k_bg_box, 3.0f);
+                ctx.dl->AddRect(a, b, palette::k_yellow, 3.0f, 0, 1.5f);
+                // Header en amarillo (estilo "QUEST:" sin prefijo
+                // literal — el titulo ya es identificable).
+                ctx.dl->AddText(ImVec2(originX + padX, originY + padY),
+                                 palette::k_yellow, title.c_str());
+                // Objectives.
+                float y = originY + padY + titleSz.y + headerGap;
+                constexpr ImU32 k_done_green = IM_COL32(120, 200, 120, 255);
+                for (const auto& r : rows) {
+                    const ImU32 col = r.done ? k_done_green : palette::k_white;
+                    ctx.dl->AddText(ImVec2(originX + padX, y),
+                                     col, r.text.c_str());
+                    y += rowH + rowGap;
+                }
+                return;  // modo (a) gano — no dibujar modo (b)
+            }
+        }
+    }
+
+    // ----- Modo (b): legacy F2H41 — texto libre con prefijo -----
+    if (h.objective_text.empty()) return;
     const std::string objStr = I18n::T("hud.label.objective_prefix",
                                          h.objective_text);
     const ImVec2 sz = ImGui::CalcTextSize(objStr.c_str());
-    constexpr float padX = 14.0f, padY = 8.0f;
     const ImVec2 a(originX, originY);
     const ImVec2 b(originX + sz.x + padX * 2.0f, originY + sz.y + padY * 2.0f);
     ctx.dl->AddRectFilled(a, b, palette::k_bg_box, 3.0f);

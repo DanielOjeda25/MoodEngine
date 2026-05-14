@@ -27,6 +27,7 @@
 #include "engine/dialog/DialogSystem.h"          // F2H48
 #include "engine/game/state/GameState.h"         // F2H52 H: Tab toggle inventory_panel
 #include "engine/inventory/ItemPickupSystem.h"   // F2H52 Bloque C
+#include "engine/quest/QuestSystem.h"            // F2H53 Bloque F
 #include "engine/render/backend/opengl/OpenGLDebugRenderer.h"  // F2H29 Bloque C: drawAabb preview.
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/physics/world/PhysicsWorld.h"
@@ -1467,6 +1468,20 @@ int EditorApplication::run() {
                 Inventory::ItemPickupSystem::tick(
                     *m_scene, *m_assetManager,
                     m_ePlayJustPressed, dialogActive);
+            }
+
+            // F2H53 Bloque F: QuestSystem::tick — evalua predicates de
+            // objectives via el LuaEvaluator (inyectado por
+            // setupQuestBindings desde ScriptSystem). Lo corremos despues
+            // del ItemPickupSystem para que un Collect predicate
+            // (`inventory.count(...) >= N`) que recien quedo satisfecho
+            // por el pickup de este frame se complete inmediatamente.
+            // Tambien despues del DialogInteractSystem para que objectives
+            // Talk/Reach que dependen de `dialog.has_var(...)` resuelvan
+            // en el mismo frame que el dialog set la var.
+            {
+                MOOD_PROFILE_SCOPE("QuestSystem::tick");
+                Mood::Quest::QuestSystem::tick(*m_assetManager);
             }
 
             // F2H52 Bloque H: Tab togglea el widget `inventory_panel`.

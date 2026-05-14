@@ -1,0 +1,32 @@
+{
+  "_version": 1,
+  "id": "quest_demo",
+  "name_key": "",
+  "name_literal": "La llave misteriosa",
+  "description_key": "",
+  "description_literal": "Encontrá la llave que dejaron en algún lado.",
+  "category": "main",
+  "objectives": [
+    {
+      "id": "find_key",
+      "name_key": "",
+      "name_literal": "Levantar la llave (E)",
+      "description_literal": "Caminá hasta la llave y presioná E.",
+      "type": "collect",
+      "item_path": "items/mysterious_key.mooditem",
+      "min_quantity": 1,
+      "var_name": "",
+      "custom_predicate": ""
+    }
+  ],
+  "rewards": [
+    {
+      "type": "var",
+      "item_path": "",
+      "quantity": 0,
+      "var_name": "quest_demo_done",
+      "var_value": "yes",
+      "lua_script": ""
+    }
+  ]
+}

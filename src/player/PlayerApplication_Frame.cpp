@@ -19,6 +19,7 @@
 #include "engine/dialog/DialogInteractSystem.h"  // F2H48
 #include "engine/dialog/DialogSystem.h"          // F2H48
 #include "engine/inventory/ItemPickupSystem.h"   // F2H52 Bloque C
+#include "engine/quest/QuestSystem.h"            // F2H53 Bloque F
 #include "engine/game/state/GameState.h"
 #include "engine/i18n/I18n.h"  // F2H43
 #include "engine/physics/world/PhysicsWorld.h"
@@ -513,6 +514,13 @@ int PlayerApplication::run() {
                 Mood::Inventory::ItemPickupSystem::tick(
                     *m_scene, *m_assetManager,
                     eJustPressed, dialogActive);
+            }
+
+            // F2H53 Bloque F: QuestSystem::tick — paridad con Editor.
+            // Despues del pickup + dialog para que predicates que dependan
+            // de inventory/dialog vars completen en el mismo frame.
+            {
+                Mood::Quest::QuestSystem::tick(*m_assetManager);
             }
 
             // F2H52 Bloque H: Tab togglea el widget `inventory_panel`.
