@@ -244,86 +244,15 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem(I18n::T("editor.menu.help.about").c_str())) {
                 m_showAboutPopup = true;
             }
-            ImGui::Separator();
-            if (ImGui::BeginMenu(I18n::T("editor.menu.help.demos").c_str(), ui.hasProject())) {
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.rotator").c_str())) {
-                    ui.requestSpawnRotator();
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.hud").c_str())) {
-                    ui.requestSpawnHudDemo();
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.enemy").c_str())) {
-                    ui.requestSpawnEnemyDemo();
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.audio").c_str())) {
-                    ui.requestSpawnAudioSource();
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.point_light").c_str())) {
-                    ui.requestSpawnPointLight();
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.physics_box").c_str())) {
-                    ui.requestSpawnPhysicsBox();
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.environment").c_str())) {
-                    ui.requestSpawnEnvironment();
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.shadow").c_str())) {
-                    ui.requestSpawnShadowDemo();
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.pbr_spheres").c_str())) {
-                    ui.requestSpawnPbrSpheres();
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.light_stress").c_str())) {
-                    ui.requestSpawnLightStress();
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.animated_char").c_str())) {
-                    ui.requestSpawnAnimatedCharacter();
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.fire_particles").c_str())) {
-                    ui.requestSpawnFireParticles();
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.trigger").c_str())) {
-                    ui.requestSpawnTrigger();
-                }
-                // F2H47: demo de un .mooddialog pre-armado (3 nodos +
-                // 2 choices). Lo abre directo en el DialogEditor sin
-                // necesidad de crear un asset desde cero.
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.dialog").c_str())) {
-                    ui.requestSpawnDialogDemo();
-                }
-                // F2H50 Bloque A: demo end-to-end de narrativa. Genera
-                // (si falta) `assets/maps/narrative_demo.moodmap` con un
-                // NPC armado con DialogComponent + Trigger + Animator,
-                // y lo abre. El player puede entrar a Play Mode y hablar
-                // con el NPC presionando E.
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.demo.narrative_map").c_str())) {
-                    ui.requestGenerateNarrativeDemoMap();
-                }
-
-                ImGui::Separator();
-                if (ImGui::BeginMenu(I18n::T("editor.menu.help.stress").c_str())) {
-                    if (ImGui::MenuItem(I18n::T("editor.menu.help.stress.10k").c_str())) {
-                        ui.requestSpawnStressTris(10000);
-                    }
-                    if (ImGui::MenuItem(I18n::T("editor.menu.help.stress.100k").c_str())) {
-                        ui.requestSpawnStressTris(100000);
-                    }
-                    if (ImGui::MenuItem(I18n::T("editor.menu.help.stress.500k").c_str())) {
-                        ui.requestSpawnStressTris(500000);
-                    }
-                    if (ImGui::MenuItem(I18n::T("editor.menu.help.stress.1m").c_str())) {
-                        ui.requestSpawnStressTris(1000000);
-                    }
-                    ImGui::EndMenu();
-                }
-
-                ImGui::Separator();
-                if (ImGui::MenuItem(I18n::T("editor.menu.help.full_stress").c_str())) {
-                    ui.requestSpawnFullStressScene();
-                }
-                ImGui::EndMenu();
-            }
-            ImGui::EndMenu();
+            // F2H57 Bloque E: submenu "Demos" eliminado. El workflow
+            // canonico es "+ Crear Entidad" en el panel Escena +
+            // right-click "Cambiar tipo" (estilo Hammer Editor). Los
+            // handlers process*Request de DemoSpawners_*.cpp quedan
+            // como dead code linkeado, pero sin trigger desde UI.
+            // Cleanup completo (eliminar .cpp + helpers compartidos)
+            // se difiere a un follow-up del hito para evitar romper
+            // dependencias laterales (ej. ensureDemoIntroDialogExists
+            // que F2H47 podria estar reusando).
         }
 
         // F2H7: workspace tabs en la misma menu bar — estilo Blender.
