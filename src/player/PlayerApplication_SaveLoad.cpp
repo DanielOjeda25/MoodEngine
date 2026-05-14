@@ -9,9 +9,11 @@
 #include "player/PlayerApplication.h"
 
 #include "core/Log.h"
+#include "engine/assets/manager/AssetManager.h"  // F2H53 H: quest restore necesita AssetManager
 #include "engine/game/state/GameState.h"
 #include "engine/i18n/I18n.h"  // F2H43
 #include "engine/physics/world/PhysicsWorld.h"
+#include "engine/quest/QuestSystem.h"            // F2H53 H
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -324,6 +326,37 @@ void PlayerApplication::applyLoadedSave(const SaveLoad::SaveData& data) {
     Log::engine()->info(
         "[Load] Restored {} script globals snapshots (path matched)",
         globalsApplied);
+
+    // F2H53 H: restaurar quests. Reset total + restore por entry +
+    // setTracked. Si un path ya no resuelve (asset borrado entre save y
+    // load), restore() lo skipea con warn y el quest queda fuera. NO se
+    // disparan hooks game-side — esto es restauracion pura.
+    if (m_assetManager) {
+        Mood::Quest::QuestSystem::reset();
+        int questsApplied = 0;
+        for (const auto& q : data.quests) {
+            const QuestAssetId id = m_assetManager->loadQuest(q.path);
+            if (id == m_assetManager->missingQuestId()) {
+                Log::engine()->warn(
+                    "[Load] quest huerfana: path '{}' no resuelve (asset borrado?)",
+                    q.path);
+                continue;
+            }
+            const auto state = static_cast<Mood::Quest::QuestSystem::State>(q.state);
+            Mood::Quest::QuestSystem::restore(id, state, q.objectiveDone,
+                                                *m_assetManager);
+            ++questsApplied;
+        }
+        if (!data.trackedQuestPath.empty()) {
+            const QuestAssetId tid = m_assetManager->loadQuest(data.trackedQuestPath);
+            if (tid != m_assetManager->missingQuestId()) {
+                Mood::Quest::QuestSystem::setTracked(tid);
+            }
+        }
+        Log::engine()->info(
+            "[Load] Restored {}/{} quests (tracked='{}')",
+            questsApplied, data.quests.size(), data.trackedQuestPath);
+    }
 }
 
 SaveLoad::SaveData PlayerApplication::captureCurrentState() {
@@ -397,6 +430,28 @@ SaveLoad::SaveData PlayerApplication::captureCurrentState() {
                 d.scriptGlobals.push_back(std::move(sg));
             });
         Log::engine()->info("  - {} scripts with globals captured", d.scriptGlobals.size());
+    }
+
+    // F2H53 H: capturar snapshot de quests + path del tracked. Itera
+    // QuestSystem::snapshot() (todos los registrados, incluyendo failed/
+    // complete que aun no se reseteo). Convierte id -> path via AssetManager.
+    if (m_assetManager) {
+        for (const auto& aq : Mood::Quest::QuestSystem::snapshot()) {
+            SaveLoad::QuestSnapshot qs;
+            qs.path  = m_assetManager->questPathOf(aq.id);
+            qs.state = static_cast<int>(aq.state);
+            qs.objectiveDone.reserve(aq.objectives.size());
+            for (const auto& op : aq.objectives) {
+                qs.objectiveDone.push_back(op.completed);
+            }
+            d.quests.push_back(std::move(qs));
+        }
+        const QuestAssetId tid = Mood::Quest::QuestSystem::tracked();
+        if (tid != m_assetManager->missingQuestId()) {
+            d.trackedQuestPath = m_assetManager->questPathOf(tid);
+        }
+        Log::engine()->info("  - {} quests captured (tracked='{}')",
+                              d.quests.size(), d.trackedQuestPath);
     }
 
     return d;

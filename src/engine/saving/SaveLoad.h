@@ -77,6 +77,17 @@ struct ScriptGlobalsSnapshot {
     std::unordered_map<std::string, ExposedValue> globals;
 };
 
+/// @brief F2H53 H: snapshot del progreso de un quest. Se identifica por
+///        path logico (no por id; ids son volatiles entre runs por orden
+///        de loadQuest del AssetManager). En load, se resuelve via
+///        `assets.loadQuest(path)`. Si el path ya no existe (asset borrado
+///        entre save y load), el quest se skipea sin restaurar.
+struct QuestSnapshot {
+    std::string       path;          // ej. "quests/rescate_gata.moodquest"
+    int               state = 0;     // enum value de QuestSystem::State
+    std::vector<bool> objectiveDone; // alineado por indice contra Asset::objectives
+};
+
 struct SaveData {
     std::string mapPath;        // path logico al `.moodmap` activo
     HudState    hud;
@@ -87,6 +98,9 @@ struct SaveData {
     std::vector<BodySnapshot> bodies;
     /// Hito 41 B: globals Lua filtradas por script.
     std::vector<ScriptGlobalsSnapshot> scriptGlobals;
+    /// F2H53 H: snapshot de quests activos + path del tracked. v3+.
+    std::vector<QuestSnapshot> quests;
+    std::string trackedQuestPath;  // "" = ninguno
 };
 
 /// @brief Escribe `d` como JSON en `path`. Crea directorios padre si

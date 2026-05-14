@@ -589,3 +589,100 @@ TEST_CASE("QuestSystem::clearHooks: limpia hooks, NO activos") {
 
     std::filesystem::remove_all(tmpRoot);
 }
+
+// ============================================================
+// F2H53 Bloque H — restore (save/load)
+// ============================================================
+
+TEST_CASE("QuestSystem::restore: inserta quest Active con progress arbitrario") {
+    QuestFixture fx;
+    std::filesystem::path tmpRoot;
+    auto am = makeAmWithTmpRoot(tmpRoot, "restore_active");
+
+    Asset q;
+    q.id = "r1";
+    Objective o1; o1.id = "a"; o1.type = ObjectiveType::CustomLua; o1.custom_predicate = "false";
+    Objective o2; o2.id = "b"; o2.type = ObjectiveType::CustomLua; o2.custom_predicate = "false";
+    q.objectives = {o1, o2};
+    const QuestAssetId qid = saveAndLoadQuest(*am, tmpRoot, "r1.moodquest", q);
+
+    int startHits = 0;
+    QuestSystem::setStartHook([&](QuestAssetId) { ++startHits; });
+
+    QuestSystem::restore(qid, QuestSystem::State::Active,
+                          /* objectiveDone */ {true, false}, *am);
+
+    CHECK(QuestSystem::isActive(qid));
+    // restore NO dispara hooks (es restauracion pura, no transicion).
+    CHECK(startHits == 0);
+
+    // Snapshot refleja el progress exacto que pedimos.
+    const auto& snap = QuestSystem::snapshot();
+    REQUIRE(snap.size() == 1u);
+    CHECK(snap[0].id == qid);
+    REQUIRE(snap[0].objectives.size() == 2u);
+    CHECK(snap[0].objectives[0].completed == true);
+    CHECK(snap[0].objectives[1].completed == false);
+
+    std::filesystem::remove_all(tmpRoot);
+}
+
+TEST_CASE("QuestSystem::restore: state Complete + objectiveDone se preservan") {
+    QuestFixture fx;
+    std::filesystem::path tmpRoot;
+    auto am = makeAmWithTmpRoot(tmpRoot, "restore_complete");
+
+    Asset q;
+    q.id = "r2";
+    Objective o; o.id = "x"; o.type = ObjectiveType::CustomLua; o.custom_predicate = "false";
+    q.objectives = {o};
+    const QuestAssetId qid = saveAndLoadQuest(*am, tmpRoot, "r2.moodquest", q);
+
+    int completeHits = 0;
+    QuestSystem::setCompleteHook([&](QuestAssetId) { ++completeHits; });
+
+    QuestSystem::restore(qid, QuestSystem::State::Complete, {true}, *am);
+    CHECK(QuestSystem::isComplete(qid));
+    // restore NO dispara hooks ni aplica rewards.
+    CHECK(completeHits == 0);
+
+    std::filesystem::remove_all(tmpRoot);
+}
+
+TEST_CASE("QuestSystem::restore: objectiveDone con menos entries que el asset se padea con false") {
+    QuestFixture fx;
+    std::filesystem::path tmpRoot;
+    auto am = makeAmWithTmpRoot(tmpRoot, "restore_short");
+
+    Asset q;
+    q.id = "r3";
+    Objective o1; o1.id = "a"; o1.type = ObjectiveType::CustomLua; o1.custom_predicate = "false";
+    Objective o2; o2.id = "b"; o2.type = ObjectiveType::CustomLua; o2.custom_predicate = "false";
+    Objective o3; o3.id = "c"; o3.type = ObjectiveType::CustomLua; o3.custom_predicate = "false";
+    q.objectives = {o1, o2, o3};
+    const QuestAssetId qid = saveAndLoadQuest(*am, tmpRoot, "r3.moodquest", q);
+
+    // Save antiguo solo tenia 2 objectives; asset actual tiene 3.
+    QuestSystem::restore(qid, QuestSystem::State::Active, {true, true}, *am);
+
+    const auto& snap = QuestSystem::snapshot();
+    REQUIRE(snap.size() == 1u);
+    REQUIRE(snap[0].objectives.size() == 3u);
+    CHECK(snap[0].objectives[0].completed == true);
+    CHECK(snap[0].objectives[1].completed == true);
+    CHECK(snap[0].objectives[2].completed == false);  // padeado
+
+    std::filesystem::remove_all(tmpRoot);
+}
+
+TEST_CASE("QuestSystem::restore: id invalido (slot 0) no inserta nada") {
+    QuestFixture fx;
+    std::filesystem::path tmpRoot;
+    auto am = makeAmWithTmpRoot(tmpRoot, "restore_invalid");
+
+    QuestSystem::restore(am->missingQuestId(),
+                          QuestSystem::State::Active, {}, *am);
+    CHECK(QuestSystem::snapshot().empty());
+
+    std::filesystem::remove_all(tmpRoot);
+}

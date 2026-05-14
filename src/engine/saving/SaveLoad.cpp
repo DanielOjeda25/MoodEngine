@@ -9,7 +9,7 @@
 namespace Mood::SaveLoad {
 
 namespace {
-constexpr int k_supportedVersion = 2;  // Hito 41: bumpe v1 -> v2
+constexpr int k_supportedVersion = 3;  // F2H53 H: bump v2 -> v3 (quests)
 
 // Convierte un ExposedValue al primitive JSON correspondiente.
 // Reusamos el patron del EntitySerializer (Hito 24) — lo duplicamos
@@ -93,6 +93,22 @@ bool save(const SaveData& d, const std::filesystem::path& path) {
         }
     }
 
+    // F2H53 H: quest state runtime — path logico + state enum + bool[]
+    // de objective progress. NO serializamos el quest tracked si esta vacio.
+    if (!d.quests.empty()) {
+        j["quests"] = nlohmann::json::array();
+        for (const auto& q : d.quests) {
+            nlohmann::json jq;
+            jq["path"]            = q.path;
+            jq["state"]           = q.state;
+            jq["objective_done"]  = q.objectiveDone;  // nlohmann handles vector<bool>
+            j["quests"].push_back(std::move(jq));
+        }
+    }
+    if (!d.trackedQuestPath.empty()) {
+        j["tracked_quest"] = d.trackedQuestPath;
+    }
+
     std::error_code ec;
     fs::create_directories(path.parent_path(), ec);
     std::ofstream f(path);
@@ -104,11 +120,13 @@ bool save(const SaveData& d, const std::filesystem::path& path) {
     }
     f << j.dump(2);
     Log::engine()->info(
-        "SaveLoad::save: '{}' OK ({} bytes, {} bodies, {} script globals, hp={}, ammo={})",
+        "SaveLoad::save: '{}' OK ({} bytes, {} bodies, {} script globals, "
+        "{} quests, hp={}, ammo={})",
         path.generic_string(),
         static_cast<usize>(f.tellp()),
         d.bodies.size(),
         d.scriptGlobals.size(),
+        d.quests.size(),
         d.hud.hp, d.hud.ammo);
     return true;
 }
@@ -211,6 +229,24 @@ std::optional<SaveData> load(const std::filesystem::path& path) {
         }
     }
 
+    // F2H53 H: quests array (opcional — v1/v2 no lo tienen).
+    if (j.contains("quests") && j.at("quests").is_array()) {
+        for (const auto& jq : j.at("quests")) {
+            QuestSnapshot q;
+            q.path  = jq.value("path", std::string{});
+            q.state = jq.value("state", 0);
+            if (jq.contains("objective_done") && jq.at("objective_done").is_array()) {
+                for (const auto& jb : jq.at("objective_done")) {
+                    q.objectiveDone.push_back(jb.get<bool>());
+                }
+            }
+            if (!q.path.empty()) {
+                d.quests.push_back(std::move(q));
+            }
+        }
+    }
+    d.trackedQuestPath = j.value("tracked_quest", std::string{});
+
     // Hito 41 B: script_globals array (opcional).
     if (j.contains("script_globals") && j.at("script_globals").is_array()) {
         for (const auto& jsg : j.at("script_globals")) {
@@ -231,10 +267,11 @@ std::optional<SaveData> load(const std::filesystem::path& path) {
     }
 
     Log::engine()->info(
-        "SaveLoad::load: '{}' OK (map='{}', hp={}, ammo={}, {} bodies, {} script globals)",
+        "SaveLoad::load: '{}' OK (map='{}', hp={}, ammo={}, {} bodies, "
+        "{} script globals, {} quests)",
         path.generic_string(),
         d.mapPath, d.hud.hp, d.hud.ammo,
-        d.bodies.size(), d.scriptGlobals.size());
+        d.bodies.size(), d.scriptGlobals.size(), d.quests.size());
     return d;
 }
 

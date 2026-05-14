@@ -306,3 +306,76 @@ TEST_CASE("RigidBodyComponent: hasPendingVel=false → no se aplica nada al mate
     CHECK(v.y == doctest::Approx(0.0f));
     CHECK(v.z == doctest::Approx(0.0f));
 }
+
+// ============================================================
+// F2H53 Bloque H: quest snapshots roundtrip
+// ============================================================
+
+TEST_CASE("SaveLoad: quests + tracked se persisten y leen (v3)") {
+    SaveLoad::SaveData d;
+    d.mapPath = "maps/quest_demo.moodmap";
+
+    SaveLoad::QuestSnapshot q1;
+    q1.path = "quests/q_fetch.moodquest";
+    q1.state = 1;  // Active
+    q1.objectiveDone = {false};
+    d.quests.push_back(q1);
+
+    SaveLoad::QuestSnapshot q2;
+    q2.path = "quests/q_combo.moodquest";
+    q2.state = 2;  // Complete
+    q2.objectiveDone = {true, true};
+    d.quests.push_back(q2);
+
+    d.trackedQuestPath = "quests/q_fetch.moodquest";
+
+    const auto path = tempSavePath("quests");
+    REQUIRE(SaveLoad::save(d, path));
+
+    const auto loaded = SaveLoad::load(path);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->quests.size() == 2u);
+    CHECK(loaded->quests[0].path == "quests/q_fetch.moodquest");
+    CHECK(loaded->quests[0].state == 1);
+    REQUIRE(loaded->quests[0].objectiveDone.size() == 1u);
+    CHECK(loaded->quests[0].objectiveDone[0] == false);
+    CHECK(loaded->quests[1].path == "quests/q_combo.moodquest");
+    CHECK(loaded->quests[1].state == 2);
+    REQUIRE(loaded->quests[1].objectiveDone.size() == 2u);
+    CHECK(loaded->quests[1].objectiveDone[0] == true);
+    CHECK(loaded->quests[1].objectiveDone[1] == true);
+    CHECK(loaded->trackedQuestPath == "quests/q_fetch.moodquest");
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SaveLoad: archivo v2 sin campo 'quests' carga ok con quests vacios") {
+    // Back-compat: un .moodsave pre-F2H53 (v2) no tiene "quests" ni
+    // "tracked_quest". El loader v3 debe aceptarlo sin warn ni crash, dejando
+    // quests vacios.
+    const auto path = tempSavePath("v2_no_quests");
+    {
+        std::ofstream f(path);
+        f << R"({"version": 2, "map_path": "maps/legacy.moodmap"})";
+    }
+    const auto r = SaveLoad::load(path);
+    REQUIRE(r.has_value());
+    CHECK(r->mapPath == "maps/legacy.moodmap");
+    CHECK(r->quests.empty());
+    CHECK(r->trackedQuestPath.empty());
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SaveLoad: archivo v1 (Hito 38) sigue siendo legible (back-compat)") {
+    // El loader actual soporta hasta v3 pero NO debe rechazar v1 (limite
+    // inferior de soportado = 1). Verificamos el camino mas viejo sigue OK.
+    const auto path = tempSavePath("v1_basic");
+    {
+        std::ofstream f(path);
+        f << R"({"version": 1, "map_path": "maps/v1.moodmap", "hud": {"hp": 42}})";
+    }
+    const auto r = SaveLoad::load(path);
+    REQUIRE(r.has_value());
+    CHECK(r->mapPath == "maps/v1.moodmap");
+    CHECK(r->hud.hp == 42);
+    std::filesystem::remove(path);
+}

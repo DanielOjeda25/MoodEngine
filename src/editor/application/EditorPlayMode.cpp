@@ -7,6 +7,7 @@
 #include "engine/game/state/GameState.h"
 #include "engine/i18n/I18n.h"  // F2H43
 #include "engine/physics/world/PhysicsWorld.h"
+#include "engine/quest/QuestSystem.h"        // F2H53 H
 #include "engine/scene/queries/ViewportPick.h"
 #include "engine/world/grid/GridMap.h"
 #include "platform/Window.h"
@@ -47,6 +48,11 @@ void EditorApplication::exitPlayMode() {
     // Resetea HUD + pause al baseline para que el proximo Play Mode
     // arranque limpio.
     GameState::reset();
+    // F2H53 H: limpiar quest state runtime. Sin esto, quests iniciados en
+    // una sesion de Play quedan vivos al siguiente Play (problemas: tracker
+    // mostrando quest viejo, predicates fallando porque scene cambio).
+    // Mismo criterio que GameState::reset(): empezar limpio cada Play.
+    Mood::Quest::QuestSystem::reset();
     // Hito 30: destruir el character al salir de Play Mode. La proxima
     // entrada lo recrea en la pos de spawn de la camara. Reseteamos
     // tambien jumpCooldown + crouching para que un futuro Play arranque

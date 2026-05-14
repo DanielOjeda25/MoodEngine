@@ -184,6 +184,26 @@ void clearHooks();
 void reset();
 
 // =============================================================
+// Save / Load (F2H53 Bloque H)
+// =============================================================
+
+/// @brief Inserta un quest directamente al state runtime con un progreso
+///        arbitrario. NO dispara hooks (start/complete/fail) ni aplica
+///        rewards — esto es restauracion pura, no transicion. Si el
+///        quest ya estaba en el state, lo sobreescribe.
+///
+///        Pensado SOLO para `SaveLoad::load(...)`. En gameplay normal el
+///        dev usa `start/complete/fail/objectiveComplete` que SI disparan
+///        hooks. No expuesto a Lua para evitar abusos.
+///
+///        `objectiveDone` se alinea por indice contra `Asset::objectives`.
+///        Si el length no coincide con el asset (ej. el .moodquest cambio
+///        de objectives entre save y load), se trunca / padea con `false`.
+void restore(QuestAssetId id, State state,
+              const std::vector<bool>& objectiveDone,
+              AssetManager& am);
+
+// =============================================================
 // Helpers (publicos para tests)
 // =============================================================
 

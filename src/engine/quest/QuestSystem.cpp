@@ -299,4 +299,42 @@ void reset() {
     g_tracked = 0;
 }
 
+// =============================================================
+// Save / Load
+// =============================================================
+
+void restore(QuestAssetId id, State state,
+              const std::vector<bool>& objectiveDone,
+              AssetManager& am) {
+    if (id == am.missingQuestId()) {
+        Log::engine()->warn("[QuestSystem] restore({}): id invalido (slot 0)", id);
+        return;
+    }
+    const Asset* asset = am.getQuest(id);
+    if (asset == nullptr) {
+        Log::engine()->warn("[QuestSystem] restore({}): asset no resuelve", id);
+        return;
+    }
+
+    ActiveQuest fresh;
+    fresh.id    = id;
+    fresh.state = state;
+    fresh.objectives.resize(asset->objectives.size());
+    // Alinear por indice. Si el save tiene mas/menos progress que el asset
+    // actual (porque el .moodquest cambio post-save), truncar/padear.
+    for (size_t i = 0; i < fresh.objectives.size(); ++i) {
+        fresh.objectives[i].completed = (i < objectiveDone.size())
+            ? objectiveDone[i] : false;
+    }
+
+    if (ActiveQuest* existing = find(id)) {
+        *existing = std::move(fresh);
+    } else {
+        g_active.push_back(std::move(fresh));
+    }
+    Log::engine()->info(
+        "[QuestSystem] restored quest id={} (state={}, {} objectives)",
+        id, static_cast<int>(state), asset->objectives.size());
+}
+
 } // namespace Mood::Quest::QuestSystem
