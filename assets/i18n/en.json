@@ -256,6 +256,10 @@
   "editor.panel.inspector.environment.bloom_threshold": "threshold",
   "editor.panel.inspector.environment.bloom_intensity": "intensity",
   "editor.panel.inspector.environment.bloom_radius": "halo radius",
+  "editor.panel.inspector.environment.ssao": "AO (corner shadows)",
+  "editor.panel.inspector.environment.ssao_enabled": "enable AO",
+  "editor.panel.inspector.environment.ssao_radius": "radius",
+  "editor.panel.inspector.environment.ssao_intensity": "AO intensity",
 
   "editor.panel.inspector.mesh.mesh_id_path": "mesh: {} (id {})",
   "editor.panel.inspector.mesh.mesh_id": "mesh id: {}",

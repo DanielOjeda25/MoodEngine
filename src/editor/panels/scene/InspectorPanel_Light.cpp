@@ -213,6 +213,36 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
             },
             "Editar bloom radius");
     }
+
+    // F2H56: SSAO (sombras de rincon). Master switch + radio + intensidad.
+    ImGui::Separator();
+    ImGui::TextUnformatted(I18n::T("editor.panel.inspector.environment.ssao").c_str());
+    const std::string ssaoEnabledLabel = I18n::T("editor.panel.inspector.environment.ssao_enabled") + "##env";
+    if (ImGui::Checkbox(ssaoEnabledLabel.c_str(), &env.ssaoEnabled)) {
+        m_editedThisFrame = true;
+    }
+    if (env.ssaoEnabled) {
+        const std::string ssaoRadLabel = I18n::T("editor.panel.inspector.environment.ssao_radius") + "##env";
+        if (ImGui::SliderFloat(ssaoRadLabel.c_str(),
+                                &env.ssaoRadius, 0.05f, 2.0f, "%.2f")) {
+            m_editedThisFrame = true;
+        }
+        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.ssaoRadius,
+            [](Entity& en, const f32& v) {
+                en.getComponent<EnvironmentComponent>().ssaoRadius = v;
+            },
+            "Editar SSAO radius");
+        const std::string ssaoIntLabel = I18n::T("editor.panel.inspector.environment.ssao_intensity") + "##env";
+        if (ImGui::SliderFloat(ssaoIntLabel.c_str(),
+                                &env.ssaoIntensity, 0.0f, 3.0f, "%.2f")) {
+            m_editedThisFrame = true;
+        }
+        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.ssaoIntensity,
+            [](Entity& en, const f32& v) {
+                en.getComponent<EnvironmentComponent>().ssaoIntensity = v;
+            },
+            "Editar SSAO intensity");
+    }
     ImGui::Separator();
 }
 

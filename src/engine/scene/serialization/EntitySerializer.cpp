@@ -157,6 +157,10 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         if (env.bloomThreshold != 1.0f)     je2["bloom_threshold"] = env.bloomThreshold;
         if (env.bloomIntensity != 0.6f)     je2["bloom_intensity"] = env.bloomIntensity;
         if (env.bloomRadius != 1.0f)        je2["bloom_radius"]    = env.bloomRadius;
+        // F2H56: SSAO aditivo igual que bloom.
+        if (!env.ssaoEnabled)               je2["ssao_enabled"]   = env.ssaoEnabled;
+        if (env.ssaoRadius    != 0.5f)      je2["ssao_radius"]    = env.ssaoRadius;
+        if (env.ssaoIntensity != 1.0f)      je2["ssao_intensity"] = env.ssaoIntensity;
         je["environment"] = je2;
     }
 
@@ -414,6 +418,10 @@ SavedEntity parseEntityFromJson(const json& j) {
         se2.bloomThreshold = je.value("bloom_threshold", 1.0f);
         se2.bloomIntensity = je.value("bloom_intensity", 0.6f);
         se2.bloomRadius    = je.value("bloom_radius",    1.0f);
+        // F2H56: SSAO defaults para mapas pre-F2H56.
+        se2.ssaoEnabled    = je.value("ssao_enabled",    true);
+        se2.ssaoRadius     = je.value("ssao_radius",     0.5f);
+        se2.ssaoIntensity  = je.value("ssao_intensity",  1.0f);
         se.environment = std::move(se2);
     }
     if (j.contains("particle_emitter")) {

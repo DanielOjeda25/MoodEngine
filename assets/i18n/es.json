@@ -256,6 +256,10 @@
   "editor.panel.inspector.environment.bloom_threshold": "umbral",
   "editor.panel.inspector.environment.bloom_intensity": "intensidad",
   "editor.panel.inspector.environment.bloom_radius": "radio del halo",
+  "editor.panel.inspector.environment.ssao": "AO (sombras de rincon)",
+  "editor.panel.inspector.environment.ssao_enabled": "activar AO",
+  "editor.panel.inspector.environment.ssao_radius": "radio",
+  "editor.panel.inspector.environment.ssao_intensity": "intensidad AO",
 
   "editor.panel.inspector.mesh.mesh_id_path": "mesh: {} (id {})",
   "editor.panel.inspector.mesh.mesh_id": "mesh id: {}",

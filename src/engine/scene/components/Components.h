@@ -240,6 +240,18 @@ struct EnvironmentComponent {
     float bloomThreshold = 1.0f;
     float bloomIntensity = 0.6f;
     float bloomRadius    = 1.0f;
+
+    // F2H56: SSAO (Ambient Occlusion / sombras de rincon). Algoritmo
+    // screen-space, ver SSAOPass.h. Multiplica el HDR scene color por
+    // un factor [0..1] computado del depth buffer.
+    //   ssaoEnabled:   master switch.
+    //   ssaoRadius:    en view-space units. Tipico 0.3-0.8. Mas alto =
+    //                  oclusion mas amplia (rincones grandes).
+    //   ssaoIntensity: multiplicador del efecto. 0 = sin AO,
+    //                  1 = standard, 2 = exagerado.
+    bool  ssaoEnabled   = true;
+    float ssaoRadius    = 0.5f;
+    float ssaoIntensity = 1.0f;
 };
 
 /// @brief Marca a una entidad como instancia de un prefab (Hito 14).

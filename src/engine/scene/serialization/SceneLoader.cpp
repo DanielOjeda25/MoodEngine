@@ -211,6 +211,10 @@ Entity applyOneEntity(const SavedEntity& se,
             env.bloomThreshold = s.bloomThreshold;
             env.bloomIntensity = s.bloomIntensity;
             env.bloomRadius    = s.bloomRadius;
+            // F2H56: SSAO params.
+            env.ssaoEnabled    = s.ssaoEnabled;
+            env.ssaoRadius     = s.ssaoRadius;
+            env.ssaoIntensity  = s.ssaoIntensity;
             e.addComponent<EnvironmentComponent>(env);
         }
 

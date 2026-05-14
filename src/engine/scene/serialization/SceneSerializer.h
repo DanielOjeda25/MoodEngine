@@ -112,6 +112,11 @@ struct SavedEnvironment {
     f32  bloomThreshold = 1.0f;
     f32  bloomIntensity = 0.6f;
     f32  bloomRadius    = 1.0f;
+
+    // F2H56: SSAO. Mismos defaults que EnvironmentComponent.
+    bool ssaoEnabled   = true;
+    f32  ssaoRadius    = 0.5f;
+    f32  ssaoIntensity = 1.0f;
 };
 
 /// @brief Copia persistida de un ScriptComponent (Hito 24). Persiste el
