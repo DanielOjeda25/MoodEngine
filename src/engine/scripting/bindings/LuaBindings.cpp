@@ -370,6 +370,12 @@ void setupLuaBindings(sol::state& lua, Entity self,
     // directo desde Bloque G; pasamos el scene de la entity self.
     setupInventoryBindings(lua, self.scene(), assets);
 
+    // F2H53 Bloque E — tabla `quest`. DESPUES de `inventory` y `dialog`
+    // para que los predicates de objectives (`inventory.count(...) >= N`,
+    // `dialog.has_var(...)`) resuelvan contra los bindings ya registrados.
+    // Tambien instala el evaluator + executor del QuestSystem.
+    setupQuestBindings(lua, assets);
+
     // self como global.
     lua["self"] = self;
 }

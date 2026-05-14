@@ -83,6 +83,7 @@ add_executable(mood_tests
     test_item_spawn.cpp           # F2H52 Bloque H5
     test_quest_asset.cpp          # F2H53 Bloque A
     test_quest_system.cpp         # F2H53 Bloque C
+    test_lua_bindings_quest.cpp   # F2H53 Bloque E
 
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/Brush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/BrushMesh.cpp
@@ -175,6 +176,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/inventory/InventoryHooks.cpp # F2H52 F
     ${CMAKE_SOURCE_DIR}/src/engine/inventory/ItemSpawn.cpp      # F2H52 H5
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Inventory.cpp # F2H52 E
+    ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Quest.cpp # F2H53 E
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogScriptHost.cpp # F2H48.1
 )
 

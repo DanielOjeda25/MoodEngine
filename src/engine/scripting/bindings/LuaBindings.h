@@ -50,4 +50,14 @@ void setupLuaBindings(sol::state& lua, Entity self,
 void setupInventoryBindings(sol::state& lua, class Scene* scene,
                              AssetManager* assets);
 
+/// @brief F2H53 Bloque E: registra la tabla `quest` en `lua` e instala el
+///        `LuaEvaluator` + `LuaExecutor` del `QuestSystem` apuntando a esta
+///        misma state. Implementado en LuaBindings_Quest.cpp.
+///        Llamado por `setupLuaBindings` despues de `setupInventoryBindings`
+///        para que los predicates `inventory.count(...) >= N` resuelvan
+///        contra los bindings de inventory ya registrados.
+///        `assets` puede ser nullptr en tests headless — las funciones
+///        devuelven false/"" silenciosamente.
+void setupQuestBindings(sol::state& lua, AssetManager* assets);
+
 } // namespace Mood
