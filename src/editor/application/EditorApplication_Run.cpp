@@ -357,6 +357,7 @@ int EditorApplication::run() {
         processSpawnPointLightRequest();
         processSpawnAudioSourceRequest();
         processSavePrefabRequest();
+        processCreateEntityFromModelRequest();  // F2H57
 
         // 2.4) Click-to-select (Hito 13 Bloque 2): raycast desde el cursor
         //      y selecciona la entidad mas cercana. Click en vacio deselecciona.

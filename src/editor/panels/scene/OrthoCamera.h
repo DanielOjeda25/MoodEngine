@@ -40,11 +40,19 @@ struct OrthoCamera {
     static constexpr float k_maxHeight = 8192.0f;
 
     /// Eje "right" del view en world space (X+ pantalla -> world).
+    /// F2H57 Bloque A: SideZY corregido a (0,0,-1). El bug previo
+    /// (0,0,+1) hacia que worldFromNdc devolviera coords inversas a
+    /// lo que el camera lookAt() realmente renderiza:
+    ///   - Para Side, glm::lookAt con eye=+X, target=-X, up=+Y
+    ///     produce camera.right = cross(forward, up) = cross(-X, +Y) = -Z.
+    ///   - Asi que pantalla-X+ corresponde a world-Z-, no world-Z+.
+    /// Pan no se afecta porque el algoritmo "drag delta * -scale" es
+    /// robusto al signo (los dos errores se cancelaban).
     glm::vec3 rightAxis() const {
         switch (view) {
-            case OrthoView::TopXZ:   return {1.0f, 0.0f, 0.0f};
-            case OrthoView::FrontXY: return {1.0f, 0.0f, 0.0f};
-            case OrthoView::SideZY:  return {0.0f, 0.0f, 1.0f};
+            case OrthoView::TopXZ:   return {1.0f,  0.0f, 0.0f};
+            case OrthoView::FrontXY: return {1.0f,  0.0f, 0.0f};
+            case OrthoView::SideZY:  return {0.0f,  0.0f, -1.0f};
         }
         return {1.0f, 0.0f, 0.0f};
     }

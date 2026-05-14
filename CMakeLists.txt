@@ -522,6 +522,7 @@ add_executable(MoodEditor
     src/editor/application/DemoSpawners_Prefab.cpp
     src/editor/application/DemoSpawners_Drop.cpp
     src/editor/application/EditorProjectActions.cpp
+    src/editor/application/EditorProjectActions_CreateEntity.cpp
     src/editor/application/EditorProjectActions_FileIO.cpp
     src/editor/application/EditorProjectActions_Package.cpp
     src/editor/application/EditorProjectActions_Map.cpp

@@ -121,6 +121,8 @@
   "editor.statusbar.last_command": "Last command: {}",
 
   "editor.panel.hierarchy.scene_not_injected": "Scene not injected",
+  "editor.panel.hierarchy.create_entity": "Create Entity",
+  "editor.panel.hierarchy.create_entity_tooltip": "Create a new entity from a 3D model (.fbx/.obj/.gltf/.glb). After spawn, right-click the entity to change its type.",
   "editor.panel.hierarchy.empty": "Empty scene.",
   "editor.panel.hierarchy.shortcut_hint": "Click=sel | Shift+Click=add | Ctrl+Click=toggle",
   "editor.panel.hierarchy.shortcut_tooltip": "Click            -> replace selection (single).\nShift+Click      -> add entity to set (multi-selection).\nCtrl+Click       -> toggle (add if absent, remove if present).\n\nMulti-selection: the Inspector applies Transform\nchanges to ALL entities as the same delta.\n\nRow color:\nOrange    -> active entity (set primary).\nYellow    -> in selection but not active (secondary).\nGray      -> hidden by VisGroup (still clickable).",

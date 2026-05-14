@@ -375,6 +375,21 @@ public:
         return r;
     }
 
+    /// @brief F2H57: request para crear una entidad nueva a partir de
+    ///        un modelo elegido por el dev via file picker. Workflow
+    ///        Hammer Editor: click "+ Crear Entidad" -> file picker
+    ///        del SO -> spawnea entidad con Transform + MeshRenderer
+    ///        apuntando al modelo importado. EditorApplication consume
+    ///        el request, abre `pfd::open_file` con filtro de modelos
+    ///        (.fbx/.obj/.gltf/.glb) y dispara la creacion via
+    ///        AssetManager::loadMesh + Scene::createEntity.
+    void requestCreateEntityFromModel() { m_createEntityFromModelRequested = true; }
+    bool consumeCreateEntityFromModelRequest() {
+        const bool r = m_createEntityFromModelRequested;
+        m_createEntityFromModelRequested = false;
+        return r;
+    }
+
     /// @brief Hito 15: request para crear una entidad "Environment" con
     ///        un `EnvironmentComponent` default. Util para empezar a editar
     ///        sky/fog/post-process desde el Inspector.
@@ -692,6 +707,7 @@ private:
     bool m_spawnPointLightRequested = false;
     bool m_spawnPhysicsBoxRequested = false;
     bool m_savePrefabRequested = false;
+    bool m_createEntityFromModelRequested = false;  // F2H57
     bool m_spawnEnvironmentRequested = false;
     bool m_spawnShadowDemoRequested = false; // Hito 16
     bool m_spawnPbrSpheresRequested = false; // Hito 17

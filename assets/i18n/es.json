@@ -121,6 +121,8 @@
   "editor.statusbar.last_command": "Último comando: {}",
 
   "editor.panel.hierarchy.scene_not_injected": "Escena no inyectada",
+  "editor.panel.hierarchy.create_entity": "Crear Entidad",
+  "editor.panel.hierarchy.create_entity_tooltip": "Crea una entidad nueva desde un modelo 3D (.fbx/.obj/.gltf/.glb). Al spawnear, podes editar su tipo con click derecho.",
   "editor.panel.hierarchy.empty": "Escena vacía.",
   "editor.panel.hierarchy.shortcut_hint": "Click=sel | Shift+Click=añadir | Ctrl+Click=toggle",
   "editor.panel.hierarchy.shortcut_tooltip": "Click            -> reemplazar selección (single).\nShift+Click      -> añadir entidad al set (multi-selección).\nCtrl+Click       -> toggle (añadir si no está, quitar si está).\n\nMulti-selección: el Inspector aplica los cambios de\nTransform a TODAS las entidades como mismo delta.\n\nColor del row:\nNaranja    -> entidad activa (primary del set).\nAmarillo   -> en selección pero no activa (secundaria).\nGris       -> oculta por VisGroup (sigue clickeable).",

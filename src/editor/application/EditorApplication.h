@@ -240,6 +240,7 @@ private:
     ///        invoca aca tambien para no duplicarlo en cada path.
     void pushCreatedEntities(std::vector<Entity> created, std::string label);
     void processSavePrefabRequest();
+    void processCreateEntityFromModelRequest();  // F2H57
     void processViewportTextureDrop();
     void processViewportMeshDrop();
     void processViewportPrefabDrop();

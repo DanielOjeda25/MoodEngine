@@ -4,6 +4,7 @@
 #include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/ui/EditorUI.h"
 #include "editor/ui/IconHelpers.h"  // F2H37: iconForEntity compartido
+#include "editor/ui/IconsFontAwesome6.h"
 #include "engine/i18n/I18n.h"  // F2H43
 #include "engine/scene/VisGroup.h"  // F2H33: gray-out hidden entities
 #include "engine/scene/core/Entity.h"
@@ -29,6 +30,21 @@ void HierarchyPanel::onImGuiRender() {
         ImGui::End();
         return;
     }
+
+    // F2H57: boton "+ Crear Entidad" arriba de la lista (workflow
+    // Hammer Editor). Click -> file picker del SO -> spawnea entidad
+    // con MeshRenderer apuntando al modelo elegido. EditorApplication
+    // consume el request y maneja el file dialog + carga del asset.
+    const std::string createLabel = std::string("+ ") +
+        I18n::T("editor.panel.hierarchy.create_entity");
+    if (ImGui::Button(createLabel.c_str())) {
+        m_ui->requestCreateEntityFromModel();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.panel.hierarchy.create_entity_tooltip").c_str());
+    }
+    ImGui::Separator();
 
     // F2H5: cache de entries por frame. Reusa storage entre frames —
     // `clear()` no reduce capacity, asi que tras la primera escena
