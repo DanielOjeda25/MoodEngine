@@ -35,6 +35,7 @@ struct AnimationClip;  // F2H49
 
 namespace Dialog { class Asset; }     // F2H48
 namespace Inventory { class Asset; }  // F2H51
+namespace Quest { class Asset; }      // F2H53
 
 /// @brief Identificador estable de una textura dentro de un `AssetManager`.
 ///        Valor 0 se reserva para la textura "missing": pedir `getTexture(0)`
@@ -80,6 +81,12 @@ using AnimationClipAssetId = u32;
 ///        permite que `getItem(0)` nunca sea null. Loadeo lazy + cache por
 ///        path logico, mismo patron que Dialog.
 using ItemAssetId = u32;
+
+/// @brief F2H53: Identificador estable de un QuestAsset (.moodquest).
+///        Valor 0 reservado para un "quest vacio" (id "" + objectives
+///        vacios) que permite que `getQuest(0)` nunca sea null. Loadeo
+///        lazy + cache por path logico, mismo patron que Item.
+using QuestAssetId = u32;
 
 class AssetManager {
 public:
@@ -406,6 +413,28 @@ public:
     /// @brief Cantidad de items cacheados (incluye slot 0).
     usize itemCount() const;
 
+    // ---- Quest (F2H53) ----
+
+    /// @brief Carga (o devuelve cacheado) un quest asset por path logico
+    ///        (p.ej. "quests/rescatar_gata.moodquest"). En fallo devuelve
+    ///        `missingQuestId()` (asset vacio) y loguea al canal `assets`.
+    ///        Mismo patron que `loadItem`.
+    QuestAssetId loadQuest(std::string_view logicalPath);
+
+    /// @brief Devuelve el Asset del id. Nunca null: ids invalidos caen al
+    ///        slot 0 (asset vacio).
+    const Quest::Asset* getQuest(QuestAssetId id) const;
+
+    /// @brief Id del quest vacio (slot 0). Asset con id "" y objectives vacios.
+    QuestAssetId missingQuestId() const { return 0; }
+
+    /// @brief Path logico con el que se cargo el quest. Slot 0 devuelve el
+    ///        sentinela `"__empty_quest"`.
+    std::string questPathOf(QuestAssetId id) const;
+
+    /// @brief Cantidad de quests cacheados (incluye slot 0).
+    usize questCount() const;
+
 private:
     VFS m_vfs;
     TextureFactory m_textureFactory;
@@ -452,6 +481,11 @@ private:
     std::unordered_map<std::string, ItemAssetId> m_itemCache;
     std::vector<std::unique_ptr<Inventory::Asset>> m_items;
     std::vector<std::string> m_itemPaths; // paralelo a m_items
+
+    // Quest (F2H53). [0] = asset vacio (id "", objectives vacios).
+    std::unordered_map<std::string, QuestAssetId> m_questCache;
+    std::vector<std::unique_ptr<Quest::Asset>> m_quests;
+    std::vector<std::string> m_questPaths; // paralelo a m_quests
 };
 
 } // namespace Mood

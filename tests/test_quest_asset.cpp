@@ -6,7 +6,9 @@
 
 #include <doctest/doctest.h>
 
+#include "engine/assets/manager/AssetManager.h"
 #include "engine/quest/QuestAsset.h"
+#include "engine/render/rhi/ITexture.h"
 
 #include <fstream>
 
@@ -374,4 +376,125 @@ TEST_CASE("QuestAsset: loadFromFile con JSON corrupto devuelve nullopt") {
     auto loaded = Asset::loadFromFile(path);
     CHECK_FALSE(loaded.has_value());
     std::filesystem::remove(path);
+}
+
+// ============================================================
+// AssetManager integration (F2H53 Bloque B — loadQuest/getQuest/etc)
+// ============================================================
+
+namespace {
+
+class DummyTexture : public ITexture {
+public:
+    void bind(u32 = 0) const override {}
+    void unbind() const override {}
+    u32 width() const override { return 1; }
+    u32 height() const override { return 1; }
+    TextureHandle handle() const override { return nullptr; }
+};
+
+AssetManager::TextureFactory dummyTexFactory() {
+    return [](const std::string&) { return std::make_unique<DummyTexture>(); };
+}
+
+} // namespace
+
+TEST_CASE("AssetManager: arranca con slot 0 quest vacio + missingQuestId()==0") {
+    AssetManager am("assets", dummyTexFactory());
+    CHECK(am.missingQuestId() == 0u);
+    CHECK(am.questCount() == 1u);
+    CHECK(am.questPathOf(0u) == "__empty_quest");
+    const Quest::Asset* empty = am.getQuest(0u);
+    REQUIRE(empty != nullptr);
+    CHECK(empty->id.empty());
+    CHECK(empty->objectives.empty());
+    CHECK(empty->rewards.empty());
+}
+
+TEST_CASE("AssetManager: loadQuest con path no resoluble cae al slot 0") {
+    AssetManager am("assets", dummyTexFactory());
+    const QuestAssetId id = am.loadQuest("quests/no_existe_12345.moodquest");
+    CHECK(id == am.missingQuestId());
+    // Segunda llamada con mismo path: hit en cache, sigue devolviendo 0.
+    CHECK(am.loadQuest("quests/no_existe_12345.moodquest") == am.missingQuestId());
+    CHECK(am.questCount() == 1u);  // no se agrego ningun slot nuevo
+}
+
+TEST_CASE("AssetManager: getQuest con id fuera de rango cae al slot 0 (nunca null)") {
+    AssetManager am("assets", dummyTexFactory());
+    const Quest::Asset* a = am.getQuest(99999u);
+    REQUIRE(a != nullptr);
+    CHECK(a->id.empty());
+    CHECK(am.questPathOf(99999u) == "__empty_quest");
+}
+
+TEST_CASE("AssetManager: loadQuest valido carga + cachea + asigna id estable") {
+    // Setup: tmpRoot/quests/test_quest.moodquest con un quest real.
+    namespace fs = std::filesystem;
+    const auto tmpRoot = fs::temp_directory_path() / "mood_quest_am_test";
+    fs::remove_all(tmpRoot);
+    fs::create_directories(tmpRoot / "quests");
+
+    Asset q;
+    q.id = "test_quest";
+    q.name_literal = "Test Quest";
+    q.category = "main";
+    Objective o;
+    o.id = "step_1";
+    o.type = ObjectiveType::Collect;
+    o.item_path = "items/key.mooditem";
+    o.min_quantity = 3;
+    q.objectives.push_back(o);
+    REQUIRE(q.saveToFile(tmpRoot / "quests" / "test_quest.moodquest"));
+
+    AssetManager am(tmpRoot.string(), dummyTexFactory());
+
+    const QuestAssetId id = am.loadQuest("quests/test_quest.moodquest");
+    CHECK(id != am.missingQuestId());
+    CHECK(am.questCount() == 2u);  // slot 0 vacio + slot 1 nuevo
+
+    // Cache hit: misma id en segunda llamada.
+    CHECK(am.loadQuest("quests/test_quest.moodquest") == id);
+    CHECK(am.questCount() == 2u);
+
+    // Resolucion del asset.
+    const Quest::Asset* loaded = am.getQuest(id);
+    REQUIRE(loaded != nullptr);
+    CHECK(loaded->id == "test_quest");
+    CHECK(loaded->category == "main");
+    REQUIRE(loaded->objectives.size() == 1u);
+    CHECK(loaded->objectives[0].type == ObjectiveType::Collect);
+    CHECK(loaded->objectives[0].item_path == "items/key.mooditem");
+    CHECK(loaded->objectives[0].min_quantity == 3);
+
+    // Path lookup.
+    CHECK(am.questPathOf(id) == "quests/test_quest.moodquest");
+
+    fs::remove_all(tmpRoot);
+}
+
+TEST_CASE("AssetManager: loadQuest con path unsafe (..) rechazado por VFS") {
+    AssetManager am("assets", dummyTexFactory());
+    const QuestAssetId id = am.loadQuest("../../etc/passwd.moodquest");
+    CHECK(id == am.missingQuestId());
+}
+
+TEST_CASE("AssetManager: loadQuest con JSON corrupto cae al slot 0 + cache lo guarda") {
+    namespace fs = std::filesystem;
+    const auto tmpRoot = fs::temp_directory_path() / "mood_quest_am_corrupt";
+    fs::remove_all(tmpRoot);
+    fs::create_directories(tmpRoot / "quests");
+    {
+        std::ofstream out(tmpRoot / "quests" / "corrupt.moodquest");
+        out << "{ NOT VALID JSON";
+    }
+
+    AssetManager am(tmpRoot.string(), dummyTexFactory());
+    const QuestAssetId id = am.loadQuest("quests/corrupt.moodquest");
+    CHECK(id == am.missingQuestId());
+    CHECK(am.questCount() == 1u);  // no se agrego entry nueva
+    // Segunda llamada: cache hit, sigue devolviendo missing sin reintentar.
+    CHECK(am.loadQuest("quests/corrupt.moodquest") == am.missingQuestId());
+
+    fs::remove_all(tmpRoot);
 }

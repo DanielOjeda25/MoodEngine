@@ -21,6 +21,7 @@
 #include "engine/audio/clips/AudioClip.h"
 #include "engine/dialog/DialogAsset.h"  // F2H48
 #include "engine/inventory/ItemAsset.h" // F2H51
+#include "engine/quest/QuestAsset.h"    // F2H53
 #include "engine/render/rhi/IMesh.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MaterialAsset.h"
@@ -50,6 +51,8 @@ constexpr const char* k_emptyDialogPath    = "__empty_dialog";
 constexpr const char* k_emptyAnimClipPath  = "__empty_clip";
 // F2H51: sentinela del ItemAsset fallback (slot 0). Asset con id "".
 constexpr const char* k_emptyItemPath      = "__empty_item";
+// F2H53: sentinela del Quest fallback (slot 0). Asset con id "", sin objectives.
+constexpr const char* k_emptyQuestPath     = "__empty_quest";
 // Sentinela del material fallback (slot 0). Albedo blanco, mate medio.
 constexpr const char* k_defaultMaterialPath = "__default_material";
 
@@ -259,6 +262,17 @@ AssetManager::AssetManager(std::string rootDir,
         m_itemCache.emplace(k_emptyItemPath, missingItemId());
     }
     Log::assets()->info("AssetManager: item 'vacio' generado en slot 0");
+
+    // ---- Slot 0 Quest (F2H53): asset vacio (id "", objectives vacios).
+    //      `QuestSystem::start("__empty_quest")` lo rechaza por falta de
+    //      objectives — el caller espera ese path.
+    {
+        auto empty = std::make_unique<Quest::Asset>();
+        m_quests.emplace_back(std::move(empty));
+        m_questPaths.emplace_back(k_emptyQuestPath);
+        m_questCache.emplace(k_emptyQuestPath, missingQuestId());
+    }
+    Log::assets()->info("AssetManager: quest 'vacio' generado en slot 0");
 }
 
 AssetManager::~AssetManager() = default;

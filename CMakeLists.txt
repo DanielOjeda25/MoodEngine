@@ -355,6 +355,7 @@ add_library(mood_engine_lib STATIC
     src/engine/assets/manager/AssetManager_Dialog.cpp  # F2H48
     src/engine/assets/manager/AssetManager_AnimationClip.cpp  # F2H49
     src/engine/assets/manager/AssetManager_Item.cpp  # F2H51
+    src/engine/assets/manager/AssetManager_Quest.cpp  # F2H53 Bloque B
     src/engine/assets/loaders/MeshLoader.cpp
     src/engine/assets/primitives/PrimitiveMeshes.cpp
     src/engine/assets/loaders/stb_impl.cpp
