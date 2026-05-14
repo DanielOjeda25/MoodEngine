@@ -387,6 +387,7 @@ add_library(mood_engine_lib STATIC
     src/engine/inventory/ItemSpawn.cpp          # F2H52 H5
 
     src/engine/quest/QuestAsset.cpp             # F2H53 Bloque A
+    src/engine/quest/QuestSystem.cpp            # F2H53 Bloque C
 
     src/engine/packaging/PackageBuilder.cpp
 

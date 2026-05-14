@@ -82,6 +82,7 @@ add_executable(mood_tests
     test_lua_bindings_inventory.cpp  # F2H52 Bloque E
     test_item_spawn.cpp           # F2H52 Bloque H5
     test_quest_asset.cpp          # F2H53 Bloque A
+    test_quest_system.cpp         # F2H53 Bloque C
 
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/Brush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/BrushMesh.cpp
@@ -137,6 +138,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Item.cpp  # F2H51
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Quest.cpp # F2H53 Bloque B
     ${CMAKE_SOURCE_DIR}/src/engine/quest/QuestAsset.cpp                  # F2H53 Bloque A
+    ${CMAKE_SOURCE_DIR}/src/engine/quest/QuestSystem.cpp                 # F2H53 Bloque C
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Animation.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Geometry.cpp
