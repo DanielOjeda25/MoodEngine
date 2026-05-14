@@ -51,6 +51,8 @@ EditorUI::EditorUI() {
                 &m_dialogInspector,   // F2H47
                 &m_itemBrowser,       // F2H51
                 &m_itemPropertyEditor,// F2H51
+                &m_questBrowser,        // F2H53
+                &m_questPropertyEditor, // F2H53
                 &m_scriptEditor, &m_materialEditor, &m_toolbar,
                 // F2H28: paneles del workspace "Editor de mapas".
                 // Arrancan ocultos; se hacen visibles via
@@ -74,6 +76,8 @@ EditorUI::EditorUI() {
     m_dialogInspector.setEditorUi(this);   // F2H47
     m_itemBrowser.setEditorUi(this);       // F2H51
     m_itemPropertyEditor.setEditorUi(this);// F2H51
+    m_questBrowser.setEditorUi(this);         // F2H53
+    m_questPropertyEditor.setEditorUi(this);  // F2H53
 
     // F2H7: el dockspace arranca apuntando al workspace default
     // (F2H22: Modelar, era Layout).

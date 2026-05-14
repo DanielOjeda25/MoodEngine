@@ -575,6 +575,8 @@ add_executable(MoodEditor
     src/editor/panels/narrative/DialogNodeInspectorPanel.cpp   # F2H47
     src/editor/panels/inventory/ItemBrowserPanel.cpp           # F2H51
     src/editor/panels/inventory/ItemPropertyEditorPanel.cpp    # F2H51
+    src/editor/panels/quest/QuestBrowserPanel.cpp              # F2H53
+    src/editor/panels/quest/QuestPropertyEditorPanel.cpp       # F2H53
     src/editor/panels/assets/ScriptEditorPanel.cpp
     src/editor/panels/assets/MaterialEditorPanel.cpp
 )

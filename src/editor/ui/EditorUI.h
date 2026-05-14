@@ -22,6 +22,8 @@
 #include "editor/panels/narrative/DialogNodeInspectorPanel.h"  // F2H47
 #include "editor/panels/inventory/ItemBrowserPanel.h"          // F2H51
 #include "editor/panels/inventory/ItemPropertyEditorPanel.h"   // F2H51
+#include "editor/panels/quest/QuestBrowserPanel.h"             // F2H53
+#include "editor/panels/quest/QuestPropertyEditorPanel.h"      // F2H53
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/assets/MaterialEditorPanel.h"  // Hito 42
 #include "editor/panels/assets/ScriptEditorPanel.h"
@@ -241,6 +243,11 @@ public:
     ///        Inspector section consumen la seleccion via `selectedPath()`.
     ItemBrowserPanel&          itemBrowser()     { return m_itemBrowser; }
     ItemPropertyEditorPanel&   itemPropertyEditor() { return m_itemPropertyEditor; }
+
+    /// @brief F2H53: accessor al Quest Browser. El Property Editor (mismo
+    ///        bloque) consume la seleccion via `selectedPath()`.
+    QuestBrowserPanel&         questBrowser()       { return m_questBrowser; }
+    QuestPropertyEditorPanel&  questPropertyEditor(){ return m_questPropertyEditor; }
 
     /// @brief Hito 27: HistoryStack del editor inyectado desde
     ///        EditorApplication. La MenuBar lo usa para los items
@@ -649,6 +656,8 @@ private:
     DialogNodeInspectorPanel  m_dialogInspector;   // F2H47
     ItemBrowserPanel          m_itemBrowser;       // F2H51
     ItemPropertyEditorPanel   m_itemPropertyEditor;// F2H51
+    QuestBrowserPanel         m_questBrowser;        // F2H53
+    QuestPropertyEditorPanel  m_questPropertyEditor; // F2H53
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     MaterialEditorPanel m_materialEditor;  // Hito 42
     Toolbar m_toolbar;  // F2H22: tools de edicion (gizmo modes + brushes + face)
