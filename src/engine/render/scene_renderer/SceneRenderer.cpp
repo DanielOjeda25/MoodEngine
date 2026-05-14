@@ -42,8 +42,11 @@
 #include "systems/light/LightSystem.h"
 #include "systems/render/BloomPass.h"
 #include "systems/render/PostProcessPass.h"
+#include "systems/render/SSAOPass.h"
 #include "systems/render/ShadowPass.h"
 #include "systems/render/SkyboxRenderer.h"
+
+#include <glm/gtc/matrix_inverse.hpp>
 
 #include <glad/gl.h>  // F2H28 Bloque E: glGenVertexArrays / glDeleteVertexArrays
 
@@ -65,6 +68,10 @@ SceneRenderer::SceneRenderer()
     //   - `m_sceneFb`: HDR (RGBA16F). Donde se pinta sky + escena + lit + fog.
     //   - `m_viewportFb`: LDR (RGBA8). Resultado del post-process pass.
     m_sceneFb = std::make_unique<OpenGLFramebuffer>(
+        1280u, 720u, OpenGLFramebuffer::Format::HDR);
+    // F2H56: FB intermedio HDR donde SSAOPass escribe (scene HDR
+    // multiplicado por AO factor). Alimenta a BloomPass.
+    m_ssaoOutFb = std::make_unique<OpenGLFramebuffer>(
         1280u, 720u, OpenGLFramebuffer::Format::HDR);
     // F2H55: FB intermedio HDR (scene + bloom contribution) que alimenta
     // el post-process en lugar de leer directo de m_sceneFb.
@@ -183,6 +190,15 @@ SceneRenderer::SceneRenderer()
         m_bloomPass.reset();
     }
 
+    // F2H56: SSAO pass. Mismo patron tolerante a falla de shaders.
+    try {
+        m_ssaoPass = std::make_unique<SSAOPass>();
+    } catch (const std::exception& e) {
+        Log::render()->warn("SSAOPass no disponible: {}. SSAO desactivado.",
+                             e.what());
+        m_ssaoPass.reset();
+    }
+
     // Shadow pass (Hito 16).
     try {
         m_shadowPass = std::make_unique<ShadowPass>(2048);
@@ -230,6 +246,7 @@ SceneRenderer::~SceneRenderer() {
     m_shadowPass.reset();
     m_postProcess.reset();
     m_bloomPass.reset();  // F2H55
+    m_ssaoPass.reset();   // F2H56
     m_debugRenderer.reset();
     // F2H28: tirar FBOs orto + shaders orto antes del contexto GL.
     if (m_grid2dVao != 0) glDeleteVertexArrays(1, &m_grid2dVao);
@@ -241,7 +258,8 @@ SceneRenderer::~SceneRenderer() {
     m_pbrShader.reset();
     m_instanceBuffer.reset();
     m_viewportFb.reset();
-    m_bloomFb.reset();  // F2H55
+    m_bloomFb.reset();   // F2H55
+    m_ssaoOutFb.reset(); // F2H56
     m_sceneFb.reset();
     m_renderer.reset();
 }
@@ -262,6 +280,10 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
     m_bloomThreshold = 1.0f;
     m_bloomIntensity = 0.6f;
     m_bloomRadius    = 1.0f;
+    // F2H56: defaults SSAO.
+    m_ssaoEnabled   = true;
+    m_ssaoRadius    = 0.5f;
+    m_ssaoIntensity = 1.0f;
 
     bool envFound = false;
     scene.forEach<EnvironmentComponent>(
@@ -281,6 +303,10 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
             m_bloomThreshold  = env.bloomThreshold;
             m_bloomIntensity  = env.bloomIntensity;
             m_bloomRadius     = env.bloomRadius;
+            // F2H56: SSAO params.
+            m_ssaoEnabled     = env.ssaoEnabled;
+            m_ssaoRadius      = env.ssaoRadius;
+            m_ssaoIntensity   = env.ssaoIntensity;
         });
 }
 
@@ -298,20 +324,41 @@ void SceneRenderer::endFrame() {
     m_renderer->endFrame();
     m_sceneFb->unbind();
 
-    // F2H55: bloom pass entre scene HDR y post-process. Si esta apagado
-    // o intensity = 0, o el bloom no pudo correr (size invalido), se
-    // skipea y el post-process lee directo del m_sceneFb. Cero regresion
-    // respecto a pre-F2H55.
+    // F2H56: SSAO pass. Lee depth + color del m_sceneFb, escribe a
+    // m_ssaoOutFb (= color * AO factor). Si esta apagado o el src no
+    // tiene depth texture (modo LDR), se skipea sin tocar el flow.
+    OpenGLFramebuffer* afterSsao = m_sceneFb.get();
+    const bool runSsao = m_ssaoEnabled
+                      && m_ssaoIntensity > 0.0f
+                      && m_ssaoPass
+                      && m_ssaoOutFb
+                      && m_sceneFb;
+    if (runSsao) {
+        MOOD_PROFILE_SCOPE("SSAOPass::apply");
+        const glm::mat4 invProj = glm::inverse(m_lastProjection);
+        const bool ssaoApplied = m_ssaoPass->apply(
+            *m_sceneFb, *m_ssaoOutFb,
+            m_lastProjection, invProj,
+            m_ssaoRadius, m_ssaoIntensity);
+        if (ssaoApplied) {
+            afterSsao = m_ssaoOutFb.get();
+        }
+    }
+
+    // F2H55: bloom pass entre el resultado del SSAO (o scene HDR si SSAO
+    // off) y post-process. Si esta apagado o intensity = 0, o el bloom
+    // no pudo correr, se skipea y el post-process lee directo del FB
+    // anterior. Cero regresion respecto a pre-F2H55.
     const bool runBloom = m_bloomEnabled
                        && m_bloomIntensity > 0.0f
                        && m_bloomPass
                        && m_bloomFb
-                       && m_sceneFb;
-    OpenGLFramebuffer* postProcessSrc = m_sceneFb.get();
+                       && afterSsao;
+    OpenGLFramebuffer* postProcessSrc = afterSsao;
     if (runBloom) {
         MOOD_PROFILE_SCOPE("BloomPass::apply");
         const bool bloomApplied = m_bloomPass->apply(
-            *m_sceneFb, *m_bloomFb,
+            *afterSsao, *m_bloomFb,
             m_bloomThreshold, m_bloomIntensity, m_bloomRadius);
         if (bloomApplied) {
             postProcessSrc = m_bloomFb.get();

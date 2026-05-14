@@ -41,6 +41,11 @@ public:
     ///        para no filtrar el tipo concreto del backend.
     GLuint glColorTextureId() const { return m_colorTexture; }
 
+    /// @brief F2H56: GLuint del depth attachment cuando es textura (modo HDR).
+    ///        Devuelve 0 si el depth es renderbuffer (modo LDR). Usado por
+    ///        SSAOPass para samplear depth del scene FB.
+    GLuint glDepthTextureId() const { return m_depthTexture; }
+
     /// @brief Formato del color attachment (LDR/HDR).
     Format format() const { return m_format; }
 
@@ -50,7 +55,8 @@ private:
 
     GLuint m_fbo = 0;
     GLuint m_colorTexture = 0;
-    GLuint m_depthRbo = 0;
+    GLuint m_depthRbo = 0;          // LDR: depth-stencil renderbuffer
+    GLuint m_depthTexture = 0;      // HDR (F2H56): depth como textura sampleable
     u32 m_width = 0;
     u32 m_height = 0;
     Format m_format = Format::LDR;

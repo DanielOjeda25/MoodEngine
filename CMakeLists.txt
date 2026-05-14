@@ -426,6 +426,7 @@ add_library(mood_engine_lib STATIC
     src/systems/physics/PhysicsSystem.cpp
     src/systems/render/BloomPass.cpp
     src/systems/render/PostProcessPass.cpp
+    src/systems/render/SSAOPass.cpp
     src/systems/scripting/ScriptSystem.cpp
     src/systems/render/ShadowPass.cpp
     src/systems/physics/TriggerSystem.cpp

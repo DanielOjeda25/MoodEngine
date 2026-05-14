@@ -47,6 +47,7 @@ class OpenGLParticleRenderer;
 class OpenGLSSBO;
 class BloomPass;
 class PostProcessPass;
+class SSAOPass;
 class Scene;
 class ShadowPass;
 class SkyboxRenderer;
@@ -146,6 +147,11 @@ public:
     f32  bloomIntensity() const { return m_bloomIntensity; }
     f32  bloomRadius()    const { return m_bloomRadius; }
 
+    // F2H56: SSAO params.
+    bool ssaoEnabled()   const { return m_ssaoEnabled; }
+    f32  ssaoRadius()    const { return m_ssaoRadius; }
+    f32  ssaoIntensity() const { return m_ssaoIntensity; }
+
     /// @brief Resetea el cache de Environment y aplica el primer
     ///        EnvironmentComponent encontrado en la escena. Util al
     ///        cargar un proyecto para tener los valores antes del
@@ -171,8 +177,10 @@ public:
 private:
     std::unique_ptr<IRenderer> m_renderer;
     std::unique_ptr<OpenGLFramebuffer> m_sceneFb;     // HDR RGBA16F
+    std::unique_ptr<OpenGLFramebuffer> m_ssaoOutFb;   // HDR RGBA16F (F2H56): scene * AO modulation
     std::unique_ptr<OpenGLFramebuffer> m_bloomFb;     // HDR RGBA16F (F2H55): scene + bloom contribution antes del post-process
     std::unique_ptr<OpenGLFramebuffer> m_viewportFb;  // LDR RGBA8
+    std::unique_ptr<SSAOPass>          m_ssaoPass;    // F2H56
     std::unique_ptr<BloomPass>         m_bloomPass;   // F2H55
     std::unique_ptr<PostProcessPass>   m_postProcess;
 
@@ -232,6 +240,11 @@ private:
     f32  m_bloomThreshold  = 1.0f;
     f32  m_bloomIntensity  = 0.6f;
     f32  m_bloomRadius     = 1.0f;
+
+    // F2H56: SSAO params (poblados por applyEnvironmentFromScene).
+    bool m_ssaoEnabled   = true;
+    f32  m_ssaoRadius    = 0.5f;
+    f32  m_ssaoIntensity = 1.0f;
 
     // Diagnostico one-shot.
     bool m_shadowEnabledLastFrame = false;

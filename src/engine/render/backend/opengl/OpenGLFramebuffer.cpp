@@ -17,6 +17,9 @@ OpenGLFramebuffer::~OpenGLFramebuffer() {
     if (m_depthRbo != 0) {
         glDeleteRenderbuffers(1, &m_depthRbo);
     }
+    if (m_depthTexture != 0) {
+        glDeleteTextures(1, &m_depthTexture);
+    }
     if (m_colorTexture != 0) {
         glDeleteTextures(1, &m_colorTexture);
     }
@@ -62,6 +65,10 @@ void OpenGLFramebuffer::invalidate() {
         glDeleteRenderbuffers(1, &m_depthRbo);
         m_depthRbo = 0;
     }
+    if (m_depthTexture != 0) {
+        glDeleteTextures(1, &m_depthTexture);
+        m_depthTexture = 0;
+    }
     if (m_colorTexture != 0) {
         glDeleteTextures(1, &m_colorTexture);
         m_colorTexture = 0;
@@ -96,14 +103,31 @@ void OpenGLFramebuffer::invalidate() {
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                            GL_TEXTURE_2D, m_colorTexture, 0);
 
-    // Depth attachment: renderbuffer (no lo necesitamos para samplear, solo
-    // para el Z-buffer al dibujar).
-    glGenRenderbuffers(1, &m_depthRbo);
-    glBindRenderbuffer(GL_RENDERBUFFER, m_depthRbo);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8,
-                          static_cast<GLsizei>(m_width), static_cast<GLsizei>(m_height));
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
-                              GL_RENDERBUFFER, m_depthRbo);
+    // Depth attachment:
+    //   - HDR (F2H56): textura DEPTH24_STENCIL8 sampleable (SSAOPass lee
+    //     depth para reconstruir posiciones y calcular oclusion).
+    //   - LDR: renderbuffer (mas eficiente; el viewport FB final no necesita
+    //     samplear su propio depth).
+    if (m_format == Format::HDR) {
+        glGenTextures(1, &m_depthTexture);
+        glBindTexture(GL_TEXTURE_2D, m_depthTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8,
+                     static_cast<GLsizei>(m_width), static_cast<GLsizei>(m_height),
+                     0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
+                               GL_TEXTURE_2D, m_depthTexture, 0);
+    } else {
+        glGenRenderbuffers(1, &m_depthRbo);
+        glBindRenderbuffer(GL_RENDERBUFFER, m_depthRbo);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8,
+                              static_cast<GLsizei>(m_width), static_cast<GLsizei>(m_height));
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
+                                  GL_RENDERBUFFER, m_depthRbo);
+    }
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
         throw std::runtime_error("OpenGLFramebuffer: framebuffer incompleto");
