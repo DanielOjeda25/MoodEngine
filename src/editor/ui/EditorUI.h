@@ -390,6 +390,33 @@ public:
         return r;
     }
 
+    /// @brief F2H57 Bloque C: request para abrir el modal "Convertir
+    ///        entidad" sobre la entidad pasada. El modal muestra los
+    ///        kits disponibles (NPC con dialogo / Player / Item /
+    ///        Luz puntual / etc.) y aplica los componentes
+    ///        correspondientes. EditorApplication consume el request
+    ///        en el frame loop y abre el modal ImGui.
+    void requestEntityConvertModal(entt::entity e) {
+        m_convertModalRequested = true;
+        m_convertModalTarget    = e;
+    }
+    bool consumeEntityConvertModalRequest(entt::entity& outTarget) {
+        if (!m_convertModalRequested) return false;
+        m_convertModalRequested = false;
+        outTarget = m_convertModalTarget;
+        return true;
+    }
+
+    /// @brief F2H57 Bloque C: request para borrar la entidad activa de
+    ///        la seleccion. Mismo flow que la tecla Delete pero
+    ///        disparado desde el menu contextual del panel Escena.
+    void requestDeleteSelectedEntity() { m_deleteSelectedRequested = true; }
+    bool consumeDeleteSelectedRequest() {
+        const bool r = m_deleteSelectedRequested;
+        m_deleteSelectedRequested = false;
+        return r;
+    }
+
     /// @brief Hito 15: request para crear una entidad "Environment" con
     ///        un `EnvironmentComponent` default. Util para empezar a editar
     ///        sky/fog/post-process desde el Inspector.
@@ -708,6 +735,9 @@ private:
     bool m_spawnPhysicsBoxRequested = false;
     bool m_savePrefabRequested = false;
     bool m_createEntityFromModelRequested = false;  // F2H57
+    bool m_convertModalRequested = false;            // F2H57 Bloque C
+    entt::entity m_convertModalTarget{entt::null};   // F2H57 Bloque C
+    bool m_deleteSelectedRequested = false;          // F2H57 Bloque C
     bool m_spawnEnvironmentRequested = false;
     bool m_spawnShadowDemoRequested = false; // Hito 16
     bool m_spawnPbrSpheresRequested = false; // Hito 17

@@ -23,6 +23,7 @@
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 
+#include <imgui.h>
 #include <portable-file-dialogs.h>
 
 #include <filesystem>
@@ -207,6 +208,177 @@ void EditorApplication::processCreateEntityFromModelRequest() {
     replaceWithSingle(m_ui.selectionSet(), e);
 
     pushCreatedEntities({e}, std::string("Crear entidad '") + finalName + "'");
+}
+
+// ============================================================================
+// F2H57 Bloque D: Modal "Convertir entidad"
+//
+// Patron Hammer Editor: right-click sobre una entidad -> elegir un "kit"
+// preset que aplica componentes especificos (NPC con dialogo, Player,
+// Luz, etc.). Los kits SON aditivos: agregan componentes sin remover los
+// existentes. Si el dev quiere bajar a entidad vacia, usa Inspector
+// para remover componentes individualmente.
+//
+// v1 ships 4 kits: NPC con dialogo / Player / Luz puntual / Luz
+// direccional / Item pickeable. Mas kits (Camera, Quest runner) y
+// undo del paso convert quedan como follow-up sub-blocks. Los ediits
+// individuales de componentes post-convert SI son undoable via
+// Inspector (F2H32 InspectorEditCommand).
+// ============================================================================
+
+void EditorApplication::renderConvertEntityModal() {
+    // Latch del target cuando llega un request nuevo.
+    entt::entity req;
+    if (m_ui.consumeEntityConvertModalRequest(req)) {
+        m_convertModalActiveTarget = req;
+        ImGui::OpenPopup("convert_entity_modal");
+    }
+
+    // Modal solo visible mientras hay target activo.
+    if (m_convertModalActiveTarget == entt::null) return;
+
+    // Centrar.
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(
+        ImVec2(vp->GetCenter().x, vp->GetCenter().y),
+        ImGuiCond_Appearing,
+        ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f), ImGuiCond_Appearing);
+
+    constexpr ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_AlwaysAutoResize;
+
+    if (!ImGui::BeginPopupModal("convert_entity_modal", nullptr, flags)) {
+        return;
+    }
+
+    if (m_scene == nullptr) {
+        ImGui::TextUnformatted("Sin escena activa.");
+        if (ImGui::Button("Cerrar")) {
+            m_convertModalActiveTarget = entt::null;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+        return;
+    }
+
+    Entity target(m_convertModalActiveTarget, m_scene.get());
+    if (!target.hasComponent<TagComponent>()) {
+        // Entidad invalida o destruida entre frames.
+        m_convertModalActiveTarget = entt::null;
+        ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+        return;
+    }
+
+    const std::string& tagName = target.getComponent<TagComponent>().name;
+    ImGui::Text("%s", I18n::T("editor.convert_modal.title", tagName).c_str());
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.convert_modal.subtitle").c_str());
+    ImGui::Separator();
+
+    // Helper para mostrar boton de kit que solo se habilita si el componente
+    // requerido no esta ya presente.
+    auto kitButton = [&](const char* labelKey, const char* descKey, bool alreadyHas) -> bool {
+        const std::string label = I18n::T(labelKey);
+        ImGui::BeginGroup();
+        if (alreadyHas) ImGui::BeginDisabled();
+        const bool clicked = ImGui::Button(label.c_str(), ImVec2(-1.0f, 0.0f));
+        if (alreadyHas) ImGui::EndDisabled();
+        ImGui::TextDisabled("%s%s",
+            alreadyHas ? "[ya aplicado] " : "",
+            I18n::T(descKey).c_str());
+        ImGui::Spacing();
+        ImGui::EndGroup();
+        return clicked && !alreadyHas;
+    };
+
+    bool applied = false;
+
+    // --- Kit 1: NPC con dialogo ---
+    const bool hasDialog = target.hasComponent<DialogComponent>();
+    if (kitButton("editor.convert_modal.kit.npc",
+                  "editor.convert_modal.kit.npc_desc",
+                  hasDialog)) {
+        if (!target.hasComponent<TriggerComponent>()) {
+            target.addComponent<TriggerComponent>(TriggerComponent{});
+        }
+        DialogComponent dlg{};
+        dlg.dialogPath = "dialogs/example.mooddialog";
+        dlg.autoStartOnInteract = true;
+        target.addComponent<DialogComponent>(dlg);
+        Log::editor()->info("[convert] '{}' -> NPC con dialogo (path placeholder)",
+                              tagName);
+        applied = true;
+    }
+
+    // --- Kit 2: Item pickeable ---
+    const bool hasPickup = target.hasComponent<ItemPickupComponent>();
+    if (kitButton("editor.convert_modal.kit.item",
+                  "editor.convert_modal.kit.item_desc",
+                  hasPickup)) {
+        if (!target.hasComponent<TriggerComponent>()) {
+            target.addComponent<TriggerComponent>(TriggerComponent{});
+        }
+        ItemPickupComponent pickup{};
+        pickup.itemPath = "items/example.mooditem";
+        pickup.quantity = 1;
+        pickup.destroyOnPickup = true;
+        target.addComponent<ItemPickupComponent>(pickup);
+        Log::editor()->info("[convert] '{}' -> Item pickeable (path placeholder)",
+                              tagName);
+        applied = true;
+    }
+
+    // --- Kit 3: Luz puntual ---
+    const bool hasLight = target.hasComponent<LightComponent>();
+    if (kitButton("editor.convert_modal.kit.point_light",
+                  "editor.convert_modal.kit.point_light_desc",
+                  hasLight)) {
+        LightComponent light{};
+        light.type = LightComponent::Type::Point;
+        light.color = glm::vec3(1.0f, 0.9f, 0.7f);
+        light.intensity = 1.0f;
+        light.radius = 10.0f;
+        light.enabled = true;
+        target.addComponent<LightComponent>(light);
+        Log::editor()->info("[convert] '{}' -> Luz puntual", tagName);
+        applied = true;
+    }
+
+    // --- Kit 4: Luz direccional ---
+    if (kitButton("editor.convert_modal.kit.dir_light",
+                  "editor.convert_modal.kit.dir_light_desc",
+                  hasLight)) {
+        LightComponent light{};
+        light.type = LightComponent::Type::Directional;
+        light.color = glm::vec3(1.0f);
+        light.intensity = 1.0f;
+        light.direction = glm::vec3(-0.3f, -1.0f, -0.2f);
+        light.castShadows = true;
+        light.enabled = true;
+        target.addComponent<LightComponent>(light);
+        Log::editor()->info("[convert] '{}' -> Luz direccional", tagName);
+        applied = true;
+    }
+
+    ImGui::Separator();
+    ImGui::TextDisabled("%s", I18n::T("editor.convert_modal.note_undo").c_str());
+    ImGui::Spacing();
+
+    if (ImGui::Button(I18n::T("editor.convert_modal.close").c_str(), ImVec2(120.0f, 0.0f))) {
+        m_convertModalActiveTarget = entt::null;
+        ImGui::CloseCurrentPopup();
+    }
+
+    if (applied) {
+        markDirty();
+        // No cerramos al aplicar: el dev puede agregar varios kits al
+        // mismo target en una sola pasada (Item + NPC + Luz puntual).
+    }
+
+    ImGui::EndPopup();
 }
 
 } // namespace Mood

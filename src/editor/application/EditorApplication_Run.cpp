@@ -359,6 +359,16 @@ int EditorApplication::run() {
         processSavePrefabRequest();
         processCreateEntityFromModelRequest();  // F2H57
 
+        // F2H57 Bloque C: menu contextual del panel Escena puede
+        // disparar el delete sin pasar por la tecla del teclado.
+        if (m_ui.consumeDeleteSelectedRequest()) {
+            deleteSelectedEntity();
+        }
+
+        // F2H57 Bloque D: modal "Convertir entidad". Se abre cuando
+        // se consume el request del context menu del HierarchyPanel.
+        renderConvertEntityModal();
+
         // 2.4) Click-to-select (Hito 13 Bloque 2): raycast desde el cursor
         //      y selecciona la entidad mas cercana. Click en vacio deselecciona.
         //      Solo en Editor Mode — en Play Mode el mouse es para la camara.

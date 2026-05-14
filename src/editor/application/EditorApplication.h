@@ -241,6 +241,7 @@ private:
     void pushCreatedEntities(std::vector<Entity> created, std::string label);
     void processSavePrefabRequest();
     void processCreateEntityFromModelRequest();  // F2H57
+    void renderConvertEntityModal();             // F2H57 Bloque D
     void processViewportTextureDrop();
     void processViewportMeshDrop();
     void processViewportPrefabDrop();
@@ -727,6 +728,10 @@ private:
     std::vector<std::filesystem::path> m_recentProjects;
     // Path del mapa activo, relativo a `m_project->root`.
     std::filesystem::path m_currentMapPath;
+    // F2H57 Bloque D: handle de la entidad sobre la que esta abierto el
+    // modal "Convertir entidad". `entt::null` cuando el modal no esta
+    // activo. Latched cuando se consume el request del context menu.
+    entt::entity m_convertModalActiveTarget{entt::null};
     // True cuando se modifico el estado desde el ultimo save. El titulo de
     // la ventana muestra " *" en ese caso.
     bool m_projectDirty = false;

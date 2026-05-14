@@ -158,6 +158,28 @@ void HierarchyPanel::onImGuiRender() {
                 }
             }
 
+            // F2H57 Bloque C: menu contextual con click derecho sobre
+            // la entidad. Convencion Hammer Editor: Cambiar tipo /
+            // Eliminar (Rename + Duplicar quedan como follow-up).
+            if (ImGui::BeginPopupContextItem("##entity_ctx")) {
+                // Si el right-click cae sobre una entidad fuera de la
+                // seleccion, hacer que esa entidad sea la activa
+                // (UX estandar: el menu opera sobre lo que clickeaste).
+                if (!isInSelection) {
+                    replaceWithSingle(set, e);
+                }
+                if (ImGui::MenuItem(
+                        I18n::T("editor.panel.hierarchy.ctx.change_type").c_str())) {
+                    m_ui->requestEntityConvertModal(entry.handle);
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(
+                        I18n::T("editor.panel.hierarchy.ctx.delete").c_str())) {
+                    m_ui->requestDeleteSelectedEntity();
+                }
+                ImGui::EndPopup();
+            }
+
             if (grayedHidden) {
                 ImGui::PopStyleColor();
             }
