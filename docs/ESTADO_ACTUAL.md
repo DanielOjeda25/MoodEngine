@@ -4,7 +4,34 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H53 cerrado (2026-05-14)
+## 0. ACTUALIZACIÓN F2H55 cerrado (2026-05-14)
+
+**Primer hito de Sub-fase 2.6 cerrado — Bloom (glow) + Environment settings per scene.**
+Tag: `v1.42.0-fase2-hito55`. Validado por dev tras crear una caja blanca de testing en una escena ad-hoc y mover los sliders en vivo: cita *"el bloom va bien"*. Demo `.moodmap` formal con cubos emissive diferida (el tour ad-hoc cubrió la validación).
+
+**Qué entrega F2H55** (Bloques A-F, detalle completo en `HITOS.md`):
+- **4 shaders nuevos en `shaders/`** (Bloque A): `bloom.vert` (fullscreen triangle compartido), `bloom_downsample.frag` (13-tap con Karis weighted average + soft-knee threshold), `bloom_upsample.frag` (tent 9-tap escalado por radius), `bloom_composite.frag` (`mix(hdr, hdr+bloom, intensity)`). Portados de Godot 4 (MIT) + Filament (Apache 2.0); algoritmo COD Advanced Warfare 2014 — estándar industria desde hace 10+ años.
+- **`BloomPass` C++ class** (Bloque B, `src/systems/render/BloomPass.{h,cpp}`): mip chain de 6 niveles HDR (RGBA16F) recreado on resize. `apply(src, dst, threshold, intensity, radius) → bool`. Insertado en `SceneRenderer::endFrame()` entre HDR scene FB y PostProcessPass. Si bloom está apagado o falla, post-process lee directo del scene FB (cero regresión). Save/restore GL state (depth/cull/blend).
+- **`EnvironmentComponent` extendido** (Bloque C) con 4 campos nuevos (`bloomEnabled`, `bloomThreshold`, `bloomIntensity`, `bloomRadius`). `SavedEnvironment` paralelo. Write JSON aditivo (solo persiste si difiere del default — `.moodmap` pre-F2H55 round-trip sin ensuciarse). Parse con defaults explícitos (back-compat). `applyEnvironmentFromScene` ya corre cada frame en `renderScene` → sliders propagan en vivo sin re-cargar mapa.
+- **Panel sliders en el Inspector** (Bloque D, `InspectorPanel_Light.cpp::renderEnvironmentSection`): sección "Bloom (glow)" debajo de Post-procesado con checkbox `activar bloom` + 3 sliders (`umbral` 0-3, `intensidad` 0-2, `radio del halo` 0.5-3). Sliders se ocultan si checkbox apagado. Undo records via `pushEditIfDone`. 5 i18n keys nuevas en es.json + en.json.
+- **Bug crítico durante tour** (fixeado): primera versión chequeaba `if (m_mips[0] == nullptr) return;` ANTES del resize interno → mip chain nunca se creaba → apply early-return + endFrame ya había apuntado postProcessSrc a m_bloomFb vacío → **pantalla negra**. Fix: resize idempotente PRIMERO, `apply()` retorna bool indicando si escribió al dst, `endFrame` solo cambia postProcessSrc si retornó true.
+- **Suite 926/9705 verde** (sin tests nuevos: bloom es shader visual no headless-testeable; serialización roundtrip cubierta por el patrón existente de EnvironmentComponent que ya tenía coverage F2H15).
+
+**Decisiones**:
+1. **No-librería externa**: bloom no tiene "lib plug-and-play" en la industria — Unreal/Unity/Godot/id/Frostbite todos lo implementan inline porque debe estar pegado al pipeline del motor. Portar shaders de Godot/Filament (open-source comprobado) es el equivalente a "no reinventar" en este dominio. Documentado en headers de los shaders.
+2. **Settings per-mapa, no global**: cada `.moodmap` guarda su look propio en el `EnvironmentComponent`. Sienta la base donde se acumularán futuras opciones de Sub-fase 2.6 (ssao, colorGrading, godRays).
+3. **Default bloom on** (no off): engine-grade no toca semánticas de gameplay pero SÍ provee defaults visuales sensatos. El dev del juego apaga si quiere look plano vintage.
+4. **Defaults aditivos en JSON**: solo se escriben campos que difieren del default — los `.moodmap` viejos se mantienen limpios al round-tripear.
+
+**Estado del editor post-F2H55**:
+- Bloom funciona end-to-end: shaders cargan, mip chain construye on demand, sliders mueven el efecto en vivo.
+- Sombras siguen existiendo en el motor (ShadowPass + shadow_depth.{vert,frag}, F2H16) pero **el dev observó que su escena de testing no proyecta sombras** — investigación pendiente (probable: falta directional light con `casts shadows` en la escena ad-hoc). Tagged como reactive fix candidate, NO scope de F2H55.
+
+**Próximo hito candidato**: investigación rápida del por qué no se ven sombras en escenas ad-hoc (¿defaults del +Add Component → Light? ¿auto-spawn de directional al crear proyecto?) — diferido para que el dev decida si quiere atacar eso vs continuar con el siguiente polish (AO/color grading/god rays). Plan stub en [`PLAN_HITO_F2H56.md`](PLAN_HITO_F2H56.md).
+
+---
+
+## 0bis. ACTUALIZACIÓN F2H53 cerrado (2026-05-14)
 
 **Octavo hito de Sub-fase 2.5 cerrado — Quest System engine-grade (autoría + state machine + tick auto-eval + HUD + persistencia).**
 Tag: `v1.41.0-fase2-hito53`. Validado por dev tras tour visual *"funcionó todo"* — el flujo end-to-end funciona (pickup del item → tick auto-completa el objective → reward `dialog.set_var` aplicada → tracker pasa a `[x]` verde).

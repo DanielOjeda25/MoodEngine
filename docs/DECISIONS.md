@@ -11,6 +11,42 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-14: F2H55 cierre — Bloom (glow) + Environment per-scene (apertura Sub-fase 2.6 Render polish)
+
+**Contexto:** primer hito de **Sub-fase 2.6 — Render polish** post-cierre de Sub-fase 2.5 (Diálogos / Inventario / Quests, F2H53). El dev pidió "lo visual que podemos sacar bien" — entre 4 candidatos (bloom / AO / color grading / god rays) eligió bloom por mayor impacto inmediato + scope acotado. Tag `v1.42.0-fase2-hito55`. F2H54 quedó **skip** (laptop-only descartado por divergencia con desktop al cerrar F2H53).
+
+**Decisión clave 1 — No-librería externa para bloom: portar shaders open-source en lugar de adoptar SDK.** Bloom no tiene "lib plug-and-play" en la industria — Unreal Engine, Unity HDRP, Godot 4, id Tech, Frostbite todos lo implementan inline porque debe estar pegado al pipeline del motor (formatos HDR específicos, orden de passes, mip chain de FBs). El algoritmo (downsample con Karis + upsample tent + composite) viene de una presentación de Sledgehammer/Activision 2014 ("Next Generation Post Processing in Call of Duty Advanced Warfare", Jorge Jimenez) — es el estándar de facto desde hace 10+ años. Lo que cambia entre motores es el tuning, no la matemática.
+
+- **Razón:** integrar una lib externa terminaría siendo más trabajo que las ~80 líneas de GLSL. Y "no reinventar" en este dominio significa **portar de referencia open-source comprobada** (Godot MIT, Filament Apache 2.0) — no escribir de cero.
+- **Alternativas evaluadas:** (a) **AMD FidelityFX SDK** — descartado para bloom: el SDK trae CAS/FSR/CACAO pero no bloom como módulo discreto. Re-evaluable cuando lleguemos a AO en F2H56 (CACAO sí es código AMD mantenido). (b) **bgfx examples** — sólo reference code, no library. (c) **Adoptar bgfx o Filament completos** — descartado: implicaría reemplazar el motor entero (RHI propio). (d) **Reinventar from scratch** — descartado: alta probabilidad de bug, sin upside.
+- **Atribución en código:** headers de los 4 shaders mencionan Godot 4 / Filament + algoritmo COD AW 2014. Documenta que NO es trabajo propio + da pista al próximo agente sobre dónde buscar si necesita modificar.
+- **Revisión:** si Godot/Filament evolucionan su algoritmo (ej. dual-Kawase vs mip-chain), re-evaluar el port.
+
+**Decisión clave 2 — Settings de bloom (y futuros polish) per-mapa en `EnvironmentComponent`, NO global.** Extender el componente existente con 4 campos nuevos en lugar de inventar un struct `EnvironmentSettings` separado.
+
+- **Razón:** el motor YA tiene `EnvironmentComponent` con skybox + fog + exposure + tonemap + IBL intensity (F2H15/F2H18). Bloom es semánticamente el mismo dominio ("cómo se ve este mapa"). Sumar un struct paralelo violaría YAGNI + duplicaría serialización + duplicaría UI. Per-mapa permite que la cueva tenga bloom alto + el desierto bajo (mood diferencial).
+- **Consecuencia futura:** F2H56 (AO) suma `ssao*` al mismo componente. F2H57 (color grading) suma `colorGrading*`. F2H58 (god rays) suma `godRays*`. El componente crecerá ~12-16 campos más durante Sub-fase 2.6 — aceptable mientras siga siendo conceptualmente coherente. Si emerge presión, split a subcomponente (p.ej. `PostFXComponent`) con migración aditiva.
+- **Alternativa descartada:** global setting en `config.json` o `UserSettings` — apaga el caso de uso principal (variedad mood por mapa). Per-cámara override quedó para Sub-fase 3 si emerge demanda (cinemáticas custom).
+
+**Decisión clave 3 — Defaults aditivos en JSON: solo persistir campos que difieren del default.** Cuando `EntitySerializer` escribe el `environment` block, los 4 campos bloom solo aparecen si difieren de su default. El parser lee con `je.value(key, default)` — campos ausentes resultan en el mismo valor que campos presentes con el default explícito.
+
+- **Razón:** mapas `.moodmap` pre-F2H55 round-tripean SIN ensuciarse con los 4 campos nuevos. Sólo los mapas que el dev edita activamente con bloom custom acumulan los campos en disco. Mantiene los diffs de git limpios.
+- **Patrón establecido:** mismo enfoque que `ibl_intensity` (Hito 18) — ese campo también se persiste sólo si `!= 1.0`. F2H55 extiende el patrón a 4 campos más.
+- **Trade-off:** si el dev EXPLÍCITAMENTE pone `bloomIntensity = 0.6` (igual al default), no se persiste — el .moodmap no refleja la "intención de set". Aceptable mientras el default sea estable. Si emerge presión, refactor a "siempre persistir todos".
+
+**Decisión clave 4 — Cero regresión visual con bloom apagado: si `apply()` falla o intensity=0, post-process lee directo del scene FB.** El `endFrame()` del SceneRenderer mantiene dos rutas:
+
+- **Razón:** F2H55 toca el flujo crítico del frame (post-process). Una regresión silenciosa donde "sin bloom" se ve distinto a "antes de F2H55" sería un bug difícil de detectar. La regla *"con bloom apagado, idéntico al frame pre-F2H55"* es testeable visualmente por el dev.
+- **Implementación:** `BloomPass::apply` retorna bool. `endFrame` solo apunta `postProcessSrc` al `m_bloomFb` si el apply retornó true. Si bloom está deshabilitado, no se invoca al pass; `postProcessSrc` queda en `m_sceneFb` directo.
+- **Bug descubierto durante tour por NO seguir esta regla en v1:** primera implementación cambiaba `postProcessSrc = m_bloomFb` ANTES de invocar `apply()` — si apply early-returnaba (mip chain no construido), el FB destino quedaba con contenido stale → pantalla negra. Fix aplicado durante el tour del dev.
+
+**Decisión clave 5 — Defaults bloom ON (no OFF).** Cuando el dev crea un proyecto nuevo o agrega `EnvironmentComponent`, bloom arranca enabled con intensity=0.6.
+
+- **Razón:** engine-grade no toca semánticas de gameplay pero SÍ provee defaults visuales sensatos. Igual que el motor arranca con ACES tonemap default (no None) o IBL intensity 1.0 (no 0). El dev del juego que quiera look plano vintage apaga el slider — pero el motor no DEBE servir "indie sin pulir" como default.
+- **Revisión:** si emerge complaint del dev sobre que el bloom "interfiere" con su look, agregar flag en UserSettings global para apagar el default.
+
+---
+
 ## 2026-05-14: F2H53 cierre — Quest System engine-grade (schema + state machine + tick + Browser/Editor + Lua + HUD + persistencia)
 
 **Contexto:** cierra el Bloque 2 (Quests) del `PLAN_SUBFASE_2_5.md`. Sub-fase 2.5 Bloque 1 (Inventario) ya estaba completo con F2H52; F2H53 abre y cierra el sistema de quests aprovechando las primitivas de F2H48 (dialog vars) y F2H52 (inventory bindings). Tour visual validado por dev: *"funcionó todo"*.
