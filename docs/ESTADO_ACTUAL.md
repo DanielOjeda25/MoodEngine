@@ -4,7 +4,32 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H51 cerrado (2026-05-12)
+## 0. ACTUALIZACIÓN F2H53 cerrado (2026-05-14)
+
+**Octavo hito de Sub-fase 2.5 cerrado — Quest System engine-grade (autoría + state machine + tick auto-eval + HUD + persistencia).**
+Tag: `v1.41.0-fase2-hito53`. Validado por dev tras tour visual *"funcionó todo"* — el flujo end-to-end funciona (pickup del item → tick auto-completa el objective → reward `dialog.set_var` aplicada → tracker pasa a `[x]` verde).
+
+**Qué entrega F2H53** (Bloques A-I, detalle completo en `HITOS.md`):
+- **Schema `.moodquest`** (Bloque A): `Quest::Asset` con objectives (Collect/Talk/Reach/CustomLua) + rewards (Item/Var/Lua). 21+6 tests del schema + AssetManager integration.
+- **AssetManager::loadQuest** (B): paridad con `loadItem` de F2H51. `QuestAssetId` + slot 0 sentinel + cache por path lógico.
+- **`QuestSystem` runtime** (C): singleton namespace con state machine (NotStarted → Active → Complete | Failed). `tick(am)` auto-evalúa predicates via `LuaEvaluator` inyectado. 28 tests.
+- **Quest Browser + Property Editor** (D): clones de F2H51 Item Browser + Property Editor, adaptados a quests. Plantillas Fetch/Talk/Reach/Custom Lua en `+ Nueva Quest`. ~40 i18n keys.
+- **Lua bindings tabla `quest`** (E): `start/complete/fail/objective_complete/state/is_active/snapshot/set_tracked/tracked/on_start/on_complete/on_fail`. AL REGISTRAR también instala el evaluator/executor del QuestSystem apuntando a la misma sol::state. 15 tests cubren integración runtime (Collect auto-completa con threshold; combo Talk+Collect).
+- **HUD Quest Tracker** (F): `drawObjectiveText` extiende con 2 modos por prioridad — Quest Tracker (header amarillo + objectives `[x]`/`[ ]`) vs Legacy F2H41 fallback. Widget name preservado `"objective_text"` para compat. Tick cableado en game loop después de `ItemPickupSystem` + `DialogInteractSystem`. **Shutdown fix** (Editor + Player): `QuestSystem::clearHooks()` + `Inventory::Hooks::clearAll()` ANTES de destruir el ScriptSystem evita SIGSEGV al cerrar.
+- **Quest Log panel** (G): widget HUD `quest_log_panel` (default OFF, tecla **J** togglea — convención RPG). Modal centrado con todos los quests activos + state badge + click para `set_tracked`.
+- **Persistencia `.moodsave` v3** (H): bumped con back-compat v1/v2. `SaveData.quests` (path lógico + state enum + objectiveDone bool[]) + `trackedQuestPath`. Nueva API `QuestSystem::restore(...)`. `exitPlayMode` resetea el QuestSystem.
+- **Sample shipado**: `assets/quests/quest_demo.moodquest` + `assets/scripts/quest_demo.lua` ejercita flujo end-to-end.
+- **77 tests nuevos**: 21 quest_asset + 6 AssetManager integration + 28 quest_system + 15 lua_bindings_quest + 4 restore + 3 save_load v3 back-compat. Suite **926/9705** verde.
+
+**Decisiones**:
+1. **Engine-grade strict**: motor SOLO maneja state machine + predicates declarativos. NO conoce "main"/"side" hardcoded (category es string libre). NO conoce "kill quest"/"fetch quest" hardcoded (los 3 predicate types reusan primitivas `inventory.count` y `dialog.has_var` de F2H48-52). Escape hatch `CustomLua` cubre cualquier predicate complejo.
+2. **Predicates como strings Lua, no AST**: el motor GENERA `inventory.count('items/x') >= 3` pero NO lo ejecuta — delega al `LuaEvaluator` inyectado por el script host. Mismo separation que F2H48 DialogSystem.
+3. **Identificación por path en persistencia (NO por id)**: paridad con `SavedInventory` (F2H51 I). Los `QuestAssetId` son volátiles entre runs por orden de `loadQuest` del AssetManager.
+4. **Re-start permitido tras Failed**: semántica retry. Bloqueado tras Active/Complete (consistencia: un quest es one-shot por design).
+
+---
+
+## 0bis. ACTUALIZACIÓN F2H51 cerrado (2026-05-12)
 
 **Sexto hito real de Sub-fase 2.5 cerrado — Inventario engine-grade (autoría + state + persistencia).**
 Tag: `v1.39.0-fase2-hito51`. Cita verbatim del dev al validar: *"lo demas va bien"* (después de fixear 3 issues UX: tooltip i18n + formato float + plantillas en "+ Nuevo Item").
@@ -319,7 +344,13 @@ Esto significa:
 
 ## 1. ¿Dónde estamos?
 
-**🚀 Fase 2 — F2H52 cerrado: Inventory runtime (pickup entities + HUD widget + Lua bindings + container split + renderer override).**
+**🚀 Fase 2 — F2H53 cerrado: Quest System engine-grade (schema + state machine + tick + Browser/Editor + Lua bindings + HUD Tracker + Quest Log + persistencia).**
+Tag: `v1.41.0-fase2-hito53`. Validado por dev *"funcionó todo"* tras tour del flujo end-to-end (pickup → objective tachado → reward aplicada).
+
+**🏁 Mecánica de quests para el jugador**: el dev escribe `.moodquest` en el editor → `quest.start(path)` desde Lua → tracker top-left muestra título + objectives `[ ]` → al satisfacerse el predicate (`inventory.count >= N` / `dialog.has_var`) el tick auto-tachea → al completar todos, reward aplicada (item/var/lua) + hook `on_complete` dispara. Tecla **J** abre Quest Log con todos los quests activos.
+
+**Anterior** (referencia histórica):
+F2H52 cerrado — Inventory runtime (pickup entities + HUD widget + Lua bindings + container split + renderer override).
 Tag: `v1.40.0-fase2-hito52`.
 Validado visualmente por dev *"todo funciona"* tras tour de los Bloques A-N + 3 rounds de bugfixes (mouse capture + drop offset). Cierra el split editor/runtime que F2H51 dejó abierto (auto-ría + state) — F2H52 entrega la mecánica end-to-end al jugador.
 

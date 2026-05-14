@@ -11,6 +11,51 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-14: F2H53 cierre — Quest System engine-grade (schema + state machine + tick + Browser/Editor + Lua + HUD + persistencia)
+
+**Contexto:** cierra el Bloque 2 (Quests) del `PLAN_SUBFASE_2_5.md`. Sub-fase 2.5 Bloque 1 (Inventario) ya estaba completo con F2H52; F2H53 abre y cierra el sistema de quests aprovechando las primitivas de F2H48 (dialog vars) y F2H52 (inventory bindings). Tour visual validado por dev: *"funcionó todo"*.
+
+**Decisión clave 1 — Predicates declarativos sobre primitivas existentes (NO sistema de eventos custom).** Los 3 predicate types (`Collect`, `Talk`, `Reach`) se compilan a strings Lua que consumen primitivas YA registradas: `inventory.count('items/x') >= N` (F2H52) y `dialog.has_var('foo')` (F2H48). El motor NO inventó un sistema de eventos paralelo "quest.event_listen(...)".
+
+- **Razón:** engine-grade strict. La cantidad de items en el inventario YA es queryable; las dialog vars YA son el event log del juego. Sumar un tercer mecanismo de eventos sería redundancia + más superficie de bug. El dev expresa cualquier condición complejas con `CustomLua` (escape hatch).
+- **Alternativas descartadas:** (a) Sistema de eventos pub/sub propio (`quest.on_event("kill_enemy", ...)`) — descartado: el motor no conoce "enemy"; sería otra capa de game-specific. (b) Predicates como C++ función (`std::function<bool(...)>`) — descartado: requeriría re-compilación cada vez que el dev cambia un predicate. Strings Lua tienen hot-reload gratis.
+- **Revisión:** si emerge un caso de uso que el `CustomLua` no cubre cómodamente (ej. "matar 5 enemigos de tipo X en menos de 30s"), bumpear el schema con un cuarto type. La mayoría de quest types en Skyrim/Witcher caen en alguno de los 4 actuales.
+
+**Decisión clave 2 — `LuaEvaluator` + `LuaExecutor` inyectables (NO sol::state directo en el motor).** El `QuestSystem` corre el `tick()` y necesita evaluar predicates + aplicar rewards-como-código-Lua. NO importa sol2 directamente. Tiene 2 `std::function` inyectados que el script host (LuaBindings) instala apuntando a su propia sol::state.
+
+- **Razón:** mismo patrón que `DialogSystem::setEvaluator/Executor` (F2H48). Permite que `mood_tests` testee el QuestSystem headless sin sol2 (los tests inyectan mocks). Mantiene el `engine/quest/` libre de incluir sol2 en su header.
+- **Lifetime trap descubierto en F2H53:** los hooks globales (`g_evaluator`, `g_onComplete`, etc.) capturan referencias/punteros a la `sol::state` del ScriptSystem. Si la state muere antes que los hooks (orden default de destrucción), al terminar el proceso `~std::function` destruye una `sol::function` colgante → `lua_unref` sobre VM muerto → SIGSEGV. **Fix**: llamar `QuestSystem::clearHooks()` + `Inventory::Hooks::clearAll()` ANTES de `m_scriptSystem.reset()` en `~EditorApplication` y `~PlayerApplication`. Mismo bug pattern que F2H52 J — ahora documentado como invariante de shutdown.
+
+**Decisión clave 3 — Identificación por path lógico en persistencia (NO por id).** El schema `.moodsave` v3 guarda `quests[].path` (`"quests/q_fetch.moodquest"`) en lugar del `QuestAssetId` numérico.
+
+- **Razón:** paridad con `SavedInventory` de F2H51 I. Los IDs son volátiles entre runs — dependen del orden de `loadQuest` del AssetManager (primero en cargarse = id 1, etc.). El path es estable mientras el archivo exista.
+- **Consecuencia:** si el dev borra un `.moodquest` entre save y load, ese quest aparece como "huérfano" en log warn y se skipea silencioso en restore. NO crash. Mismo trade-off que `SavedInventory`.
+
+**Decisión clave 4 — `QuestSystem::restore(...)` separado del lifecycle normal.** En lugar de re-usar `start()` + setear progreso, hay una API dedicada `restore(id, state, objectiveDone, am)` que:
+- Inserta directo al `g_active` sin chequear validez de transición.
+- NO dispara hooks (es restauración, no transición).
+- Trunca/padea `objectiveDone` si el asset cambió entre save y load.
+
+- **Razón:** semánticamente diferente. `start()` es "el jugador empieza un quest" (dispara cinematic, SFX, etc. via hooks); `restore()` es "el game state se está reconstruyendo" (silencioso). Mezclarlos llevaría a callbacks disparándose al cargar partida — UX espantosa.
+- **No expuesto a Lua:** sólo callable desde C++ (`SaveLoad::load → applyLoadedSave`). Si el dev hace `quest.start("...")` desde Lua, dispara los hooks normalmente.
+
+**Decisión clave 5 — Re-start permitido tras `Failed`, bloqueado tras `Active`/`Complete`.** Cuando el dev llama `quest.start(path)` y el quest ya está registrado, el comportamiento depende del state actual.
+
+- **Razón:** retry tras fallar es UX común en RPGs ("¡puedes intentar la misión otra vez!"). Re-start tras complete sería duplicar progreso (one-shot por design). Active doble es no-op evidente.
+- **Revisión:** si emerge un caso de uso para "repeatable quest" (daily quests, side jobs), agregar flag `repeatable` al schema y permitir re-start tras Complete cuando esté activado.
+
+**Decisión clave 6 — Tracker HUD reutiliza el widget `objective_text` (NO nuevo widget).** El widget `drawObjectiveText` (F2H41) ahora tiene 2 modos: Quest Tracker (preferido si hay tracked) vs Legacy text (fallback F2H41).
+
+- **Razón:** compatibilidad con scripts existentes que usen `hud.set_widget("objective_text", false)` o `hud.setObjective("...")`. El nombre del widget en el registry queda igual; sólo cambia el render interno según el state del QuestSystem.
+- **Alternativa descartada:** widget nuevo `quest_tracker` separado — implicaría que el dev tenga DOS widgets que pueden estar enabled simultáneamente y compitiendo por la misma posición top-left.
+
+**Decisión clave 7 — Quest Log panel como widget separado con toggle por tecla (NO ventana ImGui::Begin standalone).** El panel se dibuja con `ImDrawList` directo en el viewport overlay (paridad con `inventory_panel` de F2H52). Toggle por **J** (convención RPG Skyrim/Witcher "Journal").
+
+- **Razón:** consistencia con los demás widgets HUD. No queremos ventanas ImGui flotantes en Play Mode — el HUD es overlay no-interactivo via mouse capture. Click sobre quest = mouse no capturado en Play (porque el panel está en `widget_enabled["quest_log_panel"]` que el dev togglea con J y respeta `isInputBlocked`).
+- **Limitación v1:** sin scroll. Si hay más de ~10 quests visibles, los siguientes quedan fuera del panel. Migrar a ImGui::Begin + ScrollRegion cuando emerja necesidad.
+
+---
+
 ## 2026-05-12: F2H52 cierre — Inventory runtime (pickup + HUD + Lua + container split + renderer override)
 
 **Contexto:** cierra el Bloque 1 (Inventario) del `PLAN_SUBFASE_2_5.md`. F2H51 entregó autoría + state + persistencia; F2H52 cierra el lado runtime. Sub-fase 2.5 Bloque 1 ✅ completo.
