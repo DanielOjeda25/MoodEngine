@@ -81,6 +81,7 @@ add_executable(mood_tests
     test_primitive_meshes.cpp     # F2H52 D investigacion: winding cubo
     test_lua_bindings_inventory.cpp  # F2H52 Bloque E
     test_item_spawn.cpp           # F2H52 Bloque H5
+    test_quest_asset.cpp          # F2H53 Bloque A
 
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/Brush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/world/csg/BrushMesh.cpp
@@ -134,6 +135,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Dialog.cpp  # F2H48
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_AnimationClip.cpp  # F2H49
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Item.cpp  # F2H51
+    ${CMAKE_SOURCE_DIR}/src/engine/quest/QuestAsset.cpp                  # F2H53 Bloque A
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Animation.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Geometry.cpp
