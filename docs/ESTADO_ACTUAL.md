@@ -4,7 +4,37 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H56 cerrado (2026-05-14)
+## 0. ACTUALIZACIÓN F2H57 cerrado (2026-05-15)
+
+**Pivot temporal de Sub-fase 2.6 a UX del editor cerrado — Workflow "Crear + Convertir entidad" estilo Hammer / SFM + fix bug SIDE ortho + remove Demos del menú Ayuda.**
+Tag: `v1.44.0-fase2-hito57`. Validado por dev tras testing del flujo end-to-end. Cita verbatim: *"lo demas anda perfecto, me gusta como esta"* (tras el followup del modal SFM + welcome centering).
+
+**Qué entrega F2H57** (Bloques A-G + followup, detalle completo en `HITOS.md`):
+- **Bloque A — fix SIDE ortho**: `OrthoCamera::rightAxis()` para `SideZY` retornaba `{0,0,+1}` pero `glm::lookAt(eye=+X, target=-X, up=+Y)` produce camera right = `(0,0,-1)`. Flip de sign en una línea. Pan unaffected.
+- **Bloque B — "+ Crear Entidad" button** arriba del HierarchyPanel. Final UX (post-followup): click directo abre el modal SFM-style.
+- **Bloque C — context menu right-click** sobre entidad con "Cambiar tipo de entidad..." + "Eliminar".
+- **Bloque D — modal "Convertir entidad"**: 4 kits aditivos v1 (NPC con diálogo, Item pickeable, Luz puntual, Luz direccional). El modal NO se cierra al aplicar — permite stack de kits sobre la misma entidad. **Limitación v1**: el paso convert no es undoable (snapshot pre/post diferido). Edits individuales post-convert SÍ son undoable via `InspectorEditCommand` F2H32.
+- **Bloque E — eliminar Demos del menú Ayuda**: removidas entries del menú `Ayuda > Demos` en `MenuBar.cpp`. Approach minimal-risk: solo menu entries; `DemoSpawners_*.cpp` quedan como dead code para no romper helpers compartidos.
+- **Bloque F + followup — modal SFM-style mesh picker**: `renderPickFromLoadedMeshesModal()` itera `AssetManager::meshCount()` listando todos los meshes ya cargados (skip primitivos por prefix `__`). El modal incorpora dos botones de acción al pie: "Importar desde archivo..." (file picker del SO) y "Crear vacía (placeholder)". **Welcome modal**: F2H44/F2H50 demo buttons removidos + fix de centrado en pantallas grandes (>720p) — cambiado de `ImGuiCond_Appearing` a `ImGuiCond_Always` con `WorkPos + WorkSize/2`.
+- **Bloque G — cierre**.
+
+**Decisiones**:
+1. **Workflow SFM-style sobre Hammer puro**: el dev pidió ver primero los meshes ya importados antes que solo el file picker del SO. SFM cubre el caso común "ya tengo modelos, quiero reusarlos". El file picker queda como botón secundario dentro del mismo modal.
+2. **Modal único de entry sin popup intermedio**: click directo en `+ Crear Entidad` abre el modal — un solo punto de entrada para crear (proyecto / archivo / vacía). Menos clicks que un popup de selección previa.
+3. **Kits aditivos no-destructivos**: convertir agrega; quitar lo hace el dev manualmente vía Inspector. Más predecible que un modo destructivo con confirm.
+4. **Demos removal minimal-risk**: solo menu entries; los helpers quedan como dead code para no inflar la diff con cleanup que puede romper algo lateral.
+5. **Welcome ImGuiCond_Always**: el costo de recalcular center cada frame es despreciable y elimina la categoría completa de off-center bugs cuando la ventana cambia de tamaño.
+
+**Backlog post-F2H57** (anotado en memoria persistente, no scope de F2H57 ni F2H58):
+- Preview 3D del mesh seleccionado en el modal del picker (turntable rotation off-screen render — requiere FB nuevo). Pedido explícito del dev: *"a futuro me gustaria que haya una preview en 3D del elemento a importar"*.
+- Snapshot undoable del paso convert.
+- Drag-and-drop SO→viewport (workflow Unreal — complementa el botón).
+
+**Próximo hito**: **F2H58 — Color grading (LUT-based) + consolidación del panel Environment**. Plan en [`PLAN_HITO_F2H58.md`](PLAN_HITO_F2H58.md). Bloque A consolida los controles de bloom + SSAO + tonemap (que hoy viven en `InspectorPanel_Light.cpp` por accidente histórico) en un panel "Environment / Post-Process" dedicado al `EnvironmentComponent` — convención industria (Unity Volume / Unreal Post Process Volume / Godot WorldEnvironment). Bloques B-D agregan el efecto color grading propiamente: shader + pase LUT + sliders. Retomamos el plan de render polish que F2H57 pausó.
+
+---
+
+## 0bis. ACTUALIZACIÓN F2H56 cerrado (2026-05-14)
 
 **Segundo hito de Sub-fase 2.6 cerrado — SSAO (Ambient Occlusion / sombras de rincón) + per-scene settings.**
 Tag: `v1.43.0-fase2-hito56`. Validado por dev tras crear EnvironmentComponent vía demo + manipular sliders. Cita verbatim: *"el SSAO funciona bien"* — las esquinas y debajo de los objetos se oscurecen sutilmente al default; subiendo intensity a 3.0 el efecto se vuelve marcado y obvio.

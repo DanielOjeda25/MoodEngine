@@ -11,6 +11,40 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-15: F2H57 cierre — Workflow Crear+Convertir entidad estilo Hammer/SFM
+
+**Contexto:** pivot temporal de Sub-fase 2.6 (render polish) a UX del editor entre F2H56 y F2H58, motivado por 3 bugs UX detectados durante el tour visual de F2H56. Tag `v1.44.0-fase2-hito57`. Dev validó: *"lo demas anda perfecto, me gusta como esta"* tras el followup del modal SFM + welcome centering.
+
+**Decisión clave 1 — Workflow SFM-style sobre Hammer puro.** El plan original era abrir directo el file picker del SO (convención Hammer Editor). El dev rechazó esa UX cuando vio la primera versión: *"creo que el crear entidad deberia darme la opcion de usar un mesh que este dentro del sistema, por ejemplo el hammer usa el modelo base de freeman… te cuesta leer lo que hay internamente"*. Pivot a Source Film Maker: el modal muestra primero la lista de meshes ya importados al proyecto, con botón secundario para importar uno nuevo desde el SO.
+
+- **Razón:** el caso común del dev no es "tengo un FBX nuevo en mi escritorio", es "tengo 10 FBX ya en mi proyecto, quiero reusarlos". SFM optimiza ese flujo. El file picker del SO sigue accesible pero deja de ser el path por default.
+- **Alternativa descartada:** popup con 3 opciones (Vacía / Desde modelo en el proyecto / Desde archivo del SO) antes de abrir el modal. El dev pidió eliminarla: *"que directamente al dar click en crear entidad, ya habra el modal interno"*. La razón es UX: 1 click directo al modal es menos fricción que click → popup → click → modal.
+- **Final UX:** click en `+ Crear Entidad` → modal SFM con lista de meshes + dos botones de acción al pie ("Importar desde archivo..." + "Crear vacía (placeholder)") + "Cerrar". Punto único de entrada.
+
+**Decisión clave 2 — Kits del modal Convertir son aditivos no-destructivos.** Convertir una entidad agrega los componentes del kit sin remover los existentes. Si la entidad ya tiene `DialogComponent`, el botón "NPC con diálogo" queda disabled.
+
+- **Razón:** modo destructivo con confirm ("te voy a sacar X / Y / Z componentes — ¿confirmás?") es más predecible pero también más annoying. Aditivo permite stack: el dev puede aplicar "Item pickeable" + "Luz puntual" + "NPC con diálogo" en la misma entidad sin cerrar el modal entre clicks.
+- **Trade-off de undo:** el paso convert NO es undoable en v1. Snapshot pre/post de componentes requeriría serializar la entidad completa (vía `EntitySerializer::serialize`) antes y restaurar el JSON en undo. Diferido por scope. **Mitigación:** edits individuales post-convert SÍ son undoable via `InspectorEditCommand` F2H32, así que sacar manualmente un componente del kit que aplicaste por error sigue siendo trivial.
+- **Revisión:** si emergen reportes de "apliqué un kit por error y tuve que sacar 3 componentes a mano", priorizar snapshot undoable como sub-hito puntual.
+
+**Decisión clave 3 — Demos removal minimal-risk.** Eliminamos solo las entries del menú `Ayuda > Demos` en `MenuBar.cpp` (~80 líneas). Los `DemoSpawners_*.cpp` quedan como dead code en `CMakeLists.txt` para no romper helpers compartidos como `ensureDemoIntroDialogExists`.
+
+- **Razón:** el cleanup completo (borrar los .cpp + extraer helpers compartidos a sitio nuevo) infla la diff con cambios que pueden romper algo lateral. Engine-grade prioriza minimizar regresión por hito. El dead code no tiene cost runtime — solo compila y queda sin caller.
+- **Alternativa diferida:** sub-hito de cleanup completo de los DemoSpawners + extracción de los helpers a `EditorHelpers` o equivalente, una vez confirmado que ningún consumer interno los necesita.
+- **Revisión:** flagueado como tech-debt en `MoodEngine`. Si emerge demanda (alguien intenta agregar otro demo o un test rompe), atacar entonces.
+
+**Decisión clave 4 — Welcome modal recentra cada frame (`ImGuiCond_Always` + `WorkPos + WorkSize/2`).** Pre-F2H57 el welcome usaba `ImGuiCond_Appearing` con `viewport->GetCenter()`. En pantallas >720p el viewport del primer frame todavía no tiene su tamaño definitivo → modal queda off-center.
+
+- **Razón:** el costo de recalcular center cada frame es despreciable (suma de 2 floats + dos puntos flotantes) y elimina la categoría completa de bugs de "modal off-center cuando la ventana del OS cambia de tamaño".
+- **WorkPos + WorkSize sobre `GetCenter()`:** WorkSize excluye la menubar — sin esto el modal queda visualmente alto (porque el GetCenter incluye el espacio de menubar). WorkPos cubre el caso de multi-viewport ImGui (cuando un docking layout mueve el work area).
+- **Aplicabilidad a otros modales:** si emerge el mismo bug en convert/pick mesh modals, repetir el mismo patrón. v1 los deja con `ImGuiCond_Appearing` porque arrancan después del welcome (viewport ya estable).
+
+**Lecciones cruzadas para futuros pivots UX:**
+- **Tour visual del dev > validación headless cuando se trata de UX**: las 3 issues que motivaron F2H57 ninguna era detectable por suite de tests — emergieron porque el dev usó el editor por 20 minutos para crear una escena de testing del bloom de F2H55. Pattern: priorizar tour visual como criterio de aceptación de cierres de hitos que tocan render/editor.
+- **El plan inicial del hito no sobrevive al primer feedback real**: PLAN_HITO_F2H57.md draft tenía Hammer file picker como Bloque B. Tras la primera demo el dev pidió SFM-style + popup intermedio + después pidió eliminar el popup. El plan se refinó en flight. Engine-grade no significa "spec inmutable" — significa "cada cambio del plan se documenta en DECISIONS".
+
+---
+
 ## 2026-05-14: F2H56 cierre — SSAO + depth-texture FB + per-scene settings
 
 **Contexto:** segundo hito de **Sub-fase 2.6 — Render polish** (F2H55 = bloom). Continúa el orden de impacto visual planeado: bloom → AO → color grading → god rays. Tag `v1.43.0-fase2-hito56`. Dev validó: *"el SSAO funciona bien"* — esquinas y debajo de objetos se oscurecen sutilmente al default; subiendo intensity a 3.0 el efecto se vuelve marcado.
