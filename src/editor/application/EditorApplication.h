@@ -241,6 +241,8 @@ private:
     void pushCreatedEntities(std::vector<Entity> created, std::string label);
     void processSavePrefabRequest();
     void processCreateEntityFromModelRequest();  // F2H57
+    void processCreateEntityPlaceholderRequest(); // F2H57 followup
+    void renderPickFromLoadedMeshesModal();       // F2H57 followup
     void renderConvertEntityModal();             // F2H57 Bloque D
     void processViewportTextureDrop();
     void processViewportMeshDrop();
@@ -732,6 +734,8 @@ private:
     // modal "Convertir entidad". `entt::null` cuando el modal no esta
     // activo. Latched cuando se consume el request del context menu.
     entt::entity m_convertModalActiveTarget{entt::null};
+    // F2H57 followup: flag del modal "Elegir mesh del proyecto" estilo SFM.
+    bool m_pickMeshModalActive = false;
     // True cuando se modifico el estado desde el ultimo save. El titulo de
     // la ventana muestra " *" en ese caso.
     bool m_projectDirty = false;

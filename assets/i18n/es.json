@@ -122,7 +122,15 @@
 
   "editor.panel.hierarchy.scene_not_injected": "Escena no inyectada",
   "editor.panel.hierarchy.create_entity": "Crear Entidad",
-  "editor.panel.hierarchy.create_entity_tooltip": "Crea una entidad nueva desde un modelo 3D (.fbx/.obj/.gltf/.glb). Al spawnear, podes editar su tipo con click derecho.",
+  "editor.panel.hierarchy.create_entity_tooltip": "Crea una entidad nueva. Al spawnear, podes editar su tipo con click derecho.",
+  "editor.panel.hierarchy.create_entity.placeholder": "Vacia (cubo placeholder)",
+  "editor.panel.hierarchy.create_entity.from_file": "Desde archivo del SO...",
+  "editor.panel.hierarchy.create_entity.from_project": "Desde modelo en el proyecto...",
+  "editor.pick_mesh_modal.title": "Elegir modelo cargado en el proyecto",
+  "editor.pick_mesh_modal.subtitle": "Listado de meshes ya importados. Click para spawnear una entidad con ese modelo.",
+  "editor.pick_mesh_modal.empty": "No hay modelos importados en el proyecto. Usa 'Importar desde archivo' abajo para agregar uno.",
+  "editor.pick_mesh_modal.import_from_file": "Importar desde archivo...",
+  "editor.pick_mesh_modal.empty_placeholder": "Crear vacia (placeholder)",
   "editor.panel.hierarchy.ctx.change_type": "Cambiar tipo de entidad…",
   "editor.panel.hierarchy.ctx.delete": "Eliminar",
 

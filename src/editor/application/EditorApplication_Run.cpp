@@ -358,6 +358,8 @@ int EditorApplication::run() {
         processSpawnAudioSourceRequest();
         processSavePrefabRequest();
         processCreateEntityFromModelRequest();  // F2H57
+        processCreateEntityPlaceholderRequest();  // F2H57 followup
+        renderPickFromLoadedMeshesModal();        // F2H57 followup
 
         // F2H57 Bloque C: menu contextual del panel Escena puede
         // disparar el delete sin pasar por la tecla del teclado.

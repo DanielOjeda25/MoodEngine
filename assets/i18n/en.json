@@ -122,7 +122,15 @@
 
   "editor.panel.hierarchy.scene_not_injected": "Scene not injected",
   "editor.panel.hierarchy.create_entity": "Create Entity",
-  "editor.panel.hierarchy.create_entity_tooltip": "Create a new entity from a 3D model (.fbx/.obj/.gltf/.glb). After spawn, right-click the entity to change its type.",
+  "editor.panel.hierarchy.create_entity_tooltip": "Create a new entity. After spawn, right-click the entity to change its type.",
+  "editor.panel.hierarchy.create_entity.placeholder": "Empty (placeholder cube)",
+  "editor.panel.hierarchy.create_entity.from_file": "From OS file...",
+  "editor.panel.hierarchy.create_entity.from_project": "From model in project...",
+  "editor.pick_mesh_modal.title": "Pick a model loaded in the project",
+  "editor.pick_mesh_modal.subtitle": "List of meshes already imported. Click to spawn an entity with that model.",
+  "editor.pick_mesh_modal.empty": "No models imported in the project. Use 'Import from file' below to add one.",
+  "editor.pick_mesh_modal.import_from_file": "Import from file...",
+  "editor.pick_mesh_modal.empty_placeholder": "Create empty (placeholder)",
   "editor.panel.hierarchy.ctx.change_type": "Change entity type…",
   "editor.panel.hierarchy.ctx.delete": "Delete",
 

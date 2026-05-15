@@ -370,12 +370,16 @@ void EditorUI::drawWelcomeModal() {
         ImGui::OpenPopup("MoodEngine - bienvenida");
     }
 
-    // Centrar el modal en la ventana principal.
+    // Centrar el modal cada frame usando WorkPos + WorkSize/2 (excluye
+    // menubar). ImGuiCond_Always en vez de Appearing: en pantallas >720p
+    // el viewport del primer frame todavia no tiene el tamano final y el
+    // centrado inicial queda off-center; recalculando cada frame el modal
+    // sigue centrado aunque la ventana del OS se redimensione.
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(
-        ImVec2(viewport->GetCenter().x, viewport->GetCenter().y),
-        ImGuiCond_Appearing,
-        ImVec2(0.5f, 0.5f));
+    const ImVec2 center(
+        viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+        viewport->WorkPos.y + viewport->WorkSize.y * 0.5f);
+    ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(520.0f, 0.0f), ImGuiCond_Appearing);
 
     constexpr ImGuiWindowFlags flags =
@@ -398,31 +402,10 @@ void EditorUI::drawWelcomeModal() {
             ImGui::CloseCurrentPopup();
         }
 
-        // F2H44: shortcut para devs nuevos. Crea proyecto vacio + spawnea
-        // Fox animado en una sola accion. Asi la primera vista NO es
-        // dockspace vacio, sino motor en accion.
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
-        if (ImGui::Button(I18n::T("editor.welcome.demo_map").c_str(),
-                            ImVec2(490.0f, 32.0f))) {
-            requestOpenDemoMap();
-            ImGui::CloseCurrentPopup();
-        }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("%s",
-                I18n::T("editor.welcome.demo_map_hint").c_str());
-        }
-
-        // F2H50 Bloque C: segundo demo button — narrativa.
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
-        if (ImGui::Button(I18n::T("editor.welcome.demo_narrative").c_str(),
-                            ImVec2(490.0f, 32.0f))) {
-            requestOpenNarrativeDemo();
-            ImGui::CloseCurrentPopup();
-        }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("%s",
-                I18n::T("editor.welcome.demo_narrative_hint").c_str());
-        }
+        // F2H57 Bloque E followup: botones de demos (F2H44 Fox animado,
+        // F2H50 narrativa) eliminados del welcome modal. El dev arranca
+        // con proyecto vacio y construye via "+ Crear Entidad" en el
+        // panel Escena + right-click "Cambiar tipo" (workflow Hammer).
 
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
         ImGui::Separator();

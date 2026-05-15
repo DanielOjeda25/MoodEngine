@@ -31,18 +31,14 @@ void HierarchyPanel::onImGuiRender() {
         return;
     }
 
-    // F2H57: boton "+ Crear Entidad" arriba de la lista (workflow
-    // Hammer Editor). Click -> file picker del SO -> spawnea entidad
-    // con MeshRenderer apuntando al modelo elegido. EditorApplication
-    // consume el request y maneja el file dialog + carga del asset.
+    // F2H57: boton "+ Crear Entidad" — click directo abre el modal SFM-style
+    // con la lista de meshes ya importados al proyecto. Convencion Source
+    // Film Maker: el dev ve primero lo que tiene y desde ese modal puede
+    // importar uno nuevo desde archivo o crear una entidad vacia.
     const std::string createLabel = std::string("+ ") +
         I18n::T("editor.panel.hierarchy.create_entity");
     if (ImGui::Button(createLabel.c_str())) {
-        m_ui->requestCreateEntityFromModel();
-    }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("%s",
-            I18n::T("editor.panel.hierarchy.create_entity_tooltip").c_str());
+        m_ui->requestPickFromLoadedMeshes();
     }
     ImGui::Separator();
 

@@ -390,6 +390,30 @@ public:
         return r;
     }
 
+    /// @brief F2H57 followup: spawnea una entidad con mesh placeholder
+    ///        (cubo missing-mesh del AssetManager) en world origin. No
+    ///        abre file picker. El dev luego puede cambiar el mesh via
+    ///        Inspector o pasar a "Cambiar tipo" para convertirla a NPC
+    ///        / luz / item / etc. Convencion Hammer: "Freeman model" o
+    ///        equivalente como punto de partida sin friccion.
+    void requestCreateEntityPlaceholder() { m_createEntityPlaceholderRequested = true; }
+    bool consumeCreateEntityPlaceholderRequest() {
+        const bool r = m_createEntityPlaceholderRequested;
+        m_createEntityPlaceholderRequested = false;
+        return r;
+    }
+
+    /// @brief F2H57 followup: abre un modal estilo SFM que lista los
+    ///        meshes ya cargados en el AssetManager. El dev elige uno
+    ///        de la lista y spawnea una entidad con ese mesh, sin
+    ///        pasar por el file picker del SO.
+    void requestPickFromLoadedMeshes() { m_pickFromLoadedMeshesRequested = true; }
+    bool consumePickFromLoadedMeshesRequest() {
+        const bool r = m_pickFromLoadedMeshesRequested;
+        m_pickFromLoadedMeshesRequested = false;
+        return r;
+    }
+
     /// @brief F2H57 Bloque C: request para abrir el modal "Convertir
     ///        entidad" sobre la entidad pasada. El modal muestra los
     ///        kits disponibles (NPC con dialogo / Player / Item /
@@ -735,6 +759,8 @@ private:
     bool m_spawnPhysicsBoxRequested = false;
     bool m_savePrefabRequested = false;
     bool m_createEntityFromModelRequested = false;  // F2H57
+    bool m_createEntityPlaceholderRequested = false; // F2H57 followup
+    bool m_pickFromLoadedMeshesRequested = false;    // F2H57 followup
     bool m_convertModalRequested = false;            // F2H57 Bloque C
     entt::entity m_convertModalTarget{entt::null};   // F2H57 Bloque C
     bool m_deleteSelectedRequested = false;          // F2H57 Bloque C

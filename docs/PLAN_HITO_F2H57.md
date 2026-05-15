@@ -1,104 +1,145 @@
-# PLAN HITO F2H57 — Workflow de creación de entidades (Hammer-style) + remove Demos + fix bug SIDE ortho
+# PLAN HITO F2H57 — Workflow "Crear + Convertir entidad" estilo Hammer + fix bug SIDE ortho + remove Demos
 
 > **Estado**: DRAFT pendiente aprobación del dev (2026-05-14).
 > **Tag previsto**: `v1.44.0-fase2-hito57`.
-> **Origen**: durante el tour visual de F2H56 el dev detectó 3 problemas UX del editor:
-> 1. No hay un botón claro para crear entidades — el workflow actual obliga a spawn vía Demos del menú Ayuda, que son muleta. El dev pidió un workflow estilo **Hammer Editor (Source Engine)**: botón "Create Entity" → elegir tipo + importar modelo opcional → editar propiedades en Inspector.
-> 2. La vista ortográfica **SIDE (ZY) dibuja brushes con eje invertido** — arrastrar izquierda-a-derecha mapea al revés.
-> 3. Los **Demos** del menú Ayuda son muletas — una vez exista el workflow real de creación de entidades, eliminarlos para que el editor se comporte como un editor decente.
+> **Origen**: durante el tour visual de F2H56 el dev pidió un workflow estilo Hammer Editor para crear entidades + fixear el bug del SIDE ortho + eliminar los Demos del menú Ayuda.
 >
-> F2H57 es un **pivot temporal de la Sub-fase 2.6 (render polish) a UX del editor**. Después de cerrar F2H57, retomamos el plan original con F2H58 (color grading) y F2H59 (god rays).
+> F2H57 es un **pivot temporal de la Sub-fase 2.6 (render polish) a UX del editor**. Después de cerrar F2H57, retomamos el plan con F2H58 (color grading) y F2H59 (god rays).
 
 ---
 
-## 🎮 Preguntas para el dev (en mecánicas — leer esto primero)
+## 🎮 Mecánicas del flujo (lo que vivís como dev)
 
-Antes de tocar código, confirmá / ajustá estas 4 cosas:
+El workflow Hammer Editor en mecánicas, ajustado al feedback del 2026-05-14:
 
-### 1. ¿Dónde aparece el botón "Create Entity"?
+### Paso 1 — Crear
 
-Hammer tiene el botón en el toolbar lateral. Algunas opciones:
+Hay un botón **"+ Crear Entidad"** arriba del panel Escena (también accesible desde menú `Mapa > Crear Entidad…`). Click → se abre el **file picker del SO** → elegís un modelo (`.fbx`, `.obj`, `.gltf`) → spawna en el viewport una entidad-modelo con:
+- `TransformComponent` posicionada al centro de la cámara.
+- `MeshRenderer` apuntando al modelo elegido (importado al toque al asset browser si no está ya cargado).
+- Nombre derivado del filename (`npc.fbx` → entidad "npc").
 
-- **A. En el panel "Escena"** (lo que antes se llamaba Hierarchy): un botón `+ Crear Entidad` arriba de la lista de entidades. Pros: lugar natural — donde ves la lista de entidades es donde las creás. Contras: hay que abrir el panel para usarlo.
-- **B. En la top-toolbar del workspace activo**: un botón siempre visible junto a los demás. Pros: discoverable sin abrir paneles. Contras: la top-toolbar puede llenarse de botones.
-- **C. En el menú Mapa**: `Mapa > Crear Entidad…`. Pros: convención de menús. Contras: menos discoverable que un botón.
-- **D. Las tres cosas**: botón en Escena + botón en toolbar + entry en menú.
+**Al spawnear ya queda seleccionada** + Inspector enfocado en ella. El dev la posiciona con el gizmo a gusto.
 
-**Propuesta: A + C** (botón en panel Escena + entry en menú Mapa). Cubre discoverability + UX clásico.
+### Paso 2 — Convertir (transformar en otra cosa)
 
-### 2. ¿Cómo elegís el tipo de entidad?
+**Click derecho sobre la entidad** (en el panel Escena O en el viewport directamente, ambos paths) → menú contextual con opciones:
+- **Cambiar tipo de entidad…** → abre modal "Convertir entidad".
+- Renombrar.
+- Duplicar.
+- Eliminar (ya existía).
+- (eventualmente otros: Move to layer, etc.)
 
-Al hacer click en "Create Entity", se abre un popup. ¿Qué tipos ofrecemos al primer corte?
+El **modal "Convertir entidad"** te muestra una lista de "kits" (presets de componentes) que podés aplicar a la entidad:
 
-Propuesta de tipos:
-- **Vacía** — entidad solo con Transform. El dev agrega componentes después.
-- **Mesh** — entidad con Transform + MeshRenderer. Te pide elegir un .fbx/.obj/.gltf del proyecto (o importarlo en el momento).
-- **Luz direccional** (sol).
-- **Luz puntual** (point light).
-- **Cámara** — entidad cámara editable.
-- **Player** — entidad con CharacterController + Camera child (kit del MoodPlayer).
-- **NPC con diálogo** — entidad con Trigger + DialogComponent.
-- **Item pickeable** — entidad con ItemPickupComponent (F2H52).
-- **Quest runner** — entidad vacía + ScriptComponent placeholder para correr quests.
+- **Vacía (sólo Transform)** — vuelve a la entidad básica, quita componentes extra.
+- **Modelo decorativo** — Transform + MeshRenderer (default al crear).
+- **NPC con diálogo** — agrega `TriggerComponent` + `DialogComponent` (te pide elegir un `.mooddialog`).
+- **Player** — Transform + Mesh + `CharacterController` + Camera child (kit de F2H30/F2H31).
+- **Item pickeable** — agrega `ItemPickupComponent` (F2H52) — te pide elegir un `.mooditem`.
+- **Quest runner** — agrega `ScriptComponent` apuntando a un .lua placeholder con `quest.start(...)`.
+- **Cámara** — convierte a entidad cámara.
+- **Luz puntual** — agrega `LightComponent` tipo Point.
+- **Luz direccional** — agrega `LightComponent` tipo Directional + `casts shadows = on` por default.
 
-**Propuesta**: los 9 tipos arriba, con un icono cada uno. Más de eso es overload — el dev siempre puede crear "Vacía" y armar componentes a mano.
+El modal te muestra **qué componentes va a agregar / quitar** antes de confirmar — el dev decide. Click "Aplicar" → la entidad muta + se guarda en la escena dirty. **Undo del cambio queda disponible** vía Ctrl+Z (reaprovechando `HistoryStack` F2H27/32).
 
-### 3. ¿Importar modelo "en el momento" o solo elegir del proyecto?
+### Paso 3 — Bugs reactivos + cleanup
 
-Hammer permite agregar modelos al momento de crear la entidad (te abre un file picker). Otra opción: el dev primero importa el .fbx al asset browser, después crea una entidad Mesh y elige el asset ya cargado.
-
-- **Opción A — Solo elegir del proyecto**: el dev importa los assets primero (panel Asset Browser), después crea entidades reusando esos assets. Workflow Unity/Unreal.
-- **Opción B — Importar al momento**: el botón "Mesh" abre file picker del SO, el .fbx se importa Y se agrega a la nueva entidad en un paso. Workflow Hammer.
-- **Opción C — Ambas**: dropdown con "Elegir del proyecto…" o "Importar nuevo…".
-
-**Propuesta: C** — flexibilidad sin costo, el dev elige según contexto.
-
-### 4. ¿Qué pasa con los Demos del menú Ayuda?
-
-Hoy hay varios demos (cubo PBR, escena narrativa, stress test, etc.). El dev quiere eliminarlos.
-
-- **Opción A — Eliminar todos los Demos del menú Ayuda y los handlers**.
-- **Opción B — Eliminar los Demos de "scene poblada" pero MANTENER los que crean un solo asset útil** (cubo PBR de testing, etc.).
-- **Opción C — Mover los Demos a "Plantillas de escena"**: en el popup Create Entity, agregar al final un dropdown "Plantillas" con las escenas demo como punto de partida (player solo, NPC solo, etc.). Útil si el dev quiere arrancar de algo más que vacío.
-
-**Propuesta: A** (eliminar todo). Si más adelante emerge demanda de "plantilla rápida", reintroducir como opción del popup Create Entity.
-
-### Mecánicas que F2H57 entrega (resumen)
-
-1. Botón "+ Crear Entidad" arriba del panel Escena.
-2. Click → popup con 9 tipos de entidad. Elegís uno + nombre + (opcional) modelo.
-3. Entidad spawnea en el viewport en posición central de la cámara.
-4. Inspector queda focalizado en la nueva entidad — editás propiedades de cada componente.
-5. Bug SIDE ortho fixeado: arrastrar izquierda-a-derecha en la vista lateral mapea correctamente.
-6. Menú **Ayuda > Demos** eliminado. Para arrancar una escena nueva, usás el botón "+ Crear Entidad" como en Hammer / Unity / Unreal.
-
-Cuando confirmes las 4 preguntas, arranco con el Bloque A.
+- **Bug SIDE ortho**: arrastrar izquierda-a-derecha en la vista lateral (ZY) dibuja brushes con eje invertido. Fix puntual en `OrthoViewportPanel.cpp`.
+- **Eliminar Demos del menú Ayuda**: una vez existe el workflow real, los Demos son muleta innecesaria. Borrar entries + handlers + helpers asociados. Mantener los assets útiles que generaban (`assets/dialogs/demo_intro.mooddialog`, etc.) hasta que el dev confirme que no los usa.
 
 ---
 
-## Bloques de ejecución (DRAFT — refinable post-confirmación)
+## 🎯 Preguntas concretas para confirmar antes de arrancar
 
-### Bloque A — Fix bug SIDE ortho (reactive fix, pre-requisito chico)
+### Pregunta 1 — ¿El file picker arranca de "Assets del proyecto" o del filesystem del SO?
 
-Investigación + fix puntual en `OrthoViewportPanel.cpp`. Probable causa: signo invertido en la conversión screen-coord → world-coord del eje Z. ~1h.
+- **A. Filesystem del SO** (Hammer-style): el file picker abre el SO normal — el dev navega a `npc.fbx` en cualquier carpeta de su PC, el motor lo importa automáticamente a `assets/meshes/` del proyecto si no está ya. Workflow rápido para drop de assets nuevos.
+- **B. Asset Browser del proyecto** (Unity-style): popup que muestra solo los modelos ya importados al proyecto. Si el dev quiere un modelo nuevo, primero lo importa al Asset Browser.
 
-### Bloque B — Popup "Create Entity" + 9 tipos hardcoded
+**Propuesta: A** — pega con el workflow Hammer que mencionaste. El usuario espera que "Crear Entidad" sea un atajo desde cualquier filename.
 
-Nuevo modal ImGui `CreateEntityPopup.{h,cpp}` con grid de tipos + input de nombre + dropdown "Modelo (opcional)" para tipo Mesh. Spawna entidad en `Scene` con los componentes apropiados. ~3h.
+### Pregunta 2 — Click derecho funciona en el panel Escena Y en el viewport, o solo en uno?
 
-### Bloque C — Botón "+ Crear Entidad" en panel Escena + entry en menú Mapa
+**Propuesta: ambos** — discoverability. Mismo menú contextual; ambos disparan el modal Convertir.
 
-`HierarchyPanel.cpp` (o como se llame ahora — "Escena") gana un botón arriba que dispara el popup. `MenuBar.cpp` gana entry `Mapa > Crear Entidad…`. ~1h.
+### Pregunta 3 — Si la entidad ya tiene componentes (ej. ya era NPC con DialogComponent), ¿el modal los preserva o los reemplaza?
 
-### Bloque D — Eliminar Demos del menú Ayuda
+Hay 2 modos posibles:
+- **A. Aditivo**: convertir "Modelo decorativo" → "NPC con diálogo" agrega Trigger+Dialog sin tocar Transform/Mesh. Convertir "NPC" → "Vacía" quita TODO menos Transform.
+- **B. Destructivo confirmando**: el modal muestra "Te voy a sacar X / Y / Z componentes — ¿confirmás?" cada vez.
 
-Remove menu entries + handlers de `DemoSpawners_*.cpp` (Basic / Drop / Stress). Cleanup de helpers asociados (`ensureDemoIntroDialogExists`, etc.). Suite tests si alguno depende — actualizar. ~1h.
+**Propuesta: A con preview** — al elegir un kit, el modal te muestra qué componentes quedan (verde = se mantiene, amarillo = se agrega, rojo = se quita). Click Aplicar ejecuta. Más predecible que un confirm.
 
-### Bloque E — Validación visual
+### Pregunta 4 — Eliminar Demos: ¿todos o algunos?
 
-Dev abre proyecto vacío → click + Crear Entidad → elige Mesh → spawna cubo. Inspector edita. Bug SIDE confirmado fixeado. Menú Ayuda sin Demos. ~10 min.
+- **A. Todos**: borrar el menú "Ayuda > Demos" entero + todos los `DemoSpawners_*.cpp`.
+- **B. Mantener el demo narrativo** porque tiene assets útiles (NPC + diálogo de ejemplo) — pero moverlo a "Plantillas de escena" si emerge.
 
-### Bloque F — Cierre
+**Propuesta: A** — eliminar todo. Los assets que los demos creaban quedan en el proyecto (`assets/dialogs/demo_intro.mooddialog` etc.) — no se borran. Solo eliminamos el código que los regeneraba on-demand. Si el dev quiere "una escena narrativa de arranque" después, lo agregamos como template en el modal Convertir.
+
+---
+
+## Filosofía
+
+**El workflow del editor debe ser predecible para alguien que viene de Hammer / Unity / Unreal.** El dev no está aprendiendo MoodEditor en abstracto — está extendiendo su mental model de editores que ya conoce. Apartarse de las convenciones (right-click → properties, file picker para drop rápido) cuesta fricción.
+
+**Engine-grade preservado**: los "kits" del modal Convertir NO son tipos de entidad fijos del motor — son **presets de componentes** del editor. El motor sigue tratando entidades como bolsas de componentes; el editor le agrega azúcar UX para que el dev no arme NPCs componente-por-componente.
+
+---
+
+## Bloques de ejecución (DRAFT — refinable post-confirmación de las 4 preguntas)
+
+### Bloque A — Fix bug SIDE ortho (pre-requisito chico, reactive fix)
+
+Investigación + fix puntual en `OrthoViewportPanel.cpp`. Probable causa: signo invertido en la conversión screen-coord → world-coord del eje Z en la vista lateral. Repro con tour antes de fixear para confirmar. ~1h.
+
+### Bloque B — "+ Crear Entidad" button + file picker → entidad-modelo
+
+- Botón nuevo en `HierarchyPanel.cpp` (panel "Escena") arriba de la lista de entidades.
+- Menú `Mapa > Crear Entidad…` entry en `MenuBar.cpp`.
+- Click → abrir file picker del SO (reuso de `portable_file_dialogs`, ya en deps via CPM).
+- Importar el modelo al `AssetManager::loadMesh` si no está cargado.
+- Spawnar entidad nueva con Transform + MeshRenderer.
+- Seleccionar la nueva entidad + focalizar Inspector.
+
+~2-3h.
+
+### Bloque C — Menú contextual right-click (panel Escena + viewport)
+
+- `HierarchyPanel.cpp`: agregar `ImGui::BeginPopupContextItem` por entidad.
+- Viewport: detectar click derecho sobre entidad seleccionable (ya hay raycast del gizmo F2H13 + tooltip handler — reusar).
+- Menu items: Cambiar tipo… / Renombrar / Duplicar / Eliminar.
+- Renombrar / Duplicar / Eliminar: reusan comandos existentes (`CreateEntityCommand`, `DeleteEntityCommand` de F2H27/32).
+
+~2h.
+
+### Bloque D — Modal "Convertir entidad"
+
+- Nuevo `ConvertEntityModal.{h,cpp}` (popup ImGui).
+- Lista de 9 kits con icono + descripción corta + lista de componentes que aplica.
+- Preview de qué componentes se mantienen / agregan / quitan al elegir un kit.
+- File picker secundario para los kits que lo necesitan (.mooddialog para NPC, .mooditem para Item).
+- Click Aplicar: ejecuta un `ConvertEntityCommand` nuevo en el HistoryStack (undoable).
+
+~3-4h.
+
+### Bloque E — Eliminar Demos del menú Ayuda
+
+- Remove menu entries en `MenuBar.cpp` (sección Ayuda > Demos).
+- Remove handlers en `EditorApplication_Run.cpp` (consumers de los Request flags).
+- Remove `DemoSpawners_Basic.cpp`, `DemoSpawners_Drop.cpp`, `DemoSpawners_Stress.cpp`.
+- Cleanup de helpers (`ensureDemoIntroDialogExists`, etc.) — si algún kit del modal Convertir los reusaba, mover a helper compartido.
+- Tests: si algún test del editor referencia los Demos, ajustar / eliminar.
+
+~1h.
+
+### Bloque F — Validación visual
+
+Dev abre proyecto vacío → `+ Crear Entidad` → elige `npc.fbx` → spawna → Inspector. Click derecho sobre la entidad → Cambiar tipo → "NPC con diálogo" → elige `.mooddialog` → entidad muta. Play → la entidad funciona como NPC. Vista SIDE ortho dibuja correctamente. Menú Ayuda sin Demos. ~15 min.
+
+### Bloque G — Cierre
 
 HITOS + ESTADO + DECISIONS + plan archivado + tag. ~30 min.
 
@@ -106,34 +147,35 @@ HITOS + ESTADO + DECISIONS + plan archivado + tag. ~30 min.
 
 ## Total estimado
 
-**6 bloques A-F, ~6-7h**. Hito mediano UX.
+**7 bloques A-G, ~10-12h**. Hito mediano-grande UX (más grande que F2H56 porque toca múltiples paneles + introduce el modal y los kits).
 
 ---
 
 ## Criterios de aceptación
 
-1. Proyecto nuevo + click "+ Crear Entidad" + elegir Mesh + cargar .fbx → cubo spawnea visible en viewport.
-2. Crear entidad de cada uno de los 9 tipos sin crash.
-3. Vista SIDE ortho dibuja brushes en la dirección correcta (arrastrar izq-der genera brush en world X+ correctamente).
-4. Menú Ayuda sin Demos.
-5. Crear/eliminar entidades múltiples sin leak / regresión.
-6. Tour visual del dev: *"se siente como un editor"* o equivalente.
+1. Proyecto nuevo + `+ Crear Entidad` + elegir `.fbx` → cubo (o lo que sea el modelo) spawnea visible en viewport, queda seleccionado.
+2. Click derecho sobre entidad (en panel Escena Y en viewport) → menú contextual aparece.
+3. Modal Convertir entidad muestra los 9 kits + preview de cambios + aplica con undo.
+4. Vista SIDE ortho dibuja brushes en la dirección correcta.
+5. Menú Ayuda sin Demos.
+6. Tour visual del dev: *"se siente como un editor de verdad"* o equivalente.
 
 ---
 
 ## NO entra en F2H57
 
-- **F2H58**: Color grading LUT-based (continuación del plan render polish).
+- **F2H58**: Color grading LUT-based (continuación render polish, próximo hito tras F2H57).
 - **F2H59**: Rayos volumétricos / god rays.
-- **F2H6X (backlog)**: Shadow polish (CSM, contact shadows, soft shadows PCF).
-- Drag-and-drop de modelos desde explorador del SO al viewport (workflow Unreal, separado del popup Create Entity — futuro).
-- Templates compuestos de escena ("escena narrativa completa", "escena combate", etc.) — diferido a Sub-fase 3 si emerge demanda.
-- Plugin system para que devs externos registren tipos de entidad custom — Sub-fase 3+.
+- **F2H6X (backlog)**: Shadow polish (CSM, contact shadows).
+- Drag-and-drop desde explorador del SO al viewport (workflow Unreal — futuro, complementa el botón).
+- Plugin system para que devs externos registren tipos de entidad / kits custom — Sub-fase 3+.
+- Templates compuestos de escena ("escena narrativa completa") — diferido. Si emerge demanda, agregar como kit del modal Convertir.
 
 ---
 
 ## Riesgos identificados
 
-- **Refactor de DemoSpawners**: hay tests que probablemente referencien funciones de DemoSpawners (`processGenerateNarrativeDemoMapRequest`, etc.). Mapping pre-eliminación: identificar qué tests rompen, ajustar o eliminarlos.
-- **Player spawn con CharacterController**: requiere todos los pre-requisitos (Jolt body + Camera child + Controls). Reusar el código de DemoSpawners_Basic antes de borrarlo. Mover a helper compartido.
-- **Modelo en el momento (Opción B/C de pregunta 3)**: file picker del SO + import .fbx es un flujo que ya existe en AssetBrowser. Reusar el handler — no escribir nuevo.
+- **`ConvertEntityCommand` undoable**: convertir una entidad muta varios componentes. Captura del state pre/post requiere snapshot de la entidad completa para roundtrip. Reusable: ya hay `EntitySerializer::serialize` que captura todos los componentes → el comando puede guardar el JSON pre y restaurarlo en undo.
+- **DemoSpawners removal — tests dependientes**: probable que tests del editor que validan "spawn de escena" referencian los handlers. Mapping inicial: identificar tests con `grep "processGenerateNarrativeDemoMapRequest\|StressScene\|spawnFullStressScene"` → ajustar o eliminar.
+- **File picker bloqueante**: portable_file_dialogs es modal sync (bloquea el thread main). Si el dev cierra el picker sin elegir, manejar el caso (no spawn entidad). Patrón ya usado en F2H8 Save Map As y F2H38 Save Game.
+- **Right-click en viewport conflict con gizmo**: el gizmo de F2H13 ya consume click derecho en algunos modos (rotate gizmo, etc.). Investigar el handler — probable que solo consume click derecho con drag, no con click puro.

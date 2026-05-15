@@ -211,6 +211,221 @@ void EditorApplication::processCreateEntityFromModelRequest() {
 }
 
 // ============================================================================
+// F2H57 followup: spawn de entidad con mesh placeholder
+//
+// Workflow Hammer: el dev pide "una entidad nueva" sin browsing de
+// archivos. Spawnea con el missing-mesh (cubo placeholder) del
+// AssetManager. El dev luego cambia el mesh via Inspector o pasa al
+// modal "Cambiar tipo" para convertirla en NPC / luz / item / etc.
+// ============================================================================
+
+void EditorApplication::processCreateEntityPlaceholderRequest() {
+    if (!m_ui.consumeCreateEntityPlaceholderRequest()) return;
+    if (!(m_scene && m_assetManager)) {
+        Log::editor()->warn("[create_entity_placeholder] Sin escena/assets - skip");
+        return;
+    }
+
+    // Nombre base + sufijo incremental.
+    const std::string baseName = "Entity";
+    std::string finalName = baseName;
+    int suffix = 1;
+    while (true) {
+        bool collision = false;
+        m_scene->forEach<TagComponent>(
+            [&](Entity, TagComponent& tag) {
+                if (tag.name == finalName) collision = true;
+            });
+        if (!collision) break;
+        ++suffix;
+        finalName = baseName + "_" + std::to_string(suffix);
+    }
+
+    Entity e = m_scene->createEntity(finalName);
+    auto& t = e.getComponent<TransformComponent>();
+    t.position = glm::vec3(0.0f, 0.5f, 0.0f); // medio cubo arriba del piso
+    t.scale    = glm::vec3(1.0f);
+
+    // MeshRenderer con missing-mesh (cubo placeholder del AssetManager).
+    const MeshAssetId placeholderId = m_assetManager->missingMeshId();
+    auto mats = m_assetManager->createMaterialsForMesh(placeholderId);
+    e.addComponent<MeshRendererComponent>(placeholderId, std::move(mats));
+
+    Log::editor()->info(
+        "[create_entity_placeholder] Spawned '{}' con placeholder cube",
+        finalName);
+
+    replaceWithSingle(m_ui.selectionSet(), e);
+    pushCreatedEntities({e}, std::string("Crear entidad '") + finalName + "'");
+}
+
+// ============================================================================
+// F2H57 followup: Modal "Elegir mesh del proyecto" (estilo SFM)
+//
+// Lista los meshes ya cargados en el AssetManager. El dev clickea uno
+// y spawnea una entidad con ese mesh. No abre file picker del SO -
+// cubre el caso "ya tengo modelos importados, quiero reusarlos sin
+// re-navegar el filesystem". Convencion Source Film Maker / Asset
+// Browser de Unity-Unreal.
+// ============================================================================
+
+void EditorApplication::renderPickFromLoadedMeshesModal() {
+    if (m_ui.consumePickFromLoadedMeshesRequest()) {
+        m_pickMeshModalActive = true;
+        ImGui::OpenPopup("pick_mesh_modal");
+    }
+
+    if (!m_pickMeshModalActive) return;
+
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(
+        ImVec2(vp->GetCenter().x, vp->GetCenter().y),
+        ImGuiCond_Appearing,
+        ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(620.0f, 480.0f), ImGuiCond_Appearing);
+
+    constexpr ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoCollapse;
+
+    if (!ImGui::BeginPopupModal("pick_mesh_modal", nullptr, flags)) {
+        return;
+    }
+
+    if (!(m_scene && m_assetManager)) {
+        ImGui::TextUnformatted("Sin escena/assets.");
+        if (ImGui::Button("Cerrar")) {
+            m_pickMeshModalActive = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+        return;
+    }
+
+    ImGui::TextUnformatted(I18n::T("editor.pick_mesh_modal.title").c_str());
+    ImGui::TextDisabled("%s", I18n::T("editor.pick_mesh_modal.subtitle").c_str());
+    ImGui::Separator();
+
+    // Listado: itera meshIds [1..count). Skip id 0 = missing-mesh
+    // (ya es accesible via "Vacia (placeholder)").
+    const usize meshCount = m_assetManager->meshCount();
+    if (meshCount <= 1) {
+        ImGui::TextDisabled("%s", I18n::T("editor.pick_mesh_modal.empty").c_str());
+    } else {
+        ImGui::BeginChild("##mesh_list", ImVec2(0.0f, 360.0f), true);
+        MeshAssetId selectedToSpawn = 0;
+        for (usize i = 1; i < meshCount; ++i) {
+            const auto id = static_cast<MeshAssetId>(i);
+            const std::string path = m_assetManager->meshPathOf(id);
+            // Skip primitivos sintetizados (sphere/cube generados en ctor).
+            if (path.rfind("__", 0) == 0) continue;
+            ImGui::PushID(static_cast<int>(id));
+            char buf[512];
+            std::snprintf(buf, sizeof(buf), "%s  (id %u)", path.c_str(), id);
+            if (ImGui::Selectable(buf, false,
+                                    ImGuiSelectableFlags_AllowDoubleClick)) {
+                selectedToSpawn = id;
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndChild();
+
+        if (selectedToSpawn != 0) {
+            // Reusar la logica de spawn de processCreateEntityFromModelRequest
+            // pero con el meshId ya conocido.
+            const MeshAsset* asset = m_assetManager->getMesh(selectedToSpawn);
+            const std::string logicalStr =
+                m_assetManager->meshPathOf(selectedToSpawn);
+            const std::filesystem::path logicalPath(logicalStr);
+            std::string baseName = logicalPath.stem().generic_string();
+            if (baseName.empty()) baseName = "Entity";
+            std::string finalName = baseName;
+            int suffix = 1;
+            while (true) {
+                bool collision = false;
+                m_scene->forEach<TagComponent>(
+                    [&](Entity, TagComponent& tag) {
+                        if (tag.name == finalName) collision = true;
+                    });
+                if (!collision) break;
+                ++suffix;
+                finalName = baseName + "_" + std::to_string(suffix);
+            }
+
+            Entity e = m_scene->createEntity(finalName);
+            auto& t = e.getComponent<TransformComponent>();
+            const glm::vec3 importEuler = (asset != nullptr)
+                ? asset->importRotationEuler : glm::vec3(0.0f);
+            t.rotationEuler = importEuler;
+
+            f32 autoScale = 1.0f;
+            WorldYBoundsLocal wy{};
+            if (asset != nullptr) {
+                wy = rotatedAabbWorldY_local(asset->aabbMin, asset->aabbMax, importEuler);
+                const f32 height = wy.maxY - wy.minY;
+                if (height > 3.0f) autoScale = 1.5f / height;
+                else if (height > 0.001f && height < 0.1f) autoScale = 1.5f / height;
+            }
+            t.scale = glm::vec3(autoScale);
+            const f32 yFloorOffset = -autoScale * wy.minY;
+            t.position = glm::vec3(0.0f, yFloorOffset, 0.0f);
+
+            auto mats = m_assetManager->createMaterialsForMesh(selectedToSpawn);
+            e.addComponent<MeshRendererComponent>(selectedToSpawn, std::move(mats));
+
+            if (asset != nullptr && asset->hasSkeleton()) {
+                AnimatorComponent anim{};
+                anim.playing = true;
+                anim.loop = true;
+                e.addComponent<AnimatorComponent>(anim);
+                e.addComponent<SkeletonComponent>(SkeletonComponent{});
+            }
+
+            Log::editor()->info(
+                "[pick_mesh] Spawned '{}' from project mesh '{}' (id {})",
+                finalName, logicalStr, selectedToSpawn);
+
+            replaceWithSingle(m_ui.selectionSet(), e);
+            pushCreatedEntities({e}, std::string("Crear entidad '") + finalName + "'");
+
+            m_pickMeshModalActive = false;
+            ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+            return;
+        }
+    }
+
+    ImGui::Separator();
+    // Acciones secundarias dentro del modal: importar desde archivo del SO
+    // (file picker) y crear entidad vacia con cubo placeholder. Convencion
+    // Hammer/SFM: el modal de picker es el punto unico de "como creo una
+    // entidad", sin popups intermedios.
+    if (ImGui::Button(I18n::T("editor.pick_mesh_modal.import_from_file").c_str(),
+                       ImVec2(220.0f, 0.0f))) {
+        m_pickMeshModalActive = false;
+        ImGui::CloseCurrentPopup();
+        m_ui.requestCreateEntityFromModel();
+        ImGui::EndPopup();
+        return;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(I18n::T("editor.pick_mesh_modal.empty_placeholder").c_str(),
+                       ImVec2(220.0f, 0.0f))) {
+        m_pickMeshModalActive = false;
+        ImGui::CloseCurrentPopup();
+        m_ui.requestCreateEntityPlaceholder();
+        ImGui::EndPopup();
+        return;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(I18n::T("editor.convert_modal.close").c_str(), ImVec2(140.0f, 0.0f))) {
+        m_pickMeshModalActive = false;
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+}
+
+// ============================================================================
 // F2H57 Bloque D: Modal "Convertir entidad"
 //
 // Patron Hammer Editor: right-click sobre una entidad -> elegir un "kit"
