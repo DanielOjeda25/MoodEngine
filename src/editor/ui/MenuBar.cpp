@@ -253,6 +253,7 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             // se difiere a un follow-up del hito para evitar romper
             // dependencias laterales (ej. ensureDemoIntroDialogExists
             // que F2H47 podria estar reusando).
+            ImGui::EndMenu();
         }
 
         // F2H7: workspace tabs en la misma menu bar — estilo Blender.
