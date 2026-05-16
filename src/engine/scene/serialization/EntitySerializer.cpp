@@ -161,6 +161,12 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         if (!env.ssaoEnabled)               je2["ssao_enabled"]   = env.ssaoEnabled;
         if (env.ssaoRadius    != 0.5f)      je2["ssao_radius"]    = env.ssaoRadius;
         if (env.ssaoIntensity != 1.0f)      je2["ssao_intensity"] = env.ssaoIntensity;
+        // F2H58: Color Grading aditivo. Default OFF -- el flag se
+        // serializa solo cuando se prende. LUT path string vacio se
+        // serializa siempre que diff del default (vacio).
+        if (env.colorGradingEnabled)        je2["color_grading_enabled"]   = env.colorGradingEnabled;
+        if (!env.colorGradingLutPath.empty()) je2["color_grading_lut"]       = env.colorGradingLutPath;
+        if (env.colorGradingIntensity != 1.0f) je2["color_grading_intensity"] = env.colorGradingIntensity;
         je["environment"] = je2;
     }
 
@@ -422,6 +428,10 @@ SavedEntity parseEntityFromJson(const json& j) {
         se2.ssaoEnabled    = je.value("ssao_enabled",    true);
         se2.ssaoRadius     = je.value("ssao_radius",     0.5f);
         se2.ssaoIntensity  = je.value("ssao_intensity",  1.0f);
+        // F2H58: Color Grading defaults para mapas pre-F2H58.
+        se2.colorGradingEnabled   = je.value("color_grading_enabled",   false);
+        se2.colorGradingLutPath   = je.value("color_grading_lut",       std::string{});
+        se2.colorGradingIntensity = je.value("color_grading_intensity", 1.0f);
         se.environment = std::move(se2);
     }
     if (j.contains("particle_emitter")) {

@@ -425,6 +425,7 @@ add_library(mood_engine_lib STATIC
     src/systems/particles/ParticleSystem.cpp
     src/systems/physics/PhysicsSystem.cpp
     src/systems/render/BloomPass.cpp
+    src/systems/render/ColorGradingPass.cpp     # F2H58
     src/systems/render/PostProcessPass.cpp
     src/systems/render/SSAOPass.cpp
     src/systems/scripting/ScriptSystem.cpp

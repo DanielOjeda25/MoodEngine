@@ -41,6 +41,7 @@
 #include "engine/scene/core/Scene.h"
 #include "systems/light/LightSystem.h"
 #include "systems/render/BloomPass.h"
+#include "systems/render/ColorGradingPass.h"
 #include "systems/render/PostProcessPass.h"
 #include "systems/render/SSAOPass.h"
 #include "systems/render/ShadowPass.h"
@@ -76,6 +77,10 @@ SceneRenderer::SceneRenderer()
     // F2H55: FB intermedio HDR (scene + bloom contribution) que alimenta
     // el post-process en lugar de leer directo de m_sceneFb.
     m_bloomFb = std::make_unique<OpenGLFramebuffer>(
+        1280u, 720u, OpenGLFramebuffer::Format::HDR);
+    // F2H58: FB intermedio HDR (post bloom + color grading) entre el
+    // bloom y el post-process. Reuso del mismo size que m_bloomFb.
+    m_colorGradingFb = std::make_unique<OpenGLFramebuffer>(
         1280u, 720u, OpenGLFramebuffer::Format::HDR);
     m_viewportFb = std::make_unique<OpenGLFramebuffer>(
         1280u, 720u, OpenGLFramebuffer::Format::LDR);
@@ -199,6 +204,15 @@ SceneRenderer::SceneRenderer()
         m_ssaoPass.reset();
     }
 
+    // F2H58: Color Grading pass. Mismo patron tolerante.
+    try {
+        m_colorGradingPass = std::make_unique<ColorGradingPass>();
+    } catch (const std::exception& e) {
+        Log::render()->warn("ColorGradingPass no disponible: {}. Color grading desactivado.",
+                             e.what());
+        m_colorGradingPass.reset();
+    }
+
     // Shadow pass (Hito 16).
     try {
         m_shadowPass = std::make_unique<ShadowPass>(2048);
@@ -247,6 +261,13 @@ SceneRenderer::~SceneRenderer() {
     m_postProcess.reset();
     m_bloomPass.reset();  // F2H55
     m_ssaoPass.reset();   // F2H56
+    m_colorGradingPass.reset(); // F2H58
+    // F2H58: liberar identity LUT sintetizada (si existe).
+    if (m_identityLutId != 0) {
+        GLuint tex = static_cast<GLuint>(m_identityLutId);
+        glDeleteTextures(1, &tex);
+        m_identityLutId = 0;
+    }
     m_debugRenderer.reset();
     // F2H28: tirar FBOs orto + shaders orto antes del contexto GL.
     if (m_grid2dVao != 0) glDeleteVertexArrays(1, &m_grid2dVao);
@@ -259,6 +280,7 @@ SceneRenderer::~SceneRenderer() {
     m_instanceBuffer.reset();
     m_viewportFb.reset();
     m_bloomFb.reset();   // F2H55
+    m_colorGradingFb.reset();  // F2H58
     m_ssaoOutFb.reset(); // F2H56
     m_sceneFb.reset();
     m_renderer.reset();
@@ -284,6 +306,10 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
     m_ssaoEnabled   = true;
     m_ssaoRadius    = 0.5f;
     m_ssaoIntensity = 1.0f;
+    // F2H58: defaults Color Grading. OFF por default.
+    m_colorGradingEnabled   = false;
+    m_colorGradingLutPath.clear();
+    m_colorGradingIntensity = 1.0f;
 
     bool envFound = false;
     scene.forEach<EnvironmentComponent>(
@@ -307,7 +333,56 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
             m_ssaoEnabled     = env.ssaoEnabled;
             m_ssaoRadius      = env.ssaoRadius;
             m_ssaoIntensity   = env.ssaoIntensity;
+            // F2H58: Color Grading params.
+            m_colorGradingEnabled   = env.colorGradingEnabled;
+            m_colorGradingLutPath   = env.colorGradingLutPath;
+            m_colorGradingIntensity = env.colorGradingIntensity;
         });
+}
+
+void SceneRenderer::synthesizeIdentityLut() {
+    if (m_identityLutId != 0) return;  // idempotente
+
+    // 256x16 RGBA8: 16 slices de 16x16. Para cada (x, y):
+    //   sliceIdx  = x / 16          (0..15) -> componente Blue
+    //   localR    = x % 16          (0..15) -> componente Red
+    //   G         = y               (0..15)
+    // El sample da color = (localR/15, G/15, sliceIdx/15) = el color de
+    // entrada cuando se usa el algoritmo de lookup del color_grading.frag.
+    // Por eso esta LUT es "identidad" (lookup(c) == c).
+    constexpr u32 W = 256;
+    constexpr u32 H = 16;
+    std::vector<u8> pixels(W * H * 4);
+    for (u32 y = 0; y < H; ++y) {
+        for (u32 x = 0; x < W; ++x) {
+            const u32 sliceIdx = x / 16;
+            const u32 localR   = x % 16;
+            const u32 idx = (y * W + x) * 4;
+            pixels[idx + 0] = static_cast<u8>((localR   * 255 + 7) / 15);
+            pixels[idx + 1] = static_cast<u8>((y        * 255 + 7) / 15);
+            pixels[idx + 2] = static_cast<u8>((sliceIdx * 255 + 7) / 15);
+            pixels[idx + 3] = 255;
+        }
+    }
+
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    // RGBA8 LINEAL (no sRGB) -- la LUT es una tabla de mapeo, no una
+    // imagen para mirar. CLAMP_TO_EDGE en U para que el wrap entre
+    // slices Blue no genere bleeding.
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+                  static_cast<GLsizei>(W), static_cast<GLsizei>(H), 0,
+                  GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    m_identityLutId = static_cast<u32>(tex);
+    Log::render()->info("ColorGrading: identity LUT sintetizada (id={}, 256x16 RGBA8 lineal)",
+                         m_identityLutId);
 }
 
 void SceneRenderer::endFrame() {
@@ -362,6 +437,34 @@ void SceneRenderer::endFrame() {
             m_bloomThreshold, m_bloomIntensity, m_bloomRadius);
         if (bloomApplied) {
             postProcessSrc = m_bloomFb.get();
+        }
+    }
+
+    // F2H58: color grading entre bloom y post-process. Si esta off o
+    // intensity = 0 o LUT no resuelta, skip. El pass internamente
+    // chequea size del dst FB (resize-on-bind por dst.bind()).
+    const bool runColorGrading = m_colorGradingEnabled
+                               && m_colorGradingIntensity > 0.0f
+                               && m_colorGradingPass
+                               && m_colorGradingFb
+                               && m_currentLutTextureId != 0
+                               && postProcessSrc;
+    if (runColorGrading) {
+        MOOD_PROFILE_SCOPE("ColorGradingPass::apply");
+        // El FB del color grading puede no coincidir con el viewport
+        // size si la ventana se resizeo entre frames. Forzar resize
+        // del dst FB al size del src antes del pass.
+        if (m_colorGradingFb->width()  != postProcessSrc->width() ||
+            m_colorGradingFb->height() != postProcessSrc->height()) {
+            m_colorGradingFb->resize(postProcessSrc->width(),
+                                       postProcessSrc->height());
+        }
+        const bool gradingApplied = m_colorGradingPass->apply(
+            *postProcessSrc, *m_colorGradingFb,
+            static_cast<GLuint>(m_currentLutTextureId),
+            m_colorGradingIntensity);
+        if (gradingApplied) {
+            postProcessSrc = m_colorGradingFb.get();
         }
     }
 

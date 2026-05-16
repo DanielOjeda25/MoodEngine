@@ -215,6 +215,10 @@ Entity applyOneEntity(const SavedEntity& se,
             env.ssaoEnabled    = s.ssaoEnabled;
             env.ssaoRadius     = s.ssaoRadius;
             env.ssaoIntensity  = s.ssaoIntensity;
+            // F2H58: Color Grading params.
+            env.colorGradingEnabled   = s.colorGradingEnabled;
+            env.colorGradingLutPath   = s.colorGradingLutPath;
+            env.colorGradingIntensity = s.colorGradingIntensity;
             e.addComponent<EnvironmentComponent>(env);
         }
 

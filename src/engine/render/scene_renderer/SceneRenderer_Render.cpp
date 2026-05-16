@@ -165,6 +165,33 @@ void SceneRenderer::renderScene(Scene& scene,
     // parametro es ref).
     applyEnvironmentFromScene(scene);
 
+    // F2H58 C: resolver la LUT del frame. Si color grading esta off, no
+    // resolvemos (m_currentLutTextureId queda 0 -> pass skipea). Si esta
+    // ON con path vacio, lazy-create identity LUT. Si hay path, carga
+    // via AssetManager (que ya tiene cache propio path->id).
+    m_currentLutTextureId = 0;
+    if (m_colorGradingEnabled) {
+        if (m_colorGradingLutPath.empty()) {
+            synthesizeIdentityLut();
+            m_currentLutTextureId = m_identityLutId;
+        } else {
+            const TextureAssetId tid = assets.loadTexture(m_colorGradingLutPath);
+            if (tid != assets.missingTextureId()) {
+                ITexture* tex = assets.getTexture(tid);
+                if (tex != nullptr) {
+                    m_currentLutTextureId = static_cast<u32>(
+                        reinterpret_cast<uintptr_t>(tex->handle()));
+                }
+            }
+            // Fallback: si el path no resuelve, usar identity para no
+            // pintar negro.
+            if (m_currentLutTextureId == 0) {
+                synthesizeIdentityLut();
+                m_currentLutTextureId = m_identityLutId;
+            }
+        }
+    }
+
     LightFrameData lights;
     {
         MOOD_PROFILE_SCOPE("LightSystem::buildFrameData");

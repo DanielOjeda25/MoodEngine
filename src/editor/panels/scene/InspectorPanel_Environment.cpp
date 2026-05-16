@@ -24,10 +24,52 @@
 #include "engine/scene/components/Components.h"
 
 #include <imgui.h>
+#include <portable-file-dialogs.h>
 
+#include <cstring>
+#include <filesystem>
 #include <memory>
 
 namespace Mood {
+
+namespace {
+
+// F2H58 Bloque G: instancia default para obtener valores de fabrica de cada
+// campo. Construida una vez por proceso (no por frame). El reset por seccion
+// asigna desde este snapshot.
+const EnvironmentComponent kEnvDefaults{};
+
+// Helper: pinta un boton "Restablecer" pequeno alineado a la derecha. Llama
+// `apply` si el dev clickea. Convencion Unity Inspector / Unreal Details
+// panel: el reset es per-seccion, no per-field (UX mas limpia con menos
+// botones). Sin undo en v1: el dev sabe que reseteo manualmente; si lo
+// necesita, futuro followup con ResetSectionCommand.
+//
+// `idSuffix` da un ID interno unico a ImGui (todos los botones tienen el
+// mismo label visible "Restablecer", asi que sin sufijo ImGui los considera
+// el mismo widget y solo uno recibe el click).
+template<typename ApplyFn>
+void drawSectionResetButton(const char* idSuffix, ApplyFn&& apply) {
+    ImGui::Spacing();
+    const std::string visibleLabel = std::string(ICON_FA_ROTATE " ") +
+        I18n::T("editor.panel.inspector.environment.reset");
+    const std::string buttonId = visibleLabel + "##envreset_" + idSuffix;
+    const float btnW = ImGui::CalcTextSize(visibleLabel.c_str()).x +
+        ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float avail = ImGui::GetContentRegionAvail().x;
+    if (avail > btnW) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - btnW));
+    }
+    if (ImGui::SmallButton(buttonId.c_str())) {
+        apply();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.panel.inspector.environment.reset_tooltip").c_str());
+    }
+}
+
+} // namespace
 
 void InspectorPanel::renderEnvironmentSection(Entity e) {
     auto& env = e.getComponent<EnvironmentComponent>();
@@ -95,11 +137,30 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
                 },
                 "Editar fog density");
         }
+        drawSectionResetButton("fog", [&]() {
+            env.fogMode        = kEnvDefaults.fogMode;
+            env.fogColor       = kEnvDefaults.fogColor;
+            env.fogDensity     = kEnvDefaults.fogDensity;
+            env.fogLinearStart = kEnvDefaults.fogLinearStart;
+            env.fogLinearEnd   = kEnvDefaults.fogLinearEnd;
+            m_editedThisFrame = true;
+        });
     }
+
+    // F2H58 Bloque I: Post-Process consolidado. Wrapper header top-level
+    // que agrupa los 4 sub-pases (Tonemap+Exposure / Bloom / SSAO /
+    // Color Grading) bajo un mismo nodo, estilo Unreal Post Process
+    // Volume y Unity Volume. Cada sub-header sigue siendo independiente
+    // con su propio reset. Indent visual los hace ver subordinados al
+    // wrapper sin requerir TreeNode anidados (que duplican el chevron).
+    if (ImGui::CollapsingHeader(
+            I18n::T("editor.panel.inspector.environment.post_process").c_str(),
+            ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Indent();
 
     // ----- Tonemap + Exposure + IBL -----
     if (ImGui::CollapsingHeader(
-            I18n::T("editor.panel.inspector.environment.post_process").c_str(),
+            I18n::T("editor.panel.inspector.environment.tonemap_section").c_str(),
             ImGuiTreeNodeFlags_DefaultOpen)) {
         const std::string exposureLabel =
             I18n::T("editor.panel.inspector.environment.exposure") + "##env";
@@ -135,6 +196,12 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
                 en.getComponent<EnvironmentComponent>().iblIntensity = v;
             },
             "Editar IBL intensity");
+        drawSectionResetButton("tonemap", [&]() {
+            env.exposure     = kEnvDefaults.exposure;
+            env.tonemapMode  = kEnvDefaults.tonemapMode;
+            env.iblIntensity = kEnvDefaults.iblIntensity;
+            m_editedThisFrame = true;
+        });
     }
 
     // ----- Bloom (F2H55) -----
@@ -181,6 +248,13 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
                 },
                 "Editar bloom radius");
         }
+        drawSectionResetButton("bloom", [&]() {
+            env.bloomEnabled   = kEnvDefaults.bloomEnabled;
+            env.bloomThreshold = kEnvDefaults.bloomThreshold;
+            env.bloomIntensity = kEnvDefaults.bloomIntensity;
+            env.bloomRadius    = kEnvDefaults.bloomRadius;
+            m_editedThisFrame = true;
+        });
     }
 
     // ----- SSAO (F2H56) -----
@@ -216,7 +290,131 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
                 },
                 "Editar SSAO intensity");
         }
+        drawSectionResetButton("ssao", [&]() {
+            env.ssaoEnabled   = kEnvDefaults.ssaoEnabled;
+            env.ssaoRadius    = kEnvDefaults.ssaoRadius;
+            env.ssaoIntensity = kEnvDefaults.ssaoIntensity;
+            m_editedThisFrame = true;
+        });
     }
+
+    // ----- Color Grading (F2H58) -----
+    if (ImGui::CollapsingHeader(
+            I18n::T("editor.panel.inspector.environment.color_grading").c_str(),
+            ImGuiTreeNodeFlags_DefaultOpen)) {
+        const std::string cgEnabledLabel =
+            I18n::T("editor.panel.inspector.environment.color_grading_enabled") + "##env";
+        if (ImGui::Checkbox(cgEnabledLabel.c_str(), &env.colorGradingEnabled)) {
+            m_editedThisFrame = true;
+        }
+        if (env.colorGradingEnabled) {
+            // F2H58 Bloque H: dropdown de presets. Reemplaza el InputText +
+            // boton "..." crudos por un Combo con looks nombrados — UX al
+            // estilo "Camera Filter" de Unity / "Cine Looks" de Premiere.
+            // Los 4 built-ins son los LUTs shipados en assets/luts/. El
+            // dev solo elige por nombre; el path interno se setea solo.
+            // Opcion final "Personalizado..." abre file picker para LUTs
+            // externas (escape hatch — no debe ser el flow principal).
+            struct CgPreset { const char* labelKey; const char* path; };
+            constexpr CgPreset kPresets[] = {
+                { "editor.panel.inspector.environment.color_grading_preset_none",     ""                              },
+                { "editor.panel.inspector.environment.color_grading_preset_warm",     "luts/cinema_warm.png"          },
+                { "editor.panel.inspector.environment.color_grading_preset_cool",     "luts/matrix_cool.png"          },
+                { "editor.panel.inspector.environment.color_grading_preset_noir",     "luts/noir_high_contrast.png"   },
+                { "editor.panel.inspector.environment.color_grading_preset_identity", "luts/identity.png"             },
+            };
+            constexpr int kPresetCount = static_cast<int>(sizeof(kPresets) / sizeof(kPresets[0]));
+            constexpr int kCustomIndex = kPresetCount; // sentinel index para "Personalizado..."
+
+            // Resolver indice actual: si el path matchea un preset, mostrar
+            // ese; sino "Personalizado: <filename>".
+            int currentIdx = kCustomIndex;
+            for (int i = 0; i < kPresetCount; ++i) {
+                if (env.colorGradingLutPath == kPresets[i].path) {
+                    currentIdx = i;
+                    break;
+                }
+            }
+            std::string customLabel;
+            if (currentIdx == kCustomIndex) {
+                namespace fs = std::filesystem;
+                const std::string fname =
+                    fs::path(env.colorGradingLutPath).filename().generic_string();
+                customLabel = I18n::T("editor.panel.inspector.environment.color_grading_preset_custom_active",
+                                       fname);
+            }
+            const char* preview = (currentIdx == kCustomIndex)
+                ? customLabel.c_str()
+                : I18n::T(kPresets[currentIdx].labelKey).c_str();
+
+            const std::string comboLabel =
+                I18n::T("editor.panel.inspector.environment.color_grading_preset") + "##env";
+            if (ImGui::BeginCombo(comboLabel.c_str(), preview)) {
+                for (int i = 0; i < kPresetCount; ++i) {
+                    const bool selected = (currentIdx == i);
+                    const std::string itemLabel = I18n::T(kPresets[i].labelKey);
+                    if (ImGui::Selectable(itemLabel.c_str(), selected)) {
+                        env.colorGradingLutPath = kPresets[i].path;
+                        m_editedThisFrame = true;
+                    }
+                    if (selected) ImGui::SetItemDefaultFocus();
+                }
+                ImGui::Separator();
+                // Item "Personalizado..." — abre file picker. No se selecciona
+                // visualmente (se selecciona el resultado del picker).
+                const std::string customItem = I18n::T(
+                    "editor.panel.inspector.environment.color_grading_preset_custom");
+                if (ImGui::Selectable(customItem.c_str(), false)) {
+                    namespace fs = std::filesystem;
+                    const fs::path lutsDir = fs::current_path() / "assets" / "luts";
+                    const std::string startDir = fs::exists(lutsDir)
+                        ? lutsDir.generic_string()
+                        : (fs::current_path() / "assets").generic_string();
+                    const std::string filterPng =
+                        I18n::T("editor.panel.inspector.environment.color_grading_filter");
+                    const auto picked = pfd::open_file(
+                        I18n::T("editor.panel.inspector.environment.color_grading_pick"),
+                        startDir,
+                        { filterPng, "*.png" }).result();
+                    if (!picked.empty()) {
+                        fs::path abs(picked[0]);
+                        const fs::path assetsRoot = fs::current_path() / "assets";
+                        std::error_code ec;
+                        fs::path rel = fs::relative(abs, assetsRoot, ec);
+                        if (!ec && !rel.empty()) {
+                            env.colorGradingLutPath = rel.generic_string();
+                        } else {
+                            env.colorGradingLutPath = abs.generic_string();
+                        }
+                        m_editedThisFrame = true;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            // Intensity slider.
+            const std::string cgIntLabel =
+                I18n::T("editor.panel.inspector.environment.color_grading_intensity") + "##env";
+            if (ImGui::SliderFloat(cgIntLabel.c_str(),
+                                    &env.colorGradingIntensity, 0.0f, 1.0f, "%.2f")) {
+                m_editedThisFrame = true;
+            }
+            detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.colorGradingIntensity,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<EnvironmentComponent>().colorGradingIntensity = v;
+                },
+                "Editar color grading intensity");
+        }
+        drawSectionResetButton("cgrade", [&]() {
+            env.colorGradingEnabled   = kEnvDefaults.colorGradingEnabled;
+            env.colorGradingLutPath   = kEnvDefaults.colorGradingLutPath;
+            env.colorGradingIntensity = kEnvDefaults.colorGradingIntensity;
+            m_editedThisFrame = true;
+        });
+    }
+
+        ImGui::Unindent();
+    } // cierre wrapper Post-Process (F2H58 Bloque I)
 }
 
 } // namespace Mood

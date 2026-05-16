@@ -117,6 +117,12 @@ struct SavedEnvironment {
     bool ssaoEnabled   = true;
     f32  ssaoRadius    = 0.5f;
     f32  ssaoIntensity = 1.0f;
+
+    // F2H58: Color Grading. Default OFF -- color grading sin LUT no
+    // aporta + look default cuestionable.
+    bool        colorGradingEnabled   = false;
+    std::string colorGradingLutPath   = "";
+    f32         colorGradingIntensity = 1.0f;
 };
 
 /// @brief Copia persistida de un ScriptComponent (Hito 24). Persiste el

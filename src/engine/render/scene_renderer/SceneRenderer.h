@@ -29,6 +29,8 @@
 
 #include <array>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Mood {
@@ -46,6 +48,7 @@ class OpenGLInstanceBuffer;
 class OpenGLParticleRenderer;
 class OpenGLSSBO;
 class BloomPass;
+class ColorGradingPass;
 class PostProcessPass;
 class SSAOPass;
 class Scene;
@@ -179,9 +182,11 @@ private:
     std::unique_ptr<OpenGLFramebuffer> m_sceneFb;     // HDR RGBA16F
     std::unique_ptr<OpenGLFramebuffer> m_ssaoOutFb;   // HDR RGBA16F (F2H56): scene * AO modulation
     std::unique_ptr<OpenGLFramebuffer> m_bloomFb;     // HDR RGBA16F (F2H55): scene + bloom contribution antes del post-process
+    std::unique_ptr<OpenGLFramebuffer> m_colorGradingFb;// HDR RGBA16F (F2H58): post bloom + color grading aplicado, antes del post-process
     std::unique_ptr<OpenGLFramebuffer> m_viewportFb;  // LDR RGBA8
     std::unique_ptr<SSAOPass>          m_ssaoPass;    // F2H56
     std::unique_ptr<BloomPass>         m_bloomPass;   // F2H55
+    std::unique_ptr<ColorGradingPass>  m_colorGradingPass; // F2H58
     std::unique_ptr<PostProcessPass>   m_postProcess;
 
     std::unique_ptr<IShader> m_pbrShader;          // PBR estatico (no instanced)
@@ -245,6 +250,24 @@ private:
     bool m_ssaoEnabled   = true;
     f32  m_ssaoRadius    = 0.5f;
     f32  m_ssaoIntensity = 1.0f;
+
+    // F2H58: Color Grading params (poblados por applyEnvironmentFromScene).
+    bool        m_colorGradingEnabled   = false;
+    std::string m_colorGradingLutPath   = "";
+    f32         m_colorGradingIntensity = 1.0f;
+    // GL handle de la LUT efectiva del frame actual. Resuelto en
+    // renderScene a partir del path (loadTexture via AssetManager) o
+    // identity si path vacio. 0 = no listo / fallback a skip del pass.
+    u32         m_currentLutTextureId   = 0;
+    // Identity LUT sintetizada lazy. 256x16 RGBA8 lineal con lookup(c) == c.
+    // Se crea la primera vez que se necesita y se reusa entre frames.
+    u32         m_identityLutId         = 0;
+
+    /// @brief Sintetiza la LUT identidad 256x16 RGBA8 lineal. Idempotente:
+    ///        si `m_identityLutId != 0` no recrea. Llamada lazy desde
+    ///        renderScene cuando el color grading necesita LUT y no hay
+    ///        path custom.
+    void synthesizeIdentityLut();
 
     // Diagnostico one-shot.
     bool m_shadowEnabledLastFrame = false;

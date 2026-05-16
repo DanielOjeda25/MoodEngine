@@ -252,6 +252,18 @@ struct EnvironmentComponent {
     bool  ssaoEnabled   = true;
     float ssaoRadius    = 0.5f;
     float ssaoIntensity = 1.0f;
+
+    // F2H58: Color Grading (LUT 2D 256x16, layout Unity URP). Pre-tonemap.
+    //   colorGradingEnabled:   master switch. Default OFF -- a diferencia
+    //                          de bloom/SSAO, color grading sin LUT no
+    //                          aporta y un look default cuestionable.
+    //   colorGradingLutPath:   path logico al .png. Vacio = LUT identidad
+    //                          (lookup(c) == c, no cambia nada).
+    //   colorGradingIntensity: blend con el color original. 0 = sin grade,
+    //                          1 = grade puro. Sweet spot 0.6-0.8.
+    bool        colorGradingEnabled   = false;
+    std::string colorGradingLutPath   = "";
+    float       colorGradingIntensity = 1.0f;
 };
 
 /// @brief Marca a una entidad como instancia de un prefab (Hito 14).
