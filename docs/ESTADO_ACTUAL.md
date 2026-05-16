@@ -4,7 +4,43 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H57 cerrado (2026-05-15)
+## 0. ACTUALIZACIÓN F2H58 cerrado (2026-05-16)
+
+**Tercer hito de Sub-fase 2.6 (Render polish) cerrado — Color grading LUT-based + consolidación del panel Environment + UX polish del Inspector.**
+Tag: `v1.45.0-fase2-hito58`. Validado por dev tras tour visual del Inspector consolidado + dropdown de presets + reset buttons. Citas verbatim del proceso: *"todo lo demas esta perfecto"* (tras Color Grading core funcionando) y *"el resto funciona bien"* (post-fix de los reset buttons y caracter Unicode `…`).
+
+**Qué entrega F2H58** (Bloques A-J + 1 fix lateral, detalle completo en `HITOS.md`):
+- **Bloque A — Consolidación del panel Environment** (commit `9ea434a`): extracción de `renderEnvironmentSection` de `InspectorPanel_Light.cpp` a `InspectorPanel_Environment.cpp` propio. Cada sub-bloque (Sky+Fog / Tonemap / Bloom / SSAO) ahora es un CollapsingHeader independiente. Convención Unity Volume / Unreal Post Process Volume / Godot WorldEnvironment.
+- **Bloque B — Shader + pase Color Grading**: `shaders/color_grading.frag` con algoritmo Unity URP (LUT 2D 256x16 layout, interpolación lineal entre slices) + `ColorGradingPass.{h,cpp}` mismo patrón que BloomPass/SSAOPass. Pre-tonemap (antes de la curva final, después de bloom+SSAO).
+- **Bloque C — Wireup + persistencia**: `EnvironmentComponent` extendido con 3 campos (`colorGradingEnabled` default OFF, `colorGradingLutPath` vacío=identidad, `colorGradingIntensity` 1.0). `SavedEnvironment` paralelo + serialización aditiva. `SceneRenderer` sintetiza un LUT identidad 256x16 RGBA8 en runtime como fallback garantizado. Resolución de LUT desde path usa `AssetManager::loadTexture` como cache.
+- **Bloque D — UI sliders inicial**: sección "Color Grading" con checkbox + path field + file picker + slider intensidad + botón reset identidad. 9 i18n keys nuevas.
+- **Bloque E — 4 LUTs sample shipados** en `assets/luts/`: `identity.png`, `cinema_warm.png` (atardecer/sepia), `matrix_cool.png` (sci-fi/Matrix), `noir_high_contrast.png` (B&N alto contraste). Generador `tools/gen_luts.py` (Python + PIL).
+- **Bloque F — validación visual + fix MenuBar pre-existente**: assert ImGui `EndMenuBar` al lanzar el editor → root cause en F2H57 Bloque E (commit `3a9a072`) que borró un `EndMenu()` del menu Help junto con el submenu Demos. Fix: una línea en `MenuBar.cpp:256`.
+- **Bloque G — reset-to-default por sección**: helper `drawSectionResetButton(idSuffix, applyFn)` con `kEnvDefaults` constexpr. Bug detectado al primer tour: los 5 botones con mismo label colisionaban en ImGui ID → solo uno respondía. Fix con sufijos `##envreset_<id>`. Sin undo en v1.
+- **Bloque H — LUT dropdown de presets**: pedido del dev *"lo de LUT no lo veo viable, a menos que tenga pressets incluidos"*. Reemplazo del path field crudo por `BeginCombo` con 5 built-ins (Ninguno / Cálido / Frío / Noir / Identidad) + opción "Personalizado..." que dispara el file picker existente. 8 i18n keys nuevas. Caracter Unicode `…` (U+2026) reemplazado por `...` ASCII porque la font default no lo incluía.
+- **Bloque I — reorganización jerárquica**: top-level del Inspector→Environment ahora es 2 headers (`Sky + Fog` y `Post-procesado`); el wrapper Post-Process contiene los 4 sub-pases anidados con `Indent/Unindent` para subordinación visual. Convención Unreal Post Process Volume.
+- **Bloque J — cierre**.
+
+**Decisiones** (detalle en `DECISIONS.md`):
+1. **Pre-tonemap LUT (Unity URP)** sobre post-tonemap (Unreal) — más simple, mismo color space.
+2. **Default OFF** (a diferencia de bloom/SSAO) — sin LUT no aporta y el look default es decisión de art direction.
+3. **Path field interno + preset dropdown UX** — el path queda como mecánica de persistencia/versionado; la UI normal va por preset.
+4. **Reset per-section sin undo en v1** — trade-off de simplicidad. Snapshot multi-campo diferido.
+5. **Post-Process wrapper con `Indent/Unindent`** sobre TreeNode anidado nativo — efecto visual deseado sin chevron doble.
+6. **IDs únicos `##envreset_<id>` para los 5 reset buttons** — labels visibles iguales necesitan IDs distintos en ImGui.
+
+**Backlog post-F2H58** (anotado en HITOS, no scope inmediato):
+- Undo del reset multi-campo (`ResetSectionCommand` custom).
+- `.cube` parser (formato Adobe ASCII).
+- Scan dinámico del directorio `assets/luts/` para el dropdown.
+- Preview 3D del LUT cargado en el panel (visualización del cubo RGB).
+- sRGB vs linear loading explícito del LUT (actualmente confiamos en defaults del AssetManager).
+
+**Próximo hito**: **F2H59 — Primitivas Plano + clásicas (suelo, etc.)**. Pedido del dev al cierre del tour: *"la base es un cuadrado comprimido, no tenemos la primitiva de un plano? deberiamos tener… estaria bien que tengamos las primitivas clasicas para no modelar todo desde la base"*. Plan en [`PLAN_HITO_F2H59.md`](PLAN_HITO_F2H59.md) — agrega `AddPlaneBrush` al menú `Brush > Añadir` (los actuales son Box / Cylinder / Sphere / Pyramid / Wedge / Prism triangular / Prism hexagonal); evaluamos también si vale sumar primitivas adicionales clásicas (cono, toro, capsule) según necesidad.
+
+---
+
+## 0bis. ACTUALIZACIÓN F2H57 cerrado (2026-05-15)
 
 **Pivot temporal de Sub-fase 2.6 a UX del editor cerrado — Workflow "Crear + Convertir entidad" estilo Hammer / SFM + fix bug SIDE ortho + remove Demos del menú Ayuda.**
 Tag: `v1.44.0-fase2-hito57`. Validado por dev tras testing del flujo end-to-end. Cita verbatim: *"lo demas anda perfecto, me gusta como esta"* (tras el followup del modal SFM + welcome centering).

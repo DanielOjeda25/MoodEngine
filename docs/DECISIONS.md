@@ -11,6 +11,50 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-16: F2H58 cierre — Color grading LUT-based + consolidación Environment + UX polish
+
+**Contexto:** tercer hito de Sub-fase 2.6 (Render polish): bloom (F2H55) → SSAO (F2H56) → **color grading (F2H58)** → god rays / shadow polish (F2H6X+). Tag `v1.45.0-fase2-hito58`. Hito mediano que creció de 7 bloques planeados (A-G) a 10 (A-J + fix lateral) por feedback iterativo del dev durante el tour visual.
+
+**Decisión clave 1 — Pre-tonemap LUT (convención Unity URP) sobre post-tonemap (Unreal).** El plan original (PLAN_HITO_F2H58 línea 171) ya documentaba las dos escuelas. v1 va con pre-tonemap clamp `[0,1]` por simplicidad del color space: la LUT opera en el rango que cualquier herramienta de cine (Photoshop, GIMP, DaVinci) le pasa al colorista por default.
+
+- **Razón:** Unity URP usa el mismo path y es el flow más documentado entre los motores open-source que portamos shaders (Filament, Godot 4). Cambiar a post-tonemap requeriría re-arquitectar la posición del pase en el pipeline y posiblemente convertir las LUTs existentes.
+- **Alternativa diferida:** si emerge feedback de coloristas de que las LUTs de DaVinci Resolve (que asumen input post-tonemap) no quedan bien aplicadas pre-tonemap, evaluar switch. **Mitigación:** los 4 LUTs sample que shippeamos (`identity`, `cinema_warm`, `matrix_cool`, `noir_high_contrast`) están generados con `tools/gen_luts.py` operando sobre la identity table — son coherentes con el path pre-tonemap del shader y se pueden regenerar trivialmente si se cambia el approach.
+
+**Decisión clave 2 — Color grading default OFF, a diferencia de bloom/SSAO.** Bloom y SSAO en F2H55/F2H56 quedaron default ON con valores razonables porque sin ellos la escena se ve "plana" — ambos efectos aportan grounding visual incluso con intensidades bajas.
+
+- **Razón:** color grading sin LUT (con la identidad) es no-op. Con una LUT cargada el efecto cambia el look entero de la escena — eso es una decisión de art direction que el motor no debe imponer. Engine-grade significa proveer defaults sensatos, no opiniones de director artístico. El dev del juego elige el look conscientemente.
+- **Trade-off de discoverability:** el dev podría no enterarse de que existe color grading si nunca prende el checkbox. **Mitigación:** los presets en el dropdown (Cálido / Frío / Noir) son visualmente obvios y nombrados con la mood asociada — eso da exposure UX al feature sin imponer el efecto por default.
+
+**Decisión clave 3 — Path field como mecánica interna + preset dropdown como UX.** El dev pidió explícitamente: *"lo de LUT no lo veo viable, a menos que tenga pressets incluidos"*. Pre-feedback la UI mostraba un `InputText` con el path lógico (ej. `luts/cinema_warm.png`) — UX técnica más que de director artístico.
+
+- **Razón:** el dev del juego piensa en términos de "look" ("quiero un atardecer cálido", "quiero un noir") no de paths de archivo. Pre-feedback el flow obligaba a explorar `assets/luts/` con el file picker para descubrir qué hay; post-Bloque H el flow es 1 click en el dropdown.
+- **El path sigue siendo la mecánica de persistencia** — el `.moodmap` guarda `colorGradingLutPath: "luts/cinema_warm.png"` y los devs pueden inspeccionar/versionar/editar manualmente. El preset dropdown es resolución bidireccional: lee el path del componente y lo matchea contra los built-ins; si no matchea, muestra "Personalizado: \<filename\>". Best of both worlds.
+- **Alternativa descartada:** ocultar el path completamente y usar IDs internos del preset (`PresetId::CinemaWarm`). Rechazada porque ata el formato del .moodmap a un enum que rompería si en el futuro removemos un built-in. El path tiene la ventaja de ser self-documenting y forward-compatible.
+
+**Decisión clave 4 — Reset per-section sin undo en v1.** Los 5 botones `⟲ Restablecer` (uno por sección Sky+Fog, Tonemap, Bloom, SSAO, Color Grading) asignan los campos desde una instancia `kEnvDefaults` default-constructed.
+
+- **Razón:** snapshot multi-campo undoable requeriría un `ResetSectionCommand` custom que serializa el `EnvironmentComponent` entero pre-reset y deserializa en undo. Es complejidad significativa para una operación claramente intencional (el dev clickea explícitamente).
+- **Trade-off documentado:** si el dev resetea por error, no hay Ctrl+Z. **Mitigación:** los edits individuales sobre los sliders post-reset SÍ son undoable (mismo `pushEditIfDone` pre-existente). En el peor caso el dev reescribe los valores a mano — fricción aceptable para no inflar v1.
+- **Revisión:** si emergen reportes de "reseteé y perdí mi config", priorizar `ResetSectionCommand` como sub-hito puntual.
+
+**Decisión clave 5 — Post-Process wrapper con `ImGui::Indent/Unindent` sobre TreeNode anidado nativo.** Bloque I reorganiza el Inspector a 2 headers top-level (Sky+Fog y Post-procesado) con los 4 sub-pases (Tonemap / Bloom / SSAO / Color Grading) dentro de Post-procesado.
+
+- **Razón:** ImGui no anida `CollapsingHeader` nativamente con un solo chevron — usar `TreeNode` anidado da un look-and-feel diferente (chevron doble) que no matchea la convención visual del resto del Inspector. `CollapsingHeader` plano + `Indent/Unindent` da el efecto visual de subordinación sin alterar el control de colapso.
+- **Patrón Unity Volume / Unreal PPV:** ambos usan algún tipo de indent visual o group headers — F2H58 elige la opción más simple compatible con el resto del panel.
+- **Aplicabilidad a otros paneles:** si emerge la necesidad de jerarquía visual similar en otros sub-paneles del Inspector (Mesh con submesh details, Animation con timeline groups), el patrón `Indent/Unindent` queda como template reusable.
+
+**Decisión clave 6 — IDs únicos por sufijo `##envreset_<id>` para los 5 botones reset.** Bug descubierto al primer tour: los 5 botones con mismo label visible "Restablecer" colisionaban en el ImGui ID interno → solo uno respondía al click.
+
+- **Razón:** convención ImGui — labels visibles iguales necesitan IDs distintos. Las opciones son: (a) labels visibles diferentes ("Restablecer Sky+Fog" / "Restablecer Bloom" — verboso), (b) sufijos `##id` que ImGui usa internamente sin mostrar (mantiene texto visible limpio), (c) `PushID/PopID` por sección (más invasivo). Elegimos (b) por mínima fricción.
+- **Generalización:** cualquier helper que pinte widgets con label visible idéntico debe tomar un `idSuffix` parameter — patrón aplicable a futuros helpers del Inspector.
+
+**Decisión clave 7 — Fix MenuBar pre-existente incluido en F2H58 (bug de F2H57).** Durante el tour Bloque F el editor crashea con assert ImGui `EndMenuBar`. Root cause: F2H57 Bloque E borró un `EndMenu()` del menu Help junto con el submenu Demos eliminado. El bug NO se manifestó en F2H57 porque el test de ese hito no hizo click sobre Help.
+
+- **Decisión:** fix de una línea (`ImGui::EndMenu();` en `MenuBar.cpp:256`) incluido en F2H58 en vez de hito separado. **Razón:** sin el fix, F2H58 no es testeable visualmente (el crash bloquea el tour). Hito de fix-only para una línea es overhead burocrático. **Mitigación:** commit separado con prefijo `fix(F2H57 followup):` para que git blame del MenuBar atribuya correctamente el origen del bug y del fix.
+- **Aplicabilidad futura:** patrón de "fix lateral de hito anterior incluido en hito siguiente con commit separado" queda como precedente — preferible a inflar el hito siguiente con tag separado para una línea de fix.
+
+---
+
 ## 2026-05-15: F2H57 cierre — Workflow Crear+Convertir entidad estilo Hammer/SFM
 
 **Contexto:** pivot temporal de Sub-fase 2.6 (render polish) a UX del editor entre F2H56 y F2H58, motivado por 3 bugs UX detectados durante el tour visual de F2H56. Tag `v1.44.0-fase2-hito57`. Dev validó: *"lo demas anda perfecto, me gusta como esta"* tras el followup del modal SFM + welcome centering.
