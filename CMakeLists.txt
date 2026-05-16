@@ -559,6 +559,7 @@ add_executable(MoodEditor
     src/editor/panels/scene/InspectorPanel_Transform.cpp
     src/editor/panels/scene/InspectorPanel_MeshRenderer.cpp
     src/editor/panels/scene/InspectorPanel_Light.cpp
+    src/editor/panels/scene/InspectorPanel_Environment.cpp  # F2H58 Bloque A
     src/editor/panels/scene/InspectorPanel_Script.cpp
     src/editor/panels/scene/InspectorPanel_Physics.cpp
     src/editor/panels/scene/InspectorPanel_Audio.cpp
