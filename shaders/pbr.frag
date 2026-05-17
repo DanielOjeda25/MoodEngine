@@ -25,6 +25,7 @@ in vec3  vColor;
 in vec2  vUv;
 in vec3  vWorldPos;
 in vec3  vWorldNormal;
+in vec3  vViewSpaceNormal;  // F2H61: view-space normal para el G-buffer (SSR).
 in float vViewSpaceZ;   // F2H60: |view-space Z| del vert para seleccion de cascada.
 
 uniform vec3 uCameraPos;
@@ -270,7 +271,15 @@ vec3 evalBrdf(vec3 N, vec3 V, vec3 L, vec3 lightRadiance,
 
 // --------------------------------------------------------------------------
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
+// F2H61: G-buffer parcial -- view-space normal + flag de "pixel PBR".
+// Si el FB no tiene location 1 attached (path LDR), el driver ignora
+// esta escritura. Si SI lo tiene, el SSRPass lee desde aca.
+//   rgb = normal en view-space (componentes [-1,1])
+//   a   = 1.0 marca "este pixel fue escrito por un shader PBR"
+// SSR descarta pixels con a < 0.5 (skybox/particles/debug no escriben
+// location 1 y quedan con el clear value (0,0,0,0)).
+layout(location = 1) out vec4 NormalRT;
 
 void main() {
     // --- Sample del material ---
@@ -373,4 +382,9 @@ void main() {
     lighting = mix(lighting, uFogColor, fogF);
 
     FragColor = vec4(lighting, 1.0);
+
+    // F2H61: emitir view-space normal al G-buffer. SSRPass lo lee. Si el
+    // FB no tiene attachment en location 1 (path LDR / FB sin normal RT),
+    // GL ignora silenciosamente esta escritura.
+    NormalRT = vec4(normalize(vViewSpaceNormal), 1.0);
 }

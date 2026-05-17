@@ -34,6 +34,7 @@ out vec3  vColor;
 out vec2  vUv;
 out vec3  vWorldPos;
 out vec3  vWorldNormal;
+out vec3  vViewSpaceNormal;  // F2H61: G-buffer normal para SSR (paridad con pbr.vert).
 out float vViewSpaceZ;
 
 void main() {
@@ -79,6 +80,9 @@ void main() {
 
     vec4 viewPos = uView * worldPos4;
     vViewSpaceZ = abs(viewPos.z);
+
+    // F2H61: paridad con pbr.vert.
+    vViewSpaceNormal = normalize(mat3(uView) * vWorldNormal);
 
     gl_Position = uProjection * viewPos;
 }

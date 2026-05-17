@@ -6,10 +6,13 @@
 
 namespace Mood {
 
-OpenGLFramebuffer::OpenGLFramebuffer(u32 width, u32 height, Format format) {
+OpenGLFramebuffer::OpenGLFramebuffer(u32 width, u32 height, Format format,
+                                       bool withNormalRT) {
     m_width = width;
     m_height = height;
     m_format = format;
+    // Normal RT solo aplica en modo HDR — el LDR final no lo necesita.
+    m_withNormalRT = withNormalRT && (format == Format::HDR);
     invalidate();
 }
 
@@ -19,6 +22,9 @@ OpenGLFramebuffer::~OpenGLFramebuffer() {
     }
     if (m_depthTexture != 0) {
         glDeleteTextures(1, &m_depthTexture);
+    }
+    if (m_normalTexture != 0) {
+        glDeleteTextures(1, &m_normalTexture);
     }
     if (m_colorTexture != 0) {
         glDeleteTextures(1, &m_colorTexture);
@@ -69,6 +75,10 @@ void OpenGLFramebuffer::invalidate() {
         glDeleteTextures(1, &m_depthTexture);
         m_depthTexture = 0;
     }
+    if (m_normalTexture != 0) {
+        glDeleteTextures(1, &m_normalTexture);
+        m_normalTexture = 0;
+    }
     if (m_colorTexture != 0) {
         glDeleteTextures(1, &m_colorTexture);
         m_colorTexture = 0;
@@ -102,6 +112,29 @@ void OpenGLFramebuffer::invalidate() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                            GL_TEXTURE_2D, m_colorTexture, 0);
+
+    // F2H61: Normal RT opcional (G-buffer parcial para SSR). RGBA16F para
+    // mantener precision de [-1,1] sin packing tricks. El alpha indica si
+    // el pixel fue escrito por un shader que emite normal (PBR variantes);
+    // shaders no-PBR (skybox/particles/debug) no escriben location 1 y
+    // dejan el alpha en 0 — el SSR usa eso como flag "no reflejar aca".
+    if (m_withNormalRT) {
+        glGenTextures(1, &m_normalTexture);
+        glBindTexture(GL_TEXTURE_2D, m_normalTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F,
+                     static_cast<GLsizei>(m_width), static_cast<GLsizei>(m_height),
+                     0, GL_RGBA, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1,
+                               GL_TEXTURE_2D, m_normalTexture, 0);
+
+        // Habilitar ambos draw buffers: location 0 = color, location 1 = normal.
+        const GLenum drawBufs[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+        glDrawBuffers(2, drawBufs);
+    }
 
     // Depth attachment:
     //   - HDR (F2H56): textura DEPTH24_STENCIL8 sampleable (SSAOPass lee

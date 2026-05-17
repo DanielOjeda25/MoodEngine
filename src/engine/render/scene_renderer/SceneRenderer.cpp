@@ -70,8 +70,11 @@ SceneRenderer::SceneRenderer()
     // Hito 15 Bloque 3: dos framebuffers para el viewport.
     //   - `m_sceneFb`: HDR (RGBA16F). Donde se pinta sky + escena + lit + fog.
     //   - `m_viewportFb`: LDR (RGBA8). Resultado del post-process pass.
+    // F2H61: el scene FB ahora exporta un G-buffer parcial (color + normal
+    // view-space en location 1) para el SSRPass. Sin SSR el normal RT existe
+    // pero no se samplea; cost extra ~8MB a 1080p.
     m_sceneFb = std::make_unique<OpenGLFramebuffer>(
-        1280u, 720u, OpenGLFramebuffer::Format::HDR);
+        1280u, 720u, OpenGLFramebuffer::Format::HDR, /*withNormalRT=*/true);
     // F2H56: FB intermedio HDR donde SSAOPass escribe (scene HDR
     // multiplicado por AO factor). Alimenta a BloomPass.
     m_ssaoOutFb = std::make_unique<OpenGLFramebuffer>(

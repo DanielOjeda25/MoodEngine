@@ -22,6 +22,7 @@ out vec3  vColor;
 out vec2  vUv;
 out vec3  vWorldPos;
 out vec3  vWorldNormal;
+out vec3  vViewSpaceNormal;  // F2H61: view-space normal para el G-buffer (SSR).
 out float vViewSpaceZ;  // F2H60: |view-space Z| para seleccion de cascada CSM.
 
 void main() {
@@ -38,6 +39,11 @@ void main() {
 
     vec4 viewPos = uView * worldPos4;
     vViewSpaceZ = abs(viewPos.z);
+
+    // F2H61: normal en view-space para el SSR pass. mat3(uView) descarta
+    // la traslacion. Como uView puede tener scale 1 (camara estandar),
+    // usamos transform directo en vez de inverse-transpose.
+    vViewSpaceNormal = normalize(mat3(uView) * vWorldNormal);
 
     gl_Position = uProjection * viewPos;
 }

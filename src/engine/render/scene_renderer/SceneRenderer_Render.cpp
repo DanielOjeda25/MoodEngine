@@ -131,6 +131,15 @@ void SceneRenderer::renderScene(Scene& scene,
     clear.color = {0.07f, 0.12f, 0.22f, 1.0f};
     m_renderer->beginFrame(clear);
 
+    // F2H61: el clear global pisa AMBOS color attachments con el sky color.
+    // Para el normal RT (location 1) necesitamos (0,0,0,0) para que el SSR
+    // distinga pixels "no-PBR" via alpha < 0.5. Si el FB se construyo sin
+    // normal RT, glClearBufferfv en draw buffer 1 es no-op silencioso.
+    if (m_sceneFb->glNormalTextureId() != 0) {
+        const GLfloat zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        glClearBufferfv(GL_COLOR, 1, zero);
+    }
+
     // Skybox primero (depth=1 + LEQUAL).
     if (m_skyboxRenderer) {
         MOOD_PROFILE_SCOPE("Skybox::draw");

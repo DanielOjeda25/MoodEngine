@@ -21,7 +21,8 @@ public:
     ///     textura LDR del post-process pass para mostrar.
     enum class Format { LDR = 0, HDR = 1 };
 
-    OpenGLFramebuffer(u32 width, u32 height, Format format = Format::LDR);
+    OpenGLFramebuffer(u32 width, u32 height, Format format = Format::LDR,
+                       bool withNormalRT = false);
     ~OpenGLFramebuffer() override;
 
     OpenGLFramebuffer(const OpenGLFramebuffer&) = delete;
@@ -46,6 +47,14 @@ public:
     ///        SSAOPass para samplear depth del scene FB.
     GLuint glDepthTextureId() const { return m_depthTexture; }
 
+    /// @brief F2H61: GLuint del normal RT (G-buffer parcial para SSR).
+    ///        Devuelve 0 si el FB se construyo sin `withNormalRT`. Solo
+    ///        valido en modo HDR — los PBR shaders escriben view-space
+    ///        normal al location 1; otros shaders (skybox/particles/debug)
+    ///        no tocan el location 1 y dejan los pixels con el clear (0,0,0,0)
+    ///        — el SSR usa alpha < 0.5 como flag "no-PBR / skip".
+    GLuint glNormalTextureId() const { return m_normalTexture; }
+
     /// @brief Formato del color attachment (LDR/HDR).
     Format format() const { return m_format; }
 
@@ -57,9 +66,11 @@ private:
     GLuint m_colorTexture = 0;
     GLuint m_depthRbo = 0;          // LDR: depth-stencil renderbuffer
     GLuint m_depthTexture = 0;      // HDR (F2H56): depth como textura sampleable
+    GLuint m_normalTexture = 0;     // HDR (F2H61): view-space normal RT, solo si withNormalRT
     u32 m_width = 0;
     u32 m_height = 0;
     Format m_format = Format::LDR;
+    bool   m_withNormalRT = false;
 };
 
 } // namespace Mood
