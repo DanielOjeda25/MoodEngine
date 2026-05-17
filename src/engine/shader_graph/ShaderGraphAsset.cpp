@@ -386,7 +386,14 @@ NodeGraph::NodeId Asset::createNode(NodeKind kind, glm::vec2 position) {
     populateDefaultSockets(m_graph, nodeId, kind);
 
     NodeGraph::Node* n = m_graph.findNode(nodeId);
-    if (n) populateDefaultLiterals(*n, kind);
+    if (n) {
+        // El title bar del editor visual lee n->title; si esta vacio
+        // el wrapper cae a "Node #ID". Seteamos el display name del
+        // kind ("Color", "Output PBR", "Lerp", ...) para que el dev
+        // vea labels semanticos en lugar de IDs anonimos.
+        n->title = nodeKindDisplayName(kind);
+        populateDefaultLiterals(*n, kind);
+    }
 
     if (kind == NodeKind::OutputPBR) {
         m_outputNodeId = nodeId;

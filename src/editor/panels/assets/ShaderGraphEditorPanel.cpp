@@ -206,6 +206,26 @@ void ShaderGraphEditorPanel::drawToolbar() {
         newAsset();
     }
     ImGui::SameLine();
+    // F2H62 polish: imgui-node-editor consume el right-click del canvas
+    // antes que nuestro codigo (lo usa para su propio menu interno).
+    // Boton explicito en el toolbar como ruta primaria para spawn de
+    // nodos -- siempre funciona, no depende del canvas.
+    if (ImGui::Button("+ Agregar nodo")) {
+        ImGui::OpenPopup("##ToolbarAddNodePopup");
+    }
+    if (ImGui::BeginPopup("##ToolbarAddNodePopup")) {
+        ImGui::TextDisabled("Agregar nodo al grafo");
+        ImGui::Separator();
+        for (ShaderGraph::NodeKind kind : ShaderGraph::allNodeKinds()) {
+            if (ImGui::MenuItem(ShaderGraph::nodeKindDisplayName(kind))) {
+                // Pos default cerca del centro-izquierda del canvas;
+                // el dev arrastra a donde quiera despues.
+                spawnNode(kind, glm::vec2{80.0f, 80.0f});
+            }
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::SameLine();
     if (ImGui::Button("Compilar")) {
         compile();
     }
@@ -224,50 +244,34 @@ void ShaderGraphEditorPanel::drawToolbar() {
 // -------------------------------------------------------------
 
 void ShaderGraphEditorPanel::drawCanvasAndPalette() {
-    // Hint visible para el usuario.
-    ImGui::TextDisabled("Click derecho: agregar nodo  |  Del: borrar  |  drag socket → socket: conectar");
+    // Hint para el usuario. Hay dos rutas para spawnear nodos: boton del
+    // toolbar (siempre visible) o right-click sobre el canvas vacio
+    // (Unity/Unreal-style, integrado via EditorDrawConfig del wrapper).
+    ImGui::TextDisabled("Click derecho en canvas o boton '+ Agregar nodo'  |  Del: borrar  |  drag socket -> socket: conectar");
     ImGui::Separator();
 
-    // Para que BeginPopupContextWindow capture el right-click del canvas,
-    // tiene que ejecutarse DENTRO de la misma ImGui window que contiene
-    // al canvas. La opcion mas robusta es chequear el right click sobre
-    // el rect del child y abrir el popup manualmente.
-
-    const ImVec2 canvasMin = ImGui::GetCursorScreenPos();
     const ImVec2 canvasSize = ImGui::GetContentRegionAvail();
-
     ImGui::BeginChild("##GraphCanvas", canvasSize, false,
                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar);
 
-    const auto events = m_canvas.draw(m_asset.graph());
-
-    // Right-click sobre el child (siempre que NO sea sobre un nodo
-    // -- imgui-node-editor maneja su propio popup encima). Aproximacion:
-    // si el child fue clickeado con boton derecho y NO hay nodos
-    // seleccionados, abrir el popup de palette.
-    if (ImGui::IsWindowHovered() &&
-        ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
-        m_canvas.selectedNodes().empty()) {
-        ImGui::OpenPopup("##AddNodePopup");
-    }
-
-    if (ImGui::BeginPopup("##AddNodePopup")) {
+    // Configuracion del wrapper: callback de background context menu.
+    // El wrapper se encarga de Suspend/Resume + Begin/EndPopup; aca
+    // solo emitimos los MenuItem de la palette. canvasPos es la
+    // posicion en coords del editor donde el dev clickeo -- la usamos
+    // como pos del nodo nuevo para que aparezca exactamente bajo el
+    // cursor.
+    NodeGraph::EditorDrawConfig cfg;
+    cfg.drawBackgroundContextMenu = [this](glm::vec2 canvasPos) {
         ImGui::TextDisabled("Agregar nodo");
         ImGui::Separator();
-        // Una lista plana ordenada por NodeKind. Para v2 podriamos
-        // categorizar (Input / Math / Vector / Output) con submenus.
-        for (NodeKind kind : ShaderGraph::allNodeKinds()) {
+        for (ShaderGraph::NodeKind kind : ShaderGraph::allNodeKinds()) {
             if (ImGui::MenuItem(ShaderGraph::nodeKindDisplayName(kind))) {
-                // Pos relativa al canvas + un offset arbitrario. v2:
-                // mapear pos del mouse a coords del editor de nodos.
-                const ImVec2 mouse = ImGui::GetMousePosOnOpeningCurrentPopup();
-                const glm::vec2 pos{ mouse.x - canvasMin.x,
-                                      mouse.y - canvasMin.y };
-                spawnNode(kind, pos);
+                spawnNode(kind, canvasPos);
             }
         }
-        ImGui::EndPopup();
-    }
+    };
+
+    const auto events = m_canvas.draw(m_asset.graph(), &cfg);
 
     ImGui::EndChild();
 

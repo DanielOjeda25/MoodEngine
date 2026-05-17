@@ -85,49 +85,22 @@ CPMAddPackage(
     DOWNLOAD_ONLY YES
 )
 
-# imgui-node-editor (F2H46): editor de grafos visuales reutilizable.
-# Base de los Dialog Editor y Quest Editor de Sub-fase 2.5. Header-only-ish:
-# 4 .cpp + headers. No tiene CMakeLists utilizable, asi que armamos
-# nuestro propio target estatico (mismo patron que `imgui`). License MIT.
-# Pinned a v0.9.3 stable; bump manual cuando emerja necesidad.
+# imnodes (F2H62 migration from imgui-node-editor): editor de grafos
+# visuales con UX estilo Blender (cuerpo del nodo arrastrable desde
+# cualquier punto, pines = hot-area solo sobre el circulito, sin
+# proximity hit-test del rival). License MIT (Nelarius/imnodes).
+# Lo usamos via el wrapper Mood::NodeGraph::NodeGraphEditor en
+# src/engine/nodegraph/.
 CPMAddPackage(
-    NAME imgui_node_editor
-    GITHUB_REPOSITORY thedmd/imgui-node-editor
-    # Pinned a master commit del 2025 que compila contra ImGui docking
-    # branch actual. v0.9.3 (Aug 2023) es muy vieja: usaba ImRect::Floor
-    # + GetKeyIndex que el ImGui actual ya removio. Cuando aparezca una
-    # v0.9.4+ tag estable, migrar a ese tag.
-    GIT_TAG 021aa0ea4da13fed864bafb2a92d4c5205076866
+    NAME imnodes
+    GITHUB_REPOSITORY Nelarius/imnodes
+    # v0.5 (2022) rompe contra ImGui docking actual (IM_OFFSETOF removido,
+    # ImDrawCmd::TextureId renombrado a TexRef). HEAD de master incluye
+    # los fixes para ImGui 1.92+ (commits b2ec254, c9bb8e9, e9bb6ca).
+    # Pinned a este commit estable hasta que aparezca un v0.6 tagged.
+    GIT_TAG eb36902c892548ef94f88f51ad7e7c9c7058a71c
     DOWNLOAD_ONLY YES
 )
-
-# v0.9.3 (Aug 2023) define operator==(ImVec2), operator!=(ImVec2) y
-# operator*(float, ImVec2) en imgui_extra_math.inl que colisionan con
-# el ImGui docking branch actual (los provee desde imgui.h:3038-3054).
-# Patch idempotente: envuelve el bloque de los 3 operadores en
-# #ifndef IMGUI_DEFINE_MATH_OPERATORS_IMPLEMENTED. Al re-configurar
-# detectamos el guard y no se reaplica.
-set(_ne_extra_inl "${imgui_node_editor_SOURCE_DIR}/imgui_extra_math.inl")
-if(EXISTS "${_ne_extra_inl}")
-    file(READ "${_ne_extra_inl}" _ne_content)
-    if(NOT _ne_content MATCHES "MOOD_NE_OPS_GUARD")
-        # Estrategia: 2 reemplazos single-line (CRLF-safe). Marcador de
-        # inicio: la linea de operator==. Marcador de fin: la siguiente
-        # linea unica conocida post-bloque (`# if IMGUI_VERSION_NUM`).
-        set(_start_line "inline bool operator==(const ImVec2& lhs, const ImVec2& rhs)")
-        set(_end_line   "# if IMGUI_VERSION_NUM < 18955")
-        string(REPLACE
-            "${_start_line}"
-            "// MOOD_NE_OPS_GUARD start\n#ifndef IMGUI_DEFINE_MATH_OPERATORS_IMPLEMENTED\n${_start_line}"
-            _ne_content "${_ne_content}")
-        string(REPLACE
-            "${_end_line}"
-            "#endif // MOOD_NE_OPS_GUARD end\n${_end_line}"
-            _ne_content "${_ne_content}")
-        file(WRITE "${_ne_extra_inl}" "${_ne_content}")
-        message(STATUS "[F2H46] Patched imgui_extra_math.inl: guarded 3 ImVec2 operators against ImGui docking-branch duplicates")
-    endif()
-endif()
 
 CPMAddPackage(
     NAME doctest
@@ -305,25 +278,29 @@ target_link_libraries(imgui PUBLIC
 )
 
 # ---------------------------------------------------------------------------
-# imgui-node-editor (F2H46): node-graph editor library. Base de Dialog
-# Editor + Quest Editor + Material Editor pro version futura. Cuatro
-# .cpp + headers; linkea contra `imgui` para los draw calls.
+# imnodes (F2H62): node-graph editor library con UX estilo Blender.
+# Reemplazo de imgui-node-editor por bugs cronicos de UX (proximity
+# hit-test que disparaba "crear link" al intentar mover nodos). Mismo
+# rol arquitectonico: base del Dialog Editor + Shader Graph + futuros.
+# Header + 1 .cpp; linkea contra `imgui`.
 # ---------------------------------------------------------------------------
-add_library(imgui_node_editor STATIC
-    ${imgui_node_editor_SOURCE_DIR}/crude_json.cpp
-    ${imgui_node_editor_SOURCE_DIR}/imgui_canvas.cpp
-    ${imgui_node_editor_SOURCE_DIR}/imgui_node_editor.cpp
-    ${imgui_node_editor_SOURCE_DIR}/imgui_node_editor_api.cpp
+add_library(imnodes STATIC
+    ${imnodes_SOURCE_DIR}/imnodes.cpp
 )
-target_include_directories(imgui_node_editor PUBLIC
-    ${imgui_node_editor_SOURCE_DIR}
+target_include_directories(imnodes PUBLIC
+    ${imnodes_SOURCE_DIR}
 )
-target_link_libraries(imgui_node_editor PUBLIC imgui)
+target_link_libraries(imnodes PUBLIC imgui)
+# imnodes requiere IMGUI_DEFINE_MATH_OPERATORS antes de incluir
+# imgui_internal.h (lo enforza imgui_internal con un #error). Lo
+# definimos PUBLIC para que consumidores del wrapper que tengan que
+# incluir imnodes.h tambien lo tengan.
+target_compile_definitions(imnodes PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 # Suprimir warnings de la lib externa (no son nuestro codigo).
 if(MSVC)
-    target_compile_options(imgui_node_editor PRIVATE /W0)
+    target_compile_options(imnodes PRIVATE /W0)
 else()
-    target_compile_options(imgui_node_editor PRIVATE -w)
+    target_compile_options(imnodes PRIVATE -w)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -481,7 +458,7 @@ target_link_libraries(mood_engine_lib PUBLIC
     glm::glm
     spdlog::spdlog
     imgui
-    imgui_node_editor  # F2H46
+    imnodes  # F2H62 (reemplazo de imgui-node-editor)
     glad
     stb
     nlohmann_json::nlohmann_json

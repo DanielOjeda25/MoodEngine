@@ -24,10 +24,27 @@
 
 #include <glm/vec2.hpp>
 
+#include <functional>
 #include <memory>
 #include <vector>
 
 namespace Mood::NodeGraph {
+
+/// @brief Configuracion opcional pasada a draw(). Permite al caller
+///        engancharse a hooks del editor (ej. right-click sobre el
+///        canvas vacio para spawn de nodos estilo Unity/Unreal). El
+///        wrapper gestiona Suspend/Resume + Begin/EndPopup internamente
+///        — el caller solo emite ImGui::MenuItem dentro del callback.
+struct EditorDrawConfig {
+    /// Se invoca dentro de un popup que abre el wrapper cuando el dev
+    /// hace right-click sobre el espacio vacio del canvas. El callback
+    /// emite `ImGui::MenuItem(...)` etc. `canvasPos` es la posicion
+    /// donde se hizo el right-click en coords del editor (no de
+    /// pantalla) — util para spawnear el nodo cerca del cursor.
+    /// Vacio = el wrapper no abre ningun menu (el right-click queda
+    /// libre para los menus internos de la lib).
+    std::function<void(glm::vec2 canvasPos)> drawBackgroundContextMenu;
+};
 
 /// @brief Evento emergente del editor visual. El caller los itera
 ///        despues de draw() para mutar el graph (directo o via
@@ -64,8 +81,12 @@ public:
     ///        — solo se lee. La lista de Event retornada describe los
     ///        cambios que el user pidio, pero aplicarlos es trabajo del
     ///        caller (asi puede envolverlos en Command para undo).
+    /// @param cfg Configuracion opcional para hookear callbacks (ej.
+    ///        background context menu para spawn de nodos). nullptr =
+    ///        comportamiento default sin hooks.
     /// @return Eventos a aplicar. Si vacio, no hubo cambios solicitados.
-    std::vector<EditorEvent> draw(const Graph& graph);
+    std::vector<EditorEvent> draw(const Graph& graph,
+                                    const EditorDrawConfig* cfg = nullptr);
 
     /// @brief IDs de los nodos seleccionados actualmente (selection
     ///        manejada internamente por la lib). Util para Inspector
