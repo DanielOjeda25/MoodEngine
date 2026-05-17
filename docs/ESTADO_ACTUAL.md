@@ -36,16 +36,17 @@ Tag: `v1.46.0-fase2-hito59`. Validado por dev tras tour completo del modal + ove
 **Limitación arquitectónica destacada durante el tour** (NO scope F2H59, scope explícito de F2H60):
 - **Los brushes con RigidBody Dynamic NO caen visualmente**. El body de física se simula correctamente (Jolt lo cae), pero el mesh cache del brush se construye con `worldMatrix` incrustado en los vértices y solo se rebuilda si `bc.dirty=true` — al cambiar `t.position` el cache queda desactualizado. Esto es consistente con la **convención Source/Hammer 2004**: brushes son geometría estática del mapa, props (meshes) son los objetos con física dinámica.
 
-**Próximo hito**: **F2H60 — Adoptar Source paradigm + UX polish acumulado**. Plan en [`PLAN_HITO_F2H60.md`](PLAN_HITO_F2H60.md):
-- Rename UI "Brush" → "Estructura" / "Geometría del nivel" (BrushComponent técnico no cambia).
-- Tab "Primitivas" del modal Crear Entidad se divide en 2 sub-secciones: **Estructura** (los 11 brushes actuales) + **Objetos** (5-6 meshes procedurales: Cubo, Esfera, Cilindro, Cápsula, Cono).
-- Generación de meshes procedurales en runtime para "Objetos" — soportan física dinámica nativamente.
-- Warning en Inspector: si el dev pone RigidBody Dynamic sobre un Brush, slider Type Dynamic queda disabled con tooltip.
-- Kit "Physics" en modal Convert Entity (aplicable solo a entities con MeshRenderer).
-- Map Tools híbrido Hammer+Blender (dockable + opcionalmente desplegable como overlay del viewport ortográfico).
-- Overlay context-aware por workspace (botones específicos según narrative / map_editor / etc.).
-- Homogeneización del sistema de iconos del editor.
-- Modificadores Blender-style para operaciones booleanas.
+**Reset de scope post-F2H59 (2026-05-16)**: F2H60 originalmente iba a ser "Source paradigm + meshes procedurales + UX polish acumulado" (propuesta del agente durante el tour de F2H59). Pedido del dev: *"hagamos todo lo que falta que venia del plan original, y guardemos lo que falta, de pendientes, para no desviarnos porque me estoy desviando muchisimo"*. **F2H60 retoma el plan original** (`PLAN_FASE2.md`). Los follow-ups acumulados quedan registrados en [`BACKLOG.md`](BACKLOG.md) sin priorización.
+
+**Próximo hito**: **F2H60 — Cascade Shadow Maps (CSM)** (= F2H22 del plan original). Plan en [`PLAN_HITO_F2H60.md`](PLAN_HITO_F2H60.md). 3-4 cascadas para shadows del directional light a distintas distancias. Mejor calidad sin perder rendimiento. Cierra Sub-fase 2.3 original (render polish: F2H17 material editor lite + F2H19/F2H56 SSAO + F2H21/F2H55 bloom + F2H22/F2H60 CSM done; quedan F2H18 shader graph runtime + F2H20 SSR pendientes).
+
+**Pendientes restantes del plan original (post-F2H60)**:
+- **Sub-fase 2.3 — Renderer**: F2H18 (Shader graph runtime), F2H20 (SSR).
+- **Sub-fase 2.4 — Física avanzada (entera pendiente)**: F2H23 (constraints), F2H24 (ragdolls), F2H25 (vehicles), F2H26 (force fields), F2H27 (triggers avanzados), F2H28 (cloth/soft body).
+- **Sub-fase 2.6 — Pipeline de contenido AI (mayoría pendiente)**: F2H36 (Blender MCP), F2H37 (armas procedurales), F2H38 (props procedurales), F2H39 (pipeline Blender → MoodEngine auto), F2H40 (validación assets).
+- **Sub-fase 2.7 — UI/UX final**: F2H41 (theming light/dark), F2H42 (atajos configurables), F2H44 (cierre Fase 2 + tag `v2.0.0`). **SKIP F2H43 (tutorial in-app)** — pedido del dev: *"el tutorial no lo vea necesario aun, ya que estos eguira cambiando"*.
+
+Total: **16 hitos pendientes** del plan original tras F2H60.
 
 ---
 
