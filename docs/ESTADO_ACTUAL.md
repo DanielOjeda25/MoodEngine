@@ -4,7 +4,46 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H59 cerrado (2026-05-16)
+## 0. ACTUALIZACIÓN F2H60 cerrado (2026-05-17)
+
+**Cuarto hito de Sub-fase 2.6 (Render polish) cerrado — Cascade Shadow Maps (CSM) con 4 cascadas + 5 iteraciones de polish UX descubiertas durante el tour visual.**
+Tag: `v1.47.0-fase2-hito60`. Validado por dev tras 5 ciclos de feedback + fix. Citas verbatim: *"todo ok"* (cierre), *"al acercarlo al suelo, para ver la sombra, la sombra desaparece"* (iter4 — bias 0.005 era ~0.25m de lift en NDC), *"baje y aumento los valores de cascadadas y split, no alteran nada, no se si pusiste logs"* (iter5 — las fórmulas para extraer near/far del proj matrix estaban INVERTIDAS).
+
+**Qué entrega F2H60** (Bloques A-F + iter1-5, detalle completo en `HITOS.md`):
+- **Bloque A — `OpenGLShadowMapArray`**: wrapper `GL_TEXTURE_2D_ARRAY` 2048×2048×N + 1 FBO con `glFramebufferTextureLayer` para renderear cada cascada como layer.
+- **Bloque B — `ShadowMath.h` extensión**: `computeCsmSplits(near, far, count, lambda)` (PSSM Zhang 2006) + `computeCascadeShadowMatrices` (bounding sphere del sub-frustum + texel snapping).
+- **Bloque C — refactor `ShadowPass`**: API `recordCsm(...)` reemplaza single-map. Itera 3 tipos de casters (MeshRenderer / BrushComponent / CompiledMeshComponent).
+- **Bloque D — shaders `pbr.frag` + `pbr.vert` (+ variants)**: `sampler2DShadow` → `sampler2DArrayShadow`, `sampleShadowCascade(worldPos, idx)` con hardware PCF 4 taps + 3×3 manual (36 muestras), `sampleShadow` selecciona cascada por `vViewSpaceZ` con blend lineal en último 15%.
+- **Bloque E — wireup `SceneRenderer`**: cache F2H42 (bounding-sphere hash) eliminado. `m_shadowPass->recreate()` si cambia `cascadeCount`.
+- **Bloque F — `EnvironmentComponent` + Inspector + i18n**: knobs cascadas (1-4) + lambda (0-1).
+
+**5 iteraciones de polish UX (todas validadas por dev)**:
+- **iter1**: defaults OFF (bloom/SSAO/CSM) por pedido *"todo deberia estar desactivado por defecto"*. Botones reset con nombre de sección. GL warning "texture object 0 ... shadow sampler" fixeado (bindeo siempre). Bug C++ lifetime en Color Grading dropdown (`?????`) fixeado.
+- **iter2**: separación visual de secciones (`drawSectionDivider`) + revert label "Restablecer" plano por pedido *"solo diga Restablecer"*. Tab "Luces" en modal Crear Entidad. **Gate `csmEnabled` master switch ELIMINADO** — el dev activaba CastShadows pero requería 2 toggles; ahora gate solo per-light (`LightComponent::castShadows`).
+- **iter3**: bug shadow casters faltantes — `ShadowPass` solo iteraba `MeshRendererComponent`, los brushes CSG NO proyectaban sombras. Fix: añadir paths `BrushComponent` + `CompiledMeshComponent`. Bug `uModel = identity` (mi primer fix) → sombras pegadas al origen → fix correcto `uModel = worldMatrix` (vertices del brush son LOCAL space).
+- **iter4**: `applyEnvironmentFromScene` movido ANTES del shadow pass (sliders sin 1-frame delay). `uShadowBias` 0.005 → 0.0015 (era ~0.25m de lift NDC → peter-panning brutal). Logs diagnósticos en `ShadowPass::recordCsm` y `applyEnvironmentFromScene`.
+- **iter5**: **bug crítico fórmulas near/far del proj matrix INVERTIDAS**. Pre-fix log mostraba `near=100, far=0.1, splits=[100.00 | 100.25 | ... | 101.00]` → cascadas fuera de cuadro → mover sliders no surtía efecto. Fórmula correcta GLM right-handed: `near = m32 / (m22 - 1)`, `far = m32 / (m22 + 1)`. Post-fix log: `near=0.10, far=100.00, splits=[0.10 | 0.56 | 3.16 | 17.78 | 100.00]` con lambda=1.
+
+**Decisiones** (detalle en `DECISIONS.md`):
+1. **CSM clásico sobre Source paradigm** — reset al plan original. Backlog de follow-ups (Source paradigm, Map Tools híbrido, modifiers Blender, brushes con física dinámica) en `BACKLOG.md`.
+2. **Gate de sombras solo per-light** — `LightComponent::castShadows` es la fuente única; el panel Environment solo tiene knobs de calidad (cascadas + lambda).
+3. **`uModel = worldMatrix` para brushes en shadow pass** — mismo criterio que el PBR pass.
+4. **`applyEnvironmentFromScene` ANTES del shadow pass** — para que los sliders surtan efecto en el mismo frame.
+5. **PSSM lambda hybrid 0.5 sweet spot** (Zhang 2006) + bias 0.0015 con escalado por cascada (×1,×2,×3,×4).
+6. **Logs diagnósticos conservados** (low-spam, solo al cambiar) como guía para futuras sesiones.
+
+**Limitaciones conocidas v1**:
+- Sin shadow para luces puntuales (cube map shadows agendado a follow-up futuro).
+- Sin frustum cull per-cascada (todas las cascadas dibujan toda la escena — optimización futura si N-pass impacta perf).
+- Shadow map size fijo a 2048×2048 (configurable via `ShadowPass::recreate` pero sin slider en UI).
+
+**Próximo hito**: **F2H61 — SSR (Screen-Space Reflections)** (= F2H20 del plan original). Plan stub en [`PLAN_HITO_F2H61.md`](PLAN_HITO_F2H61.md). Reflexiones screen-space para superficies metálicas/agua, cierra Sub-fase 2.3 render polish (junto con F2H62 Shader graph runtime queda Sub-fase 2.3 completa del plan original).
+
+**Pendientes restantes del plan original (post-F2H60)**: 16 hitos — ver sección 0bis F2H59 abajo.
+
+---
+
+## 0bis. ACTUALIZACIÓN F2H59 cerrado (2026-05-16)
 
 **Pivot temporal de Sub-fase 2.6 a UX del editor — primitivas clásicas (Plano + Cono + Cápsula + Quad) + reorg "Crear entidad" + toolbar flotante Blender-style sobre el viewport.**
 Tag: `v1.46.0-fase2-hito59`. Validado por dev tras tour completo del modal + overlay. Citas verbatim del proceso: *"se sigue viendo unas lineas finas"* (post-fix), *"y esta idea me gusta"* (sobre Map Tools híbrido Hammer+Blender — agendado a F2H60), *"sigamos esa direccion"* (confirmación del Source paradigm como scope de F2H60).

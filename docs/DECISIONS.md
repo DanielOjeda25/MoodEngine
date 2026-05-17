@@ -11,6 +11,72 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-17: F2H60 cierre — Cascade Shadow Maps (CSM) + 5 iteraciones de polish UX
+
+**Contexto:** cuarto hito de Sub-fase 2.6 (Render polish). Plan original = CSM clásico, sucesor de Hito 16 (single shadow map estático). El agente propuso pivotar al "Source paradigm + meshes procedurales" como F2H60, pero el dev pushback con *"no quiero alejarme tanto de la vision y el plan original"* y *"hagamos todo lo que falta que venia del plan original, y guardemos lo que falta, de pendientes"* → reset a CSM clásico. Follow-ups descartados acumulados en `BACKLOG.md`. Tag `v1.47.0-fase2-hito60`. Hito mediano técnico (Bloques A-F) + iteración intensa de UX (iter1-5) descubierta durante el tour visual.
+
+**Decisión clave 1 — Gate de sombras solo per-light (eliminado `csmEnabled` global).** Mi implementación inicial tenía un master switch `EnvironmentComponent::csmEnabled` Y el `LightComponent::castShadows` per-light, requiriendo ambos = true para que se vieran sombras. El dev activaba CastShadows en la luz directional pero nada aparecía hasta que también activaba CSM en Environment.
+
+- **Razón:** doble gate = confusión cognitive load alta y feedback no inmediato (¿por qué no veo sombras si la luz tiene castShadows?). El gate per-light es el modelo mental natural: "esta luz proyecta sombras o no". El panel Environment debe contener solo knobs de **calidad** (cantidad de cascadas + lambda), no on/off.
+- **Cambio aplicado:** eliminado `csmEnabled` del componente, del SavedEnvironment, del read/write del EntitySerializer, del SceneRenderer, del Inspector. La sección CSM del Inspector muestra un hint "Activá CastShadows en una Luz Direccional para que se vean".
+- **Alternativa descartada:** auto-activar `csmEnabled` cuando se enable CastShadows. Rechazada por complejidad innecesaria (el campo legacy debe quedar) y por seguir requiriendo el toggle en el Inspector como UX.
+
+**Decisión clave 2 — `uModel = worldMatrix` para brushes en el shadow pass.** Mi primer fix de iter3 usaba `uModel = identity` argumentando que `Csg::buildBrushMesh` "hornea el worldMatrix en los vertices". Bug visible: la sombra del cubo quedaba clavada en el origen del mundo (0,0,0); al mover el cubo se "desconectaba" de su sombra; al bajar el cubo encima del origen la sombra "desaparecía" porque se solapaba con el caster.
+
+- **Razón:** lectura cuidadosa de `BrushMesh.cpp:154` muestra `v.position = p` SIN multiplicar por worldMatrix. El argumento worldMatrix solo se usa para UVs `lockToWorld` (proyección al world space del vertex antes de evaluar los UV axes). Las vertices del brush quedan en LOCAL space. El PBR pass usa `uModel = worldMatrix` para transformarlas; el shadow pass debe hacer lo mismo.
+- **Lección general:** "el cache hornea X" requiere verificación en el source. La asunción cuesta horas de debug cuando se invalida silenciosamente. Documentado el bug en el comentario del fix en `ShadowPass.cpp` para que el próximo dev no repita.
+
+**Decisión clave 3 — `applyEnvironmentFromScene` movido ANTES del shadow pass.** Pre-iter4 la llamada estaba en `renderScene` línea 136 (después del shadow pass). Los miembros `m_csmCascadeCount` / `m_csmSplitLambda` que el shadow pass consumía eran del frame anterior → cambios del Inspector tenían 1 frame de delay.
+
+- **Razón:** `applyEnvironmentFromScene` solo modifica miembros del SceneRenderer (no toca GL state), así que es seguro moverla al tope del frame. El delay frame-vs-frame es invisible en condiciones normales (60 FPS = 16ms), pero para sliders en tiempo real el dev espera feedback inmediato y la asunción de "no responde" se construye rápido.
+- **Pattern:** las funciones que solo configuran state desde una fuente de verdad (componentes del scene) deberían ejecutarse al inicio del frame, antes de cualquier pase que las consuma. Tomar nota para futuras refactorizaciones del frame loop.
+
+**Decisión clave 4 — Logs diagnósticos conservados como deuda buena.** Iter5 destapó un bug crítico que llevaba semanas sin descubrirse: las fórmulas para extraer `cameraNear/Far` del proj matrix GLM right-handed estaban INVERTIDAS:
+
+```cpp
+// Pre-fix (INCORRECTO):
+n = m32 / (m22 + 1)    // -> daba far
+f = m32 / (m22 - 1)    // -> daba near
+
+// Post-fix (CORRECTO):
+n = m32 / (m22 - 1)
+f = m32 / (m22 + 1)
+```
+
+El log `ShadowPass params: near=100, far=0.1, splits=[100.00 | 100.25 | ... | 101.00]` lo hizo trivial (los splits "fuera de cuadro" son visibles a simple vista). Sin el log el bug habría sobrevivido porque mover lambda **sí cambia el cálculo** — solo que el resultado sigue en rango basura, y el efecto visual es invisible.
+
+- **Decisión:** conservar los 3 logs diagnósticos (`applyEnvironmentFromScene LEE Environment.CSM`, `ShadowPass params` con splits, `ShadowPass casters` por tipo) como infraestructura permanente. Solo logean al cambiar valores (low-spam). Costo: nulo en runtime estable, gigantesco beneficio cuando regresa un bug.
+- **Pattern:** "imprimir los números clave" es la primera herramienta de debug. Logs diagnósticos de orden de magnitud (¿el near es 0.1 o 100? los splits cubren la escena o no?) atrapan bugs que tests unitarios no atrapan porque el bug está en el wireup (matriz pasada, no calculada).
+
+**Decisión clave 5 — PSSM lambda hybrid 0.5 default + bias 0.0015 con escalado por cascada (×1, ×2, ×3, ×4).** Trade-off de calidad sweet spot.
+
+- **Lambda 0.5** (Zhang 2006 PSSM hybrid): lambda 0 puro lineal subutiliza cascadas cerca (todas cubren áreas similares); lambda 1 puro log subutiliza cascadas lejos (cascadas 2-3-4 colapsan). 0.5 es el balance práctico documentado en el paper.
+- **Bias 0.0015** sobre el 0.005 inicial: era ~0.25m de "lift" en NDC depth → peter-panning brutal al apoyar caster sobre receptor. 0.0015 elimina el problema sin generar shadow acné perceptible (en combinación con el cull `GL_FRONT` que descarta caras frontales del caster).
+- **Escalado por cascada (×1, ×2, ×3, ×4)** porque cascadas lejanas tienen texeles más grandes; el bias absoluto NDC apropiado para cascada 0 es insuficiente para cascada 3.
+
+**Decisión clave 6 — Modal Crear Entidad: tab "Luces" como ciudadano de primera clase.** Pre-F2H60 iter2 las luces solo se podían crear vía "Convertir entidad" sobre un mesh existente, lo cual era confuso para arrancar una escena (no hay mesh todavía). Iter2 agrega `ProjectAction::AddDirectionalLight` + `AddPointLight` + handlers que spawnean entidad solo con Tag + Transform + LightComponent (sin mesh; el icono 2D del overlay del editor la hace visible).
+
+- **Razón:** el dev *"deberia poder crearse luces desde el panel de entidades"*. Workflow Hammer/SFM: 1 click → modal → tab → click. Consistente con la convención de F2H59 (modal único para crear geometría) extendida ahora a luces.
+- **Defaults sensatos**: Directional spawn (0,3,0), dir (-0.3,-1,-0.2), **castShadows=true** (engine-grade out-of-the-box). Point spawn (0,2,0), radius 10m, color cálido.
+
+**Decisión clave 7 — CSM clásico sobre Source paradigm (reset al plan original).** El agente propuso F2H60 = Source paradigm + meshes procedurales con física + UX polish acumulado (overlay context-aware, Map Tools híbrido Hammer+Blender, modifiers Blender-style, iconos homogéneos). El dev rechazó con *"no quiero alejarme tanto de la vision y el plan original... me estoy desviando muchisimo"*.
+
+- **Razón:** disciplina de scope. El plan original Fase 2 tiene 16 hitos pendientes después de F2H60; cada pivot agrega complejidad y push out de los objetivos originales. Los follow-ups son valiosos pero no urgentes.
+- **Mecánica:** `BACKLOG.md` creado al inicio de F2H60 (Bloque pre-A) para capturar todos los follow-ups sin priorización. El próximo hito (F2H61 SSR) sigue el plan original; los items del BACKLOG quedan disponibles para cuando emerja la demanda.
+
+**Alternativas descartadas en CSM core:**
+- Frustum cull per-cascada — diferido. Todas las cascadas dibujan toda la escena en v1. Si N-pass impacta perf medible, evaluar AABB frustum test por cascada antes del draw.
+- VSM (Variance Shadow Maps) o ESM (Exponential Shadow Maps) — más complejos, requieren blur pass, light leak en grietas. PCF estándar 3×3 con hardware 4 taps = 36 muestras efectivas, calidad decente sin complejidad extra.
+- Shadow map size dinámico per-cascade (cascadas cerca con mayor resolución) — viable pero requiere N texturas separadas en vez de un array. Optimización futura si emerge demanda.
+- Cascada exponencial vs lineal vs PSSM — PSSM (Zhang 2006) es el estándar industria. Stable Cascaded Shadow Maps (Microsoft) requieren recompute por frame con cierto overhead; la implementación actual ya tiene texel snapping para evitar shimmering al rotar cámara.
+
+**Condiciones de revisión:**
+- Si en F2H61+ (SSR) o follow-ups posteriores el rendering pipeline cambia significativamente, revisar si el order de `applyEnvironmentFromScene` antes del shadow pass sigue siendo el correcto.
+- Si emerge demanda de sombras para luces puntuales (point lights), implementar cube map shadows en hito propio (no encadenar a CSM).
+- Si el bias 0.0015 + ×N por cascada empieza a mostrar acné en mapas reales, considerar slope-scale bias en el shader (depender del ángulo entre `N` y `L`).
+
+---
+
 ## 2026-05-16: F2H59 cierre — Primitivas clásicas + reorg UX (modal Crear entidad + toolbar flotante)
 
 **Contexto:** pivot temporal de Sub-fase 2.6 (render polish) a UX del editor entre F2H58 (color grading) y F2H6X (siguiente render polish), motivado por el dev que durante el tour visual de F2H58 detectó que estaba usando un Box brush aplastado como suelo y pidió la primitiva Plano + primitivas clásicas adicionales. La conversación escaló a UX reorg general. Tag `v1.46.0-fase2-hito59`. Hito mediano (Bloques A-G).
