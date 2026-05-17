@@ -45,15 +45,12 @@ GLuint compileStage(GLenum stage, const std::string& source, const std::string& 
     return shader;
 }
 
-/// Compila vs+fs y linkea un program nuevo. En cualquier fallo lanza
-/// runtime_error con el mensaje de GL. El caller decide que hacer con su
-/// program previo (mantenerlo si esto fallo, swapearlo si exitoso).
-GLuint buildProgram(const std::string& vertexPath, const std::string& fragmentPath) {
-    const std::string vsSrc = readFile(vertexPath);
-    const std::string fsSrc = readFile(fragmentPath);
-
-    GLuint vs = compileStage(GL_VERTEX_SHADER, vsSrc, vertexPath);
-    GLuint fs = compileStage(GL_FRAGMENT_SHADER, fsSrc, fragmentPath);
+/// Compila vs+fs sources (ya leidos del disco o generados en memoria) y
+/// linkea un program nuevo. En cualquier fallo lanza runtime_error.
+GLuint buildProgramFromSources(const std::string& vsSrc, const std::string& vsName,
+                                  const std::string& fsSrc, const std::string& fsName) {
+    GLuint vs = compileStage(GL_VERTEX_SHADER, vsSrc, vsName);
+    GLuint fs = compileStage(GL_FRAGMENT_SHADER, fsSrc, fsName);
 
     GLuint prog = glCreateProgram();
     glAttachShader(prog, vs);
@@ -78,6 +75,13 @@ GLuint buildProgram(const std::string& vertexPath, const std::string& fragmentPa
     glDeleteShader(vs);
     glDeleteShader(fs);
     return prog;
+}
+
+/// Compila vs+fs desde archivos. En cualquier fallo lanza runtime_error.
+GLuint buildProgram(const std::string& vertexPath, const std::string& fragmentPath) {
+    const std::string vsSrc = readFile(vertexPath);
+    const std::string fsSrc = readFile(fragmentPath);
+    return buildProgramFromSources(vsSrc, vertexPath, fsSrc, fragmentPath);
 }
 
 /// Lee mtime con error_code. Si falla devuelve un file_time_type por defecto
@@ -105,6 +109,27 @@ OpenGLShader::OpenGLShader(const std::string& vertexPath, const std::string& fra
     Log::render()->info("Shader compilado: {} + {}", vertexPath, fragmentPath);
 }
 
+OpenGLShader::OpenGLShader(FromSourceTag,
+                              const std::string& vertexPath,
+                              const std::string& fragmentSource,
+                              const std::string& debugName)
+    : m_vertexPath(vertexPath)
+    , m_fragmentPath() {  // empty -> no hot-reload del frag
+    const std::string vsSrc = readFile(vertexPath);
+    m_program = buildProgramFromSources(vsSrc, vertexPath,
+                                            fragmentSource, debugName);
+    m_vertexMtime   = mtimeOf(vertexPath);
+    // m_fragmentMtime queda default (epoch); tryReloadIfChanged trata
+    // ese caso como "sin cambios" (ya tiene esa logica para archivos
+    // que desaparecen), asi que este shader nunca se hot-reloadea.
+    // El ShaderGraphCache rebuilea desde cero cuando el .moodshader
+    // cambie de hash -- ese es el equivalente de hot-reload para esta
+    // variante.
+    s_allShaders.push_back(this);
+    Log::render()->info("Shader compilado (from-source): {} + [{}]",
+                          vertexPath, debugName);
+}
+
 OpenGLShader::~OpenGLShader() {
     auto it = std::find(s_allShaders.begin(), s_allShaders.end(), this);
     if (it != s_allShaders.end()) s_allShaders.erase(it);
@@ -114,6 +139,10 @@ OpenGLShader::~OpenGLShader() {
 }
 
 bool OpenGLShader::tryReloadIfChanged() {
+    // Shaders from-source (fragment generado, sin path): no participan
+    // del hot-reload automatico. El ShaderGraphCache se encarga de
+    // recompilarlos cuando el .moodshader fuente cambia (hash mismatch).
+    if (m_fragmentPath.empty()) return false;
     const auto vNow = mtimeOf(m_vertexPath);
     const auto fNow = mtimeOf(m_fragmentPath);
     // file_time_type{} (epoch) significa que stat fallo (archivo no existe

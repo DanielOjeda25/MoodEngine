@@ -23,6 +23,23 @@ public:
     /// @throws std::runtime_error si falla la compilacion o el linkeo.
     OpenGLShader(const std::string& vertexPath, const std::string& fragmentPath);
 
+    /// @brief F2H62 Bloque E: compila desde GLSL string en memoria, sin
+    ///        leer archivos. Util cuando el fragment source es generado
+    ///        on-the-fly (ej. shader graph) -- el vertex sigue viniendo
+    ///        de un archivo del disco (pbr.vert / pbr_instanced.vert /
+    ///        pbr_skinned.vert) para reusar layout + atributos.
+    /// @param vertexPath Path del vertex shader en disco (se lee y
+    ///        compila normalmente -- esto permite hot-reload del vert).
+    /// @param fragmentSource GLSL del fragment ya generado.
+    /// @param debugName Etiqueta para logs (ej. "shader_graph:water.moodshader").
+    /// @throws std::runtime_error si falla la compilacion o el linkeo.
+    struct FromSourceTag {};
+    static constexpr FromSourceTag k_fromSource{};
+    OpenGLShader(FromSourceTag,
+                  const std::string& vertexPath,
+                  const std::string& fragmentSource,
+                  const std::string& debugName);
+
     ~OpenGLShader() override;
 
     OpenGLShader(const OpenGLShader&) = delete;

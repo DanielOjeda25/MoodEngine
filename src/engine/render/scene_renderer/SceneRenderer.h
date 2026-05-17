@@ -53,6 +53,7 @@ class SSRPass;  // F2H61
 class PostProcessPass;
 class SSAOPass;
 class Scene;
+class ShaderGraphCache;  // F2H62 Bloque E
 class ShadowPass;
 class SkyboxRenderer;
 struct FrameStats;
@@ -204,6 +205,17 @@ private:
     std::unique_ptr<IShader> m_pbrSkinnedShader;   // PBR + LBS skinning
     std::unique_ptr<IShader> m_wireframeOrthoShader;  // F2H28: vista orto.
     std::unique_ptr<IShader> m_grid2dShader;          // F2H28 Bloque E: grid orto.
+
+    // F2H62 Bloque E: cache de programas GL compilados desde .moodshader.
+    // Cuando un material tiene shaderGraphPath no vacio, el render pide
+    // un IShader* al cache; si hay hit lo usa en lugar del PBR estandar.
+    // Fallback transparente al PBR si load/compile falla.
+    std::unique_ptr<ShaderGraphCache> m_shaderGraphCache;
+
+    // F2H62 Bloque E: tiempo acumulado desde el primer frame para el
+    // uniform uTime de los shader graphs (necesario para shaders
+    // animados tipo water/hologram). Actualizado en renderScene.
+    f32 m_currentTime = 0.0f;
 
     // F2H28: 3 FBOs LDR para Top/Front/Side del workspace "Editor de
     // mapas". Resize a demanda en renderOrthoView. Vacios cuando el

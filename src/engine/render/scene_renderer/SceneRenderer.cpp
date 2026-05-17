@@ -36,6 +36,7 @@
 #include "engine/render/backend/opengl/OpenGLTexture.h"
 #include "engine/render/pipeline/LightGrid.h"
 #include "engine/render/rhi/IRenderer.h"
+#include "engine/shader_graph/ShaderGraphCache.h"  // F2H62 Bloque E
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -106,6 +107,12 @@ SceneRenderer::SceneRenderer()
     // Skinned vertex shader, mismo .frag — Hito 19.
     m_pbrSkinnedShader = std::make_unique<OpenGLShader>(
         "shaders/pbr_skinned.vert", "shaders/pbr.frag");
+
+    // F2H62 Bloque E: cache de shader graphs compilados.
+    // El vertex base es pbr.vert (meshes estaticos no-instanced). v1
+    // NO soporta shader graph para instanced ni skinned -- caen al
+    // PBR estandar transparentemente.
+    m_shaderGraphCache = std::make_unique<ShaderGraphCache>("shaders/pbr.vert");
 
     // F2H28: shader wireframe orto para el workspace "Editor de mapas".
     // Tolera fallo de carga (silencioso): el render orto detecta nullptr

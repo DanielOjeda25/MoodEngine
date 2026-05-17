@@ -36,6 +36,7 @@
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/rhi/RendererTypes.h"
 #include "engine/scene/VisGroup.h"  // F2H33: hide gate
+#include "engine/shader_graph/ShaderGraphCache.h"  // F2H62 Bloque E
 #include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/CompiledMeshComponent.h"  // F2H26
 #include "engine/scene/components/Components.h"
@@ -48,6 +49,7 @@
 
 #include <glad/gl.h>
 
+#include <chrono>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -76,6 +78,18 @@ void SceneRenderer::renderScene(Scene& scene,
     m_lastView = view;
     m_lastProjection = projection;
     m_lastAspect = aspect;
+
+    // F2H62 Bloque E: actualizar uTime acumulado para shader graphs
+    // animados. Usamos un steady_clock para no depender de un dt
+    // externo (renderScene no recibe dt). Resolucion: segundos desde
+    // el primer frame.
+    {
+        static const auto k_appStart = std::chrono::steady_clock::now();
+        const auto now = std::chrono::steady_clock::now();
+        const auto elapsed = std::chrono::duration_cast<
+            std::chrono::duration<f32>>(now - k_appStart);
+        m_currentTime = elapsed.count();
+    }
 
     // F2H60 polish iter4: aplicar Environment ANTES del shadow pass para
     // que los cambios de cascadas/lambda surtan efecto en el mismo frame.
@@ -339,8 +353,9 @@ void SceneRenderer::renderScene(Scene& scene,
     // Texturas dummy para los slots no usados.
     ITexture* dummyTex = assets.getTexture(assets.missingTextureId());
 
-    auto drawMeshRenderer = [&](IShader& sh,
-                                 MeshRendererComponent& mr) {
+    auto drawMeshRenderer = [&](IShader& defaultSh,
+                                 MeshRendererComponent& mr,
+                                 const glm::mat4& model) {
         MeshAsset* asset = assets.getMesh(mr.mesh);
         if (asset == nullptr) return;
         for (usize i = 0; i < asset->submeshes.size(); ++i) {
@@ -351,6 +366,27 @@ void SceneRenderer::renderScene(Scene& scene,
                 mr.materialOrMissing(sub.materialIndex);
             const MaterialAsset* mat = assets.getMaterial(matId);
 
+            // F2H62 Bloque E: si el material tiene shaderGraphPath, pedimos
+            // al cache un IShader compilado. Si lo da, lo usamos en lugar
+            // del defaultSh para este submesh; sino, fallback transparente.
+            // El cache reusa el program compilado entre frames; solo
+            // recompila si el hash del GLSL cambia (dev edito el grafo).
+            IShader* sh = &defaultSh;
+            bool usingGraph = false;
+            if (mat != nullptr && !mat->shaderGraphPath.empty() &&
+                m_shaderGraphCache != nullptr) {
+                IShader* gSh = m_shaderGraphCache->getOrCompile(
+                    mat->shaderGraphPath, assets);
+                if (gSh != nullptr) {
+                    sh = gSh;
+                    usingGraph = true;
+                    // Rebind program + uniforms (estabamos en defaultSh).
+                    applyShaderUniforms(*sh);
+                    sh->setMat4("uModel", model);
+                    sh->setFloat("uTime", m_currentTime);
+                }
+            }
+
             // useAlbedoMap distingue "tint puro" (gold/plastic, false) de
             // "samplear textura" (true). El default material tiene
             // useAlbedoMap=true con albedo=0 => muestra missing.png como
@@ -358,7 +394,7 @@ void SceneRenderer::renderScene(Scene& scene,
             const bool hasAlbedo = (mat != nullptr && mat->useAlbedoMap);
             glActiveTexture(GL_TEXTURE0);
             assets.getTexture(hasAlbedo ? mat->albedo : 0)->bind(0);
-            sh.setInt("uHasAlbedoMap", hasAlbedo ? 1 : 0);
+            sh->setInt("uHasAlbedoMap", hasAlbedo ? 1 : 0);
 
             const bool hasMR =
                 (mat != nullptr && mat->metallicRoughness != 0);
@@ -368,7 +404,7 @@ void SceneRenderer::renderScene(Scene& scene,
             } else {
                 dummyTex->bind(2);
             }
-            sh.setInt("uHasMetallicRoughness", hasMR ? 1 : 0);
+            sh->setInt("uHasMetallicRoughness", hasMR ? 1 : 0);
 
             const bool hasAo = (mat != nullptr && mat->ao != 0);
             glActiveTexture(GL_TEXTURE3);
@@ -377,22 +413,29 @@ void SceneRenderer::renderScene(Scene& scene,
             } else {
                 dummyTex->bind(3);
             }
-            sh.setInt("uHasAoMap", hasAo ? 1 : 0);
+            sh->setInt("uHasAoMap", hasAo ? 1 : 0);
 
             if (mat != nullptr) {
-                sh.setVec3 ("uAlbedoTint",   mat->albedoTint);
-                sh.setFloat("uMetallicMult", mat->metallicMult);
-                sh.setFloat("uRoughnessMult",mat->roughnessMult);
-                sh.setFloat("uAoMult",       mat->aoMult);
+                sh->setVec3 ("uAlbedoTint",   mat->albedoTint);
+                sh->setFloat("uMetallicMult", mat->metallicMult);
+                sh->setFloat("uRoughnessMult",mat->roughnessMult);
+                sh->setFloat("uAoMult",       mat->aoMult);
             } else {
-                sh.setVec3 ("uAlbedoTint",   glm::vec3(1.0f));
-                sh.setFloat("uMetallicMult", 0.0f);
-                sh.setFloat("uRoughnessMult",0.5f);
-                sh.setFloat("uAoMult",       1.0f);
+                sh->setVec3 ("uAlbedoTint",   glm::vec3(1.0f));
+                sh->setFloat("uMetallicMult", 0.0f);
+                sh->setFloat("uRoughnessMult",0.5f);
+                sh->setFloat("uAoMult",       1.0f);
             }
 
             glActiveTexture(GL_TEXTURE0);
-            m_renderer->drawMesh(*sub.mesh, sh);
+            m_renderer->drawMesh(*sub.mesh, *sh);
+
+            // Si swappeamos al graph shader, volvemos a bindear el
+            // defaultSh para no afectar el siguiente submesh o entity
+            // del loop externo (que asume defaultSh activo).
+            if (usingGraph) {
+                applyShaderUniforms(defaultSh);
+            }
         }
     };
 
@@ -490,8 +533,9 @@ void SceneRenderer::renderScene(Scene& scene,
                 !e.hasComponent<MeshRendererComponent>()) continue;
             auto& t = e.getComponent<TransformComponent>();
             auto& mr = e.getComponent<MeshRendererComponent>();
-            m_pbrShader->setMat4("uModel", t.worldMatrix());
-            drawMeshRenderer(*m_pbrShader, mr);
+            const glm::mat4 model = t.worldMatrix();
+            m_pbrShader->setMat4("uModel", model);
+            drawMeshRenderer(*m_pbrShader, mr, model);
         }
     }
 
@@ -514,7 +558,8 @@ void SceneRenderer::renderScene(Scene& scene,
             [&](Entity e, TransformComponent& t, MeshRendererComponent& mr,
                 SkeletonComponent& sk) {
                 if (isEntityHiddenByVisGroup(scene, e)) return;  // F2H33
-                m_pbrSkinnedShader->setMat4("uModel", t.worldMatrix());
+                const glm::mat4 model = t.worldMatrix();
+                m_pbrSkinnedShader->setMat4("uModel", model);
                 const usize n = sk.skinningMatrices.size();
                 if (n == 0) return;
                 const usize cap = static_cast<usize>(k_maxBonesPerSkeleton);
@@ -524,7 +569,12 @@ void SceneRenderer::renderScene(Scene& scene,
                                        std::to_string(i) + "]";
                     m_pbrSkinnedShader->setMat4(name, sk.skinningMatrices[i]);
                 }
-                drawMeshRenderer(*m_pbrSkinnedShader, mr);
+                // F2H62: drawMeshRenderer va a saltar al graph shader si
+                // el material lo pide, pero el path skinned NO usa
+                // pbr_skinned.vert para el graph (la v1 del cache solo
+                // soporta pbr.vert estatico). Resultado: skeletal +
+                // shaderGraphPath cae al fallback PBR — esperado.
+                drawMeshRenderer(*m_pbrSkinnedShader, mr, model);
             });
     }
 
