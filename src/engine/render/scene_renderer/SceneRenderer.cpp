@@ -44,6 +44,7 @@
 #include "systems/render/ColorGradingPass.h"
 #include "systems/render/PostProcessPass.h"
 #include "systems/render/SSAOPass.h"
+#include "systems/render/SSRPass.h"  // F2H61
 #include "systems/render/ShadowPass.h"
 #include "systems/render/SkyboxRenderer.h"
 
@@ -86,6 +87,11 @@ SceneRenderer::SceneRenderer()
     // F2H58: FB intermedio HDR (post bloom + color grading) entre el
     // bloom y el post-process. Reuso del mismo size que m_bloomFb.
     m_colorGradingFb = std::make_unique<OpenGLFramebuffer>(
+        1280u, 720u, OpenGLFramebuffer::Format::HDR);
+    // F2H61: FB intermedio HDR donde SSR escribe (color base + reflejo
+    // aditivo). Sin normal RT propio -- el SSR pass lee el normal RT del
+    // m_sceneFb original.
+    m_ssrFb = std::make_unique<OpenGLFramebuffer>(
         1280u, 720u, OpenGLFramebuffer::Format::HDR);
     m_viewportFb = std::make_unique<OpenGLFramebuffer>(
         1280u, 720u, OpenGLFramebuffer::Format::LDR);
@@ -218,6 +224,15 @@ SceneRenderer::SceneRenderer()
         m_colorGradingPass.reset();
     }
 
+    // F2H61: SSR pass. Mismo patron tolerante.
+    try {
+        m_ssrPass = std::make_unique<SSRPass>();
+    } catch (const std::exception& e) {
+        Log::render()->warn("SSRPass no disponible: {}. SSR desactivado.",
+                             e.what());
+        m_ssrPass.reset();
+    }
+
     // Shadow pass (Hito 16).
     try {
         m_shadowPass = std::make_unique<ShadowPass>(2048);
@@ -267,6 +282,7 @@ SceneRenderer::~SceneRenderer() {
     m_bloomPass.reset();  // F2H55
     m_ssaoPass.reset();   // F2H56
     m_colorGradingPass.reset(); // F2H58
+    m_ssrPass.reset();    // F2H61
     // F2H58: liberar identity LUT sintetizada (si existe).
     if (m_identityLutId != 0) {
         GLuint tex = static_cast<GLuint>(m_identityLutId);
@@ -286,6 +302,7 @@ SceneRenderer::~SceneRenderer() {
     m_viewportFb.reset();
     m_bloomFb.reset();   // F2H55
     m_colorGradingFb.reset();  // F2H58
+    m_ssrFb.reset();     // F2H61
     m_ssaoOutFb.reset(); // F2H56
     m_sceneFb.reset();
     m_renderer.reset();
@@ -318,6 +335,12 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
     // reseteamos los knobs de calidad.
     m_csmCascadeCount = 4;
     m_csmSplitLambda  = 0.5f;
+    // F2H61: SSR defaults a OFF (mismo criterio que bloom/SSAO/CSM).
+    m_ssrEnabled   = false;
+    m_ssrMaxSteps  = 32;
+    m_ssrThickness = 0.5f;
+    m_ssrStepSize  = 0.2f;
+    m_ssrIntensity = 0.5f;
 
     bool envFound = false;
     scene.forEach<EnvironmentComponent>(
@@ -348,6 +371,12 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
             // F2H60: CSM quality params (sin "enabled" global - gate per-light).
             m_csmCascadeCount = env.csmCascadeCount;
             m_csmSplitLambda  = env.csmSplitLambda;
+            // F2H61: SSR params.
+            m_ssrEnabled   = env.ssrEnabled;
+            m_ssrMaxSteps  = env.ssrMaxSteps;
+            m_ssrThickness = env.ssrThickness;
+            m_ssrStepSize  = env.ssrStepSize;
+            m_ssrIntensity = env.ssrIntensity;
         });
 
     // F2H60 polish iter5: diagnostico. Loguea cuando los valores del
@@ -451,7 +480,37 @@ void SceneRenderer::endFrame() {
         }
     }
 
-    // F2H55: bloom pass entre el resultado del SSAO (o scene HDR si SSAO
+    // F2H61: SSR pass. Lee color del afterSsao (asi el reflejo tiene AO
+    // de la superficie) + depth/normal del m_sceneFb (G-buffer original).
+    // Escribe a m_ssrFb el color + reflejo aditivo. Si esta off, sin
+    // gbuffer, o intensity 0, se skipea y bloom lee de afterSsao directo.
+    OpenGLFramebuffer* afterSsr = afterSsao;
+    const bool runSsr = m_ssrEnabled
+                     && m_ssrIntensity > 0.0f
+                     && m_ssrPass
+                     && m_ssrFb
+                     && afterSsao
+                     && m_sceneFb
+                     && m_sceneFb->glNormalTextureId() != 0;
+    if (runSsr) {
+        MOOD_PROFILE_SCOPE("SSRPass::apply");
+        // El FB del SSR puede no coincidir con el viewport size si la
+        // ventana se resizeo entre frames. Forzar resize.
+        if (m_ssrFb->width()  != afterSsao->width() ||
+            m_ssrFb->height() != afterSsao->height()) {
+            m_ssrFb->resize(afterSsao->width(), afterSsao->height());
+        }
+        const glm::mat4 invProj = glm::inverse(m_lastProjection);
+        const bool ssrApplied = m_ssrPass->apply(
+            *afterSsao, *m_sceneFb, *m_ssrFb,
+            m_lastProjection, invProj,
+            m_ssrMaxSteps, m_ssrThickness, m_ssrStepSize, m_ssrIntensity);
+        if (ssrApplied) {
+            afterSsr = m_ssrFb.get();
+        }
+    }
+
+    // F2H55: bloom pass entre el resultado del SSR (o SSAO/scene si SSR
     // off) y post-process. Si esta apagado o intensity = 0, o el bloom
     // no pudo correr, se skipea y el post-process lee directo del FB
     // anterior. Cero regresion respecto a pre-F2H55.
@@ -459,12 +518,12 @@ void SceneRenderer::endFrame() {
                        && m_bloomIntensity > 0.0f
                        && m_bloomPass
                        && m_bloomFb
-                       && afterSsao;
-    OpenGLFramebuffer* postProcessSrc = afterSsao;
+                       && afterSsr;
+    OpenGLFramebuffer* postProcessSrc = afterSsr;
     if (runBloom) {
         MOOD_PROFILE_SCOPE("BloomPass::apply");
         const bool bloomApplied = m_bloomPass->apply(
-            *afterSsao, *m_bloomFb,
+            *afterSsr, *m_bloomFb,
             m_bloomThreshold, m_bloomIntensity, m_bloomRadius);
         if (bloomApplied) {
             postProcessSrc = m_bloomFb.get();

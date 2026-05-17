@@ -49,6 +49,7 @@ class OpenGLParticleRenderer;
 class OpenGLSSBO;
 class BloomPass;
 class ColorGradingPass;
+class SSRPass;  // F2H61
 class PostProcessPass;
 class SSAOPass;
 class Scene;
@@ -155,6 +156,13 @@ public:
     f32  ssaoRadius()    const { return m_ssaoRadius; }
     f32  ssaoIntensity() const { return m_ssaoIntensity; }
 
+    // F2H61: SSR params (leidos por el panel Environment + tests).
+    bool ssrEnabled()    const { return m_ssrEnabled; }
+    i32  ssrMaxSteps()   const { return m_ssrMaxSteps; }
+    f32  ssrThickness()  const { return m_ssrThickness; }
+    f32  ssrStepSize()   const { return m_ssrStepSize; }
+    f32  ssrIntensity()  const { return m_ssrIntensity; }
+
     /// @brief Resetea el cache de Environment y aplica el primer
     ///        EnvironmentComponent encontrado en la escena. Util al
     ///        cargar un proyecto para tener los valores antes del
@@ -183,10 +191,12 @@ private:
     std::unique_ptr<OpenGLFramebuffer> m_ssaoOutFb;   // HDR RGBA16F (F2H56): scene * AO modulation
     std::unique_ptr<OpenGLFramebuffer> m_bloomFb;     // HDR RGBA16F (F2H55): scene + bloom contribution antes del post-process
     std::unique_ptr<OpenGLFramebuffer> m_colorGradingFb;// HDR RGBA16F (F2H58): post bloom + color grading aplicado, antes del post-process
+    std::unique_ptr<OpenGLFramebuffer> m_ssrFb;       // HDR RGBA16F (F2H61): scene color + SSR reflection aditivo
     std::unique_ptr<OpenGLFramebuffer> m_viewportFb;  // LDR RGBA8
     std::unique_ptr<SSAOPass>          m_ssaoPass;    // F2H56
     std::unique_ptr<BloomPass>         m_bloomPass;   // F2H55
     std::unique_ptr<ColorGradingPass>  m_colorGradingPass; // F2H58
+    std::unique_ptr<SSRPass>           m_ssrPass;     // F2H61
     std::unique_ptr<PostProcessPass>   m_postProcess;
 
     std::unique_ptr<IShader> m_pbrShader;          // PBR estatico (no instanced)
@@ -250,6 +260,14 @@ private:
     bool m_ssaoEnabled   = true;
     f32  m_ssaoRadius    = 0.5f;
     f32  m_ssaoIntensity = 1.0f;
+
+    // F2H61: SSR params (poblados por applyEnvironmentFromScene).
+    // Default OFF -- iter1 F2H60: "todo deberia estar desactivado por defecto".
+    bool m_ssrEnabled   = false;
+    i32  m_ssrMaxSteps  = 32;
+    f32  m_ssrThickness = 0.5f;
+    f32  m_ssrStepSize  = 0.2f;
+    f32  m_ssrIntensity = 0.5f;
 
     // F2H58: Color Grading params (poblados por applyEnvironmentFromScene).
     bool        m_colorGradingEnabled   = false;

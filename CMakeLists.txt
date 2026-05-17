@@ -428,6 +428,7 @@ add_library(mood_engine_lib STATIC
     src/systems/render/ColorGradingPass.cpp     # F2H58
     src/systems/render/PostProcessPass.cpp
     src/systems/render/SSAOPass.cpp
+    src/systems/render/SSRPass.cpp              # F2H61
     src/systems/scripting/ScriptSystem.cpp
     src/systems/render/ShadowPass.cpp
     src/systems/physics/TriggerSystem.cpp

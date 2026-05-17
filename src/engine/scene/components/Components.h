@@ -280,6 +280,25 @@ struct EnvironmentComponent {
     //                     (sweet spot PSSM Zhang 2006).
     u32   csmCascadeCount = 4;
     float csmSplitLambda  = 0.5f;
+
+    // F2H61: SSR (Screen-Space Reflections). Algoritmo Morgan McGuire 2014
+    // linear DDA en view-space. Ver SSRPass.h / shaders/ssr.frag.
+    //   ssrEnabled:   master switch. Default OFF (mismo criterio que el
+    //                 resto de los efectos post-F2H60 polish).
+    //   ssrMaxSteps:  pasos del ray marching. 16=performance, 64+=calidad.
+    //                 Lineal en costo.
+    //   ssrThickness: tolerancia view-space para considerar hit valido.
+    //                 0.1-1.0. Mas alto = mas reflejos pero artifacts al
+    //                 cruzar geometria fina.
+    //   ssrStepSize:  tamano de cada step view-space (units). 0.05=fino,
+    //                 0.3=grueso. Combinar con maxSteps: rango = maxSteps
+    //                 * stepSize.
+    //   ssrIntensity: factor del reflejo aditivo. 0=apagado, 1=full.
+    bool  ssrEnabled   = false;
+    i32   ssrMaxSteps  = 32;
+    float ssrThickness = 0.5f;
+    float ssrStepSize  = 0.2f;
+    float ssrIntensity = 0.5f;
 };
 
 /// @brief Marca a una entidad como instancia de un prefab (Hito 14).

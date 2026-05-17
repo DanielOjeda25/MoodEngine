@@ -67,6 +67,7 @@ void SceneRenderer::renderScene(Scene& scene,
         m_sceneFb->resize(panelWidth, panelHeight);
         if (m_ssaoOutFb) m_ssaoOutFb->resize(panelWidth, panelHeight); // F2H56
         if (m_bloomFb) m_bloomFb->resize(panelWidth, panelHeight);     // F2H55
+        if (m_ssrFb) m_ssrFb->resize(panelWidth, panelHeight);         // F2H61
         m_viewportFb->resize(panelWidth, panelHeight);
     }
 
