@@ -2,15 +2,17 @@
 
 // F2H62 PLANTILLA DEL SHADER GRAPH RUNTIME.
 //
-// Copia disciplinada de pbr.frag con los markers __SHADERGRAPH_*__
+// Copia disciplinada de pbr.frag con los marcadores SHADERGRAPH_xxx
 // reemplazando el bloque de sample del material. El generador
-// ShaderGraphGenerator (C++) hace string replace de:
-//   __SHADERGRAPH_DECLS__     -> declaraciones SSA de los nodos del grafo
-//   __SHADERGRAPH_ALBEDO__    -> expresion vec3 para el albedo
-//   __SHADERGRAPH_METALLIC__  -> expresion float para metallic
-//   __SHADERGRAPH_ROUGHNESS__ -> expresion float para roughness
-//   __SHADERGRAPH_NORMAL__    -> expresion vec3 para normal (tangent space, optional)
-//   __SHADERGRAPH_EMISSIVE__  -> expresion vec3 para emissive
+// ShaderGraphGenerator (C++) hace string replace (marcadores entre
+// dobles guiones bajos, omitidos en este comentario a proposito para
+// que `replaceOnce` no los matchee aca):
+//   DECLS     -> declaraciones SSA de los nodos del grafo
+//   ALBEDO    -> expresion vec3 para el albedo
+//   METALLIC  -> expresion float para metallic
+//   ROUGHNESS -> expresion float para roughness
+//   NORMAL    -> expresion vec3 para normal (tangent space, optional)
+//   EMISSIVE  -> expresion vec3 para emissive
 //
 // REGLA DE SYNC: si modificas pbr.frag (luces / CSM / IBL / fog), copia
 // los cambios aca tambien. El resto del shader (todo lo que NO sea el

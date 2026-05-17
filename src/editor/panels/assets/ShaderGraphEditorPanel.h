@@ -33,6 +33,7 @@
 
 namespace Mood {
 
+class AssetManager;
 class EditorUI;
 
 class ShaderGraphEditorPanel : public IPanel {
@@ -45,6 +46,10 @@ public:
 
     /// @brief Inyecta el EditorUI para acceder al HistoryStack.
     void setEditorUi(EditorUI* ui) { m_ui = ui; }
+
+    /// @brief Inyecta el AssetManager para que "Guardar como..." pueda
+    ///        defaultear al path del proyecto (assets/shaders/graphs/).
+    void setAssetManager(AssetManager* am) { m_assets = am; }
 
     // ----- API publica (Browser / Welcome modal / Inspector lo usan) -----
 
@@ -106,6 +111,7 @@ private:
                                     NodeGraph::SocketId socketId);
 
     EditorUI*                              m_ui = nullptr;
+    AssetManager*                          m_assets = nullptr;
     ShaderGraph::Asset                     m_asset;
     bool                                   m_hasAsset = false;
     bool                                   m_dirty = false;
@@ -116,6 +122,17 @@ private:
     // la zona "Compile Output" mientras edita.
     ShaderGraph::GenResult                 m_lastCompile;
     bool                                   m_hasCompileResult = false;
+
+    // Frames de feedback verde tras un save exitoso (decrementa por frame).
+    int                                    m_saveFlashFrames = 0;
+
+    // Modal "Save As" custom de ImGui usado como fallback cuando el
+    // file dialog nativo de pfd falla (sucede a veces en Windows con
+    // paths relativos / proyectos con paths exoticos). Es un modal con
+    // un InputText simple para nombre del archivo, escribe al subdir
+    // shaders/graphs/ del proyecto. Garantiza poder guardar SIEMPRE.
+    bool                                   m_showSaveAsModal = false;
+    char                                   m_saveAsNameBuf[128]{};
 };
 
 } // namespace Mood

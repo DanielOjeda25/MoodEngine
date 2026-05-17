@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "editor/commands/DeleteEntityCommand.h"
+#include "editor/commands/SetTileCommand.h"  // F2H62 polish: delete tile -> Empty
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/components/Components.h"
@@ -16,6 +17,7 @@
 #include <glm/gtc/quaternion.hpp>   // Hito 41 fix-up: euler → quat
 
 #include <cmath>            // std::sin
+#include <cstdio>           // F2H62 polish: sscanf para parsear "Tile_X_Y"
 #include <string>
 
 namespace Mood {
@@ -279,16 +281,40 @@ void EditorApplication::deleteSelectedEntity() {
             ? selected.getComponent<TagComponent>().name
             : std::string{"(sin tag)"};
 
-    // Filtra tiles del mapa de prueba (Tile_X_Y) — esos vienen de
-    // `m_map` y reaparecen al rebuild; eliminarlos solo confunde. Para
-    // tiles, el flujo correcto es editarlos en el GridMap (futuro:
-    // panel del mapa).
+    // F2H62 polish: tiles del mapa (Tag "Tile_X_Y") son rendereados como
+    // entidades pero el "source of truth" es m_map (GridMap). Si el dev
+    // pide "Eliminar" sobre un tile, lo natural es que la celda quede
+    // vacia -- no que la entidad se borre y reaparezca al rebuild. Lo
+    // hacemos via SetTileCommand para que sea undoable.
+    // Pre-fix: el delete sobre tiles era bloqueado con un log info que
+    // el dev no leia; parecia un bug.
     const bool isTile = tagName.size() >= 5
         && tagName.compare(0, 5, "Tile_") == 0;
     if (isTile) {
-        Log::editor()->info(
-            "Delete: '{}' es un tile del mapa, no se elimina "
-            "(usar editor de mapa para limpiar tiles).",
+        u32 tx = 0, ty = 0;
+        if (std::sscanf(tagName.c_str(), "Tile_%u_%u", &tx, &ty) == 2) {
+            const TileType oldType = m_map.tileAt(tx, ty);
+            const TextureAssetId oldTex = m_map.tileTextureAt(tx, ty);
+            if (oldType == TileType::Empty) {
+                Log::editor()->info("Delete: tile ({}, {}) ya estaba vacio", tx, ty);
+                return;
+            }
+            auto sync = [this](u32 x, u32 y, TextureAssetId tex) {
+                updateTileEntity(x, y, tex);
+            };
+            m_history.push(std::make_unique<SetTileCommand>(
+                &m_map, std::move(sync), tx, ty,
+                oldType, oldTex,
+                TileType::Empty, 0u,
+                "Vaciar tile"));
+            markDirty();
+            m_ui.setStatusMessage("Tile (" + std::to_string(tx) + ", " +
+                                    std::to_string(ty) + ") vaciado");
+            Log::editor()->info("Delete: tile ({}, {}) -> Empty", tx, ty);
+            return;
+        }
+        Log::editor()->warn(
+            "Delete: '{}' parece tile pero no pude parsear coords; abortado",
             tagName);
         return;
     }
@@ -320,6 +346,16 @@ void EditorApplication::updateTileEntity(u32 tileX, u32 tileY, TextureAssetId te
     m_scene->forEach<TagComponent>([&](Entity e, TagComponent& tag) {
         if (!static_cast<bool>(found) && tag.name == name) found = e;
     });
+
+    // F2H62 polish: si el tile esta en Empty (Set Empty o Delete), NO crear
+    // ni actualizar la entidad -- destruirla si existe. Sino el "borrado"
+    // dejaba un cubo zombie con textura missing.
+    if (m_map.tileAt(tileX, tileY) == TileType::Empty) {
+        if (static_cast<bool>(found)) {
+            m_scene->destroyEntity(found);
+        }
+        return;
+    }
 
     // Hito 17: el slot por submesh es ahora un MaterialAssetId. Para drops
     // de textura, generamos un material wrapper auto unico

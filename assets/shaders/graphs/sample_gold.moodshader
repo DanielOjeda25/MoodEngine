@@ -1,0 +1,55 @@
+{
+  "_version": 1,
+  "graph": {
+    "_version": 1,
+    "links": [
+      {
+        "from": 6,
+        "id": 1,
+        "to": 1
+      }
+    ],
+    "next_link_id": 2,
+    "next_node_id": 3,
+    "next_socket_id": 7,
+    "nodes": [
+      {
+        "custom_data": {
+          "socket_literals": {
+            "1": [1.0, 1.0, 1.0, 0.0],
+            "2": [1.0, 0.0, 0.0, 0.0],
+            "3": [0.18, 0.0, 0.0, 0.0],
+            "4": [0.0, 0.0, 1.0, 0.0],
+            "5": [0.0, 0.0, 0.0, 0.0]
+          }
+        },
+        "id": 1,
+        "inputs": [
+          {"id": 1, "kind": 0, "name": "albedo",    "owner_node": 1, "type_tag": "vec3"},
+          {"id": 2, "kind": 0, "name": "metallic",  "owner_node": 1, "type_tag": "float"},
+          {"id": 3, "kind": 0, "name": "roughness", "owner_node": 1, "type_tag": "float"},
+          {"id": 4, "kind": 0, "name": "normal",    "owner_node": 1, "type_tag": "vec3"},
+          {"id": 5, "kind": 0, "name": "emissive",  "owner_node": 1, "type_tag": "vec3"}
+        ],
+        "outputs": [],
+        "position": [380.0, 100.0],
+        "title": "Output PBR",
+        "type_tag": "output_pbr"
+      },
+      {
+        "custom_data": {
+          "value": [1.0, 0.78, 0.34, 1.0]
+        },
+        "id": 2,
+        "inputs": [],
+        "outputs": [
+          {"id": 6, "kind": 1, "name": "out", "owner_node": 2, "type_tag": "vec3"}
+        ],
+        "position": [80.0, 80.0],
+        "title": "Color",
+        "type_tag": "color"
+      }
+    ]
+  },
+  "output_node_id": 1
+}

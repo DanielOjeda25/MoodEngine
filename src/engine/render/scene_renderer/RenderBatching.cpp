@@ -1,6 +1,7 @@
 #include "engine/render/scene_renderer/RenderBatching.h"
 
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/render/resources/MaterialAsset.h"  // F2H62 Bloque E
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/VisGroup.h"  // F2H33: hide gate
 #include "engine/scene/components/Components.h"
@@ -77,6 +78,21 @@ BatchingResult groupByBatch(Scene& scene,
             const u32 lod = selectLod(distance, asset->lodDistances);
 
             const MaterialAssetId matId = mr.materialOrMissing(0);
+
+            // F2H62 Bloque E: materiales con shaderGraphPath caen al
+            // path nonBatchable. Razon: el path instanced (A.1) usa
+            // pbr_instanced.vert que el ShaderGraphCache v1 no soporta
+            // (solo conoce pbr.vert estatico). Pasando por nonBatchable
+            // (A.2) el cache si se aplica y el shader graph se renderea.
+            // Cost: pierde el batching para estos materiales (pocos en
+            // la practica -- shaders graph son para efectos especiales,
+            // no para terrain tiles repetidos).
+            const MaterialAsset* matAsset = assets.getMaterial(matId);
+            if (matAsset != nullptr && !matAsset->shaderGraphPath.empty()) {
+                result.nonBatchable.push_back(e);
+                return;
+            }
+
             const BatchKey key{mr.mesh, matId, lod};
             result.batches[key].models.push_back(worldMat);
         });

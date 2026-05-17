@@ -326,6 +326,7 @@ EditorApplication::EditorApplication() {
     m_ui.inspector().setEditorUi(&m_ui);
     m_ui.inspector().setAssetManager(m_assetManager.get());
     m_ui.materialEditor().setAssetManager(m_assetManager.get());  // Hito 42
+    m_ui.shaderGraphEditor().setAssetManager(m_assetManager.get()); // F2H62
 
     // F2H21: preview esferico off-screen del Material Editor. Se crea
     // post SceneRenderer para inyectarle el IBL compartido. Si la carga

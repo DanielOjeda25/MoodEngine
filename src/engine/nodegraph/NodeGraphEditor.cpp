@@ -300,16 +300,21 @@ std::vector<EditorEvent> NodeGraphEditor::draw(const Graph& graph,
     // Delete key sobre nodos/links seleccionados. imnodes NO maneja
     // esto automaticamente -- el wrapper lo provee como "comportamiento
     // estandar" para que el caller no tenga que duplicar logica.
-    // Condicion: la window que contiene el editor tiene el focus
-    // (suficiente -- IsEditorHovered exigia el mouse encima del canvas,
-    // demasiado restrictivo: el dev presiona Del con el cursor en
-    // cualquier lado).
+    // Condiciones:
+    //   - la window que contiene el editor tiene el focus.
+    //   - HAY al menos un nodo o link seleccionado en este editor.
+    // Sin la segunda condicion, el wrapper "absorbe" el Delete cuando
+    // el panel esta abierto pero el dev queria borrar una entidad en
+    // el viewport (bug reportado). Con la guard, si no hay seleccion
+    // local, el evento se "deja pasar" para que otros sistemas (ej.
+    // delete-entity del editor) lo procesen.
     const bool delPressed = ImGui::IsKeyPressed(ImGuiKey_Delete) ||
                               ImGui::IsKeyPressed(ImGuiKey_Backspace);
     const bool focusOk = ImGui::IsWindowFocused(
         ImGuiFocusedFlags_RootAndChildWindows);
-    if (delPressed && focusOk) {
-        const int nodeSelCount = ImNodes::NumSelectedNodes();
+    const int nodeSelCount = ImNodes::NumSelectedNodes();
+    const int linkSelCount = ImNodes::NumSelectedLinks();
+    if (delPressed && focusOk && (nodeSelCount > 0 || linkSelCount > 0)) {
         if (nodeSelCount > 0) {
             std::vector<int> ids(nodeSelCount);
             ImNodes::GetSelectedNodes(ids.data());
@@ -320,7 +325,6 @@ std::vector<EditorEvent> NodeGraphEditor::draw(const Graph& graph,
                 events.push_back(ev);
             }
         }
-        const int linkSelCount = ImNodes::NumSelectedLinks();
         if (linkSelCount > 0) {
             std::vector<int> ids(linkSelCount);
             ImNodes::GetSelectedLinks(ids.data());

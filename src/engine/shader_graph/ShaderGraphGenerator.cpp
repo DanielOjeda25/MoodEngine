@@ -431,6 +431,29 @@ GenResult generateGlsl(const Asset& asset, const std::string& templateSource) {
     replaceOnce(out, "__SHADERGRAPH_NORMAL__",    normalExpr);
     replaceOnce(out, "__SHADERGRAPH_EMISSIVE__",  emissiveExpr);
 
+    // Safety: si quedo algun marker sin reemplazar (la plantilla tiene el
+    // marker en mas de un lugar -- p.ej. en un comentario Y en codigo, y
+    // replaceOnce solo agarro la primera), abortar antes de mandar GLSL
+    // basura al driver. Esto cazo F2H62 polish: el template real tenia
+    // los markers documentados en comments arriba, los reemplazos pisaban
+    // los comments y dejaban los puntos de inyeccion intactos -> GLSL roto.
+    const size_t residual = out.find("__SHADERGRAPH_");
+    if (residual != std::string::npos) {
+        const size_t end = out.find("__", residual + 2);
+        const std::string token = (end != std::string::npos)
+            ? out.substr(residual, end + 2 - residual)
+            : std::string("__SHADERGRAPH_???");
+        result.messages.push_back(
+            {GenSeverity::Error,
+             "Plantilla GLSL malformada: el marcador '" + token +
+             "' aparece mas de una vez (o no fue substituido). Cada "
+             "marcador debe aparecer EXACTAMENTE una vez en la plantilla.",
+             NodeGraph::k_invalidNodeId});
+        result.messages.insert(result.messages.end(),
+            state.messages.begin(), state.messages.end());
+        return result;
+    }
+
     result.glsl = std::move(out);
     result.messages = std::move(state.messages);
     result.succeeded = true;

@@ -71,6 +71,7 @@ add_executable(mood_tests
     test_compiled_mesh_persistence.cpp
     test_map_export_obj.cpp
     test_nodegraph.cpp  # F2H46
+    test_shader_graph.cpp     # F2H62 Bloque G
     test_dialog_asset.cpp      # F2H47
     test_dialog_validator.cpp  # F2H47
     test_dialog_system.cpp        # F2H48
@@ -167,6 +168,8 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/i18n/I18n.cpp  # F2H43
     ${CMAKE_SOURCE_DIR}/src/core/UserSettings.cpp  # F2H43
     ${CMAKE_SOURCE_DIR}/src/engine/nodegraph/Graph.cpp  # F2H46
+    ${CMAKE_SOURCE_DIR}/src/engine/shader_graph/ShaderGraphAsset.cpp     # F2H62
+    ${CMAKE_SOURCE_DIR}/src/engine/shader_graph/ShaderGraphGenerator.cpp # F2H62
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogAsset.cpp      # F2H47
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogValidator.cpp  # F2H47
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogSystem.cpp     # F2H48

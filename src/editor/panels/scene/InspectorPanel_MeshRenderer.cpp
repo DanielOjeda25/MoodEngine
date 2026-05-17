@@ -3,6 +3,7 @@
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/scene/InspectorPanel_Internal.h"
 
+#include "core/Log.h"  // F2H62 polish: warn al evitar overwrite de dirty shader graph
 #include "editor/panels/assets/ShaderGraphEditorPanel.h"  // F2H62 Bloque D
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
@@ -13,10 +14,12 @@
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace Mood {
 
@@ -137,54 +140,139 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
                         mat->albedo, mat->metallicRoughness,
                         mat->normal,  mat->ao).c_str());
 
-            // F2H62 Bloque D: shader (PBR estandar vs Shader Graph).
-            // Editable sin undo en v1 -- el shader graph es metadata del
-            // material, no de la entidad. El usuario lo cambia rara vez.
+            // F2H62 Bloque D + polish: shader (PBR estandar vs Shader Graph).
+            // UX estilo Blender Principled BSDF: dropdown listando los
+            // .moodshader del proyecto en vez de InputText manual.
             if (ImGui::CollapsingHeader("Shader")) {
-                const bool usingGraph = !mat->shaderGraphPath.empty();
-                const int currentType = usingGraph ? 1 : 0;
-                int newType = currentType;
-                const char* items[] = {"PBR estandar", "Shader Graph"};
-                if (ImGui::Combo("Tipo", &newType, items, 2)) {
-                    if (newType == 0 && usingGraph) {
-                        mat->shaderGraphPath.clear();
-                        m_editedThisFrame = true;
-                    } else if (newType == 1 && !usingGraph) {
-                        mat->shaderGraphPath = "shaders/graphs/new.moodshader";
-                        m_editedThisFrame = true;
+                // 1) Escanear `assets/shaders/graphs/` para los .moodshader
+                // disponibles. Resolvemos la primera vez por frame; baratisimo
+                // (decenas de archivos como mucho).
+                std::vector<std::string> graphPaths;
+                if (m_assets != nullptr) {
+                    const auto dir = m_assets->resolvePath("shaders/graphs");
+                    if (!dir.empty()) {
+                        std::error_code ec;
+                        if (std::filesystem::exists(dir, ec) &&
+                            std::filesystem::is_directory(dir, ec)) {
+                            for (const auto& e : std::filesystem::directory_iterator(dir, ec)) {
+                                if (!e.is_regular_file() ||
+                                    e.path().extension() != ".moodshader") continue;
+                                // Path logico relativo al root del proyecto.
+                                graphPaths.push_back(
+                                    "shaders/graphs/" +
+                                    e.path().filename().generic_string());
+                            }
+                            std::sort(graphPaths.begin(), graphPaths.end());
+                        }
                     }
                 }
-                if (newType == 1) {
-                    char pathBuf[256];
-                    std::snprintf(pathBuf, sizeof(pathBuf), "%s",
-                                    mat->shaderGraphPath.c_str());
-                    if (ImGui::InputText("Path", pathBuf, sizeof(pathBuf))) {
-                        mat->shaderGraphPath = pathBuf;
-                        m_editedThisFrame = true;
+
+                // 2) Combo "Shader graph": "(PBR estandar)" + lista + indice
+                //    actual segun mat->shaderGraphPath.
+                std::vector<const char*> items;
+                items.reserve(graphPaths.size() + 1);
+                items.push_back("(PBR estandar)");
+                for (const auto& p : graphPaths) items.push_back(p.c_str());
+                int curIdx = 0;  // 0 = PBR estandar
+                if (!mat->shaderGraphPath.empty()) {
+                    for (usize idx = 0; idx < graphPaths.size(); ++idx) {
+                        if (graphPaths[idx] == mat->shaderGraphPath) {
+                            curIdx = static_cast<int>(idx + 1);
+                            break;
+                        }
                     }
-                    if (ImGui::Button("Abrir editor")) {
+                    // Path seteado que NO esta en la lista (huerfano:
+                    // archivo borrado, path mal escrito). Insertamos un
+                    // item especial al final para mostrarlo + permitir
+                    // quitarlo via el combo.
+                    if (curIdx == 0) {
+                        items.push_back(mat->shaderGraphPath.c_str());
+                        curIdx = static_cast<int>(items.size() - 1);
+                    }
+                }
+                if (ImGui::Combo("Shader graph", &curIdx,
+                                    items.data(),
+                                    static_cast<int>(items.size()))) {
+                    if (curIdx == 0) {
+                        mat->shaderGraphPath.clear();
+                    } else if (curIdx <= static_cast<int>(graphPaths.size())) {
+                        mat->shaderGraphPath = graphPaths[curIdx - 1];
+                    }
+                    // (caso huerfano: el dev re-seleccionando el huerfano
+                    // no cambia nada; no hace falta accion.)
+                    m_editedThisFrame = true;
+                }
+
+                // 3) Botones de accion segun el estado actual.
+                if (!mat->shaderGraphPath.empty()) {
+                    if (ImGui::Button("Editar")) {
                         if (m_ui != nullptr && m_assets != nullptr) {
+                            auto& panel = m_ui->shaderGraphEditor();
                             const auto fs = m_assets->resolvePath(mat->shaderGraphPath);
-                            if (!fs.empty() && std::filesystem::exists(fs)) {
-                                m_ui->shaderGraphEditor().openFromFile(fs);
+                            Log::editor()->info(
+                                "[Inspector] Editar shader graph: path='{}' fs='{}' "
+                                "panelHasAsset={} panelFilePath='{}' panelDirty={}",
+                                mat->shaderGraphPath, fs.generic_string(),
+                                panel.hasAsset(),
+                                panel.filePath().has_value()
+                                    ? panel.filePath()->generic_string()
+                                    : std::string("<vacio>"),
+                                panel.dirty());
+
+                            // Garantia: el panel queda visible siempre que el
+                            // dev haga click en Editar. Cualquier rama hace
+                            // visible=true para que el dev SIEMPRE vea algo
+                            // en respuesta al click.
+                            panel.visible = true;
+
+                            const bool samePathOpen =
+                                panel.filePath().has_value() &&
+                                (panel.filePath()->generic_string() ==
+                                  fs.generic_string());
+                            if (samePathOpen) {
+                                // Mismo asset abierto, nada que cargar.
+                            } else if (panel.hasAsset() && panel.dirty()) {
+                                Log::editor()->warn(
+                                    "[Inspector] ShaderGraphEditor con cambios "
+                                    "sin guardar -- no se reemplaza. Guarda "
+                                    "antes para abrir '{}'.",
+                                    mat->shaderGraphPath);
+                            } else if (!fs.empty() && std::filesystem::exists(fs)) {
+                                panel.openFromFile(fs);
                             } else {
-                                // Path no existe: abrir editor vacio con
-                                // el path pre-seteado. Al hacer Save lo
-                                // creara en disco.
-                                m_ui->shaderGraphEditor().newAsset();
-                                m_ui->shaderGraphEditor().saveAs(
-                                    fs.empty() ? std::filesystem::path(mat->shaderGraphPath)
-                                                : fs);
+                                // El path en el material no existe en disco
+                                // (archivo borrado, path mal escrito). Avisamos
+                                // pero dejamos el panel visible.
+                                Log::editor()->warn(
+                                    "[Inspector] '{}' no existe en disco "
+                                    "(fs='{}'); abrir un graph nuevo o corregir "
+                                    "el path en el combo de arriba.",
+                                    mat->shaderGraphPath, fs.generic_string());
                             }
                         }
                     }
                     ImGui::SameLine();
-                    if (ImGui::Button("Quitar")) {
-                        mat->shaderGraphPath.clear();
-                        m_editedThisFrame = true;
-                    }
-                    ImGui::TextDisabled("(compilacion runtime: Bloque E)");
                 }
+                if (ImGui::Button("+ Nuevo shader graph")) {
+                    // Abrir el panel con un asset nuevo + pedir Save As
+                    // automaticamente. Cuando el dev guarda, el path se
+                    // mete en el material via el combo de arriba (al
+                    // siguiente frame el escaneo del dir lo detecta).
+                    if (m_ui != nullptr) {
+                        auto& panel = m_ui->shaderGraphEditor();
+                        if (panel.hasAsset() && panel.dirty()) {
+                            Log::editor()->warn(
+                                "[Inspector] ShaderGraphEditor con cambios sin "
+                                "guardar -- guarda antes de crear uno nuevo.");
+                            panel.visible = true;
+                        } else {
+                            panel.newAsset();
+                            panel.visible = true;
+                        }
+                    }
+                }
+                ImGui::TextDisabled(
+                    "(graphs en assets/shaders/graphs/ aparecen aca)");
             }
         }
 

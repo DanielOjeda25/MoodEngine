@@ -4,11 +4,14 @@
 #include "editor/commands/HistoryStack.h"
 #include "editor/commands/NodeGraphCommand.h"
 #include "editor/ui/EditorUI.h"
+#include "engine/assets/manager/AssetManager.h"
 
 #include <imgui.h>
+#include <portable-file-dialogs.h>
 
 #include <algorithm>
 #include <cstdio>
+#include <system_error>
 
 namespace Mood {
 
@@ -75,25 +78,44 @@ void ShaderGraphEditorPanel::closeAsset() {
 }
 
 bool ShaderGraphEditorPanel::save() {
-    if (!m_hasAsset) return false;
-    if (!m_filePath.has_value()) {
-        Log::editor()->warn("[ShaderGraphEditor] save sin filepath — usar saveAs");
+    if (!m_hasAsset) {
+        Log::editor()->warn("[ShaderGraphEditor] save abortado: no hay asset");
         return false;
     }
-    if (!m_asset.saveToFile(*m_filePath)) return false;
+    if (!m_filePath.has_value()) {
+        Log::editor()->warn(
+            "[ShaderGraphEditor] save sin filepath -- usar Guardar como");
+        return false;
+    }
+    if (!m_asset.saveToFile(*m_filePath)) {
+        Log::editor()->warn(
+            "[ShaderGraphEditor] save: saveToFile('{}') retorno false",
+            m_filePath->generic_string());
+        return false;
+    }
     m_dirty = false;
     Log::editor()->info("[ShaderGraphEditor] guardado '{}'",
                           m_filePath->generic_string());
+    m_saveFlashFrames = 60;  // ~1 segundo de feedback verde en el panel
     return true;
 }
 
 bool ShaderGraphEditorPanel::saveAs(const std::filesystem::path& fsPath) {
-    if (!m_hasAsset) return false;
-    if (!m_asset.saveToFile(fsPath)) return false;
+    if (!m_hasAsset) {
+        Log::editor()->warn("[ShaderGraphEditor] saveAs abortado: no hay asset");
+        return false;
+    }
+    if (!m_asset.saveToFile(fsPath)) {
+        Log::editor()->warn(
+            "[ShaderGraphEditor] saveAs: saveToFile('{}') retorno false",
+            fsPath.generic_string());
+        return false;
+    }
     m_filePath = fsPath;
     m_dirty = false;
     Log::editor()->info("[ShaderGraphEditor] guardado como '{}'",
                           fsPath.generic_string());
+    m_saveFlashFrames = 60;
     return true;
 }
 
@@ -187,16 +209,161 @@ void ShaderGraphEditorPanel::onImGuiRender() {
 
     drawCompileOutput();
 
+    // Modal "Guardar como" custom (fallback al file dialog nativo que
+    // puede fallar silencioso). Garantiza poder guardar siempre con
+    // un InputText + boton.
+    if (m_showSaveAsModal) {
+        ImGui::OpenPopup("Guardar shader graph");
+        m_showSaveAsModal = false;
+    }
+    if (ImGui::BeginPopupModal("Guardar shader graph", nullptr,
+                                  ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextDisabled("Se guardara en: assets/shaders/graphs/");
+        ImGui::Separator();
+        ImGui::InputText("Nombre", m_saveAsNameBuf, sizeof(m_saveAsNameBuf));
+        ImGui::Spacing();
+        const bool nameOk = std::strlen(m_saveAsNameBuf) > 0;
+        if (!nameOk) ImGui::BeginDisabled();
+        const bool clickSave = ImGui::Button("Guardar", ImVec2(120, 0));
+        if (!nameOk) ImGui::EndDisabled();
+        ImGui::SameLine();
+        const bool clickCancel = ImGui::Button("Cancelar", ImVec2(120, 0));
+        if (clickSave && nameOk) {
+            // Construir path absoluto al subdir del proyecto + crear dir
+            // si falta.
+            std::filesystem::path outPath;
+            if (m_assets != nullptr) {
+                auto dir = m_assets->resolvePath("shaders/graphs");
+                if (!dir.empty()) {
+                    std::error_code ec;
+                    std::filesystem::create_directories(dir, ec);
+                    outPath = dir / m_saveAsNameBuf;
+                }
+            }
+            if (outPath.empty()) {
+                outPath = std::filesystem::path("shaders/graphs") /
+                            m_saveAsNameBuf;
+                std::error_code ec;
+                std::filesystem::create_directories(outPath.parent_path(), ec);
+            }
+            if (outPath.extension() != ".moodshader") {
+                outPath += ".moodshader";
+            }
+            if (saveAs(outPath)) {
+                ImGui::CloseCurrentPopup();
+            }
+            // Si saveAs fallo, el log dice por que y dejamos el modal abierto.
+        }
+        if (clickCancel) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
     ImGui::End();
 }
 
 void ShaderGraphEditorPanel::drawToolbar() {
-    if (ImGui::Button("Guardar")) {
-        if (!m_filePath.has_value()) {
-            Log::editor()->warn("[ShaderGraphEditor] Save sin filepath; usar Save As");
-        } else {
-            save();
+    // Helper: arma el path default para el dialog Save As.
+    // CRITICO: pfd en Windows necesita el path en formato nativo (con
+    // backslashes via `.string()`, no forward slashes via `generic_string()`).
+    // Tambien tiene que ser ABSOLUTO -- con paths relativos el dialog
+    // se cancela silenciosamente en algunos setups.
+    auto buildSaveDefault = [this]() -> std::string {
+        std::filesystem::path p;
+        if (m_filePath.has_value()) {
+            p = *m_filePath;
+        } else if (m_assets != nullptr) {
+            const auto dir = m_assets->resolvePath("shaders/graphs");
+            if (!dir.empty()) {
+                std::error_code ec;
+                std::filesystem::create_directories(dir, ec);
+                p = dir / "untitled.moodshader";
+            }
         }
+        if (p.empty()) p = "untitled.moodshader";
+        std::error_code ec;
+        auto abs = std::filesystem::absolute(p, ec);
+        if (ec) abs = p;
+        return abs.string();  // path nativo (backslashes en Windows)
+    };
+
+    // Helper: abre el file dialog Save As y llama a saveAs() con el resultado.
+    auto openSaveAsDialog = [this, &buildSaveDefault]() -> bool {
+        const std::string defPath = buildSaveDefault();
+        Log::editor()->info(
+            "[ShaderGraphEditor] abriendo dialog Save As (default='{}')",
+            defPath);
+        std::string sel;
+        try {
+            sel = pfd::save_file(
+                "Guardar shader graph como",
+                defPath,
+                {"MoodShader (*.moodshader)", "*.moodshader"},
+                pfd::opt::none).result();
+        } catch (const std::exception& e) {
+            Log::editor()->warn(
+                "[ShaderGraphEditor] pfd::save_file lanzo excepcion: {}",
+                e.what());
+            return false;
+        }
+        if (sel.empty()) {
+            Log::editor()->info(
+                "[ShaderGraphEditor] Save As cancelado (o dialog no aparecio); "
+                "podes usar 'Guardar como...' o tipear el nombre en el path default");
+            return false;
+        }
+        auto outPath = std::filesystem::path(sel);
+        if (outPath.extension() != ".moodshader") {
+            outPath += ".moodshader";
+        }
+        return saveAs(outPath);
+    };
+
+    // Helper: dispara el flow de save. Si hay path -> save directo. Si no
+    // -> abre el modal ImGui de "nombre del archivo" (robusto, no depende
+    // del file dialog nativo que puede fallar silencioso en Windows).
+    auto triggerSave = [this]() {
+        if (m_filePath.has_value()) {
+            save();
+            return;
+        }
+        // Pre-poblar el buffer del modal con un default razonable.
+        const char* def = "untitled.moodshader";
+        std::snprintf(m_saveAsNameBuf, sizeof(m_saveAsNameBuf), "%s", def);
+        m_showSaveAsModal = true;
+        Log::editor()->info("[ShaderGraphEditor] abriendo modal de Save As (ImGui)");
+    };
+
+    if (ImGui::Button("Guardar")) {
+        triggerSave();
+    }
+    ImGui::SameLine();
+    // "Guardar como..." sigue intentando el dialog nativo (mejor UX cuando
+    // anda); si falla, el dev tiene el modal de "Guardar" como fallback.
+    if (ImGui::Button("Guardar como...")) {
+        if (!openSaveAsDialog()) {
+            // pfd cancelado o fallido -> caer al modal ImGui.
+            triggerSave();
+        }
+    }
+    // Atajo Ctrl+S: si el panel del shader graph tiene focus, lo procesa
+    // aca (guarda el shader graph; el global Ctrl+S del editor tambien
+    // dispara su save del proyecto, ambos no entran en conflicto).
+    // IsKeyPressed con repeat=false: no spamear si el dev mantiene apretado.
+    const bool ctrlS = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)
+        && ImGui::GetIO().KeyCtrl
+        && ImGui::IsKeyPressed(ImGuiKey_S, /*repeat=*/false);
+    if (ctrlS) {
+        Log::editor()->info("[ShaderGraphEditor] Ctrl+S detectado en panel");
+        triggerSave();
+    }
+    // Feedback verde transitorio tras un save exitoso.
+    if (m_saveFlashFrames > 0) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.13f, 0.83f, 0.43f, 1.0f),
+                            " Guardado!");
+        m_saveFlashFrames--;
     }
     ImGui::SameLine();
     if (ImGui::Button("Nuevo")) {
