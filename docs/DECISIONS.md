@@ -11,6 +11,69 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-17: F2H62 cierre — Shader Graph runtime + migración a imnodes + polish UX
+
+**Contexto:** sexto hito de **Sub-fase 2.6 — Render polish**, = F2H18 del plan original Fase 2. **Cierra Sub-fase 2.3 (Renderer) del plan original 100%** junto con los anteriores (Hito 17 PBR, F2H55 bloom, F2H56 SSAO, F2H60 CSM, F2H61 SSR). Tag `v1.49.0-fase2-hito62`. Dev validó tras tour del hologram sample (cyan + Fresnel rim en aristas): *"creo que esta bien"*.
+
+**Decisión clave 1 — Migración mid-hito `imgui-node-editor` → `imnodes` (Nelarius).** Durante Bloque C el dev reportó bugs persistentes de UX al mover nodos cerca de otros (cita: *"si quiero mover el nodo 2... estos bugs no me dejaron tranquilo"*).
+
+- **Root cause:** `imgui-node-editor` (ax::NodeEditor de thedmd) tiene bug de hit-test de proximidad. Al arrastrar un nodo cerca de otro, el editor "salta" la captura al vecino. Conocido upstream, sin fix corto plazo.
+- **Razón para migrar mid-hito:** el shader graph editor sería el panel más usado de F2H62. Convivir con bugs persistentes contaminaba la validación de las demás piezas (cache, samples, integración).
+- **Solución:** rewrite completo del wrapper `NodeGraphEditor.{h,cpp}` usando imnodes (`Nelarius/imnodes`, pinneado a master `eb36902c892548ef94f88f51ad7e7c9c7058a71c`). API más declarativa → ~70% menos código que la implementación previa.
+- **Trade-offs aceptados:** imnodes v0.5 (último release) era incompatible con ImGui docking; tuvimos que pinear a HEAD del master. `target_compile_definitions(imnodes PUBLIC IMGUI_DEFINE_MATH_OPERATORS)` requerido por la API de imnodes. Lazy `ImNodes::CreateContext` via `atomic_bool` para el lifecycle. Per-instance `EditorContext`. Drag detection via diff de mouse-down state (imnodes no expone callback de "drag-end"). Resync de posiciones gated por "mouse idle ambos frames" (evita race entre drag y resync).
+- **Cero impacto al DialogEditorPanel** (F2H46) — mismo wrapper `NodeGraphEditor`, mismo API. Migración transparente.
+- **Memoria persistente:** memory entry `project_node_editor_lib` guardada para futuras sesiones.
+
+**Decisión clave 2 — Solo fragment graph v1; vertex sigue siendo `pbr.vert` estático.**
+
+- **Razón:** el motor tiene 3 variants del vertex (`pbr.vert` static, `pbr_instanced.vert` instanced, `pbr_skinned.vert` skinned). Cada uno define `vViewSpaceNormal`, `vWorldPos`, etc. con interfaces compatibles entre sí pero distintas en la entrada (atributos de instancia, bones). Un vertex graph runtime tendría que generar las 3 variants + cachearlas → triplica complejidad.
+- **Alternativa diferida:** vertex graph como hito separado si emerge demanda específica (displacement, wave/vegetación procedural).
+
+**Decisión clave 3 — SSA naming `v_<socketId>` para variables intermedias del GLSL generado.**
+
+- **Razón:** los socket IDs del `NodeGraph::Graph` son únicos por asset (`next_socket_id` counter). Reusarlos como SSA names garantiza unicidad sin tracking adicional. Trivial debugging: si el GLSL falla, el socket ID está en el log y en el JSON.
+- **Trade-off:** los nombres no son human-readable (`v_14` en vez de `v_lerp_emissive`). Aceptable porque el GLSL generado se ve solo en compile output cuando falla.
+
+**Decisión clave 4 — Markers `__SHADERGRAPH_<TAG>__` con post-substitution validation.**
+
+- **Contexto:** descubrimos durante validación que el template `pbr_graph_template.frag` documentaba los markers en comentarios de cabecera Y los usaba como puntos de inyección en `main()`. `replaceOnce` por marker pisaba el COMENTARIO (primera ocurrencia) → puntos de inyección reales quedaban como `__SHADERGRAPH_DECLS__` literales → GLSL `ERROR: 0:9: '-' syntax error`.
+- **Fix triple:** (1) renombré markers en comentarios a tokens sin `__` doble (no matchea); (2) el generator valida post-substitución que no queden `__SHADERGRAPH_` residuales y devuelve error claro `"el marcador X aparece mas de una vez (o no fue substituido)"` en vez de mandar GLSL roto al driver; (3) 2 tests nuevos en `test_shader_graph.cpp` cubren el caso (template con marker duplicado debe fallar limpio + template real del repo no debe dejar residuales).
+- **Alternativa rechazada:** `replaceAll` por marker. Falla para `__SHADERGRAPH_DECLS__` que se reemplaza con MULTI-LÍNEA — el comentario `// __SHADERGRAPH_DECLS__ -> docs` se rompe porque el `\n` de las decls hace que `-> docs` quede como código (no comentario) → syntax error de otro tipo.
+
+**Decisión clave 5 — Materiales con shaderGraphPath caen a `nonBatchable` (path A.2 no-instanced).**
+
+- **Contexto:** el `SceneRenderer` tiene 3 paths: A.1 instanced (`pbr_instanced.vert`), A.2 nonBatchable (`pbr.vert`), B skinned (`pbr_skinned.vert`). El `ShaderGraphCache` v1 solo soporta `pbr.vert` estático (decisión 2). Si un material con shader graph cae al path instanced, el cache no tiene shader compatible y el grafo no se renderea.
+- **Razón:** en `RenderBatching.cpp::groupByBatch`, después del cull pero antes de decidir batching, chequeo `material->shaderGraphPath` — si no vacío, ruteo a `nonBatchable`. El draw del nonBatchable usa `drawMeshRenderer` que pide al cache el shader específico.
+- **Trade-off:** pierde batching para esos materiales (cada entidad con shader graph = 1 draw call). Aceptable porque shader graphs son para efectos especiales (pocos en la práctica — water surface, hologramas, glow), no para terrain tiles repetidos que necesitan instancing.
+- **Alternativa diferida:** soportar `pbr_instanced.vert` en el cache + variant per-graph. Triplica el cache size y la complejidad. Solo justifica si emerge demanda de "100 cubos con shader graph idéntico" (poco probable).
+
+**Decisión clave 6 — Cache keyed por logical path + hash GLSL.**
+
+- **Razón:** la key del cache es el `logicalPath` (`"shaders/graphs/rojo.moodshader"`). La entry guarda `glslHash` (std::hash<std::string> del GLSL generado). Cada `getOrCompile` regenera el GLSL (baratísimo: ~17K chars, walk topológico de pocas decenas de nodos) y compara hash. Si difiere, recompila el program OpenGL.
+- **Alternativa rechazada — timestamp del archivo:** el editor edita en memoria y guarda explícitamente; entre saves el archivo en disco está stale. Hash del GLSL es la fuente de verdad: si el dev cambia el grafo y NO guarda, el hash igual cambia y el cache recompila → el viewport actualiza en vivo.
+- **Alternativa rechazada — recompilar cada frame:** ~17K chars de string hashing + comparación de unsigned long. Trivial. Pero el `OpenGLShader::buildProgram` sí cuesta (compilación driver + link). Sin hash, recompilaríamos cada frame.
+
+**Decisión clave 7 — Custom ImGui save modal como triple-fallback sobre `pfd::save_file`.**
+
+- **Contexto:** `pfd::save_file` (portable-file-dialogs, dependency externa) falla silencioso en Windows con paths relativos o caracteres especiales. Cita del dev al detectarlo: *"el boton de guardar sigue sin funcionar"*. Logs mostraban `Save As cancelado por el usuario` instantáneo (sin que el dev tocara cancelar).
+- **Razón fix triple-fallback:** (1) intentar pfd nativo (path absoluto + `.string()` en vez de `.generic_string()`); (2) si retorna vacío sin excepción, custom ImGui modal con `InputText` simple que escribe al subdir `shaders/graphs/` del proyecto + sufijo `.moodshader` automático; (3) Ctrl+S directo si ya hay path conocido.
+- **Trade-off:** el modal custom no respeta la convención del SO (no muestra el árbol de directorios). Aceptable porque los `.moodshader` siempre viven en `assets/shaders/graphs/`.
+- **Lección durable:** las dependencias de file dialog son frágiles cross-platform. Siempre tener fallback in-engine para acciones críticas de save.
+
+**Decisión clave 8 — Dropdown estilo Blender en Inspector sobre InputText manual.**
+
+- **Contexto inicial:** Bloque D entregó un InputText donde el dev tipeaba el path al .moodshader. Cita del dev al validar: *"queda muy contra intuitivo que deva escribir el path para ver si el color anda, debemos buscar una forma de hacer que todo este sistema de texturas procedurales, sera lo mas blender, porque en ese programa funciona excelente"*.
+- **Razón:** convención industria (Blender Principled BSDF, Unity Shader Graph asset dropdown, Unreal Material picker). Scan del dir `assets/shaders/graphs/` per-frame (decenas de archivos, baratísimo) → `ImGui::Combo` con "(PBR estándar)" + listado ordenado de `.moodshader`. Item huérfano al final si el path actual del material no existe en disco (archivo borrado, path mal escrito).
+- **Trade-off:** un InputText es 5 LOC; el dropdown con scan es ~60 LOC. Vale la pena por UX claramente superior.
+
+**Razones de revisión (cuándo volver a discutir):**
+- Si emerge demanda de vertex shader graph → revisar decisión 2 (variants instanced/skinned/depth).
+- Si emerge demanda de "100 entidades con shader graph idéntico" → revisar decisión 5 (soporte instanced en cache).
+- Si emerge demanda de `.cube` LUT-style format para subgraphs → revisar el schema del .moodshader.
+- Si pfd::save_file mejora o lo migramos a `nfd-extended` → revisar decisión 7 (mantener fallback como safety net igual).
+
+---
+
 ## 2026-05-17: F2H61 cierre — SSR (Screen-Space Reflections) + G-buffer parcial via MRT
 
 **Contexto:** quinto hito de **Sub-fase 2.6 — Render polish**, = F2H20 del plan original Fase 2 (Sub-fase 2.3 — Renderer). Tag `v1.48.0-fase2-hito61`. Dev validó tras tour visual: *"se ve decente"*.

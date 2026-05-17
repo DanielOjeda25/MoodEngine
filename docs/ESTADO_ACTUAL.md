@@ -4,7 +4,59 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H61 cerrado (2026-05-17)
+## 0. ACTUALIZACIÓN F2H62 cerrado (2026-05-17)
+
+**Sexto hito de Sub-fase 2.6 (Render polish) cerrado — Shader Graph runtime + migración a imnodes + polish UX. = F2H18 del plan original Fase 2. CIERRA Sub-fase 2.3 (Renderer) del plan original 100%.**
+Tag: `v1.49.0-fase2-hito62`. Validado por dev tras tour del hologram sample (cyan + Fresnel rim en aristas del cubo). Cita verbatim: *"creo que esta bien"*.
+
+**Qué entrega F2H62** (Bloques A-I + 1 migración mid-hito + polish UX, detalle completo en `HITOS.md`):
+- **Bloque A — schema `.moodshader` sobre `NodeGraph::Graph`** (reusa la infra de F2H46). 20 NodeKinds: terminal OutputPBR (5 inputs), generadores Color/Float/UV/Time/SampleTexture, aritméticos Add/Multiply/Lerp/Power/OneMinus/Saturate/Clamp, vectoriales Dot/Cross/Normalize/Length/Reflect, PBR Fresnel/NormalMap. JSON aditivo.
+- **Bloque B — generador GLSL**: walk topológico DFS post-order desde OutputPBR, SSA vars `v_<socketId>`, plantilla `pbr_graph_template.frag` con markers `__SHADERGRAPH_*__`, detección de ciclos, literals fallback.
+- **Bloque C — editor visual `ShaderGraphEditorPanel`**: canvas con palette de 20 NodeKinds (right-click), inspector contextual del nodo seleccionado, zona Compile Output con warnings/errores, toolbar New/Save/Save As/Close/Compile.
+- **Migración mid-hito `imgui-node-editor` → `imnodes`** (Nelarius, pinned master `eb36902c`) por bug de hit-test de proximidad. Cero-touch al DialogEditorPanel (mismo wrapper).
+- **Bloque D — integración MaterialAsset + Inspector dropdown estilo Blender**: `shaderGraphPath` en MaterialAsset, scan del dir `assets/shaders/graphs/` per-frame, `ImGui::Combo` con item huérfano, botones "Editar" + "+ Nuevo".
+- **Bloque E — compilación on-the-fly + cache + fallback al PBR**: `ShaderGraphCache::getOrCompile(path, AssetManager) → IShader*`, keyed por logical path + hash GLSL (recompila si difiere). `OpenGLShader::FromSourceTag` constructor nuevo. Wireup en SceneRenderer + `m_currentTime`. **`RenderBatching`** rutea materiales con shaderGraphPath a nonBatchable (path A.2 no-instanced) porque el cache solo conoce `pbr.vert` estático.
+- **Bloque F — 3 samples shipados** en `assets/shaders/graphs/`: `sample_water.moodshader` (azul deep + glossy), `sample_gold.moodshader` (oro pulido), `sample_hologram.moodshader` (Fresnel rim cyan + Lerp emissive).
+- **Bloque G — 16 tests E2E**: Asset CRUD, JSON roundtrip, disk roundtrip, generator (minimal + Color + cycle + no OutputPBR + template inválido + **regresión marker duplicado** + **template real del repo** + **3 samples**).
+- **Bloque H — validación visual**. **Bloque I — cierre**.
+
+**Bugs cazados durante validación + fixes** (detalle en `HITOS.md`):
+1. `pbr_graph_template.frag` markers duplicados en comentarios y código → `replaceOnce` pisaba el comentario → GLSL inválido. Fix triple: rename de markers en comentarios + post-substitution validation en generator + 2 tests cubren el caso.
+2. `pfd::save_file` silent failure en Windows → custom ImGui save modal como fallback + Ctrl+S directo.
+3. Persistencia del shader graph al cambiar de panel → same-path-open check + dirty check (nunca destruye silently).
+4. Delete keystroke para entities → gate por `nodeSelCount > 0 || linkSelCount > 0` en el wrapper imnodes.
+5. Tile delete dejaba "missing.png" → `updateTileEntity` destruye entity cuando `tileAt(x,y) == Empty` + `deleteSelectedEntity` parsea `Tile_X_Y` y usa `SetTileCommand`.
+6. Node labels semánticos → `createNode` setea `n->title = nodeKindDisplayName(kind)`.
+
+**Decisiones** (detalle en `DECISIONS.md`):
+1. **`imnodes` sobre `imgui-node-editor`** — migración mid-hito por bug de hit-test de proximidad. Cero-touch al DialogEditorPanel.
+2. **Solo fragment graph v1** — vertex sigue siendo `pbr.vert` estático.
+3. **SSA naming `v_<socketId>`** — IDs únicos del NodeGraph garantizan unicidad sin tracking adicional.
+4. **Markers con post-substitution validation** — si quedan residuales tras `replaceOnce`, error claro en vez de GLSL roto al driver.
+5. **Materiales con shaderGraphPath caen a nonBatchable (A.2)** — el cache solo conoce `pbr.vert`, no `pbr_instanced.vert`. Cost: pierde batching; aceptable porque shader graphs son para efectos especiales.
+6. **Cache keyed por logical path + hash GLSL** — recompila solo si el grafo cambia (hash mismatch).
+7. **Custom ImGui save modal como triple-fallback** sobre `pfd::save_file` (que falla silencioso en Windows).
+8. **Dropdown estilo Blender en Inspector** sobre InputText manual.
+
+**Limitaciones conocidas v1** (documentadas, no scope inmediato):
+- **Sin transparencia / alpha blending** — agendado como F2H63 ("Materiales translúcidos").
+- Sin vertex shader graph.
+- Sin sub-graphs reutilizables.
+- Sin uniforms custom desde el grafo.
+- Sin compute shaders.
+- `SampleTexture` v1 emite warning y usa `uAlbedoMap` fallback.
+- `NormalMap` v1 emite `vWorldNormal` directo (sin TBN decode).
+- Skeletal + shaderGraphPath cae al fallback PBR (path skinned no usa cache).
+
+**🏁 Sub-fase 2.3 (Renderer) del plan original Fase 2 cerrada con F2H62.** PBR (Hito 17) + SSAO (F2H56) + bloom (F2H55) + CSM (F2H60) + SSR (F2H61) + shader graph (F2H62) todos completos.
+
+**Próximo hito**: **F2H63 — Materiales translúcidos / alpha blending** (transparencia: render pass separado post-opaque + sort back-to-front + alpha output del fragment + UI material toggle Opaque/Translucent). Plan stub en [`PLAN_HITO_F2H63.md`](PLAN_HITO_F2H63.md). Pedido explícito del dev al cierre F2H62: *"para mas adelante, porque es obvio que deberemos tener transparentes, un motor grafico debe tenerlo"*.
+
+**Pendientes restantes del plan original (post-F2H62)**: 15 hitos. Sub-fase 2.3 (Renderer) cerrada; opciones para próximo scope: F2H63 transparencia (continuación natural), Sub-fase 2.4 (Física avanzada), o ítem 1.0 del BACKLOG (Environment entry point).
+
+---
+
+## 0bis. ACTUALIZACIÓN F2H61 cerrado (2026-05-17)
 
 **Quinto hito de Sub-fase 2.6 (Render polish) cerrado — SSR (Screen-Space Reflections) + G-buffer parcial via MRT. = F2H20 del plan original Fase 2.**
 Tag: `v1.48.0-fase2-hito61`. Validado por dev tras tour visual con cubo missing-texture sobre piso PBR. Cita verbatim: *"se ve decente"*.
