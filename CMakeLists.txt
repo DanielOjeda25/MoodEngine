@@ -389,6 +389,8 @@ add_library(mood_engine_lib STATIC
 
     src/engine/quest/QuestAsset.cpp             # F2H53 Bloque A
     src/engine/quest/QuestSystem.cpp            # F2H53 Bloque C
+    src/engine/shader_graph/ShaderGraphAsset.cpp      # F2H62 Bloque A
+    src/engine/shader_graph/ShaderGraphGenerator.cpp  # F2H62 Bloque B
 
     src/engine/packaging/PackageBuilder.cpp
 
