@@ -4,7 +4,44 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H60 cerrado (2026-05-17)
+## 0. ACTUALIZACIÓN F2H61 cerrado (2026-05-17)
+
+**Quinto hito de Sub-fase 2.6 (Render polish) cerrado — SSR (Screen-Space Reflections) + G-buffer parcial via MRT. = F2H20 del plan original Fase 2.**
+Tag: `v1.48.0-fase2-hito61`. Validado por dev tras tour visual con cubo missing-texture sobre piso PBR. Cita verbatim: *"se ve decente"*.
+
+**Qué entrega F2H61** (Bloques A-F, detalle completo en `HITOS.md`):
+- **Bloque A — G-buffer parcial via MRT**: `OpenGLFramebuffer` extendido con `withNormalRT` ctor flag. En modo HDR crea segundo color attachment RGBA16F en location 1 + `glDrawBuffers(2, ...)`. Los 3 PBR vertex shaders emiten varying `vViewSpaceNormal`; `pbr.frag` declara `layout(location=1) out vec4 NormalRT` y escribe `vec4(viewNormal, 1.0)`. Pixels no-PBR quedan en `(0,0,0,0)` gracias al `glClearBufferfv` post-clear global. SSR descarta pixels con `alpha < 0.5`.
+- **Bloque B — `shaders/ssr.frag`**: ray marching linear DDA en view-space (Morgan McGuire 2014). 3 texturas input (color, depth, normal RT). `R = reflect(-V, N)`, marcha N pasos, hit cuando `gap > 0 && gap < uThickness`. Output = `baseColor + reflection * uIntensity`. Sin hit → `baseColor` inalterado (fallback al cubemap IBL bakeado).
+- **Bloque C — `SSRPass.{h,cpp}`**: single draw call, sin FBs internos, save/restore GL state. Patrón establecido (BloomPass/SSAOPass/ColorGradingPass).
+- **Bloque D — wireup `SceneRenderer::endFrame`**: pipeline `sceneFb → SSAO → afterSsao → SSR (color del afterSsao, gbuffer del sceneFb) → afterSsr → Bloom → ColorGrading → PostProcess`. SSR después de SSAO para que el reflejo reciba AO + downstream apliquen al reflejo también. Cero regresión si SSR off (default).
+- **Bloque E — persistencia + UI**: `EnvironmentComponent` extendido con 5 campos. Sección "Reflejos screen-space (SSR)" en `InspectorPanel_Environment.cpp` bajo el wrapper Post-Process: 4 sliders (intensidad / pasos / tamaño paso / espesor) + checkbox + reset button + hint. 7 i18n keys nuevas (es + en).
+- **Bloque F — validación visual + cierre**.
+
+**Decisiones** (detalle en `DECISIONS.md`):
+1. **MRT G-buffer** sobre depth-prepass separado — extiende sceneFb sin duplicar draw calls. ~8MB extra a 1080p.
+2. **Linear DDA view-space** sobre Hi-Z — simple sin importance sampling. Suficiente para v1.
+3. **SSR después de SSAO** — el reflejo recibe AO de la superficie. Trade-off: el reflejo en sí no recibe AO de la zona donde apunta (visualmente casi imperceptible).
+4. **Sin per-material SSR toggle** v1 — todas las superficies PBR reflejan con la misma intensity. Per-material al BACKLOG.
+5. **`ssrMaxSteps` como `u32`** (no `i32`) — el `InspectorEditTracker` variant no incluye i32; más simple castear en el setter del uniform GLSL que extender el variant.
+6. **Default OFF** — iter1 F2H60 polish: efectos visuales opt-in.
+7. **Fallback al cubemap IBL implícito** — sin hit, el frag retorna `baseColor` (cubemap spec ya bakeado por el PBR pass).
+
+**Limitaciones conocidas v1** (documentadas en HITOS, no scope inmediato):
+- Reflejos "cortados" al borde de pantalla (sin fade-out — mejora futura).
+- Sin temporal accumulation / TAA (single sample sin convergencia).
+- Sin per-material SSR toggle (todas las superficies PBR reflejan).
+- Sin refracciones (SSR solo opera reflecciones especulares).
+- Sin Hi-Z buffer optimization (linear march iterativo).
+
+**Feedback UX del tour (NO scope F2H61, agendado al BACKLOG ítem 1.0)**: el dev tuvo que crear un cubo placeholder solo para hostear el `EnvironmentComponent`. Cita: *"el cubo con la textura missing es mi environmentCOmponent, mas adelante me gustaria que tenga un icono y una opcion propia, porque de la forma que hago ahora es agregar un empty y ahi agregar el componentEnviroment y no le veo el sentido si es un componente global"*. Convención Unity Volume / Unreal Post Process Volume / Godot WorldEnvironment — entry point dedicado en el modal Crear Entidad + icono propio en Hierarchy. Item 1.0 del BACKLOG (alta prioridad, atacable como sub-hito o como bloque temprano de F2H62).
+
+**Próximo hito**: **F2H62 — Shader Graph runtime** (= F2H18 del plan original) que **cierra Sub-fase 2.3 (Renderer) del plan original** completa. Plan stub en [`PLAN_HITO_F2H62.md`](PLAN_HITO_F2H62.md).
+
+**Pendientes restantes del plan original (post-F2H61)**: 15 hitos — ver sección F2H60 abajo para el detalle. Tras cerrar F2H62, **Sub-fase 2.3 completa** y se retoma Sub-fase 2.4 (Física avanzada) o se ataca el ítem 1.0 del BACKLOG (Environment entry point) como sub-hito de UX antes.
+
+---
+
+## 0bis. ACTUALIZACIÓN F2H60 cerrado (2026-05-17)
 
 **Cuarto hito de Sub-fase 2.6 (Render polish) cerrado — Cascade Shadow Maps (CSM) con 4 cascadas + 5 iteraciones de polish UX descubiertas durante el tour visual.**
 Tag: `v1.47.0-fase2-hito60`. Validado por dev tras 5 ciclos de feedback + fix. Citas verbatim: *"todo ok"* (cierre), *"al acercarlo al suelo, para ver la sombra, la sombra desaparece"* (iter4 — bias 0.005 era ~0.25m de lift en NDC), *"baje y aumento los valores de cascadadas y split, no alteran nada, no se si pusiste logs"* (iter5 — las fórmulas para extraer near/far del proj matrix estaban INVERTIDAS).

@@ -11,6 +11,58 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-17: F2H61 cierre — SSR (Screen-Space Reflections) + G-buffer parcial via MRT
+
+**Contexto:** quinto hito de **Sub-fase 2.6 — Render polish**, = F2H20 del plan original Fase 2 (Sub-fase 2.3 — Renderer). Tag `v1.48.0-fase2-hito61`. Dev validó tras tour visual: *"se ve decente"*.
+
+**Decisión clave 1 — MRT G-buffer parcial vs depth-prepass separado.** Para SSR necesitamos sample de normal en view-space + depth + color. Dos approaches estándar:
+- **A. MRT** sobre el sceneFb existente: segundo color attachment (RGBA16F) que recibe el normal. El PBR shader emite ambos outputs en el mismo draw call.
+- **B. Pre-pass dedicado** depth+normal: shader nuevo que dibuja toda la geometría a un FB separado solo para llenar el G-buffer.
+
+Elegimos **A (MRT)**.
+
+- **Razón:** A duplica memoria (~8MB extra a 1080p para el normal RT en RGBA16F) pero NO duplica draw calls. B duplica draw calls (cada mesh se rendea 2 veces). Para N draws, A es 50% más barato GPU.
+- **Trade-off:** shaders no-PBR (skybox/particles/debug) NO escriben el location 1 → quedarían con basura. Mitigación: `glClearBufferfv(GL_COLOR, 1, zero)` específico al location 1 después del clear global. SSR descarta pixels con `alpha < 0.5`.
+- **Alternativa diferida:** si emerge presión de memoria (4K), packing del normal en R10G10B10A2 o reconstrucción del normal del depth (como hace el SSAO de F2H56).
+
+**Decisión clave 2 — Algoritmo linear DDA view-space vs perspective-correct DDA NDC vs Hi-Z.** McGuire 2014 ofrece 3 variantes; elegimos **linear view-space DDA** para v1.
+
+- **Razón:** ~30 líneas de GLSL vs ~80 perspective-correct vs ~150+ Hi-Z. Calidad "decente" según validación del dev. McGuire concede que linear es "good enough" para charcos/pisos/agua.
+- **Trade-off:** lejano refleja menos preciso (pasos grandes generan miss/hit irregulares). Para v1 OK.
+- **Alternativa diferida:** Hi-Z si emerge demanda de reflejos en grandes superficies de agua o perf (Hi-Z reduce pasos típicos 30→5).
+
+**Decisión clave 3 — SSR después de SSAO en el pipeline.** Pipeline final: `sceneFb → SSAO → afterSsao → SSR → afterSsr → Bloom → ColorGrading → PostProcess`.
+
+- **Razón:** SSR lee color del `afterSsao` (con AO ya aplicado). El reflejo, al sumarse a baseColor, también se "moja" del AO. Físicamente plausible: reflejo en esquina ocluida debería ser sutilmente más oscuro.
+- **Trade-off:** el reflejo en sí NO recibe AO de la zona donde apunta. Visualmente casi imperceptible.
+- **Alternativa rechazada:** SSR antes de SSAO requeriría refactor del SSAOPass para aceptar `colorSrc` + `depthSrc` por separado. Demasiado scope para marginal correctness.
+
+**Decisión clave 4 — Firma del SSRPass con 2 FBs source.** El `apply()` toma `srcColor` + `srcGbuffer` por separado.
+
+- **Razón:** el color procesado viene post-SSAO (con AO); depth y normal viven en el sceneFb original. Pasar 2 FBs es más limpio que copiar depth/normal al ssrFb cada frame.
+- **Trade-off:** la firma rompe la simetría de los otros pases (1 src + 1 dst). Aceptable porque expresa el concepto natural: SSR opera sobre un G-buffer compartido + un color buffer downstream.
+
+**Decisión clave 5 — Sin per-material SSR toggle en v1.** El SSR aplica a TODOS los pixels con `alpha > 0.5` del normal RT con la misma `intensity` global.
+
+- **Razón:** per-material requiere extender MaterialAsset + propagar al PBR shader + emitir bit al alpha del normal RT (packing trick) o crear un 3er G-buffer attachment. Triplica complejidad. Para v1 el dev controla con la intensity global.
+- **Alternativa diferida (BACKLOG):** si emerge demanda "solo metálicos reflejan", emitir flag al alpha (`alpha = (metallic > 0.5) ? 1.0 : 0.5`) + SSR ramp por alpha.
+
+**Decisión clave 6 — `ssrMaxSteps` como `u32` en lugar de `i32`.** Tipo en C++ es u32, GLSL es int. Cast en el setter: `setInt("uMaxSteps", static_cast<i32>(maxSteps))`.
+
+- **Razón:** `InspectorEditTracker::before` es un `std::variant<f32, glm::vec3, glm::vec4, bool, std::string, u32, std::pair<f32, f32>>`. NO incluye `i32`. Extender el variant compilaría templates en muchos lugares; más simple usar `u32` para ints positivos (mismo criterio que `csmCascadeCount`).
+- **Trade-off:** `SliderInt` requiere `int&`, así que el InspectorPanel usa un proxy `int steps = static_cast<int>(...); SliderInt(..., &steps); env.ssrMaxSteps = static_cast<u32>(steps)`. 3 líneas de boilerplate, aceptable.
+
+**Decisión clave 7 — Default OFF + fallback al cubemap IBL implícito.** SSR off por default. Cuando un fragmento no encuentra hit, el `ssr.frag` retorna `baseColor` inalterado — y `baseColor` ya tiene el cubemap IBL specular bakeado por el PBR pass.
+
+- **Razón:** efectos visuales opt-in (criterio iter1 F2H60: *"todo deberia estar desactivado por defecto"*). El cubemap como fallback significa que pixels sin ray hit conservan el look pre-F2H61 sin necesidad de samplear el cubemap explícitamente en el SSR shader.
+- **Trade-off:** físicamente sub-óptimo. El reflejo "real" (SSR hit) se SUMA al cubemap spec en lugar de reemplazarlo. "Double-counting" para superficies altamente metálicas. Solución correcta requeriría que el PBR shader emita el cubemap spec a un G-buffer separado y el SSR mezcle `lerp(cubemap, ssr, hit_confidence)`. Para v1 el additive simple "se ve decente".
+
+**Lecciones cruzadas para futuros pases de post-process:**
+- **Bug recurrente del clear global + MRT:** cuando un FB tiene 2 color attachments, `glClear(GL_COLOR_BUFFER_BIT)` aplica el `glClearColor` a AMBOS. Si el clearColor tiene `alpha = 1` (típico sky color), el alpha del normal RT queda en 1.0 → rompe el flag "pixel no-PBR". Mitigación: `glClearBufferfv(GL_COLOR, 1, zero)` específico al RT 1 después del clear global. Pattern aplicable a cualquier MRT futuro (G-buffer completo en F2H62+).
+- **F2H61 cerró clean al primer intento** — sin pivots de scope durante el desarrollo. Validación visual del dev clean ("se ve decente") + 1 feedback de UX (Environment entry point) que NO ataca el render sino la UX del editor. F2H58/F2H59/F2H60 tuvieron pivots significativos. Posible explicación: SSR es feature contenida en el pipeline render, no toca UX del editor. **Generalizable: hitos "puramente técnicos" (sin nuevas UI) cierran cleaner que hitos UX**.
+
+---
+
 ## 2026-05-17: F2H60 cierre — Cascade Shadow Maps (CSM) + 5 iteraciones de polish UX
 
 **Contexto:** cuarto hito de Sub-fase 2.6 (Render polish). Plan original = CSM clásico, sucesor de Hito 16 (single shadow map estático). El agente propuso pivotar al "Source paradigm + meshes procedurales" como F2H60, pero el dev pushback con *"no quiero alejarme tanto de la vision y el plan original"* y *"hagamos todo lo que falta que venia del plan original, y guardemos lo que falta, de pendientes"* → reset a CSM clásico. Follow-ups descartados acumulados en `BACKLOG.md`. Tag `v1.47.0-fase2-hito60`. Hito mediano técnico (Bloques A-F) + iteración intensa de UX (iter1-5) descubierta durante el tour visual.

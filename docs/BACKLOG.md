@@ -10,6 +10,25 @@
 
 ## 1. Pedido explícitamente por el dev en algún tour (alta presión)
 
+### 1.0. EnvironmentComponent con entry point dedicado (F2H61 tour)
+
+**Contexto**: durante la validación visual de F2H61 (SSR) el dev creó una entidad placeholder (cubo missing-texture) **solo para colgarle el `EnvironmentComponent`** y poder activar el SSR. Cita verbatim: *"el cubo con la textura missing es mi environmentCOmponent, mas adelante me gustaria que tenga un icono y una opcion propia, porque de la forma que hago ahora es agregar un empty y ahi agregar el componentEnviroment y no le veo el sentido si es un componente global"*.
+
+El `EnvironmentComponent` ES global por escena (`SceneRenderer::applyEnvironmentFromScene` solo aplica el primer Environment encontrado). Tenerlo colgado de una entidad placeholder rompe la convención de otros motores:
+- **Unity**: Render Settings global (no anclado a GameObject) + Volume actor especial con icono propio.
+- **Unreal**: Post Process Volume actor con icono y categoría propia en el outliner.
+- **Godot**: `WorldEnvironment` node específico con icono y entry point en el menú Add Node.
+
+**Scope estimado**: 2-3h. Cambios mínimos:
+1. Entry point dedicado: en el modal `+ Crear Entidad` (F2H57/F2H59) agregar una sub-sección "World/Environment" o un kit en el modal Convertir, con un botón "Crear Environment" que spawnea una entidad con sólo `TagComponent` + `TransformComponent` + `EnvironmentComponent`.
+2. Icono dedicado en el Hierarchy panel: `IconHelpers::iconForEntity` ya detecta tipo de componente — añadir branch para `EnvironmentComponent` con `ICON_FA_TREE` o `ICON_FA_GLOBE` (probablemente FA_GLOBE para distinguirlo del header del Inspector).
+3. UI guard: si la escena ya tiene un Environment, el botón queda disabled o agrega al existente.
+4. Opcional UX nice: skip del MeshRenderer placeholder en la entidad Environment (no debe verse en el viewport — es una "config entity", no geometría).
+
+**Por qué NO atacamos ahora**: F2H61 ship SSR funcional. El workaround "crear empty + agregar Environment" es feo pero funciona. Atacar como sub-hito propio o como bloque temprano del F2H62 (UX cleanup de Sub-fase 2.3) si emerge fricción real.
+
+---
+
 ### 1.1. Map Tools híbrido Hammer+Blender (F2H59 tour)
 
 **Contexto**: en el workspace `map_editor`, el panel **Map Tools** (Bloque/Pincel/Clip/Objeto/Vertex/Edge/Cara/Snap/Nombres/Carve) ocupa una columna lateral fija estilo Hammer. El dev sugirió: que pueda ser dockable a un lado por default (Hammer) **pero** opcionalmente desplegable como overlay flotante sobre el viewport ortográfico cuando quiera más espacio (Blender). Cita: *"y esta idea me gusta"*.
