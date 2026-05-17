@@ -246,4 +246,55 @@ void EditorApplication::handleAddPrismHexagonalBrush() {
     pushCreatedEntities({e}, "Anadir Prism Hexagonal");
 }
 
+void EditorApplication::handleAddPlaneBrush() {
+    if (!m_scene) return;
+    // F2H59: el "plano" es un preset de Box con dimensiones default
+    // optimizadas para suelo (10m x 0.05m alto x 10m). Convencion Unity
+    // Plane / Unreal Plane / Godot PlaneMesh. Internamente sigue siendo
+    // un Box CSG estandar -- el dev lo edita con el mismo gizmo y se
+    // serializa al .moodmap igual que cualquier otro brush.
+    const glm::mat4 scale = glm::scale(glm::mat4(1.0f),
+                                         glm::vec3(10.0f, 0.05f, 10.0f));
+    Entity e = spawnBrushEntity(*m_scene,
+        Csg::makeBoxBrush(scale),
+        "Plane", "Anadir Plane Brush:");
+    pushCreatedEntities({e}, "Anadir Plane Brush");
+}
+
+void EditorApplication::handleAddQuadBrush() {
+    if (!m_scene) return;
+    // F2H59: "quad" = version chica del plano (1x0.05x1). Util como
+    // billboard / sprite proxy o como base de pickup items.
+    const glm::mat4 scale = glm::scale(glm::mat4(1.0f),
+                                         glm::vec3(1.0f, 0.05f, 1.0f));
+    Entity e = spawnBrushEntity(*m_scene,
+        Csg::makeBoxBrush(scale),
+        "Quad", "Anadir Quad Brush:");
+    pushCreatedEntities({e}, "Anadir Quad Brush");
+}
+
+void EditorApplication::handleAddConeBrush() {
+    if (!m_scene) return;
+    Entity e = spawnBrushEntity(*m_scene,
+        Csg::makeConeBrush(glm::mat4(1.0f)),
+        "Cone", "Anadir Cone Brush:");
+    pushCreatedEntities({e}, "Anadir Cone Brush");
+}
+
+void EditorApplication::handleAddCapsuleBrush() {
+    if (!m_scene) return;
+    // F2H59: "capsula" v1 = sphere dodecaedrica estirada 2x en Y.
+    // No es una capsula tecnica (cilindro + 2 hemisferios) sino un
+    // elipsoide alargado, pero cubre el caso comun de "personaje
+    // proxy" / "pildora" / "pilar redondeado". Si emerge necesidad
+    // de capsula precisa (paredes laterales rectas), follow-up con
+    // makeCapsuleBrush() real (cilindro central + hemisferios).
+    const glm::mat4 scale = glm::scale(glm::mat4(1.0f),
+                                         glm::vec3(1.0f, 2.0f, 1.0f));
+    Entity e = spawnBrushEntity(*m_scene,
+        Csg::makeSphereBrush(scale),
+        "Cap", "Anadir Capsule Brush:");
+    pushCreatedEntities({e}, "Anadir Capsule Brush");
+}
+
 } // namespace Mood

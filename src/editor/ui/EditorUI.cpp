@@ -53,7 +53,12 @@ EditorUI::EditorUI() {
                 &m_itemPropertyEditor,// F2H51
                 &m_questBrowser,        // F2H53
                 &m_questPropertyEditor, // F2H53
-                &m_scriptEditor, &m_materialEditor, &m_toolbar,
+                &m_scriptEditor, &m_materialEditor,
+                // F2H59: Toolbar removido del dockspace -- las herramientas
+                // (Mover/Rotar/Escala/Cara) viven ahora como overlay flotante
+                // sobre el viewport, estilo Blender. El struct `m_toolbar`
+                // queda como dead code linkeable (no inicializado por panels)
+                // mientras no se reactive como panel independiente.
                 // F2H28: paneles del workspace "Editor de mapas".
                 // Arrancan ocultos; se hacen visibles via
                 // applyDefaultVisibilityForWorkspace.
@@ -67,7 +72,10 @@ EditorUI::EditorUI() {
     m_orthoSide.visible = false;
     m_mapEditorTopBar.visible = false;
     m_visGroupsPanel.visible = false;  // F2H33
-    m_toolbar.setEditorUi(this);  // F2H22: la toolbar emite requests a UI
+    // F2H59: Toolbar como panel independiente queda inactivo (no en m_panels).
+    // El ViewportPanel pinta las herramientas overlay sobre la imagen del
+    // viewport directamente; recibe el puntero a UI aca.
+    m_viewport.setEditorUi(this);
     m_mapEditorTopBar.setEditorUi(this);  // F2H30 Bloque C
     m_visGroupsPanel.setEditorUi(this);  // F2H33
     m_nodeGraphSandbox.setEditorUi(this);  // F2H46

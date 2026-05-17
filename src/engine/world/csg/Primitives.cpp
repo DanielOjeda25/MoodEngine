@@ -244,6 +244,58 @@ Brush makeWedgeBrush(const glm::mat4& worldFromLocal,
     return b;
 }
 
+Brush makeConeBrush(const glm::mat4& worldFromLocal,
+                     u32 segments,
+                     u32 materialIndex) {
+    // F2H59: Cono con apex en (0, +0.5, 0) y base circular radio 0.5
+    // en y=-0.5. N caras laterales triangulares + 1 cap base.
+    //
+    // Geometria por cara lateral i (con angulo central θ_i = 2πi/N + π/N):
+    //   - La normal de cada cara tiene componente Y = sin(α) y
+    //     componente radial = cos(α), donde α = atan(base_radius/height)
+    //     = atan(0.5/1) = atan(0.5). sin(α) = 0.5/sqrt(1.25),
+    //     cos(α) = 1/sqrt(1.25).
+    //   - El plano pasa por el apex (0, 0.5, 0), por lo que:
+    //       d = -dot(normal, apex) = -sin(α) * 0.5.
+    Brush b;
+    if (segments < 3) return b;  // degenerado
+
+    const f32 lateralLen = std::sqrt(1.25f);  // sqrt(0.5^2 + 1^2)
+    const f32 sinAlpha = 0.5f / lateralLen;
+    const f32 cosAlpha = 1.0f / lateralLen;
+    const f32 lateralDist = -sinAlpha * 0.5f;
+
+    const glm::mat3 normalMatrix = glm::inverseTranspose(glm::mat3(worldFromLocal));
+    b.faces.reserve(segments + 1);
+
+    // Caras laterales. Offset π/N para que las caras esten centradas
+    // entre los vertices de la base (no que cada cara sea un vertice).
+    for (u32 i = 0; i < segments; ++i) {
+        const f32 theta = (2.0f * glm::pi<f32>() * (static_cast<f32>(i) + 0.5f))
+                            / static_cast<f32>(segments);
+        const glm::vec3 normal(cosAlpha * std::cos(theta),
+                                sinAlpha,
+                                cosAlpha * std::sin(theta));
+        const Plane localPlane{normal, lateralDist};
+        BrushFace face;
+        face.plane = transformPlane(localPlane, worldFromLocal, normalMatrix);
+        face.materialIndex = materialIndex;
+        defaultTangentBasis(face.plane.normal, face.uAxis, face.vAxis);
+        b.faces.push_back(face);
+    }
+
+    // Cap base en y=-0.5, normal (0,-1,0).
+    const Plane baseLocal{{0.0f, -1.0f, 0.0f}, -0.5f};
+    BrushFace baseFace;
+    baseFace.plane = transformPlane(baseLocal, worldFromLocal, normalMatrix);
+    baseFace.materialIndex = materialIndex;
+    defaultTangentBasis(baseFace.plane.normal, baseFace.uAxis, baseFace.vAxis);
+    b.faces.push_back(baseFace);
+
+    b.localAabb = computeBrushAabb(b);
+    return b;
+}
+
 namespace {
 
 /// @brief F2H30 Bloque C: proyecta un punto 3D a 2D ignorando el

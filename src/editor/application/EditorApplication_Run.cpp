@@ -270,6 +270,11 @@ int EditorApplication::run() {
             case ProjectAction::AddWedgeBrush:           handleAddWedgeBrush();            break;
             case ProjectAction::AddPrismTriangularBrush: handleAddPrismTriangularBrush();  break;
             case ProjectAction::AddPrismHexagonalBrush:  handleAddPrismHexagonalBrush();   break;
+            // F2H59: primitivas clasicas adicionales.
+            case ProjectAction::AddPlaneBrush:           handleAddPlaneBrush();            break;
+            case ProjectAction::AddQuadBrush:            handleAddQuadBrush();             break;
+            case ProjectAction::AddConeBrush:            handleAddConeBrush();             break;
+            case ProjectAction::AddCapsuleBrush:         handleAddCapsuleBrush();          break;
             // F2H20: compilacion brush -> mesh estatica + export OBJ.
             case ProjectAction::CompileMap:              handleCompileMap();               break;
             case ProjectAction::ExportObj:               handleExportObj();                break;

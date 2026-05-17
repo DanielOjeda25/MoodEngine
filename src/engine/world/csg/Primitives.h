@@ -69,6 +69,20 @@ Brush makePyramidBrush(const glm::mat4& worldFromLocal,
 Brush makeWedgeBrush(const glm::mat4& worldFromLocal,
                       u32 materialIndex = 0);
 
+/// @brief F2H59: Brush conico: N planos laterales triangulares que
+///        convergen al apex `(0, +0.5, 0)` + 1 cap base en `y=-0.5`
+///        con radio 0.5. Similar a `makeCylinderBrush` pero con
+///        radio top = 0.
+///
+///        Util para spotlights cosmeticos, tiendas de campana,
+///        sombreros, arboles low-poly.
+///
+///        @param segments Cantidad de caras laterales (>=3).
+///                         Default 16 (matchea cylinder).
+Brush makeConeBrush(const glm::mat4& worldFromLocal,
+                     u32 segments = 16,
+                     u32 materialIndex = 0);
+
 /// @brief F2H30 Bloque C: brush prismatico desde polígono arbitrario.
 ///        Toma una secuencia de N puntos en LOCAL space (sobre un
 ///        plano perpendicular a `axisIndex`: 0=X, 1=Y, 2=Z) y los

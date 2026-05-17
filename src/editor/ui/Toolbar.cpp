@@ -87,23 +87,10 @@ void Toolbar::onImGuiRender() {
 
     ImGui::Separator();
 
-    // ---- Brushes (Add Box, Add Cylinder) ----
-    const std::string boxLabel = std::string(ICON_FA_CUBE " ") +
-        I18n::T("editor.panel.toolbar.box");
-    const std::string boxTooltip = I18n::T("editor.panel.toolbar.box_tooltip");
-    if (toolButton(boxLabel.c_str(),
-                    boxTooltip.c_str())) {
-        m_ui->requestProjectAction(ProjectAction::AddBoxBrush);
-    }
-    const std::string cylLabel = std::string(ICON_FA_CIRCLE " ") +
-        I18n::T("editor.panel.toolbar.cylinder");
-    const std::string cylTooltip = I18n::T("editor.panel.toolbar.cylinder_tooltip");
-    if (toolButton(cylLabel.c_str(),
-                    cylTooltip.c_str())) {
-        m_ui->requestProjectAction(ProjectAction::AddCylinderBrush);
-    }
-
-    ImGui::Separator();
+    // F2H59: Box/Cylinder removidos del Toolbar -- las primitivas viven
+    // ahora en el modal "+ Crear Entidad" del panel Escena (workflow
+    // SFM-style). Toolbar queda solo con herramientas de edicion
+    // (Mover/Rotar/Escala/Cara), no con spawn de geometria.
 
     // ---- Face mode toggle ----
     const bool faceActive = (m_ui->subMode() == EditorSubMode::Face);

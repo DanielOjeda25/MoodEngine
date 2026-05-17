@@ -88,6 +88,11 @@ enum class ProjectAction {
     AddWedgeBrush,
     AddPrismTriangularBrush,
     AddPrismHexagonalBrush,
+    // F2H59: primitivas clasicas adicionales para no modelar desde la base.
+    AddPlaneBrush,   // box aplastado 10x0.05x10 -- convencion Unity Plane.
+    AddQuadBrush,    // box chico 1x0.05x1 -- billboard / sprite.
+    AddConeBrush,    // N caras triangulares + cap base.
+    AddCapsuleBrush, // sphere estirada en Y -- aproximacion pildora.
     // F2H20: compilacion brush -> mesh estatica + export OBJ.
     CompileMap,
     ExportObj,

@@ -1,5 +1,8 @@
 #include "editor/panels/scene/ViewportPanel.h"
 
+#include "editor/application/EditorMode.h"   // F2H59: EditorSubMode para Cara toggle.
+#include "editor/ui/EditorUI.h"               // F2H59: overlay tool buttons.
+#include "editor/ui/IconsFontAwesome6.h"     // F2H59: icons del overlay.
 #include "engine/i18n/I18n.h"  // F2H43
 #include "engine/render/rhi/IFramebuffer.h"
 
@@ -9,6 +12,93 @@
 #include <string>
 
 namespace Mood {
+
+namespace {
+
+// F2H59: overlay flotante de herramientas estilo Blender. Sub-window
+// posicionada al top-left de la imagen del viewport, sin titulo / sin
+// docking / sin resize, con background semi-transparente. La posicion
+// es sticky al viewport (no es movible) para que el dev siempre la
+// encuentre en el mismo lugar al cambiar de layout.
+void drawViewportToolsOverlay(EditorUI* ui, ImVec2 imageMin) {
+    if (ui == nullptr) return;
+
+    constexpr float kOverlayOffset = 8.0f;
+    ImGui::SetNextWindowPos(ImVec2(imageMin.x + kOverlayOffset,
+                                     imageMin.y + kOverlayOffset),
+                              ImGuiCond_Always);
+    // F2H59: alpha 0 -> background totalmente transparente, solo se ven
+    // los botones (estilo Blender). Pedido del dev: "le podemos dejar el
+    // fondo transparente para que solo sean botones flotantes?".
+    ImGui::SetNextWindowBgAlpha(0.0f);
+
+    // F2H59 fix: WindowBorderSize y PopupBorderSize a 0 para que no
+    // queden lineas finas del frame de la sub-window con bg transparente.
+    // Pedido del dev: "se sigue viendo unas lineas finas".
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
+
+    constexpr ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoDocking |
+        ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoFocusOnAppearing |
+        ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoBackground;  // F2H59: redundante con alpha=0 pero explicito.
+
+    if (!ImGui::Begin("##viewport_tools_overlay", nullptr, flags)) {
+        ImGui::End();
+        ImGui::PopStyleVar(2);
+        return;
+    }
+
+    constexpr ImVec2 kBtnSize{36.0f, 36.0f};
+    auto iconBtn = [&kBtnSize](const char* icon, const char* tooltipKey,
+                                  bool active = false) -> bool {
+        if (active) {
+            ImGui::PushStyleColor(ImGuiCol_Button,
+                                    ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        }
+        const bool clicked = ImGui::Button(icon, kBtnSize);
+        if (active) ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", I18n::T(tooltipKey).c_str());
+        }
+        return clicked;
+    };
+
+    if (iconBtn(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT,
+                 "editor.panel.toolbar.move_tooltip")) {
+        ui->requestGizmoMode(0);
+    }
+    if (iconBtn(ICON_FA_ROTATE,
+                 "editor.panel.toolbar.rotate_tooltip")) {
+        ui->requestGizmoMode(1);
+    }
+    if (iconBtn(ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER,
+                 "editor.panel.toolbar.scale_tooltip")) {
+        ui->requestGizmoMode(2);
+    }
+
+    ImGui::Separator();
+
+    // F2H59: el modo Face se identifica con la letra "F" (mas claro que
+    // el icono cuadrado generico). Pedido del dev. Homogeneizar el
+    // sistema de iconos del editor queda como follow-up.
+    const bool faceActive = (ui->subMode() == EditorSubMode::Face);
+    if (iconBtn("F",
+                 "editor.panel.toolbar.face_tooltip",
+                 faceActive)) {
+        ui->requestToggleFaceMode();
+    }
+
+    ImGui::End();
+    ImGui::PopStyleVar(2);  // WindowBorderSize + WindowPadding push del prologo.
+}
+
+} // namespace
 
 void ViewportPanel::onImGuiRender() {
     // Reset de input capturado: se actualiza dentro del panel si aplica.
@@ -71,6 +161,13 @@ void ViewportPanel::onImGuiRender() {
                                imageSize.x, imageSize.y);
                 dl->PopClipRect();
             }
+
+            // F2H59: overlay flotante de herramientas estilo Blender. Se
+            // pinta como sub-window posicionada al top-left de la imagen
+            // del viewport. Reemplaza al panel Toolbar separado pre-F2H59.
+            // El overlay aparece DESPUES del drawlist callback para que
+            // los iconos no queden ocultos por gizmos / outlines.
+            drawViewportToolsOverlay(m_editorUi, imageMin);
 
             // Helper local: pos del cursor -> NDC dentro de la imagen.
             auto mousePosToNdc = [&imageMin, &imageSize](ImVec2 mp, float& ndcX, float& ndcY) {

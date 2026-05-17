@@ -10,11 +10,18 @@ struct ImDrawList;
 namespace Mood {
 
 class IFramebuffer;
+class EditorUI;
 
 class ViewportPanel : public IPanel {
 public:
     void onImGuiRender() override;
     const char* name() const override { return "Viewport"; }
+
+    /// @brief F2H59: inyecta el puntero a EditorUI para renderizar el
+    ///        overlay de herramientas (Mover/Rotar/Escala/Cara) sobre
+    ///        el viewport, estilo Blender. El overlay reemplaza al
+    ///        panel Toolbar separado pre-F2H59.
+    void setEditorUi(EditorUI* ui) { m_editorUi = ui; }
 
     /// @brief Asocia el framebuffer cuya color attachment se muestra en el panel.
     ///        La escena se renderiza a este FB desde fuera (EditorApplication).
@@ -196,6 +203,7 @@ public:
 
 private:
     IFramebuffer* m_framebuffer = nullptr;
+    EditorUI*     m_editorUi    = nullptr;  // F2H59: para overlay de herramientas.
     u32 m_desiredWidth = 0;
     u32 m_desiredHeight = 0;
 

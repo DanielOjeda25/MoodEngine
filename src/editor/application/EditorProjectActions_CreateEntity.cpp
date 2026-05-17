@@ -270,9 +270,18 @@ void EditorApplication::processCreateEntityPlaceholderRequest() {
 // ============================================================================
 
 void EditorApplication::renderPickFromLoadedMeshesModal() {
+    // F2H59: el popup ID interno de ImGui sigue siendo "pick_mesh_modal"
+    // (estable para layout/persistence); el title visible se compone con
+    // sufijo `##pick_mesh_modal` para que ImGui muestre el label traducido
+    // pero matchee el OpenPopup contra el mismo ID. Si cambiamos el ID,
+    // BeginPopupModal no abre.
+    constexpr const char* kPopupId = "##pick_mesh_modal";
+    const std::string popupTitle =
+        I18n::T("editor.pick_mesh_modal.window_title") + kPopupId;
+
     if (m_ui.consumePickFromLoadedMeshesRequest()) {
         m_pickMeshModalActive = true;
-        ImGui::OpenPopup("pick_mesh_modal");
+        ImGui::OpenPopup(popupTitle.c_str());
     }
 
     if (!m_pickMeshModalActive) return;
@@ -287,16 +296,24 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
     constexpr ImGuiWindowFlags flags =
         ImGuiWindowFlags_NoCollapse;
 
-    if (!ImGui::BeginPopupModal("pick_mesh_modal", nullptr, flags)) {
+    // F2H59: pasar &m_pickMeshModalActive como p_open hace que ImGui
+    // pinte la X arriba a la derecha. Al cliquear, ImGui setea el bool
+    // a false; nosotros llamamos CloseCurrentPopup en el siguiente
+    // chequeo abajo. Reemplaza al boton "Cerrar" inferior pre-F2H59.
+    if (!ImGui::BeginPopupModal(popupTitle.c_str(), &m_pickMeshModalActive, flags)) {
+        return;
+    }
+
+    // Si el dev clickeo la X, ImGui ya seteo m_pickMeshModalActive=false;
+    // cerramos el popup y salimos limpio.
+    if (!m_pickMeshModalActive) {
+        ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
         return;
     }
 
     if (!(m_scene && m_assetManager)) {
         ImGui::TextUnformatted("Sin escena/assets.");
-        if (ImGui::Button("Cerrar")) {
-            m_pickMeshModalActive = false;
-            ImGui::CloseCurrentPopup();
-        }
         ImGui::EndPopup();
         return;
     }
@@ -305,13 +322,29 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
     ImGui::TextDisabled("%s", I18n::T("editor.pick_mesh_modal.subtitle").c_str());
     ImGui::Separator();
 
+    // F2H59: TabBar con dos sub-secciones. "Meshes del proyecto" mantiene
+    // el flujo SFM original; "Primitivas" agrupa los brushes CSG (Plano /
+    // Quad / Box / Cylinder / Sphere / Cone / Capsule / Pyramid / Wedge /
+    // Prism tri / Prism hex) que antes vivian en el menu top-level
+    // Brush > Anadir y en el Toolbar. Punto unico de "como creo geometria".
+    if (ImGui::BeginTabBar("##create_entity_tabs")) {
+
+    // F2H59 fix: altura uniforme del contenido de las tabs para que el
+    // footer del modal quede siempre en la misma posicion vertical sin
+    // importar que tab esta activa. Pedido del dev: "en primitivas no
+    // esta el footer bien posicionado".
+    constexpr float kTabContentHeight = 320.0f;
+
+    if (ImGui::BeginTabItem(I18n::T("editor.pick_mesh_modal.tab_meshes").c_str())) {
     // Listado: itera meshIds [1..count). Skip id 0 = missing-mesh
-    // (ya es accesible via "Vacia (placeholder)").
+    // (ya es accesible via "New (empty)").
     const usize meshCount = m_assetManager->meshCount();
     if (meshCount <= 1) {
+        ImGui::BeginChild("##mesh_empty", ImVec2(0.0f, kTabContentHeight), false);
         ImGui::TextDisabled("%s", I18n::T("editor.pick_mesh_modal.empty").c_str());
+        ImGui::EndChild();
     } else {
-        ImGui::BeginChild("##mesh_list", ImVec2(0.0f, 360.0f), true);
+        ImGui::BeginChild("##mesh_list", ImVec2(0.0f, kTabContentHeight), true);
         MeshAssetId selectedToSpawn = 0;
         for (usize i = 1; i < meshCount; ++i) {
             const auto id = static_cast<MeshAssetId>(i);
@@ -389,18 +422,79 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
 
             m_pickMeshModalActive = false;
             ImGui::CloseCurrentPopup();
+            ImGui::EndTabItem();
+            ImGui::EndTabBar();
             ImGui::EndPopup();
             return;
         }
     }
+    ImGui::EndTabItem();
+    } // end TabItem "Meshes"
 
+    // F2H59: tab "Primitivas". Cada boton dispara el ProjectAction
+    // correspondiente y cierra el modal. Grid 3-columns para que entren
+    // las 11 primitivas sin scroll.
+    if (ImGui::BeginTabItem(I18n::T("editor.pick_mesh_modal.tab_primitives").c_str())) {
+        ImGui::BeginChild("##primitives_grid", ImVec2(0.0f, kTabContentHeight), false);
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.pick_mesh_modal.primitives_hint").c_str());
+        ImGui::Spacing();
+
+        struct PrimSpec { const char* labelKey; ProjectAction action; };
+        constexpr PrimSpec kPrims[] = {
+            { "editor.menu.brush.plane",     ProjectAction::AddPlaneBrush             },
+            { "editor.menu.brush.quad",      ProjectAction::AddQuadBrush              },
+            { "editor.menu.brush.box",       ProjectAction::AddBoxBrush               },
+            { "editor.menu.brush.cylinder",  ProjectAction::AddCylinderBrush          },
+            { "editor.menu.brush.sphere",    ProjectAction::AddSphereBrush            },
+            { "editor.menu.brush.cone",      ProjectAction::AddConeBrush              },
+            { "editor.menu.brush.capsule",   ProjectAction::AddCapsuleBrush           },
+            { "editor.menu.brush.pyramid",   ProjectAction::AddPyramidBrush           },
+            { "editor.menu.brush.wedge",     ProjectAction::AddWedgeBrush             },
+            { "editor.menu.brush.prism_tri", ProjectAction::AddPrismTriangularBrush   },
+            { "editor.menu.brush.prism_hex", ProjectAction::AddPrismHexagonalBrush    },
+        };
+        constexpr int kPrimCount = static_cast<int>(sizeof(kPrims) / sizeof(kPrims[0]));
+        constexpr int kCols = 3;
+        constexpr float kBtnW = 180.0f;
+        constexpr float kBtnH = 40.0f;
+
+        ProjectAction pendingAction = static_cast<ProjectAction>(-1);
+        bool actionPicked = false;
+        for (int i = 0; i < kPrimCount; ++i) {
+            if (i % kCols != 0) ImGui::SameLine();
+            const std::string label = I18n::T(kPrims[i].labelKey);
+            if (ImGui::Button(label.c_str(), ImVec2(kBtnW, kBtnH))) {
+                pendingAction = kPrims[i].action;
+                actionPicked = true;
+            }
+        }
+
+        if (actionPicked) {
+            m_ui.requestProjectAction(pendingAction);
+            m_pickMeshModalActive = false;
+            ImGui::CloseCurrentPopup();
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+            ImGui::EndTabBar();
+            ImGui::EndPopup();
+            return;
+        }
+        ImGui::EndChild();
+        ImGui::EndTabItem();
+    }
+
+    ImGui::EndTabBar();
+    } // end TabBar
+
+    // F2H59: footer del modal estilo "engine generico" (Unreal Content
+    // Browser / Unity Asset Window): los 2 botones primarios siempre
+    // presentes ("Importar..." abre file picker del SO, "Nuevo (vacio)"
+    // crea una entidad placeholder). Cerrar via X arriba (sacamos el
+    // boton "Cerrar" inferior pre-F2H59 -- convencion ventana estandar).
     ImGui::Separator();
-    // Acciones secundarias dentro del modal: importar desde archivo del SO
-    // (file picker) y crear entidad vacia con cubo placeholder. Convencion
-    // Hammer/SFM: el modal de picker es el punto unico de "como creo una
-    // entidad", sin popups intermedios.
-    if (ImGui::Button(I18n::T("editor.pick_mesh_modal.import_from_file").c_str(),
-                       ImVec2(220.0f, 0.0f))) {
+    if (ImGui::Button(I18n::T("editor.pick_mesh_modal.import").c_str(),
+                       ImVec2(180.0f, 0.0f))) {
         m_pickMeshModalActive = false;
         ImGui::CloseCurrentPopup();
         m_ui.requestCreateEntityFromModel();
@@ -408,18 +502,13 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
         return;
     }
     ImGui::SameLine();
-    if (ImGui::Button(I18n::T("editor.pick_mesh_modal.empty_placeholder").c_str(),
-                       ImVec2(220.0f, 0.0f))) {
+    if (ImGui::Button(I18n::T("editor.pick_mesh_modal.new_empty").c_str(),
+                       ImVec2(180.0f, 0.0f))) {
         m_pickMeshModalActive = false;
         ImGui::CloseCurrentPopup();
         m_ui.requestCreateEntityPlaceholder();
         ImGui::EndPopup();
         return;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(I18n::T("editor.convert_modal.close").c_str(), ImVec2(140.0f, 0.0f))) {
-        m_pickMeshModalActive = false;
-        ImGui::CloseCurrentPopup();
     }
 
     ImGui::EndPopup();

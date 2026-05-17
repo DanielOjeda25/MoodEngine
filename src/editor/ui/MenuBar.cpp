@@ -127,33 +127,12 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
 
         // F2H18: top-level "Brush". Geometria (primitivas + booleanos).
         // Antes vivia anidada como Archivo > Mapa > {Anadir Brush, Boolean}.
+        // F2H59: submenu "Anadir" removido -- las primitivas ahora viven
+        // en el modal "+ Crear Entidad" del panel Escena (tab "Primitivas").
+        // Workflow Hammer/SFM: un solo punto de entrada para spawnear
+        // geometria, sea mesh importado o primitiva procedural. Si emerge
+        // demanda de "agregar primitiva sin abrir modal", re-evaluar.
         if (ImGui::BeginMenu((std::string(ICON_FA_CUBES_STACKED " ") + I18n::T("editor.menu.brush")).c_str(), ui.hasProject())) {
-            // F2H11 + F2H14: primitivas CSG para el mapa actual.
-            if (ImGui::BeginMenu(I18n::T("editor.menu.brush.add").c_str())) {
-                if (ImGui::MenuItem(I18n::T("editor.menu.brush.box").c_str())) {
-                    ui.requestProjectAction(ProjectAction::AddBoxBrush);
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.brush.cylinder").c_str())) {
-                    ui.requestProjectAction(ProjectAction::AddCylinderBrush);
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.brush.sphere").c_str())) {
-                    ui.requestProjectAction(ProjectAction::AddSphereBrush);
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.brush.pyramid").c_str())) {
-                    ui.requestProjectAction(ProjectAction::AddPyramidBrush);
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.brush.wedge").c_str())) {
-                    ui.requestProjectAction(ProjectAction::AddWedgeBrush);
-                }
-                ImGui::Separator();
-                if (ImGui::MenuItem(I18n::T("editor.menu.brush.prism_tri").c_str())) {
-                    ui.requestProjectAction(ProjectAction::AddPrismTriangularBrush);
-                }
-                if (ImGui::MenuItem(I18n::T("editor.menu.brush.prism_hex").c_str())) {
-                    ui.requestProjectAction(ProjectAction::AddPrismHexagonalBrush);
-                }
-                ImGui::EndMenu();
-            }
             // F2H12: operaciones booleanas entre brushes.
             // A = entidad seleccionada (debe tener BrushComponent);
             // B se elige del submenu listando los demas brushes.

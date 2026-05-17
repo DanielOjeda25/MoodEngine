@@ -164,6 +164,11 @@ private:
     void handleAddWedgeBrush();
     void handleAddPrismTriangularBrush();
     void handleAddPrismHexagonalBrush();
+    // F2H59: primitivas clasicas adicionales (plano / quad / cono / capsula).
+    void handleAddPlaneBrush();    // box aplastada 10x0.05x10 -- suelo.
+    void handleAddQuadBrush();     // box chica 1x0.05x1 -- billboard.
+    void handleAddConeBrush();     // cono regular -- spotlights / sombreros.
+    void handleAddCapsuleBrush();  // sphere estirada en Y -- pildora proxy.
 
     /// @brief F2H20: compila los brushes del mapa actual a una mesh
     ///        estatica unificada (weld + cull caras internas + merge
