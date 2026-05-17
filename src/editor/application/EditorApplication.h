@@ -62,14 +62,21 @@ private:
     void beginFrame();
     void endFrame();
 
-    /// @brief Procesa todas las interacciones de viewport: click-to-select
-    ///        (3D + 3 orthos), face mode picking, polygon brush, clip tool,
-    ///        drag-edit en ortos, block tool, vertex/edge edit, marquee
-    ///        select. Definido en `EditorApplication_RunInteractions.cpp`
-    ///        (split AUDIT-1 para mantener `_Run.cpp` bajo el hard cap de
-    ///        800 LOC — antes esta seccion vivia inline en `run()` con
-    ///        ~1018 LOC). Llamado una vez por frame desde `run()`.
+    /// @brief Procesa interacciones de viewport: click-to-select 3D +
+    ///        face mode, polygon brush, clip tool, click-select ortho,
+    ///        drag-edit en ortos. Definido en
+    ///        `EditorApplication_RunInteractions.cpp` (split AUDIT-1).
+    ///        Llamado una vez por frame desde `run()`. Al final invoca
+    ///        `processOrthoToolModes()` (sub-split AUDIT-2).
     void processViewportInteractions();
+
+    /// @brief Modos de herramienta de los viewports ortograficos: block
+    ///        tool, marquee select, vertex/edge edit. Definido en
+    ///        `EditorApplication_RunInteractions_ToolModes.cpp` (sub-split
+    ///        AUDIT-2 para mantener `_RunInteractions.cpp` bajo el hard
+    ///        cap de 800 LOC — antes vivian en el mismo archivo con 1065
+    ///        LOC). Invocado al final de `processViewportInteractions()`.
+    void processOrthoToolModes();
 
     /// @brief Renderiza la escena al framebuffer offscreen que muestra el
     ///        panel Viewport.

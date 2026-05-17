@@ -501,6 +501,7 @@ add_executable(MoodEditor
     src/editor/application/EditorApplication_Init.cpp
     src/editor/application/EditorApplication_Run.cpp
     src/editor/application/EditorApplication_RunInteractions.cpp  # AUDIT-1 split
+    src/editor/application/EditorApplication_RunInteractions_ToolModes.cpp  # AUDIT-2 sub-split
     src/editor/application/EditorApplication_Snap.cpp
     src/editor/application/EditorProjectActions_Clip.cpp
     src/editor/application/EditorProjectActions_Carve.cpp
@@ -510,6 +511,7 @@ add_executable(MoodEditor
     src/editor/application/DemoSpawners_Drop.cpp
     src/editor/application/EditorProjectActions.cpp
     src/editor/application/EditorProjectActions_CreateEntity.cpp
+    src/editor/application/EditorProjectActions_CreateEntity_PickModal.cpp  # AUDIT-2 split
     src/editor/application/EditorProjectActions_FileIO.cpp
     src/editor/application/EditorProjectActions_Package.cpp
     src/editor/application/EditorProjectActions_Map.cpp
@@ -517,6 +519,7 @@ add_executable(MoodEditor
     src/editor/application/EditorProjectActions_Boolean.cpp
     src/editor/application/EditorProjectActions_Compile.cpp
     src/editor/application/EditorRenderPass.cpp
+    src/editor/application/EditorRenderPass_Overlay.cpp  # AUDIT-2 split
     src/editor/application/EditorScene.cpp
     src/editor/ui/EditorUI.cpp
     src/editor/ui/MenuBar.cpp
