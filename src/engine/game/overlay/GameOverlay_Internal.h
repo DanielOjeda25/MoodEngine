@@ -15,6 +15,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <string>
 
 namespace Mood::GameOverlay {
 
@@ -105,5 +107,51 @@ void drawInventoryPanel(const HudContext& ctx);
 ///        `QuestSystem::snapshot()` + permite trackear con click. Skipea
 ///        si no hay AssetManager. Default OFF — el dev togglea con `J`.
 void drawQuestLogPanel(const HudContext& ctx);
+
+/// @brief Widget `dialog_box` (F2H48). Definido en
+///        `GameOverlay_DialogBox.cpp` (split AUDIT-1: GameOverlay.cpp
+///        pasaba el hard cap de 800 LOC). Caja inferior estilo HL2 con
+///        texto del NPC + choices. Solo dibuja si `DialogSystem::isActive()`.
+void drawDialogBox(const HudContext& ctx);
+
+/// @brief Pause menu Doom-style. Definido en `GameOverlay_PauseMenu.cpp`
+///        (split AUDIT-1). Solo dibuja si `GameState::paused()`. No es
+///        un widget del registry k_widgets (firma distinta: recibe
+///        exitLabel + callback), se llama directo desde `draw()`.
+void drawPauseMenu(const HudContext& ctx,
+                    const char* exitLabel,
+                    const std::function<void()>& onExitRequested);
+
+} // namespace Mood::GameOverlay
+
+// Forward decls de Inventory necesarias para split mode (que vive en su
+// propio .cpp tras AUDIT-1). Promotemos displayNameOfItem de anonymous
+// a namespace publico para reuso entre `GameOverlay_Inventory.cpp` y
+// `GameOverlay_InventorySplit.cpp`.
+namespace Mood {
+class AssetManager;
+namespace Inventory {
+    class State;
+    class Asset;
+}
+}
+
+namespace Mood::GameOverlay {
+
+/// @brief Nombre legible del item: name_literal -> i18n(name_key) -> id
+///        -> path stem -> "(unknown)". Definido en
+///        `GameOverlay_Inventory.cpp`. Promovido a namespace publico en
+///        AUDIT-1 (consumidor: `drawInventorySplit` en sibling file).
+std::string displayNameOfItem(const Mood::Inventory::Asset& asset,
+                                const std::string& pathFallback);
+
+/// @brief Container split mode (F2H52 Bloque I). Definido en
+///        `GameOverlay_InventorySplit.cpp` (split AUDIT-1). Dos columnas
+///        estilo Skyrim Take/Place + drag entre lados (atomico: add en
+///        destino primero; remove de source solo si add ok).
+void drawInventorySplit(const HudContext& ctx,
+                         Mood::Inventory::State& playerInv,
+                         Mood::Inventory::State& containerInv,
+                         Mood::AssetManager& assets);
 
 } // namespace Mood::GameOverlay

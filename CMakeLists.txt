@@ -343,8 +343,11 @@ add_library(mood_engine_lib STATIC
 
     src/engine/game/manifest/GameManifest.cpp
     src/engine/game/overlay/GameOverlay.cpp
-    src/engine/game/overlay/GameOverlay_Inventory.cpp  # F2H52 H
-    src/engine/game/overlay/GameOverlay_Quest.cpp      # F2H53 G
+    src/engine/game/overlay/GameOverlay_DialogBox.cpp     # AUDIT-1 split
+    src/engine/game/overlay/GameOverlay_Inventory.cpp     # F2H52 H
+    src/engine/game/overlay/GameOverlay_InventorySplit.cpp # AUDIT-1 split (F2H52 I)
+    src/engine/game/overlay/GameOverlay_PauseMenu.cpp     # AUDIT-1 split
+    src/engine/game/overlay/GameOverlay_Quest.cpp         # F2H53 G
     src/engine/game/state/GameState.cpp
 
     src/engine/i18n/I18n.cpp  # F2H43
@@ -497,6 +500,7 @@ add_executable(MoodEditor
     src/editor/application/EditorOverlay_Modal.cpp
     src/editor/application/EditorApplication_Init.cpp
     src/editor/application/EditorApplication_Run.cpp
+    src/editor/application/EditorApplication_RunInteractions.cpp  # AUDIT-1 split
     src/editor/application/EditorApplication_Snap.cpp
     src/editor/application/EditorProjectActions_Clip.cpp
     src/editor/application/EditorProjectActions_Carve.cpp

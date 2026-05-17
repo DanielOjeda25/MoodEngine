@@ -62,6 +62,15 @@ private:
     void beginFrame();
     void endFrame();
 
+    /// @brief Procesa todas las interacciones de viewport: click-to-select
+    ///        (3D + 3 orthos), face mode picking, polygon brush, clip tool,
+    ///        drag-edit en ortos, block tool, vertex/edge edit, marquee
+    ///        select. Definido en `EditorApplication_RunInteractions.cpp`
+    ///        (split AUDIT-1 para mantener `_Run.cpp` bajo el hard cap de
+    ///        800 LOC — antes esta seccion vivia inline en `run()` con
+    ///        ~1018 LOC). Llamado una vez por frame desde `run()`.
+    void processViewportInteractions();
+
     /// @brief Renderiza la escena al framebuffer offscreen que muestra el
     ///        panel Viewport.
     void renderSceneToViewport(f32 dt);
