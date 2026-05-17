@@ -277,6 +277,16 @@ AssetManager::AssetManager(std::string rootDir,
 
 AssetManager::~AssetManager() = default;
 
+std::filesystem::path AssetManager::resolvePath(std::string_view logicalPath) const {
+    auto fs = m_vfs.resolve(logicalPath);
+    if (fs.empty()) {
+        Log::assets()->warn(
+            "AssetManager::resolvePath: VFS rechazo '{}' (proyecto cerrado?)",
+            logicalPath);
+    }
+    return fs;
+}
+
 std::unique_ptr<IMesh> AssetManager::createDynamicMesh(
     const std::vector<f32>& vertices,
     const std::vector<VertexAttribute>& attributes) const {

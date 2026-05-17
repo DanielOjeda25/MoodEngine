@@ -171,6 +171,14 @@ public:
     /// @brief Id de la textura de fallback. Siempre vale 0.
     TextureAssetId missingTextureId() const { return 0; }
 
+    /// @brief F2H62 Bloque D: resuelve un path logico al filesystem path
+    ///        usando el VFS interno. Empty + log si el VFS rechaza el
+    ///        path (proyecto cerrado, path fuera del root, etc.).
+    ///        Los callers usan esto para abrir archivos del proyecto que
+    ///        NO son texturas/materials cacheados (ej. .moodshader del
+    ///        ShaderGraphEditor).
+    std::filesystem::path resolvePath(std::string_view logicalPath) const;
+
     /// @brief Cantidad de texturas en cache (incluye missing).
     usize textureCount() const { return m_textures.size(); }
 

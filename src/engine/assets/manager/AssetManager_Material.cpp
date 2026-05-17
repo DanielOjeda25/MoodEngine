@@ -94,6 +94,13 @@ MaterialAssetId AssetManager::loadMaterial(std::string_view logicalPath) {
     if (j.contains("roughness")) mat->roughnessMult = j.at("roughness").get<f32>();
     if (j.contains("ao"))        mat->aoMult        = j.at("ao").get<f32>();
 
+    // F2H62 Bloque D: campo opcional "shader_graph" con path logico al
+    // .moodshader. Si esta presente y no vacio, el SceneRenderer usara
+    // ese shader compilado en vez del PBR estandar.
+    if (j.contains("shader_graph") && j.at("shader_graph").is_string()) {
+        mat->shaderGraphPath = j.at("shader_graph").get<std::string>();
+    }
+
     const MaterialAssetId id = static_cast<MaterialAssetId>(m_materials.size());
     m_materials.push_back(std::move(mat));
     m_materialPaths.push_back(key);
@@ -276,6 +283,11 @@ bool AssetManager::saveMaterial(MaterialAssetId id) {
     j["metallic"]  = mat->metallicMult;
     j["roughness"] = mat->roughnessMult;
     j["ao"]        = mat->aoMult;
+
+    // F2H62 Bloque D: solo se persiste si esta seteado.
+    if (!mat->shaderGraphPath.empty()) {
+        j["shader_graph"] = mat->shaderGraphPath;
+    }
 
     std::ofstream out(fs);
     if (!out.is_open()) {

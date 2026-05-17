@@ -54,6 +54,7 @@ EditorUI::EditorUI() {
                 &m_questBrowser,        // F2H53
                 &m_questPropertyEditor, // F2H53
                 &m_scriptEditor, &m_materialEditor,
+                &m_shaderGraphEditor,  // F2H62 Bloque C
                 // F2H59: Toolbar removido del dockspace -- las herramientas
                 // (Mover/Rotar/Escala/Cara) viven ahora como overlay flotante
                 // sobre el viewport, estilo Blender. El struct `m_toolbar`
@@ -86,6 +87,7 @@ EditorUI::EditorUI() {
     m_itemPropertyEditor.setEditorUi(this);// F2H51
     m_questBrowser.setEditorUi(this);         // F2H53
     m_questPropertyEditor.setEditorUi(this);  // F2H53
+    m_shaderGraphEditor.setEditorUi(this);    // F2H62 Bloque C
 
     // F2H7: el dockspace arranca apuntando al workspace default
     // (F2H22: Modelar, era Layout).

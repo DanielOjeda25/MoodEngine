@@ -3,6 +3,7 @@
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/scene/InspectorPanel_Internal.h"
 
+#include "editor/panels/assets/ShaderGraphEditorPanel.h"  // F2H62 Bloque D
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/i18n/I18n.h"  // F2H43
@@ -12,6 +13,9 @@
 
 #include <imgui.h>
 
+#include <cstdio>
+#include <cstring>
+#include <filesystem>
 #include <string>
 
 namespace Mood {
@@ -132,6 +136,56 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
                 I18n::T("editor.panel.inspector.mesh.tex_status",
                         mat->albedo, mat->metallicRoughness,
                         mat->normal,  mat->ao).c_str());
+
+            // F2H62 Bloque D: shader (PBR estandar vs Shader Graph).
+            // Editable sin undo en v1 -- el shader graph es metadata del
+            // material, no de la entidad. El usuario lo cambia rara vez.
+            if (ImGui::CollapsingHeader("Shader")) {
+                const bool usingGraph = !mat->shaderGraphPath.empty();
+                const int currentType = usingGraph ? 1 : 0;
+                int newType = currentType;
+                const char* items[] = {"PBR estandar", "Shader Graph"};
+                if (ImGui::Combo("Tipo", &newType, items, 2)) {
+                    if (newType == 0 && usingGraph) {
+                        mat->shaderGraphPath.clear();
+                        m_editedThisFrame = true;
+                    } else if (newType == 1 && !usingGraph) {
+                        mat->shaderGraphPath = "shaders/graphs/new.moodshader";
+                        m_editedThisFrame = true;
+                    }
+                }
+                if (newType == 1) {
+                    char pathBuf[256];
+                    std::snprintf(pathBuf, sizeof(pathBuf), "%s",
+                                    mat->shaderGraphPath.c_str());
+                    if (ImGui::InputText("Path", pathBuf, sizeof(pathBuf))) {
+                        mat->shaderGraphPath = pathBuf;
+                        m_editedThisFrame = true;
+                    }
+                    if (ImGui::Button("Abrir editor")) {
+                        if (m_ui != nullptr && m_assets != nullptr) {
+                            const auto fs = m_assets->resolvePath(mat->shaderGraphPath);
+                            if (!fs.empty() && std::filesystem::exists(fs)) {
+                                m_ui->shaderGraphEditor().openFromFile(fs);
+                            } else {
+                                // Path no existe: abrir editor vacio con
+                                // el path pre-seteado. Al hacer Save lo
+                                // creara en disco.
+                                m_ui->shaderGraphEditor().newAsset();
+                                m_ui->shaderGraphEditor().saveAs(
+                                    fs.empty() ? std::filesystem::path(mat->shaderGraphPath)
+                                                : fs);
+                            }
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Quitar")) {
+                        mat->shaderGraphPath.clear();
+                        m_editedThisFrame = true;
+                    }
+                    ImGui::TextDisabled("(compilacion runtime: Bloque E)");
+                }
+            }
         }
 
         // Hito 35 A: drop de textura del AssetBrowser sobre este slot

@@ -58,6 +58,14 @@ struct MaterialAsset {
     /// magenta de missing.png en el material default cuando una entidad
     /// no tiene material asignado).
     bool useAlbedoMap = false;
+
+    /// F2H62 Bloque D: path logico a un `.moodshader` que reemplaza el
+    /// shader PBR estandar para este material. Empty = usar pbr.frag
+    /// del motor (camino default). Cuando esta presente, el SceneRenderer
+    /// compila el shader graph + cachea el resultado y lo usa para
+    /// drawear las entidades con este material. La compilacion on-the-fly
+    /// + cache + fallback al PBR si falla son responsabilidad del Bloque E.
+    std::string shaderGraphPath;
 };
 
 } // namespace Mood

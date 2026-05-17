@@ -27,6 +27,7 @@
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/assets/MaterialEditorPanel.h"  // Hito 42
 #include "editor/panels/assets/ScriptEditorPanel.h"
+#include "editor/panels/assets/ShaderGraphEditorPanel.h"  // F2H62 Bloque C
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28
 #include "editor/panels/scene/ViewportPanel.h"
 #include "editor/panels/scene/VisGroupsPanel.h"  // F2H33
@@ -226,6 +227,10 @@ public:
     /// @brief Hito 42: panel dedicado de edicion de materiales (drop
     ///        textures + sliders sin necesidad de tener entidad seleccionada).
     MaterialEditorPanel& materialEditor() { return m_materialEditor; }
+
+    /// @brief F2H62 Bloque C: editor visual de shader graphs (.moodshader).
+    ///        Owns el asset abierto + maneja Save/Load/Compile.
+    ShaderGraphEditorPanel& shaderGraphEditor() { return m_shaderGraphEditor; }
 
     /// @brief F2H2: panel del Performance HUD (FPS / frame ms / draw calls /
     ///        triangulos / entity count). EditorApplication le pasa las
@@ -726,6 +731,7 @@ private:
     QuestPropertyEditorPanel  m_questPropertyEditor; // F2H53
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     MaterialEditorPanel m_materialEditor;  // Hito 42
+    ShaderGraphEditorPanel m_shaderGraphEditor;  // F2H62 Bloque C
     Toolbar m_toolbar;  // F2H22: tools de edicion (gizmo modes + brushes + face)
     MapEditorTopBar m_mapEditorTopBar;  // F2H30 Bloque C: top toolbar del workspace "Editor de mapas"
     VisGroupsPanel m_visGroupsPanel;  // F2H33: panel "Grupos"

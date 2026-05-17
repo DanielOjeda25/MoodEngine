@@ -590,6 +590,7 @@ add_executable(MoodEditor
     src/editor/panels/quest/QuestPropertyEditorPanel.cpp       # F2H53
     src/editor/panels/assets/ScriptEditorPanel.cpp
     src/editor/panels/assets/MaterialEditorPanel.cpp
+    src/editor/panels/assets/ShaderGraphEditorPanel.cpp   # F2H62 Bloque C
 )
 
 target_link_libraries(MoodEditor PRIVATE
