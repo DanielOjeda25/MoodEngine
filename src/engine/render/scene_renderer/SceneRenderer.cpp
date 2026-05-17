@@ -49,6 +49,8 @@
 
 #include <glm/gtc/matrix_inverse.hpp>
 
+#include <cmath>
+
 #include <glad/gl.h>  // F2H28 Bloque E: glGenVertexArrays / glDeleteVertexArrays
 
 #include <array>
@@ -297,19 +299,22 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
     m_exposure     = 0.0f;
     m_tonemap      = TonemapMode{2}; // ACES
     m_iblIntensity = 1.0f;
-    // F2H55: defaults bloom.
-    m_bloomEnabled   = true;
+    // F2H60 polish: defaults a OFF para bloom/SSAO/CSM (pedido del dev).
+    m_bloomEnabled   = false;
     m_bloomThreshold = 1.0f;
     m_bloomIntensity = 0.6f;
     m_bloomRadius    = 1.0f;
-    // F2H56: defaults SSAO.
-    m_ssaoEnabled   = true;
+    m_ssaoEnabled   = false;
     m_ssaoRadius    = 0.5f;
     m_ssaoIntensity = 1.0f;
-    // F2H58: defaults Color Grading. OFF por default.
     m_colorGradingEnabled   = false;
     m_colorGradingLutPath.clear();
     m_colorGradingIntensity = 1.0f;
+    // F2H60 polish iter2: CSM ya no tiene "enabled" global. El gate de
+    // sombras es per-light (LightComponent::castShadows). Aca solo
+    // reseteamos los knobs de calidad.
+    m_csmCascadeCount = 4;
+    m_csmSplitLambda  = 0.5f;
 
     bool envFound = false;
     scene.forEach<EnvironmentComponent>(
@@ -337,7 +342,30 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
             m_colorGradingEnabled   = env.colorGradingEnabled;
             m_colorGradingLutPath   = env.colorGradingLutPath;
             m_colorGradingIntensity = env.colorGradingIntensity;
+            // F2H60: CSM quality params (sin "enabled" global - gate per-light).
+            m_csmCascadeCount = env.csmCascadeCount;
+            m_csmSplitLambda  = env.csmSplitLambda;
         });
+
+    // F2H60 polish iter5: diagnostico. Loguea cuando los valores del
+    // Environment cambian frame-a-frame (slider movido) o cuando no
+    // hay Environment en la escena (cae a defaults). Esto permite
+    // verificar si la edicion en el Inspector llega al renderer.
+    if (envFound != m_lastLoggedEnvFound) {
+        Log::render()->info(
+            "applyEnvironmentFromScene: Environment {} en la escena",
+            envFound ? "ENCONTRADO" : "NO encontrado -> usa defaults");
+        m_lastLoggedEnvFound = envFound;
+    }
+    if (envFound &&
+        (m_csmCascadeCount != m_lastLoggedCsmCascadeCount ||
+         std::fabs(m_csmSplitLambda - m_lastLoggedCsmLambda) > 1e-3f)) {
+        Log::render()->info(
+            "applyEnvironmentFromScene LEE Environment.CSM: cascadas={}, lambda={:.2f}",
+            m_csmCascadeCount, m_csmSplitLambda);
+        m_lastLoggedCsmCascadeCount = m_csmCascadeCount;
+        m_lastLoggedCsmLambda       = m_csmSplitLambda;
+    }
 }
 
 void SceneRenderer::synthesizeIdentityLut() {

@@ -27,6 +27,7 @@
 #include "engine/render/backend/opengl/OpenGLTexture.h"
 #include "engine/render/backend/opengl/OpenGLCubemapTexture.h"
 #include "engine/render/pipeline/Frustum.h"
+#include "engine/render/pipeline/ShadowMath.h"  // F2H60: kMaxCsmCascades
 #include "engine/render/pipeline/LightGrid.h"
 #include "engine/render/rhi/IRenderer.h"
 #include "engine/render/rhi/ITexture.h"
@@ -75,6 +76,13 @@ void SceneRenderer::renderScene(Scene& scene,
     m_lastProjection = projection;
     m_lastAspect = aspect;
 
+    // F2H60 polish iter4: aplicar Environment ANTES del shadow pass para
+    // que los cambios de cascadas/lambda surtan efecto en el mismo frame.
+    // Pre-fix se llamaba en linea 136 (despues del shadow pass) -> los
+    // sliders tenian 1 frame de lag y parecian no responder en tiempo
+    // real. No tiene side-effects de GL state, solo poblar miembros.
+    applyEnvironmentFromScene(scene);
+
     // Hito 16: Shadow pass ANTES de bindear el scene FB.
     bool shadowEnabled = false;
     glm::vec3 shadowLightDir(0.0f, -1.0f, 0.0f);
@@ -90,50 +98,19 @@ void SceneRenderer::renderScene(Scene& scene,
             });
     }
     if (shadowEnabled) {
-        // Bounding sphere fijo amplio para cubrir el mapa + props. Cuando
-        // llegue CSM se reemplaza por una serie de cascadas. El centro y
-        // radio los fijamos aproximadamente al origen del mundo: el caller
-        // no lo sabe (ya no tenemos el GridMap aca) y para escenas tipicas
-        // del Hito 20 alcanza.
-        const glm::vec3 sceneCenter(0.0f, 0.0f, 0.0f);
-        const f32 sceneRadius = 30.0f;
-
-        // F2H42: hash incremental (FNV-1a 64) de los inputs que afectan
-        // la depth texture. Si no cambia, reusamos el shadow map del
-        // frame anterior (la GLTexture sigue valida) y skipeamos record.
-        u64 sceneHash = 14695981039346656037ULL; // FNV offset basis
-        constexpr u64 kFnvPrime = 1099511628211ULL;
-        auto mix = [&](const void* data, size_t bytes) {
-            const auto* p = static_cast<const unsigned char*>(data);
-            for (size_t i = 0; i < bytes; ++i) {
-                sceneHash ^= p[i];
-                sceneHash *= kFnvPrime;
-            }
-        };
-        {
-            MOOD_PROFILE_SCOPE("ShadowPass::hash");
-            mix(&shadowLightDir, sizeof(shadowLightDir));
-            mix(&sceneCenter,    sizeof(sceneCenter));
-            mix(&sceneRadius,    sizeof(sceneRadius));
-            scene.forEach<TransformComponent, MeshRendererComponent>(
-                [&](Entity, TransformComponent& t, MeshRendererComponent& mr) {
-                    mix(&t.position,      sizeof(t.position));
-                    mix(&t.rotationEuler, sizeof(t.rotationEuler));
-                    mix(&t.scale,         sizeof(t.scale));
-                    mix(&mr.mesh,         sizeof(mr.mesh));
-                });
+        // F2H60: Cascade Shadow Maps. Cache F2H42 eliminado: CSM depende
+        // de la matriz de camara que cambia casi siempre. El gate global
+        // m_csmEnabled fue eliminado en F2H60 polish iter2 -- las sombras
+        // se controlan solo via LightComponent::castShadows.
+        // Recreate del array si cambio cascadeCount via Inspector.
+        if (m_shadowPass->cascadeCount() != m_csmCascadeCount) {
+            m_shadowPass->recreate(m_shadowPass->shadowMapSize(),
+                                     m_csmCascadeCount);
         }
-
-        // Si la activacion de sombras cambio (off->on), forzar regenerado.
-        if (!m_shadowEnabledLastFrame) m_shadowMapValid = false;
-
-        if (sceneHash != m_lastShadowSceneHash || !m_shadowMapValid) {
-            MOOD_PROFILE_SCOPE("ShadowPass::record");
-            m_shadowPass->record(scene, assets, *m_renderer,
-                                 shadowLightDir, sceneCenter, sceneRadius);
-            m_lastShadowSceneHash = sceneHash;
-            m_shadowMapValid       = true;
-        }
+        MOOD_PROFILE_SCOPE("ShadowPass::recordCsm");
+        m_shadowPass->recordCsm(scene, assets, *m_renderer,
+                                  shadowLightDir, view, projection,
+                                  m_csmCascadeCount, m_csmSplitLambda);
     }
     if (shadowEnabled != m_shadowEnabledLastFrame) {
         if (shadowEnabled) {
@@ -160,10 +137,9 @@ void SceneRenderer::renderScene(Scene& scene,
         m_skyboxRenderer->draw(view, projection);
     }
 
-    // Render scene-driven (Hito 10 Bloque 4). Lo hacemos sin chequeos
-    // de scene null porque el caller ya garantiza scene valida (el
-    // parametro es ref).
-    applyEnvironmentFromScene(scene);
+    // F2H60 polish iter4: applyEnvironmentFromScene se llama arriba,
+    // ANTES del shadow pass, asi los cambios en cascadas/lambda surten
+    // efecto en el mismo frame. Removido de aca.
 
     // F2H58 C: resolver la LUT del frame. Si color grading esta off, no
     // resolvemos (m_currentLutTextureId queda 0 -> pass skipea). Si esta
@@ -279,7 +255,14 @@ void SceneRenderer::renderScene(Scene& scene,
         m_iblPrefilter->bind(5);
         m_iblBrdfLut->bind(6);
     }
-    if (shadowEnabled && m_shadowPass) {
+    // F2H60 polish: bindeamos el shadow map array SIEMPRE (no solo si
+    // shadowEnabled). Razon: el shader declara `uniform sampler2DArray
+    // Shadow uShadowMap` y GL valida los samplers de la draw call aunque
+    // el shader NO los samplee en el branch dinamico (uShadowEnabled==0
+    // fast path en sampleShadow). Sin bindeo, la texture unit 1 queda
+    // con texture id 0 -> warning GL "texture object 0 ... non-depth
+    // format ... sampled with shadow sampler".
+    if (m_shadowPass) {
         m_shadowPass->bindShadowMap(1);
     }
 
@@ -305,12 +288,36 @@ void SceneRenderer::renderScene(Scene& scene,
         sh.setFloat("uPrefilterMaxLod", prefilterMaxLod);
         sh.setFloat("uIblIntensity",    m_iblIntensity);
 
-        sh.setInt  ("uShadowEnabled", shadowEnabled ? 1 : 0);
-        sh.setFloat("uShadowBias",    0.005f);
-        sh.setMat4 ("uLightSpace",
-            shadowEnabled && m_shadowPass
-                ? m_shadowPass->lightSpaceMatrix()
-                : glm::mat4(1.0f));
+        // F2H60: CSM. uShadowMap pasa de sampler2DShadow a sampler2DArray
+        // Shadow. El array de matrices `uLightSpaces[kMaxCsmCascades]` +
+        // splits view-space `uCascadeSplits` permiten al shader elegir
+        // cascada por fragment.
+        sh.setInt  ("uShadowEnabled",  shadowEnabled ? 1 : 0);
+        // F2H60 polish iter4: bias bajado de 0.005 a 0.0015. El bias
+        // antiguo era ~0.25m de "lift" en NDC depth -- visible peter-
+        // panning al apoyar un brush sobre el piso (la sombra
+        // "desaparecia" porque el bias hacia que el receiver pareciera
+        // estar mas cerca de la luz que el caster). 0.0015 + el
+        // biasScale por cascada del shader (x1, x2, x3, x4) es
+        // suficiente para evitar acne sin despegar sombras cercanas.
+        sh.setFloat("uShadowBias",     0.0015f);
+        const u32 csmCount = (shadowEnabled && m_shadowPass)
+            ? m_shadowPass->cascadeCount() : 1;
+        sh.setInt("uCascadeCount", static_cast<int>(csmCount));
+        for (u32 i = 0; i < kMaxCsmCascades; ++i) {
+            const std::string lsKey = "uLightSpaces[" + std::to_string(i) + "]";
+            sh.setMat4(lsKey.c_str(),
+                shadowEnabled && m_shadowPass
+                    ? m_shadowPass->lightSpaceMatrix(i)
+                    : glm::mat4(1.0f));
+        }
+        for (u32 i = 0; i <= kMaxCsmCascades; ++i) {
+            const std::string spKey = "uCascadeSplits[" + std::to_string(i) + "]";
+            sh.setFloat(spKey.c_str(),
+                shadowEnabled && m_shadowPass
+                    ? m_shadowPass->cascadeSplit(i)
+                    : 0.0f);
+        }
 
         sh.setInt  ("uFogMode",    static_cast<int>(m_fog.mode));
         sh.setVec3 ("uFogColor",   m_fog.color);

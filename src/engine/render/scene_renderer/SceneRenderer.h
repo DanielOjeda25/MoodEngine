@@ -255,6 +255,11 @@ private:
     bool        m_colorGradingEnabled   = false;
     std::string m_colorGradingLutPath   = "";
     f32         m_colorGradingIntensity = 1.0f;
+    // F2H60: CSM quality params (poblados por applyEnvironmentFromScene).
+    // El "enabled" de las sombras se decide per-light via
+    // LightComponent::castShadows -- aca solo viven los knobs de calidad.
+    u32  m_csmCascadeCount = 4;
+    f32  m_csmSplitLambda  = 0.5f;
     // GL handle de la LUT efectiva del frame actual. Resuelto en
     // renderScene a partir del path (loadTexture via AssetManager) o
     // identity si path vacio. 0 = no listo / fallback a skip del pass.
@@ -272,13 +277,16 @@ private:
     // Diagnostico one-shot.
     bool m_shadowEnabledLastFrame = false;
     u32  m_lastLoggedPointLightCount = 9999u;
+    // F2H60 polish iter5: diagnostico de applyEnvironmentFromScene.
+    // Loguea solo cuando los valores cambian (slider movido) para evitar
+    // spam por frame.
+    bool m_lastLoggedEnvFound        = false;
+    u32  m_lastLoggedCsmCascadeCount = 0;
+    f32  m_lastLoggedCsmLambda       = -1.0f;
 
-    // F2H42: shadow map caching por hash de escena. Si el hash de
-    // (lightDir + transforms de meshes con MeshRenderer + mesh ids) no
-    // cambia entre frames, se reusa la depth texture del frame anterior
-    // saltando ShadowPass::record (54.7% del frame en escenas estaticas).
-    u64  m_lastShadowSceneHash = 0;
-    bool m_shadowMapValid       = false;
+    // F2H42 -> F2H60: shadow map cache por hash de escena ELIMINADO con
+    // CSM. CSM depende de la matriz de camara que cambia casi siempre,
+    // asi que cachear entre frames no aporta. recordCsm corre cada frame.
 };
 
 } // namespace Mood

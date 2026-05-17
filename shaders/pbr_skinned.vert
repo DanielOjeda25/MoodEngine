@@ -21,18 +21,20 @@ layout(location = 5) in vec4 aBoneWeights;
 uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProjection;
-uniform mat4 uLightSpace;
+
+// F2H60: idem pbr.vert. uLightSpace eliminado; vViewSpaceZ pasa al frag
+// para que elija cascada CSM.
 
 // MAX_BONES debe matchear `Mood::k_maxBonesPerSkeleton` en C++. Subirlo
 // requiere bumpear ambos.
 const int MAX_BONES = 128;
 uniform mat4 uBoneMatrices[MAX_BONES];
 
-out vec3 vColor;
-out vec2 vUv;
-out vec3 vWorldPos;
-out vec3 vWorldNormal;
-out vec4 vLightSpacePos;
+out vec3  vColor;
+out vec2  vUv;
+out vec3  vWorldPos;
+out vec3  vWorldNormal;
+out float vViewSpaceZ;
 
 void main() {
     vColor = aColor;
@@ -75,6 +77,8 @@ void main() {
     mat3 normalMatrix = mat3(transpose(inverse(uModel)));
     vWorldNormal = normalize(normalMatrix * skinnedNormal);
 
-    vLightSpacePos = uLightSpace * worldPos4;
-    gl_Position = uProjection * uView * worldPos4;
+    vec4 viewPos = uView * worldPos4;
+    vViewSpaceZ = abs(viewPos.z);
+
+    gl_Position = uProjection * viewPos;
 }

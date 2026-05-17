@@ -93,6 +93,13 @@ enum class ProjectAction {
     AddQuadBrush,    // box chico 1x0.05x1 -- billboard / sprite.
     AddConeBrush,    // N caras triangulares + cap base.
     AddCapsuleBrush, // sphere estirada en Y -- aproximacion pildora.
+    // F2H60 polish iter2: luces como primer-ciudadano en el modal Crear
+    // Entidad. Spawnean entidad solo con Transform + LightComponent (sin
+    // mesh). Antes solo se podian agregar via "Convertir entidad" sobre
+    // un mesh existente, lo cual era confuso para arrancar una escena
+    // (no hay mesh todavia).
+    AddDirectionalLight, // luz direccional (sol) con castShadows ON.
+    AddPointLight,       // luz puntual omnidireccional con radius=10m.
     // F2H20: compilacion brush -> mesh estatica + export OBJ.
     CompileMap,
     ExportObj,

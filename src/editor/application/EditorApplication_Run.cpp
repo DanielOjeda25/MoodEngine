@@ -275,6 +275,9 @@ int EditorApplication::run() {
             case ProjectAction::AddQuadBrush:            handleAddQuadBrush();             break;
             case ProjectAction::AddConeBrush:            handleAddConeBrush();             break;
             case ProjectAction::AddCapsuleBrush:         handleAddCapsuleBrush();          break;
+            // F2H60 polish iter2: spawn directo de luces desde el modal.
+            case ProjectAction::AddDirectionalLight:     handleAddDirectionalLight();      break;
+            case ProjectAction::AddPointLight:           handleAddPointLight();            break;
             // F2H20: compilacion brush -> mesh estatica + export OBJ.
             case ProjectAction::CompileMap:              handleCompileMap();               break;
             case ProjectAction::ExportObj:               handleExportObj();                break;

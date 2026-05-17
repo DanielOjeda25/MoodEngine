@@ -236,7 +236,10 @@ struct EnvironmentComponent {
     //                   1 = peso completo.
     //   bloomRadius:    escala del tent filter al upsamplear.
     //                   0.5 = ajustado, 2.0 = halo amplio.
-    bool  bloomEnabled   = true;
+    // F2H60 polish: defaults OFF -- pedido del dev: "todo deberia estar
+    // desactivado por defecto y solo activar a gusto". Engine-grade
+    // significa proveer la opcion, no imponer el look.
+    bool  bloomEnabled   = false;
     float bloomThreshold = 1.0f;
     float bloomIntensity = 0.6f;
     float bloomRadius    = 1.0f;
@@ -249,7 +252,8 @@ struct EnvironmentComponent {
     //                  oclusion mas amplia (rincones grandes).
     //   ssaoIntensity: multiplicador del efecto. 0 = sin AO,
     //                  1 = standard, 2 = exagerado.
-    bool  ssaoEnabled   = true;
+    // F2H60 polish: default OFF (ver bloomEnabled).
+    bool  ssaoEnabled   = false;
     float ssaoRadius    = 0.5f;
     float ssaoIntensity = 1.0f;
 
@@ -264,6 +268,18 @@ struct EnvironmentComponent {
     bool        colorGradingEnabled   = false;
     std::string colorGradingLutPath   = "";
     float       colorGradingIntensity = 1.0f;
+
+    // F2H60: Cascade Shadow Maps. 3-4 cascadas para shadows del directional
+    // light a distintas distancias -- mejor calidad de sombras sin perder
+    // rendimiento. Sin "master switch" -- el gate de sombras es per-light
+    // via LightComponent::castShadows. Aca solo viven los knobs de calidad.
+    //   csmCascadeCount: 1..4. 1 = legacy single shadow map (back-compat).
+    //                     Default 4 = mejor distribucion de resolucion.
+    //   csmSplitLambda:  0..1. 0 = lineal (cascadas mismo tamano), 1 = log
+    //                     (mas resolucion cerca), 0.5 = hybrid practico
+    //                     (sweet spot PSSM Zhang 2006).
+    u32   csmCascadeCount = 4;
+    float csmSplitLambda  = 0.5f;
 };
 
 /// @brief Marca a una entidad como instancia de un prefab (Hito 14).

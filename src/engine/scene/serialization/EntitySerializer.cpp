@@ -167,6 +167,11 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         if (env.colorGradingEnabled)        je2["color_grading_enabled"]   = env.colorGradingEnabled;
         if (!env.colorGradingLutPath.empty()) je2["color_grading_lut"]       = env.colorGradingLutPath;
         if (env.colorGradingIntensity != 1.0f) je2["color_grading_intensity"] = env.colorGradingIntensity;
+        // F2H60: CSM. Aditivo -- solo persiste si difiere del default.
+        // El "enabled" global fue removido en F2H60 polish iter2 (gate
+        // per-light via LightComponent::castShadows).
+        if (env.csmCascadeCount != 4u)   je2["csm_cascades"] = env.csmCascadeCount;
+        if (env.csmSplitLambda  != 0.5f) je2["csm_lambda"]   = env.csmSplitLambda;
         je["environment"] = je2;
     }
 
@@ -418,20 +423,26 @@ SavedEntity parseEntityFromJson(const json& j) {
         se2.exposure       = je.value("exposure",        0.0f);
         se2.tonemapMode    = je.value("tonemap_mode",    std::string{"aces"});
         se2.iblIntensity   = je.value("ibl_intensity",   1.0f); // Hito 18
-        // F2H55: bloom. Defaults explicitos para mapas pre-F2H55 que no
-        // tienen los campos -- se cargan con bloom medio prendido.
-        se2.bloomEnabled   = je.value("bloom_enabled",   true);
+        // F2H55: bloom. F2H60 polish: defaults a OFF para mapas que no
+        // tienen las keys (pre-F2H60 los mapas no las traian con OFF,
+        // las traian con ON; este cambio rompe back-compat consciente
+        // -- el dev quiere los efectos OFF por default).
+        se2.bloomEnabled   = je.value("bloom_enabled",   false);
         se2.bloomThreshold = je.value("bloom_threshold", 1.0f);
         se2.bloomIntensity = je.value("bloom_intensity", 0.6f);
         se2.bloomRadius    = je.value("bloom_radius",    1.0f);
-        // F2H56: SSAO defaults para mapas pre-F2H56.
-        se2.ssaoEnabled    = je.value("ssao_enabled",    true);
+        // F2H56: SSAO. F2H60 polish: default OFF.
+        se2.ssaoEnabled    = je.value("ssao_enabled",    false);
         se2.ssaoRadius     = je.value("ssao_radius",     0.5f);
         se2.ssaoIntensity  = je.value("ssao_intensity",  1.0f);
         // F2H58: Color Grading defaults para mapas pre-F2H58.
         se2.colorGradingEnabled   = je.value("color_grading_enabled",   false);
         se2.colorGradingLutPath   = je.value("color_grading_lut",       std::string{});
         se2.colorGradingIntensity = je.value("color_grading_intensity", 1.0f);
+        // F2H60: CSM. Solo knobs de calidad -- "csm_enabled" legacy
+        // ignorado (gate per-light via LightComponent::castShadows).
+        se2.csmCascadeCount = je.value("csm_cascades", 4u);
+        se2.csmSplitLambda  = je.value("csm_lambda",   0.5f);
         se.environment = std::move(se2);
     }
     if (j.contains("particle_emitter")) {

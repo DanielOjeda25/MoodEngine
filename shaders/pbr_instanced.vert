@@ -22,13 +22,15 @@ layout(location = 5) in mat4 aModel;
 
 uniform mat4 uView;
 uniform mat4 uProjection;
-uniform mat4 uLightSpace;  // Hito 16: lightProj * lightView (identidad si off)
 
-out vec3 vColor;
-out vec2 vUv;
-out vec3 vWorldPos;
-out vec3 vWorldNormal;
-out vec4 vLightSpacePos;
+// F2H60: idem pbr.vert. uLightSpace eliminado; vViewSpaceZ pasa al frag
+// para que elija cascada CSM.
+
+out vec3  vColor;
+out vec2  vUv;
+out vec3  vWorldPos;
+out vec3  vWorldNormal;
+out float vViewSpaceZ;
 
 void main() {
     vColor = aColor;
@@ -43,6 +45,8 @@ void main() {
     mat3 normalMatrix = mat3(transpose(inverse(aModel)));
     vWorldNormal = normalize(normalMatrix * aNormal);
 
-    vLightSpacePos = uLightSpace * worldPos4;
-    gl_Position = uProjection * uView * worldPos4;
+    vec4 viewPos = uView * worldPos4;
+    vViewSpaceZ = abs(viewPos.z);
+
+    gl_Position = uProjection * viewPos;
 }

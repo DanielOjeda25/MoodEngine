@@ -445,6 +445,7 @@ add_library(mood_engine_lib STATIC
     src/engine/render/backend/opengl/OpenGLTexture.cpp
     src/engine/render/backend/opengl/OpenGLCubemapTexture.cpp
     src/engine/render/backend/opengl/OpenGLShadowMap.cpp
+    src/engine/render/backend/opengl/OpenGLShadowMapArray.cpp
     src/engine/render/backend/opengl/OpenGLSSBO.cpp
     src/engine/render/backend/opengl/OpenGLDebugRenderer.cpp
     src/engine/render/backend/opengl/OpenGLInstanceBuffer.cpp

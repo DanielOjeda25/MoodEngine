@@ -39,15 +39,14 @@ namespace {
 // asigna desde este snapshot.
 const EnvironmentComponent kEnvDefaults{};
 
-// Helper: pinta un boton "Restablecer" pequeno alineado a la derecha. Llama
-// `apply` si el dev clickea. Convencion Unity Inspector / Unreal Details
-// panel: el reset es per-seccion, no per-field (UX mas limpia con menos
-// botones). Sin undo en v1: el dev sabe que reseteo manualmente; si lo
-// necesita, futuro followup con ResetSectionCommand.
+// Helper: pinta un boton "Restablecer" pequeno alineado a la derecha.
+// Llama `apply` si el dev clickea. Convencion Unity Inspector / Unreal
+// Details panel: el reset es per-seccion, no per-field.
 //
-// `idSuffix` da un ID interno unico a ImGui (todos los botones tienen el
-// mismo label visible "Restablecer", asi que sin sufijo ImGui los considera
-// el mismo widget y solo uno recibe el click).
+// F2H60 polish iter2: label visible queda en "Restablecer" plano (pedido
+// del dev: "solo diga Restablecer"). La separacion entre secciones se
+// resuelve aparte con drawSectionDivider() — convencion de panel propio
+// estilo Unity Volume.
 template<typename ApplyFn>
 void drawSectionResetButton(const char* idSuffix, ApplyFn&& apply) {
     ImGui::Spacing();
@@ -67,6 +66,18 @@ void drawSectionResetButton(const char* idSuffix, ApplyFn&& apply) {
         ImGui::SetTooltip("%s",
             I18n::T("editor.panel.inspector.environment.reset_tooltip").c_str());
     }
+}
+
+// F2H60 polish iter2: separador visual entre secciones del panel Environment.
+// El CollapsingHeader de ImGui no agrega margen vertical entre items —
+// dos secciones cerradas quedan pegadas y se confunden. Agregamos
+// Spacing + linea separadora + Spacing para que el ojo pueda
+// distinguir donde termina una y arranca la otra. Equivalente al
+// `ImGui::Separator()` interno pero con respiro arriba y abajo.
+void drawSectionDivider() {
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
 }
 
 } // namespace
@@ -146,6 +157,7 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
             m_editedThisFrame = true;
         });
     }
+    drawSectionDivider();
 
     // F2H58 Bloque I: Post-Process consolidado. Wrapper header top-level
     // que agrupa los 4 sub-pases (Tonemap+Exposure / Bloom / SSAO /
@@ -203,6 +215,7 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
             m_editedThisFrame = true;
         });
     }
+    drawSectionDivider();
 
     // ----- Bloom (F2H55) -----
     if (ImGui::CollapsingHeader(
@@ -256,6 +269,7 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
             m_editedThisFrame = true;
         });
     }
+    drawSectionDivider();
 
     // ----- SSAO (F2H56) -----
     if (ImGui::CollapsingHeader(
@@ -297,6 +311,52 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
             m_editedThisFrame = true;
         });
     }
+    drawSectionDivider();
+
+    // ----- Shadows (CSM, F2H60) -----
+    // F2H60 polish iter2: la seccion ya no tiene checkbox propio. Las
+    // sombras se gobiernan por LightComponent::castShadows (per-light).
+    // Aca solo viven los knobs de calidad (cantidad de cascadas + split
+    // lambda) -- aplican cuando hay una directional con castShadows en
+    // la escena.
+    if (ImGui::CollapsingHeader(
+            I18n::T("editor.panel.inspector.environment.csm").c_str(),
+            ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.environment.csm_hint").c_str());
+        // Cascadas: 1..4. Slider int.
+        int cascades = static_cast<int>(env.csmCascadeCount);
+        const std::string csmCascLabel =
+            I18n::T("editor.panel.inspector.environment.csm_cascades") + "##env";
+        if (ImGui::SliderInt(csmCascLabel.c_str(), &cascades, 1, 4)) {
+            env.csmCascadeCount = static_cast<u32>(cascades);
+            m_editedThisFrame = true;
+        }
+        detail::pushEditIfDone<u32>(m_editTracker, m_ui, e, env.csmCascadeCount,
+            [](Entity& en, const u32& v) {
+                en.getComponent<EnvironmentComponent>().csmCascadeCount = v;
+            },
+            "Editar CSM cascadas");
+
+        // Lambda: 0..1. 0=lineal, 1=log, 0.5=hybrid.
+        const std::string csmLambdaLabel =
+            I18n::T("editor.panel.inspector.environment.csm_lambda") + "##env";
+        if (ImGui::SliderFloat(csmLambdaLabel.c_str(),
+                                &env.csmSplitLambda, 0.0f, 1.0f, "%.2f")) {
+            m_editedThisFrame = true;
+        }
+        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.csmSplitLambda,
+            [](Entity& en, const f32& v) {
+                en.getComponent<EnvironmentComponent>().csmSplitLambda = v;
+            },
+            "Editar CSM lambda");
+        drawSectionResetButton("csm", [&]() {
+            env.csmCascadeCount = kEnvDefaults.csmCascadeCount;
+            env.csmSplitLambda  = kEnvDefaults.csmSplitLambda;
+            m_editedThisFrame = true;
+        });
+    }
+    drawSectionDivider();
 
     // ----- Color Grading (F2H58) -----
     if (ImGui::CollapsingHeader(
@@ -335,17 +395,23 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
                     break;
                 }
             }
-            std::string customLabel;
+            // F2H60 polish fix: el preview tiene que vivir hasta despues
+            // del BeginCombo. Pre-fix: `I18n::T(...).c_str()` daba un
+            // puntero dangling al string temporal liberado, lo que
+            // renderizaba "?????????" como preview. Bug clasico de
+            // lifetime en C++. Fix: asignar a string local antes de pasar
+            // el .c_str() a ImGui.
+            std::string previewStr;
             if (currentIdx == kCustomIndex) {
                 namespace fs = std::filesystem;
                 const std::string fname =
                     fs::path(env.colorGradingLutPath).filename().generic_string();
-                customLabel = I18n::T("editor.panel.inspector.environment.color_grading_preset_custom_active",
+                previewStr = I18n::T("editor.panel.inspector.environment.color_grading_preset_custom_active",
                                        fname);
+            } else {
+                previewStr = I18n::T(kPresets[currentIdx].labelKey);
             }
-            const char* preview = (currentIdx == kCustomIndex)
-                ? customLabel.c_str()
-                : I18n::T(kPresets[currentIdx].labelKey).c_str();
+            const char* preview = previewStr.c_str();
 
             const std::string comboLabel =
                 I18n::T("editor.panel.inspector.environment.color_grading_preset") + "##env";

@@ -170,6 +170,11 @@ private:
     void handleAddConeBrush();     // cono regular -- spotlights / sombreros.
     void handleAddCapsuleBrush();  // sphere estirada en Y -- pildora proxy.
 
+    // F2H60 polish iter2: spawn de luz como entidad nueva (sin mesh).
+    // Tag + Transform + LightComponent del tipo correspondiente.
+    void handleAddDirectionalLight(); // dir=(-0.3,-1.0,-0.2), castShadows=true.
+    void handleAddPointLight();       // pos=(0,1,0), radius=10m, color calido.
+
     /// @brief F2H20: compila los brushes del mapa actual a una mesh
     ///        estatica unificada (weld + cull caras internas + merge
     ///        por material) y muestra dialog con stats.

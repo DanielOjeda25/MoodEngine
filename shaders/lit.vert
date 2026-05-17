@@ -3,6 +3,10 @@
 // Hito 11: shader iluminado. Pasa al fragment la posicion en world (para
 // distancia a luces puntuales y vector a la camara) y la normal transformada
 // por la inversa-transpuesta del modelo (para escalas no uniformes).
+//
+// F2H60: para CSM, ya no calculamos `vLightSpacePos` aca — el frag elige
+// cascada por depth view-space y reconstruye la pos de luz desde
+// `vWorldPos` con la matriz apropiada del array `uLightSpaces`.
 
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aColor;
@@ -12,13 +16,12 @@ layout(location = 3) in vec3 aNormal;
 uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProjection;
-uniform mat4 uLightSpace;  // Hito 16: lightProj * lightView, identidad si no hay shadows
 
-out vec3 vColor;
-out vec2 vUv;
-out vec3 vWorldPos;
-out vec3 vWorldNormal;
-out vec4 vLightSpacePos;   // posicion en light-clip-space para shadow sample
+out vec3  vColor;
+out vec2  vUv;
+out vec3  vWorldPos;
+out vec3  vWorldNormal;
+out float vViewSpaceZ;  // F2H60: |view-space Z|, usado por el frag para elegir cascada CSM.
 
 void main() {
     vColor = aColor;
@@ -34,11 +37,8 @@ void main() {
     mat3 normalMatrix = mat3(transpose(inverse(uModel)));
     vWorldNormal = normalize(normalMatrix * aNormal);
 
-    // Posicion en clip-space de la luz para sampling del shadow map.
-    // Si el shadow map no esta activo, `uLightSpace` es la identidad y
-    // este valor queda en (worldPos, 1.0) — el frag shader igual lo
-    // ignora porque `uShadowEnabled = 0`.
-    vLightSpacePos = uLightSpace * worldPos4;
+    vec4 viewPos = uView * worldPos4;
+    vViewSpaceZ = abs(viewPos.z);  // distancia positiva al ojo.
 
-    gl_Position = uProjection * uView * worldPos4;
+    gl_Position = uProjection * viewPos;
 }

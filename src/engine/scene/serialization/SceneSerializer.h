@@ -106,15 +106,14 @@ struct SavedEnvironment {
     std::string tonemapMode{"aces"};       // "none" | "reinhard" | "aces"
     f32 iblIntensity = 1.0f;               // Hito 18, opcional en JSON
 
-    // F2H55: bloom. Campos opcionales en JSON (back-compat con mapas
-    // pre-F2H55: si faltan, defaults razonables).
-    bool bloomEnabled   = true;
+    // F2H55: bloom. F2H60 polish: default OFF -- pedido del dev.
+    bool bloomEnabled   = false;
     f32  bloomThreshold = 1.0f;
     f32  bloomIntensity = 0.6f;
     f32  bloomRadius    = 1.0f;
 
-    // F2H56: SSAO. Mismos defaults que EnvironmentComponent.
-    bool ssaoEnabled   = true;
+    // F2H56: SSAO. F2H60 polish: default OFF.
+    bool ssaoEnabled   = false;
     f32  ssaoRadius    = 0.5f;
     f32  ssaoIntensity = 1.0f;
 
@@ -123,6 +122,11 @@ struct SavedEnvironment {
     bool        colorGradingEnabled   = false;
     std::string colorGradingLutPath   = "";
     f32         colorGradingIntensity = 1.0f;
+
+    // F2H60: Cascade Shadow Maps. Solo knobs de calidad -- el gate de
+    // sombras es per-light via LightComponent::castShadows.
+    u32  csmCascadeCount = 4;
+    f32  csmSplitLambda  = 0.5f;
 };
 
 /// @brief Copia persistida de un ScriptComponent (Hito 24). Persiste el

@@ -12,13 +12,17 @@ layout(location = 3) in vec3 aNormal;
 uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProjection;
-uniform mat4 uLightSpace;  // Hito 16: lightProj * lightView (identidad si off)
 
-out vec3 vColor;
-out vec2 vUv;
-out vec3 vWorldPos;
-out vec3 vWorldNormal;
-out vec4 vLightSpacePos;
+// F2H60: con CSM, el shader frag elige cascada por depth view-space y
+// reconstruye la pos en light-space desde vWorldPos con la matriz
+// apropiada del array `uLightSpaces`. uLightSpace single y vLightSpace
+// Pos out se eliminan.
+
+out vec3  vColor;
+out vec2  vUv;
+out vec3  vWorldPos;
+out vec3  vWorldNormal;
+out float vViewSpaceZ;  // F2H60: |view-space Z| para seleccion de cascada CSM.
 
 void main() {
     vColor = aColor;
@@ -32,6 +36,8 @@ void main() {
     mat3 normalMatrix = mat3(transpose(inverse(uModel)));
     vWorldNormal = normalize(normalMatrix * aNormal);
 
-    vLightSpacePos = uLightSpace * worldPos4;
-    gl_Position = uProjection * uView * worldPos4;
+    vec4 viewPos = uView * worldPos4;
+    vViewSpaceZ = abs(viewPos.z);
+
+    gl_Position = uProjection * viewPos;
 }

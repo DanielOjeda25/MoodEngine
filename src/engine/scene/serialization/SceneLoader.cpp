@@ -219,6 +219,9 @@ Entity applyOneEntity(const SavedEntity& se,
             env.colorGradingEnabled   = s.colorGradingEnabled;
             env.colorGradingLutPath   = s.colorGradingLutPath;
             env.colorGradingIntensity = s.colorGradingIntensity;
+            // F2H60: CSM quality params (sin "enabled" global).
+            env.csmCascadeCount = s.csmCascadeCount;
+            env.csmSplitLambda  = s.csmSplitLambda;
             e.addComponent<EnvironmentComponent>(env);
         }
 

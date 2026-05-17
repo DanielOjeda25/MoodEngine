@@ -431,6 +431,50 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
     ImGui::EndTabItem();
     } // end TabItem "Meshes"
 
+    // F2H60 polish iter2: tab "Luces". Spawn directo de Directional /
+    // Point con defaults sensatos (Directional con castShadows ON --
+    // funciona out-of-the-box). El icono de la luz en el overlay del
+    // editor la hace visible aunque la entidad no tenga mesh.
+    if (ImGui::BeginTabItem(I18n::T("editor.pick_mesh_modal.tab_lights").c_str())) {
+        ImGui::BeginChild("##lights_grid", ImVec2(0.0f, kTabContentHeight), false);
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.pick_mesh_modal.lights_hint").c_str());
+        ImGui::Spacing();
+
+        struct LightSpec { const char* labelKey; ProjectAction action; };
+        constexpr LightSpec kLights[] = {
+            { "editor.menu.light.directional", ProjectAction::AddDirectionalLight },
+            { "editor.menu.light.point",       ProjectAction::AddPointLight       },
+        };
+        constexpr int kLightCount = static_cast<int>(sizeof(kLights) / sizeof(kLights[0]));
+        constexpr float kBtnW = 220.0f;
+        constexpr float kBtnH = 56.0f;
+
+        ProjectAction pendingAction = static_cast<ProjectAction>(-1);
+        bool actionPicked = false;
+        for (int i = 0; i < kLightCount; ++i) {
+            if (i > 0) ImGui::SameLine();
+            const std::string label = I18n::T(kLights[i].labelKey);
+            if (ImGui::Button(label.c_str(), ImVec2(kBtnW, kBtnH))) {
+                pendingAction = kLights[i].action;
+                actionPicked = true;
+            }
+        }
+
+        if (actionPicked) {
+            m_ui.requestProjectAction(pendingAction);
+            m_pickMeshModalActive = false;
+            ImGui::CloseCurrentPopup();
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+            ImGui::EndTabBar();
+            ImGui::EndPopup();
+            return;
+        }
+        ImGui::EndChild();
+        ImGui::EndTabItem();
+    }
+
     // F2H59: tab "Primitivas". Cada boton dispara el ProjectAction
     // correspondiente y cierra el modal. Grid 3-columns para que entren
     // las 11 primitivas sin scroll.
@@ -683,6 +727,87 @@ void EditorApplication::renderConvertEntityModal() {
     }
 
     ImGui::EndPopup();
+}
+
+// ============================================================================
+// F2H60 polish iter2: spawn de luz como entidad nueva (sin mesh)
+//
+// Pre-iter2 el unico flow para crear una luz era spawnar primero un
+// placeholder cube y "Convertir > Luz" sobre el. Ahora el modal Crear
+// Entidad tiene tab propio "Luces" -- pedido del dev: "deberia poder
+// crearse luces directamente desde el panel de entidades".
+//
+// Spawnean entidad solo con Tag + Transform + LightComponent. Sin
+// MeshRenderer; el overlay del editor pinta el ICONO de la luz (gizmo
+// 2D ya existente desde Hito 15+) asi el dev la ve en el viewport
+// aunque no haya geometria.
+// ============================================================================
+
+namespace {
+
+// Genera "Nombre", "Nombre_2", etc. unicos en la escena.
+std::string uniqueEntityName(Scene& scene, const std::string& base) {
+    std::string finalName = base;
+    int suffix = 1;
+    while (true) {
+        bool collision = false;
+        scene.forEach<TagComponent>([&](Entity, TagComponent& tag) {
+            if (tag.name == finalName) collision = true;
+        });
+        if (!collision) return finalName;
+        ++suffix;
+        finalName = base + "_" + std::to_string(suffix);
+    }
+}
+
+} // namespace
+
+void EditorApplication::handleAddDirectionalLight() {
+    if (!m_scene) return;
+    const std::string name = uniqueEntityName(*m_scene, "DirectionalLight");
+    Entity e = m_scene->createEntity(name);
+
+    auto& t = e.getComponent<TransformComponent>();
+    // Posicion arriba para que el icono del overlay sea visible. La
+    // direccion de luz es independiente de la posicion para directionals
+    // (la matriz light-space se arma desde el frustum de la camara).
+    t.position = glm::vec3(0.0f, 3.0f, 0.0f);
+
+    LightComponent light{};
+    light.type        = LightComponent::Type::Directional;
+    light.color       = glm::vec3(1.0f);
+    light.intensity   = 1.0f;
+    light.direction   = glm::vec3(-0.3f, -1.0f, -0.2f);
+    light.castShadows = true; // engine-grade default -- pedido del dev.
+    light.enabled     = true;
+    e.addComponent<LightComponent>(light);
+
+    Log::editor()->info("[create_light] Spawned '{}' (Directional, castShadows=ON)", name);
+
+    replaceWithSingle(m_ui.selectionSet(), e);
+    pushCreatedEntities({e}, std::string("Crear luz '") + name + "'");
+}
+
+void EditorApplication::handleAddPointLight() {
+    if (!m_scene) return;
+    const std::string name = uniqueEntityName(*m_scene, "PointLight");
+    Entity e = m_scene->createEntity(name);
+
+    auto& t = e.getComponent<TransformComponent>();
+    t.position = glm::vec3(0.0f, 2.0f, 0.0f);
+
+    LightComponent light{};
+    light.type      = LightComponent::Type::Point;
+    light.color     = glm::vec3(1.0f, 0.9f, 0.7f); // calida default.
+    light.intensity = 1.0f;
+    light.radius    = 10.0f;
+    light.enabled   = true;
+    e.addComponent<LightComponent>(light);
+
+    Log::editor()->info("[create_light] Spawned '{}' (Point, radius=10m)", name);
+
+    replaceWithSingle(m_ui.selectionSet(), e);
+    pushCreatedEntities({e}, std::string("Crear luz '") + name + "'");
 }
 
 } // namespace Mood
