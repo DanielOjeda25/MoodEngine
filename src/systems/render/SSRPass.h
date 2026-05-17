@@ -56,7 +56,7 @@ public:
                OpenGLFramebuffer& srcGbuffer,
                OpenGLFramebuffer& dst,
                const glm::mat4& proj, const glm::mat4& invProj,
-               i32 maxSteps, f32 thickness, f32 stepSize, f32 intensity);
+               u32 maxSteps, f32 thickness, f32 stepSize, f32 intensity);
 
 private:
     std::unique_ptr<IShader> m_shader;

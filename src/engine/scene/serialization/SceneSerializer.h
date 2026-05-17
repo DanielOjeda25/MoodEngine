@@ -127,6 +127,13 @@ struct SavedEnvironment {
     // sombras es per-light via LightComponent::castShadows.
     u32  csmCascadeCount = 4;
     f32  csmSplitLambda  = 0.5f;
+
+    // F2H61: SSR (Screen-Space Reflections). Default OFF.
+    bool ssrEnabled   = false;
+    u32  ssrMaxSteps  = 32u;
+    f32  ssrThickness = 0.5f;
+    f32  ssrStepSize  = 0.2f;
+    f32  ssrIntensity = 0.5f;
 };
 
 /// @brief Copia persistida de un ScriptComponent (Hito 24). Persiste el

@@ -158,7 +158,7 @@ public:
 
     // F2H61: SSR params (leidos por el panel Environment + tests).
     bool ssrEnabled()    const { return m_ssrEnabled; }
-    i32  ssrMaxSteps()   const { return m_ssrMaxSteps; }
+    u32  ssrMaxSteps()   const { return m_ssrMaxSteps; }
     f32  ssrThickness()  const { return m_ssrThickness; }
     f32  ssrStepSize()   const { return m_ssrStepSize; }
     f32  ssrIntensity()  const { return m_ssrIntensity; }
@@ -264,7 +264,7 @@ private:
     // F2H61: SSR params (poblados por applyEnvironmentFromScene).
     // Default OFF -- iter1 F2H60: "todo deberia estar desactivado por defecto".
     bool m_ssrEnabled   = false;
-    i32  m_ssrMaxSteps  = 32;
+    u32  m_ssrMaxSteps  = 32u;
     f32  m_ssrThickness = 0.5f;
     f32  m_ssrStepSize  = 0.2f;
     f32  m_ssrIntensity = 0.5f;

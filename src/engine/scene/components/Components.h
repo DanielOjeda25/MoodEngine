@@ -295,7 +295,7 @@ struct EnvironmentComponent {
     //                 * stepSize.
     //   ssrIntensity: factor del reflejo aditivo. 0=apagado, 1=full.
     bool  ssrEnabled   = false;
-    i32   ssrMaxSteps  = 32;
+    u32   ssrMaxSteps  = 32u;
     float ssrThickness = 0.5f;
     float ssrStepSize  = 0.2f;
     float ssrIntensity = 0.5f;

@@ -27,7 +27,7 @@ bool SSRPass::apply(OpenGLFramebuffer& srcColor,
                      OpenGLFramebuffer& srcGbuffer,
                      OpenGLFramebuffer& dst,
                      const glm::mat4& proj, const glm::mat4& invProj,
-                     i32 maxSteps, f32 thickness, f32 stepSize, f32 intensity) {
+                     u32 maxSteps, f32 thickness, f32 stepSize, f32 intensity) {
     if (intensity <= 0.0f) return false;
     // Sin normal RT no hay G-buffer para el ray marching.
     if (srcGbuffer.glNormalTextureId() == 0) return false;
@@ -36,7 +36,7 @@ bool SSRPass::apply(OpenGLFramebuffer& srcColor,
     if (srcGbuffer.glDepthTextureId() == 0) return false;
 
     intensity = std::clamp(intensity, 0.0f, 1.0f);
-    maxSteps  = std::clamp(maxSteps, 1, 256);
+    maxSteps  = std::clamp<u32>(maxSteps, 1u, 256u);
     thickness = std::clamp(thickness, 0.001f, 5.0f);
     stepSize  = std::clamp(stepSize, 0.001f, 5.0f);
 
@@ -57,7 +57,7 @@ bool SSRPass::apply(OpenGLFramebuffer& srcColor,
     m_shader->setMat4("uProj", proj);
     m_shader->setMat4("uInvProj", invProj);
     m_shader->setFloat("uIntensity", intensity);
-    m_shader->setInt("uMaxSteps", maxSteps);
+    m_shader->setInt("uMaxSteps", static_cast<i32>(maxSteps));
     m_shader->setFloat("uThickness", thickness);
     m_shader->setFloat("uStepSize", stepSize);
 

@@ -222,6 +222,12 @@ Entity applyOneEntity(const SavedEntity& se,
             // F2H60: CSM quality params (sin "enabled" global).
             env.csmCascadeCount = s.csmCascadeCount;
             env.csmSplitLambda  = s.csmSplitLambda;
+            // F2H61: SSR params.
+            env.ssrEnabled   = s.ssrEnabled;
+            env.ssrMaxSteps  = s.ssrMaxSteps;
+            env.ssrThickness = s.ssrThickness;
+            env.ssrStepSize  = s.ssrStepSize;
+            env.ssrIntensity = s.ssrIntensity;
             e.addComponent<EnvironmentComponent>(env);
         }
 

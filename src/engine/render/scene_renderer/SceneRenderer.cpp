@@ -337,7 +337,7 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
     m_csmSplitLambda  = 0.5f;
     // F2H61: SSR defaults a OFF (mismo criterio que bloom/SSAO/CSM).
     m_ssrEnabled   = false;
-    m_ssrMaxSteps  = 32;
+    m_ssrMaxSteps  = 32u;
     m_ssrThickness = 0.5f;
     m_ssrStepSize  = 0.2f;
     m_ssrIntensity = 0.5f;

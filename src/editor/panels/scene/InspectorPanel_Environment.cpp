@@ -478,6 +478,83 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
             m_editedThisFrame = true;
         });
     }
+    drawSectionDivider();
+
+    // ----- SSR (F2H61) -----
+    if (ImGui::CollapsingHeader(
+            I18n::T("editor.panel.inspector.environment.ssr").c_str(),
+            ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.environment.ssr_hint").c_str());
+
+        const std::string ssrEnabledLabel =
+            I18n::T("editor.panel.inspector.environment.ssr_enabled") + "##env";
+        if (ImGui::Checkbox(ssrEnabledLabel.c_str(), &env.ssrEnabled)) {
+            m_editedThisFrame = true;
+        }
+        if (env.ssrEnabled) {
+            // Intensity 0..1.
+            const std::string ssrIntLabel =
+                I18n::T("editor.panel.inspector.environment.ssr_intensity") + "##env";
+            if (ImGui::SliderFloat(ssrIntLabel.c_str(),
+                                    &env.ssrIntensity, 0.0f, 1.0f, "%.2f")) {
+                m_editedThisFrame = true;
+            }
+            detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.ssrIntensity,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<EnvironmentComponent>().ssrIntensity = v;
+                },
+                "Editar SSR intensity");
+
+            // Max steps 8..128. SliderInt requiere int&; usamos un proxy.
+            int steps = static_cast<int>(env.ssrMaxSteps);
+            const std::string ssrStepsLabel =
+                I18n::T("editor.panel.inspector.environment.ssr_max_steps") + "##env";
+            if (ImGui::SliderInt(ssrStepsLabel.c_str(), &steps, 8, 128)) {
+                env.ssrMaxSteps = static_cast<u32>(steps);
+                m_editedThisFrame = true;
+            }
+            detail::pushEditIfDone<u32>(m_editTracker, m_ui, e, env.ssrMaxSteps,
+                [](Entity& en, const u32& v) {
+                    en.getComponent<EnvironmentComponent>().ssrMaxSteps = v;
+                },
+                "Editar SSR max steps");
+
+            // Step size view-space units.
+            const std::string ssrStepSizeLabel =
+                I18n::T("editor.panel.inspector.environment.ssr_step_size") + "##env";
+            if (ImGui::SliderFloat(ssrStepSizeLabel.c_str(),
+                                    &env.ssrStepSize, 0.05f, 1.0f, "%.2f")) {
+                m_editedThisFrame = true;
+            }
+            detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.ssrStepSize,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<EnvironmentComponent>().ssrStepSize = v;
+                },
+                "Editar SSR step size");
+
+            // Thickness view-space units.
+            const std::string ssrThickLabel =
+                I18n::T("editor.panel.inspector.environment.ssr_thickness") + "##env";
+            if (ImGui::SliderFloat(ssrThickLabel.c_str(),
+                                    &env.ssrThickness, 0.01f, 2.0f, "%.2f")) {
+                m_editedThisFrame = true;
+            }
+            detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.ssrThickness,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<EnvironmentComponent>().ssrThickness = v;
+                },
+                "Editar SSR thickness");
+        }
+        drawSectionResetButton("ssr", [&]() {
+            env.ssrEnabled   = kEnvDefaults.ssrEnabled;
+            env.ssrMaxSteps  = kEnvDefaults.ssrMaxSteps;
+            env.ssrThickness = kEnvDefaults.ssrThickness;
+            env.ssrStepSize  = kEnvDefaults.ssrStepSize;
+            env.ssrIntensity = kEnvDefaults.ssrIntensity;
+            m_editedThisFrame = true;
+        });
+    }
 
         ImGui::Unindent();
     } // cierre wrapper Post-Process (F2H58 Bloque I)

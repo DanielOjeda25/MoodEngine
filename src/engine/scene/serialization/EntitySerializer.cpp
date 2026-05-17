@@ -172,6 +172,12 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         // per-light via LightComponent::castShadows).
         if (env.csmCascadeCount != 4u)   je2["csm_cascades"] = env.csmCascadeCount;
         if (env.csmSplitLambda  != 0.5f) je2["csm_lambda"]   = env.csmSplitLambda;
+        // F2H61: SSR aditivo. Default OFF.
+        if (env.ssrEnabled)            je2["ssr_enabled"]   = env.ssrEnabled;
+        if (env.ssrMaxSteps  != 32u)   je2["ssr_max_steps"] = env.ssrMaxSteps;
+        if (env.ssrThickness != 0.5f)  je2["ssr_thickness"] = env.ssrThickness;
+        if (env.ssrStepSize  != 0.2f)  je2["ssr_step_size"] = env.ssrStepSize;
+        if (env.ssrIntensity != 0.5f)  je2["ssr_intensity"] = env.ssrIntensity;
         je["environment"] = je2;
     }
 
@@ -443,6 +449,12 @@ SavedEntity parseEntityFromJson(const json& j) {
         // ignorado (gate per-light via LightComponent::castShadows).
         se2.csmCascadeCount = je.value("csm_cascades", 4u);
         se2.csmSplitLambda  = je.value("csm_lambda",   0.5f);
+        // F2H61: SSR defaults para mapas pre-F2H61.
+        se2.ssrEnabled   = je.value("ssr_enabled",   false);
+        se2.ssrMaxSteps  = je.value("ssr_max_steps", 32u);
+        se2.ssrThickness = je.value("ssr_thickness", 0.5f);
+        se2.ssrStepSize  = je.value("ssr_step_size", 0.2f);
+        se2.ssrIntensity = je.value("ssr_intensity", 0.5f);
         se.environment = std::move(se2);
     }
     if (j.contains("particle_emitter")) {
