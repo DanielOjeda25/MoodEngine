@@ -4,7 +4,52 @@
 
 ---
 
-## 0. ACTUALIZACIÓN F2H58 cerrado (2026-05-16)
+## 0. ACTUALIZACIÓN F2H59 cerrado (2026-05-16)
+
+**Pivot temporal de Sub-fase 2.6 a UX del editor — primitivas clásicas (Plano + Cono + Cápsula + Quad) + reorg "Crear entidad" + toolbar flotante Blender-style sobre el viewport.**
+Tag: `v1.46.0-fase2-hito59`. Validado por dev tras tour completo del modal + overlay. Citas verbatim del proceso: *"se sigue viendo unas lineas finas"* (post-fix), *"y esta idea me gusta"* (sobre Map Tools híbrido Hammer+Blender — agendado a F2H60), *"sigamos esa direccion"* (confirmación del Source paradigm como scope de F2H60).
+
+**Qué entrega F2H59** (Bloques A-G, detalle completo en `HITOS.md`):
+- **Bloque A — primitiva Plano**: `handleAddPlaneBrush` preset de Box 10m × 0.05m × 10m. Convención Unity Plane.
+- **Bloque B — Cono + Cápsula + Quad**: Cono con nueva función `Csg::makeConeBrush()` (N caras triangulares + cap base). Quad preset Box 1×0.05×1 (billboard). Cápsula preset Sphere dodecaédrica estirada Y 2× (pildora proxy). **Toro skipped v1** — no convexo, requiere CSG no-soportado.
+- **Bloque D — limpieza Toolbar**: removidos Box/Cylinder del Toolbar lateral. Solo quedan herramientas de edición (Mover/Rotar/Escala/Cara).
+- **Bloque E — primitivas al modal "+ Crear Entidad"**: TabBar de 2 sub-secciones (Meshes del proyecto / Primitivas). Menú top-level "Brush > Añadir" eliminado completamente. Punto único de entrada para crear geometría.
+- **Bloque F — overlay flotante Blender-style sobre el viewport**: sub-window ImGui posicionada al top-left de la imagen del viewport, background transparente (alpha 0 + border 0). 4 botones icon-only: Mover / Rotar / Escala / "F" (Face). El panel Toolbar original sale del dockspace; ViewportPanel recibe `setEditorUi(this)`.
+- **Bloque G — cierre**.
+
+**Followup UX polish del modal Crear Entidad** (Bloque F+):
+- Título traducido "Crear entidad" en vez de literal `pick_mesh_modal`.
+- X arriba a la derecha en lugar de botón "Cerrar" inferior.
+- Footer engine-y: "Importar..." (file picker SO) + "**Empty**" (placeholder vacío).
+- Altura uniforme de tabs con BeginChild 320px para que el footer no salte.
+- Overlay sin líneas finas (PushStyleVar WindowBorderSize=0 + NoBackground flag).
+
+**Decisiones** (detalle en `DECISIONS.md`):
+1. **Modal "+ Crear Entidad" como punto único** — primitivas fuera del menú Brush + fuera del Toolbar.
+2. **Toolbar como overlay flotante sobre el viewport** — convención moderna (Blender / Unity / Unreal / Godot 4) sobre toolbar lateral fijo (Hammer 2004).
+3. **Background del overlay totalmente transparente** — alpha 0 + border 0 + NoBackground.
+4. **"F" como label del botón Face** — pedido del dev; homogeneización de iconos del editor a follow-up.
+5. **Footer con vocabulario universal de engines** — "Empty" (Unity Empty GameObject / Unreal Empty Actor / Godot Empty Node) sobre "Crear vacía (placeholder)".
+6. **Toro skipped v1** — geométricamente no convexo, requiere CSG no-soportado o N segmentos auto-spawned.
+7. **Cápsula = Sphere estirada Y 2×** — trade-off de simplicidad sobre cápsula técnica (cilindro + 2 hemisferios).
+
+**Limitación arquitectónica destacada durante el tour** (NO scope F2H59, scope explícito de F2H60):
+- **Los brushes con RigidBody Dynamic NO caen visualmente**. El body de física se simula correctamente (Jolt lo cae), pero el mesh cache del brush se construye con `worldMatrix` incrustado en los vértices y solo se rebuilda si `bc.dirty=true` — al cambiar `t.position` el cache queda desactualizado. Esto es consistente con la **convención Source/Hammer 2004**: brushes son geometría estática del mapa, props (meshes) son los objetos con física dinámica.
+
+**Próximo hito**: **F2H60 — Adoptar Source paradigm + UX polish acumulado**. Plan en [`PLAN_HITO_F2H60.md`](PLAN_HITO_F2H60.md):
+- Rename UI "Brush" → "Estructura" / "Geometría del nivel" (BrushComponent técnico no cambia).
+- Tab "Primitivas" del modal Crear Entidad se divide en 2 sub-secciones: **Estructura** (los 11 brushes actuales) + **Objetos** (5-6 meshes procedurales: Cubo, Esfera, Cilindro, Cápsula, Cono).
+- Generación de meshes procedurales en runtime para "Objetos" — soportan física dinámica nativamente.
+- Warning en Inspector: si el dev pone RigidBody Dynamic sobre un Brush, slider Type Dynamic queda disabled con tooltip.
+- Kit "Physics" en modal Convert Entity (aplicable solo a entities con MeshRenderer).
+- Map Tools híbrido Hammer+Blender (dockable + opcionalmente desplegable como overlay del viewport ortográfico).
+- Overlay context-aware por workspace (botones específicos según narrative / map_editor / etc.).
+- Homogeneización del sistema de iconos del editor.
+- Modificadores Blender-style para operaciones booleanas.
+
+---
+
+## 0bis. ACTUALIZACIÓN F2H58 cerrado (2026-05-16)
 
 **Tercer hito de Sub-fase 2.6 (Render polish) cerrado — Color grading LUT-based + consolidación del panel Environment + UX polish del Inspector.**
 Tag: `v1.45.0-fase2-hito58`. Validado por dev tras tour visual del Inspector consolidado + dropdown de presets + reset buttons. Citas verbatim del proceso: *"todo lo demas esta perfecto"* (tras Color Grading core funcionando) y *"el resto funciona bien"* (post-fix de los reset buttons y caracter Unicode `…`).

@@ -11,6 +11,57 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-16: F2H59 cierre — Primitivas clásicas + reorg UX (modal Crear entidad + toolbar flotante)
+
+**Contexto:** pivot temporal de Sub-fase 2.6 (render polish) a UX del editor entre F2H58 (color grading) y F2H6X (siguiente render polish), motivado por el dev que durante el tour visual de F2H58 detectó que estaba usando un Box brush aplastado como suelo y pidió la primitiva Plano + primitivas clásicas adicionales. La conversación escaló a UX reorg general. Tag `v1.46.0-fase2-hito59`. Hito mediano (Bloques A-G).
+
+**Decisión clave 1 — Modal "+ Crear Entidad" como punto único de entrada para crear geometría.** Pre-F2H59 las primitivas vivían en 3 lugares: menú top-level "Brush > Añadir" (11 items), Toolbar lateral (Box + Cylinder), y modal "+ Crear Entidad" (que solo manejaba meshes importados). F2H59 consolida los 3 en el modal con TabBar (Meshes del proyecto / Primitivas).
+
+- **Razón:** workflow Hammer/SFM consistente. 1 click en panel Escena → modal → click en primitiva. El dev no tiene que aprender 3 caminos distintos para crear geometría. Convención que ya empezamos a usar en F2H57 ("+ Crear Entidad" como punto único de entrada SFM-style).
+- **Alternativa descartada:** mantener las primitivas en el menú Brush para "Hammer-purists" + el Toolbar como "atajos rápidos". Rechazada porque genera tres puntos de mantenimiento UI sincronizados. Si emerge demanda futura de atajos rápidos a primitivas comunes, agregamos un atajo de teclado o configurable.
+- **Trade-off documentado:** el dev pierde 1 click vs el menú directo (modal → tab → click vs menú → click). Aceptable porque el modal también ofrece "Importar..." + "Empty" en el mismo flow.
+
+**Decisión clave 2 — Toolbar como overlay flotante sobre el viewport, estilo Blender / Unity / Unreal moderno / Godot 4.** El panel Toolbar pre-F2H59 era una ventana dockable lateral con Box/Cylinder + gizmo modes + Face toggle. F2H59 lo migra a una sub-window ImGui flotante en la esquina superior-izquierda de la imagen del viewport (background transparente alpha 0 + border 0 + NoBackground), 4 botones icon-only: Mover / Rotar / Escala / "F".
+
+- **Razón:** convención industria moderna. Hammer 2004 usa toolbar lateral fijo (paradigma MFC de Windows), pero Blender / Unity 2024 / Unreal 5 / Godot 4 usan overlay flotante porque libera espacio dockable para paneles más útiles (Hierarchy / Inspector / Asset Browser). El espacio horizontal del editor es escaso.
+- **Limitación documentada:** el overlay actual NO es movible, NO es context-aware del workspace. F2H60 candidate evalúa overlay context-aware (botones específicos según workspace: narrative vs map_editor vs gameplay) y posiblemente movible con SetWindowPos.
+- **Toolbar como panel queda dead-code linkeable** — no en `m_panels` pero el struct `m_toolbar` sigue declarado. Cleanup completo (eliminar `Toolbar.h/.cpp`) diferido por minimal-risk; si emerge demanda futura de reactivarlo como panel, está intacto.
+
+**Decisión clave 3 — Background del overlay totalmente transparente** (alpha 0 + border 0 + flag `NoBackground`). Pedido explícito del dev: *"le podemos dejar el fondo transparente para que solo sean botones flotantes?"*.
+
+- **Razón:** estética Blender — los botones de tools "flotan" sobre el viewport sin marco visual que los separe. Mejor integración visual con el render 3D detrás.
+- **Bug pre-detectado:** con solo `SetNextWindowBgAlpha(0.0f)` quedaban líneas finas del frame de la sub-window. Fix: `PushStyleVar(WindowBorderSize, 0.0f)` + flag `NoBackground` explícito redundante con el alpha pero protege si el alpha falla por theme. Pedido del dev: *"se sigue viendo unas lineas finas"*.
+
+**Decisión clave 4 — "F" como label del botón Face toggle, no `ICON_FA_VECTOR_SQUARE`.** Pedido explícito del dev: *"creo que deberia ser F de faces, ya que solo se usa en la edicion de texturas"*.
+
+- **Razón:** la letra F como label es semánticamente clara (Face = F). El icono cuadrado FA es genérico y se confundía con Box / Quad. En el overlay flotante con 4 botones chicos (36×36 px), claridad > consistencia con icon set FA.
+- **Aplicabilidad:** homogeneización general del sistema de iconos del editor agendada como follow-up F2H60+. Por ahora el botón F es la excepción minimal.
+
+**Decisión clave 5 — Footer del modal con vocabulario universal de engines** ("Importar..." + "Empty"). Pre-F2H59 los labels eran "Importar desde archivo..." + "Crear vacía (placeholder)" — verbosos y específicos del workflow. F2H59 los acorta + adopta términos universales.
+
+- **Razón:** "Empty" es vocabulario universal — Unity Empty GameObject, Unreal Empty Actor, Godot Empty Node. El dev que viene de cualquier engine moderno reconoce inmediatamente el botón. "Importar..." con elipsis es convención UI estándar para "abre file picker" (Unity Import / Unreal Import / Godot Import). Pedido explícito del dev: *"al termino que me referia era a Empty"*.
+- **Trade-off i18n:** "Empty" queda en inglés también en `es.json` (no se traduce a "Vacío"). Convención: términos universales del vocabulario engine quedan en inglés (matchea expectativa del dev que viene de tutoriales en inglés). Si emerge demanda de full translation, evaluar.
+
+**Decisión clave 6 — Toro skipped en v1.** Las primitivas pedidas eran Plano / Quad / Cono / Cápsula / Toro. Toro NO entró.
+
+- **Razón técnica:** un toro NO es geométricamente convexo (tiene un agujero en el medio), y el sistema CSG de MoodEngine asume brushes convexos para todas las operaciones (boolean, picking, clipping). Implementar Toro como brush único es imposible sin refactor del CSG core.
+- **Workaround documentado:** spawn 2 cilindros (outer + inner) + Brush > Operaciones Booleanas > Resta del inner. 3 clicks pero da un anillo CSG editable.
+- **Alternativa diferida:** implementar Toro como N segmentos curvos auto-spawneados + group. Scope mayor, requiere primitive groups (no implementado). F2H6X+ evalúa cuando se vea modificadores Blender-style para booleans.
+
+**Decisión clave 7 — Cápsula = Sphere dodecaédrica estirada Y 2×.** No es cápsula técnica (cilindro + 2 hemisferios con paredes laterales rectas) sino elipsoide alargado.
+
+- **Razón:** trade-off de simplicidad. La cápsula como `makeSphereBrush(scale Y=2)` es 0 código nuevo. La cápsula técnica requiere nueva función `makeCapsuleBrush()` con geometría híbrida (cilindro central + 2 calotas hemisféricas preservando convexidad). v1 cubre el caso común "personaje proxy / pildora / pilar redondeado".
+- **Revisión:** si emerge demanda de cápsula con paredes laterales rectas (gameplay con player controller cápsula), follow-up implementa `makeCapsuleBrush()` real.
+
+**Decisión clave 8 — Brushes son geometría estática del mapa, NO objetos físicos dinámicos. Source/Hammer paradigm explícito agendado a F2H60.** Durante el tour el dev creó un cubo brush, le agregó RigidBody Dynamic, dio Play y no cayó. Causa raíz: el mesh cache del brush se construye con `worldMatrix` incrustado en los vértices y solo se rebuilda si `bc.dirty=true` — al cambiar `t.position` el cache queda desactualizado. El body de física Jolt SÍ cae internamente, pero el visual no se mueve.
+
+- **Decisión arquitectónica (F2H60):** adoptar explícitamente la separación que Source/Hammer 2004 hizo con Half-Life 2 (Havok Physics). **Brushes** = estructura estática del mapa (paredes, pisos, columnas) — nunca dinámicos. **Meshes (props)** = objetos del juego (cajas, barriles, NPCs) — pueden ser Static / Kinematic / Dynamic libremente. Source separó porque BSP/CSG no se lleva bien con simulación rígida — la geometría de un brush se materializa al compile-time del mapa, no a runtime per-frame.
+- **Implicancias en MoodEngine F2H60:** rename UI "Brush" → "Estructura" / "Geometría del nivel" (el término técnico "brush" queda solo en código + docs). Tab "Primitivas" del modal Crear Entidad se divide en 2 sub-secciones: **Estructura** (los 11 brushes actuales) + **Objetos** (5-6 meshes procedurales: Cubo, Esfera, Cilindro, Cápsula, Cono — generados en runtime con vertices/normales/UVs puros, soportan física dinámica nativamente). Warning en Inspector si el dev pone RigidBody Dynamic sobre un Brush — slider Type Dynamic queda disabled con tooltip.
+- **Cita del dev:** *"que es mejor usar meshes o brushes? para nuestro editor me refiero, porque me gusta lo de los brush, por ahi confunde el termino o su definicion pero si es util"*. Tras explicación del Source paradigm: *"sigamos esa direccion"*.
+- **Alternativa descartada:** refactor del render de brushes para que rebuilden el mesh cache cada frame si tienen RigidBody Dynamic (1 línea de código: `bc.dirty = (rb.type == Dynamic);`). Rechazada porque mezcla los paradigmas — el dev podría poner RigidBody Dynamic sobre brushes complejos (boolean trees, polígonos arbitrarios) y el rebuild per-frame del mesh cache impactaría performance. La separación Source es más limpia conceptualmente.
+
+---
+
 ## 2026-05-16: F2H58 cierre — Color grading LUT-based + consolidación Environment + UX polish
 
 **Contexto:** tercer hito de Sub-fase 2.6 (Render polish): bloom (F2H55) → SSAO (F2H56) → **color grading (F2H58)** → god rays / shadow polish (F2H6X+). Tag `v1.45.0-fase2-hito58`. Hito mediano que creció de 7 bloques planeados (A-G) a 10 (A-J + fix lateral) por feedback iterativo del dev durante el tour visual.
