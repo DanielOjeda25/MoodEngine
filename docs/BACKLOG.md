@@ -10,6 +10,40 @@
 
 ## 1. Pedido explícitamente por el dev en algún tour (alta presión)
 
+### 1.-3. Shift+D duplicate (F2H64 tour, 2026-05-18)
+
+**Contexto**: al validar F2H64 el dev pidió un atajo Blender-style para duplicar la entidad seleccionada. Cita: *"no tengo la capacidad aun de duplicar un boton podemos hacer como en blender shift + D de un elemento seleccionado y crea una copia"*.
+
+**Scope estimado**: ~30 min. Keyboard handler para Shift+D en `EditorUI` + comando `SpawnEntity` con snapshot de la seleccionada + offset chico (ej. +0.5 en X). Ya hay infra de spawn undoable desde F2H27+.
+
+**Por qué NO atacamos ahora**: el dev pidió cerrar Sub-fase 2.4 del plan original (física) antes de seguir con quality-of-life. Volver cuando emerja friction concreta en la edición de niveles.
+
+---
+
+### 1.-2. Brushes translúcidos OIT (F2H64 tour, 2026-05-18)
+
+**Contexto**: al validar F2H64 el dev preguntó *"acepta materiales tambien? o solo los meshes?"* sobre brushes CSG con material Translucent. Confirmé que `RenderBatching::groupByBatch` solo itera `MeshRendererComponent` — los brushes van por el `brushPass` en medio del opaque path. Con material Translucent hoy se ven mal (depth-write ON, refracción mal posicionada).
+
+**Scope estimado**: ~2-3h. Bifurcar `brushPass` en `SceneRenderer_Render.cpp`: brushes opacos van por el path actual; brushes translucent van a un bucket nuevo + se dibujan en el `oitPass` con `uOitPass=1`. Tests: roundtrip en `test_render_batching` con brushes de blendMode mixto.
+
+**Workaround mientras tanto**: convertir el brush a mesh (Hammer-style "make detail"). Funciona pero pierde la edición CSG.
+
+**Por qué NO atacamos ahora**: el caso 95% (vidrios como mesh prop) ya funciona. Vidrios estructurales del nivel (ventanas CSG) son menos comunes. Atacar si emerge demanda real al construir un mapa.
+
+---
+
+### 1.-1. Skybox / HDRI switcher (F2H64 tour, 2026-05-18)
+
+**Contexto**: al validar las sombras tintadas de F2H64 el dev tuvo dificultad para distinguir los colores porque el HDRI default (`sky_kloofendal`) es muy luminoso. Cita: *"creo que debemos tratar de tener un HDRI mas dinamico, como los motores, y ahi resolveria mas rapido ver estos test de colores en cosas traslucidas"*.
+
+**Scope estimado**: ~2-3h. Dropdown en el Inspector del `EnvironmentComponent` con: HDRIs shipados (kloofendal brillante / neutro / atardecer / interior oscuro / nocturno) + opción "Cargar custom..." desde AssetBrowser. Reuso del patrón F2H42 (Material Editor) y F2H58 (Color Grading LUT). Persistir el path en `EnvironmentComponent.skyboxPath`.
+
+**Workaround mientras tanto**: bajar Exposure del Environment a -2 o -3 cuando hay que validar tintes tenues. Funciona pero es manual y se olvida.
+
+**Por qué NO atacamos ahora**: friction emerge solo cuando hay que validar tintes sutiles. Hoy con el editor en producción/edición normal el HDRI fijo no molesta.
+
+---
+
 ### 1.0. EnvironmentComponent con entry point dedicado (F2H61 tour)
 
 **Contexto**: durante la validación visual de F2H61 (SSR) el dev creó una entidad placeholder (cubo missing-texture) **solo para colgarle el `EnvironmentComponent`** y poder activar el SSR. Cita verbatim: *"el cubo con la textura missing es mi environmentCOmponent, mas adelante me gustaria que tenga un icono y una opcion propia, porque de la forma que hago ahora es agregar un empty y ahi agregar el componentEnviroment y no le veo el sentido si es un componente global"*.

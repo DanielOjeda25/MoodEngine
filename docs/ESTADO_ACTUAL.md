@@ -53,11 +53,13 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ### Próximo
 
-Roadmap inmediato (en orden tentativo, validar con el dev antes de arrancar):
+**Decisión del dev (2026-05-18):** cerrar lo que queda del **plan original** (`PLAN_FASE2.md`) antes de atacar follow-ups. Los 3 follow-ups de F2H64 quedaron archivados en [BACKLOG.md §1.-3/-2/-1](BACKLOG.md). Sub-fases pendientes según plan original:
 
-- **F2H64.1 — Shift+D duplicate** (~30 min). Mini-hito de quality-of-life. Pedido del dev durante F2H64. Atajo Blender-style para duplicar entity seleccionada + offset chico.
-- **F2H65 — Brushes translúcidos OIT** (~2-3h). Rutea `BrushComponent` con material Translucent al `oitPass` igual que MeshRenderer. Hoy los brushes con material Translucent se rendean en el opaque path (artefacto). Limitación documentada en F2H64.
-- **F2H66 — Skybox / HDRI switcher** (~2-3h). Dropdown en Environment para elegir entre HDRIs shipados (kloofendal brillante, neutro, atardecer, interior oscuro) o cargar custom. Pedido del dev durante F2H64: el HDRI fijo dificulta visualizar test de sombras tintadas tenues.
+- **Sub-fase 2.4 — Física avanzada** (F2H23-F2H28 originales): Jolt constraints/joints, ragdolls, vehicle physics, force fields, triggers avanzados, cloth/soft body. **Bloque entero sin tocar** — primer candidato natural a abrir.
+- **Sub-fase 2.6 — Pipeline AI** (F2H35-F2H40 originales): Mixamo importer cubierto parcialmente por F2H49. Pendiente: Blender MCP server, armas procedurales, generador de props, validación automática.
+- **Sub-fase 2.7 — UI/UX final + cierre Fase 2** (F2H41-F2H44 originales): theming, atajos configurables, tutorial in-app, tag `v2.0.0`.
+
+Primer candidato concreto a arrancar: **F2H65 — Jolt constraints (joints)** [usando numeración actual]. Habilita el resto de Sub-fase 2.4 (ragdolls dependen de joints).
 
 ---
 
