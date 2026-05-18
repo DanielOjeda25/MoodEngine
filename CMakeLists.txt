@@ -425,6 +425,7 @@ add_library(mood_engine_lib STATIC
     src/engine/render/backend/opengl/OpenGLMesh.cpp
     src/engine/render/backend/opengl/OpenGLShader.cpp
     src/engine/render/backend/opengl/OpenGLFramebuffer.cpp
+    src/engine/render/backend/opengl/OpenGLOitFramebuffer.cpp  # F2H64
     src/engine/render/backend/opengl/OpenGLRenderer.cpp
     src/engine/render/backend/opengl/OpenGLTexture.cpp
     src/engine/render/backend/opengl/OpenGLCubemapTexture.cpp

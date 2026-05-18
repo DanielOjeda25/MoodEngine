@@ -61,6 +61,14 @@ uniform float     uRefractionStrength; // 0-1 (multiplica el offset)
 uniform sampler2D uBackbufferCopy;     // unit 7 (solo se samplea si Translucent)
 uniform vec2      uScreenSize;         // viewport en pixels
 
+// --- F2H64: OIT Weighted Blended (McGuire 2013) ---
+// uOitPass = 0 -> path forward F2H63 (opaque + translucent direct).
+// uOitPass = 1 -> el FB activo es m_oitAccumFb. Los Translucent/Additive
+//                 escriben (rgb*α*w, α*w) al accum (loc 0) y (α) al
+//                 revealage (loc 1). El composite pass mezcla con el
+//                 scene color. El path Opaque NUNCA entra con uOitPass=1.
+uniform int       uOitPass;
+
 // --- Lights (mismo layout que lit.frag para reusar LightSystem) ---
 struct DirLight {
     vec3 direction;
@@ -396,9 +404,12 @@ void main() {
     float fogF = computeFogFactor(dist);
     lighting = mix(lighting, uFogColor, fogF);
 
-    // --- F2H63: branching por BlendMode ---
+    // --- F2H63 + F2H64: branching por BlendMode + opcional OIT path ---
     if (uBlendMode == 0) {
         // Opaque (default): path tradicional. SSR escribe normal RT.
+        // Opaque NUNCA entra con uOitPass=1 (el renderer no rutea opacos
+        // por el FB OIT). Si llegara aca con OIT, el FB acepta el write
+        // a loc 0 igual; no es un bug, solo no se invoca por el caller.
         FragColor = vec4(lighting, 1.0);
         NormalRT  = vec4(normalize(vViewSpaceNormal), 1.0);
         return;
@@ -413,29 +424,52 @@ void main() {
     float fresnel = pow(1.0 - clamp(NdotV, 0.0, 1.0), 5.0);
     float effectiveOpacity = clamp(mix(uOpacity, 1.0, fresnel * 0.5), 0.0, 1.0);
 
+    // Computar el color "final" del fragment per-mode. Es lo que escribiriamos
+    // a un FB normal en el path forward. En OIT lo metemos al accum con peso.
+    vec3 colorOut;
     if (uBlendMode == 2) {
-        // Additive (emisivo, glow): GL_SRC_ALPHA/ONE hace la suma en
-        // hardware. El shader emite (lighting * α, α).
-        FragColor = vec4(lighting * effectiveOpacity, effectiveOpacity);
-        NormalRT  = vec4(0.0);
+        // Additive: el color es lighting puro. En forward el GL_BLEND
+        // SRC_ALPHA/ONE multiplica por α y suma; en OIT lo hace el composite.
+        colorOut = lighting;
+    } else {
+        // Translucent (vidrio, agua): refraccion screen-space. Sample del
+        // backbuffer copy con offset proporcional a la normal en view-space
+        // y (IOR - 1) * refractionStrength.
+        vec2 screenUv = gl_FragCoord.xy / uScreenSize;
+        vec2 nViewXY  = normalize(vViewSpaceNormal).xy;
+        vec2 refractOffset = nViewXY * (uIor - 1.0) * uRefractionStrength * 0.1;
+        vec2 sampleUv = clamp(screenUv + refractOffset, vec2(0.001), vec2(0.999));
+        vec3 refracted = texture(uBackbufferCopy, sampleUv).rgb;
+        colorOut = mix(refracted, lighting, effectiveOpacity);
+    }
+
+    if (uOitPass == 1) {
+        // F2H64 OIT Weighted Blended (McGuire & Bavoil 2013, ec. 8/9).
+        // weight pondera por opacidad^3 y profundidad^3 para que objetos
+        // cercanos a la cámara dominen al composite. Los valores 0.01 y
+        // 1e8 son del paper. clamp [1e-2, 3e3] evita overflow/underflow.
+        float depth  = gl_FragCoord.z;
+        float weight = clamp(
+            pow(min(1.0, effectiveOpacity * 10.0) + 0.01, 3.0)
+                * 1e8 * pow(1.0 - depth * 0.9, 3.0),
+            1e-2, 3e3);
+        // Loc 0 (accum RGBA16F): sum(rgb * α * w) en RGB, sum(α * w) en A.
+        FragColor = vec4(colorOut * effectiveOpacity, effectiveOpacity) * weight;
+        // Loc 1 (revealage R16F): producto de (1 - α). Blend ZERO/ONE_MINUS_SRC_COLOR
+        // acumula multiplicativamente desde el clear inicial 1.0 -> solo se
+        // usa el componente .r del write. Translucent y Additive comparten
+        // esta semantica (ambos contribuyen a "cuánta luz del background pasa").
+        NormalRT  = vec4(effectiveOpacity);
         return;
     }
 
-    // Translucent (vidrio, agua): refraccion screen-space. Sample del
-    // backbuffer copy con offset proporcional a la normal en view-space
-    // y (IOR - 1) * refractionStrength. Con IOR=1 y strength=0 el offset
-    // es cero -> equivale a alpha blend regular contra el FB pre-pass.
-    //
-    // El shader hace toda la composicion -> GL_BLEND OFF en este path
-    // (set por el renderer). FragColor.a = 1.0 (no se blendea de nuevo).
-    vec2 screenUv = gl_FragCoord.xy / uScreenSize;
-    vec2 nViewXY  = normalize(vViewSpaceNormal).xy;
-    vec2 refractOffset = nViewXY * (uIor - 1.0) * uRefractionStrength * 0.1;
-    // Clamp para evitar artefactos cuando el offset cae fuera del FB
-    // (sampling de bordes devolveria negro/clamped).
-    vec2 sampleUv = clamp(screenUv + refractOffset, vec2(0.001), vec2(0.999));
-    vec3 refracted = texture(uBackbufferCopy, sampleUv).rgb;
-    vec3 finalColor = mix(refracted, lighting, effectiveOpacity);
-    FragColor = vec4(finalColor, 1.0);
+    // F2H63 forward path: escritura directa al FB activo (m_sceneFb).
+    if (uBlendMode == 2) {
+        FragColor = vec4(colorOut * effectiveOpacity, effectiveOpacity);
+    } else {
+        // Translucent: el shader hace la composicion (mix con refracted).
+        // FragColor.a = 1.0 -> NO se blendea de nuevo en hw (GL_BLEND OFF).
+        FragColor = vec4(colorOut, 1.0);
+    }
     NormalRT  = vec4(0.0);
 }

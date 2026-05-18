@@ -44,6 +44,7 @@ class LightSystem;
 class OpenGLCubemapTexture;
 class OpenGLDebugRenderer;
 class OpenGLFramebuffer;
+class OpenGLOitFramebuffer;  // F2H64
 class OpenGLInstanceBuffer;
 class OpenGLParticleRenderer;
 class OpenGLSSBO;
@@ -194,6 +195,7 @@ private:
     std::unique_ptr<OpenGLFramebuffer> m_colorGradingFb;// HDR RGBA16F (F2H58): post bloom + color grading aplicado, antes del post-process
     std::unique_ptr<OpenGLFramebuffer> m_ssrFb;       // HDR RGBA16F (F2H61): scene color + SSR reflection aditivo
     std::unique_ptr<OpenGLFramebuffer> m_backbufferCopyFb; // HDR RGBA16F (F2H63): snapshot del color del FB pre-translucent. Los frag shaders translucent samplean esto via uBackbufferCopy con offset para refraccion screen-space.
+    std::unique_ptr<OpenGLOitFramebuffer> m_oitAccumFb; // F2H64: OIT Weighted Blended. Dos color attachments (accumColor RGBA16F + revealage R16F) + depth compartido con m_sceneFb. El composite pass mezcla con el scene color.
     std::unique_ptr<OpenGLFramebuffer> m_viewportFb;  // LDR RGBA8
     std::unique_ptr<SSAOPass>          m_ssaoPass;    // F2H56
     std::unique_ptr<BloomPass>         m_bloomPass;   // F2H55
@@ -206,6 +208,8 @@ private:
     std::unique_ptr<IShader> m_pbrSkinnedShader;   // PBR + LBS skinning
     std::unique_ptr<IShader> m_wireframeOrthoShader;  // F2H28: vista orto.
     std::unique_ptr<IShader> m_grid2dShader;          // F2H28 Bloque E: grid orto.
+    std::unique_ptr<IShader> m_oitCompositeShader;    // F2H64: fullscreen tri que mezcla m_oitAccumFb sobre el scene FB.
+    unsigned int            m_oitCompositeVao = 0;   // F2H64: VAO trivial para el composite (gl_VertexID gen).
 
     // F2H62 Bloque E: cache de programas GL compilados desde .moodshader.
     // Cuando un material tiene shaderGraphPath no vacio, el render pide
@@ -304,6 +308,12 @@ private:
     ///        renderScene cuando el color grading necesita LUT y no hay
     ///        post-process pass o LUT custom.
     void synthesizeIdentityLut();
+
+    /// @brief F2H64: ensure-or-resize del `m_oitAccumFb`. Lo crea si no
+    ///        existe, lo resize si cambió el panel size, y re-attachea el
+    ///        depth del scene FB (que puede haberse recreado en su resize).
+    ///        Idempotente — seguro llamarlo cada frame.
+    void ensureOitFb(u32 width, u32 height);
 
     /// @brief F2H63: blittea el color attachment de `m_sceneFb` a
     ///        `m_backbufferCopyFb`. Llamar justo antes del translucent

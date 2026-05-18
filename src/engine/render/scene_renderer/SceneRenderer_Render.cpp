@@ -20,6 +20,7 @@
 #include "engine/render/backend/opengl/OpenGLDebugRenderer.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
 #include "engine/render/backend/opengl/OpenGLInstanceBuffer.h"
+#include "engine/render/backend/opengl/OpenGLOitFramebuffer.h"  // F2H64
 #include "engine/render/backend/opengl/OpenGLParticleRenderer.h"
 #include "engine/render/backend/opengl/OpenGLRenderer.h"
 #include "engine/render/backend/opengl/OpenGLSSBO.h"
@@ -49,7 +50,7 @@
 
 #include <glad/gl.h>
 
-#include <algorithm>  // F2H63: std::sort para back-to-front
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <string>
@@ -72,6 +73,7 @@ void SceneRenderer::renderScene(Scene& scene,
         if (m_bloomFb) m_bloomFb->resize(panelWidth, panelHeight);     // F2H55
         if (m_ssrFb) m_ssrFb->resize(panelWidth, panelHeight);         // F2H61
         if (m_backbufferCopyFb) m_backbufferCopyFb->resize(panelWidth, panelHeight); // F2H63
+        ensureOitFb(panelWidth, panelHeight);                           // F2H64
         m_viewportFb->resize(panelWidth, panelHeight);
     }
 
@@ -788,78 +790,110 @@ void SceneRenderer::renderScene(Scene& scene,
         }
     }
 
-    // F2H63: pase translucent. Va DESPUES del opaco + skybox + brushes +
-    // compiledMesh, pero ANTES de particulas y debug. Sort back-to-front
-    // por distancia camara->centro AABB; tiebreaker por entity handle
-    // estable (evita flicker frame-a-frame para entidades co-distantes).
+    // F2H64: pase OIT (Order-Independent Transparency Weighted Blended,
+    // McGuire & Bavoil 2013). Reemplaza el sort back-to-front de F2H63
+    // por un algoritmo de acumulacion ponderada que no depende del orden
+    // de iteracion. Va DESPUES del opaco + skybox + brushes + compiledMesh,
+    // ANTES de particulas y debug.
     //
-    // GL state:
-    //   - depth-test ON (los translucents se ocluyen por opacos delante).
-    //   - depth-write OFF (translucents no escriben profundidad — sino
-    //     ocluyen entre si en orden incorrecto y SSAO/SSR los pisan).
-    //   - Translucent: GL_BLEND OFF -- el shader hace la composicion
-    //     completa via sample del backbuffer copy + Fresnel + opacity.
-    //     FragColor.a = 1.0.
-    //   - Additive: GL_BLEND ON con SRC_ALPHA/ONE (emisivo aditivo en HW).
-    if (!batching.translucents.empty()) {
-        MOOD_PROFILE_SCOPE("PBR::translucentPass");
+    // Pipeline:
+    //   1. Blit del color del scene FB al backbuffer copy (F2H63 reusa esto
+    //      para refraccion screen-space dentro del frag shader).
+    //   2. Bind m_oitAccumFb (2 color attachments + depth compartido con
+    //      m_sceneFb). Clear: accum=(0,0,0,0), revealage=(1,1,1,1).
+    //   3. Blend separado per-attachment:
+    //        loc 0 (accum):     GL_ONE / GL_ONE       (suma pura)
+    //        loc 1 (revealage): GL_ZERO / GL_ONE_MINUS_SRC_COLOR (mult)
+    //   4. Iterar translucents SIN sort. El shader detecta uOitPass=1 y
+    //      escribe la formula McGuire al accum/revealage. Tanto Translucent
+    //      como Additive comparten este path.
+    //   5. Composite: bind m_sceneFb (solo loc 0 via drawBuffers), bind
+    //      oit_composite shader + accum/revealage, fullscreen tri con
+    //      blend GL_ONE_MINUS_SRC_ALPHA / GL_SRC_ALPHA. Restaura ambos
+    //      attachments del scene FB al salir.
+    if (!batching.translucents.empty() && m_oitAccumFb && m_oitCompositeShader) {
+        MOOD_PROFILE_SCOPE("PBR::oitPass");
 
-        // Sort back-to-front por distancia^2 (evita sqrt). Tiebreaker
-        // estable por handle raw.
-        std::sort(batching.translucents.begin(), batching.translucents.end(),
-                  [&](const TranslucentDraw& a, const TranslucentDraw& b) {
-                      const f32 dA = glm::dot(a.worldCenter - cameraPos,
-                                              a.worldCenter - cameraPos);
-                      const f32 dB = glm::dot(b.worldCenter - cameraPos,
-                                              b.worldCenter - cameraPos);
-                      if (dA != dB) return dA > dB; // farthest first
-                      // Tiebreaker estable: entt::entity es enum class,
-                      // castear a u32 para comparar.
-                      return static_cast<u32>(a.entity.handle()) <
-                             static_cast<u32>(b.entity.handle());
-                  });
-
-        // Snapshot del color FB pre-translucent al backbuffer copy. Los
-        // shaders translucent lo samplean via uBackbufferCopy (unit 7)
-        // para refraccion screen-space.
+        // 1) Snapshot del color FB pre-translucent al backbuffer copy.
+        //    Los shaders translucent lo samplean via uBackbufferCopy
+        //    (unit 7) para refraccion screen-space.
         blitSceneToBackbufferCopy();
         glActiveTexture(GL_TEXTURE7);
         glBindTexture(GL_TEXTURE_2D, m_backbufferCopyFb->glColorTextureId());
 
-        // Estado comun a ambos blend modes.
-        glDepthMask(GL_FALSE);
+        // 2) Bind del FB OIT + clear separado por attachment.
+        m_oitAccumFb->bind();
+        const GLfloat clearAccum[4]    = {0.0f, 0.0f, 0.0f, 0.0f};
+        const GLfloat clearRevealage[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        glClearBufferfv(GL_COLOR, 0, clearAccum);
+        glClearBufferfv(GL_COLOR, 1, clearRevealage);
+        // NO clearear el depth: el FB OIT lo comparte con el scene FB y
+        // queremos preservar la profundidad de los opacos para depth-test
+        // contra ellos.
+
+        // 3) GL state. blend separado por attachment (GL 4.0+).
+        glEnable(GL_BLEND);
+        glBlendFunci(0, GL_ONE, GL_ONE);                               // accum
+        glBlendFunci(1, GL_ZERO, GL_ONE_MINUS_SRC_COLOR);              // revealage
+        glDepthMask(GL_FALSE);  // OIT no escribe depth (los opacos ya lo hicieron)
         glEnable(GL_DEPTH_TEST);
 
+        // 4) Iterar translucents SIN sort (algoritmo order-independent).
         applyShaderUniforms(*m_pbrShader);
+        m_pbrShader->setInt("uOitPass", 1);
         for (const TranslucentDraw& td : batching.translucents) {
             Entity e = td.entity;
             if (!e.hasComponent<TransformComponent>() ||
                 !e.hasComponent<MeshRendererComponent>()) continue;
             auto& t  = e.getComponent<TransformComponent>();
             auto& mr = e.getComponent<MeshRendererComponent>();
-
-            // Per-material GL state. drawMeshRenderer setea los uniforms
-            // de blend (uBlendMode/uOpacity/uIor/...) por nosotros, pero
-            // el blend func de hardware lo configuramos aca per-entidad.
-            const MaterialAsset* mat = assets.getMaterial(mr.materialOrMissing(0));
-            const BlendMode mode = mat ? mat->blendMode : BlendMode::Opaque;
-            if (mode == BlendMode::Additive) {
-                glEnable(GL_BLEND);
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-            } else {
-                // Translucent: BLEND off, el shader hace la composicion.
-                glDisable(GL_BLEND);
-            }
-
             const glm::mat4 model = t.worldMatrix();
             m_pbrShader->setMat4("uModel", model);
             drawMeshRenderer(*m_pbrShader, mr, model);
         }
+        // Reset uOitPass para no contaminar el resto del frame (opaque
+        // path del frame siguiente).
+        m_pbrShader->setInt("uOitPass", 0);
 
-        // Restaurar estado opaco para que las particulas y el debug
-        // renderer no hereden depth-write off / blend on.
+        // Restaurar GL state base antes del composite.
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // default
         glDepthMask(GL_TRUE);
+
+        // 5) Composite pass. Volver al scene FB, ESCRIBIR SOLO LOC 0
+        //    (no pisamos las normales de los opacos en loc 1).
+        m_sceneFb->bind();
+        const GLenum compositeDrawBufs[1] = { GL_COLOR_ATTACHMENT0 };
+        glDrawBuffers(1, compositeDrawBufs);
+
+        // Blend del composite: dst = dst * revealage + src * (1 - revealage).
+        // src.a viene como (1 - revealage_acumulado) del shader, asi que el
+        // blend ONE_MINUS_SRC_ALPHA / SRC_ALPHA hace exactamente eso.
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA);
+        glDisable(GL_DEPTH_TEST);
+
+        m_oitCompositeShader->bind();
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, m_oitAccumFb->glAccumTextureId());
+        m_oitCompositeShader->setInt("uAccum", 0);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, m_oitAccumFb->glRevealageTextureId());
+        m_oitCompositeShader->setInt("uRevealage", 1);
+
+        glBindVertexArray(m_oitCompositeVao);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glBindVertexArray(0);
+
+        // Restaurar drawBuffers del scene FB para que los pases siguientes
+        // (particulas, debug, post-process) escriban a ambos attachments
+        // si el shader lo hace.
+        const GLenum sceneDrawBufs[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+        glDrawBuffers(2, sceneDrawBufs);
+
+        // Restaurar GL state estandar.
         glDisable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glEnable(GL_DEPTH_TEST);
         glActiveTexture(GL_TEXTURE0);
     }
 

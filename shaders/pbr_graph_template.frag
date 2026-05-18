@@ -79,6 +79,10 @@ uniform float     uRefractionStrength;
 uniform sampler2D uBackbufferCopy;     // unit 7
 uniform vec2      uScreenSize;
 
+// F2H64: OIT pass flag. Cuando 1, escribimos accum/revealage en lugar
+// del path forward F2H63 (ver pbr.frag para detalle de la formula).
+uniform int       uOitPass;
+
 // --- Lights (mismo layout que lit.frag para reusar LightSystem) ---
 struct DirLight {
     vec3 direction;
@@ -425,35 +429,49 @@ __SHADERGRAPH_DECLS__
     // luces ni fog -- mismo trato que un material con map emissive).
     lighting += emissive;
 
-    // --- F2H63: branching por BlendMode (mismo path que pbr.frag) ---
+    // --- F2H63 + F2H64: branching por BlendMode + opcional OIT path ---
     if (uBlendMode == 0) {
+        // Opaque: NUNCA entra con uOitPass=1.
         FragColor = vec4(lighting, 1.0);
         NormalRT  = vec4(normalize(vViewSpaceNormal), 1.0);
         return;
     }
 
     // F2H63: el grafo controla opacity multiplicando al slider del
-    // Inspector (uOpacity). graphOpacity=1.0 default -> control puro del
-    // slider; graphOpacity<1 lo modula (e.g. Fresnel-driven opacity
-    // emitido por el shader graph del sample_glass).
+    // Inspector (uOpacity).
     float baseOpacity = clamp(graphOpacity * uOpacity, 0.0, 1.0);
     float fresnel = pow(1.0 - clamp(NdotV, 0.0, 1.0), 5.0);
     float effectiveOpacity = clamp(mix(baseOpacity, 1.0, fresnel * 0.5), 0.0, 1.0);
 
+    // Color "final" per-mode (mismo pattern que pbr.frag).
+    vec3 colorOut;
     if (uBlendMode == 2) {
-        // Additive (GL_SRC_ALPHA/ONE en hardware).
-        FragColor = vec4(lighting * effectiveOpacity, effectiveOpacity);
-        NormalRT  = vec4(0.0);
+        colorOut = lighting;
+    } else {
+        vec2 screenUv = gl_FragCoord.xy / uScreenSize;
+        vec2 nViewXY  = normalize(vViewSpaceNormal).xy;
+        vec2 refractOffset = nViewXY * (uIor - 1.0) * uRefractionStrength * 0.1;
+        vec2 sampleUv = clamp(screenUv + refractOffset, vec2(0.001), vec2(0.999));
+        vec3 refracted = texture(uBackbufferCopy, sampleUv).rgb;
+        colorOut = mix(refracted, lighting, effectiveOpacity);
+    }
+
+    if (uOitPass == 1) {
+        // F2H64: OIT Weighted Blended (McGuire & Bavoil 2013).
+        float depth  = gl_FragCoord.z;
+        float weight = clamp(
+            pow(min(1.0, effectiveOpacity * 10.0) + 0.01, 3.0)
+                * 1e8 * pow(1.0 - depth * 0.9, 3.0),
+            1e-2, 3e3);
+        FragColor = vec4(colorOut * effectiveOpacity, effectiveOpacity) * weight;
+        NormalRT  = vec4(effectiveOpacity);
         return;
     }
 
-    // Translucent: refraccion screen-space + composicion in-shader.
-    vec2 screenUv = gl_FragCoord.xy / uScreenSize;
-    vec2 nViewXY  = normalize(vViewSpaceNormal).xy;
-    vec2 refractOffset = nViewXY * (uIor - 1.0) * uRefractionStrength * 0.1;
-    vec2 sampleUv = clamp(screenUv + refractOffset, vec2(0.001), vec2(0.999));
-    vec3 refracted = texture(uBackbufferCopy, sampleUv).rgb;
-    vec3 finalColor = mix(refracted, lighting, effectiveOpacity);
-    FragColor = vec4(finalColor, 1.0);
+    if (uBlendMode == 2) {
+        FragColor = vec4(colorOut * effectiveOpacity, effectiveOpacity);
+    } else {
+        FragColor = vec4(colorOut, 1.0);
+    }
     NormalRT  = vec4(0.0);
 }

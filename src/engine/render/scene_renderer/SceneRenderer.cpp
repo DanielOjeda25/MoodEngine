@@ -28,6 +28,7 @@
 #include "engine/render/backend/opengl/OpenGLCubemapTexture.h"
 #include "engine/render/backend/opengl/OpenGLDebugRenderer.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
+#include "engine/render/backend/opengl/OpenGLOitFramebuffer.h"  // F2H64
 #include "engine/render/backend/opengl/OpenGLInstanceBuffer.h"
 #include "engine/render/backend/opengl/OpenGLParticleRenderer.h"
 #include "engine/render/backend/opengl/OpenGLRenderer.h"
@@ -154,6 +155,20 @@ SceneRenderer::SceneRenderer()
         m_grid2dShader.reset();
     }
     glGenVertexArrays(1, &m_grid2dVao);
+
+    // F2H64: composite OIT. Fullscreen tri (post_process.vert genera la
+    // posicion desde gl_VertexID); fragment lee accum + revealage del FB
+    // OIT y compone sobre el scene FB via blend hardware.
+    try {
+        m_oitCompositeShader = std::make_unique<OpenGLShader>(
+            "shaders/post_process.vert", "shaders/oit_composite.frag");
+    } catch (const std::exception& e) {
+        Log::render()->warn("OitCompositeShader no disponible: {}. Translucents OIT "
+                             "no funcionaran -- pase translucent skipeado por frame.",
+                             e.what());
+        m_oitCompositeShader.reset();
+    }
+    glGenVertexArrays(1, &m_oitCompositeVao);
 
     // F2H4: VBO recyclable para subir las matrices model cada frame.
     m_instanceBuffer = std::make_unique<OpenGLInstanceBuffer>();
@@ -305,6 +320,8 @@ SceneRenderer::~SceneRenderer() {
     }
     m_debugRenderer.reset();
     // F2H28: tirar FBOs orto + shaders orto antes del contexto GL.
+    if (m_oitCompositeVao != 0) glDeleteVertexArrays(1, &m_oitCompositeVao); // F2H64
+    m_oitCompositeShader.reset(); // F2H64
     if (m_grid2dVao != 0) glDeleteVertexArrays(1, &m_grid2dVao);
     m_grid2dShader.reset();
     for (auto& fb : m_orthoFbs) fb.reset();
@@ -314,6 +331,8 @@ SceneRenderer::~SceneRenderer() {
     m_pbrShader.reset();
     m_instanceBuffer.reset();
     m_viewportFb.reset();
+    m_oitAccumFb.reset();      // F2H64 (antes que sceneFb: depende de su depth tex)
+    m_backbufferCopyFb.reset();// F2H63
     m_bloomFb.reset();   // F2H55
     m_colorGradingFb.reset();  // F2H58
     m_ssrFb.reset();     // F2H61
@@ -457,6 +476,18 @@ void SceneRenderer::synthesizeIdentityLut() {
     m_identityLutId = static_cast<u32>(tex);
     Log::render()->info("ColorGrading: identity LUT sintetizada (id={}, 256x16 RGBA8 lineal)",
                          m_identityLutId);
+}
+
+void SceneRenderer::ensureOitFb(u32 width, u32 height) {
+    if (!m_sceneFb) return;
+    if (width == 0 || height == 0) return;
+    const GLuint depthTex = m_sceneFb->glDepthTextureId();
+    if (depthTex == 0) return;  // scene FB en modo LDR no expone depth tex
+    if (!m_oitAccumFb) {
+        m_oitAccumFb = std::make_unique<OpenGLOitFramebuffer>(width, height, depthTex);
+        return;
+    }
+    m_oitAccumFb->resize(width, height, depthTex);
 }
 
 bool SceneRenderer::blitSceneToBackbufferCopy() {
