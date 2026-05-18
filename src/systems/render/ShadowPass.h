@@ -97,12 +97,18 @@ public:
     ///        lit shader lo samplee como `sampler2DArrayShadow`.
     void bindShadowMap(u32 textureUnit) const;
 
+    /// @brief F2H64: bindea el color array RGBA8 a un texture unit. El
+    ///        pbr.frag lo samplea como `sampler2DArray` y multiplica la
+    ///        directional light por shadowColor.rgb (sombras tintadas).
+    void bindShadowColorMap(u32 textureUnit) const;
+
     /// @brief Tamano del shadow map (cuadrado).
     u32 shadowMapSize() const;
 
 private:
     std::unique_ptr<OpenGLShadowMapArray> m_shadowMapArray;
     std::unique_ptr<IShader> m_shader;
+    std::unique_ptr<IShader> m_tintedShader;  // F2H64: pase tinted (Translucent shadow casters)
     u32 m_cascadeCount = 1;
     std::array<glm::mat4, kMaxCsmCascades>     m_lightSpaces{};
     std::array<f32, kMaxCsmCascades + 1>       m_cascadeSplits{};

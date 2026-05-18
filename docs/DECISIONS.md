@@ -11,6 +11,61 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-18: F2H64 — OIT Weighted Blended + sombras tintadas
+
+**Contexto:** completar la línea de transparencia abierta en F2H63 (split de scope decidido en 2026-05-17). F2H63 entregó base visual; F2H64 entrega correctness: no flicker apilando translúcidos + vidrios proyectan sombras tintadas. Tag `v1.51.0-fase2-hito64`. Detalle en [`hitos/F2H64.md`](hitos/F2H64.md). El dev cerró con *"todo se ve ok"* tras tour visual (incluyó screenshot de cubo rojo + cubo verde con sombras del mismo color sobre suelo blanco: *"de 10!"*).
+
+**Decisión clave 1 — OIT Weighted Blended (McGuire & Bavoil 2013) reemplaza el sort de F2H63.**
+
+- **Approach:** 2 attachments nuevos (`accumColor` RGBA16F + `revealage` R16F) en un FB separado `m_oitAccumFb`, depth compartido con el scene FB. Shader emite `(rgb * α, α) * weight` al accum y `α` al revealage. Composite final divide `accum.rgb / accum.a` y mezcla con `glBlendFunc(GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA)`.
+- **Razón:** una sola forma de hacer las cosas. F2H63 sortaba back-to-front con tiebreaker por entity ID, suficiente para casos simples pero con flicker garantizado cuando 2 vidrios estaban a casi misma distancia. OIT es order-independent por construcción — el orden de iteración del registry de entt ya no importa.
+- **Alternativas descartadas:** mantener sort como fallback opcional → 2 paths de render que envejecen mal. Depth-peeling → más correcto pero N passes per N layers (cuello CPU/GPU); WBOIT es el sweet spot de calidad / costo.
+- **Limitación:** el weight es heurístico (McGuire); en escenas con rangos de profundidad extremos puede haber objetos cercanos que dominen demasiado. La fórmula del paper funciona bien para la mayoría; se ajusta si emerge artefacto concreto.
+
+**Decisión clave 2 — Uniform branching `uOitPass` sobre compilar 2 variantes del shader.**
+
+- **Approach:** un solo `pbr.frag` con `uniform int uOitPass`. Default 0 (path forward F2H63). Cuando 1, el branch translucent emite a accum/revealage en lugar de FragColor.
+- **Razón:** simplicidad runtime. La rama OIT solo se ejecuta en translucents (que son pocos), el costo del branch dinámico es despreciable. Compilar 2 variantes hubiera duplicado los OpenGLShader instances + el ShaderGraphCache + el path skinned + el path instanced. Trade-off claro a favor de simplicidad para este caso.
+- **Cuándo revisar:** si profileo el frame y aparece como cuello el branch en GPUs viejas, se puede compilar dual con `#ifdef` controlado por defines del shader graph cache.
+
+**Decisión clave 3 — FB OIT comparte depth con el scene FB (no propio).**
+
+- **Approach:** `OpenGLOitFramebuffer` recibe un `GLuint sharedDepthTextureId` externo y lo attachea via `glFramebufferTexture2D` durante el `invalidate()`/`resize()`. El caller (SceneRenderer) es dueño del depth.
+- **Razón:** depth-test contra opacos funciona automáticamente (los opacos ya escribieron su depth en el scene FB). Sin esto habría que hacer blit o resolve del depth, agregando cost por frame.
+- **Trade-off:** acoplamiento al lifecycle del scene FB. Si el scene FB recrea su depth en un resize, el OIT FB tiene que re-attachear el id actualizado. Resuelto con `ensureOitFb(w, h)` idempotente que re-attachea en cada resize.
+
+**Decisión clave 4 — Shadow atlas RGB con sub-pase tinted separado del opaque.**
+
+- **Approach:** `OpenGLShadowMapArray` extendida con un color attachment RGBA8 array paralelo a la depth array. `ShadowPass::recordCsm` hace 2 sub-pases por cascada: opaco (depth-only, filtra Translucent) + tinted (depth-write OFF, blend `ZERO/SRC_COLOR` multiplicativo, escribe `albedoTint * (1 - opacity)`).
+- **Razón fisica:** vidrios no ocluyen luz, la tintan. Si el opaque pass escribiera depth para Translucent, la luz quedaría bloqueada y el tinte sería sombra negra coloreada (no realista). Filtrar Translucent del opaque + agregarlos al tinted da el resultado correcto: luz pasa atenuada y coloreada.
+- **Trade-off:** cada Translucent con `castTranslucentShadow=true` agrega un draw call por cascada al shadow pass. Para 50+ vidrios + 4 cascadas se nota. Mitigación: opt-out per material via checkbox.
+
+**Decisión clave 5 — Default ON para `castTranslucentShadow` (opt-out, no opt-in).**
+
+- **Approach:** `MaterialAsset.castTranslucentShadow = true` por default. Inspector muestra checkbox "Proyectar sombra tintada" en Translucent (disabled en Opaque/Additive).
+- **Razón:** el look realista debe ser automático. El dev pone un material Translucent y "funciona": sombra tintada sin tener que recordar prender un checkbox. El escape hatch existe para escenas con muchos vidrios donde la perf manda.
+- **Persistencia aditiva:** solo se escribe `cast_translucent_shadow` al `.moodmat` cuando `blendMode == Translucent && castTranslucentShadow == false`. Los `.moodmat` históricos no se contaminan con la key nueva.
+
+**Decisión clave 6 — OIT compatible con shader graph desde día 1.**
+
+- **Approach:** el template `pbr_graph_template.frag` también emite ambos paths controlados por `uOitPass`. Los samples shipados (water/glass/hologram) funcionan sin migración.
+- **Razón:** si no lo hacíamos ahora, los samples que el dev validó hoy (transparencia) iban a flickearse al apilar. No tendría sentido cerrar F2H64 dejando el caso "shader graph + translúcido" roto.
+
+**Decisión clave 7 — Composite pass escribe solo a loc 0 del scene FB.**
+
+- **Approach:** `glDrawBuffers(1, { GL_COLOR_ATTACHMENT0 })` antes del fullscreen tri del composite. Restaurar a `(0, 1)` después.
+- **Razón:** el scene FB es MRT (color + normal para SSR). El composite no debe pisar las normales de los opacos en loc 1, sino el SSR vería "pixels sin normal PBR" donde hay translucents → no se reflejaría correctamente.
+
+**Decisión clave 8 — Brushes translúcidos quedan agendados (no entran a F2H64).**
+
+- **Contexto:** durante validación el dev preguntó por brushes con material Translucent. Confirmamos: `RenderBatching::groupByBatch` solo itera MeshRenderer; los brushes van por el `brushPass` en medio del opaque path. Con material Translucent hoy se ven mal.
+- **Decisión:** documentar como limitación + agendar como **F2H65 — Brushes translúcidos OIT** (~2-3h). Razón: no inflar F2H64 con scope adicional. La base actual ya cierra el caso 95%.
+- **Workaround mientras tanto:** convertir brush a mesh (Hammer-style "make detail").
+
+**Tests post-F2H64:** suite global **975/9927 verde** (971 previos F2H63 + 4 nuevos: cast_translucent_shadow roundtrip + back-compat). Test del sort F2H63 eliminado (1 case neto +3).
+
+---
+
 ## 2026-05-17: F2H63 — Transparencia base (alpha + refracción screen-space)
 
 **Contexto:** pedido del dev al cierre F2H62: *"un motor grafico debe tener transparentes"*. Discusión de scope arrancó con un approach minimal (BlendMode + sort back-to-front), pero el dev pidió *"transparencia o traslucido realista, nada de simulaciones que no tengan sentido, esto es un motor realista"*. Mega-hito de ~30h (OIT + refracción + sombras translúcidas + UI + Shader Graph extensión) era riesgo de regresión. Tag `v1.50.0-fase2-hito63`. Detalle en [`hitos/F2H63.md`](hitos/F2H63.md).

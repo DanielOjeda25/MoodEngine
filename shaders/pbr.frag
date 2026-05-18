@@ -135,6 +135,7 @@ uniform float        uIblIntensity;      // Hito 18: multiplicador del IBL
 #define MAX_CSM_CASCADES 4
 uniform int                  uShadowEnabled;
 uniform sampler2DArrayShadow uShadowMap;     // unit 1
+uniform sampler2DArray       uShadowColorMap; // unit 8 (F2H64: sombras tintadas)
 uniform float                uShadowBias;
 uniform int                  uCascadeCount;                       // 1..MAX_CSM_CASCADES
 uniform mat4                 uLightSpaces[MAX_CSM_CASCADES];
@@ -192,11 +193,15 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 // a NDC, mapea a [0,1], aplica bias, y samplea con PCF 3x3 sobre el layer
 // correspondiente del 2D-array. Cada `texture()` con sampler2DArrayShadow
 // hace 4 taps hardware-PCF, totalizando 9 * 4 = 36 muestras efectivas.
-float sampleShadowCascade(vec3 worldPos, int cascadeIdx) {
+// F2H60 + F2H64: devuelve vec4(shadowFactor, tint.rgb). El shadowFactor
+// es el resultado del compare-PCF (0=en sombra, 1=iluminado) y tint.rgb
+// es el color RGBA8 acumulado por los translucent shadow casters del
+// shadow pass tinted (default blanco = sin tinte).
+vec4 sampleShadowCascade(vec3 worldPos, int cascadeIdx) {
     vec4 lightSpacePos = uLightSpaces[cascadeIdx] * vec4(worldPos, 1.0);
     vec3 proj = lightSpacePos.xyz / max(lightSpacePos.w, 1e-5);
     proj = proj * 0.5 + 0.5;
-    if (proj.z > 1.0) return 1.0;
+    if (proj.z > 1.0) return vec4(1.0);
     // Bias escalado por indice de cascada: cascadas lejanas tienen texel
     // mas grande, necesitan mas bias para evitar acne. Crecimiento lineal
     // simple (x1, x2, x3, x4) — suficiente para evitar acne sin generar
@@ -216,15 +221,24 @@ float sampleShadowCascade(vec3 worldPos, int cascadeIdx) {
                                   refDepth));
         }
     }
-    return sum / 9.0;
+    float shadowF = sum / 9.0;
+
+    // F2H64: sample del color attachment del shadow atlas en la misma
+    // posicion (sin PCF -- 1 tap LINEAR es suficiente para tintes
+    // suaves). Si no hay translucents en esa region, el texel quedo en
+    // (1,1,1,1) por el clear -> tint=blanco, multiplica por 1.0.
+    vec3 tint = texture(uShadowColorMap,
+                         vec3(proj.xy, float(cascadeIdx))).rgb;
+    return vec4(shadowF, tint);
 }
 
 // F2H60: elige cascada por `vViewSpaceZ` y samplea. Si el fragment esta
 // cerca del borde de la cascada actual (ultimo 10% del rango), blend con
 // la cascada siguiente para evitar banding visible al cruzar fronteras.
 // Si no hay cascada siguiente (en la ultima), no hay blend.
-float sampleShadow(vec3 worldPos) {
-    if (uShadowEnabled == 0) return 1.0;
+// F2H64: devuelve vec4 (shadowFactor + tint).
+vec4 sampleShadow(vec3 worldPos) {
+    if (uShadowEnabled == 0) return vec4(1.0);
 
     int cascadeIdx = uCascadeCount - 1;  // fallback: ultima cascada
     for (int i = 0; i < uCascadeCount; ++i) {
@@ -233,7 +247,7 @@ float sampleShadow(vec3 worldPos) {
             break;
         }
     }
-    float sNear = sampleShadowCascade(worldPos, cascadeIdx);
+    vec4 sNear = sampleShadowCascade(worldPos, cascadeIdx);
 
     // Blend con la siguiente cascada en el ultimo 15% del rango. Esto
     // evita el "salto" visual visible cuando un fragment cruza la
@@ -246,7 +260,7 @@ float sampleShadow(vec3 worldPos) {
         const float kBlendStart = 0.85;
         if (t > kBlendStart) {
             float w = (t - kBlendStart) / (1.0 - kBlendStart);  // 0..1
-            float sFar = sampleShadowCascade(worldPos, cascadeIdx + 1);
+            vec4 sFar = sampleShadowCascade(worldPos, cascadeIdx + 1);
             return mix(sNear, sFar, w);
         }
     }
@@ -373,9 +387,14 @@ void main() {
     if (uDirectional.enabled == 1) {
         vec3 L = normalize(-uDirectional.direction);
         vec3 radiance = uDirectional.color * uDirectional.intensity;
-        float shadowF = sampleShadow(vWorldPos);  // F2H60: pasa worldPos para que el frag elija cascada CSM.
+        // F2H64: sampleShadow ahora devuelve vec4 (shadowFactor + tint).
+        // El tint default es blanco (sin tinte); cuando un translucent
+        // proyecta sombra, el tint queda multiplicado por su albedo.
+        vec4 shadowSample = sampleShadow(vWorldPos);
+        float shadowF    = shadowSample.r;
+        vec3  shadowTint = shadowSample.gba;
         lo += evalBrdf(N, V, L, radiance, albedo, metallic, roughness, F0)
-              * shadowF;
+              * shadowF * shadowTint;
     }
 
     // Point lights via Forward+ tile lookup. gl_FragCoord.xy esta en

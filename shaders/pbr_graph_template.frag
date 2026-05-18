@@ -149,6 +149,7 @@ uniform float        uIblIntensity;      // Hito 18: multiplicador del IBL
 #define MAX_CSM_CASCADES 4
 uniform int                  uShadowEnabled;
 uniform sampler2DArrayShadow uShadowMap;     // unit 1
+uniform sampler2DArray       uShadowColorMap; // unit 8 (F2H64: sombras tintadas)
 uniform float                uShadowBias;
 uniform int                  uCascadeCount;                       // 1..MAX_CSM_CASCADES
 uniform mat4                 uLightSpaces[MAX_CSM_CASCADES];
@@ -206,15 +207,12 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 // a NDC, mapea a [0,1], aplica bias, y samplea con PCF 3x3 sobre el layer
 // correspondiente del 2D-array. Cada `texture()` con sampler2DArrayShadow
 // hace 4 taps hardware-PCF, totalizando 9 * 4 = 36 muestras efectivas.
-float sampleShadowCascade(vec3 worldPos, int cascadeIdx) {
+// F2H64: devuelve vec4 (shadowFactor + tint.rgb). Mismo contrato que pbr.frag.
+vec4 sampleShadowCascade(vec3 worldPos, int cascadeIdx) {
     vec4 lightSpacePos = uLightSpaces[cascadeIdx] * vec4(worldPos, 1.0);
     vec3 proj = lightSpacePos.xyz / max(lightSpacePos.w, 1e-5);
     proj = proj * 0.5 + 0.5;
-    if (proj.z > 1.0) return 1.0;
-    // Bias escalado por indice de cascada: cascadas lejanas tienen texel
-    // mas grande, necesitan mas bias para evitar acne. Crecimiento lineal
-    // simple (x1, x2, x3, x4) — suficiente para evitar acne sin generar
-    // peter-panning visible en la cascada 0.
+    if (proj.z > 1.0) return vec4(1.0);
     float biasScale = float(cascadeIdx + 1);
     float refDepth = proj.z - uShadowBias * biasScale;
 
@@ -223,44 +221,40 @@ float sampleShadowCascade(vec3 worldPos, int cascadeIdx) {
     for (int y = -1; y <= 1; ++y) {
         for (int x = -1; x <= 1; ++x) {
             vec2 offset = vec2(float(x), float(y)) * texelSize;
-            // sampler2DArrayShadow: coord (x, y, layer, refDepth).
             sum += texture(uShadowMap,
                             vec4(proj.xy + offset,
                                   float(cascadeIdx),
                                   refDepth));
         }
     }
-    return sum / 9.0;
+    float shadowF = sum / 9.0;
+    vec3 tint = texture(uShadowColorMap,
+                         vec3(proj.xy, float(cascadeIdx))).rgb;
+    return vec4(shadowF, tint);
 }
 
-// F2H60: elige cascada por `vViewSpaceZ` y samplea. Si el fragment esta
-// cerca del borde de la cascada actual (ultimo 10% del rango), blend con
-// la cascada siguiente para evitar banding visible al cruzar fronteras.
-// Si no hay cascada siguiente (en la ultima), no hay blend.
-float sampleShadow(vec3 worldPos) {
-    if (uShadowEnabled == 0) return 1.0;
+// F2H64: devuelve vec4.
+vec4 sampleShadow(vec3 worldPos) {
+    if (uShadowEnabled == 0) return vec4(1.0);
 
-    int cascadeIdx = uCascadeCount - 1;  // fallback: ultima cascada
+    int cascadeIdx = uCascadeCount - 1;
     for (int i = 0; i < uCascadeCount; ++i) {
         if (vViewSpaceZ < uCascadeSplits[i + 1]) {
             cascadeIdx = i;
             break;
         }
     }
-    float sNear = sampleShadowCascade(worldPos, cascadeIdx);
+    vec4 sNear = sampleShadowCascade(worldPos, cascadeIdx);
 
-    // Blend con la siguiente cascada en el ultimo 15% del rango. Esto
-    // evita el "salto" visual visible cuando un fragment cruza la
-    // frontera entre cascada i y cascada i+1.
     if (cascadeIdx + 1 < uCascadeCount) {
         float splitNear = uCascadeSplits[cascadeIdx];
         float splitFar  = uCascadeSplits[cascadeIdx + 1];
         float range = max(splitFar - splitNear, 1e-4);
-        float t = (vViewSpaceZ - splitNear) / range;  // 0..1 dentro de la cascada
+        float t = (vViewSpaceZ - splitNear) / range;
         const float kBlendStart = 0.85;
         if (t > kBlendStart) {
-            float w = (t - kBlendStart) / (1.0 - kBlendStart);  // 0..1
-            float sFar = sampleShadowCascade(worldPos, cascadeIdx + 1);
+            float w = (t - kBlendStart) / (1.0 - kBlendStart);
+            vec4 sFar = sampleShadowCascade(worldPos, cascadeIdx + 1);
             return mix(sNear, sFar, w);
         }
     }
@@ -394,9 +388,12 @@ __SHADERGRAPH_DECLS__
     if (uDirectional.enabled == 1) {
         vec3 L = normalize(-uDirectional.direction);
         vec3 radiance = uDirectional.color * uDirectional.intensity;
-        float shadowF = sampleShadow(vWorldPos);  // F2H60: pasa worldPos para que el frag elija cascada CSM.
+        // F2H64: sampleShadow devuelve vec4 (factor + tint).
+        vec4 shadowSample = sampleShadow(vWorldPos);
+        float shadowF    = shadowSample.r;
+        vec3  shadowTint = shadowSample.gba;
         lo += evalBrdf(N, V, L, radiance, albedo, metallic, roughness, F0)
-              * shadowF;
+              * shadowF * shadowTint;
     }
 
     // Point lights via Forward+ tile lookup. gl_FragCoord.xy esta en

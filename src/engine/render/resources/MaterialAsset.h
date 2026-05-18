@@ -102,6 +102,15 @@ struct MaterialAsset {
     /// (igual que IOR=1). Permite "refraccion suave" en materiales con
     /// IOR fisico alto sin distorsionar tanto. Solo `Translucent`.
     f32 refractionStrength = 0.0f;
+
+    /// F2H64: si true, el material participa del shadow pass tinted
+    /// (el vidrio proyecta sombra coloreada en lugar de sombra opaca).
+    /// Default ON para que vidrios nuevos tinten automaticamente; el dev
+    /// puede apagarlo per material para optimizar escenas con muchos
+    /// translucents (cada uno duplica el shadow draw).
+    /// Solo aplica si `blendMode == Translucent` (Additive no tiene
+    /// sentido fisico para shadow caster).
+    bool castTranslucentShadow = true;
 };
 
 } // namespace Mood

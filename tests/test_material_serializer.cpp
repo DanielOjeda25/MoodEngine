@@ -502,6 +502,107 @@ TEST_CASE("saveMaterial F2H63: Additive con opacity!=1 persiste opacity") {
     std::filesystem::remove(fs, ec);
 }
 
+// --------------------------------------------------------------------------
+// F2H64: cast_translucent_shadow (sombras tintadas por material)
+// --------------------------------------------------------------------------
+
+TEST_CASE("loadMaterial F2H64: cast_translucent_shadow default true cuando JSON no lo trae") {
+    const std::string name = uniqueName("load_cast_default");
+    const std::string logical = writeMaterial(name, R"({
+        "blend_mode": "translucent",
+        "opacity": 0.3
+    })");
+
+    AssetManager am("assets", nullFactory());
+    MaterialAsset* mat = am.getMaterial(am.loadMaterial(logical));
+    REQUIRE(mat != nullptr);
+    CHECK(mat->castTranslucentShadow == true);  // default ON
+
+    std::error_code ec;
+    std::filesystem::remove(std::filesystem::path("assets") / "materials" / name, ec);
+}
+
+TEST_CASE("loadMaterial F2H64: cast_translucent_shadow=false se respeta") {
+    const std::string name = uniqueName("load_cast_false");
+    const std::string logical = writeMaterial(name, R"({
+        "blend_mode": "translucent",
+        "opacity": 0.5,
+        "cast_translucent_shadow": false
+    })");
+
+    AssetManager am("assets", nullFactory());
+    MaterialAsset* mat = am.getMaterial(am.loadMaterial(logical));
+    REQUIRE(mat != nullptr);
+    CHECK(mat->castTranslucentShadow == false);
+
+    std::error_code ec;
+    std::filesystem::remove(std::filesystem::path("assets") / "materials" / name, ec);
+}
+
+TEST_CASE("saveMaterial F2H64: Translucent con castTranslucentShadow=false roundtrip") {
+    const std::string name = uniqueName("save_cast_false_roundtrip");
+    const std::string logical = writeMaterial(name, R"({})");
+
+    AssetManager am("assets", nullFactory());
+    const MaterialAssetId id = am.loadMaterial(logical);
+    MaterialAsset* mat = am.getMaterial(id);
+    REQUIRE(mat != nullptr);
+    mat->blendMode             = BlendMode::Translucent;
+    mat->opacity               = 0.5f;
+    mat->castTranslucentShadow = false;
+
+    REQUIRE(am.saveMaterial(id));
+
+    // Verificar que el JSON contiene cast_translucent_shadow=false
+    // (default true -> solo se persiste cuando difiere).
+    const auto fs = std::filesystem::path("assets") / "materials" / name;
+    std::string content;
+    {
+        std::ifstream in(fs);
+        content.assign((std::istreambuf_iterator<char>(in)),
+                       std::istreambuf_iterator<char>());
+    }
+    CHECK(content.find("\"cast_translucent_shadow\"") != std::string::npos);
+    CHECK(content.find("false") != std::string::npos);
+
+    // Roundtrip.
+    AssetManager am2("assets", nullFactory());
+    MaterialAsset* reloaded = am2.getMaterial(am2.loadMaterial(logical));
+    REQUIRE(reloaded != nullptr);
+    CHECK(reloaded->castTranslucentShadow == false);
+
+    std::error_code ec;
+    std::filesystem::remove(fs, ec);
+}
+
+TEST_CASE("saveMaterial F2H64: castTranslucentShadow=true (default) NO se persiste") {
+    // Mismo patron que ior=1.0 default: no contaminar JSONs historicos.
+    const std::string name = uniqueName("save_cast_default_omitted");
+    const std::string logical = writeMaterial(name, R"({})");
+
+    AssetManager am("assets", nullFactory());
+    const MaterialAssetId id = am.loadMaterial(logical);
+    MaterialAsset* mat = am.getMaterial(id);
+    REQUIRE(mat != nullptr);
+    mat->blendMode = BlendMode::Translucent;
+    mat->opacity   = 0.5f;
+    // castTranslucentShadow queda en default true.
+
+    REQUIRE(am.saveMaterial(id));
+
+    const auto fs = std::filesystem::path("assets") / "materials" / name;
+    std::string content;
+    {
+        std::ifstream in(fs);
+        content.assign((std::istreambuf_iterator<char>(in)),
+                       std::istreambuf_iterator<char>());
+    }
+    CHECK(content.find("\"cast_translucent_shadow\"") == std::string::npos);
+
+    std::error_code ec;
+    std::filesystem::remove(fs, ec);
+}
+
 TEST_CASE("saveMaterial: campos de textura ausentes en JSON cuando slot=0") {
     const std::string name = uniqueName("save_no_textures");
     const std::string logical = writeMaterial(name, R"({

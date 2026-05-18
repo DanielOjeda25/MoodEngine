@@ -292,6 +292,7 @@ void SceneRenderer::renderScene(Scene& scene,
     // format ... sampled with shadow sampler".
     if (m_shadowPass) {
         m_shadowPass->bindShadowMap(1);
+        m_shadowPass->bindShadowColorMap(8);  // F2H64: sombras tintadas
     }
 
     // Lambda con TODOS los uniforms del shader de escena.
@@ -311,6 +312,7 @@ void SceneRenderer::renderScene(Scene& scene,
         // estos uniforms no se leen — pero igual seteamos defaults para
         // que la sampler unit no quede sin asignar (UB del driver).
         sh.setInt  ("uBackbufferCopy",  7);
+        sh.setInt  ("uShadowColorMap",  8);  // F2H64: sombras tintadas
         sh.setVec2 ("uScreenSize",
                     glm::vec2(static_cast<f32>(fbW), static_cast<f32>(fbH)));
         m_lightSystem->bindUniforms(sh, lights, cameraPos);

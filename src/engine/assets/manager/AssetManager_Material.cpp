@@ -113,6 +113,7 @@ MaterialAssetId AssetManager::loadMaterial(std::string_view logicalPath) {
     if (j.contains("opacity"))              mat->opacity            = j.at("opacity").get<f32>();
     if (j.contains("ior"))                  mat->ior                = j.at("ior").get<f32>();
     if (j.contains("refraction_strength"))  mat->refractionStrength = j.at("refraction_strength").get<f32>();
+    if (j.contains("cast_translucent_shadow")) mat->castTranslucentShadow = j.at("cast_translucent_shadow").get<bool>();
 
     const MaterialAssetId id = static_cast<MaterialAssetId>(m_materials.size());
     m_materials.push_back(std::move(mat));
@@ -310,6 +311,11 @@ bool AssetManager::saveMaterial(MaterialAssetId id) {
         if (mat->opacity != 1.0f)              j["opacity"]             = mat->opacity;
         if (mat->ior != 1.0f)                  j["ior"]                 = mat->ior;
         if (mat->refractionStrength != 0.0f)   j["refraction_strength"] = mat->refractionStrength;
+        // F2H64: persistir cast_translucent_shadow solo si difiere del default (true)
+        // y el material es Translucent (no aplica a Additive).
+        if (mat->blendMode == BlendMode::Translucent && !mat->castTranslucentShadow) {
+            j["cast_translucent_shadow"] = false;
+        }
     }
 
     std::ofstream out(fs);

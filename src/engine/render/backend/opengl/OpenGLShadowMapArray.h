@@ -40,7 +40,11 @@ public:
     /// @brief Bindea el FBO + re-attacha `layerIdx` del array como depth
     ///        target + setea el viewport a `size x size`. Llamar antes
     ///        de renderear cada cascada.
-    void bindLayerAsTarget(u32 layerIdx) const;
+    ///
+    ///        F2H64: `withColor=true` ademas attachea el layer del color
+    ///        attachment (sombras tintadas). Cuando false (default,
+    ///        backward-compat), DrawBuffer queda en GL_NONE como en F2H60.
+    void bindLayerAsTarget(u32 layerIdx, bool withColor = false) const;
 
     /// @brief Restaura el framebuffer por defecto.
     void unbind() const;
@@ -49,12 +53,18 @@ public:
     ///        bindee como `sampler2DArrayShadow`.
     GLuint glDepthTextureId() const { return m_depthTexture; }
 
+    /// @brief F2H64: GLuint de la color array RGBA8 para sombras tintadas.
+    ///        El pbr.frag la samplea como `sampler2DArray` y multiplica
+    ///        la dir light por shadowColor.rgb.
+    GLuint glColorTextureId() const { return m_colorTexture; }
+
     u32 size()         const { return m_size; }
     u32 cascadeCount() const { return m_cascadeCount; }
 
 private:
     GLuint m_fbo            = 0;
     GLuint m_depthTexture   = 0;
+    GLuint m_colorTexture   = 0;   // F2H64: RGBA8 array para sombras tintadas
     u32    m_size           = 0;
     u32    m_cascadeCount   = 0;
 };

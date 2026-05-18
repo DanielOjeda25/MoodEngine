@@ -360,6 +360,23 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
                     },
                     "Editar refraction strength");
                 ImGui::EndDisabled();
+
+                // F2H64: checkbox "Proyectar sombra tintada". Solo aplica a
+                // Translucent (Additive no tiene sentido como shadow caster).
+                ImGui::BeginDisabled(mat->blendMode != BlendMode::Translucent);
+                if (ImGui::Checkbox(
+                        I18n::T("editor.panel.inspector.mesh.cast_translucent_shadow").c_str(),
+                        &mat->castTranslucentShadow)) {
+                    m_editedThisFrame = true;
+                }
+                detail::pushEditIfDone<u32>(m_editTracker, m_ui, e,
+                    static_cast<u32>(mat->castTranslucentShadow ? 1u : 0u),
+                    [assetsCap, matIdCap](Entity&, const u32& v) {
+                        if (auto* m = assetsCap->getMaterial(matIdCap))
+                            m->castTranslucentShadow = (v != 0u);
+                    },
+                    "Editar cast translucent shadow");
+                ImGui::EndDisabled();
             }
         }
 

@@ -290,15 +290,17 @@ TEST_CASE("groupByBatch F2H63: translucent fuera del frustum es culled (no entra
     CHECK(r.culledCount == 1u);
 }
 
-TEST_CASE("groupByBatch F2H63: sort back-to-front por distancia^2 (validacion del comparator)") {
-    // No invocamos al sort del renderer aca (no es pure), pero
-    // verificamos que worldCenter permite un sort correcto -- el dato
-    // que el SceneRenderer usa.
+TEST_CASE("groupByBatch F2H64: order-independent bucket (sin sort)") {
+    // F2H64: el oitPass del SceneRenderer reemplaza el sort back-to-front
+    // de F2H63 por un algoritmo OIT Weighted Blended (McGuire 2013) que
+    // produce el mismo resultado sin importar el orden. Este test verifica
+    // que el bucket `translucents` preserve los datos correctos
+    // (worldCenter para debug + entity handle) sin asumir un orden
+    // particular -- el renderer ya no ordena.
     Scene s;
     AssetManager assets("assets", stubFactoryBatch());
     const MaterialAssetId trans = makeBlendMaterial(assets, BlendMode::Translucent);
 
-    // 3 entidades a distintas distancias de la camara en origen.
     spawnCube(s, glm::vec3(0.0f, 0.0f,  -3.0f), {trans});  // cerca
     spawnCube(s, glm::vec3(0.0f, 0.0f, -10.0f), {trans});  // lejos
     spawnCube(s, glm::vec3(0.0f, 0.0f,  -6.0f), {trans});  // medio
@@ -306,19 +308,20 @@ TEST_CASE("groupByBatch F2H63: sort back-to-front por distancia^2 (validacion de
     const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
     REQUIRE(r.translucents.size() == 3u);
 
-    // Aplicar el sort comparator que usa el SceneRenderer.
-    auto sorted = r.translucents;
-    const glm::vec3 cam(0.0f);
-    std::sort(sorted.begin(), sorted.end(),
-              [&](const TranslucentDraw& a, const TranslucentDraw& b) {
-                  const f32 dA = glm::dot(a.worldCenter - cam, a.worldCenter - cam);
-                  const f32 dB = glm::dot(b.worldCenter - cam, b.worldCenter - cam);
-                  return dA > dB;
-              });
-    // Orden esperado farthest-first: -10, -6, -3.
-    CHECK(sorted[0].worldCenter.z == doctest::Approx(-10.0f).epsilon(0.001));
-    CHECK(sorted[1].worldCenter.z == doctest::Approx(-6.0f).epsilon(0.001));
-    CHECK(sorted[2].worldCenter.z == doctest::Approx(-3.0f).epsilon(0.001));
+    // Los 3 worldCenters quedan capturados (independientemente del orden
+    // de iteracion del registry de entt). Validamos via lookup.
+    std::vector<f32> zs;
+    zs.reserve(3);
+    for (const auto& td : r.translucents) zs.push_back(td.worldCenter.z);
+    std::sort(zs.begin(), zs.end());
+    CHECK(zs[0] == doctest::Approx(-10.0f).epsilon(0.001));
+    CHECK(zs[1] == doctest::Approx(-6.0f).epsilon(0.001));
+    CHECK(zs[2] == doctest::Approx(-3.0f).epsilon(0.001));
+
+    // Cada TranslucentDraw debe tener entity handle valido (no default).
+    for (const auto& td : r.translucents) {
+        CHECK(static_cast<bool>(td.entity));
+    }
 }
 
 TEST_CASE("BatchKey: lod distinto produce keys distintas") {

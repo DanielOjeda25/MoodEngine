@@ -30,11 +30,11 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H63 (2026-05-17)
+## 0.1. Último hito de feature — F2H64 (2026-05-18)
 
-**Transparencia base + refracción screen-space.** Tag `v1.50.0-fase2-hito63`. Detalle completo en [`hitos/F2H63.md`](hitos/F2H63.md). Validado por dev: *"todo ok"* (tras tour visual con los 3 samples water/glass/hologram).
+**OIT Weighted Blended + sombras tintadas.** Tag `v1.51.0-fase2-hito64`. Detalle completo en [`hitos/F2H64.md`](hitos/F2H64.md). Validado por dev: *"todo se ve ok"* (tras tour OIT sin flicker + sombras rojo/verde sobre suelo blanco).
 
-**Entrega base visual de translúcidos** (BlendMode Opaque/Translucent/Additive + IOR + Fresnel auto-opacity + screen-space refraction + 6º input Opacity en el Shader Graph). OIT + sombras translúcidas quedan agendadas para F2H64.
+**Cierra la línea de transparencia abierta en F2H63**: ya no hay flicker al apilar translúcidos (algoritmo order-independent, McGuire 2013), los vidrios proyectan sombras tintadas según su `albedoTint * (1-opacity)`, y el dev puede apagar el tinte per material via checkbox "Proyectar sombra tintada". Brushes translúcidos quedan agendados para F2H65.
 
 ---
 
@@ -49,11 +49,15 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ### En curso
 
-- **Sub-fase 2.6** (Render polish): F2H55, F2H56, F2H58, F2H59, F2H60, F2H61, F2H62, F2H63 cerrados. AUDIT-1, AUDIT-2, AUDIT-3 cerrados.
+- **Sub-fase 2.6** (Render polish): F2H55, F2H56, F2H58, F2H59, F2H60, F2H61, F2H62, F2H63, F2H64 cerrados. AUDIT-1, AUDIT-2, AUDIT-3 cerrados.
 
 ### Próximo
 
-- **F2H64 — Transparencia correctness: OIT + sombras translúcidas** (Weighted Blended OIT McGuire/Bavoil 2013 para resolver flicker en escenas con muchos translúcidos solapados + sombras tintadas extendiendo el shadow atlas a RGB + opcionalmente refracción full Snell). Plan stub en [`PLAN_HITO_F2H64.md`](PLAN_HITO_F2H64.md).
+Roadmap inmediato (en orden tentativo, validar con el dev antes de arrancar):
+
+- **F2H64.1 — Shift+D duplicate** (~30 min). Mini-hito de quality-of-life. Pedido del dev durante F2H64. Atajo Blender-style para duplicar entity seleccionada + offset chico.
+- **F2H65 — Brushes translúcidos OIT** (~2-3h). Rutea `BrushComponent` con material Translucent al `oitPass` igual que MeshRenderer. Hoy los brushes con material Translucent se rendean en el opaque path (artefacto). Limitación documentada en F2H64.
+- **F2H66 — Skybox / HDRI switcher** (~2-3h). Dropdown en Environment para elegir entre HDRIs shipados (kloofendal brillante, neutro, atardecer, interior oscuro) o cargar custom. Pedido del dev durante F2H64: el HDRI fijo dificulta visualizar test de sombras tintadas tenues.
 
 ---
 

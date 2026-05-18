@@ -354,6 +354,7 @@
   "editor.panel.inspector.mesh.ior": "IOR (refraction index)",
   "editor.panel.inspector.mesh.ior_presets": "Water=1.33  Glass=1.50  Diamond=2.42",
   "editor.panel.inspector.mesh.refraction_strength": "Distortion",
+  "editor.panel.inspector.mesh.cast_translucent_shadow": "Cast tinted shadow",
 
   "editor.panel.inspector.camera.fov": "fov (deg)",
   "editor.panel.inspector.camera.near": "near",
