@@ -3,33 +3,30 @@
   "graph": {
     "_version": 1,
     "links": [
-      {"from":  6, "id": 1, "to":  1},
-      {"from":  7, "id": 2, "to": 11},
-      {"from":  8, "id": 3, "to": 12},
-      {"from": 10, "id": 4, "to": 13},
-      {"from": 14, "id": 5, "to":  5}
+      {"from": 6, "id": 1, "to": 1},
+      {"from": 7, "id": 2, "to": 5}
     ],
-    "next_link_id": 6,
-    "next_node_id": 7,
-    "next_socket_id": 15,
+    "next_link_id": 3,
+    "next_node_id": 4,
+    "next_socket_id": 8,
     "nodes": [
       {
         "custom_data": {
           "socket_literals": {
-            "1": [1.0, 1.0, 1.0, 0.0],
             "2": [0.0, 0.0, 0.0, 0.0],
-            "3": [0.35, 0.0, 0.0, 0.0],
+            "3": [0.4, 0.0, 0.0, 0.0],
             "4": [0.0, 0.0, 1.0, 0.0],
-            "5": [0.0, 0.0, 0.0, 0.0]
+            "15": [0.45, 0.0, 0.0, 0.0]
           }
         },
         "id": 1,
         "inputs": [
-          {"id": 1, "kind": 0, "name": "albedo",    "owner_node": 1, "type_tag": "vec3"},
-          {"id": 2, "kind": 0, "name": "metallic",  "owner_node": 1, "type_tag": "float"},
-          {"id": 3, "kind": 0, "name": "roughness", "owner_node": 1, "type_tag": "float"},
-          {"id": 4, "kind": 0, "name": "normal",    "owner_node": 1, "type_tag": "vec3"},
-          {"id": 5, "kind": 0, "name": "emissive",  "owner_node": 1, "type_tag": "vec3"}
+          {"id":  1, "kind": 0, "name": "albedo",    "owner_node": 1, "type_tag": "vec3"},
+          {"id":  2, "kind": 0, "name": "metallic",  "owner_node": 1, "type_tag": "float"},
+          {"id":  3, "kind": 0, "name": "roughness", "owner_node": 1, "type_tag": "float"},
+          {"id":  4, "kind": 0, "name": "normal",    "owner_node": 1, "type_tag": "vec3"},
+          {"id":  5, "kind": 0, "name": "emissive",  "owner_node": 1, "type_tag": "vec3"},
+          {"id": 15, "kind": 0, "name": "opacity",   "owner_node": 1, "type_tag": "float"}
         ],
         "outputs": [],
         "position": [600.0, 100.0],
@@ -45,73 +42,22 @@
         "outputs": [
           {"id": 6, "kind": 1, "name": "out", "owner_node": 2, "type_tag": "vec3"}
         ],
-        "position": [80.0, 40.0],
-        "title": "Color (albedo)",
+        "position": [80.0, 80.0],
+        "title": "Color (albedo oscuro)",
         "type_tag": "color"
       },
       {
         "custom_data": {
-          "value": [0.0, 0.0, 0.0, 1.0]
+          "value": [0.4, 2.5, 3.2, 1.0]
         },
         "id": 3,
         "inputs": [],
         "outputs": [
           {"id": 7, "kind": 1, "name": "out", "owner_node": 3, "type_tag": "vec3"}
         ],
-        "position": [80.0, 200.0],
-        "title": "Color (negro)",
+        "position": [80.0, 280.0],
+        "title": "Color (emissive cyan HDR)",
         "type_tag": "color"
-      },
-      {
-        "custom_data": {
-          "value": [0.2, 0.95, 1.2, 1.0]
-        },
-        "id": 4,
-        "inputs": [],
-        "outputs": [
-          {"id": 8, "kind": 1, "name": "out", "owner_node": 4, "type_tag": "vec3"}
-        ],
-        "position": [80.0, 320.0],
-        "title": "Color (cyan)",
-        "type_tag": "color"
-      },
-      {
-        "custom_data": {
-          "socket_literals": {
-            "9": [2.0, 0.0, 0.0, 0.0]
-          }
-        },
-        "id": 5,
-        "inputs": [
-          {"id": 9, "kind": 0, "name": "power", "owner_node": 5, "type_tag": "float"}
-        ],
-        "outputs": [
-          {"id": 10, "kind": 1, "name": "out", "owner_node": 5, "type_tag": "float"}
-        ],
-        "position": [80.0, 460.0],
-        "title": "Fresnel",
-        "type_tag": "fresnel"
-      },
-      {
-        "custom_data": {
-          "socket_literals": {
-            "11": [0.0, 0.0, 0.0, 0.0],
-            "12": [1.0, 1.0, 1.0, 0.0],
-            "13": [0.5, 0.0, 0.0, 0.0]
-          }
-        },
-        "id": 6,
-        "inputs": [
-          {"id": 11, "kind": 0, "name": "a", "owner_node": 6, "type_tag": "vec3"},
-          {"id": 12, "kind": 0, "name": "b", "owner_node": 6, "type_tag": "vec3"},
-          {"id": 13, "kind": 0, "name": "t", "owner_node": 6, "type_tag": "float"}
-        ],
-        "outputs": [
-          {"id": 14, "kind": 1, "name": "out", "owner_node": 6, "type_tag": "vec3"}
-        ],
-        "position": [340.0, 280.0],
-        "title": "Lerp",
-        "type_tag": "lerp"
       }
     ]
   },

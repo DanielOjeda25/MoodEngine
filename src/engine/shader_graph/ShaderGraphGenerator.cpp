@@ -364,7 +364,8 @@ GenResult generateGlsl(const Asset& asset, const std::string& templateSource) {
         return result;
     }
 
-    // Validar que la plantilla tiene los 6 marcadores esperados.
+    // Validar que la plantilla tiene los 7 marcadores esperados
+    // (F2H63 sumo __SHADERGRAPH_OPACITY__).
     const std::string requiredMarkers[] = {
         "__SHADERGRAPH_DECLS__",
         "__SHADERGRAPH_ALBEDO__",
@@ -372,6 +373,7 @@ GenResult generateGlsl(const Asset& asset, const std::string& templateSource) {
         "__SHADERGRAPH_ROUGHNESS__",
         "__SHADERGRAPH_NORMAL__",
         "__SHADERGRAPH_EMISSIVE__",
+        "__SHADERGRAPH_OPACITY__",
     };
     for (const auto& m : requiredMarkers) {
         if (templateSource.find(m) == std::string::npos) {
@@ -402,7 +404,8 @@ GenResult generateGlsl(const Asset& asset, const std::string& templateSource) {
     if (!outputNode || outputNode->inputs.size() < 5) {
         result.messages.push_back(
             {GenSeverity::Error,
-             "OutputPBR malformado (esperados 5 inputs, encontrados " +
+             "OutputPBR malformado (esperados al menos 5 inputs -- "
+             "6 con F2H63 opacity, encontrados " +
              std::to_string(outputNode ? outputNode->inputs.size() : 0) + ").",
              asset.outputNodeId()});
         result.messages.insert(result.messages.end(),
@@ -421,6 +424,12 @@ GenResult generateGlsl(const Asset& asset, const std::string& templateSource) {
     const std::string roughnessExpr = exprFor(2, kSocketType_Float);
     const std::string normalExpr    = exprFor(3, kSocketType_Vec3);
     const std::string emissiveExpr  = exprFor(4, kSocketType_Vec3);
+    // F2H63: opacity es el 6to input. Assets viejos (5 inputs) no
+    // tienen slot 5 -> exprFor cae al fallback. Para back-compat
+    // tratamos opacity ausente como literal 1.0 (full opaque).
+    const std::string opacityExpr   = (outputNode->inputs.size() >= 6)
+        ? exprFor(5, kSocketType_Float)
+        : std::string("1.0");
 
     // Substituir markers en la plantilla.
     std::string out = templateSource;
@@ -430,6 +439,7 @@ GenResult generateGlsl(const Asset& asset, const std::string& templateSource) {
     replaceOnce(out, "__SHADERGRAPH_ROUGHNESS__", roughnessExpr);
     replaceOnce(out, "__SHADERGRAPH_NORMAL__",    normalExpr);
     replaceOnce(out, "__SHADERGRAPH_EMISSIVE__",  emissiveExpr);
+    replaceOnce(out, "__SHADERGRAPH_OPACITY__",   opacityExpr);
 
     // Safety: si quedo algun marker sin reemplazar (la plantilla tiene el
     // marker en mas de un lugar -- p.ej. en un comentario Y en codigo, y

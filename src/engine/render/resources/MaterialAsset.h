@@ -25,6 +25,20 @@ namespace Mood {
 
 using TextureAssetId = u32;
 
+/// F2H63: modos de blending del material. Convencion industria
+/// (Unity URP / Unreal Material `Blend Mode` / Godot StandardMaterial3D).
+///   - **Opaque**: blending disabled, depth-write enabled. Path default.
+///   - **Translucent**: SRC_ALPHA / ONE_MINUS_SRC_ALPHA, depth-test ON,
+///     depth-write OFF. Sort back-to-front (F2H63) -> OIT (F2H64). El
+///     mas comun para vidrios, agua, hologramas.
+///   - **Additive**: SRC_ALPHA / ONE, depth-test ON, depth-write OFF.
+///     Para emissive (glow, fuego, magia). No sortea (commutative).
+enum class BlendMode : u8 {
+    Opaque      = 0,
+    Translucent = 1,
+    Additive    = 2,
+};
+
 struct MaterialAsset {
     /// Path logico usado por el serializer (p.ej. "materials/brass.material").
     std::string logicalPath;
@@ -66,6 +80,28 @@ struct MaterialAsset {
     /// drawear las entidades con este material. La compilacion on-the-fly
     /// + cache + fallback al PBR si falla son responsabilidad del Bloque E.
     std::string shaderGraphPath;
+
+    // --- F2H63: transparencia + refraccion ---
+
+    /// Modo de blending. `Opaque` = path tradicional (default, back-compat).
+    /// `Translucent` / `Additive` activan el translucent pass del SceneRenderer.
+    BlendMode blendMode = BlendMode::Opaque;
+
+    /// Alpha base del material (0-1). Solo aplica si `blendMode != Opaque`.
+    /// El shader combina este escalar con un Fresnel automatico (bordes mas
+    /// opacos, frente mas transparente) para dar el look "vidrio real".
+    f32 opacity = 1.0f;
+
+    /// Indice de refraccion (1.0 = sin refraccion). Presets fisicos:
+    ///   Aire = 1.00, Agua = 1.33, Vidrio = 1.50, Diamante = 2.42.
+    /// Solo aplica a `Translucent` (no a Additive). El shader convierte
+    /// (ior - 1.0) en magnitud de offset screen-space sobre el backbuffer.
+    f32 ior = 1.0f;
+
+    /// Multiplicador del offset de refraccion (0-1). 0 = sin distorsion
+    /// (igual que IOR=1). Permite "refraccion suave" en materiales con
+    /// IOR fisico alto sin distorsionar tanto. Solo `Translucent`.
+    f32 refractionStrength = 0.0f;
 };
 
 } // namespace Mood

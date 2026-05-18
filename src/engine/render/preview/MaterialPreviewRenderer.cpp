@@ -250,6 +250,19 @@ void MaterialPreviewRenderer::renderPreview(const MaterialAsset& mat,
     m_pbrShader->setFloat("uRoughnessMult", mat.roughnessMult);
     m_pbrShader->setFloat("uAoMult",        mat.aoMult);
 
+    // F2H63: el preview render siempre usa el path Opaque (la sphere
+    // preview no tiene un backbuffer detras para refractar; sin sentido
+    // mostrar transparencia en el thumbnail). El material translucido
+    // se previsualiza como si fuera opaco — tradeoff aceptable para v1.
+    m_pbrShader->setInt  ("uBlendMode",          0);
+    m_pbrShader->setFloat("uOpacity",            1.0f);
+    m_pbrShader->setFloat("uIor",                1.0f);
+    m_pbrShader->setFloat("uRefractionStrength", 0.0f);
+    m_pbrShader->setInt  ("uBackbufferCopy",     7);
+    m_pbrShader->setVec2 ("uScreenSize",
+                          glm::vec2(static_cast<f32>(m_width),
+                                    static_cast<f32>(m_height)));
+
     // ---- Draw ----
     glActiveTexture(GL_TEXTURE0);  // dejar texture 0 activa para el draw
     mesh->bind();

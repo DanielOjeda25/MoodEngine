@@ -39,10 +39,15 @@ TEST_CASE("ShaderGraph::Asset: createNode(OutputPBR) tracks outputNodeId") {
     CHECK(a.outputNodeId() == out);
     CHECK(a.graph().nodeCount() == 1);
 
-    // OutputPBR debe tener 5 inputs (albedo, metallic, roughness, normal, emissive).
+    // F2H63: OutputPBR tiene 6 inputs (albedo, metallic, roughness,
+    // normal, emissive, opacity). Assets viejos cargan con 5 -- el
+    // generator hace fallback. createNode siempre crea con la version
+    // actual.
     const Node* n = a.graph().findNode(out);
     REQUIRE(n != nullptr);
-    CHECK(n->inputs.size() == 5);
+    CHECK(n->inputs.size() == 6);
+    CHECK(n->inputs[5].typeTag == SG::kSocketType_Float);
+    CHECK(n->inputs[5].name    == "opacity");
     CHECK(n->outputs.empty());
     CHECK(n->title == "Output PBR");  // semantic label seteado por createNode
 }
@@ -151,7 +156,8 @@ float metallic = __SHADERGRAPH_METALLIC__;
 float roughness = __SHADERGRAPH_ROUGHNESS__;
 vec3 normal = __SHADERGRAPH_NORMAL__;
 vec3 emissive = __SHADERGRAPH_EMISSIVE__;
-FragColor = vec4(albedo + emissive, 1.0);
+float opacity = __SHADERGRAPH_OPACITY__;
+FragColor = vec4(albedo + emissive, opacity);
 }
 )";
 
@@ -253,7 +259,8 @@ float metallic = __SHADERGRAPH_METALLIC__;
 float roughness = __SHADERGRAPH_ROUGHNESS__;
 vec3 normal = __SHADERGRAPH_NORMAL__;
 vec3 emissive = __SHADERGRAPH_EMISSIVE__;
-FragColor = vec4(albedo + emissive, 1.0);
+float opacity = __SHADERGRAPH_OPACITY__;
+FragColor = vec4(albedo + emissive, opacity);
 }
 )";
     SG::Asset a;
@@ -378,4 +385,64 @@ TEST_CASE("Sample shipado: sample_gold.moodshader carga y compila") {
 
 TEST_CASE("Sample shipado: sample_hologram.moodshader carga y compila") {
     checkSampleCompiles("sample_hologram.moodshader");
+}
+
+TEST_CASE("Sample shipado F2H63: sample_glass.moodshader carga y compila") {
+    checkSampleCompiles("sample_glass.moodshader");
+}
+
+TEST_CASE("Generator F2H63: OutputPBR con 5 inputs (asset viejo) compila con opacity=1.0 fallback") {
+    // Back-compat: assets pre-F2H63 tienen 5 inputs (sin opacity). El
+    // generador debe emitir "1.0" como literal en lugar de fallar y
+    // dejar el marcador __SHADERGRAPH_OPACITY__ residual.
+    //
+    // Simulamos un asset viejo construyendo el JSON manualmente con 5
+    // sockets en OutputPBR (no podemos usar createNode porque crea 6).
+    const nlohmann::json j = nlohmann::json::parse(R"({
+        "_version": 1,
+        "graph": {
+            "_version": 1,
+            "links": [],
+            "next_link_id": 1,
+            "next_node_id": 2,
+            "next_socket_id": 6,
+            "nodes": [{
+                "custom_data": {
+                    "socket_literals": {
+                        "1": [1.0, 0.5, 0.2, 0.0],
+                        "2": [0.0, 0.0, 0.0, 0.0],
+                        "3": [0.5, 0.0, 0.0, 0.0],
+                        "4": [0.0, 0.0, 1.0, 0.0],
+                        "5": [0.0, 0.0, 0.0, 0.0]
+                    }
+                },
+                "id": 1,
+                "inputs": [
+                    {"id": 1, "kind": 0, "name": "albedo",    "owner_node": 1, "type_tag": "vec3"},
+                    {"id": 2, "kind": 0, "name": "metallic",  "owner_node": 1, "type_tag": "float"},
+                    {"id": 3, "kind": 0, "name": "roughness", "owner_node": 1, "type_tag": "float"},
+                    {"id": 4, "kind": 0, "name": "normal",    "owner_node": 1, "type_tag": "vec3"},
+                    {"id": 5, "kind": 0, "name": "emissive",  "owner_node": 1, "type_tag": "vec3"}
+                ],
+                "outputs": [],
+                "position": [0.0, 0.0],
+                "title": "Output PBR",
+                "type_tag": "output_pbr"
+            }]
+        },
+        "output_node_id": 1
+    })");
+    SG::Asset legacy = SG::Asset::fromJson(j);
+    // Confirmar que el load preservo los 5 sockets.
+    const Node* outNode = legacy.graph().findNode(legacy.outputNodeId());
+    REQUIRE(outNode != nullptr);
+    CHECK(outNode->inputs.size() == 5);
+
+    // Generar GLSL: el opacity expr debe ser literal "1.0".
+    auto res = SG::generateGlsl(legacy, k_tplFixture);
+    CHECK(res.succeeded);
+    CHECK(res.glsl.find("__SHADERGRAPH_") == std::string::npos);
+    // Verificar que el opacity literal "1.0" aparece en el GLSL emitido
+    // (en la linea `float opacity = ...;` del fixture).
+    CHECK(res.glsl.find("float opacity = 1.0;") != std::string::npos);
 }

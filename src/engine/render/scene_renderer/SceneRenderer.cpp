@@ -94,6 +94,13 @@ SceneRenderer::SceneRenderer()
     // m_sceneFb original.
     m_ssrFb = std::make_unique<OpenGLFramebuffer>(
         1280u, 720u, OpenGLFramebuffer::Format::HDR);
+    // F2H63: snapshot del color del FB pre-translucent. Justo antes del
+    // pase translucent hacemos blit m_sceneFb -> m_backbufferCopyFb; los
+    // shaders translucent samplean su color attachment via uBackbufferCopy
+    // para hacer refraccion screen-space (offset por normal * (IOR-1)).
+    // HDR para preservar rango (no perdemos highlights del bloom inminente).
+    m_backbufferCopyFb = std::make_unique<OpenGLFramebuffer>(
+        1280u, 720u, OpenGLFramebuffer::Format::HDR);
     m_viewportFb = std::make_unique<OpenGLFramebuffer>(
         1280u, 720u, OpenGLFramebuffer::Format::LDR);
 
@@ -450,6 +457,38 @@ void SceneRenderer::synthesizeIdentityLut() {
     m_identityLutId = static_cast<u32>(tex);
     Log::render()->info("ColorGrading: identity LUT sintetizada (id={}, 256x16 RGBA8 lineal)",
                          m_identityLutId);
+}
+
+bool SceneRenderer::blitSceneToBackbufferCopy() {
+    if (!m_sceneFb || !m_backbufferCopyFb) return false;
+    const GLint w = static_cast<GLint>(m_sceneFb->width());
+    const GLint h = static_cast<GLint>(m_sceneFb->height());
+    if (w <= 0 || h <= 0) return false;
+
+    // Capturar el FB activo (asumido = m_sceneFb por el caller) y el
+    // read previo para restaurar al final. Inferimos los GL handles raw
+    // (OpenGLFramebuffer no expone su `m_fbo`) consultando los bindings
+    // antes y despues de un bind() del destino.
+    GLint prevDrawFb = 0;
+    GLint prevReadFb = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFb);
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFb);
+
+    m_backbufferCopyFb->bind();
+    GLint copyFbHandle = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &copyFbHandle);
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, prevDrawFb);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, copyFbHandle);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    GLenum drawBufs[1] = { GL_COLOR_ATTACHMENT0 };
+    glDrawBuffers(1, drawBufs);
+    glBlitFramebuffer(0, 0, w, h, 0, 0, w, h,
+                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFb);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFb);
+    return true;
 }
 
 void SceneRenderer::endFrame() {

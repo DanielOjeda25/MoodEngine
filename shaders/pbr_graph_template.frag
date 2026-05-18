@@ -68,6 +68,17 @@ uniform float uMetallicMult;
 uniform float uRoughnessMult;
 uniform float uAoMult;
 
+// --- F2H63: transparencia + refraccion screen-space ---
+// Mismo set de uniforms que pbr.frag. La logica de branching por BlendMode
+// vive al final de main() abajo. uBlendMode = 0 (Opaque) deja el path
+// tradicional sin tocar.
+uniform int       uBlendMode;
+uniform float     uOpacity;
+uniform float     uIor;
+uniform float     uRefractionStrength;
+uniform sampler2D uBackbufferCopy;     // unit 7
+uniform vec2      uScreenSize;
+
 // --- Lights (mismo layout que lit.frag para reusar LightSystem) ---
 struct DirLight {
     vec3 direction;
@@ -318,6 +329,11 @@ __SHADERGRAPH_DECLS__
     // mapping desde el grafo queda como follow-up.
     // vec3 graphNormal = __SHADERGRAPH_NORMAL__;
     vec3 emissive = __SHADERGRAPH_EMISSIVE__;
+    // F2H63: opacity del grafo. Multiplica al uOpacity del material
+    // como un master volume -- graphOpacity=1.0 (default disconnected)
+    // deja el control completamente en el slider del Inspector;
+    // graphOpacity<1 lo modula. Solo se usa cuando uBlendMode!=Opaque.
+    float graphOpacity = __SHADERGRAPH_OPACITY__;
 
     // Aplicar saturate al final como safety (los nodos Saturate explicitos
     // pueden no estar en cadena; estos clamps evitan NaN/blow-up).
@@ -409,10 +425,35 @@ __SHADERGRAPH_DECLS__
     // luces ni fog -- mismo trato que un material con map emissive).
     lighting += emissive;
 
-    FragColor = vec4(lighting, 1.0);
+    // --- F2H63: branching por BlendMode (mismo path que pbr.frag) ---
+    if (uBlendMode == 0) {
+        FragColor = vec4(lighting, 1.0);
+        NormalRT  = vec4(normalize(vViewSpaceNormal), 1.0);
+        return;
+    }
 
-    // F2H61: emitir view-space normal al G-buffer. SSRPass lo lee. Si el
-    // FB no tiene attachment en location 1 (path LDR / FB sin normal RT),
-    // GL ignora silenciosamente esta escritura.
-    NormalRT = vec4(normalize(vViewSpaceNormal), 1.0);
+    // F2H63: el grafo controla opacity multiplicando al slider del
+    // Inspector (uOpacity). graphOpacity=1.0 default -> control puro del
+    // slider; graphOpacity<1 lo modula (e.g. Fresnel-driven opacity
+    // emitido por el shader graph del sample_glass).
+    float baseOpacity = clamp(graphOpacity * uOpacity, 0.0, 1.0);
+    float fresnel = pow(1.0 - clamp(NdotV, 0.0, 1.0), 5.0);
+    float effectiveOpacity = clamp(mix(baseOpacity, 1.0, fresnel * 0.5), 0.0, 1.0);
+
+    if (uBlendMode == 2) {
+        // Additive (GL_SRC_ALPHA/ONE en hardware).
+        FragColor = vec4(lighting * effectiveOpacity, effectiveOpacity);
+        NormalRT  = vec4(0.0);
+        return;
+    }
+
+    // Translucent: refraccion screen-space + composicion in-shader.
+    vec2 screenUv = gl_FragCoord.xy / uScreenSize;
+    vec2 nViewXY  = normalize(vViewSpaceNormal).xy;
+    vec2 refractOffset = nViewXY * (uIor - 1.0) * uRefractionStrength * 0.1;
+    vec2 sampleUv = clamp(screenUv + refractOffset, vec2(0.001), vec2(0.999));
+    vec3 refracted = texture(uBackbufferCopy, sampleUv).rgb;
+    vec3 finalColor = mix(refracted, lighting, effectiveOpacity);
+    FragColor = vec4(finalColor, 1.0);
+    NormalRT  = vec4(0.0);
 }

@@ -101,6 +101,19 @@ MaterialAssetId AssetManager::loadMaterial(std::string_view logicalPath) {
         mat->shaderGraphPath = j.at("shader_graph").get<std::string>();
     }
 
+    // F2H63: transparencia + refraccion. Schema aditivo — campos ausentes
+    // preservan los defaults (Opaque + opacity=1 + ior=1 + strength=0),
+    // que matchean el comportamiento pre-F2H63.
+    if (j.contains("blend_mode") && j.at("blend_mode").is_string()) {
+        const std::string mode = j.at("blend_mode").get<std::string>();
+        if (mode == "translucent")     mat->blendMode = BlendMode::Translucent;
+        else if (mode == "additive")   mat->blendMode = BlendMode::Additive;
+        else                           mat->blendMode = BlendMode::Opaque;
+    }
+    if (j.contains("opacity"))              mat->opacity            = j.at("opacity").get<f32>();
+    if (j.contains("ior"))                  mat->ior                = j.at("ior").get<f32>();
+    if (j.contains("refraction_strength"))  mat->refractionStrength = j.at("refraction_strength").get<f32>();
+
     const MaterialAssetId id = static_cast<MaterialAssetId>(m_materials.size());
     m_materials.push_back(std::move(mat));
     m_materialPaths.push_back(key);
@@ -287,6 +300,16 @@ bool AssetManager::saveMaterial(MaterialAssetId id) {
     // F2H62 Bloque D: solo se persiste si esta seteado.
     if (!mat->shaderGraphPath.empty()) {
         j["shader_graph"] = mat->shaderGraphPath;
+    }
+
+    // F2H63: solo persistir blending fields si difieren del default Opaque.
+    // Mismo patron que `friction` (Hito 34 A) — materiales viejos no se
+    // ensucian con campos nuevos.
+    if (mat->blendMode != BlendMode::Opaque) {
+        j["blend_mode"] = (mat->blendMode == BlendMode::Translucent) ? "translucent" : "additive";
+        if (mat->opacity != 1.0f)              j["opacity"]             = mat->opacity;
+        if (mat->ior != 1.0f)                  j["ior"]                 = mat->ior;
+        if (mat->refractionStrength != 0.0f)   j["refraction_strength"] = mat->refractionStrength;
     }
 
     std::ofstream out(fs);

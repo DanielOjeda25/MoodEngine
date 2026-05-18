@@ -71,13 +71,29 @@ struct InstanceBatch {
 
 using BatchMap = std::unordered_map<BatchKey, InstanceBatch, BatchKeyHash>;
 
+/// @brief F2H63: una entidad translucida con su centro precomputado.
+///        Los caemos a un bucket aparte para que el SceneRenderer haga
+///        sort back-to-front por distancia a camara antes de dibujar.
+///        `worldCenter` se computa una vez en groupByBatch y se reusa
+///        en el sort -- evita re-multiplicar AABB.center() por matriz.
+struct TranslucentDraw {
+    Entity entity;
+    glm::vec3 worldCenter{0.0f};
+};
+
 /// @brief Resultado de la agrupacion: batches listos para draw instanced
-///        + lista de entidades que cayeron al path non-instanced.
+///        + lista de entidades que cayeron al path non-instanced +
+///        bucket translucent para el pase aparte (F2H63).
 struct BatchingResult {
     BatchMap batches;
     /// Entidades que el SceneRenderer debe dibujar con el path
     /// individual (mismo loop que F2H3, ya con cull aplicado).
     std::vector<Entity> nonBatchable;
+    /// F2H63: entidades con `MaterialAsset::blendMode != Opaque`. El
+    /// SceneRenderer las dibuja en pase aparte despues del opaco con
+    /// sort back-to-front + GL state especifico (BLEND off para
+    /// Translucent, SRC_ALPHA/ONE para Additive, depth-write OFF).
+    std::vector<TranslucentDraw> translucents;
     /// Conteo de entidades descartadas por el frustum cull (mismo
     /// numero que F2H3 reportaba con `PBR::CulledStatic`).
     u32 culledCount{0};

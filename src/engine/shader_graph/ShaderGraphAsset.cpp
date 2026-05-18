@@ -236,6 +236,12 @@ void populateDefaultSockets(NodeGraph::Graph& g, NodeGraph::NodeId nodeId, NodeK
             addInput(g, nodeId, kSocketType_Float, "roughness");
             addInput(g, nodeId, kSocketType_Vec3,  "normal");
             addInput(g, nodeId, kSocketType_Vec3,  "emissive");
+            // F2H63: 6to input opacity. Default desconectado = 1.0
+            // (full opaque). Solo afecta el render cuando el material
+            // tiene BlendMode != Opaque. Multiplica al uOpacity del
+            // material (slider del Inspector) -> el dev compone graph
+            // + slider del material como "master volume".
+            addInput(g, nodeId, kSocketType_Float, "opacity");
             break;
         case NodeKind::Color:
             addOutput(g, nodeId, kSocketType_Vec3, "out");
@@ -322,13 +328,18 @@ void populateDefaultSockets(NodeGraph::Graph& g, NodeGraph::NodeId nodeId, NodeK
 void populateDefaultLiterals(NodeGraph::Node& node, NodeKind kind) {
     switch (kind) {
         case NodeKind::OutputPBR: {
-            // sockets en orden: albedo, metallic, roughness, normal, emissive
-            if (node.inputs.size() == 5) {
+            // F2H63: 6 sockets ahora (albedo, metallic, roughness,
+            // normal, emissive, opacity). Asets viejos cargan con 5 -
+            // el generator hace fallback a opacity=1.0 si no hay slot 5.
+            if (node.inputs.size() >= 5) {
                 setSocketLiteral(node, node.inputs[0].id, {1.0f, 1.0f, 1.0f, 0.0f}); // albedo blanco
                 setSocketLiteral(node, node.inputs[1].id, {0.0f, 0.0f, 0.0f, 0.0f}); // metallic 0
                 setSocketLiteral(node, node.inputs[2].id, {0.5f, 0.0f, 0.0f, 0.0f}); // roughness 0.5
                 setSocketLiteral(node, node.inputs[3].id, {0.0f, 0.0f, 1.0f, 0.0f}); // normal Z+
                 setSocketLiteral(node, node.inputs[4].id, {0.0f, 0.0f, 0.0f, 0.0f}); // emissive 0
+            }
+            if (node.inputs.size() >= 6) {
+                setSocketLiteral(node, node.inputs[5].id, {1.0f, 0.0f, 0.0f, 0.0f}); // opacity 1.0 (full opaque default)
             }
             break;
         }

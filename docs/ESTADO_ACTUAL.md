@@ -30,11 +30,11 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H62 (2026-05-17)
+## 0.1. Último hito de feature — F2H63 (2026-05-17)
 
-**Shader Graph runtime + migración a imnodes.** Tag `v1.49.0-fase2-hito62`. Detalle completo en [`hitos/F2H62.md`](hitos/F2H62.md). Validado por dev: *"creo que esta bien"*.
+**Transparencia base + refracción screen-space.** Tag `v1.50.0-fase2-hito63`. Detalle completo en [`hitos/F2H63.md`](hitos/F2H63.md). Validado por dev: *"todo ok"* (tras tour visual con los 3 samples water/glass/hologram).
 
-**Cierra Sub-fase 2.3 (Renderer) del plan original Fase 2 al 100%** (PBR + bloom + SSAO + CSM + SSR + shader graph).
+**Entrega base visual de translúcidos** (BlendMode Opaque/Translucent/Additive + IOR + Fresnel auto-opacity + screen-space refraction + 6º input Opacity en el Shader Graph). OIT + sombras translúcidas quedan agendadas para F2H64.
 
 ---
 
@@ -49,11 +49,11 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ### En curso
 
-- **Sub-fase 2.6** (Render polish): F2H55, F2H56, F2H58, F2H59, F2H60, F2H61, F2H62 cerrados. AUDIT-1 cerrado.
+- **Sub-fase 2.6** (Render polish): F2H55, F2H56, F2H58, F2H59, F2H60, F2H61, F2H62, F2H63 cerrados. AUDIT-1, AUDIT-2, AUDIT-3 cerrados.
 
 ### Próximo
 
-- **F2H63 — Materiales translúcidos / alpha blending** (transparencia: render pass separado post-opaque + sort back-to-front + alpha output del fragment + UI material toggle Opaque/Translucent). Pedido del dev al cierre F2H62. Plan stub en [`PLAN_HITO_F2H63.md`](PLAN_HITO_F2H63.md).
+- **F2H64 — Transparencia correctness: OIT + sombras translúcidas** (Weighted Blended OIT McGuire/Bavoil 2013 para resolver flicker en escenas con muchos translúcidos solapados + sombras tintadas extendiendo el shadow atlas a RGB + opcionalmente refracción full Snell). Plan stub en [`PLAN_HITO_F2H64.md`](PLAN_HITO_F2H64.md).
 
 ---
 

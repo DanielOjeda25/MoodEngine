@@ -193,6 +193,7 @@ private:
     std::unique_ptr<OpenGLFramebuffer> m_bloomFb;     // HDR RGBA16F (F2H55): scene + bloom contribution antes del post-process
     std::unique_ptr<OpenGLFramebuffer> m_colorGradingFb;// HDR RGBA16F (F2H58): post bloom + color grading aplicado, antes del post-process
     std::unique_ptr<OpenGLFramebuffer> m_ssrFb;       // HDR RGBA16F (F2H61): scene color + SSR reflection aditivo
+    std::unique_ptr<OpenGLFramebuffer> m_backbufferCopyFb; // HDR RGBA16F (F2H63): snapshot del color del FB pre-translucent. Los frag shaders translucent samplean esto via uBackbufferCopy con offset para refraccion screen-space.
     std::unique_ptr<OpenGLFramebuffer> m_viewportFb;  // LDR RGBA8
     std::unique_ptr<SSAOPass>          m_ssaoPass;    // F2H56
     std::unique_ptr<BloomPass>         m_bloomPass;   // F2H55
@@ -301,8 +302,18 @@ private:
     /// @brief Sintetiza la LUT identidad 256x16 RGBA8 lineal. Idempotente:
     ///        si `m_identityLutId != 0` no recrea. Llamada lazy desde
     ///        renderScene cuando el color grading necesita LUT y no hay
-    ///        path custom.
+    ///        post-process pass o LUT custom.
     void synthesizeIdentityLut();
+
+    /// @brief F2H63: blittea el color attachment de `m_sceneFb` a
+    ///        `m_backbufferCopyFb`. Llamar justo antes del translucent
+    ///        pass para que los shaders translucent puedan samplear el
+    ///        color "pre-translucent" via `uBackbufferCopy` (unit 7) y
+    ///        hacer refraccion screen-space. Asume que ambos FBOs tienen
+    ///        el mismo size — el resize esta sincronizado en renderScene.
+    ///        Devuelve `true` si el blit se ejecuto, `false` si los FBOs
+    ///        no estan listos.
+    bool blitSceneToBackbufferCopy();
 
     // Diagnostico one-shot.
     bool m_shadowEnabledLastFrame = false;

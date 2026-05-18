@@ -49,6 +49,7 @@
 
 #include <glad/gl.h>
 
+#include <algorithm>  // F2H63: std::sort para back-to-front
 #include <chrono>
 #include <cmath>
 #include <string>
@@ -70,6 +71,7 @@ void SceneRenderer::renderScene(Scene& scene,
         if (m_ssaoOutFb) m_ssaoOutFb->resize(panelWidth, panelHeight); // F2H56
         if (m_bloomFb) m_bloomFb->resize(panelWidth, panelHeight);     // F2H55
         if (m_ssrFb) m_ssrFb->resize(panelWidth, panelHeight);         // F2H61
+        if (m_backbufferCopyFb) m_backbufferCopyFb->resize(panelWidth, panelHeight); // F2H63
         m_viewportFb->resize(panelWidth, panelHeight);
     }
 
@@ -302,6 +304,13 @@ void SceneRenderer::renderScene(Scene& scene,
         sh.setInt("uIrradianceMap",     4);
         sh.setInt("uPrefilterMap",      5);
         sh.setInt("uBrdfLut",           6);
+        // F2H63: el translucent pass bindea el backbuffer copy a unit 7
+        // y setea uScreenSize. Para el pase opaco normal uBlendMode=0 y
+        // estos uniforms no se leen — pero igual seteamos defaults para
+        // que la sampler unit no quede sin asignar (UB del driver).
+        sh.setInt  ("uBackbufferCopy",  7);
+        sh.setVec2 ("uScreenSize",
+                    glm::vec2(static_cast<f32>(fbW), static_cast<f32>(fbH)));
         m_lightSystem->bindUniforms(sh, lights, cameraPos);
 
         sh.setInt("uTileSize", static_cast<int>(k_LightGridTileSize));
@@ -420,11 +429,22 @@ void SceneRenderer::renderScene(Scene& scene,
                 sh->setFloat("uMetallicMult", mat->metallicMult);
                 sh->setFloat("uRoughnessMult",mat->roughnessMult);
                 sh->setFloat("uAoMult",       mat->aoMult);
+                // F2H63: blending per-material. uBlendMode=0 (Opaque) hace
+                // que el shader use el path tradicional — los otros tres
+                // uniforms quedan sin efecto.
+                sh->setInt  ("uBlendMode",          static_cast<int>(mat->blendMode));
+                sh->setFloat("uOpacity",            mat->opacity);
+                sh->setFloat("uIor",                mat->ior);
+                sh->setFloat("uRefractionStrength", mat->refractionStrength);
             } else {
                 sh->setVec3 ("uAlbedoTint",   glm::vec3(1.0f));
                 sh->setFloat("uMetallicMult", 0.0f);
                 sh->setFloat("uRoughnessMult",0.5f);
                 sh->setFloat("uAoMult",       1.0f);
+                sh->setInt  ("uBlendMode",          0);   // Opaque default
+                sh->setFloat("uOpacity",            1.0f);
+                sh->setFloat("uIor",                1.0f);
+                sh->setFloat("uRefractionStrength", 0.0f);
             }
 
             glActiveTexture(GL_TEXTURE0);
@@ -766,6 +786,81 @@ void SceneRenderer::renderScene(Scene& scene,
                     }
                 });
         }
+    }
+
+    // F2H63: pase translucent. Va DESPUES del opaco + skybox + brushes +
+    // compiledMesh, pero ANTES de particulas y debug. Sort back-to-front
+    // por distancia camara->centro AABB; tiebreaker por entity handle
+    // estable (evita flicker frame-a-frame para entidades co-distantes).
+    //
+    // GL state:
+    //   - depth-test ON (los translucents se ocluyen por opacos delante).
+    //   - depth-write OFF (translucents no escriben profundidad — sino
+    //     ocluyen entre si en orden incorrecto y SSAO/SSR los pisan).
+    //   - Translucent: GL_BLEND OFF -- el shader hace la composicion
+    //     completa via sample del backbuffer copy + Fresnel + opacity.
+    //     FragColor.a = 1.0.
+    //   - Additive: GL_BLEND ON con SRC_ALPHA/ONE (emisivo aditivo en HW).
+    if (!batching.translucents.empty()) {
+        MOOD_PROFILE_SCOPE("PBR::translucentPass");
+
+        // Sort back-to-front por distancia^2 (evita sqrt). Tiebreaker
+        // estable por handle raw.
+        std::sort(batching.translucents.begin(), batching.translucents.end(),
+                  [&](const TranslucentDraw& a, const TranslucentDraw& b) {
+                      const f32 dA = glm::dot(a.worldCenter - cameraPos,
+                                              a.worldCenter - cameraPos);
+                      const f32 dB = glm::dot(b.worldCenter - cameraPos,
+                                              b.worldCenter - cameraPos);
+                      if (dA != dB) return dA > dB; // farthest first
+                      // Tiebreaker estable: entt::entity es enum class,
+                      // castear a u32 para comparar.
+                      return static_cast<u32>(a.entity.handle()) <
+                             static_cast<u32>(b.entity.handle());
+                  });
+
+        // Snapshot del color FB pre-translucent al backbuffer copy. Los
+        // shaders translucent lo samplean via uBackbufferCopy (unit 7)
+        // para refraccion screen-space.
+        blitSceneToBackbufferCopy();
+        glActiveTexture(GL_TEXTURE7);
+        glBindTexture(GL_TEXTURE_2D, m_backbufferCopyFb->glColorTextureId());
+
+        // Estado comun a ambos blend modes.
+        glDepthMask(GL_FALSE);
+        glEnable(GL_DEPTH_TEST);
+
+        applyShaderUniforms(*m_pbrShader);
+        for (const TranslucentDraw& td : batching.translucents) {
+            Entity e = td.entity;
+            if (!e.hasComponent<TransformComponent>() ||
+                !e.hasComponent<MeshRendererComponent>()) continue;
+            auto& t  = e.getComponent<TransformComponent>();
+            auto& mr = e.getComponent<MeshRendererComponent>();
+
+            // Per-material GL state. drawMeshRenderer setea los uniforms
+            // de blend (uBlendMode/uOpacity/uIor/...) por nosotros, pero
+            // el blend func de hardware lo configuramos aca per-entidad.
+            const MaterialAsset* mat = assets.getMaterial(mr.materialOrMissing(0));
+            const BlendMode mode = mat ? mat->blendMode : BlendMode::Opaque;
+            if (mode == BlendMode::Additive) {
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            } else {
+                // Translucent: BLEND off, el shader hace la composicion.
+                glDisable(GL_BLEND);
+            }
+
+            const glm::mat4 model = t.worldMatrix();
+            m_pbrShader->setMat4("uModel", model);
+            drawMeshRenderer(*m_pbrShader, mr, model);
+        }
+
+        // Restaurar estado opaco para que las particulas y el debug
+        // renderer no hereden depth-write off / blend on.
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+        glActiveTexture(GL_TEXTURE0);
     }
 
     // Hito 29 Bloque 2: pase de particulas. Va DESPUES de la geometria

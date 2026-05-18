@@ -11,6 +11,55 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-17: F2H63 — Transparencia base (alpha + refracción screen-space)
+
+**Contexto:** pedido del dev al cierre F2H62: *"un motor grafico debe tener transparentes"*. Discusión de scope arrancó con un approach minimal (BlendMode + sort back-to-front), pero el dev pidió *"transparencia o traslucido realista, nada de simulaciones que no tengan sentido, esto es un motor realista"*. Mega-hito de ~30h (OIT + refracción + sombras translúcidas + UI + Shader Graph extensión) era riesgo de regresión. Tag `v1.50.0-fase2-hito63`. Detalle en [`hitos/F2H63.md`](hitos/F2H63.md).
+
+**Decisión clave 1 — Split en F2H63 (base visual) + F2H64 (correctness multi-vidrio).**
+
+- **F2H63 entrega:** BlendMode (Opaque/Translucent/Additive), opacity + IOR + refractionStrength en MaterialAsset, refracción screen-space del backbuffer copy, Fresnel-driven auto-opacity, UI Inspector Blending, Shader Graph 6º input Opacity, 3 samples (water/glass/hologram), tests.
+- **F2H64 entregará:** Weighted Blended OIT (McGuire/Bavoil 2013), sombras translúcidas (extender shadow atlas a RGB), opcionalmente refracción full Snell.
+- **Razón:** validar la base visual con el dev antes de moverse a correctness con muchos translúcidos solapados. La base ya cubre el caso 95% (escenas con <50 vidrios no-solapados).
+- **Cuándo revisar el split:** si emerge una demo con muchos vidrios intersectados o follaje denso que flickerea, priorizar F2H64.
+
+**Decisión clave 2 — Screen-space distortion sobre full Snell refraction.**
+
+- **Approach:** sample del backbuffer copy con offset `nViewXY * (uIor - 1) * uRefractionStrength * 0.1`. Convención Unity URP / Unreal "Distortion".
+- **Razón:** resultado visual indistinguible para el ojo en geometría plana / convexa simple; ~zero costo extra (1 texture sample por fragment). Trazar el rayo a través del material según grosor estimado es ~3-5x más caro y solo se nota en geometría compleja transparente (cristales tallados, agua con curvatura fuerte).
+- **Limitación documentada:** borde de pantalla puede dar coords fuera del backbuffer copy. Mitigado con `clamp(uv, 0.001, 0.999)`. Mejora futura: fade en bordes — solo si emerge demanda.
+
+**Decisión clave 3 — Fresnel-driven auto-opacity integrado, no opt-in.**
+
+- **Approach:** shader hardcoded `fresnel = pow(1 - NdotV, 5)` + `effectiveOpacity = mix(uOpacity, 1, fresnel * 0.5)` para todos los Translucent. Bordes más opacos, frente más transparente.
+- **Razón:** look "vidrio real" sin que el dev tenga que armar el grafo Fresnel cada vez. Si el dev quiere opacidad uniforme, baja Opacity al valor target — el factor 0.5 hace el efecto sutil.
+- **Bug cazado validando:** los samples originales (glass + hologram) conectaban un Fresnel node al input Opacity del OutputPBR. Resultado: face-on → opacity=0 → cubo invisible. Fix: literal opacity en los samples (el Fresnel hardcoded del shader ya hace su parte).
+
+**Decisión clave 4 — Translucent pass antes de SSAO/SSR/bloom.**
+
+- **Approach:** orden de frame: opaque → skybox → brushes → translucent → SSAO → SSR → bloom → particles.
+- **Razón:** los translúcidos LEEN del backbuffer copy (color de los opacos). Los screen-space passes posteriores no afectan al copy (ya hecho). Translúcidos NO contribuyen a SSAO/SSR (leen depth attachment del pase opaco — convención estándar Unity URP / Unreal, aceptable v1).
+- **Trade-off conocido:** un vidrio no contribuye a su propio AO ni se refleja en SSR. Para mejorarlo habría que hacer un re-render del depth con translúcidos antes de SSAO/SSR — costo significativo, sin demanda concreta.
+
+**Decisión clave 5 — Backbuffer copy 1x por frame, no per-translucent.**
+
+- **Approach:** blit del scene FBO al `m_backbufferCopyFb` (RGBA16F preserva HDR) UNA vez antes del translucent pass. Todos los vidrios sortean back-to-front contra el mismo snapshot.
+- **Razón:** sort estable + 1 blit + N draws es ~10-20x más barato que N blits + N draws. Para refracción multi-layer correcta (vidrio detrás de vidrio refractando el segundo correctamente) habría que blittear per-translucent. Aceptable v1.
+- **Limitación conocida:** dos vidrios alineados refractan los OPACOS de atrás correctamente, pero el más cercano NO refracta al más lejano (el copy fue tomado antes de los translucents). Mitigación futura: re-blit si emerge necesidad — agendado a F2H64 si el OIT necesita el mismo workaround.
+
+**Decisión clave 6 — Persistir blending solo si `blendMode != Opaque`.**
+
+- **Approach:** `AssetManager_Material::save` omite las keys `blend_mode`/`opacity`/`ior`/`refraction_strength` si el material es Opaque.
+- **Razón:** los `.moodmat` históricos no tenían estos campos. Si los persistiéramos siempre, abriríamos un material viejo en el editor → Save → diff "fantasma" de 4 keys nuevas. Solo se contamina el JSON cuando el dev decide pasar a Translucent/Additive.
+- **Trade-off:** un material que el dev pasa a Translucent y vuelve a Opaque sí deja las keys en disco. Es aceptable (raro flow, y la lectura sigue siendo correcta: keys ignoradas en Opaque).
+
+**Decisión clave 7 — OutputPBR 6 inputs con back-compat literal `1.0`.**
+
+- **Approach:** el `ShaderGraphAsset::createNode(OutputPBR)` arma 6 inputs siempre. Los shaders `.moodshader` viejos con 5 inputs cargan ok; el generator emite el literal `1.0` para el input Opacity faltante.
+- **Razón:** evita migración masiva de assets. Los 3 samples shipados en F2H62 (water/gold/hologram) y futuros assets de usuarios siguen funcionando sin tocar disco.
+- **Test regression:** `test_shader_graph.cpp` valida que un OutputPBR legacy compile sin error con opacity default.
+
+---
+
 ## 2026-05-17: AUDIT-3 cierre — Tanda de audits completa
 
 **Contexto:** tercer y último audit de la tanda inicial (~10h totales tras AUDIT-1 y AUDIT-2). El dev pidió cerrar la profesionalización del código antes de seguir con features. Tag `v1.49.3-audit-3`. Reporte completo en [`audits/AUDIT_3.md`](audits/AUDIT_3.md).

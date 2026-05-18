@@ -341,6 +341,167 @@ TEST_CASE("saveMaterial: createMaterial (path runtime sentinel) rechazado") {
     CHECK_FALSE(am.saveMaterial(id));
 }
 
+// ============================================================
+// F2H63: transparencia (BlendMode + opacity + ior + refractionStrength)
+// ============================================================
+
+TEST_CASE("loadMaterial F2H63: defaults Opaque cuando JSON sin blend_mode") {
+    const std::string name = uniqueName("blend_default");
+    const std::string logical = writeMaterial(name, R"({
+        "metallic": 0.5
+    })");
+
+    AssetManager am("assets", nullFactory());
+    MaterialAsset* mat = am.getMaterial(am.loadMaterial(logical));
+    REQUIRE(mat != nullptr);
+    CHECK(mat->blendMode          == BlendMode::Opaque);
+    CHECK(mat->opacity            == doctest::Approx(1.0f));
+    CHECK(mat->ior                == doctest::Approx(1.0f));
+    CHECK(mat->refractionStrength == doctest::Approx(0.0f));
+
+    std::filesystem::remove(std::filesystem::path("assets") / "materials" / name);
+}
+
+TEST_CASE("loadMaterial F2H63: blend_mode 'translucent' con opacity + ior + refraction_strength") {
+    const std::string name = uniqueName("blend_translucent");
+    const std::string logical = writeMaterial(name, R"({
+        "blend_mode": "translucent",
+        "opacity": 0.3,
+        "ior": 1.5,
+        "refraction_strength": 0.6
+    })");
+
+    AssetManager am("assets", nullFactory());
+    MaterialAsset* mat = am.getMaterial(am.loadMaterial(logical));
+    REQUIRE(mat != nullptr);
+    CHECK(mat->blendMode          == BlendMode::Translucent);
+    CHECK(mat->opacity            == doctest::Approx(0.3f));
+    CHECK(mat->ior                == doctest::Approx(1.5f));
+    CHECK(mat->refractionStrength == doctest::Approx(0.6f));
+
+    std::filesystem::remove(std::filesystem::path("assets") / "materials" / name);
+}
+
+TEST_CASE("loadMaterial F2H63: blend_mode 'additive' carga sin opacity (default 1.0)") {
+    const std::string name = uniqueName("blend_additive");
+    const std::string logical = writeMaterial(name, R"({
+        "blend_mode": "additive",
+        "albedo_tint": [1.0, 0.5, 0.0]
+    })");
+
+    AssetManager am("assets", nullFactory());
+    MaterialAsset* mat = am.getMaterial(am.loadMaterial(logical));
+    REQUIRE(mat != nullptr);
+    CHECK(mat->blendMode == BlendMode::Additive);
+    CHECK(mat->opacity   == doctest::Approx(1.0f));
+
+    std::filesystem::remove(std::filesystem::path("assets") / "materials" / name);
+}
+
+TEST_CASE("loadMaterial F2H63: blend_mode string desconocido cae a Opaque") {
+    const std::string name = uniqueName("blend_unknown");
+    const std::string logical = writeMaterial(name, R"({
+        "blend_mode": "yolo_super_blend"
+    })");
+
+    AssetManager am("assets", nullFactory());
+    MaterialAsset* mat = am.getMaterial(am.loadMaterial(logical));
+    REQUIRE(mat != nullptr);
+    CHECK(mat->blendMode == BlendMode::Opaque);
+
+    std::filesystem::remove(std::filesystem::path("assets") / "materials" / name);
+}
+
+TEST_CASE("saveMaterial F2H63: Opaque no escribe campos blend (back-compat)") {
+    const std::string name = uniqueName("save_opaque");
+    const std::string logical = writeMaterial(name, R"({
+        "metallic": 0.5
+    })");
+
+    AssetManager am("assets", nullFactory());
+    const MaterialAssetId id = am.loadMaterial(logical);
+    REQUIRE(am.saveMaterial(id));
+
+    const auto fs = std::filesystem::path("assets") / "materials" / name;
+    std::string content;
+    {
+        std::ifstream in(fs);
+        content.assign((std::istreambuf_iterator<char>(in)),
+                       std::istreambuf_iterator<char>());
+    }
+    // Material Opaque (default) NO debe ensuciar el JSON con campos
+    // de blending — mismo patron que `friction` (Hito 34 A).
+    CHECK(content.find("\"blend_mode\"")          == std::string::npos);
+    CHECK(content.find("\"opacity\"")             == std::string::npos);
+    CHECK(content.find("\"ior\"")                 == std::string::npos);
+    CHECK(content.find("\"refraction_strength\"") == std::string::npos);
+
+    std::error_code ec;
+    std::filesystem::remove(fs, ec);
+}
+
+TEST_CASE("saveMaterial F2H63: Translucent roundtrip con todos los campos") {
+    const std::string name = uniqueName("save_translucent_roundtrip");
+    const std::string logical = writeMaterial(name, R"({
+        "metallic": 0.0,
+        "roughness": 0.1
+    })");
+
+    AssetManager am("assets", nullFactory());
+    const MaterialAssetId id = am.loadMaterial(logical);
+    MaterialAsset* mat = am.getMaterial(id);
+    REQUIRE(mat != nullptr);
+    mat->blendMode          = BlendMode::Translucent;
+    mat->opacity            = 0.42f;
+    mat->ior                = 1.33f;
+    mat->refractionStrength = 0.75f;
+
+    REQUIRE(am.saveMaterial(id));
+
+    AssetManager am2("assets", nullFactory());
+    MaterialAsset* reloaded = am2.getMaterial(am2.loadMaterial(logical));
+    REQUIRE(reloaded != nullptr);
+    CHECK(reloaded->blendMode          == BlendMode::Translucent);
+    CHECK(reloaded->opacity            == doctest::Approx(0.42f));
+    CHECK(reloaded->ior                == doctest::Approx(1.33f));
+    CHECK(reloaded->refractionStrength == doctest::Approx(0.75f));
+
+    std::error_code ec;
+    std::filesystem::remove(std::filesystem::path("assets") / "materials" / name, ec);
+}
+
+TEST_CASE("saveMaterial F2H63: Additive con opacity!=1 persiste opacity") {
+    const std::string name = uniqueName("save_additive");
+    const std::string logical = writeMaterial(name, R"({})");
+
+    AssetManager am("assets", nullFactory());
+    const MaterialAssetId id = am.loadMaterial(logical);
+    MaterialAsset* mat = am.getMaterial(id);
+    REQUIRE(mat != nullptr);
+    mat->blendMode = BlendMode::Additive;
+    mat->opacity   = 0.85f;
+    // ior/refractionStrength quedan en defaults (Additive no usa refraccion).
+
+    REQUIRE(am.saveMaterial(id));
+
+    const auto fs = std::filesystem::path("assets") / "materials" / name;
+    std::string content;
+    {
+        std::ifstream in(fs);
+        content.assign((std::istreambuf_iterator<char>(in)),
+                       std::istreambuf_iterator<char>());
+    }
+    CHECK(content.find("\"blend_mode\"")          != std::string::npos);
+    CHECK(content.find("\"additive\"")            != std::string::npos);
+    CHECK(content.find("\"opacity\"")             != std::string::npos);
+    // ior y refraction_strength en defaults -> NO persisten.
+    CHECK(content.find("\"ior\"")                 == std::string::npos);
+    CHECK(content.find("\"refraction_strength\"") == std::string::npos);
+
+    std::error_code ec;
+    std::filesystem::remove(fs, ec);
+}
+
 TEST_CASE("saveMaterial: campos de textura ausentes en JSON cuando slot=0") {
     const std::string name = uniqueName("save_no_textures");
     const std::string logical = writeMaterial(name, R"({

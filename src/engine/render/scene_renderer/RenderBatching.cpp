@@ -38,8 +38,7 @@ BatchingResult groupByBatch(Scene& scene,
             }
 
             // Frustum cull: AABB world-space del mesh. Si esta fuera, no
-            // entra a ningun lado (ni batch ni non-batchable). Mismo
-            // comportamiento que F2H3.
+            // entra a ningun lado (ni batch ni non-batchable ni translucent).
             const AABB localAabb{asset->aabbMin, asset->aabbMax};
             const glm::mat4 worldMat = t.worldMatrix();
             if (localAabb.isValid()) {
@@ -48,6 +47,26 @@ BatchingResult groupByBatch(Scene& scene,
                     ++result.culledCount;
                     return;
                 }
+            }
+
+            // Centro world-space del AABB -- usado para distancia LOD y
+            // sort back-to-front de translucents.
+            const glm::vec3 entityCenter = localAabb.isValid()
+                ? glm::vec3(worldMat * glm::vec4(localAabb.center(), 1.0f))
+                : glm::vec3(worldMat[3]);
+
+            const MaterialAssetId matId = mr.materialOrMissing(0);
+            const MaterialAsset* matAsset = assets.getMaterial(matId);
+
+            // F2H63: el primer material define el bucket. Si es translucent
+            // o additive, la entidad va al pase translucent y NO al opaco.
+            // Limitacion v1: multi-submesh con mix opaque+translucent no se
+            // soporta (la decision es per-entidad, no per-submesh) -- el
+            // dev debe separar submeshes en entidades distintas si quiere
+            // mezcla.
+            if (matAsset != nullptr && matAsset->blendMode != BlendMode::Opaque) {
+                result.translucents.push_back(TranslucentDraw{e, entityCenter});
+                return;
             }
 
             // Decision de "batcheable":
@@ -63,31 +82,15 @@ BatchingResult groupByBatch(Scene& scene,
                 return;
             }
 
-            // F2H6: seleccion de LOD por distancia camera→entidad. La
-            // distancia se calcula desde el centro del AABB world-space
-            // (mas estable que t.position cuando hay rotaciones que mueven
-            // el centro de masa visual). Si el mesh no tiene LOD para el
-            // nivel calculado, `submeshesForLod()` cae a LOD 0 — el
-            // BatchKey igual lo agrupa por nivel pedido para que las
-            // entidades con/sin LOD del mismo mesh queden separadas
-            // (asi el caller decide que IMesh dibujar con `submeshesForLod`).
-            const glm::vec3 entityCenter = localAabb.isValid()
-                ? glm::vec3(worldMat * glm::vec4(localAabb.center(), 1.0f))
-                : glm::vec3(worldMat[3]); // fallback: traslacion pura
+            // F2H6: seleccion de LOD por distancia camera→entidad.
             const f32 distance = glm::distance(cameraPos, entityCenter);
             const u32 lod = selectLod(distance, asset->lodDistances);
-
-            const MaterialAssetId matId = mr.materialOrMissing(0);
 
             // F2H62 Bloque E: materiales con shaderGraphPath caen al
             // path nonBatchable. Razon: el path instanced (A.1) usa
             // pbr_instanced.vert que el ShaderGraphCache v1 no soporta
             // (solo conoce pbr.vert estatico). Pasando por nonBatchable
             // (A.2) el cache si se aplica y el shader graph se renderea.
-            // Cost: pierde el batching para estos materiales (pocos en
-            // la practica -- shaders graph son para efectos especiales,
-            // no para terrain tiles repetidos).
-            const MaterialAsset* matAsset = assets.getMaterial(matId);
             if (matAsset != nullptr && !matAsset->shaderGraphPath.empty()) {
                 result.nonBatchable.push_back(e);
                 return;

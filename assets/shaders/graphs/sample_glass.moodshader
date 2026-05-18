@@ -3,11 +3,7 @@
   "graph": {
     "_version": 1,
     "links": [
-      {
-        "from": 6,
-        "id": 1,
-        "to": 1
-      }
+      {"from": 7, "id": 1, "to": 1}
     ],
     "next_link_id": 2,
     "next_node_id": 3,
@@ -16,12 +12,11 @@
       {
         "custom_data": {
           "socket_literals": {
-            "1": [1.0, 1.0, 1.0, 0.0],
             "2": [0.0, 0.0, 0.0, 0.0],
-            "3": [0.1, 0.0, 0.0, 0.0],
+            "3": [0.03, 0.0, 0.0, 0.0],
             "4": [0.0, 0.0, 1.0, 0.0],
             "5": [0.0, 0.0, 0.0, 0.0],
-            "7": [0.4, 0.0, 0.0, 0.0]
+            "6": [0.25, 0.0, 0.0, 0.0]
           }
         },
         "id": 1,
@@ -31,24 +26,24 @@
           {"id": 3, "kind": 0, "name": "roughness", "owner_node": 1, "type_tag": "float"},
           {"id": 4, "kind": 0, "name": "normal",    "owner_node": 1, "type_tag": "vec3"},
           {"id": 5, "kind": 0, "name": "emissive",  "owner_node": 1, "type_tag": "vec3"},
-          {"id": 7, "kind": 0, "name": "opacity",   "owner_node": 1, "type_tag": "float"}
+          {"id": 6, "kind": 0, "name": "opacity",   "owner_node": 1, "type_tag": "float"}
         ],
         "outputs": [],
-        "position": [380.0, 100.0],
+        "position": [600.0, 100.0],
         "title": "Output PBR",
         "type_tag": "output_pbr"
       },
       {
         "custom_data": {
-          "value": [0.05, 0.22, 0.45, 1.0]
+          "value": [0.75, 0.88, 1.0, 1.0]
         },
         "id": 2,
         "inputs": [],
         "outputs": [
-          {"id": 6, "kind": 1, "name": "out", "owner_node": 2, "type_tag": "vec3"}
+          {"id": 7, "kind": 1, "name": "out", "owner_node": 2, "type_tag": "vec3"}
         ],
         "position": [80.0, 80.0],
-        "title": "Color",
+        "title": "Color (cyan ice)",
         "type_tag": "color"
       }
     ]

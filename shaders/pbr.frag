@@ -46,6 +46,21 @@ uniform float uMetallicMult;
 uniform float uRoughnessMult;
 uniform float uAoMult;
 
+// --- F2H63: transparencia + refraccion screen-space ---
+// uBlendMode = 0 -> Opaque (path tradicional, default).
+// uBlendMode = 1 -> Translucent: shader hace `mix(refracted, lighting,
+//                   effectiveOpacity)` con Fresnel automatico. GL_BLEND
+//                   OFF en este path — el blending vive en el shader.
+//                   uBackbufferCopy contiene el FB pre-translucent.
+// uBlendMode = 2 -> Additive: emisivo puro `lighting * opacity`.
+//                   GL_BLEND ON con SRC_ALPHA/ONE.
+uniform int       uBlendMode;
+uniform float     uOpacity;            // default 1.0
+uniform float     uIor;                // 1.0=sin refraccion, 1.5=vidrio
+uniform float     uRefractionStrength; // 0-1 (multiplica el offset)
+uniform sampler2D uBackbufferCopy;     // unit 7 (solo se samplea si Translucent)
+uniform vec2      uScreenSize;         // viewport en pixels
+
 // --- Lights (mismo layout que lit.frag para reusar LightSystem) ---
 struct DirLight {
     vec3 direction;
@@ -381,10 +396,46 @@ void main() {
     float fogF = computeFogFactor(dist);
     lighting = mix(lighting, uFogColor, fogF);
 
-    FragColor = vec4(lighting, 1.0);
+    // --- F2H63: branching por BlendMode ---
+    if (uBlendMode == 0) {
+        // Opaque (default): path tradicional. SSR escribe normal RT.
+        FragColor = vec4(lighting, 1.0);
+        NormalRT  = vec4(normalize(vViewSpaceNormal), 1.0);
+        return;
+    }
 
-    // F2H61: emitir view-space normal al G-buffer. SSRPass lo lee. Si el
-    // FB no tiene attachment en location 1 (path LDR / FB sin normal RT),
-    // GL ignora silenciosamente esta escritura.
-    NormalRT = vec4(normalize(vViewSpaceNormal), 1.0);
+    // Translucent / Additive: depth-write OFF en GL state, SSR no aplica
+    // (NormalRT=0 marca "no PBR opaco" — el SSRPass descarta estos pixels).
+    //
+    // Fresnel automatico (look "vidrio real"): bordes mas opacos, frente
+    // mas transparente. Sin esto los translucents se ven como capas planas
+    // de color en lugar de superficies con curvatura percibible.
+    float fresnel = pow(1.0 - clamp(NdotV, 0.0, 1.0), 5.0);
+    float effectiveOpacity = clamp(mix(uOpacity, 1.0, fresnel * 0.5), 0.0, 1.0);
+
+    if (uBlendMode == 2) {
+        // Additive (emisivo, glow): GL_SRC_ALPHA/ONE hace la suma en
+        // hardware. El shader emite (lighting * α, α).
+        FragColor = vec4(lighting * effectiveOpacity, effectiveOpacity);
+        NormalRT  = vec4(0.0);
+        return;
+    }
+
+    // Translucent (vidrio, agua): refraccion screen-space. Sample del
+    // backbuffer copy con offset proporcional a la normal en view-space
+    // y (IOR - 1) * refractionStrength. Con IOR=1 y strength=0 el offset
+    // es cero -> equivale a alpha blend regular contra el FB pre-pass.
+    //
+    // El shader hace toda la composicion -> GL_BLEND OFF en este path
+    // (set por el renderer). FragColor.a = 1.0 (no se blendea de nuevo).
+    vec2 screenUv = gl_FragCoord.xy / uScreenSize;
+    vec2 nViewXY  = normalize(vViewSpaceNormal).xy;
+    vec2 refractOffset = nViewXY * (uIor - 1.0) * uRefractionStrength * 0.1;
+    // Clamp para evitar artefactos cuando el offset cae fuera del FB
+    // (sampling de bordes devolveria negro/clamped).
+    vec2 sampleUv = clamp(screenUv + refractOffset, vec2(0.001), vec2(0.999));
+    vec3 refracted = texture(uBackbufferCopy, sampleUv).rgb;
+    vec3 finalColor = mix(refracted, lighting, effectiveOpacity);
+    FragColor = vec4(finalColor, 1.0);
+    NormalRT  = vec4(0.0);
 }

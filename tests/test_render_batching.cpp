@@ -8,6 +8,7 @@
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/pipeline/Frustum.h"
 #include "engine/render/rhi/ITexture.h"
+#include "engine/render/resources/MaterialAsset.h"  // F2H63: BlendMode
 #include "engine/render/scene_renderer/RenderBatching.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
@@ -15,6 +16,8 @@
 
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
+
+#include <algorithm>  // F2H63: std::sort para test del sort back-to-front
 
 using namespace Mood;
 
@@ -190,6 +193,132 @@ TEST_CASE("BatchKey: igualdad y hash") {
     // No es invariante absoluto pero hashes distintos para keys
     // diferentes son lo esperado en este rango.
     CHECK(h(a) != h(c));
+}
+
+// ============================================================
+// F2H63: bucket translucents (materiales BlendMode != Opaque)
+// ============================================================
+
+namespace {
+
+// Crea un material con BlendMode dado (mutando el default opaco).
+MaterialAssetId makeBlendMaterial(AssetManager& assets, BlendMode mode,
+                                  f32 opacity = 0.5f) {
+    const MaterialAssetId mid = assets.createMaterialFromTexture(0u);
+    MaterialAsset* m = assets.getMaterial(mid);
+    REQUIRE(m != nullptr);
+    m->blendMode = mode;
+    m->opacity   = opacity;
+    return mid;
+}
+
+} // namespace
+
+TEST_CASE("groupByBatch F2H63: material Translucent va a translucents (no a batches)") {
+    Scene s;
+    AssetManager assets("assets", stubFactoryBatch());
+    const MaterialAssetId trans = makeBlendMaterial(assets, BlendMode::Translucent);
+
+    spawnCube(s, glm::vec3(0.0f, 0.0f, -5.0f), {trans});
+
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
+    CHECK(r.batches.empty());
+    CHECK(r.nonBatchable.empty());
+    REQUIRE(r.translucents.size() == 1u);
+    CHECK(r.translucents[0].entity);  // valido
+}
+
+TEST_CASE("groupByBatch F2H63: BlendMode::Additive tambien rutea a translucents") {
+    Scene s;
+    AssetManager assets("assets", stubFactoryBatch());
+    const MaterialAssetId add = makeBlendMaterial(assets, BlendMode::Additive);
+
+    spawnCube(s, glm::vec3(0.0f, 0.0f, -5.0f), {add});
+
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
+    CHECK(r.batches.empty());
+    REQUIRE(r.translucents.size() == 1u);
+}
+
+TEST_CASE("groupByBatch F2H63: opacos y translucents se separan en buckets distintos") {
+    Scene s;
+    AssetManager assets("assets", stubFactoryBatch());
+    const MaterialAssetId trans = makeBlendMaterial(assets, BlendMode::Translucent);
+
+    // 2 opacos + 1 translucent
+    spawnCube(s, glm::vec3(0.0f, 0.0f, -5.0f));            // opaco (mat default)
+    spawnCube(s, glm::vec3(2.0f, 0.0f, -5.0f));            // opaco
+    spawnCube(s, glm::vec3(-2.0f, 0.0f, -5.0f), {trans});  // translucent
+
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
+    CHECK(r.batches.size() == 1u);
+    REQUIRE(r.batches.count(BatchKey{0u, 0u}) == 1u);
+    CHECK(r.batches.at(BatchKey{0u, 0u}).models.size() == 2u);
+    CHECK(r.translucents.size() == 1u);
+    CHECK(r.nonBatchable.empty());
+}
+
+TEST_CASE("groupByBatch F2H63: TranslucentDraw.worldCenter refleja la posicion world-space") {
+    Scene s;
+    AssetManager assets("assets", stubFactoryBatch());
+    const MaterialAssetId trans = makeBlendMaterial(assets, BlendMode::Translucent);
+
+    // Pos especifica para verificar precision.
+    spawnCube(s, glm::vec3(3.0f, 2.0f, -10.0f), {trans});
+
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
+    REQUIRE(r.translucents.size() == 1u);
+    // El AABB del cubo primitivo es centrado en origen; con scale=0.5
+    // el centro world-space coincide con la posicion del transform.
+    CHECK(r.translucents[0].worldCenter.x == doctest::Approx(3.0f).epsilon(0.001));
+    CHECK(r.translucents[0].worldCenter.y == doctest::Approx(2.0f).epsilon(0.001));
+    CHECK(r.translucents[0].worldCenter.z == doctest::Approx(-10.0f).epsilon(0.001));
+}
+
+TEST_CASE("groupByBatch F2H63: translucent fuera del frustum es culled (no entra a translucents)") {
+    Scene s;
+    AssetManager assets("assets", stubFactoryBatch());
+    const MaterialAssetId trans = makeBlendMaterial(assets, BlendMode::Translucent);
+
+    // Visible delante.
+    spawnCube(s, glm::vec3(0.0f, 0.0f, -5.0f), {trans});
+    // Detras de la camara — cull.
+    spawnCube(s, glm::vec3(0.0f, 0.0f, 10.0f), {trans});
+
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
+    CHECK(r.translucents.size() == 1u);
+    CHECK(r.culledCount == 1u);
+}
+
+TEST_CASE("groupByBatch F2H63: sort back-to-front por distancia^2 (validacion del comparator)") {
+    // No invocamos al sort del renderer aca (no es pure), pero
+    // verificamos que worldCenter permite un sort correcto -- el dato
+    // que el SceneRenderer usa.
+    Scene s;
+    AssetManager assets("assets", stubFactoryBatch());
+    const MaterialAssetId trans = makeBlendMaterial(assets, BlendMode::Translucent);
+
+    // 3 entidades a distintas distancias de la camara en origen.
+    spawnCube(s, glm::vec3(0.0f, 0.0f,  -3.0f), {trans});  // cerca
+    spawnCube(s, glm::vec3(0.0f, 0.0f, -10.0f), {trans});  // lejos
+    spawnCube(s, glm::vec3(0.0f, 0.0f,  -6.0f), {trans});  // medio
+
+    const auto r = groupByBatch(s, assets, bigFrustum(), glm::vec3(0.0f));
+    REQUIRE(r.translucents.size() == 3u);
+
+    // Aplicar el sort comparator que usa el SceneRenderer.
+    auto sorted = r.translucents;
+    const glm::vec3 cam(0.0f);
+    std::sort(sorted.begin(), sorted.end(),
+              [&](const TranslucentDraw& a, const TranslucentDraw& b) {
+                  const f32 dA = glm::dot(a.worldCenter - cam, a.worldCenter - cam);
+                  const f32 dB = glm::dot(b.worldCenter - cam, b.worldCenter - cam);
+                  return dA > dB;
+              });
+    // Orden esperado farthest-first: -10, -6, -3.
+    CHECK(sorted[0].worldCenter.z == doctest::Approx(-10.0f).epsilon(0.001));
+    CHECK(sorted[1].worldCenter.z == doctest::Approx(-6.0f).epsilon(0.001));
+    CHECK(sorted[2].worldCenter.z == doctest::Approx(-3.0f).epsilon(0.001));
 }
 
 TEST_CASE("BatchKey: lod distinto produce keys distintas") {

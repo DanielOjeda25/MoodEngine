@@ -136,6 +136,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 
 > **Nota de formato** (AUDIT-1, 2026-05-17): desde F2H62 en adelante, cada hito tiene su detalle en [`docs/hitos/F2H<N>.md`](hitos/README.md) y este índice queda con una línea por hito. Los entries de F2H1-F2H61 quedan inline acá hasta que un AUDIT futuro los migre.
 
+- [x] **F2H63** — Transparencia base + refracción screen-space (alpha blending + IOR + Fresnel auto-opacity + Shader Graph 6º input Opacity) (2026-05-17, tag `v1.50.0-fase2-hito63`) — [detalle](hitos/F2H63.md). 3 samples shipados (water, glass, hologram). Base lista; OIT + sombras translúcidas en F2H64.
+
 - [x] **F2H62** — Shader Graph runtime + migración a imnodes (2026-05-17, tag `v1.49.0-fase2-hito62`) — [detalle](hitos/F2H62.md). Cierra Sub-fase 2.3 (Renderer) del plan original al 100%.
 
 <!-- AUDIT-1: el resto del entry fat original (~9000 chars) migrado a docs/hitos/F2H62.md. -->

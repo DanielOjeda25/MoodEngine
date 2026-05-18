@@ -274,6 +274,93 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
                 ImGui::TextDisabled(
                     "(graphs en assets/shaders/graphs/ aparecen aca)");
             }
+
+            // F2H63: Blending (Opaque / Translucent / Additive).
+            // Dropdown + sliders opacity / IOR / refractionStrength. Los
+            // sliders se desactivan cuando no aplican (e.g. IOR no afecta
+            // a Additive porque no hace refraccion).
+            if (ImGui::CollapsingHeader(
+                    I18n::T("editor.panel.inspector.mesh.blending").c_str())) {
+                const char* modeKeys[3] = {
+                    "editor.panel.inspector.mesh.blend_opaque",
+                    "editor.panel.inspector.mesh.blend_translucent",
+                    "editor.panel.inspector.mesh.blend_additive",
+                };
+                // I18n::T devuelve std::string -- guardamos las 3 strings
+                // localizadas en variables locales para que los punteros
+                // sobrevivan hasta la llamada al Combo.
+                const std::string mOpaque      = I18n::T(modeKeys[0]);
+                const std::string mTranslucent = I18n::T(modeKeys[1]);
+                const std::string mAdditive    = I18n::T(modeKeys[2]);
+                const char* modeLabels[3] = {
+                    mOpaque.c_str(), mTranslucent.c_str(), mAdditive.c_str(),
+                };
+                int curBlend = static_cast<int>(mat->blendMode);
+                if (ImGui::Combo(
+                        I18n::T("editor.panel.inspector.mesh.blend_mode").c_str(),
+                        &curBlend, modeLabels, 3)) {
+                    mat->blendMode = static_cast<BlendMode>(curBlend);
+                    m_editedThisFrame = true;
+                }
+                // Undo del Combo: trackeamos cambio del valor (cast a u32 --
+                // el variant de InspectorEditTracker tiene u32 pero no int).
+                // La conversion BlendMode->u32 va y vuelve sin perdida
+                // (enum class : u8).
+                {
+                    u32 blendModeU32 = static_cast<u32>(mat->blendMode);
+                    detail::pushEditIfDone<u32>(
+                        m_editTracker, m_ui, e, blendModeU32,
+                        [assetsCap, matIdCap](Entity&, const u32& v) {
+                            if (auto* m = assetsCap->getMaterial(matIdCap))
+                                m->blendMode = static_cast<BlendMode>(v);
+                        },
+                        "Editar blend mode");
+                }
+
+                const bool isOpaque  = (mat->blendMode == BlendMode::Opaque);
+                const bool isAdditive = (mat->blendMode == BlendMode::Additive);
+
+                ImGui::BeginDisabled(isOpaque);
+                if (ImGui::SliderFloat(
+                        I18n::T("editor.panel.inspector.mesh.opacity").c_str(),
+                        &mat->opacity, 0.0f, 1.0f, "%.2f")) {
+                    m_editedThisFrame = true;
+                }
+                detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, mat->opacity,
+                    [assetsCap, matIdCap](Entity&, const f32& v) {
+                        if (auto* m = assetsCap->getMaterial(matIdCap)) m->opacity = v;
+                    },
+                    "Editar opacity");
+                ImGui::EndDisabled();
+
+                // IOR + refractionStrength: solo aplican a Translucent.
+                // Additive no hace refraccion (es emisivo puro).
+                ImGui::BeginDisabled(isOpaque || isAdditive);
+                if (ImGui::SliderFloat(
+                        I18n::T("editor.panel.inspector.mesh.ior").c_str(),
+                        &mat->ior, 1.0f, 2.5f, "%.2f")) {
+                    m_editedThisFrame = true;
+                }
+                detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, mat->ior,
+                    [assetsCap, matIdCap](Entity&, const f32& v) {
+                        if (auto* m = assetsCap->getMaterial(matIdCap)) m->ior = v;
+                    },
+                    "Editar IOR");
+                ImGui::TextDisabled("%s",
+                    I18n::T("editor.panel.inspector.mesh.ior_presets").c_str());
+
+                if (ImGui::SliderFloat(
+                        I18n::T("editor.panel.inspector.mesh.refraction_strength").c_str(),
+                        &mat->refractionStrength, 0.0f, 1.0f, "%.2f")) {
+                    m_editedThisFrame = true;
+                }
+                detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, mat->refractionStrength,
+                    [assetsCap, matIdCap](Entity&, const f32& v) {
+                        if (auto* m = assetsCap->getMaterial(matIdCap)) m->refractionStrength = v;
+                    },
+                    "Editar refraction strength");
+                ImGui::EndDisabled();
+            }
         }
 
         // Hito 35 A: drop de textura del AssetBrowser sobre este slot
