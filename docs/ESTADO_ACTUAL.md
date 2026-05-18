@@ -30,11 +30,11 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H64 (2026-05-18)
+## 0.1. Último hito de feature — F2H65 (2026-05-18)
 
-**OIT Weighted Blended + sombras tintadas.** Tag `v1.51.0-fase2-hito64`. Detalle completo en [`hitos/F2H64.md`](hitos/F2H64.md). Validado por dev: *"todo se ve ok"* (tras tour OIT sin flicker + sombras rojo/verde sobre suelo blanco).
+**Jolt constraints (Hinge / Distance / Point).** Tag `v1.52.0-fase2-hito65`. Detalle completo en [`hitos/F2H65.md`](hitos/F2H65.md). **Abre Sub-fase 2.4 (Física avanzada)** del plan original.
 
-**Cierra la línea de transparencia abierta en F2H63**: ya no hay flicker al apilar translúcidos (algoritmo order-independent, McGuire 2013), los vidrios proyectan sombras tintadas según su `albedoTint * (1-opacity)`, y el dev puede apagar el tinte per material via checkbox "Proyectar sombra tintada". Brushes translúcidos quedan agendados para F2H65.
+**Stack completo end-to-end**: `PhysicsWorld` API para los 3 tipos de constraint (Hinge/Distance/Point) → `JointComponent` con runtime cleanup + `dirty` flag → Inspector con combo type + drag-drop entity desde Hierarchy (payload `MOOD_ENTITY` reusable para futuros component-entity links) + DragFloat3 pivotLocal + campos condicionales por type → persistencia `.moodmap` aditiva (sin schema bump) con target body B referenciado por **TAG** (handles entt no son estables entre sesiones; patrón paths-no-ids del Animator/Inventory) → debug overlay 3D con anchor + línea pivot→target + flecha de eje para Hinge (colores por tipo bajo F1) → sample mapa `assets/maps/physics_joints_demo.moodmap` (puerta-péndulo Hinge + péndulo rígido Distance). **Bug fix relevante**: sentinel "sin target asignado" cambió de `0` a `kJointNoTarget = UINT32_MAX` porque raw `entt::entity{0}` es válido (primera entity creada en una scene fresca colisionaba con el sentinel). **Suite 987/10006 verde** (+7 cases, +68 asserts).
 
 ---
 
@@ -49,17 +49,18 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ### En curso
 
+- **Sub-fase 2.4** (Física avanzada): **F2H65** cerrado (Hinge / Distance / Point). Pendiente del plan original: ragdolls, vehicle physics, force fields, triggers avanzados, cloth/soft body, Slider/Fixed joints.
 - **Sub-fase 2.6** (Render polish): F2H55, F2H56, F2H58, F2H59, F2H60, F2H61, F2H62, F2H63, F2H64 cerrados. AUDIT-1, AUDIT-2, AUDIT-3 cerrados.
 
 ### Próximo
 
-**Decisión del dev (2026-05-18):** cerrar lo que queda del **plan original** (`PLAN_FASE2.md`) antes de atacar follow-ups. Los 3 follow-ups de F2H64 quedaron archivados en [BACKLOG.md §1.-3/-2/-1](BACKLOG.md). Sub-fases pendientes según plan original:
+**Decisión del dev (2026-05-18):** cerrar lo que queda del **plan original** (`PLAN_FASE2.md`) antes de atacar follow-ups. Los 3 follow-ups de F2H64 quedaron archivados en [BACKLOG.md §1.-3/-2/-1](BACKLOG.md).
 
-- **Sub-fase 2.4 — Física avanzada** (F2H23-F2H28 originales): Jolt constraints/joints, ragdolls, vehicle physics, force fields, triggers avanzados, cloth/soft body. **Bloque entero sin tocar** — primer candidato natural a abrir.
+Sub-fases pendientes:
+
+- **Sub-fase 2.4 — Física avanzada** (continúa post-F2H65): siguiente candidato natural = **F2H66 — Ragdolls** (esqueleto + bodies + constraints automáticos, plan original F2H24). Dependía de joints que ya tenemos. Alternativa: **F2H66 — Vehicle constraint** si el dev prefiere drivable cars. **Joints adicionales Slider/Fixed** quedan para un sub-hito chico si emergen necesidades de gameplay.
 - **Sub-fase 2.6 — Pipeline AI** (F2H35-F2H40 originales): Mixamo importer cubierto parcialmente por F2H49. Pendiente: Blender MCP server, armas procedurales, generador de props, validación automática.
 - **Sub-fase 2.7 — UI/UX final + cierre Fase 2** (F2H41-F2H44 originales): theming, atajos configurables, tutorial in-app, tag `v2.0.0`.
-
-Primer candidato concreto a arrancar: **F2H65 — Jolt constraints (joints)** [usando numeración actual]. Habilita el resto de Sub-fase 2.4 (ragdolls dependen de joints).
 
 ---
 

@@ -11,6 +11,51 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-18: F2H65 — Jolt constraints (Hinge / Distance / Point)
+
+**Contexto:** abrir Sub-fase 2.4 (Física avanzada) del plan original. El dev quería *"que este sea un motor físico realista, como el source"*. Tag `v1.52.0-fase2-hito65`. Detalle en [`hitos/F2H65.md`](hitos/F2H65.md). 3 tipos de constraint en v1 (Hinge para puertas/brazos, Distance para cuerdas/varillas, Point para ball joints) — Slider y Fixed quedan para sub-hito si emergen necesidades de gameplay.
+
+**Decisión clave 1 — Un solo `pivotLocal` por joint (en local de A), body B usa su origen.**
+
+- **Approach:** `JointComponent.pivotLocal` único. El segundo pivot de Hinge/Distance se asume en `(0, 0, 0)` local de B, que en world es `entityB.Transform.position`.
+- **Razón:** simplifica la UX (un DragFloat3 + un drop target en el Inspector). El caso "offset propio en B" se puede expresar moviendo el Transform de B; pocas situaciones reales necesitan más. Reduce el footprint del componente (de 6 floats a 3) y el modelo mental ("este es el punto donde se ancla A").
+- **Alternativa descartada:** `pivotA` + `pivotB` por separado. Realista pero infla la UI y el caso common (puerta-marco) solo necesita uno.
+- **Cuándo revisar:** si emerge un caso de gameplay real (ej. cable entre 2 puntos arbitrarios en bodies dinámicos sin reordenar Transforms), volver al diseño dual pivot.
+
+**Decisión clave 2 — Target body B referenciado por TAG en persistencia.**
+
+- **Approach:** `SavedJoint.targetTag : string` en el `.moodmap`. Al cargar, `SceneLoader::applyEntitiesToScene` hace una segunda pasada que resuelve `tag → entt::entity` y escribe el handle en `JointComponent.targetEntity`.
+- **Razón:** los handles `entt::entity` no son estables entre sesiones (la generación cambia al crear/destruir). Mismo patrón paths-no-ids que ya usamos en `AnimatorComponent.externalClips`, `InventoryComponent.entries`, `ItemPickupComponent.itemPath`, etc.
+- **Limitación conocida:** tags no son únicos (Hammer-style con `targetname` enforce-unique no se aplicó acá). En caso de colisión, el `forEach` retorna el primer match — log warn si emerge ambigüedad real.
+- **Alternativa descartada:** UUIDs persistentes por entity. Más correcto pero exige un campo nuevo en TODOS los componentes/SavedEntities — refactor cross-cutting que no se justifica para este hito.
+
+**Decisión clave 3 — Sentinel `kJointNoTarget = UINT32_MAX` (== `static_cast<u32>(entt::null)`), no `0`.**
+
+- **Approach:** `constexpr u32 kJointNoTarget = ~u32{0}` en `Components.h` junto a la struct. Default de `JointComponent.targetEntity` + check `== kJointNoTarget` para "sin asignar".
+- **Razón:** **bug de diseño descubierto en Bloque E**. El intento inicial usó `targetEntity == 0` como sentinel; el primer test de round-trip falló porque `frame` (creada PRIMERO en la scene fresca) tiene raw `entt::entity{0}` → `static_cast<u32>(handle) == 0` → colisión con el sentinel. El check `targetEntity != 0` filtraba el target legítimo.
+- **Alternativa descartada:** cambiar `targetEntity` de `u32` a `entt::entity` directamente (donde `entt::null` es sentinel natural). Hubiera contaminado headers de componentes con `entt::entt.hpp` y exigido cast en cada `static_cast<u32>(handle)` del Inspector/serializer.
+- **Generalización:** **regla para futuros sentinels que viajen como `u32`**: usar `UINT32_MAX` o un valor obviamente fuera del rango legítimo. El `0` es válido para entt y conviene reservarlo.
+
+**Decisión clave 4 — Drag-drop entity payload `MOOD_ENTITY` reusable.**
+
+- **Approach:** `HierarchyPanel` emite un drag source por cada row con payload `MOOD_ENTITY` cargando `entt::entity` raw (4 bytes). `InspectorPanel_Joint` lo acepta vía `BeginDragDropTarget` + `AcceptDragDropPayload("MOOD_ENTITY")` + `memcpy` con validación de `DataSize`. Self-link bloqueado en el handler.
+- **Razón:** la convención `MOOD_<TIPO>_ASSET` ya existía para texture/mesh/material/script/item/prefab; faltaba el equivalente para entities. Cualquier componente futuro que linkee entities entre sí (parent-child, follow-target, AI attention) puede consumir el mismo payload sin tocar HierarchyPanel.
+- **Trade-off:** el payload lleva el RAW handle, no la tag. El consumer hace lookup vía `Scene::entityFromHandle` (que es lo correcto para uso interno mientras la scene esté viva). La persistencia es responsabilidad del componente (en F2H65 = serializer resuelve handle → tag al guardar).
+
+**Decisión clave 5 — Tag resolution en 2 pasadas (eager + post-load batch).**
+
+- **Approach:** `SceneLoader::applyOneEntity` hace lookup inmediato con la scene parcialmente poblada (suficiente para undo de delete, donde B ya existe). `applyEntitiesToScene` hace una **segunda pasada** después del loop principal: itera entities con joint pendiente y resuelve el tag con todas las entities ya creadas.
+- **Razón:** el primer pase puede crear el owner del joint ANTES que el target (orden del array en el `.moodmap`). Sin la segunda pasada, el owner quedaría con `targetEntity = kJointNoTarget` permanente hasta que el dev re-asigne via Inspector.
+- **Alternativa descartada:** agregar un campo runtime `pendingTargetTag : string` al `JointComponent` y resolver lazily en el PhysicsSystem por tick. Funcional pero contamina el componente con state transient solo útil al cargar; la 2-pasadas es self-contained al loader.
+
+**Decisión clave 6 — Debug overlay solo bajo F1 (no toggle independiente).**
+
+- **Approach:** el `forEach<JointComponent, TransformComponent>` que dibuja anchor + línea + flecha vive dentro del bloque `if (m_debugDraw)` del overlay 3D, junto a las AABBs de tiles + OBBs de triggers + paths de NavAgents.
+- **Razón:** alinear con el patrón existente. Toggle único para "ver el cableado físico/lógico de la escena" en lugar de N toggles independientes que el dev tendría que recordar. Si emerge necesidad de granularidad (ej. "solo joints, no triggers"), agendar polish.
+- **Colores por tipo** (Hinge azul, Distance verde lima, Point magenta): convención visual que también puede aplicarse al Inspector header si el dev pide consistencia cross-panel en el futuro.
+
+---
+
 ## 2026-05-18: F2H64 — OIT Weighted Blended + sombras tintadas
 
 **Contexto:** completar la línea de transparencia abierta en F2H63 (split de scope decidido en 2026-05-17). F2H63 entregó base visual; F2H64 entrega correctness: no flicker apilando translúcidos + vidrios proyectan sombras tintadas. Tag `v1.51.0-fase2-hito64`. Detalle en [`hitos/F2H64.md`](hitos/F2H64.md). El dev cerró con *"todo se ve ok"* tras tour visual (incluyó screenshot de cubo rojo + cubo verde con sombras del mismo color sobre suelo blanco: *"de 10!"*).

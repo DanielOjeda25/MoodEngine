@@ -132,6 +132,10 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 
 **🏁 Sub-fase 2.5 (Diálogos / Inventario / Quests) cerrada con `v1.41.0-fase2-hito53`.**
 
+### Sub-fase 2.4 — Física avanzada (joints / constraints)
+
+- [x] **F2H65** — Jolt constraints (Hinge / Distance / Point) end-to-end: PhysicsWorld API + JointComponent + Inspector con drag-drop entity + persistencia `.moodmap` por TAG + debug overlay 3 colores + sample mapa `physics_joints_demo.moodmap` (puerta-péndulo Hinge + péndulo rígido Distance) + 11 tests headless (2026-05-18, tag `v1.52.0-fase2-hito65`) — [detalle](hitos/F2H65.md). Abre Sub-fase 2.4 del plan original. Bug fix de sentinel `kJointNoTarget = UINT32_MAX` (raw entt handle `0` colisionaba con la primera entity creada). Suite **987/10006**.
+
 ### Sub-fase 2.6 — Render polish
 
 > **Nota de formato** (AUDIT-1, 2026-05-17): desde F2H62 en adelante, cada hito tiene su detalle en [`docs/hitos/F2H<N>.md`](hitos/README.md) y este índice queda con una línea por hito. Los entries de F2H1-F2H61 quedan inline acá hasta que un AUDIT futuro los migre.
