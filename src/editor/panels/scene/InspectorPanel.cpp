@@ -90,6 +90,7 @@ void InspectorPanel::onImGuiRender() {
     if (e.hasComponent<EnvironmentComponent>())      renderEnvironmentSection(e);
     if (e.hasComponent<ScriptComponent>())           renderScriptSection(e);
     if (e.hasComponent<RigidBodyComponent>())        renderRigidBodySection(e);
+    if (e.hasComponent<JointComponent>())            renderJointSection(e);  // F2H65
     if (e.hasComponent<AudioSourceComponent>())      renderAudioSourceSection(e);
     if (e.hasComponent<AnimatorComponent>())         renderAnimatorSection(e);
     if (e.hasComponent<ParticleEmitterComponent>())  renderParticleEmitterSection(e);
@@ -214,6 +215,13 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
         e.hasComponent<TriggerComponent>(),
         [](Entity en, std::string lbl) {
             return makeAddComponentCommand<TriggerComponent>(en, std::move(lbl));
+        });
+    // F2H65: JointComponent en Physics.
+    add("component.name.joint", "component.desc.joint",
+        "editor.panel.inspector.add.cat.physics",
+        e.hasComponent<JointComponent>(),
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<JointComponent>(en, std::move(lbl));
         });
 
     // Audio

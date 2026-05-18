@@ -231,6 +231,68 @@ void EditorApplication::updateRigidBodies(f32 dt) {
             }
         });
 
+    // F2H65: materializar joints. Se hace DESPUES de la materializacion
+    // de bodies (loop 1) y el resync (loop F2H40) para asegurar que ambos
+    // A y B tienen bodyId valido antes de crear el constraint. Si A o B
+    // todavia no fueron creados (por orden de iteracion del registry),
+    // joint.dirty queda en true y reintenta el siguiente frame.
+    m_scene->forEach<JointComponent, TransformComponent, RigidBodyComponent>(
+        [&](Entity selfA, JointComponent& joint, TransformComponent& tA,
+            RigidBodyComponent& rbA) {
+            if (!joint.dirty && joint.constraintId != 0) return;
+            if (joint.targetEntity == kJointNoTarget) return;
+            if (rbA.bodyId == 0) return;
+
+            const entt::entity targetH = static_cast<entt::entity>(joint.targetEntity);
+            Entity entB = m_scene->entityFromHandle(targetH);
+            if (!entB) return;  // target invalido (entity destruida o nunca existio)
+            if (!entB.hasComponent<RigidBodyComponent>()) return;
+            const auto& rbB = entB.getComponent<RigidBodyComponent>();
+            if (rbB.bodyId == 0) return;  // B no materializado todavia, reintenta
+
+            // Destruir constraint previo si existe (dirty=true por cambio de
+            // params en Inspector).
+            if (joint.constraintId != 0) {
+                m_physicsWorld->destroyConstraint(joint.constraintId);
+                joint.constraintId = 0;
+            }
+
+            // Pivot local de A -> world via worldMatrix de A.
+            const glm::mat4 worldA = tA.worldMatrix();
+            const glm::vec3 pivotWorld =
+                glm::vec3(worldA * glm::vec4(joint.pivotLocal, 1.0f));
+
+            switch (joint.type) {
+                case JointComponent::Type::Hinge: {
+                    // Axis: vector direccion (w=0) para que no se desplace
+                    // por la translation de worldA.
+                    const glm::vec3 axisWorld =
+                        glm::vec3(worldA * glm::vec4(joint.axisLocal, 0.0f));
+                    joint.constraintId = m_physicsWorld->createHingeConstraint(
+                        rbA.bodyId, rbB.bodyId,
+                        pivotWorld, axisWorld,
+                        joint.limitMinDeg, joint.limitMaxDeg);
+                    break;
+                }
+                case JointComponent::Type::Distance: {
+                    // El pivot de B se asume en su Transform.position
+                    // (limitacion v1: B no tiene pivot offset propio).
+                    const auto& tB = entB.getComponent<TransformComponent>();
+                    joint.constraintId = m_physicsWorld->createDistanceConstraint(
+                        rbA.bodyId, rbB.bodyId,
+                        pivotWorld, tB.position,
+                        joint.minDistance, joint.maxDistance);
+                    break;
+                }
+                case JointComponent::Type::Point: {
+                    joint.constraintId = m_physicsWorld->createPointConstraint(
+                        rbA.bodyId, rbB.bodyId, pivotWorld);
+                    break;
+                }
+            }
+            if (joint.constraintId != 0) joint.dirty = false;
+        });
+
     // 2) Stepear la simulacion SOLO en Play Mode. En Editor Mode los bodies
     //    existen (para debug draw futuro) pero no se mueven.
     if (m_mode == EditorMode::Play) {
@@ -324,14 +386,17 @@ void EditorApplication::deleteSelectedEntity() {
     // del body de Jolt los hace `DeleteEntityCommand::execute()`.
     m_ui.setSelectedEntity(Entity{}); // limpiar seleccion antes del destroy
     DeleteEntityCommand::BodyCleanup cleanup;
+    DeleteEntityCommand::ConstraintCleanup constraintCleanup;
     if (m_physicsWorld) {
         PhysicsWorld* pw = m_physicsWorld.get();
         cleanup = [pw](u32 bodyId) { pw->destroyBody(bodyId); };
+        constraintCleanup = [pw](u32 cid) { pw->destroyConstraint(cid); };  // F2H65
     }
     auto cmd = std::make_unique<DeleteEntityCommand>(
         selected, m_scene.get(), m_assetManager.get(),
         std::move(cleanup),
-        &m_history);  // Hito 32: para remap de handles post-undo
+        &m_history,  // Hito 32: para remap de handles post-undo
+        std::move(constraintCleanup));  // F2H65
     m_history.push(std::move(cmd));
     markDirty();
 }

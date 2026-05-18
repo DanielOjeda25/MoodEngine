@@ -259,6 +259,26 @@ struct SavedInventory {
     std::vector<SavedInventoryEntry>         entries;
 };
 
+/// @brief F2H65: copia persistida de un JointComponent (constraint Jolt).
+///        El target body B se referencia por TAG (string), no por handle,
+///        porque los entt handles no son estables entre sesiones — mismo
+///        patron paths-no-ids del Animator/Inventory.
+///        Si el .moodmap no trae `joint`, SceneLoader no agrega el
+///        componente. Si trae `joint` pero el `target_tag` no resuelve
+///        a ninguna entity al cargar, `targetEntity` queda en 0 y el
+///        PhysicsSystem deja el constraint sin materializar hasta que
+///        el dev re-asigne via Inspector drag-drop.
+struct SavedJoint {
+    std::string type{"hinge"};       // "hinge" | "distance" | "point"
+    std::string targetTag;            // tag de la entity B; vacio = sin asignar
+    glm::vec3   pivotLocal{0.0f};
+    glm::vec3   axisLocal{0.0f, 1.0f, 0.0f};
+    f32         limitMinDeg = -180.0f;
+    f32         limitMaxDeg = 180.0f;
+    f32         minDistance = 0.0f;
+    f32         maxDistance = 1.0f;
+};
+
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh
 ///        renderer; Hito 11 agrega light; Hito 12 agrega rigid body;
 ///        Hito 14 agrega prefabPath (link suave al asset del que se
@@ -281,6 +301,7 @@ struct SavedEntity {
     std::optional<SavedAnimator> animator;                // F2H50 Bloque D
     std::optional<SavedInventory> inventory;              // F2H51 Bloque I
     std::optional<SavedItemPickup> itemPickup;            // F2H52 Bloque B
+    std::optional<SavedJoint>      joint;                 // F2H65
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.

@@ -154,6 +154,18 @@ void HierarchyPanel::onImGuiRender() {
                 }
             }
 
+            // F2H65 Bloque D: drag source. Permite asociar entidades entre si
+            // desde el Inspector (ej. JointComponent.targetEntity). El payload
+            // lleva el raw entt::entity handle; el drop target lo castea y
+            // resuelve via Scene::entityFromHandle.
+            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                const entt::entity handlePayload = entry.handle;
+                ImGui::SetDragDropPayload("MOOD_ENTITY", &handlePayload,
+                                            sizeof(handlePayload));
+                ImGui::Text("%s %s", iconForEntity(e), entry.tag->name.c_str());
+                ImGui::EndDragDropSource();
+            }
+
             // F2H57 Bloque C: menu contextual con click derecho sobre
             // la entidad. Convencion Hammer Editor: Cambiar tipo /
             // Eliminar (Rename + Duplicar quedan como follow-up).

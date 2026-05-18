@@ -1,0 +1,108 @@
+{
+  "brushes": [],
+  "entities": [
+    {
+      "rigid_body": {
+        "halfExtents": [0.15, 0.15, 0.15],
+        "mass": 1.0,
+        "shape": "sphere",
+        "type": "static"
+      },
+      "tag": "MarcoHinge",
+      "transform": {
+        "position": [-3.0, 3.0, 0.0],
+        "rotationEuler": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    },
+    {
+      "joint": {
+        "axisLocal": [0.0, 0.0, 1.0],
+        "limit_max_deg": 90.0,
+        "limit_min_deg": -90.0,
+        "pivotLocal": [0.0, 0.7, 0.0],
+        "target_tag": "MarcoHinge",
+        "type": "hinge"
+      },
+      "rigid_body": {
+        "halfExtents": [0.05, 0.7, 0.3],
+        "mass": 2.0,
+        "shape": "box",
+        "type": "dynamic"
+      },
+      "tag": "PuertaHinge",
+      "transform": {
+        "position": [-1.5, 3.0, 0.0],
+        "rotationEuler": [0.0, 0.0, 45.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    },
+    {
+      "rigid_body": {
+        "halfExtents": [0.15, 0.15, 0.15],
+        "mass": 1.0,
+        "shape": "sphere",
+        "type": "static"
+      },
+      "tag": "SoporteDistance",
+      "transform": {
+        "position": [3.0, 3.5, 0.0],
+        "rotationEuler": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    },
+    {
+      "joint": {
+        "max_distance": 1.5,
+        "min_distance": 1.5,
+        "pivotLocal": [0.0, 0.0, 0.0],
+        "target_tag": "SoporteDistance",
+        "type": "distance"
+      },
+      "rigid_body": {
+        "halfExtents": [0.25, 0.25, 0.25],
+        "mass": 1.5,
+        "shape": "sphere",
+        "type": "dynamic"
+      },
+      "tag": "PenduloDistance",
+      "transform": {
+        "position": [4.5, 3.5, 0.0],
+        "rotationEuler": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    }
+  ],
+  "height": 5,
+  "name": "physics_joints_demo",
+  "tileSize": 3.0,
+  "tiles": [
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"}
+  ],
+  "version": 14,
+  "width": 5
+}

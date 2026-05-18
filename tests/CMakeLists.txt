@@ -46,6 +46,7 @@ add_executable(mood_tests
     test_add_component_command.cpp  # F2H45 Bloque A
     test_particle_system.cpp
     test_character_controller.cpp
+    test_physics_constraints.cpp  # F2H65
     test_raycast.cpp
     test_trigger_system.cpp
     test_save_load.cpp

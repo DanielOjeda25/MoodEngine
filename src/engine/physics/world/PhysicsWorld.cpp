@@ -26,7 +26,15 @@
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 #include <Jolt/Physics/Body/BodyLock.h>
+#include <Jolt/Physics/Body/BodyLockMulti.h>  // F2H65: lock multi para constraints
 #include <Jolt/Physics/Body/BodyFilter.h>
+
+// F2H65: constraints (joints)
+#include <Jolt/Physics/Constraints/HingeConstraint.h>
+#include <Jolt/Physics/Constraints/DistanceConstraint.h>
+#include <Jolt/Physics/Constraints/PointConstraint.h>
+
+#include <glm/trigonometric.hpp>  // F2H65: glm::radians para hinge limits
 
 #include <cstdarg>
 #include <cstdio>
@@ -143,6 +151,13 @@ struct PhysicsWorld::Impl {
     // Hito 30: characters CharacterVirtual indexados por handle estable.
     std::unordered_map<u32, CharacterEntry> characters;
     u32 nextCharId = 1;
+
+    // F2H65: constraints (joints) indexados por handle estable.
+    // JPH::Ref<JPH::Constraint> mantiene el constraint vivo mientras este
+    // map lo tiene -- Jolt agrega su propia referencia al physicsSystem via
+    // AddConstraint, asi que el Ref aqui es por simetria al lifecycle.
+    std::unordered_map<u32, JPH::Ref<JPH::Constraint>> constraints;
+    u32 nextConstraintId = 1;
 };
 
 PhysicsWorld::PhysicsWorld() : m_impl(std::make_unique<Impl>()) {
@@ -484,6 +499,157 @@ void PhysicsWorld::addImpulse(u32 bodyId, const glm::vec3& impulse) {
 u32 PhysicsWorld::bodyCount() const {
     if (!m_impl || !m_impl->physicsSystem) return 0;
     return m_impl->physicsSystem->GetNumBodies();
+}
+
+// --- F2H65: Constraints (joints) ---
+
+namespace {
+
+// Helper: resolver bodyA + bodyB a punteros Body* via BodyLockMulti.
+// Devuelve nullptr en out si alguno no existe. Idempotente para ids invalidos.
+//
+// Importante: el lock es RAII (BodyLockMultiWrite scope-bound). Capturamos
+// los punteros pero los usamos solo durante el lock; al salir del scope los
+// invalidamos por seguridad. Para los constraint constructors necesitamos
+// las referencias, asi que la creacion del constraint se hace DENTRO del
+// scope del lock.
+struct LockedBodyPair {
+    JPH::Body* a = nullptr;
+    JPH::Body* b = nullptr;
+};
+
+} // anonymous
+
+u32 PhysicsWorld::createHingeConstraint(u32 bodyA, u32 bodyB,
+                                          const glm::vec3& pivotWorld,
+                                          const glm::vec3& axisWorld,
+                                          f32 limitMinDeg, f32 limitMaxDeg) {
+    if (!m_impl || !m_impl->physicsSystem) return 0;
+    if (bodyA == 0 || bodyB == 0) return 0;
+
+    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
+    const JPH::BodyID idA{bodyA};
+    const JPH::BodyID idB{bodyB};
+    if (!bi.IsAdded(idA) || !bi.IsAdded(idB)) return 0;
+
+    // Lock ambos bodies para tener referencias estables al crear el
+    // constraint. BodyLockMultiWrite es la API correcta cuando necesitas
+    // ambos al mismo tiempo (evita deadlocks por orden de locking).
+    const JPH::BodyID ids[2] = {idA, idB};
+    JPH::BodyLockMultiWrite lock(m_impl->physicsSystem->GetBodyLockInterface(),
+                                  ids, 2);
+    JPH::Body* a = lock.GetBody(0);
+    JPH::Body* b = lock.GetBody(1);
+    if (a == nullptr || b == nullptr) return 0;
+
+    JPH::HingeConstraintSettings settings;
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+    settings.mPoint1 = JPH::RVec3(pivotWorld.x, pivotWorld.y, pivotWorld.z);
+    settings.mPoint2 = JPH::RVec3(pivotWorld.x, pivotWorld.y, pivotWorld.z);
+    // El hinge axis define el eje de rotacion. Normal axis define un
+    // segundo eje perpendicular para medir el angulo actual. Usamos un
+    // helper para construir una base ortonormal a partir del axis.
+    const JPH::Vec3 hingeAxis(axisWorld.x, axisWorld.y, axisWorld.z);
+    JPH::Vec3 hingeAxisNorm = hingeAxis.NormalizedOr(JPH::Vec3::sAxisY());
+    // Normal axis: cualquier vector perpendicular al hinge axis. Tomamos
+    // el eje X mundial; si el hinge es paralelo a X, caemos a Z.
+    JPH::Vec3 normalAxis = JPH::Vec3::sAxisX();
+    if (std::abs(hingeAxisNorm.Dot(normalAxis)) > 0.99f) {
+        normalAxis = JPH::Vec3::sAxisZ();
+    }
+    normalAxis = (normalAxis - normalAxis.Dot(hingeAxisNorm) * hingeAxisNorm)
+                     .Normalized();
+    settings.mHingeAxis1 = hingeAxisNorm;
+    settings.mHingeAxis2 = hingeAxisNorm;
+    settings.mNormalAxis1 = normalAxis;
+    settings.mNormalAxis2 = normalAxis;
+    settings.mLimitsMin = glm::radians(limitMinDeg);
+    settings.mLimitsMax = glm::radians(limitMaxDeg);
+
+    JPH::Ref<JPH::Constraint> c = settings.Create(*a, *b);
+    m_impl->physicsSystem->AddConstraint(c);
+
+    const u32 handle = m_impl->nextConstraintId++;
+    m_impl->constraints.emplace(handle, c);
+    return handle;
+}
+
+u32 PhysicsWorld::createDistanceConstraint(u32 bodyA, u32 bodyB,
+                                             const glm::vec3& pivotA_world,
+                                             const glm::vec3& pivotB_world,
+                                             f32 minDistance, f32 maxDistance) {
+    if (!m_impl || !m_impl->physicsSystem) return 0;
+    if (bodyA == 0 || bodyB == 0) return 0;
+
+    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
+    const JPH::BodyID idA{bodyA};
+    const JPH::BodyID idB{bodyB};
+    if (!bi.IsAdded(idA) || !bi.IsAdded(idB)) return 0;
+
+    const JPH::BodyID ids[2] = {idA, idB};
+    JPH::BodyLockMultiWrite lock(m_impl->physicsSystem->GetBodyLockInterface(),
+                                  ids, 2);
+    JPH::Body* a = lock.GetBody(0);
+    JPH::Body* b = lock.GetBody(1);
+    if (a == nullptr || b == nullptr) return 0;
+
+    JPH::DistanceConstraintSettings settings;
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+    settings.mPoint1 = JPH::RVec3(pivotA_world.x, pivotA_world.y, pivotA_world.z);
+    settings.mPoint2 = JPH::RVec3(pivotB_world.x, pivotB_world.y, pivotB_world.z);
+    settings.mMinDistance = minDistance;
+    settings.mMaxDistance = maxDistance;
+
+    JPH::Ref<JPH::Constraint> c = settings.Create(*a, *b);
+    m_impl->physicsSystem->AddConstraint(c);
+
+    const u32 handle = m_impl->nextConstraintId++;
+    m_impl->constraints.emplace(handle, c);
+    return handle;
+}
+
+u32 PhysicsWorld::createPointConstraint(u32 bodyA, u32 bodyB,
+                                          const glm::vec3& pivotWorld) {
+    if (!m_impl || !m_impl->physicsSystem) return 0;
+    if (bodyA == 0 || bodyB == 0) return 0;
+
+    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
+    const JPH::BodyID idA{bodyA};
+    const JPH::BodyID idB{bodyB};
+    if (!bi.IsAdded(idA) || !bi.IsAdded(idB)) return 0;
+
+    const JPH::BodyID ids[2] = {idA, idB};
+    JPH::BodyLockMultiWrite lock(m_impl->physicsSystem->GetBodyLockInterface(),
+                                  ids, 2);
+    JPH::Body* a = lock.GetBody(0);
+    JPH::Body* b = lock.GetBody(1);
+    if (a == nullptr || b == nullptr) return 0;
+
+    JPH::PointConstraintSettings settings;
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+    settings.mPoint1 = JPH::RVec3(pivotWorld.x, pivotWorld.y, pivotWorld.z);
+    settings.mPoint2 = JPH::RVec3(pivotWorld.x, pivotWorld.y, pivotWorld.z);
+
+    JPH::Ref<JPH::Constraint> c = settings.Create(*a, *b);
+    m_impl->physicsSystem->AddConstraint(c);
+
+    const u32 handle = m_impl->nextConstraintId++;
+    m_impl->constraints.emplace(handle, c);
+    return handle;
+}
+
+void PhysicsWorld::destroyConstraint(u32 constraintId) {
+    if (!m_impl || !m_impl->physicsSystem) return;
+    if (constraintId == 0) return;
+    auto it = m_impl->constraints.find(constraintId);
+    if (it == m_impl->constraints.end()) return;
+    m_impl->physicsSystem->RemoveConstraint(it->second.GetPtr());
+    m_impl->constraints.erase(it);
+}
+
+u32 PhysicsWorld::constraintCount() const {
+    if (!m_impl) return 0;
+    return static_cast<u32>(m_impl->constraints.size());
 }
 
 // --- Hito 30: Character Controller ---

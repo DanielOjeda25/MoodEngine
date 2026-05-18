@@ -6,6 +6,7 @@
 #include "engine/scene/VisGroup.h"  // F2H33: visgroupIdOf
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
+#include "engine/scene/core/Scene.h"  // F2H65: lookup target via entityFromHandle
 #include "engine/scene/serialization/JsonHelpers.h" // adapters glm::vec3 <-> json
 
 #include <variant>
@@ -355,6 +356,49 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         je["inventory"] = ji;
     }
 
+    // F2H65: JointComponent. El target body B se persiste por TAG
+    // (string) en lugar de raw entt handle — los handles no son estables
+    // entre sesiones. El SceneLoader hace una segunda pasada post-load
+    // para resolver tag -> nuevo handle.
+    if (entity.hasComponent<JointComponent>()) {
+        const auto& jc = entity.getComponent<JointComponent>();
+        json jj;
+        const char* typeStr = "hinge";
+        switch (jc.type) {
+            case JointComponent::Type::Hinge:    typeStr = "hinge";    break;
+            case JointComponent::Type::Distance: typeStr = "distance"; break;
+            case JointComponent::Type::Point:    typeStr = "point";    break;
+        }
+        jj["type"] = typeStr;
+        // Resolver targetEntity (raw handle) -> tag via scene back-ref.
+        // Si el handle no esta vivo o no tiene tag, target_tag queda vacio
+        // (el load tratara la entidad como "sin target asignado").
+        if (jc.targetEntity != kJointNoTarget && entity.scene() != nullptr) {
+            const auto handle = static_cast<entt::entity>(jc.targetEntity);
+            Entity tgt = entity.scene()->entityFromHandle(handle);
+            if (static_cast<bool>(tgt) && tgt.hasComponent<TagComponent>()) {
+                jj["target_tag"] = tgt.getComponent<TagComponent>().name;
+            }
+        }
+        // pivotLocal siempre se persiste (default (0,0,0) es valido pero el
+        // round-trip explicito evita confusion al editar el JSON a mano).
+        jj["pivotLocal"] = jc.pivotLocal;
+        // Campos especificos por tipo. Solo se escriben si != default para
+        // no ensuciar el JSON con valores triviales.
+        if (jc.type == JointComponent::Type::Hinge) {
+            if (jc.axisLocal != glm::vec3(0.0f, 1.0f, 0.0f)) {
+                jj["axisLocal"] = jc.axisLocal;
+            }
+            if (jc.limitMinDeg != -180.0f) jj["limit_min_deg"] = jc.limitMinDeg;
+            if (jc.limitMaxDeg !=  180.0f) jj["limit_max_deg"] = jc.limitMaxDeg;
+        } else if (jc.type == JointComponent::Type::Distance) {
+            jj["min_distance"] = jc.minDistance;
+            jj["max_distance"] = jc.maxDistance;
+        }
+        // Point: no extra fields.
+        je["joint"] = jj;
+    }
+
     // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la
     // entidad tiene un `PrefabLinkComponent`. Sin propagacion bidireccional
     // por ahora; es solo un breadcrumb para futuras features ("revertir a
@@ -561,6 +605,22 @@ SavedEntity parseEntityFromJson(const json& j) {
             }
         }
         se.inventory = std::move(si);
+    }
+
+    // F2H65: joint. Aditivo — mapas pre-F2H65 sin el campo se leen igual
+    // (la entidad queda sin JointComponent).
+    if (j.contains("joint")) {
+        const auto& jj = j.at("joint");
+        SavedJoint sj;
+        sj.type        = jj.value("type",            std::string{"hinge"});
+        sj.targetTag   = jj.value("target_tag",      std::string{});
+        sj.pivotLocal  = jj.value("pivotLocal",      glm::vec3{0.0f});
+        sj.axisLocal   = jj.value("axisLocal",       glm::vec3{0.0f, 1.0f, 0.0f});
+        sj.limitMinDeg = jj.value("limit_min_deg",   -180.0f);
+        sj.limitMaxDeg = jj.value("limit_max_deg",    180.0f);
+        sj.minDistance = jj.value("min_distance",      0.0f);
+        sj.maxDistance = jj.value("max_distance",      1.0f);
+        se.joint = std::move(sj);
     }
 
     if (j.contains("script")) {

@@ -194,6 +194,80 @@ struct RigidBodyComponent {
         : type(t), shape(s), halfExtents(he), mass(m) {}
 };
 
+/// @brief F2H65: constraint (joint) entre 2 bodies fisicos. Permite armar
+///        puertas con bisagra (Hinge), cuerdas/cadenas (Distance), y
+///        pivotes 3DoF (Point) estilo Source / Unity / Godot.
+///
+///        El componente vive en la entidad "A" (uno de los dos cuerpos del
+///        joint). `targetEntity` es el raw entt::entity handle de la
+///        entidad "B" -- el otro cuerpo. Ambas deben tener RigidBodyComponent
+///        con bodyId valido para que el PhysicsSystem cree el constraint.
+///
+///        Pivot: cuando vale (0,0,0) la bisagra/pivot esta en el centro
+///        de la entity A. Para una puerta tipica el dev mueve el pivot
+///        en local space hacia el borde (ej. (-0.5, 0, 0) si la puerta
+///        tiene halfExtents (0.5, 1, 0.05)).
+///
+///        Limitacion v1: pivot unico (asumido en local de A); el body B
+///        usa su origen como segundo pivot. Si necesitas un offset en B,
+///        movele el Transform de B.
+/// @brief F2H65: sentinel "sin target asignado" para JointComponent.
+///        UINT32_MAX (== static_cast<u32>(entt::null)) en vez de 0 porque
+///        la primera entidad creada en una Scene fresca tiene raw handle
+///        0 — un sentinel == 0 colisionaria con un target legitimo a esa
+///        entidad.
+constexpr u32 kJointNoTarget = static_cast<u32>(~static_cast<u32>(0));
+
+struct JointComponent {
+    enum class Type : u8 {
+        Hinge    = 0,   // 1 eje rotacion + limits (puertas, brazos)
+        Distance = 1,   // distancia entre 2 puntos pivot (cuerdas)
+        Point    = 2,   // 3 ejes rotacion libres, 0 translation (ball joint)
+    };
+
+    Type      type = Type::Hinge;
+
+    /// @brief Raw entt::entity handle del body B. kJointNoTarget = sin
+    ///        asignar (el PhysicsSystem skipea la creacion hasta que el
+    ///        dev lo setee desde el Inspector o via drag-drop del Hierarchy).
+    u32       targetEntity = kJointNoTarget;
+
+    /// @brief Pivot del joint en local space de la entity A (esta).
+    ///        Para Hinge: posicion de la bisagra.
+    ///        Para Distance: punto de attach en A (el de B es origen de B).
+    ///        Para Point: pivot compartido (mismo punto en world coords
+    ///        que B(0,0,0)).
+    glm::vec3 pivotLocal{0.0f};
+
+    /// @brief Solo Hinge: eje de rotacion en local space de A. Default
+    ///        Y-up = bisagra vertical estilo puerta de cuarto.
+    glm::vec3 axisLocal{0.0f, 1.0f, 0.0f};
+
+    /// @brief Solo Hinge: limits angulares en grados. Defaults a
+    ///        [-180, 180] = libre rotacion. El dev los ajusta a [0, 90]
+    ///        para puerta de un solo lado, etc.
+    f32       limitMinDeg = -180.0f;
+    f32       limitMaxDeg = 180.0f;
+
+    /// @brief Solo Distance: rango de distancia entre los 2 pivots
+    ///        (world coords). min==max -> rigido. min<max -> cuerda
+    ///        que puede flexionar entre los limites.
+    f32       minDistance = 0.0f;
+    f32       maxDistance = 1.0f;
+
+    // --- Runtime (NO se persiste) ---
+
+    /// @brief Handle del constraint en PhysicsWorld. 0 = no creado.
+    u32  constraintId = 0;
+
+    /// @brief Marcar true para forzar destroy + create del constraint en
+    ///        el proximo tick del PhysicsSystem. Se setea desde el
+    ///        Inspector cuando el dev cambia type/pivot/axis/limits, y se
+    ///        limpia a false una vez aplicado. Tambien default true al
+    ///        spawn para que el primer tick cree el constraint.
+    bool dirty = true;
+};
+
 /// @brief Configuracion del entorno de render (Hito 15 Bloque 4):
 ///        skybox + fog + post-process (exposure + tonemap). Se agrega a UNA
 ///        entidad cualquiera de la scene (convencion: un objeto vacio

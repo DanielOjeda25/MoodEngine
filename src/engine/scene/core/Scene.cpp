@@ -28,6 +28,12 @@ Entity Scene::makeEntity(entt::entity handle) {
     return Entity(handle, this);
 }
 
+Entity Scene::entityFromHandle(entt::entity handle) {
+    if (handle == entt::null) return Entity{};
+    if (!m_registry.valid(handle)) return Entity{};
+    return makeEntity(handle);
+}
+
 // --- F2H33: VisGroups ---
 
 VisGroup* Scene::findVisGroup(u64 id) {

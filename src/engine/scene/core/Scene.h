@@ -83,6 +83,11 @@ public:
     ///        existente.
     void resetVisGroups(std::vector<VisGroup> vgs) { m_visgroups = std::move(vgs); }
 
+    /// @brief F2H65: lookup de Entity por raw entt handle. Devuelve una
+    ///        Entity falsy si el handle no esta vivo en el registry.
+    ///        Util para JointComponent.targetEntity → Entity B.
+    Entity entityFromHandle(entt::entity handle);
+
 private:
     Entity makeEntity(entt::entity handle);
 

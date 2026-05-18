@@ -164,6 +164,55 @@ public:
     /// @brief Cantidad de bodies activos. Util para tests / debug.
     u32 bodyCount() const;
 
+    // --- F2H65: Constraints (joints) ---
+    //
+    // 3 tipos mainstream que cubren el 95% de casos de un motor estilo
+    // Source / Unity / Godot:
+    //   - Hinge:    1 eje de rotacion + limits opcionales (puertas, barreras).
+    //   - Distance: 2 puntos pivot, mantiene distancia entre min/max (cuerdas).
+    //   - Point:    3 ejes de rotacion libres, 0 translation (pivote 3DoF).
+    //
+    // El caller debe asegurar que ambos bodies existen al llamar. Si alguno
+    // tiene bodyId invalido devolvemos 0 (no se crea constraint).
+    //
+    // Devuelve un constraint id estable durante la vida del constraint. La
+    // BodyID interna sigue valida aunque el body se duerma — Jolt mantiene
+    // la referencia al constraint mientras este vivo.
+
+    /// @brief Hinge constraint (bisagra de 1 eje). Body A y B rotan
+    ///        libremente respecto a `axisWorld` con limits angulares
+    ///        opcionales. Para limits libres usar `limitMinDeg=-180,
+    ///        limitMaxDeg=180`. Pivot y axis se proveen en world coords
+    ///        (Jolt los convierte a local de cada body internamente).
+    u32 createHingeConstraint(u32 bodyA, u32 bodyB,
+                                const glm::vec3& pivotWorld,
+                                const glm::vec3& axisWorld,
+                                f32 limitMinDeg, f32 limitMaxDeg);
+
+    /// @brief Distance constraint. Mantiene la distancia entre 2 puntos
+    ///        pivot (uno en cada body) entre `minDistance` y `maxDistance`.
+    ///        Si min==max es rigido (sin elasticidad). Si min<max el
+    ///        segmento puede contraerse/extenderse dentro del rango.
+    ///        Util para cuerdas, cables, cadenas.
+    u32 createDistanceConstraint(u32 bodyA, u32 bodyB,
+                                   const glm::vec3& pivotA_world,
+                                   const glm::vec3& pivotB_world,
+                                   f32 minDistance, f32 maxDistance);
+
+    /// @brief Point constraint. Body A y B comparten un punto pivot en
+    ///        world coords. Rotacion libre en los 3 ejes; 0 translation.
+    ///        Equivalente a "ball joint" o "socket joint" en otros motores.
+    u32 createPointConstraint(u32 bodyA, u32 bodyB,
+                                const glm::vec3& pivotWorld);
+
+    /// @brief Destruye y remueve un constraint. Llamar cuando la entity
+    ///        propietaria del JointComponent se borra o el dev cambia el
+    ///        tipo. Idempotente (id invalido = no-op).
+    void destroyConstraint(u32 constraintId);
+
+    /// @brief Cantidad de constraints activos. Util para tests / debug.
+    u32 constraintCount() const;
+
     // --- Hito 30: Character Controller (CharacterVirtual) ---
 
     /// @brief Crea un character controller (capsule kinematic-style) en

@@ -141,6 +141,58 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                         }
                     }
                 });
+
+            // F2H65: overlay de JointComponents. Para cada joint con
+            // targetEntity resuelto, dibujamos: (1) un cubito chico en el
+            // pivotWorld del owner (anchor visible), (2) una linea owner
+            // pivot -> target position, (3) para Hinge, una flecha corta
+            // que indica el eje de rotacion. Color por tipo: Hinge=azul,
+            // Distance=verde lima, Point=magenta.
+            m_scene->forEach<JointComponent, TransformComponent>(
+                [&](Entity, JointComponent& joint, TransformComponent& tA) {
+                    if (joint.targetEntity == kJointNoTarget) return;
+                    const auto handleB = static_cast<entt::entity>(joint.targetEntity);
+                    Entity entB = m_scene->entityFromHandle(handleB);
+                    if (!entB || !entB.hasComponent<TransformComponent>()) return;
+                    const auto& tB = entB.getComponent<TransformComponent>();
+
+                    glm::vec3 color;
+                    switch (joint.type) {
+                        case JointComponent::Type::Hinge:
+                            color = glm::vec3(0.30f, 0.65f, 1.00f); break;  // azul
+                        case JointComponent::Type::Distance:
+                            color = glm::vec3(0.40f, 1.00f, 0.30f); break;  // verde
+                        case JointComponent::Type::Point:
+                            color = glm::vec3(1.00f, 0.35f, 0.85f); break;  // magenta
+                    }
+
+                    const glm::mat4 worldA = tA.worldMatrix();
+                    const glm::vec3 pivotWorld =
+                        glm::vec3(worldA * glm::vec4(joint.pivotLocal, 1.0f));
+
+                    // Anchor chiquito en el pivot.
+                    constexpr f32 k_pivotMark = 0.08f;
+                    const glm::vec3 he(k_pivotMark);
+                    dbg.drawAabb(AABB{pivotWorld - he, pivotWorld + he}, color);
+
+                    // Linea pivot -> target (visualiza la asociacion A->B).
+                    dbg.drawLine(pivotWorld, tB.position, color);
+
+                    // Para Hinge, dibujamos una flecha corta sobre el eje
+                    // (segmento de pivotWorld + axis * len). Asi el dev ve
+                    // si el eje apunta como espera (Y vertical, etc.).
+                    if (joint.type == JointComponent::Type::Hinge) {
+                        const glm::vec3 axisWorld =
+                            glm::normalize(glm::vec3(
+                                worldA * glm::vec4(joint.axisLocal, 0.0f)));
+                        constexpr f32 k_axisLen = 0.5f;
+                        const glm::vec3 axisTip = pivotWorld + axisWorld * k_axisLen;
+                        // Eje principal en amarillo brillante (consistente con
+                        // gizmos de eje en otros editores).
+                        dbg.drawLine(pivotWorld, axisTip,
+                                     glm::vec3(1.0f, 1.0f, 0.2f));
+                    }
+                });
         }
     }
 

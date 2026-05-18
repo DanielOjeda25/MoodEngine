@@ -9,6 +9,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
+#include "engine/scene/serialization/SceneLoader.h"  // F2H65
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/world/grid/GridMap.h"
 #include "test_scene_serializer_helpers.h"
@@ -170,6 +171,256 @@ TEST_CASE("SceneSerializer: friction custom value round-trip (Hito 34 A)") {
     CHECK(loaded->entities[0].rigidBody->friction == doctest::Approx(0.05f));
 
     std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: round-trip JointComponent (F2H65 Hinge con limits)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+
+    // Setup: A = puerta (dynamic), B = marco (static). A tiene Joint Hinge
+    // limitado a [0, 90] grados con pivot al borde y axis Y vertical.
+    Entity frame = scene.createEntity("Marco");
+    {
+        RigidBodyComponent rb{};
+        rb.type = RigidBodyComponent::Type::Static;
+        rb.shape = RigidBodyComponent::Shape::Box;
+        rb.halfExtents = glm::vec3(0.1f, 1.0f, 0.05f);
+        frame.addComponent<RigidBodyComponent>(rb);
+    }
+    Entity door = scene.createEntity("Puerta");
+    {
+        auto& t = door.getComponent<TransformComponent>();
+        t.position = glm::vec3(0.5f, 1.0f, 0.0f);
+        RigidBodyComponent rb{};
+        rb.type = RigidBodyComponent::Type::Dynamic;
+        rb.shape = RigidBodyComponent::Shape::Box;
+        rb.halfExtents = glm::vec3(0.5f, 1.0f, 0.05f);
+        rb.mass = 5.0f;
+        door.addComponent<RigidBodyComponent>(rb);
+        JointComponent jc{};
+        jc.type         = JointComponent::Type::Hinge;
+        jc.targetEntity = static_cast<u32>(frame.handle());
+        jc.pivotLocal   = glm::vec3(-0.5f, 0.0f, 0.0f);  // borde izquierdo
+        jc.axisLocal    = glm::vec3(0.0f, 1.0f, 0.0f);   // vertical
+        jc.limitMinDeg  = 0.0f;
+        jc.limitMaxDeg  = 90.0f;
+        door.addComponent<JointComponent>(jc);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("joint_hinge_roundtrip.moodmap");
+    SceneSerializer::save(empty, "door", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    const SavedEntity* seDoor = nullptr;
+    for (const auto& se : loaded->entities) {
+        if (se.tag == "Puerta") seDoor = &se;
+    }
+    REQUIRE(seDoor != nullptr);
+    REQUIRE(seDoor->joint.has_value());
+    CHECK(seDoor->joint->type       == "hinge");
+    CHECK(seDoor->joint->targetTag  == "Marco");
+    CHECK(seDoor->joint->pivotLocal.x  == doctest::Approx(-0.5f));
+    CHECK(seDoor->joint->axisLocal.y   == doctest::Approx(1.0f));
+    CHECK(seDoor->joint->limitMinDeg   == doctest::Approx(0.0f));
+    CHECK(seDoor->joint->limitMaxDeg   == doctest::Approx(90.0f));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: JointComponent Distance round-trip y default fields no persistidos") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+
+    Entity a = scene.createEntity("A");
+    {
+        RigidBodyComponent rb{};
+        rb.type = RigidBodyComponent::Type::Dynamic;
+        rb.halfExtents = glm::vec3(0.5f);
+        a.addComponent<RigidBodyComponent>(rb);
+    }
+    Entity b = scene.createEntity("B");
+    {
+        RigidBodyComponent rb{};
+        rb.type = RigidBodyComponent::Type::Static;
+        rb.halfExtents = glm::vec3(0.5f);
+        b.addComponent<RigidBodyComponent>(rb);
+        JointComponent jc{};
+        jc.type         = JointComponent::Type::Distance;
+        jc.targetEntity = static_cast<u32>(a.handle());
+        jc.minDistance  = 2.0f;
+        jc.maxDistance  = 5.0f;
+        b.addComponent<JointComponent>(jc);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("joint_distance.moodmap");
+    SceneSerializer::save(empty, "rope", &scene, assets, path);
+
+    // En el JSON crudo, axisLocal/limit_min/limit_max NO deben aparecer
+    // (defaults del tipo Distance — solo se emiten para Hinge).
+    std::ifstream f(path);
+    REQUIRE(f.is_open());
+    nlohmann::json j = nlohmann::json::parse(f);
+    f.close();
+    const nlohmann::json* jJoint = nullptr;
+    for (const auto& jent : j["entities"]) {
+        if (jent.value("tag", std::string{}) == "B"
+            && jent.contains("joint")) {
+            jJoint = &jent["joint"];
+            break;
+        }
+    }
+    REQUIRE(jJoint != nullptr);
+    CHECK((*jJoint).value("type", std::string{}) == "distance");
+    CHECK_FALSE((*jJoint).contains("axisLocal"));
+    CHECK_FALSE((*jJoint).contains("limit_min_deg"));
+    CHECK_FALSE((*jJoint).contains("limit_max_deg"));
+    CHECK((*jJoint).value("min_distance", -1.0f) == doctest::Approx(2.0f));
+    CHECK((*jJoint).value("max_distance", -1.0f) == doctest::Approx(5.0f));
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    const SavedEntity* seB = nullptr;
+    for (const auto& se : loaded->entities) if (se.tag == "B") seB = &se;
+    REQUIRE(seB != nullptr);
+    REQUIRE(seB->joint.has_value());
+    CHECK(seB->joint->type == "distance");
+    CHECK(seB->joint->targetTag == "A");
+    CHECK(seB->joint->minDistance == doctest::Approx(2.0f));
+    CHECK(seB->joint->maxDistance == doctest::Approx(5.0f));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneLoader: JointComponent.targetEntity resuelve por tag tras applyEntitiesToScene (F2H65)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+
+    // SavedMap con 2 entities: la PRIMERA tiene un joint apuntando a la
+    // SEGUNDA (orden a-proposito: el eager lookup falla en applyOneEntity,
+    // la segunda pasada del loader es la que resuelve).
+    SavedMap saved{"test", GridMap(1u, 1u, 1.0f), {}};
+    SavedEntity owner{};
+    owner.tag = "Owner";
+    {
+        SavedRigidBody rb{};
+        rb.type = "dynamic";
+        owner.rigidBody = rb;
+        SavedJoint j{};
+        j.type        = "hinge";
+        j.targetTag   = "Target";
+        j.pivotLocal  = glm::vec3(-0.5f, 0.0f, 0.0f);
+        owner.joint   = j;
+    }
+    SavedEntity target{};
+    target.tag = "Target";
+    {
+        SavedRigidBody rb{};
+        rb.type = "static";
+        target.rigidBody = rb;
+    }
+    saved.entities.push_back(owner);
+    saved.entities.push_back(target);
+
+    SceneLoader::applyEntitiesToScene(saved, scene, assets);
+
+    // Localizar las 2 entities y comprobar que el Joint del Owner resolvio.
+    Entity ownerE, targetE;
+    scene.forEach<TagComponent>([&](Entity e, TagComponent& t) {
+        if (t.name == "Owner")  ownerE = e;
+        if (t.name == "Target") targetE = e;
+    });
+    REQUIRE(static_cast<bool>(ownerE));
+    REQUIRE(static_cast<bool>(targetE));
+    REQUIRE(ownerE.hasComponent<JointComponent>());
+    const auto& jc = ownerE.getComponent<JointComponent>();
+    CHECK(jc.type == JointComponent::Type::Hinge);
+    CHECK(jc.targetEntity == static_cast<u32>(targetE.handle()));
+    CHECK(jc.pivotLocal.x == doctest::Approx(-0.5f));
+    CHECK(jc.dirty);  // listo para materializar en el primer tick
+}
+
+TEST_CASE("SceneLoader: JointComponent con target_tag inexistente queda sin asignar (F2H65)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+
+    SavedMap saved{"test", GridMap(1u, 1u, 1.0f), {}};
+    SavedEntity orphan{};
+    orphan.tag = "Lonely";
+    SavedJoint j{};
+    j.type      = "point";
+    j.targetTag = "NoExisteEsteTag";
+    orphan.joint = j;
+    saved.entities.push_back(orphan);
+
+    SceneLoader::applyEntitiesToScene(saved, scene, assets);
+
+    Entity lonely;
+    scene.forEach<TagComponent>([&](Entity e, TagComponent& t) {
+        if (t.name == "Lonely") lonely = e;
+    });
+    REQUIRE(static_cast<bool>(lonely));
+    REQUIRE(lonely.hasComponent<JointComponent>());
+    const auto& jc = lonely.getComponent<JointComponent>();
+    CHECK(jc.targetEntity == kJointNoTarget);  // tag no resolvio => sin asignar
+    CHECK(jc.type == JointComponent::Type::Point);
+}
+
+TEST_CASE("SceneSerializer: sample map physics_joints_demo.moodmap carga con joints resueltos (F2H65 Bloque G)") {
+    AssetManager assets("assets", nullFactory());
+    const auto path = std::filesystem::path("assets") / "maps" /
+                       "physics_joints_demo.moodmap";
+    if (!std::filesystem::exists(path)) {
+        MESSAGE("Sample map no encontrado en " << path.string()
+                << " — skip (CWD probablemente fuera del repo root)");
+        return;
+    }
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+
+    // Las 4 entities estan: Marco/Puerta para Hinge, Soporte/Pendulo para
+    // Distance. Cada par tiene UN joint en el dynamic.
+    const SavedEntity* sePuerta = nullptr;
+    const SavedEntity* sePendulo = nullptr;
+    for (const auto& se : loaded->entities) {
+        if (se.tag == "PuertaHinge")     sePuerta = &se;
+        if (se.tag == "PenduloDistance") sePendulo = &se;
+    }
+    REQUIRE(sePuerta  != nullptr);
+    REQUIRE(sePendulo != nullptr);
+    REQUIRE(sePuerta->joint.has_value());
+    REQUIRE(sePendulo->joint.has_value());
+    CHECK(sePuerta->joint->type      == "hinge");
+    CHECK(sePuerta->joint->targetTag == "MarcoHinge");
+    CHECK(sePuerta->joint->limitMinDeg == doctest::Approx(-90.0f));
+    CHECK(sePuerta->joint->limitMaxDeg == doctest::Approx(90.0f));
+    CHECK(sePendulo->joint->type        == "distance");
+    CHECK(sePendulo->joint->targetTag   == "SoporteDistance");
+    CHECK(sePendulo->joint->minDistance == doctest::Approx(1.5f));
+    CHECK(sePendulo->joint->maxDistance == doctest::Approx(1.5f));
+
+    // Pasada de SceneLoader: el targetEntity debe quedar resuelto via tag.
+    Scene scene;
+    SceneLoader::applyEntitiesToScene(*loaded, scene, assets);
+    Entity puertaE, marcoE, penduloE, soporteE;
+    scene.forEach<TagComponent>([&](Entity e, TagComponent& t) {
+        if (t.name == "PuertaHinge")      puertaE  = e;
+        if (t.name == "MarcoHinge")       marcoE   = e;
+        if (t.name == "PenduloDistance")  penduloE = e;
+        if (t.name == "SoporteDistance")  soporteE = e;
+    });
+    REQUIRE(static_cast<bool>(puertaE));
+    REQUIRE(static_cast<bool>(marcoE));
+    REQUIRE(static_cast<bool>(penduloE));
+    REQUIRE(static_cast<bool>(soporteE));
+    REQUIRE(puertaE.hasComponent<JointComponent>());
+    REQUIRE(penduloE.hasComponent<JointComponent>());
+    CHECK(puertaE.getComponent<JointComponent>().targetEntity
+          == static_cast<u32>(marcoE.handle()));
+    CHECK(penduloE.getComponent<JointComponent>().targetEntity
+          == static_cast<u32>(soporteE.handle()));
 }
 
 TEST_CASE("SceneSerializer: friction default (0.5) NO se persiste en JSON (Hito 34 A)") {

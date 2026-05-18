@@ -14,9 +14,11 @@ DeleteEntityCommand::DeleteEntityCommand(Entity entity,
                                           Scene* scene,
                                           AssetManager* assets,
                                           BodyCleanup bodyCleanup,
-                                          HistoryStack* history)
+                                          HistoryStack* history,
+                                          ConstraintCleanup constraintCleanup)
     : m_scene(scene), m_assets(assets),
       m_bodyCleanup(std::move(bodyCleanup)),
+      m_constraintCleanup(std::move(constraintCleanup)),
       m_history(history),
       m_alive(entity),
       m_originalHandle(entity.handle()) {
@@ -70,6 +72,14 @@ void DeleteEntityCommand::destroyAlive() {
         if (rb.bodyId != 0) {
             m_bodyCleanup(rb.bodyId);
             rb.bodyId = 0;
+        }
+    }
+    // F2H65: cleanup del constraint si la entidad tiene JointComponent.
+    if (m_constraintCleanup && m_alive.hasComponent<JointComponent>()) {
+        auto& joint = m_alive.getComponent<JointComponent>();
+        if (joint.constraintId != 0) {
+            m_constraintCleanup(joint.constraintId);
+            joint.constraintId = 0;
         }
     }
     m_scene->destroyEntity(m_alive);

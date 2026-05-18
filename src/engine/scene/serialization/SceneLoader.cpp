@@ -341,6 +341,42 @@ Entity applyOneEntity(const SavedEntity& se,
             sc.overrides = s.overrides;
         }
 
+        // F2H65: JointComponent. El targetEntity (raw handle) se resuelve
+        // desde el tag persistido — handles no son estables entre
+        // sesiones. Eager lookup primero (sirve para undo de un single
+        // entity, donde B ya existe); si falla, `applyEntitiesToScene`
+        // hace un segundo pase post-load para resolver el resto.
+        if (se.joint.has_value()) {
+            const auto& sj = *se.joint;
+            JointComponent jc{};
+            if      (sj.type == "distance") jc.type = JointComponent::Type::Distance;
+            else if (sj.type == "point")    jc.type = JointComponent::Type::Point;
+            else                            jc.type = JointComponent::Type::Hinge;
+            jc.pivotLocal   = sj.pivotLocal;
+            jc.axisLocal    = sj.axisLocal;
+            jc.limitMinDeg  = sj.limitMinDeg;
+            jc.limitMaxDeg  = sj.limitMaxDeg;
+            jc.minDistance  = sj.minDistance;
+            jc.maxDistance  = sj.maxDistance;
+            jc.targetEntity = kJointNoTarget;
+            jc.dirty        = true;
+            if (!sj.targetTag.empty()) {
+                Entity foundTarget;
+                scene.forEach<TagComponent>(
+                    [&](Entity ex, TagComponent& tag) {
+                        if (static_cast<bool>(foundTarget)) return;
+                        if (tag.name == sj.targetTag &&
+                            ex.handle() != e.handle()) {
+                            foundTarget = ex;
+                        }
+                    });
+                if (static_cast<bool>(foundTarget)) {
+                    jc.targetEntity = static_cast<u32>(foundTarget.handle());
+                }
+            }
+            e.addComponent<JointComponent>(jc);
+        }
+
         if (!se.prefabPath.empty()) {
             e.addComponent<PrefabLinkComponent>(se.prefabPath);
         }
@@ -371,6 +407,48 @@ void applyEntitiesToScene(const SavedMap& saved,
 
     for (const auto& se : saved.entities) {
         applyOneEntity(se, scene, assets, /*applyVisGroupMembership=*/isEditorPath);
+    }
+
+    // F2H65: segunda pasada para resolver JointComponent.targetEntity.
+    // El primer pase puede crear el owner del joint ANTES que el target,
+    // en cuyo caso applyOneEntity dejo `targetEntity = 0`. Ahora que TODAS
+    // las entities existen, repetimos el tag-lookup. Si sigue sin
+    // resolver (tag inexistente o renombrado entre save/load), el joint
+    // queda sin materializar — el dev re-asigna via Inspector.
+    for (const auto& se : saved.entities) {
+        if (!se.joint.has_value()) continue;
+        const std::string& targetTag = se.joint->targetTag;
+        if (targetTag.empty()) continue;
+        // Localizar al owner (la entity con tag == se.tag) — applyOneEntity
+        // usa createEntity con ese tag, asi que esta vivo.
+        Entity owner;
+        scene.forEach<TagComponent>(
+            [&](Entity ex, TagComponent& tag) {
+                if (static_cast<bool>(owner)) return;
+                if (tag.name == se.tag) owner = ex;
+            });
+        if (!static_cast<bool>(owner)
+            || !owner.hasComponent<JointComponent>()) continue;
+        auto& joint = owner.getComponent<JointComponent>();
+        if (joint.targetEntity != kJointNoTarget) continue;  // ya resuelto en eager pass
+        Entity tgt;
+        scene.forEach<TagComponent>(
+            [&](Entity ex, TagComponent& tag) {
+                if (static_cast<bool>(tgt)) return;
+                if (tag.name == targetTag &&
+                    ex.handle() != owner.handle()) {
+                    tgt = ex;
+                }
+            });
+        if (static_cast<bool>(tgt)) {
+            joint.targetEntity = static_cast<u32>(tgt.handle());
+        } else {
+            Log::engine()->warn(
+                "SceneLoader: JointComponent en '{}' apunta a tag '{}' "
+                "que no existe en la escena cargada — el joint queda "
+                "sin materializar.",
+                se.tag, targetTag);
+        }
     }
 
     // F2H26: si el caller pidio usar la mesh compilada Y el savedMap la
