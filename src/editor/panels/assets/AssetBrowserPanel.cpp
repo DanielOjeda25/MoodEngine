@@ -4,7 +4,7 @@
 #include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons en tabs + filas
 #include "engine/animation/clips/AnimationClip.h"  // F2H49: metadata de clips
 #include "engine/audio/clips/AudioClip.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MeshAsset.h"
 

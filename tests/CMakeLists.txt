@@ -13,6 +13,9 @@ add_executable(mood_tests
     test_asset_manager.cpp
     test_json_helpers.cpp
     test_scene_serializer.cpp
+    test_scene_serializer_lighting_physics.cpp  # AUDIT-3 split
+    test_scene_serializer_gameplay.cpp          # AUDIT-3 split
+    test_ray.cpp                                # AUDIT-3 (pickRayFromNdc)
     test_project_serializer.cpp
     test_scene.cpp
     test_lua.cpp
@@ -165,7 +168,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/editor/commands/DeleteEntityCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/CreateEntityCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/i18n/I18n.cpp  # F2H43
+    ${CMAKE_SOURCE_DIR}/src/core/i18n/I18n.cpp  # F2H43 (movido a core en AUDIT-3)
     ${CMAKE_SOURCE_DIR}/src/core/UserSettings.cpp  # F2H43
     ${CMAKE_SOURCE_DIR}/src/engine/nodegraph/Graph.cpp  # F2H46
     ${CMAKE_SOURCE_DIR}/src/engine/shader_graph/ShaderGraphAsset.cpp     # F2H62

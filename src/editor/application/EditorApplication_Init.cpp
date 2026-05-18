@@ -11,7 +11,7 @@
 #include "core/UserSettings.h"  // F2H43
 #include "engine/audio/device/AudioDevice.h"
 #include "engine/dialog/DialogScriptHost.h"  // F2H48.1
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/inventory/InventoryHooks.h"  // F2H53 shutdown order
 #include "engine/quest/QuestSystem.h"         // F2H53 shutdown order
 #include "engine/physics/world/PhysicsWorld.h"

@@ -2,7 +2,7 @@
 
 #include "core/Log.h"
 #include "editor/ui/EditorUI.h"
-#include "engine/i18n/I18n.h"
+#include "core/i18n/I18n.h"
 #include "engine/quest/QuestAsset.h"
 
 #include <imgui.h>

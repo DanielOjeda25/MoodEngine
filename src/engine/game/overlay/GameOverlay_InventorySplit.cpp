@@ -17,7 +17,7 @@
 
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
-#include "engine/i18n/I18n.h"
+#include "core/i18n/I18n.h"
 #include "engine/inventory/InventoryState.h"
 #include "engine/inventory/ItemAsset.h"
 

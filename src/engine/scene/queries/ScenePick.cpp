@@ -1,6 +1,7 @@
 #include "engine/scene/queries/ScenePick.h"
 
 #include "core/math/AABB.h"
+#include "core/math/Ray.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/VisGroup.h"  // F2H33: hide gate
@@ -191,19 +192,10 @@ ScenePickResult pickEntity(Scene& scene,
                             const glm::mat4& projection,
                             const glm::vec2& ndc,
                             const AssetManager* assets) {
-    // Construccion del rayo: misma receta que pickTile — unproyectar dos
-    // puntos en z=-1 (near) y z=+1 (far) del NDC.
     const glm::mat4 invVP = glm::inverse(projection * view);
-    const glm::vec4 nearH = invVP * glm::vec4(ndc.x, ndc.y, -1.0f, 1.0f);
-    const glm::vec4 farH  = invVP * glm::vec4(ndc.x, ndc.y, +1.0f, 1.0f);
-    if (nearH.w == 0.0f || farH.w == 0.0f) return {};
-    const glm::vec3 nearW = glm::vec3(nearH) / nearH.w;
-    const glm::vec3 farW  = glm::vec3(farH)  / farH.w;
-
-    const glm::vec3 origin = nearW;
-    const glm::vec3 dir = glm::normalize(farW - nearW);
-
-    return pickEntityFromRay(scene, origin, dir, assets);
+    const auto r = pickRayFromNdc(invVP, ndc.x, ndc.y);
+    if (!r) return {};
+    return pickEntityFromRay(scene, r->origin, r->direction, assets);
 }
 
 } // namespace Mood

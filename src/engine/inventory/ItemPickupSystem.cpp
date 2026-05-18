@@ -3,7 +3,7 @@
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/dialog/DialogSystem.h"      // isActive() check (defensive)
 #include "engine/game/state/GameState.h"
-#include "engine/i18n/I18n.h"
+#include "core/i18n/I18n.h"
 #include "engine/inventory/InventoryHooks.h"  // F2H52 Bloque F
 #include "engine/inventory/ItemAsset.h"
 #include "engine/scene/components/Components.h"

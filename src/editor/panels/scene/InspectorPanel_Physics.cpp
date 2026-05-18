@@ -5,7 +5,7 @@
 #include "editor/panels/scene/InspectorPanel_Internal.h"
 
 #include "editor/ui/EditorUI.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/Components.h"
 
 #include <imgui.h>

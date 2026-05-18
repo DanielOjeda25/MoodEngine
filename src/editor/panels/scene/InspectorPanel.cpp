@@ -4,7 +4,7 @@
 #include "editor/commands/HistoryStack.h"             // F2H45 Bloque A
 #include "editor/selection/SelectionSet.h"           // F2H13
 #include "editor/ui/EditorUI.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/BrushComponent.h"  // F2H11
 #include "engine/scene/components/Components.h"
 

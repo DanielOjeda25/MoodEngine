@@ -4,7 +4,7 @@
 // API namespaced (mismo patron que `Mood::Log::*`).
 //
 // Uso tipico:
-//   #include "engine/i18n/I18n.h"
+//   #include "core/i18n/I18n.h"
 //   ImGui::Text("%s", Mood::I18n::T("editor.menu.file").c_str());
 //   ImGui::Text("%s", Mood::I18n::T("test.count", n).c_str());  // interpolacion fmt
 //

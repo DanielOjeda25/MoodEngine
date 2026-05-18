@@ -3,7 +3,7 @@
 #include "core/Log.h"
 #include "editor/panels/quest/QuestBrowserPanel.h"
 #include "editor/ui/EditorUI.h"
-#include "engine/i18n/I18n.h"
+#include "core/i18n/I18n.h"
 
 #include <imgui.h>
 

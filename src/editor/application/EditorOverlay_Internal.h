@@ -6,6 +6,7 @@
 // privado del modulo — no incluir desde otro modulo.
 
 #include "core/Types.h"
+#include "core/math/Ray.h"  // AUDIT-3: pickRayFromNdc
 
 #include <imgui.h>
 
@@ -43,16 +44,10 @@ inline bool cameraRayFromScreen(const glm::mat4& vp,
                                   glm::vec3& rorigin, glm::vec3& rdir) {
     const float ndcX = ((mp.x - x0) / w) * 2.0f - 1.0f;
     const float ndcY = 1.0f - ((mp.y - y0) / h) * 2.0f;
-    const glm::mat4 invVP = glm::inverse(vp);
-    const glm::vec4 nearH = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
-    const glm::vec4 farH  = invVP * glm::vec4(ndcX, ndcY, +1.0f, 1.0f);
-    if (nearH.w == 0.0f || farH.w == 0.0f) return false;
-    rorigin = glm::vec3(nearH) / nearH.w;
-    const glm::vec3 farW = glm::vec3(farH) / farH.w;
-    const glm::vec3 d = farW - rorigin;
-    const float len = glm::length(d);
-    if (len < 1e-6f) return false;
-    rdir = d / len;
+    const auto r = pickRayFromNdc(glm::inverse(vp), ndcX, ndcY);
+    if (!r) return false;
+    rorigin = r->origin;
+    rdir    = r->direction;
     return true;
 }
 

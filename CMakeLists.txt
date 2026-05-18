@@ -350,7 +350,7 @@ add_library(mood_engine_lib STATIC
     src/engine/game/overlay/GameOverlay_Quest.cpp         # F2H53 G
     src/engine/game/state/GameState.cpp
 
-    src/engine/i18n/I18n.cpp  # F2H43
+    src/core/i18n/I18n.cpp  # F2H43 (movido a core en AUDIT-3)
 
     src/engine/nodegraph/Graph.cpp           # F2H46
     src/engine/nodegraph/NodeGraphEditor.cpp # F2H46

@@ -1,7 +1,7 @@
 #include "editor/panels/assets/ScriptEditorPanel.h"
 
 #include "core/Log.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/Components.h"
 
 #include <imgui.h>

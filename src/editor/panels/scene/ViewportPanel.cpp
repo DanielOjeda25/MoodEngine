@@ -3,7 +3,7 @@
 #include "editor/application/EditorMode.h"   // F2H59: EditorSubMode para Cara toggle.
 #include "editor/ui/EditorUI.h"               // F2H59: overlay tool buttons.
 #include "editor/ui/IconsFontAwesome6.h"     // F2H59: icons del overlay.
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/render/rhi/IFramebuffer.h"
 
 #include <imgui.h>

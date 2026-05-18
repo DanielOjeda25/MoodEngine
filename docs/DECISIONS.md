@@ -11,6 +11,55 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-17: AUDIT-3 cierre — Tanda de audits completa
+
+**Contexto:** tercer y último audit de la tanda inicial (~10h totales tras AUDIT-1 y AUDIT-2). El dev pidió cerrar la profesionalización del código antes de seguir con features. Tag `v1.49.3-audit-3`. Reporte completo en [`audits/AUDIT_3.md`](audits/AUDIT_3.md).
+
+**Decisión clave 1 — Convención `_<Family>.inl` para inline bodies de clases grandes.**
+
+- **Contexto:** `EditorUI.h` estaba en 836 LOC HARD-cap por ~30 pares `request/consume` con bodies inline (4-6 LOC c/u + comentarios). pImpl era invasivo (~1 día de refactor + riesgo de regresión en panels).
+- **Solución:** declaraciones en el `.h`, inline bodies movidos a archivos `EditorUI_<Family>.inl` sibling (Spawn / Tools / Entity / Project), `#include`d al final del `.h` después del `} // namespace`. Mantiene API exacta (siguen siendo inline para el linker), zero impact runtime.
+- **Resultado:** `EditorUI.h` 836 → 483 LOC (-42%). HARD cap = 0 en todo el codebase.
+- **Convención formalizada:** `<Nombre>_<Family>.inl` para grupos de inline methods de una clase grande. Coexiste con los patterns previos: `<Nombre>_Internal.h` (helpers compartidos entre `.cpp` siblings) y `<Nombre>_<Family>.cpp` (split de implementaciones).
+- **Cuándo aplicar:** clases que crezcan a 700+ LOC con muchos accessor/request inlines repetitivos. Para clases con lógica genuinamente compleja en el header, el split por categoría no aplica — pImpl o reorganización real.
+
+**Decisión clave 2 — Primer pure helper en `core/math/Ray.h` como warmup DOD.**
+
+- **Contexto:** AUDIT-2 Bloque D identificó `pickRayFromNdc` con 5+ ocurrencias inline del mismo patrón (NDC unprojection). AUDIT-3 lo extrajo como prueba del flow DOD completo.
+- **API:** `unprojectNearFar(invVP, ndcX, ndcY)` devuelve near/far sin normalizar (caller decide); `pickRayFromNdc(invVP, ndcX, ndcY)` devuelve un `Ray { origin, direction }` con dir normalizada (caso 95%). Ambos retornan `std::optional` para clip.w=0 / dir cero.
+- **Tests:** 7 cases headless cubren perspective / ortho / esquinas / NDC arbitrarios / `invVP` degenerada. Suite global 949 → 956 tests verde.
+- **Trade-off aceptado:** un helper extra requiere un include extra en 5 archivos (`#include "core/math/Ray.h"`) — costo trivial vs ~42 LOC de duplicación eliminada + testabilidad.
+- **Próximos candidatos** (de AUDIT-2 Bloque D, pendientes): `aabbFromTwoPoints`, `snapWorldPositionToGrid`, `groupClickedFaceByBrush`. Extraer solo si emerge demanda — no urgente.
+
+**Decisión clave 3 — Patrón `_helpers.h` para fixtures de test compartidas.**
+
+- **Contexto:** split de `tests/test_scene_serializer.cpp` 934 LOC en 3 archivos por familia (core / lighting_physics / gameplay). Los 3 compartían `NullTexture` + `nullFactory()` + `tempPath()`.
+- **Solución:** `tests/test_scene_serializer_helpers.h` con namespace dedicado (`Mood::SceneSerializerTests`), free functions `inline` para evitar ODR violations. Análogo del `_Internal.h` para sources.
+
+**Decisión clave 4 — `engine/project/Workspace.h` + `core/i18n/` — capas estrictas.**
+
+- **Contexto:** AUDIT-2 detectó 2 violaciones cross-layer: `engine` → `editor` (`ProjectSerializer.h` incluía `editor/workspace/Workspace.h`) y `core` → `engine` (`UserSettings.h` incluía `engine/i18n/I18n.h`).
+- **Solución:** mover el `Workspace` *struct* (puro, sin ImGui) a `engine/project/`. El `WorkspaceManager` (UI de switching) queda en `editor/workspace/`. Mover `I18n.h/cpp` a `core/i18n/` (genuinamente shared — solo JSON + std).
+- **Resultado:** 0 violaciones de layer en el grep cruzado. La jerarquía `core/` ← `engine/` ← `editor/|player/|systems/` se respeta estrictamente.
+
+**Decisión clave 5 — Cadencia de audits ahora reactiva, no proactiva.**
+
+- **Contexto:** La cadencia original era "1 audit cada ~5 hitos". Tras 3 audits consecutivos, el HARD cap está limpio, el layer audit en cero, y los pendientes futuros (DOD profiling, dead code, backfill F2H1-F2H54) requieren tooling o demanda real que no existe hoy.
+- **Nueva regla:** próximo audit **solo si emerge dolor concreto**. No agendar audits vacíos por cumplir la cadencia. El sizeometer queda como herramienta operativa (`tools/sizeometer.sh` antes de cada cierre de hito) — detecta el dolor si reaparece.
+
+**Estado final post-tanda:**
+
+```
+                      AUDIT-1   AUDIT-2   AUDIT-3
+HARD cap (>800):        5         2         0
+Layer violations:       —         2         0
+Pure helpers (+tests):  0         0         1 (+7 tests)
+```
+
+24 archivos en SOFT cap (501-800) — bajo umbral pero no zona roja. Top candidatos de split natural si crecen: `SceneRenderer_Render.cpp` (788) y `EditorApplication.h` (786).
+
+---
+
 ## 2026-05-17: F2H62 cierre — Shader Graph runtime + migración a imnodes + polish UX
 
 **Contexto:** sexto hito de **Sub-fase 2.6 — Render polish**, = F2H18 del plan original Fase 2. **Cierra Sub-fase 2.3 (Renderer) del plan original 100%** junto con los anteriores (Hito 17 PBR, F2H55 bloom, F2H56 SSAO, F2H60 CSM, F2H61 SSR). Tag `v1.49.0-fase2-hito62`. Dev validó tras tour del hologram sample (cyan + Fresnel rim en aristas): *"creo que esta bien"*.

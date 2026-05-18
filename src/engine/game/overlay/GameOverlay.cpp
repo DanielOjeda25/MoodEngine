@@ -5,7 +5,7 @@
 #include "engine/dialog/DialogAsset.h"   // F2H48
 #include "engine/dialog/DialogSystem.h"  // F2H48
 #include "engine/game/state/GameState.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/quest/QuestAsset.h"     // F2H53 F
 #include "engine/quest/QuestSystem.h"    // F2H53 F
 

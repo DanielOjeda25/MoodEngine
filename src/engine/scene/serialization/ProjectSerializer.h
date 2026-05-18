@@ -14,7 +14,7 @@
 // Todos los paths son relativos a la carpeta del `.moodproj`.
 
 #include "core/Types.h"  // f32 (Hito 40 G)
-#include "editor/workspace/Workspace.h"  // F2H7
+#include "engine/project/Workspace.h"  // F2H7 (movido a engine/project en AUDIT-3)
 
 #include <filesystem>
 #include <optional>

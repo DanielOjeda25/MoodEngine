@@ -11,7 +11,7 @@
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"  // F2H53 H: quest restore necesita AssetManager
 #include "engine/game/state/GameState.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/quest/QuestSystem.h"            // F2H53 H
 #include "engine/scene/components/Components.h"

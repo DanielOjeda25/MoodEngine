@@ -17,7 +17,7 @@
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/game/state/GameState.h"
-#include "engine/i18n/I18n.h"
+#include "core/i18n/I18n.h"
 #include "engine/inventory/InventoryHooks.h"   // F2H52 H5
 #include "engine/inventory/InventoryState.h"
 #include "engine/inventory/ItemAsset.h"

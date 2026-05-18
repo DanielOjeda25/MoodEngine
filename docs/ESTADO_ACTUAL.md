@@ -6,24 +6,27 @@
 
 ---
 
-## 0. Último cierre — AUDIT-1 (2026-05-17)
+## 0. Último cierre — AUDIT-3 (2026-05-17)
 
-**Primer hito intermedio de tech debt / code quality.** Tag previsto: `v1.49.1-audit-1`. Establece cadencia: 1 audit cada ~5 hitos grandes.
+**Cierre de la tanda inicial de audits.** Tag `v1.49.3-audit-3`. Reporte completo en [`audits/AUDIT_3.md`](audits/AUDIT_3.md).
 
-**Qué entregó AUDIT-1:**
+**Resumen consolidado de la tanda (AUDIT-1 + 2 + 3, ~10h totales):**
 
-- **Sizeometer** (`tools/sizeometer.sh`) — reporta top N archivos `.cpp`/`.h` por LOC, flagea HARD (>800) / SOFT (501-800) / OK. Patrón de uso: invocar antes/después de cada audit.
-- **3 splits de archivos top sobre el hard cap**:
-  - `EditorApplication_Run.cpp` 1617 → 607 LOC (extraída `processViewportInteractions()` a sibling file).
-  - `GameOverlay.cpp` 905 → 724 LOC (extraídos `drawDialogBox` + `drawPauseMenu` a sibling files).
-  - `GameOverlay_Inventory.cpp` 936 → 772 LOC (extraído F2H52 Bloque I split mode a sibling file).
-- **Convención docs nueva**: HITOS.md como índice one-liner + `docs/hitos/F2H<N>.md` por hito (desde F2H62). ESTADO_ACTUAL.md slim (este archivo) sin acumular 0bis.
+```
+                      AUDIT-1   AUDIT-2   AUDIT-3
+HARD cap violations:    5         2         0
+Layer violations:       —         2         0
+Pure helpers extracted: 0         0         1 + 7 tests
+```
 
-**Pendiente para AUDIT-2** (próximo, post-~5 hitos):
-- 5 archivos restantes sobre HARD cap (top: `EditorApplication_RunInteractions.cpp` 1065 LOC).
-- Layer dependency audit (grep includes cruzados al revés).
-- Pure helpers audit (extraer lógica testeable entremezclada con GL/ImGui).
-- Backfill de hitos F2H1-F2H61 a per-hito files.
+**Qué entregó AUDIT-3:**
+
+- **Layer fixes mecánicos**: `Workspace` struct movido a `engine/project/`, `i18n` a `core/i18n/`. 55 archivos updateados. 0 violaciones cross-layer ahora.
+- **Split `tests/test_scene_serializer.cpp`** 934 → 302 LOC (core) + 210 (lighting/physics) + 399 (gameplay) + 39 (helpers). Patrón `_helpers.h` para fixtures de test compartidas.
+- **Pure helper `pickRayFromNdc`** + 7 unit tests headless (`core/math/Ray.h` + `tests/test_ray.cpp`). 5 call sites refactorizados, ~42 LOC de duplicación eliminada.
+- **Split `EditorUI.h`** 836 → 483 LOC (-42%). Inline bodies movidos a 4 archivos `EditorUI_<Family>.inl` por categoría (Spawn / Tools / Entity / Project). HARD cap = 0.
+
+**Próximo audit**: solo si emerge dolor concreto. No agendar audits vacíos por cumplir la cadencia.
 
 ---
 

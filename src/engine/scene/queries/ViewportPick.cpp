@@ -1,5 +1,6 @@
 #include "engine/scene/queries/ViewportPick.h"
 
+#include "core/math/Ray.h"
 #include "engine/world/grid/GridMap.h"
 
 #include <glm/geometric.hpp>
@@ -12,22 +13,14 @@ namespace Mood {
 TilePickResult pickTile(const GridMap& map, const glm::vec3& origin,
                         const glm::mat4& view, const glm::mat4& projection,
                         const glm::vec2& ndc) {
-    // Unproyectar el punto NDC en el frustum: dos puntos en z=-1 (near) y
-    // z=+1 (far) permiten definir el rayo camara->mundo sin depender de la
-    // convencion de handed-ness del sistema (el signo de rayDir.y importa
-    // para la interseccion con el plano).
     const glm::mat4 invVP = glm::inverse(projection * view);
 
-    const glm::vec4 nearH = invVP * glm::vec4(ndc.x, ndc.y, -1.0f, 1.0f);
-    const glm::vec4 farH  = invVP * glm::vec4(ndc.x, ndc.y, +1.0f, 1.0f);
-    if (nearH.w == 0.0f || farH.w == 0.0f) {
+    const auto nf = unprojectNearFar(invVP, ndc.x, ndc.y);
+    if (!nf) {
         return {};
     }
-    const glm::vec3 nearW = glm::vec3(nearH) / nearH.w;
-    const glm::vec3 farW  = glm::vec3(farH)  / farH.w;
-
-    const glm::vec3 rayOrigin = nearW;
-    const glm::vec3 rayDir = farW - nearW; // no hace falta normalizar
+    const glm::vec3 rayOrigin = nf->nearW;
+    const glm::vec3 rayDir    = nf->farW - nf->nearW; // no hace falta normalizar
     if (std::abs(rayDir.y) < 1e-6f) {
         return {}; // rayo paralelo al piso
     }

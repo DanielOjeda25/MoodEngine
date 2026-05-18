@@ -15,7 +15,7 @@
 
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/game/state/GameState.h"
-#include "engine/i18n/I18n.h"
+#include "core/i18n/I18n.h"
 #include "engine/quest/QuestAsset.h"
 #include "engine/quest/QuestSystem.h"
 

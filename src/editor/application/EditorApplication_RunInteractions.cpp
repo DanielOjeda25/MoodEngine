@@ -17,6 +17,7 @@
 #include "core/Log.h"
 #include "core/math/AABB.h"
 #include "core/math/Plane.h"
+#include "core/math/Ray.h"  // AUDIT-3: pickRayFromNdc
 #include "editor/commands/EditBrushGeometryCommand.h"
 #include "editor/commands/EditTransformCommand.h"
 #include "editor/commands/HistoryStack.h"
@@ -86,16 +87,12 @@ void EditorApplication::processViewportInteractions() {
                     auto& t = hit.entity.getComponent<TransformComponent>();
                     const glm::mat4 invVP =
                         glm::inverse(projection * view);
-                    const glm::vec4 nearH = invVP *
-                        glm::vec4(click.ndcX, click.ndcY, -1.0f, 1.0f);
-                    const glm::vec4 farH = invVP *
-                        glm::vec4(click.ndcX, click.ndcY, 1.0f, 1.0f);
-                    const glm::vec3 nearW = glm::vec3(nearH) / nearH.w;
-                    const glm::vec3 farW = glm::vec3(farH) / farH.w;
-                    const glm::vec3 origin = nearW;
-                    const glm::vec3 dir = glm::normalize(farW - nearW);
-                    const auto faceHit = Csg::pickFace(
-                        bc.brush, origin, dir, t.worldMatrix());
+                    const auto ray = pickRayFromNdc(
+                        invVP, click.ndcX, click.ndcY);
+                    const auto faceHit = ray
+                        ? Csg::pickFace(bc.brush, ray->origin,
+                                        ray->direction, t.worldMatrix())
+                        : std::optional<u32>{};
                     if (faceHit.has_value()) {
                         const Uint8* keys = SDL_GetKeyboardState(nullptr);
                         const bool keyShiftFace =

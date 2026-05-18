@@ -6,7 +6,7 @@
 #include "editor/ui/EditorUI.h"
 #include "engine/animation/clips/AnimationClip.h"  // F2H49: metadata externa
 #include "engine/assets/manager/AssetManager.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/Components.h"
 

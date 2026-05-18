@@ -6,7 +6,7 @@
 
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/audio/clips/AudioClip.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/Components.h"
 
 #include <imgui.h>

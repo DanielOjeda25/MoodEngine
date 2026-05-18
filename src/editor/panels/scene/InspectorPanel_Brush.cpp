@@ -8,7 +8,7 @@
 #include "editor/commands/EditBrushUVCommand.h"  // BrushUVSnapshot
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/Components.h"
 #include "engine/world/csg/BrushOps.h"  // F2H33: alignment helpers

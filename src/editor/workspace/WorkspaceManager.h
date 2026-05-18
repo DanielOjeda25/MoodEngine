@@ -11,7 +11,7 @@
 // `ProjectSerializer` leyendo `workspaces()` directamente.
 
 #include "core/Types.h"
-#include "editor/workspace/Workspace.h"
+#include "engine/project/Workspace.h"  // movido a engine/project en AUDIT-3
 
 #include <string>
 #include <vector>

@@ -2,7 +2,7 @@
 
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/render/preview/MaterialPreviewRenderer.h"
 #include "engine/render/resources/MaterialAsset.h"
 

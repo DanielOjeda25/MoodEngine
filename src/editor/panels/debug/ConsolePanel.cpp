@@ -4,7 +4,7 @@
 #include "core/LogRingSink.h"
 #include "core/Types.h"  // F2H23: usize
 #include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons por nivel
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 
 #include <imgui.h>
 

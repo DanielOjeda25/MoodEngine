@@ -12,7 +12,7 @@
 #include "editor/selection/SelectionSet.h"
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
-#include "engine/i18n/I18n.h"
+#include "core/i18n/I18n.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"

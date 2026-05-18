@@ -1,7 +1,7 @@
 #include "editor/ui/StatusBar.h"
 
 #include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons en mode/submode
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 
 #include <imgui.h>
 #include <imgui_internal.h>

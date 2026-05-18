@@ -4,7 +4,7 @@
 #include "engine/dialog/DialogAsset.h"
 #include "engine/dialog/DialogSystem.h"
 #include "engine/game/state/GameState.h"
-#include "engine/i18n/I18n.h"
+#include "core/i18n/I18n.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"

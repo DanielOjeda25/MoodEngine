@@ -8,7 +8,7 @@
 #include <doctest/doctest.h>
 
 #include "core/UserSettings.h"
-#include "engine/i18n/I18n.h"
+#include "core/i18n/I18n.h"
 
 #include <filesystem>
 #include <fstream>

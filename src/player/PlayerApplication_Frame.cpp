@@ -21,7 +21,7 @@
 #include "engine/inventory/ItemPickupSystem.h"   // F2H52 Bloque C
 #include "engine/quest/QuestSystem.h"            // F2H53 Bloque F
 #include "engine/game/state/GameState.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"

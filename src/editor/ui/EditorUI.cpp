@@ -1,7 +1,7 @@
 #include "editor/ui/EditorUI.h"
 
 #include "core/Log.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/BrushComponent.h"  // F2H12
 #include "engine/scene/components/Components.h"      // F2H12: TagComponent
 #include "engine/scene/core/Scene.h"                  // F2H12

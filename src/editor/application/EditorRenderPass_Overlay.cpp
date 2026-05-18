@@ -12,6 +12,7 @@
 #include "editor/application/EditorApplication.h"
 
 #include "core/math/AABB.h"
+#include "core/math/Ray.h"  // AUDIT-3: pickRayFromNdc
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
@@ -362,16 +363,10 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                 // Reconstruir el rayo desde la cam (mismo flow del
                 // click handler).
                 const glm::mat4 invVP = glm::inverse(projection * view);
-                const glm::vec4 nearH = invVP *
-                    glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
-                const glm::vec4 farH = invVP *
-                    glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
-                if (nearH.w != 0.0f && farH.w != 0.0f) {
-                    const glm::vec3 origin = glm::vec3(nearH) / nearH.w;
-                    const glm::vec3 dir = glm::normalize(
-                        glm::vec3(farH) / farH.w - origin);
+                if (const auto ray = pickRayFromNdc(invVP, ndcX, ndcY)) {
                     const auto faceHit = Csg::pickFace(
-                        bc.brush, origin, dir, tf.worldMatrix());
+                        bc.brush, ray->origin, ray->direction,
+                        tf.worldMatrix());
                     if (faceHit.has_value()) {
                         const i32 idx = static_cast<i32>(*faceHit);
                         // Skip si la cara hovered ya esta en el set

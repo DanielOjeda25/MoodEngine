@@ -3,7 +3,7 @@
 #include "core/Log.h"
 #include "core/UserSettings.h"  // F2H43
 #include "editor/ui/EditorUI.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "editor/ui/IconsFontAwesome6.h"
 #include "editor/panels/IPanel.h"
 

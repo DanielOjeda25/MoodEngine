@@ -11,7 +11,7 @@
 
 #include "core/Log.h"
 #include "engine/game/state/GameState.h"
-#include "engine/i18n/I18n.h"
+#include "core/i18n/I18n.h"
 
 #include <imgui.h>
 

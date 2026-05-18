@@ -5,7 +5,7 @@
 #include "editor/ui/EditorUI.h"
 #include "editor/ui/IconHelpers.h"  // F2H37: iconForEntity compartido
 #include "editor/ui/IconsFontAwesome6.h"
-#include "engine/i18n/I18n.h"  // F2H43
+#include "core/i18n/I18n.h"  // F2H43
 #include "engine/scene/VisGroup.h"  // F2H33: gray-out hidden entities
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"

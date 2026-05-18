@@ -20,7 +20,7 @@
 #include "editor/panels/scene/InspectorPanel_Internal.h"
 
 #include "editor/ui/EditorUI.h"
-#include "engine/i18n/I18n.h"
+#include "core/i18n/I18n.h"
 #include "engine/scene/components/Components.h"
 
 #include <imgui.h>
