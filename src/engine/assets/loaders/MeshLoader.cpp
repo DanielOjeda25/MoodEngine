@@ -143,6 +143,10 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
         SubMesh sm{};
         sm.materialIndex = m->mMaterialIndex;
         sm.vertexCount = static_cast<u32>(vertices.size() / detail::k_strideFloats);
+        // F2H67: nombre del sub-mesh para selector per-entity (chassis + wheels).
+        if (m->mName.length > 0) {
+            sm.name = std::string(m->mName.C_Str(), m->mName.length);
+        }
         sm.mesh = meshFactory(vertices, attrs);
         if (sm.mesh == nullptr) {
             Log::assets()->warn("MeshLoader: MeshFactory devolvio null para submesh {} de '{}'",

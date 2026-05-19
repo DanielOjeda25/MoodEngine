@@ -374,6 +374,11 @@ void SceneRenderer::renderScene(Scene& scene,
         for (usize i = 0; i < asset->submeshes.size(); ++i) {
             const auto& sub = asset->submeshes[i];
             if (sub.mesh == nullptr) continue;
+            // F2H67: sub-mesh selector. Si la entity pidio uno especifico,
+            // skipear el resto (case-sensitive exact match).
+            if (!mr.subMeshName.empty() && sub.name != mr.subMeshName) {
+                continue;
+            }
 
             const MaterialAssetId matId =
                 mr.materialOrMissing(sub.materialIndex);

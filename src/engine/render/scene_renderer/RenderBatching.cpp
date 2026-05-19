@@ -77,7 +77,13 @@ BatchingResult groupByBatch(Scene& scene,
             //     material; con 1 submesh esto es trivialmente cierto).
             const bool oneSubmesh = (asset->submeshes.size() == 1u);
             const bool simpleMaterials = (mr.materials.size() <= 1u);
-            if (!(oneSubmesh && simpleMaterials)) {
+            // F2H67: entities con subMeshName seleccionando UN sub-mesh del
+            // asset NO van al path instanced. El instanced asume 1 submesh
+            // global; con selector hay que iterar y comparar nombres, lo
+            // cual cae al path drawMeshRenderer (no batched, OK porque son
+            // pocas entidades — chassis + 4 wheels por auto).
+            const bool noSubMeshFilter = mr.subMeshName.empty();
+            if (!(oneSubmesh && simpleMaterials && noSubMeshFilter)) {
                 result.nonBatchable.push_back(e);
                 return;
             }

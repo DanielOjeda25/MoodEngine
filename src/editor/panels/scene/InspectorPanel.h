@@ -54,6 +54,7 @@ private:
     void renderScriptSection(Entity e);
     void renderRigidBodySection(Entity e);
     void renderJointSection(Entity e);  // F2H65
+    void renderVehicleSection(Entity e);  // F2H67
     void renderAudioSourceSection(Entity e);
     void renderAnimatorSection(Entity e);
     void renderParticleEmitterSection(Entity e);

@@ -36,6 +36,7 @@ struct AnimationClip;  // F2H49
 namespace Dialog { class Asset; }     // F2H48
 namespace Inventory { class Asset; }  // F2H51
 namespace Quest { class Asset; }      // F2H53
+namespace vehicle { struct VehicleConfig; }  // F2H67
 
 /// @brief Identificador estable de una textura dentro de un `AssetManager`.
 ///        Valor 0 se reserva para la textura "missing": pedir `getTexture(0)`
@@ -87,6 +88,12 @@ using ItemAssetId = u32;
 ///        vacios) que permite que `getQuest(0)` nunca sea null. Loadeo
 ///        lazy + cache por path logico, mismo patron que Item.
 using QuestAssetId = u32;
+
+/// @brief F2H67: Identificador estable de un VehicleConfig (.moodvehicle).
+///        Valor 0 reservado para un config "default SA" (makeDefaultSA)
+///        que asegura `getVehicleConfig(0)` nunca null. Loadeo lazy + cache
+///        por path logico, mismo patron que Dialog/Item/Quest.
+using VehicleConfigAssetId = u32;
 
 class AssetManager {
 public:
@@ -443,6 +450,28 @@ public:
     /// @brief Cantidad de quests cacheados (incluye slot 0).
     usize questCount() const;
 
+    // ---- VehicleConfig (F2H67) ----
+
+    /// @brief Carga (o devuelve cacheado) un VehicleConfig por path logico
+    ///        (p.ej. "vehicles/banshee_sa.moodvehicle"). En fallo devuelve
+    ///        `missingVehicleConfigId()` (config default SA) y loguea al
+    ///        canal `assets`. Mismo patron que `loadQuest`.
+    VehicleConfigAssetId loadVehicleConfig(std::string_view logicalPath);
+
+    /// @brief Devuelve el config del id. Nunca null: ids invalidos caen al
+    ///        slot 0 (default SA).
+    const vehicle::VehicleConfig* getVehicleConfig(VehicleConfigAssetId id) const;
+
+    /// @brief Id del config default (slot 0) = `vehicle::makeDefaultSA()`.
+    VehicleConfigAssetId missingVehicleConfigId() const { return 0; }
+
+    /// @brief Path logico con el que se cargo el config. Slot 0 devuelve
+    ///        el sentinela `"__default_vehicle_sa"`.
+    std::string vehicleConfigPathOf(VehicleConfigAssetId id) const;
+
+    /// @brief Cantidad de configs cacheados (incluye slot 0).
+    usize vehicleConfigCount() const;
+
 private:
     VFS m_vfs;
     TextureFactory m_textureFactory;
@@ -494,6 +523,11 @@ private:
     std::unordered_map<std::string, QuestAssetId> m_questCache;
     std::vector<std::unique_ptr<Quest::Asset>> m_quests;
     std::vector<std::string> m_questPaths; // paralelo a m_quests
+
+    // VehicleConfig (F2H67). [0] = default SA (makeDefaultSA).
+    std::unordered_map<std::string, VehicleConfigAssetId> m_vehicleConfigCache;
+    std::vector<std::unique_ptr<vehicle::VehicleConfig>> m_vehicleConfigs;
+    std::vector<std::string> m_vehicleConfigPaths; // paralelo a m_vehicleConfigs
 };
 
 } // namespace Mood

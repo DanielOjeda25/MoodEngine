@@ -91,6 +91,7 @@ void InspectorPanel::onImGuiRender() {
     if (e.hasComponent<ScriptComponent>())           renderScriptSection(e);
     if (e.hasComponent<RigidBodyComponent>())        renderRigidBodySection(e);
     if (e.hasComponent<JointComponent>())            renderJointSection(e);  // F2H65
+    if (e.hasComponent<VehicleComponent>())          renderVehicleSection(e);  // F2H67
     if (e.hasComponent<AudioSourceComponent>())      renderAudioSourceSection(e);
     if (e.hasComponent<AnimatorComponent>())         renderAnimatorSection(e);
     if (e.hasComponent<ParticleEmitterComponent>())  renderParticleEmitterSection(e);

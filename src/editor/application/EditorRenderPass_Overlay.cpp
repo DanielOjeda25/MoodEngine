@@ -290,6 +290,86 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                         }
                     });
             }
+
+            // F2H67 Polish 4: overlay de vehicles. Por cada entity con
+            // VehicleComponent + vehicleId valido: leemos el VehicleState
+            // del PhysicsWorld y dibujamos:
+            //   - OBB azul claro del chassis (transform world).
+            //   - 4 puntos verdes en las wheels (sus transforms post-sync).
+            //   - Vector amarillo de velocidad (forward * forwardSpeed).
+            //   - Lineas grises radiales chassis -> wheels (visualiza la
+            //     jerarquia auto-spawned).
+            if (m_physicsWorld) {
+                const glm::vec3 chassisColor(0.40f, 0.70f, 1.00f);  // azul
+                const glm::vec3 wheelColor  (0.20f, 0.90f, 0.30f);  // verde
+                const glm::vec3 velColor    (1.00f, 1.00f, 0.20f);  // amarillo
+                const glm::vec3 linkColor   (0.70f, 0.70f, 0.70f);  // gris
+                m_scene->forEach<VehicleComponent, TransformComponent>(
+                    [&](Entity, VehicleComponent& veh,
+                        TransformComponent& tf) {
+                        (void)tf;
+                        if (veh.vehicleId == 0) return;
+                        PhysicsWorld::VehicleState st;
+                        if (!m_physicsWorld->readVehicleState(
+                                veh.vehicleId, st)) return;
+
+                        const glm::vec3 chassisCenter(st.chassisWorld[3]);
+                        // OBB chassis: usamos halfExtents tipicas del SA
+                        // default (0.9, 0.5, 2.0) -- no hay forma de leer
+                        // el cfg actual sin re-cachear, asi que dibujamos
+                        // un proxy razonable. Si emerge demanda, agendar
+                        // leer halfExtents reales del VehicleConstraint.
+                        const glm::vec3 he(0.9f, 0.5f, 2.0f);
+                        // 8 corners del OBB en local space, transformados.
+                        const glm::vec3 corners[8] = {
+                            {-he.x, -he.y, -he.z}, { he.x, -he.y, -he.z},
+                            { he.x,  he.y, -he.z}, {-he.x,  he.y, -he.z},
+                            {-he.x, -he.y,  he.z}, { he.x, -he.y,  he.z},
+                            { he.x,  he.y,  he.z}, {-he.x,  he.y,  he.z},
+                        };
+                        glm::vec3 worldC[8];
+                        for (int i = 0; i < 8; ++i) {
+                            const glm::vec4 w =
+                                st.chassisWorld * glm::vec4(corners[i], 1.0f);
+                            worldC[i] = glm::vec3(w);
+                        }
+                        // 12 aristas del cubo.
+                        const int edges[12][2] = {
+                            {0,1},{1,2},{2,3},{3,0},  // bottom
+                            {4,5},{5,6},{6,7},{7,4},  // top
+                            {0,4},{1,5},{2,6},{3,7},  // verticales
+                        };
+                        for (int i = 0; i < 12; ++i) {
+                            dbg.drawLine(worldC[edges[i][0]],
+                                          worldC[edges[i][1]], chassisColor);
+                        }
+
+                        // Vector velocidad (forward del chassis * speed).
+                        const glm::vec3 fwdWorld =
+                            glm::normalize(glm::vec3(st.chassisWorld[2]));
+                        const f32 speed = st.forwardSpeed;
+                        if (std::abs(speed) > 0.1f) {
+                            dbg.drawLine(chassisCenter,
+                                          chassisCenter + fwdWorld * speed * 0.2f,
+                                          velColor);
+                        }
+
+                        // Wheels: 4 puntitos verdes + lineas grises radiales.
+                        for (int i = 0; i < 4; ++i) {
+                            const glm::vec3 wpos(st.wheelWorlds[i][3]);
+                            // Cruz chica (3 ejes) para marcar el punto.
+                            constexpr f32 k = 0.1f;
+                            dbg.drawLine(wpos - glm::vec3(k,0,0),
+                                          wpos + glm::vec3(k,0,0), wheelColor);
+                            dbg.drawLine(wpos - glm::vec3(0,k,0),
+                                          wpos + glm::vec3(0,k,0), wheelColor);
+                            dbg.drawLine(wpos - glm::vec3(0,0,k),
+                                          wpos + glm::vec3(0,0,k), wheelColor);
+                            // Linea chassis -> wheel.
+                            dbg.drawLine(chassisCenter, wpos, linkColor);
+                        }
+                    });
+            }
         }
     }
 

@@ -47,6 +47,12 @@ struct SubMesh {
     std::unique_ptr<IMesh> mesh;
     u32 materialIndex = 0;
     u32 vertexCount = 0;
+    /// F2H67: nombre del sub-mesh segun el archivo origen (assimp `aiMesh->mName`).
+    /// Vacio = el archivo no le puso nombre. Lo consume el render path para
+    /// filtrar por `MeshRendererComponent.subMeshName` (un solo sub-mesh por
+    /// entity, ej. para que un auto descomponga chassis + 4 wheels en 5 entities
+    /// distintas que comparten el mismo MeshAsset).
+    std::string name;
 };
 
 struct MeshAsset {

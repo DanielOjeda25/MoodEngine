@@ -18,6 +18,7 @@
 #include "core/Log.h"
 #include "engine/assets/primitives/PrimitiveMeshes.h"
 #include "engine/animation/clips/AnimationClip.h"  // F2H49
+#include "engine/physics/vehicle/VehicleConfig.h"  // F2H67 (dtor unique_ptr)
 #include "engine/audio/clips/AudioClip.h"
 #include "engine/dialog/DialogAsset.h"  // F2H48
 #include "engine/inventory/ItemAsset.h" // F2H51
