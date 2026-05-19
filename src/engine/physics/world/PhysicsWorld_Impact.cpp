@@ -22,6 +22,8 @@
 
 #include "engine/physics/world/PhysicsWorld_Internal.h"
 
+#include "core/Log.h"
+
 #include <Jolt/Physics/Body/Body.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
 #include <Jolt/Physics/Ragdoll/Ragdoll.h>
@@ -45,9 +47,23 @@ void ContactListener::OnContactAdded(const JPH::Body& body1,
                                        JPH::ContactSettings& /*settings*/) {
     if (owner == nullptr) return;
 
+    const u32 id1 = body1.GetID().GetIndexAndSequenceNumber();
+    const u32 id2 = body2.GetID().GetIndexAndSequenceNumber();
+
+    // F2H69-DEBUG: trazar todos los contactos para confirmar disparo del
+    // callback. Remover post-validacion del Bloque A.
+    Log::physics()->info(
+        "[F2H69-DEBUG] OnContactAdded: b1={} (Dyn={}, Sensor={}) "
+        "b2={} (Dyn={}, Sensor={})",
+        id1, body1.IsDynamic(), body1.IsSensor(),
+        id2, body2.IsDynamic(), body2.IsSensor());
+
     // Skip pares sin movimiento posible: si ambos bodies estan Static o
     // ambos son Kinematic sin velocidad linear, no hay impacto fisico.
-    if (!body1.IsDynamic() && !body2.IsDynamic()) return;
+    if (!body1.IsDynamic() && !body2.IsDynamic()) {
+        Log::physics()->info("[F2H69-DEBUG]   skip: ambos no-Dynamic");
+        return;
+    }
 
     // Velocidad relativa en el punto de contacto (mundo). Usamos el
     // centro del manifold como punto de referencia; para impacto puntual
@@ -67,7 +83,17 @@ void ContactListener::OnContactAdded(const JPH::Body& body1,
     const JPH::Vec3 normal = manifold.mWorldSpaceNormal;
     const f32 closingSpeed = vrel.Dot(normal);
 
-    if (closingSpeed < owner->impactSpeedThreshold) return;
+    Log::physics()->info(
+        "[F2H69-DEBUG]   vrel=({:.2f},{:.2f},{:.2f}) n=({:.2f},{:.2f},{:.2f}) "
+        "closingSpeed={:.2f} threshold={:.2f}",
+        vrel.GetX(), vrel.GetY(), vrel.GetZ(),
+        normal.GetX(), normal.GetY(), normal.GetZ(),
+        closingSpeed, owner->impactSpeedThreshold);
+
+    if (closingSpeed < owner->impactSpeedThreshold) {
+        Log::physics()->info("[F2H69-DEBUG]   skip: closingSpeed < threshold");
+        return;
+    }
 
     // Impulse magnitude estilo arcade: la velocidad de cierre escalada
     // por el factor configurado. NO usamos masa porque ya estamos
@@ -83,8 +109,11 @@ void ContactListener::OnContactAdded(const JPH::Body& body1,
     const glm::vec3 impulse1 = -normalG * impulseMag;
     const glm::vec3 impulse2 =  normalG * impulseMag;
 
-    const u32 id1 = body1.GetID().GetIndexAndSequenceNumber();
-    const u32 id2 = body2.GetID().GetIndexAndSequenceNumber();
+    Log::physics()->info(
+        "[F2H69-DEBUG]   ENCOLA: b1={} impulse=({:.2f},{:.2f},{:.2f}) | "
+        "b2={} impulse=({:.2f},{:.2f},{:.2f})",
+        id1, impulse1.x, impulse1.y, impulse1.z,
+        id2, impulse2.x, impulse2.y, impulse2.z);
 
     {
         std::lock_guard<std::mutex> lock(owner->impactQueueMutex);

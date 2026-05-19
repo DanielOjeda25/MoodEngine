@@ -280,6 +280,15 @@ u32 PhysicsWorld::createBody(const glm::vec3& position,
     // listener detecta el closingSpeed, dispara ragdoll, el sensor body
     // se destruye en el siguiente tick.
     settings.mIsSensor = isSensor;
+    // F2H69 Bloque A: sensors NO duermen. Jolt entra a sleep los Kinematic
+    // sin movimiento tras ~5s y un sensor dormido deja de generar callbacks
+    // de contacto (regla documentada de Jolt: solo sensors awake detectan).
+    // Sin esto, el NPC sensor del demo F2H68 dejaba de detectar el chassis
+    // pasado el primer settle — explicaba el bug "el chassis cruza pero no
+    // dispara ragdoll". Pattern estandar Jolt para triggers/sensors.
+    if (isSensor) {
+        settings.mAllowSleeping = false;
+    }
 
     JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
     JPH::BodyID id = bi.CreateAndAddBody(settings,
