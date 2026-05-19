@@ -333,6 +333,7 @@ add_library(mood_engine_lib STATIC
     src/engine/assets/manager/AssetManager_AnimationClip.cpp  # F2H49
     src/engine/assets/manager/AssetManager_Item.cpp  # F2H51
     src/engine/assets/manager/AssetManager_Quest.cpp  # F2H53 Bloque B
+    src/engine/assets/manager/AssetManager_Vehicle.cpp  # F2H67 Polish 2
     src/engine/assets/loaders/MeshLoader.cpp
     src/engine/assets/primitives/PrimitiveMeshes.cpp
     src/engine/assets/loaders/stb_impl.cpp
@@ -380,6 +381,9 @@ add_library(mood_engine_lib STATIC
     src/engine/physics/world/PhysicsWorld_Ragdoll.cpp  # F2H66 Bloque C
     src/engine/physics/ragdoll/RagdollLayout.cpp  # F2H66 Bloque A
     src/systems/physics/RagdollSystem.cpp  # F2H66 Bloque D
+    src/engine/physics/vehicle/VehicleConfig.cpp  # F2H67 Bloque A
+    src/engine/physics/world/PhysicsWorld_Vehicle.cpp  # F2H67 Bloque C
+    src/systems/physics/VehicleSystem.cpp  # F2H67 Bloque D
 
     src/engine/saving/SaveLoad.cpp
 
@@ -426,6 +430,7 @@ add_library(mood_engine_lib STATIC
     src/engine/scripting/bindings/LuaBindings_Inventory.cpp  # F2H52 Bloque E
     src/engine/scripting/bindings/LuaBindings_Quest.cpp      # F2H53 Bloque E
     src/engine/scripting/bindings/LuaBindings_Ragdoll.cpp    # F2H66 Bloque E
+    src/engine/scripting/bindings/LuaBindings_Vehicle.cpp    # F2H67 Bloque E
 
     src/engine/render/backend/opengl/OpenGLMesh.cpp
     src/engine/render/backend/opengl/OpenGLShader.cpp
@@ -559,6 +564,7 @@ add_executable(MoodEditor
     src/editor/panels/scene/InspectorPanel_Script.cpp
     src/editor/panels/scene/InspectorPanel_Physics.cpp
     src/editor/panels/scene/InspectorPanel_Joint.cpp  # F2H65
+    src/editor/panels/scene/InspectorPanel_Vehicle.cpp  # F2H67 Polish 3
     src/editor/panels/scene/InspectorPanel_Audio.cpp
     src/editor/panels/scene/InspectorPanel_Animation.cpp
     src/editor/panels/scene/InspectorPanel_Particles.cpp

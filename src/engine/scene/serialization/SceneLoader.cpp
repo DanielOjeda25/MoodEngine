@@ -108,6 +108,12 @@ Entity applyOneEntity(const SavedEntity& se,
                 }
             }
             e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
+            // F2H67: sub-mesh selector aditivo. Si trae `sub_mesh_name`
+            // el render path filtra y solo dibuja ese sub-mesh.
+            if (!mr.subMeshName.empty()) {
+                e.getComponent<MeshRendererComponent>().subMeshName =
+                    mr.subMeshName;
+            }
 
             // F2H50 Bloque D: si el JSON trae `animator` (saved), usar
             // sus valores. Sino, fallback al path legacy: auto-add con
@@ -353,6 +359,23 @@ Entity applyOneEntity(const SavedEntity& se,
             rag.spawnImpulse = sr.spawnImpulse;
             rag.ragdollId    = 0;
             e.addComponent<RagdollComponent>(rag);
+        }
+
+        // F2H67: VehicleComponent. configPath persiste; los handles
+        // runtime (vehicleId + wheelEntities[]) los rematerializa el
+        // VehicleSystem al primer tick (`dirty=true`).
+        if (se.vehicle.has_value()) {
+            const auto& sv = *se.vehicle;
+            VehicleComponent veh{};
+            veh.configPath = sv.configPath;
+            veh.dirty = true;
+            e.addComponent<VehicleComponent>(veh);
+        }
+        if (se.vehicleSeat.has_value()) {
+            const auto& ss = *se.vehicleSeat;
+            VehicleSeatComponent seat{};
+            seat.seatOffsetLocal = ss.seatOffsetLocal;
+            e.addComponent<VehicleSeatComponent>(seat);
         }
 
         // F2H65: JointComponent. El targetEntity (raw handle) se resuelve

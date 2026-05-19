@@ -72,4 +72,19 @@ void setupQuestBindings(sol::state& lua, AssetManager* assets);
 ///        al siguiente frame.
 void setupRagdollBindings(sol::state& lua, class Scene* scene);
 
+/// @brief F2H67 Bloque E: registra la tabla `vehicle` en `lua`.
+///        Implementado en LuaBindings_Vehicle.cpp. Requiere `scene` y
+///        `physicsWorld` para escribir el input del componente y leer
+///        velocidades. Si alguno es nullptr (tests headless), las
+///        funciones loggean warn y retornan defaults.
+///        API:
+///          vehicle.set_input(tag, {throttle=,brake=,steer=,handbrake=})
+///          vehicle.get_speed(tag) -> float (m/s, forward speed)
+///          vehicle.is_grounded(tag) -> bool
+///          vehicle.respawn(tag, {x=,y=,z=}, rotY_deg)
+///          vehicle.gear(tag) -> int  (-1 reverse, 0 neutral, 1..N)
+///          vehicle.rpm(tag)  -> float
+void setupVehicleBindings(sol::state& lua, class Scene* scene,
+                            class PhysicsWorld* physicsWorld);
+
 } // namespace Mood

@@ -22,6 +22,8 @@
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 #include <Jolt/Physics/Constraints/Constraint.h>
 #include <Jolt/Physics/Ragdoll/Ragdoll.h>  // F2H66
+#include <Jolt/Physics/Vehicle/VehicleConstraint.h>  // F2H67
+#include <Jolt/Physics/Vehicle/VehicleCollisionTester.h>  // F2H67
 
 #include <glm/vec3.hpp>
 
@@ -120,6 +122,20 @@ struct PhysicsWorld::Impl {
     // constraints. Cada Ragdoll posee N bodies + (N-1) constraints internos.
     std::unordered_map<u32, JPH::Ref<JPH::Ragdoll>> ragdolls;
     u32 nextRagdollId = 1;
+
+    // F2H67: vehicles indexados por handle. Cada entry mantiene la
+    // VehicleConstraint (que es JPH::Ref-counted) + el chassis BodyID (que
+    // NO es JPH::Ref — el lifecycle del body lo controlamos en createVehicle/
+    // destroyVehicle como con cualquier otro body). El collision tester
+    // debe sobrevivir mientras el constraint exista porque el constraint
+    // tiene un puntero raw a el.
+    struct VehicleEntry {
+        JPH::Ref<JPH::VehicleConstraint> constraint;
+        JPH::Ref<JPH::VehicleCollisionTester> collisionTester;
+        JPH::BodyID chassisBodyId;
+    };
+    std::unordered_map<u32, VehicleEntry> vehicles;
+    u32 nextVehicleId = 1;
 };
 
 } // namespace Mood

@@ -39,6 +39,9 @@ namespace Mood {
 // concreto de la ragdoll layout — el .cpp lo incluye).
 namespace ragdoll { struct RagdollLayout; }
 
+// F2H67: forward decl del vehicle config puro.
+namespace vehicle { struct VehicleConfig; }
+
 /// @brief Layers de la simulacion. 8-bit por Jolt — alcanzan.
 ///
 /// Hito 40 C (decision permanente): mantenemos solo Static + Moving.
@@ -264,6 +267,79 @@ public:
 
     /// @brief Cantidad de ragdolls activos. Util para tests / debug.
     u32 ragdollCount() const;
+
+    // --- F2H67: Vehicles (envuelve JPH::VehicleConstraint +
+    //            WheeledVehicleController) ---
+    //
+    // Un vehiculo es un body chassis (Dynamic Box) + un `VehicleConstraint`
+    // que aplica suspension + traccion sobre las 4 ruedas declaradas en el
+    // `VehicleConfig`. Las ruedas NO son bodies propios — son raycasts
+    // virtuales gestionados por el constraint. El visual mesh de las ruedas
+    // se renderiza desde `readVehicleState` (que devuelve las world
+    // transforms de las 4 ruedas post-step).
+    //
+    // El input (throttle/brake/steer/handbrake) se setea cada frame via
+    // `setVehicleInput`. El wrapper internamente convierte:
+    //   - throttle: gas pedal [0, 1] => `WheeledVehicleController::mForward`
+    //   - brake:    brake pedal [0, 1]
+    //   - steer:    [-1, 1] (izq..der)
+    //   - handbrake: [0, 1]
+    //
+    // El `WheeledVehicleController` lleva un automatico interno: la marcha
+    // se elige sola por RPM. No hay clutch manual en v1.
+
+    /// @brief Estado por frame del vehiculo (lectura post-step). Las
+    ///        transforms son world-space; usa `chassisWorld[3]` como
+    ///        posicion del centro del chasis y aplica a la entity-chassis;
+    ///        usa `wheelWorlds[i]` para cada uno de los 4 child-entity
+    ///        wheel meshes.
+    struct VehicleState {
+        glm::mat4 chassisWorld{1.0f};
+        glm::mat4 wheelWorlds[4]{};
+        f32       forwardSpeed = 0.0f;   ///< m/s en la direccion +Z local
+        bool      grounded     = false;  ///< true si AL MENOS 1 wheel toca
+        int       currentGear  = 0;       ///< -1 reverse, 0 neutral, 1..N
+        f32       engineRPM    = 0.0f;
+    };
+
+    /// @brief Crea un vehiculo. Construye el chassis body (Dynamic Box) +
+    ///        VehicleConstraint con 4 wheels segun el `cfg`. El chasis
+    ///        arranca en `initialWorldTransform` (rotacion + posicion).
+    ///        Devuelve handle estable; 0 si fallo (config invalido, sin
+    ///        physics system, mass <= 0, etc.).
+    u32 createVehicle(const vehicle::VehicleConfig& cfg,
+                      const glm::mat4& initialWorldTransform);
+
+    /// @brief Destruye + remueve del physics system (chassis body +
+    ///        constraint). Idempotente.
+    void destroyVehicle(u32 vehicleId);
+
+    /// @brief Setea el input del vehiculo este frame. Persiste hasta que
+    ///        sea sobreescrito. El `WheeledVehicleController` consume
+    ///        estos valores en su `PreCollide` interno (step listener).
+    /// @param throttle [0, 1] gas pedal. Para reverse, usar `brake=1` con
+    ///        velocidad casi cero — el automatic transmission cambia a
+    ///        reversa cuando el dev mantiene el brake pedal pisado y el
+    ///        vehicle esta detenido.
+    /// @param brake    [0, 1].
+    /// @param steer    [-1, 1]. Negativo = izquierda.
+    /// @param handbrake [0, 1].
+    void setVehicleInput(u32 vehicleId, f32 throttle, f32 brake,
+                          f32 steer, f32 handbrake);
+
+    /// @brief Lee el estado post-step. Devuelve false si id invalido.
+    bool readVehicleState(u32 vehicleId, VehicleState& out) const;
+
+    /// @brief Aplica un impulse al chassis body (util para respawn con
+    ///        velocidad inicial, o efectos de empuje).
+    void applyVehicleImpulse(u32 vehicleId, const glm::vec3& impulseWorld);
+
+    /// @brief BodyID del chassis (para raycast filtering del player o
+    ///        contact detection externo). 0 si vehicleId invalido.
+    u32 vehicleChassisBodyId(u32 vehicleId) const;
+
+    /// @brief Cantidad de vehiculos activos.
+    u32 vehicleCount() const;
 
     // --- Hito 30: Character Controller (CharacterVirtual) ---
 

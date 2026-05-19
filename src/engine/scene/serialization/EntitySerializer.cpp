@@ -90,6 +90,10 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
             }
             jmr["materials"].push_back(matPath);
         }
+        // F2H67: sub_mesh_name opcional (aditivo).
+        if (!mr.subMeshName.empty()) {
+            jmr["sub_mesh_name"] = mr.subMeshName;
+        }
         je["mesh_renderer"] = jmr;
     }
 
@@ -413,6 +417,21 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         je["ragdoll"] = jr;
     }
 
+    // F2H67: VehicleComponent. Solo el path al .moodvehicle; input state +
+    // handles runtime no se persisten (re-materializa al cargar).
+    if (entity.hasComponent<VehicleComponent>()) {
+        const auto& veh = entity.getComponent<VehicleComponent>();
+        json jv;
+        jv["configPath"] = veh.configPath;
+        je["vehicle"] = jv;
+    }
+    if (entity.hasComponent<VehicleSeatComponent>()) {
+        const auto& seat = entity.getComponent<VehicleSeatComponent>();
+        json js;
+        js["seatOffsetLocal"] = seat.seatOffsetLocal;
+        je["vehicle_seat"] = js;
+    }
+
     // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la
     // entidad tiene un `PrefabLinkComponent`. Sin propagacion bidireccional
     // por ahora; es solo un breadcrumb para futuras features ("revertir a
@@ -451,6 +470,8 @@ SavedEntity parseEntityFromJson(const json& j) {
                 mr.materials.push_back(m.get<std::string>());
             }
         }
+        // F2H67: sub_mesh_name aditivo (mapas pre-F2H67 lo dejan vacio).
+        mr.subMeshName = jmr.value("sub_mesh_name", std::string{});
         se.meshRenderer = std::move(mr);
     }
     if (j.contains("light")) {
@@ -630,6 +651,22 @@ SavedEntity parseEntityFromJson(const json& j) {
         sr.useGravity   = jr.value("useGravity",  true);
         sr.spawnImpulse = jr.value("spawnImpulse", glm::vec3{0.0f});
         se.ragdoll = std::move(sr);
+    }
+
+    // F2H67: vehicle + vehicle_seat. Aditivos -- mapas pre-F2H67 sin el
+    // campo se leen igual.
+    if (j.contains("vehicle")) {
+        const auto& jv = j.at("vehicle");
+        SavedVehicle sv;
+        sv.configPath = jv.value("configPath", std::string{});
+        se.vehicle = std::move(sv);
+    }
+    if (j.contains("vehicle_seat")) {
+        const auto& js = j.at("vehicle_seat");
+        SavedVehicleSeat ss;
+        ss.seatOffsetLocal = js.value("seatOffsetLocal",
+                                       glm::vec3{0.0f, 0.6f, 0.2f});
+        se.vehicleSeat = std::move(ss);
     }
 
     // F2H65: joint. Aditivo — mapas pre-F2H65 sin el campo se leen igual

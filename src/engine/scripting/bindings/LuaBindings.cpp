@@ -380,6 +380,11 @@ void setupLuaBindings(sol::state& lua, Entity self,
     // `ragdoll.enable("NPC", {x=0, y=200, z=-300})` para flopping fisico.
     setupRagdollBindings(lua, self.scene());
 
+    // F2H67 Bloque E — tabla `vehicle`. Input + queries de speed/gear/rpm
+    // + respawn. set_input solo escribe al componente; el VehicleSystem
+    // pushea al physics en el siguiente tick.
+    setupVehicleBindings(lua, self.scene(), physics);
+
     // self como global.
     lua["self"] = self;
 }

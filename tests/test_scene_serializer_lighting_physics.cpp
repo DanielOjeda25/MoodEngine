@@ -459,3 +459,111 @@ TEST_CASE("SceneSerializer: friction default (0.5) NO se persiste en JSON (Hito 
 
     std::filesystem::remove(path);
 }
+
+
+// F2H67 Bloque J: round-trip persistencia de VehicleComponent + Seat.
+// Verifica que `configPath` se serializa y rehidrata + que los handles
+// runtime (vehicleId, wheelEntities[]) NO se persisten + que el dirty=true
+// queda seteado al cargar (para que el VehicleSystem lo materialice).
+TEST_CASE("SceneSerializer: round-trip VehicleComponent (F2H67)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+
+    Entity chassis = scene.createEntity("Banshee");
+    {
+        auto& t = chassis.getComponent<TransformComponent>();
+        t.position = glm::vec3(2.0f, 1.0f, 5.0f);
+        t.rotationEuler = glm::vec3(0.0f, 45.0f, 0.0f);
+        VehicleComponent veh{};
+        veh.configPath = "vehicles/banshee_sa.moodvehicle";
+        // Setear handles runtime para verificar que NO persisten.
+        veh.vehicleId = 99;
+        veh.wheelEntities[0] = 100;
+        veh.wheelEntities[1] = 101;
+        veh.wheelEntities[2] = 102;
+        veh.wheelEntities[3] = 103;
+        chassis.addComponent<VehicleComponent>(veh);
+        VehicleSeatComponent seat{};
+        seat.seatOffsetLocal = glm::vec3(0.1f, 0.7f, 0.3f);
+        chassis.addComponent<VehicleSeatComponent>(seat);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("vehicle_roundtrip.moodmap");
+    SceneSerializer::save(empty, "vehicle_test", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() >= 1u);
+    const SavedEntity& se = loaded->entities[0];
+    CHECK(se.tag == "Banshee");
+    REQUIRE(se.vehicle.has_value());
+    CHECK(se.vehicle->configPath == "vehicles/banshee_sa.moodvehicle");
+    REQUIRE(se.vehicleSeat.has_value());
+    CHECK(se.vehicleSeat->seatOffsetLocal.x == doctest::Approx(0.1f));
+    CHECK(se.vehicleSeat->seatOffsetLocal.y == doctest::Approx(0.7f));
+    CHECK(se.vehicleSeat->seatOffsetLocal.z == doctest::Approx(0.3f));
+
+    // SceneLoader::applyEntitiesToScene rehidrata. dirty debe quedar true
+    // para que VehicleSystem materialice; vehicleId+wheelEntities deben
+    // arrancar en 0 (handles runtime NO persistidos).
+    Scene scene2;
+    SceneLoader::applyEntitiesToScene(*loaded, scene2, assets);
+    Entity reloaded;
+    scene2.forEach<TagComponent>([&](Entity e, TagComponent& t) {
+        if (t.name == "Banshee") reloaded = e;
+    });
+    REQUIRE(static_cast<bool>(reloaded));
+    REQUIRE(reloaded.hasComponent<VehicleComponent>());
+    const auto& vehR = reloaded.getComponent<VehicleComponent>();
+    CHECK(vehR.configPath == "vehicles/banshee_sa.moodvehicle");
+    CHECK(vehR.vehicleId == 0u);
+    CHECK(vehR.wheelEntities[0] == 0u);
+    CHECK(vehR.wheelEntities[1] == 0u);
+    CHECK(vehR.wheelEntities[2] == 0u);
+    CHECK(vehR.wheelEntities[3] == 0u);
+    CHECK(vehR.dirty);
+    REQUIRE(reloaded.hasComponent<VehicleSeatComponent>());
+    CHECK(reloaded.getComponent<VehicleSeatComponent>().seatOffsetLocal.y
+            == doctest::Approx(0.7f));
+
+    std::filesystem::remove(path);
+}
+
+// F2H67 Bloque J: VehicleComponent es opcional (aditivo). Mapas pre-F2H67
+// sin el campo "vehicle" cargan igual y la entity no tiene el componente.
+TEST_CASE("SceneSerializer: mapas pre-F2H67 sin VehicleComponent cargan (F2H67)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+    // Entity sin VehicleComponent pero con RigidBody (para que pase el gate
+    // de serializacion). Verificamos que el JSON NO trae campo "vehicle".
+    Entity simple = scene.createEntity("SinAuto");
+    simple.getComponent<TransformComponent>().position = glm::vec3(0.0f);
+    {
+        RigidBodyComponent rb{};
+        rb.type = RigidBodyComponent::Type::Static;
+        rb.shape = RigidBodyComponent::Shape::Box;
+        rb.halfExtents = glm::vec3(1.0f);
+        simple.addComponent<RigidBodyComponent>(rb);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("vehicle_absent.moodmap");
+    SceneSerializer::save(empty, "no_vehicle", &scene, assets, path);
+
+    // Reabrir como JSON y verificar que NO se escribio el campo vehicle.
+    std::ifstream f(path);
+    REQUIRE(f.is_open());
+    nlohmann::json j = nlohmann::json::parse(f);
+    f.close();
+    REQUIRE(j.contains("entities"));
+    REQUIRE(j["entities"].size() >= 1u);
+    CHECK_FALSE(j["entities"][0].contains("vehicle"));
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() >= 1u);
+    CHECK_FALSE(loaded->entities[0].vehicle.has_value());
+
+    std::filesystem::remove(path);
+}

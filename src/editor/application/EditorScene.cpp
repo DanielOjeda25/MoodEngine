@@ -11,6 +11,7 @@
 #include "engine/world/grid/GridMap.h"
 #include "systems/audio/AudioSystem.h"
 #include "systems/physics/RagdollSystem.h"  // F2H66
+#include "systems/physics/VehicleSystem.h"  // F2H67
 #include "systems/scripting/ScriptSystem.h"
 
 #include <glm/vec3.hpp>
@@ -315,11 +316,21 @@ void EditorApplication::updateRigidBodies(f32 dt) {
             RagdollSystem::tick(*m_scene, *m_physicsWorld, *m_assetManager);
         }
 
+        // F2H67: vehicles. Materializa el chassis si dirty, pushea input
+        // del componente y syncronea Transforms (chassis + 4 wheels) post-
+        // step. Mismo patron lazy que ragdolls. Antes del sync de la cam
+        // Play porque la cam puede seguir al chasis (Bloque F).
+        if (m_assetManager) {
+            VehicleSystem::tick(*m_scene, *m_physicsWorld, *m_assetManager);
+        }
+
         // Hito 30: sync de la camara Play con la pos del character post-step.
         // eyeOffset cambia con crouch (halfHeight 0.1 vs standing 0.5).
         // Hito 31 D: el eye Y interpola con m_crouchVisualT (smooth) +
         // suma headbob (sin() del time accumulator que avanza al caminar).
-        if (m_playerCharId != 0) {
+        // F2H67 Bloque F: si el player esta MONTADO a un vehicle, NO pisar
+        // la cam — la chase cam ya la pego al chasis en EditorPlayMode.
+        if (m_playerCharId != 0 && m_playerMountedVehicleEntity == 0) {
             constexpr f32 k_eyeStanding = 0.5f + 0.4f - 0.2f;  // 0.7
             constexpr f32 k_eyeCrouched = 0.1f + 0.4f - 0.2f;  // 0.3
             const f32 eye = glm::mix(k_eyeStanding, k_eyeCrouched, m_crouchVisualT);

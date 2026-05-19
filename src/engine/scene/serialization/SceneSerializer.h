@@ -65,6 +65,10 @@ class Scene;
 struct SavedMeshRenderer {
     std::string meshPath;
     std::vector<std::string> materials;
+    /// F2H67: si NO esta vacio, el MeshRenderer solo dibuja el sub-mesh
+    /// del MeshAsset cuyo nombre coincida (ej. "body", "wheel-front-left").
+    /// Vacio = comportamiento default (renderiza todos los sub-meshes).
+    std::string subMeshName;
 };
 
 /// @brief Copia persistida de un LightComponent (Hito 11).
@@ -290,6 +294,22 @@ struct SavedRagdoll {
     glm::vec3 spawnImpulse{0.0f};
 };
 
+/// @brief F2H67: copia persistida de un VehicleComponent. Solo el path
+///        al asset .moodvehicle; los handles runtime (vehicleId,
+///        wheelEntities[]) no se serializan -- el VehicleSystem los
+///        rematerializa al cargar. El input state tampoco persiste (es
+///        transient por frame).
+struct SavedVehicle {
+    std::string configPath;
+};
+
+/// @brief F2H67: copia persistida de un VehicleSeatComponent. Componente
+///        opcional sobre la entity del chassis para fijar el offset del
+///        asiento del conductor.
+struct SavedVehicleSeat {
+    glm::vec3 seatOffsetLocal{0.0f, 0.6f, 0.2f};
+};
+
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh
 ///        renderer; Hito 11 agrega light; Hito 12 agrega rigid body;
 ///        Hito 14 agrega prefabPath (link suave al asset del que se
@@ -314,6 +334,8 @@ struct SavedEntity {
     std::optional<SavedItemPickup> itemPickup;            // F2H52 Bloque B
     std::optional<SavedJoint>      joint;                 // F2H65
     std::optional<SavedRagdoll>    ragdoll;               // F2H66
+    std::optional<SavedVehicle>    vehicle;               // F2H67
+    std::optional<SavedVehicleSeat> vehicleSeat;          // F2H67
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.

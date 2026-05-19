@@ -79,6 +79,15 @@ struct MeshRendererComponent {
     MeshAssetId mesh = 0;                       // 0 = cubo primitivo (fallback)
     std::vector<MaterialAssetId> materials;     // 1 material por submesh
 
+    /// @brief F2H67: si NO esta vacio, el render path filtra los sub-meshes
+    ///        del MeshAsset y solo dibuja el que tenga `SubMesh.name ==
+    ///        subMeshName`. Sirve para que multiples entities (chassis +
+    ///        4 wheels) compartan UN solo MeshAsset (ej. `sedan.fbx`) pero
+    ///        cada entity renderice solo su parte. Match case-sensitive
+    ///        exacto; si no encuentra match, no dibuja nada para esa entity
+    ///        (log warn una vez por mesh para no inundar).
+    std::string subMeshName;
+
     MeshRendererComponent() = default;
     MeshRendererComponent(MeshAssetId m, MaterialAssetId mat)
         : mesh(m), materials{mat} {}
@@ -303,6 +312,59 @@ struct RagdollComponent {
 
     /// @brief Handle del ragdoll en PhysicsWorld. 0 = no creado.
     u32 ragdollId = 0;
+};
+
+/// @brief F2H67: marca una entity como chassis de un vehiculo conducible.
+///        El `VehicleSystem` consume `configPath` para construir 1 body
+///        chassis + 4 wheels en Jolt via `JPH::VehicleConstraint`. Las
+///        Transforms de los 4 child-entities listadas en `wheelEntities`
+///        (por handle entt raw) se sobreescriben cada frame con la pose
+///        de cada wheel post-step. Si la lista esta vacia, el sistema
+///        auto-spawnea 4 child entities con tags "Wheel_FL/FR/RL/RR".
+///
+///        El input (throttle/brake/steer/handbrake) se escribe desde Lua
+///        cada frame via `vehicle.set_input(tag, ...)`. El gameplay layer
+///        controla cuando/como se conduce.
+struct VehicleComponent {
+    /// @brief Path al asset `.moodvehicle` (relativo a `assets/`). Ej.
+    ///        "vehicles/banshee_sa.moodvehicle". Si esta vacio o el asset
+    ///        no carga, el VehicleSystem skipea materializacion + log warn.
+    std::string configPath;
+
+    /// @brief Input state - Lua lo escribe cada frame. Rango [0, 1] para
+    ///        throttle/brake/handbrake, [-1, 1] para steer (negativo = izq).
+    f32 inputThrottle  = 0.0f;
+    f32 inputBrake     = 0.0f;
+    f32 inputSteer     = 0.0f;
+    f32 inputHandbrake = 0.0f;
+
+    // --- Runtime (NO se persiste) ---
+
+    /// @brief Handle del vehiculo en PhysicsWorld. 0 = no creado.
+    u32 vehicleId = 0;
+
+    /// @brief Handles entt (raw u32) de los 4 child-entities que renderizan
+    ///        las ruedas. Orden fijo: FL, FR, RL, RR. 0 = aun no asignado.
+    ///        El VehicleSystem las auto-spawnea si todas son 0 al primer
+    ///        materialize.
+    u32 wheelEntities[4] = {0, 0, 0, 0};
+
+    /// @brief Marker de re-materializacion (al editar `configPath` o al
+    ///        spawnear). Sigue el patron F2H65/F2H66 (`dirty=true` =>
+    ///        destroy + recreate en el proximo tick).
+    bool dirty = true;
+};
+
+/// @brief F2H67: marca el offset del asiento del conductor sobre el chassis
+///        (local space). El sistema de mount/dismount del player teleporta
+///        al player a `chassis.worldMatrix * seatOffset` al subirse y a
+///        un punto al lado del auto al bajarse.
+///
+///        Opcional: si una entity con `VehicleComponent` NO tiene este
+///        componente, mount usa offset default (0, 0.6, 0.2) — adentro
+///        del auto, ligeramente al frente.
+struct VehicleSeatComponent {
+    glm::vec3 seatOffsetLocal{0.0f, 0.6f, 0.2f};
 };
 
 /// @brief Configuracion del entorno de render (Hito 15 Bloque 4):

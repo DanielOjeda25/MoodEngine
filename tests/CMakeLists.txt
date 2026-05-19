@@ -49,6 +49,8 @@ add_executable(mood_tests
     test_physics_constraints.cpp  # F2H65
     test_ragdoll_layout.cpp  # F2H66 Bloque A
     test_physics_ragdoll.cpp  # F2H66 Bloque H
+    test_vehicle_config.cpp  # F2H67 Bloque A
+    test_physics_vehicle.cpp  # F2H67 Bloque C/J
     test_raycast.cpp
     test_trigger_system.cpp
     test_save_load.cpp
@@ -145,6 +147,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_AnimationClip.cpp  # F2H49
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Item.cpp  # F2H51
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Quest.cpp # F2H53 Bloque B
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Vehicle.cpp # F2H67 Polish 2
     ${CMAKE_SOURCE_DIR}/src/engine/quest/QuestAsset.cpp                  # F2H53 Bloque A
     ${CMAKE_SOURCE_DIR}/src/engine/quest/QuestSystem.cpp                 # F2H53 Bloque C
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader.cpp
@@ -174,6 +177,8 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Constraints.cpp  # F2H66 Bloque 0
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Ragdoll.cpp  # F2H66 Bloque C
     ${CMAKE_SOURCE_DIR}/src/engine/physics/ragdoll/RagdollLayout.cpp  # F2H66 Bloque A
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/vehicle/VehicleConfig.cpp  # F2H67 Bloque A
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Vehicle.cpp  # F2H67 Bloque C
     ${CMAKE_SOURCE_DIR}/src/core/i18n/I18n.cpp  # F2H43 (movido a core en AUDIT-3)
     ${CMAKE_SOURCE_DIR}/src/core/UserSettings.cpp  # F2H43
     ${CMAKE_SOURCE_DIR}/src/engine/nodegraph/Graph.cpp  # F2H46
@@ -190,6 +195,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Inventory.cpp # F2H52 E
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Quest.cpp # F2H53 E
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Ragdoll.cpp # F2H66 E
+    ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Vehicle.cpp # F2H67 E
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogScriptHost.cpp # F2H48.1
 )
 

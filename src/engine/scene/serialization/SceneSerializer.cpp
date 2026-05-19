@@ -228,7 +228,17 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             // F2H51: InventoryComponent es serializable standalone — un
             // chest/container puede no tener mesh visible.
             const bool hasInv = e.hasComponent<InventoryComponent>();
-            if (!hasMr && !hasLi && !hasRb && !hasEnv && !hasScript && !hasPe && !hasInv) return;
+            // F2H67: VehicleComponent puede aparecer en una entity con
+            // MeshRenderer (caso normal) o standalone si el visual va a
+            // child-entities. Tambien las entities-placeholder de las
+            // wheels (tags Wheel_FL/FR/RL/RR) son standalone -- las
+            // marcamos para persistir aunque solo tengan Tag+Transform.
+            const bool hasVeh = e.hasComponent<VehicleComponent>();
+            const bool isWheelTag =
+                tag.name == "Wheel_FL" || tag.name == "Wheel_FR" ||
+                tag.name == "Wheel_RL" || tag.name == "Wheel_RR";
+            if (!hasMr && !hasLi && !hasRb && !hasEnv && !hasScript
+                && !hasPe && !hasInv && !hasVeh && !isWheelTag) return;
             j["entities"].push_back(serializeEntity(e, assets));
         });
     }
