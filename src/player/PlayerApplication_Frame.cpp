@@ -313,7 +313,7 @@ void PlayerApplication::updateRigidBodies(f32 dt) {
 
     // Materializar bodies nuevos.
     m_scene->forEach<TransformComponent, RigidBodyComponent>(
-        [&](Entity, TransformComponent& t, RigidBodyComponent& rb) {
+        [&](Entity e, TransformComponent& t, RigidBodyComponent& rb) {
             if (rb.bodyId != 0) return;
             CollisionShape shape = CollisionShape::Box;
             switch (rb.shape) {
@@ -334,7 +334,13 @@ void PlayerApplication::updateRigidBodies(f32 dt) {
             rb.bodyId = m_physicsWorld->createBody(t.position, shape,
                                                     rb.halfExtents, type, rb.mass,
                                                     rb.friction,
-                                                    glm::vec4(q.x, q.y, q.z, q.w));
+                                                    glm::vec4(q.x, q.y, q.z, q.w),
+                                                    rb.isSensor);
+            // F2H68: registrar el mapeo body->entity para ContactListener.
+            if (rb.bodyId != 0) {
+                m_physicsWorld->registerBodyEntity(
+                    rb.bodyId, static_cast<u32>(e.handle()));
+            }
             // Si applyLoadedSave dejo velocidades pending (porque al
             // momento del load el body no estaba materializado), las
             // aplicamos ahora y limpiamos el flag.

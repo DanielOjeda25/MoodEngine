@@ -158,7 +158,7 @@ void EditorApplication::updateRigidBodies(f32 dt) {
     // 1) Materializar bodies nuevos (bodyId==0) con los valores iniciales
     //    de la entidad.
     m_scene->forEach<TransformComponent, RigidBodyComponent>(
-        [&](Entity, TransformComponent& t, RigidBodyComponent& rb) {
+        [&](Entity e, TransformComponent& t, RigidBodyComponent& rb) {
             if (rb.bodyId != 0) return;
             CollisionShape shape = CollisionShape::Box;
             switch (rb.shape) {
@@ -178,7 +178,14 @@ void EditorApplication::updateRigidBodies(f32 dt) {
             rb.bodyId = m_physicsWorld->createBody(t.position, shape,
                                                     rb.halfExtents, type, rb.mass,
                                                     rb.friction,
-                                                    glm::vec4(q.x, q.y, q.z, q.w));
+                                                    glm::vec4(q.x, q.y, q.z, q.w),
+                                                    rb.isSensor);
+            // F2H68: registrar el mapeo body->entity para que el
+            // ContactListener pueda resolver victima en OnContactAdded.
+            if (rb.bodyId != 0) {
+                m_physicsWorld->registerBodyEntity(
+                    rb.bodyId, static_cast<u32>(e.handle()));
+            }
             // Aplicar pending vels del Save/Load si las hay (caso load
             // antes de entrar a Play Mode — body recien materializado).
             if (rb.hasPendingVel && rb.bodyId != 0) {

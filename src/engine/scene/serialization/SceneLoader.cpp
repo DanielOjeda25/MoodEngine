@@ -175,6 +175,7 @@ Entity applyOneEntity(const SavedEntity& se,
             rb.halfExtents = srb.halfExtents;
             rb.mass        = srb.mass;
             rb.friction    = srb.friction;   // Hito 34 A
+            rb.isSensor    = srb.isSensor;   // F2H68
             e.addComponent<RigidBodyComponent>(rb);
         }
 

@@ -107,9 +107,36 @@ void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets) {
     std::vector<glm::mat4> partTransforms;
     std::vector<glm::mat4> ragdollWorlds;
 
+    // F2H68: drenar la cola de impact events ANTES del materialize lazy.
+    // Cada evento dice "el body X recibio un impacto con impulse Y"; si la
+    // entity dueña tiene RagdollComponent::Animated, transicionamos a
+    // Ragdolling con ese impulse como spawnImpulse. El materialize de
+    // abajo (state==Ragdolling && ragdollId==0) se dispara el mismo tick,
+    // asi no hay frame de delay visible.
+    auto events = physicsWorld.drainImpactEvents();
+    for (const auto& ev : events) {
+        const u32 entHandle = physicsWorld.entityOfBody(ev.victimBodyId);
+        if (entHandle == 0) continue;  // body sin entity asociada
+        Entity victim = scene.entityFromHandle(
+            static_cast<entt::entity>(entHandle));
+        if (!victim) continue;
+        if (!victim.hasComponent<RagdollComponent>()) continue;
+        auto& rd = victim.getComponent<RagdollComponent>();
+        if (rd.state != RagdollComponent::State::Animated) continue;
+        // Disparar la transicion. El spawnImpulse se aplica al torso en
+        // el materialize de abajo (mismo path que activacion manual via
+        // Lua `ragdoll.enable(tag, impulse)`).
+        rd.state        = RagdollComponent::State::Ragdolling;
+        rd.spawnImpulse = ev.impulseWorld;
+        Log::physics()->info(
+            "RagdollSystem: auto-ragdoll por impacto (closingSpeed={:.2f} m/s, "
+            "impulse=({:.2f},{:.2f},{:.2f}))",
+            ev.impactSpeed, ev.impulseWorld.x, ev.impulseWorld.y, ev.impulseWorld.z);
+    }
+
     scene.forEach<RagdollComponent, AnimatorComponent, SkeletonComponent,
                    MeshRendererComponent, TransformComponent>(
-        [&](Entity, RagdollComponent& rag, AnimatorComponent& anim,
+        [&](Entity e, RagdollComponent& rag, AnimatorComponent& anim,
             SkeletonComponent& skel, MeshRendererComponent& mr,
             TransformComponent& tf) {
             // No-op si animado (sin ragdoll que tocar) o sin mesh.
@@ -156,6 +183,30 @@ void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets) {
                         "RagdollSystem: createRagdoll fallo; ragdoll "
                         "desactivado.");
                     return;
+                }
+
+                // F2H68: registrar cada part-body con la entity dueña en
+                // el mapeo body->entity. Todos los parts del ragdoll
+                // mapean al MISMO entity owner — el ContactListener no
+                // distingue parts, solo dispara cuando uno de ellos
+                // recibe un impacto.
+                const u32 entHandle = static_cast<u32>(e.handle());
+                for (u32 partBodyId : physicsWorld.ragdollBodyIds(rag.ragdollId)) {
+                    physicsWorld.registerBodyEntity(partBodyId, entHandle);
+                }
+
+                // F2H68: si la entity tenia un RigidBodyComponent (proxy
+                // hitbox kinematic para detectar impactos de vehiculos),
+                // destruirlo ahora — el ragdoll fisico lo reemplaza. Sin
+                // este cleanup, el proxy y los part-bodies coexisten y
+                // se interpenetran (ragdoll trembling + chassis sigue
+                // chocando contra el proxy).
+                if (e.hasComponent<RigidBodyComponent>()) {
+                    auto& rb = e.getComponent<RigidBodyComponent>();
+                    if (rb.bodyId != 0) {
+                        physicsWorld.destroyBody(rb.bodyId);
+                        rb.bodyId = 0;
+                    }
                 }
 
                 // 5) Pausar el Animator — desde ahora el ragdoll comanda.

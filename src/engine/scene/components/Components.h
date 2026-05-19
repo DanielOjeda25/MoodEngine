@@ -172,6 +172,14 @@ struct RigidBodyComponent {
     // entrar a Play Mode); no hay setter en runtime por ahora.
     f32 friction = 0.5f;
 
+    // F2H68: si true, el body se materializa como SENSOR (Jolt
+    // `mIsSensor=true`). El body detecta contactos (dispara
+    // ContactListener) pero no empuja ni bloquea. Equivalente a Unity
+    // `Collider.isTrigger` / Unreal `CollisionResponseChannel::Overlap`.
+    // Uso: NPC hitbox para auto-ragdoll por embestida — el chassis cruza
+    // sin rebote y el listener dispara la transicion a Ragdolling.
+    bool isSensor = false;
+
     u32 bodyId = 0;               // llenado por PhysicsSystem (0 = no creado)
 
     // F2H40: cache del ultimo halfExtents sincronizado al body Jolt.

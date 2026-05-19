@@ -94,6 +94,8 @@ struct SavedRigidBody {
     glm::vec3 halfExtents{0.5f};
     f32 mass = 1.0f;
     f32 friction = 0.5f;             // Hito 34 A — opcional en JSON, default = 0.5
+    bool isSensor = false;           // F2H68 — opcional. true = Unity isTrigger
+                                      // (detecta contact pero no rebota).
 };
 
 /// @brief Copia persistida de un EnvironmentComponent (Hito 15).

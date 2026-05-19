@@ -79,7 +79,7 @@ void writeWorldMatrixToTransform(const glm::mat4& world,
 
 void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets) {
     scene.forEach<VehicleComponent, TransformComponent>(
-        [&](Entity, VehicleComponent& veh, TransformComponent& tf) {
+        [&](Entity e, VehicleComponent& veh, TransformComponent& tf) {
             // --- 1) Materializacion lazy (dirty -> create) ---
             if (veh.dirty && veh.vehicleId == 0) {
                 const vehicle::VehicleConfig cfg = resolveConfig(veh, assets);
@@ -97,6 +97,17 @@ void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets) {
                         "desactivado.");
                     veh.dirty = false;
                     return;
+                }
+                // F2H68: registrar el chassis body en el mapeo
+                // body->entity para que el ContactListener pueda saber
+                // que un impacto contra este body pertenece a esta
+                // entity (necesario para encolar el impacto como
+                // "atacante" o "victima").
+                const u32 chassisBody = physicsWorld.vehicleChassisBodyId(
+                    veh.vehicleId);
+                if (chassisBody != 0) {
+                    physicsWorld.registerBodyEntity(
+                        chassisBody, static_cast<u32>(e.handle()));
                 }
 
                 // Buscar las 4 wheel-entities por tag fijo. Si faltan,
