@@ -376,6 +376,10 @@ void setupLuaBindings(sol::state& lua, Entity self,
     // Tambien instala el evaluator + executor del QuestSystem.
     setupQuestBindings(lua, assets);
 
+    // F2H66 Bloque E — tabla `ragdoll`. Permite que scripts disparen
+    // `ragdoll.enable("NPC", {x=0, y=200, z=-300})` para flopping fisico.
+    setupRagdollBindings(lua, self.scene());
+
     // self como global.
     lua["self"] = self;
 }

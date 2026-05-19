@@ -60,4 +60,16 @@ void setupInventoryBindings(sol::state& lua, class Scene* scene,
 ///        devuelven false/"" silenciosamente.
 void setupQuestBindings(sol::state& lua, AssetManager* assets);
 
+/// @brief F2H66 Bloque E: registra la tabla `ragdoll` en `lua`.
+///        Implementado en LuaBindings_Ragdoll.cpp.
+///        API:
+///          ragdoll.enable(tag)                          -- activa sin impulse
+///          ragdoll.enable(tag, {x=,y=,z=})              -- con impulse en torso
+///          ragdoll.is_ragdolling(tag) -> bool
+///        Requiere `scene` para encontrar la entity por tag. Si scene es
+///        nullptr (tests headless), las funciones loggean warn y retornan
+///        false. La materializacion fisica la hace `RagdollSystem::tick`
+///        al siguiente frame.
+void setupRagdollBindings(sol::state& lua, class Scene* scene);
+
 } // namespace Mood

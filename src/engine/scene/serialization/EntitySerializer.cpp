@@ -399,6 +399,20 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         je["joint"] = jj;
     }
 
+    // F2H66: RagdollComponent. Solo los tweaks de config; state arranca
+    // Animated al cargar (NPCs muertos persistidos NO es scope v1).
+    if (entity.hasComponent<RagdollComponent>()) {
+        const auto& rag = entity.getComponent<RagdollComponent>();
+        json jr;
+        jr["totalMass"]   = rag.totalMass;
+        jr["limbRadius"]  = rag.limbRadius;
+        if (!rag.useGravity) jr["useGravity"] = false;  // default ON, aditivo
+        if (glm::length(rag.spawnImpulse) > 1e-4f) {
+            jr["spawnImpulse"] = rag.spawnImpulse;
+        }
+        je["ragdoll"] = jr;
+    }
+
     // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la
     // entidad tiene un `PrefabLinkComponent`. Sin propagacion bidireccional
     // por ahora; es solo un breadcrumb para futuras features ("revertir a
@@ -605,6 +619,17 @@ SavedEntity parseEntityFromJson(const json& j) {
             }
         }
         se.inventory = std::move(si);
+    }
+
+    // F2H66: ragdoll. Aditivo — mapas pre-F2H66 sin el campo se leen igual.
+    if (j.contains("ragdoll")) {
+        const auto& jr = j.at("ragdoll");
+        SavedRagdoll sr;
+        sr.totalMass    = jr.value("totalMass",   70.0f);
+        sr.limbRadius   = jr.value("limbRadius",  0.05f);
+        sr.useGravity   = jr.value("useGravity",  true);
+        sr.spawnImpulse = jr.value("spawnImpulse", glm::vec3{0.0f});
+        se.ragdoll = std::move(sr);
     }
 
     // F2H65: joint. Aditivo — mapas pre-F2H65 sin el campo se leen igual

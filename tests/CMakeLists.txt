@@ -47,6 +47,8 @@ add_executable(mood_tests
     test_particle_system.cpp
     test_character_controller.cpp
     test_physics_constraints.cpp  # F2H65
+    test_ragdoll_layout.cpp  # F2H66 Bloque A
+    test_physics_ragdoll.cpp  # F2H66 Bloque H
     test_raycast.cpp
     test_trigger_system.cpp
     test_save_load.cpp
@@ -169,6 +171,9 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/editor/commands/DeleteEntityCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/CreateEntityCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Constraints.cpp  # F2H66 Bloque 0
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Ragdoll.cpp  # F2H66 Bloque C
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/ragdoll/RagdollLayout.cpp  # F2H66 Bloque A
     ${CMAKE_SOURCE_DIR}/src/core/i18n/I18n.cpp  # F2H43 (movido a core en AUDIT-3)
     ${CMAKE_SOURCE_DIR}/src/core/UserSettings.cpp  # F2H43
     ${CMAKE_SOURCE_DIR}/src/engine/nodegraph/Graph.cpp  # F2H46

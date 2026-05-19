@@ -16,10 +16,12 @@
 
 #include "core/Types.h"
 
+#include <glm/mat4x4.hpp>  // F2H66: ragdoll pose IO
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>  // Hito 41 C: setBodyPositionRot quat
 
 #include <memory>
+#include <vector>
 
 // Forward decls para no arrastrar headers de Jolt en este .h.
 namespace JPH {
@@ -32,6 +34,10 @@ class BodyID;
 }
 
 namespace Mood {
+
+// F2H66: forward decl del layout puro (sin acoplar PhysicsWorld al header
+// concreto de la ragdoll layout — el .cpp lo incluye).
+namespace ragdoll { struct RagdollLayout; }
 
 /// @brief Layers de la simulacion. 8-bit por Jolt — alcanzan.
 ///
@@ -212,6 +218,52 @@ public:
 
     /// @brief Cantidad de constraints activos. Util para tests / debug.
     u32 constraintCount() const;
+
+    // --- F2H66: Ragdolls (envuelve JPH::Ragdoll) ---
+    //
+    // Un ragdoll es un set de N bodies (capsules tipicamente) unidos por
+    // N-1 constraints. Jolt tiene `JPH::Ragdoll` nativo + `RagdollSettings`
+    // declarativo; aca solo envolvemos las llamadas + lifecycle.
+    //
+    // El caller arma el `RagdollLayout` puro (sin Jolt) en
+    // `engine/physics/ragdoll/RagdollLayout.h`. La pose inicial es
+    // `partWorldTransforms[i]` (una mat4 por bone del layout, en world coords
+    // — tipicamente derivada de la pose actual del Animator).
+    //
+    // Convencion HL2: una vez creado el ragdoll, los bodies son Dynamic
+    // hasta que duerman por inactividad. No hay vuelta a "animated".
+
+    /// @brief Crea un ragdoll. Retorna handle u32 estable; 0 si fallo.
+    /// @param layout            Layout puro de bones (capsule sizes + masses +
+    ///                          constraints). Tipicamente
+    ///                          `ragdoll::buildMixamoLayout(skeleton, ...)`.
+    /// @param partWorldTransforms Pose inicial de cada parte (size ==
+    ///                          layout.bones.size()). Cada mat4 incluye
+    ///                          rotacion + posicion en world space.
+    /// @param useGravity        Si los bodies caen por gravedad (default true).
+    u32 createRagdoll(const ragdoll::RagdollLayout& layout,
+                       const std::vector<glm::mat4>& partWorldTransforms,
+                       bool useGravity = true);
+
+    /// @brief Destruye + remueve del physics system. Idempotente.
+    void destroyRagdoll(u32 ragdollId);
+
+    /// @brief Lee la pose actual de las partes del ragdoll. `outTransforms`
+    ///        se redimensiona a `layout.bones.size()` y se rellena con la
+    ///        mat4 world-space de cada body. Retorna false si el id es
+    ///        invalido.
+    bool readRagdollPose(u32 ragdollId,
+                         std::vector<glm::mat4>& outTransforms) const;
+
+    /// @brief Aplica un impulse al body de una parte (typicamente el torso)
+    ///        en world space. Util para el "spawn impulse" del HL2 — el
+    ///        cadaver vuela en la direccion del disparo letal. No-op si
+    ///        ragdollId o partIndex invalidos.
+    void applyRagdollImpulse(u32 ragdollId, int partIndex,
+                              const glm::vec3& impulseWorld);
+
+    /// @brief Cantidad de ragdolls activos. Util para tests / debug.
+    u32 ragdollCount() const;
 
     // --- Hito 30: Character Controller (CharacterVirtual) ---
 

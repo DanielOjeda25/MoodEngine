@@ -376,6 +376,10 @@ add_library(mood_engine_lib STATIC
     src/engine/packaging/PackageBuilder.cpp
 
     src/engine/physics/world/PhysicsWorld.cpp
+    src/engine/physics/world/PhysicsWorld_Constraints.cpp  # F2H66 Bloque 0: split F2H65
+    src/engine/physics/world/PhysicsWorld_Ragdoll.cpp  # F2H66 Bloque C
+    src/engine/physics/ragdoll/RagdollLayout.cpp  # F2H66 Bloque A
+    src/systems/physics/RagdollSystem.cpp  # F2H66 Bloque D
 
     src/engine/saving/SaveLoad.cpp
 
@@ -421,6 +425,7 @@ add_library(mood_engine_lib STATIC
     src/engine/scripting/bindings/LuaBindings.cpp
     src/engine/scripting/bindings/LuaBindings_Inventory.cpp  # F2H52 Bloque E
     src/engine/scripting/bindings/LuaBindings_Quest.cpp      # F2H53 Bloque E
+    src/engine/scripting/bindings/LuaBindings_Ragdoll.cpp    # F2H66 Bloque E
 
     src/engine/render/backend/opengl/OpenGLMesh.cpp
     src/engine/render/backend/opengl/OpenGLShader.cpp

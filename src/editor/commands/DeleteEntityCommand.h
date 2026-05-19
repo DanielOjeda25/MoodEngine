@@ -41,6 +41,11 @@ public:
     /// EditorApplication como lambda que llama PhysicsWorld::destroyConstraint.
     using ConstraintCleanup = std::function<void(u32 constraintId)>;
 
+    /// F2H66: callback opcional para destruir el ragdoll asociado al
+    /// RagdollComponent (si fue activado). EditorApp lo cablea a
+    /// PhysicsWorld::destroyRagdoll.
+    using RagdollCleanup = std::function<void(u32 ragdollId)>;
+
     /// @param entity Entidad viva a borrar. La capturamos en snapshot
     ///        ANTES del primer execute().
     /// @param scene Scene dueño (necesario para destroyEntity + recreate).
@@ -51,12 +56,15 @@ public:
     ///        `remapEntityInStack(originalHandle, nuevoHandle)` tras recrear.
     /// @param constraintCleanup F2H65: opcional. Cleanup del constraint
     ///        de Jolt si la entidad tenia JointComponent.
+    /// @param ragdollCleanup F2H66: opcional. Cleanup del ragdoll de Jolt
+    ///        si la entidad tenia RagdollComponent::Ragdolling.
     DeleteEntityCommand(Entity entity,
                          Scene* scene,
                          AssetManager* assets,
                          BodyCleanup bodyCleanup = {},
                          HistoryStack* history = nullptr,
-                         ConstraintCleanup constraintCleanup = {});
+                         ConstraintCleanup constraintCleanup = {},
+                         RagdollCleanup ragdollCleanup = {});
 
     void execute() override;
     void undo() override;
@@ -69,6 +77,7 @@ private:
     AssetManager*     m_assets;
     BodyCleanup       m_bodyCleanup;
     ConstraintCleanup m_constraintCleanup;  // F2H65
+    RagdollCleanup    m_ragdollCleanup;     // F2H66
     HistoryStack*     m_history;       // Hito 32: para disparar remap post-undo
     SavedEntity       m_snapshot;
     Entity            m_alive;          // valida tras ctor; vaciada tras execute(); rellenada por undo().

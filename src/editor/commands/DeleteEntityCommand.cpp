@@ -15,10 +15,12 @@ DeleteEntityCommand::DeleteEntityCommand(Entity entity,
                                           AssetManager* assets,
                                           BodyCleanup bodyCleanup,
                                           HistoryStack* history,
-                                          ConstraintCleanup constraintCleanup)
+                                          ConstraintCleanup constraintCleanup,
+                                          RagdollCleanup ragdollCleanup)
     : m_scene(scene), m_assets(assets),
       m_bodyCleanup(std::move(bodyCleanup)),
       m_constraintCleanup(std::move(constraintCleanup)),
+      m_ragdollCleanup(std::move(ragdollCleanup)),
       m_history(history),
       m_alive(entity),
       m_originalHandle(entity.handle()) {
@@ -80,6 +82,14 @@ void DeleteEntityCommand::destroyAlive() {
         if (joint.constraintId != 0) {
             m_constraintCleanup(joint.constraintId);
             joint.constraintId = 0;
+        }
+    }
+    // F2H66: cleanup del ragdoll si la entidad lo tiene materializado.
+    if (m_ragdollCleanup && m_alive.hasComponent<RagdollComponent>()) {
+        auto& rag = m_alive.getComponent<RagdollComponent>();
+        if (rag.ragdollId != 0) {
+            m_ragdollCleanup(rag.ragdollId);
+            rag.ragdollId = 0;
         }
     }
     m_scene->destroyEntity(m_alive);

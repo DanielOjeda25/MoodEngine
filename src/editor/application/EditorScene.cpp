@@ -10,6 +10,7 @@
 #include "engine/scene/core/Scene.h"
 #include "engine/world/grid/GridMap.h"
 #include "systems/audio/AudioSystem.h"
+#include "systems/physics/RagdollSystem.h"  // F2H66
 #include "systems/scripting/ScriptSystem.h"
 
 #include <glm/vec3.hpp>
@@ -306,6 +307,14 @@ void EditorApplication::updateRigidBodies(f32 dt) {
                 t.position = m_physicsWorld->bodyPosition(rb.bodyId);
             });
 
+        // F2H66: ragdolls. Despues del step + sync de bodies dynamic
+        // estandar, para que las poses leidas sean post-step. El sistema
+        // tambien hace la transicion Animated->Ragdolling si fue
+        // disparada via script.
+        if (m_assetManager) {
+            RagdollSystem::tick(*m_scene, *m_physicsWorld, *m_assetManager);
+        }
+
         // Hito 30: sync de la camara Play con la pos del character post-step.
         // eyeOffset cambia con crouch (halfHeight 0.1 vs standing 0.5).
         // Hito 31 D: el eye Y interpola con m_crouchVisualT (smooth) +
@@ -387,16 +396,19 @@ void EditorApplication::deleteSelectedEntity() {
     m_ui.setSelectedEntity(Entity{}); // limpiar seleccion antes del destroy
     DeleteEntityCommand::BodyCleanup cleanup;
     DeleteEntityCommand::ConstraintCleanup constraintCleanup;
+    DeleteEntityCommand::RagdollCleanup ragdollCleanup;  // F2H66
     if (m_physicsWorld) {
         PhysicsWorld* pw = m_physicsWorld.get();
         cleanup = [pw](u32 bodyId) { pw->destroyBody(bodyId); };
         constraintCleanup = [pw](u32 cid) { pw->destroyConstraint(cid); };  // F2H65
+        ragdollCleanup = [pw](u32 rid) { pw->destroyRagdoll(rid); };        // F2H66
     }
     auto cmd = std::make_unique<DeleteEntityCommand>(
         selected, m_scene.get(), m_assetManager.get(),
         std::move(cleanup),
         &m_history,  // Hito 32: para remap de handles post-undo
-        std::move(constraintCleanup));  // F2H65
+        std::move(constraintCleanup),  // F2H65
+        std::move(ragdollCleanup));    // F2H66
     m_history.push(std::move(cmd));
     markDirty();
 }

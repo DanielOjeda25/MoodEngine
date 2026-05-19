@@ -1,17 +1,17 @@
-#include "engine/physics/world/PhysicsWorld.h"
+// F2H66 Bloque 0: el grueso de la `PhysicsWorld::Impl` + helpers Jolt
+// vive ahora en `PhysicsWorld_Internal.h`. Este .cpp implementa Hito 12 /
+// 30 / 34 / 40 / 41 (bodies + step + raycast + characters). Las funciones
+// de constraints (F2H65) viven en `PhysicsWorld_Constraints.cpp`.
+
+#include "engine/physics/world/PhysicsWorld_Internal.h"
 
 #include "core/Log.h"
 
 #include <glm/vec4.hpp>  // Hito 41 C: setBodyPositionRot quat
 
-// Jolt headers — incluir en un orden especifico. El `Jolt.h` maestro define
-// macros que el resto necesita.
-#include <Jolt/Jolt.h>
 #include <Jolt/RegisterTypes.h>
 #include <Jolt/Core/Factory.h>
-#include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Core/JobSystemThreadPool.h>
-#include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
@@ -19,27 +19,15 @@
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
-#include <Jolt/Physics/Character/CharacterVirtual.h>
-#include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
-#include <Jolt/Physics/Collision/ObjectLayer.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 #include <Jolt/Physics/Body/BodyLock.h>
-#include <Jolt/Physics/Body/BodyLockMulti.h>  // F2H65: lock multi para constraints
 #include <Jolt/Physics/Body/BodyFilter.h>
-
-// F2H65: constraints (joints)
-#include <Jolt/Physics/Constraints/HingeConstraint.h>
-#include <Jolt/Physics/Constraints/DistanceConstraint.h>
-#include <Jolt/Physics/Constraints/PointConstraint.h>
-
-#include <glm/trigonometric.hpp>  // F2H65: glm::radians para hinge limits
 
 #include <cstdarg>
 #include <cstdio>
 #include <stdexcept>
-#include <unordered_map>
 
 // Jolt requiere un trace callback global. Lo atamos al canal `physics` de
 // spdlog. Variadic via sprintf porque Jolt pasa un format string estilo C.
@@ -72,93 +60,13 @@ constexpr u32 k_maxBodyPairs         = 1024;
 constexpr u32 k_maxContactConstraints = 1024;
 constexpr u32 k_tempAllocatorMB      = 10;
 
-// Broadphase layer ids (propios de Jolt, 8-bit).
-namespace BPLayer {
-    constexpr JPH::BroadPhaseLayer NonMoving(0);
-    constexpr JPH::BroadPhaseLayer Moving(1);
-    constexpr u32 Count = 2;
-}
-
-// ObjectLayer ids — compatibles con nuestro enum `Mood::ObjectLayer`.
-constexpr JPH::ObjectLayer toJPHLayer(ObjectLayer l) {
-    return static_cast<JPH::ObjectLayer>(l);
-}
-
-// Mapa ObjectLayer -> BroadPhaseLayer. Clase requerida por Jolt.
-class BPLayerInterface final : public JPH::BroadPhaseLayerInterface {
-public:
-    BPLayerInterface() {
-        m_objectToBroadphase[static_cast<JPH::ObjectLayer>(ObjectLayer::Static)] = BPLayer::NonMoving;
-        m_objectToBroadphase[static_cast<JPH::ObjectLayer>(ObjectLayer::Moving)] = BPLayer::Moving;
-    }
-
-    JPH::uint GetNumBroadPhaseLayers() const override { return BPLayer::Count; }
-    JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer layer) const override {
-        return m_objectToBroadphase[layer];
-    }
-
-#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
-    const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer layer) const override {
-        switch (layer.GetValue()) {
-            case 0: return "NonMoving";
-            case 1: return "Moving";
-            default: return "?";
-        }
-    }
-#endif
-
-private:
-    JPH::BroadPhaseLayer m_objectToBroadphase[static_cast<JPH::uint>(ObjectLayer::Count)];
-};
-
-class ObjectVsBPFilter final : public JPH::ObjectVsBroadPhaseLayerFilter {
-public:
-    bool ShouldCollide(JPH::ObjectLayer layer, JPH::BroadPhaseLayer bp) const override {
-        const auto ol = static_cast<ObjectLayer>(layer);
-        // Moving choca con cualquiera; Static solo con Moving (no consigo mismo).
-        if (ol == ObjectLayer::Moving) return true;
-        if (ol == ObjectLayer::Static) return bp == BPLayer::Moving;
-        return false;
-    }
-};
-
-class ObjectLayerPairFilter final : public JPH::ObjectLayerPairFilter {
-public:
-    bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override {
-        const auto oa = static_cast<ObjectLayer>(a);
-        const auto ob = static_cast<ObjectLayer>(b);
-        // Nada colisiona Static-Static.
-        if (oa == ObjectLayer::Static && ob == ObjectLayer::Static) return false;
-        return true;
-    }
-};
-
 } // namespace
 
-struct CharacterEntry {
-    JPH::Ref<JPH::CharacterVirtual> character;
-    glm::vec3 desiredVelocity{0.0f};
-};
-
-struct PhysicsWorld::Impl {
-    BPLayerInterface       bpLayerInterface{};
-    ObjectVsBPFilter       objectVsBpFilter{};
-    ObjectLayerPairFilter  objectLayerPairFilter{};
-    std::unique_ptr<JPH::TempAllocator> tempAllocator;
-    std::unique_ptr<JPH::JobSystem> jobSystem;
-    std::unique_ptr<JPH::PhysicsSystem> physicsSystem;
-
-    // Hito 30: characters CharacterVirtual indexados por handle estable.
-    std::unordered_map<u32, CharacterEntry> characters;
-    u32 nextCharId = 1;
-
-    // F2H65: constraints (joints) indexados por handle estable.
-    // JPH::Ref<JPH::Constraint> mantiene el constraint vivo mientras este
-    // map lo tiene -- Jolt agrega su propia referencia al physicsSystem via
-    // AddConstraint, asi que el Ref aqui es por simetria al lifecycle.
-    std::unordered_map<u32, JPH::Ref<JPH::Constraint>> constraints;
-    u32 nextConstraintId = 1;
-};
+// Helpers BPLayer / Object filter / CharacterEntry + PhysicsWorld::Impl
+// viven en PhysicsWorld_Internal.h (compartido con los partials de
+// constraints y ragdoll). `toJPHLayer` de ahi se usa abajo via
+// `physics_internal::toJPHLayer`.
+using physics_internal::toJPHLayer;
 
 PhysicsWorld::PhysicsWorld() : m_impl(std::make_unique<Impl>()) {
     // Jolt init global: 1ra corrida crea la Factory y registra los tipos.
@@ -202,6 +110,22 @@ PhysicsWorld::PhysicsWorld() : m_impl(std::make_unique<Impl>()) {
 
 PhysicsWorld::~PhysicsWorld() {
     if (!m_impl) return;
+    // F2H66: limpieza explicita de ragdolls ANTES de destruir el
+    // PhysicsSystem. Cada `JPH::Ragdoll` tiene bodies + constraints
+    // registrados; al destruirse intenta accederlos -> crash si el
+    // system ya esta destruido.
+    for (auto& [id, rag] : m_impl->ragdolls) {
+        if (rag != nullptr) rag->RemoveFromPhysicsSystem();
+    }
+    m_impl->ragdolls.clear();
+    // F2H65: constraints tambien tienen referencia al system. Mismo
+    // razonamiento.
+    for (auto& [id, c] : m_impl->constraints) {
+        if (c != nullptr && m_impl->physicsSystem) {
+            m_impl->physicsSystem->RemoveConstraint(c.GetPtr());
+        }
+    }
+    m_impl->constraints.clear();
     m_impl->physicsSystem.reset();
     m_impl->jobSystem.reset();
     m_impl->tempAllocator.reset();
@@ -501,156 +425,9 @@ u32 PhysicsWorld::bodyCount() const {
     return m_impl->physicsSystem->GetNumBodies();
 }
 
-// --- F2H65: Constraints (joints) ---
-
-namespace {
-
-// Helper: resolver bodyA + bodyB a punteros Body* via BodyLockMulti.
-// Devuelve nullptr en out si alguno no existe. Idempotente para ids invalidos.
-//
-// Importante: el lock es RAII (BodyLockMultiWrite scope-bound). Capturamos
-// los punteros pero los usamos solo durante el lock; al salir del scope los
-// invalidamos por seguridad. Para los constraint constructors necesitamos
-// las referencias, asi que la creacion del constraint se hace DENTRO del
-// scope del lock.
-struct LockedBodyPair {
-    JPH::Body* a = nullptr;
-    JPH::Body* b = nullptr;
-};
-
-} // anonymous
-
-u32 PhysicsWorld::createHingeConstraint(u32 bodyA, u32 bodyB,
-                                          const glm::vec3& pivotWorld,
-                                          const glm::vec3& axisWorld,
-                                          f32 limitMinDeg, f32 limitMaxDeg) {
-    if (!m_impl || !m_impl->physicsSystem) return 0;
-    if (bodyA == 0 || bodyB == 0) return 0;
-
-    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
-    const JPH::BodyID idA{bodyA};
-    const JPH::BodyID idB{bodyB};
-    if (!bi.IsAdded(idA) || !bi.IsAdded(idB)) return 0;
-
-    // Lock ambos bodies para tener referencias estables al crear el
-    // constraint. BodyLockMultiWrite es la API correcta cuando necesitas
-    // ambos al mismo tiempo (evita deadlocks por orden de locking).
-    const JPH::BodyID ids[2] = {idA, idB};
-    JPH::BodyLockMultiWrite lock(m_impl->physicsSystem->GetBodyLockInterface(),
-                                  ids, 2);
-    JPH::Body* a = lock.GetBody(0);
-    JPH::Body* b = lock.GetBody(1);
-    if (a == nullptr || b == nullptr) return 0;
-
-    JPH::HingeConstraintSettings settings;
-    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
-    settings.mPoint1 = JPH::RVec3(pivotWorld.x, pivotWorld.y, pivotWorld.z);
-    settings.mPoint2 = JPH::RVec3(pivotWorld.x, pivotWorld.y, pivotWorld.z);
-    // El hinge axis define el eje de rotacion. Normal axis define un
-    // segundo eje perpendicular para medir el angulo actual. Usamos un
-    // helper para construir una base ortonormal a partir del axis.
-    const JPH::Vec3 hingeAxis(axisWorld.x, axisWorld.y, axisWorld.z);
-    JPH::Vec3 hingeAxisNorm = hingeAxis.NormalizedOr(JPH::Vec3::sAxisY());
-    // Normal axis: cualquier vector perpendicular al hinge axis. Tomamos
-    // el eje X mundial; si el hinge es paralelo a X, caemos a Z.
-    JPH::Vec3 normalAxis = JPH::Vec3::sAxisX();
-    if (std::abs(hingeAxisNorm.Dot(normalAxis)) > 0.99f) {
-        normalAxis = JPH::Vec3::sAxisZ();
-    }
-    normalAxis = (normalAxis - normalAxis.Dot(hingeAxisNorm) * hingeAxisNorm)
-                     .Normalized();
-    settings.mHingeAxis1 = hingeAxisNorm;
-    settings.mHingeAxis2 = hingeAxisNorm;
-    settings.mNormalAxis1 = normalAxis;
-    settings.mNormalAxis2 = normalAxis;
-    settings.mLimitsMin = glm::radians(limitMinDeg);
-    settings.mLimitsMax = glm::radians(limitMaxDeg);
-
-    JPH::Ref<JPH::Constraint> c = settings.Create(*a, *b);
-    m_impl->physicsSystem->AddConstraint(c);
-
-    const u32 handle = m_impl->nextConstraintId++;
-    m_impl->constraints.emplace(handle, c);
-    return handle;
-}
-
-u32 PhysicsWorld::createDistanceConstraint(u32 bodyA, u32 bodyB,
-                                             const glm::vec3& pivotA_world,
-                                             const glm::vec3& pivotB_world,
-                                             f32 minDistance, f32 maxDistance) {
-    if (!m_impl || !m_impl->physicsSystem) return 0;
-    if (bodyA == 0 || bodyB == 0) return 0;
-
-    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
-    const JPH::BodyID idA{bodyA};
-    const JPH::BodyID idB{bodyB};
-    if (!bi.IsAdded(idA) || !bi.IsAdded(idB)) return 0;
-
-    const JPH::BodyID ids[2] = {idA, idB};
-    JPH::BodyLockMultiWrite lock(m_impl->physicsSystem->GetBodyLockInterface(),
-                                  ids, 2);
-    JPH::Body* a = lock.GetBody(0);
-    JPH::Body* b = lock.GetBody(1);
-    if (a == nullptr || b == nullptr) return 0;
-
-    JPH::DistanceConstraintSettings settings;
-    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
-    settings.mPoint1 = JPH::RVec3(pivotA_world.x, pivotA_world.y, pivotA_world.z);
-    settings.mPoint2 = JPH::RVec3(pivotB_world.x, pivotB_world.y, pivotB_world.z);
-    settings.mMinDistance = minDistance;
-    settings.mMaxDistance = maxDistance;
-
-    JPH::Ref<JPH::Constraint> c = settings.Create(*a, *b);
-    m_impl->physicsSystem->AddConstraint(c);
-
-    const u32 handle = m_impl->nextConstraintId++;
-    m_impl->constraints.emplace(handle, c);
-    return handle;
-}
-
-u32 PhysicsWorld::createPointConstraint(u32 bodyA, u32 bodyB,
-                                          const glm::vec3& pivotWorld) {
-    if (!m_impl || !m_impl->physicsSystem) return 0;
-    if (bodyA == 0 || bodyB == 0) return 0;
-
-    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
-    const JPH::BodyID idA{bodyA};
-    const JPH::BodyID idB{bodyB};
-    if (!bi.IsAdded(idA) || !bi.IsAdded(idB)) return 0;
-
-    const JPH::BodyID ids[2] = {idA, idB};
-    JPH::BodyLockMultiWrite lock(m_impl->physicsSystem->GetBodyLockInterface(),
-                                  ids, 2);
-    JPH::Body* a = lock.GetBody(0);
-    JPH::Body* b = lock.GetBody(1);
-    if (a == nullptr || b == nullptr) return 0;
-
-    JPH::PointConstraintSettings settings;
-    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
-    settings.mPoint1 = JPH::RVec3(pivotWorld.x, pivotWorld.y, pivotWorld.z);
-    settings.mPoint2 = JPH::RVec3(pivotWorld.x, pivotWorld.y, pivotWorld.z);
-
-    JPH::Ref<JPH::Constraint> c = settings.Create(*a, *b);
-    m_impl->physicsSystem->AddConstraint(c);
-
-    const u32 handle = m_impl->nextConstraintId++;
-    m_impl->constraints.emplace(handle, c);
-    return handle;
-}
-
-void PhysicsWorld::destroyConstraint(u32 constraintId) {
-    if (!m_impl || !m_impl->physicsSystem) return;
-    if (constraintId == 0) return;
-    auto it = m_impl->constraints.find(constraintId);
-    if (it == m_impl->constraints.end()) return;
-    m_impl->physicsSystem->RemoveConstraint(it->second.GetPtr());
-    m_impl->constraints.erase(it);
-}
-
-u32 PhysicsWorld::constraintCount() const {
-    if (!m_impl) return 0;
-    return static_cast<u32>(m_impl->constraints.size());
-}
+// F2H66 Bloque 0: las 4 funciones de constraints (F2H65) se movieron a
+// `PhysicsWorld_Constraints.cpp` para mantener este archivo bajo el hard
+// cap de 800 LOC.
 
 // --- Hito 30: Character Controller ---
 
@@ -679,7 +456,7 @@ u32 PhysicsWorld::createCharacter(const glm::vec3& initialPos,
         m_impl->physicsSystem.get());
 
     const u32 id = m_impl->nextCharId++;
-    m_impl->characters[id] = CharacterEntry{ch, glm::vec3(0.0f)};
+    m_impl->characters[id] = physics_internal::CharacterEntry{ch, glm::vec3(0.0f)};
     return id;
 }
 

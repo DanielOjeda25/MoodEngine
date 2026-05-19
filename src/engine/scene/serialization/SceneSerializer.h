@@ -279,6 +279,17 @@ struct SavedJoint {
     f32         maxDistance = 1.0f;
 };
 
+/// @brief F2H66: copia persistida de un RagdollComponent. Solo los
+///        tweaks de configuracion; `state` arranca siempre Animated al
+///        cargar (NPCs muertos persistidos NO es scope v1) y los
+///        ragdollId/bodies runtime no se serializan.
+struct SavedRagdoll {
+    f32       totalMass = 70.0f;
+    f32       limbRadius = 0.05f;
+    bool      useGravity = true;
+    glm::vec3 spawnImpulse{0.0f};
+};
+
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh
 ///        renderer; Hito 11 agrega light; Hito 12 agrega rigid body;
 ///        Hito 14 agrega prefabPath (link suave al asset del que se
@@ -302,6 +313,7 @@ struct SavedEntity {
     std::optional<SavedInventory> inventory;              // F2H51 Bloque I
     std::optional<SavedItemPickup> itemPickup;            // F2H52 Bloque B
     std::optional<SavedJoint>      joint;                 // F2H65
+    std::optional<SavedRagdoll>    ragdoll;               // F2H66
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.

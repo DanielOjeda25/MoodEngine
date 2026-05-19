@@ -341,6 +341,20 @@ Entity applyOneEntity(const SavedEntity& se,
             sc.overrides = s.overrides;
         }
 
+        // F2H66: RagdollComponent. Solo carga config; state arranca
+        // Animated (el Lua script lo dispara con `ragdoll.enable`).
+        if (se.ragdoll.has_value()) {
+            const auto& sr = *se.ragdoll;
+            RagdollComponent rag{};
+            rag.state        = RagdollComponent::State::Animated;
+            rag.totalMass    = sr.totalMass;
+            rag.limbRadius   = sr.limbRadius;
+            rag.useGravity   = sr.useGravity;
+            rag.spawnImpulse = sr.spawnImpulse;
+            rag.ragdollId    = 0;
+            e.addComponent<RagdollComponent>(rag);
+        }
+
         // F2H65: JointComponent. El targetEntity (raw handle) se resuelve
         // desde el tag persistido — handles no son estables entre
         // sesiones. Eager lookup primero (sirve para undo de un single

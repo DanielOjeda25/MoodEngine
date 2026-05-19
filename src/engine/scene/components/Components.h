@@ -268,6 +268,43 @@ struct JointComponent {
     bool dirty = true;
 };
 
+/// @brief F2H66: marker para ragdoll fisico. Cuando `state == Ragdolling`
+///        el RagdollSystem auto-construye 14 bodies (capsules) + 13
+///        constraints (Hinge/SwingTwist) a partir del skeleton Mixamo del
+///        mesh asociado y los pone bajo control de Jolt. El Animator queda
+///        pausado y las matrices de skinning se derivan de las poses
+///        fisicas — el cadaver flopa realista, no se mueve por animacion.
+///
+///        Convencion HL2: una vez Ragdolling no se vuelve a Animated
+///        (sin scope F2H66). Para "revivir" un NPC, destruir + recrear
+///        la entity.
+struct RagdollComponent {
+    enum class State : u8 { Animated = 0, Ragdolling = 1 };
+    State state = State::Animated;
+
+    /// @brief Masa total del cadaver (kg). Se distribuye por volumen entre
+    ///        los 14 bodies. Default 70 kg = persona promedio.
+    f32 totalMass = 70.0f;
+
+    /// @brief Radio de los capsules de extremidades (m). El torso usa ~1.8x.
+    f32 limbRadius = 0.05f;
+
+    /// @brief Si los bodies caen por gravedad. Default true. Apagable para
+    ///        ragdolls zero-G / espacio.
+    bool useGravity = true;
+
+    /// @brief Impulse world-space aplicado al body torso al transicionar
+    ///        a Ragdolling. Convencion HL2: el cadaver vuela en la
+    ///        direccion del disparo. Si es (0,0,0) el ragdoll arranca
+    ///        en reposo y solo cae por gravedad. Magnitud tipica: 5-50 N·s.
+    glm::vec3 spawnImpulse{0.0f};
+
+    // --- Runtime (NO se persiste) ---
+
+    /// @brief Handle del ragdoll en PhysicsWorld. 0 = no creado.
+    u32 ragdollId = 0;
+};
+
 /// @brief Configuracion del entorno de render (Hito 15 Bloque 4):
 ///        skybox + fog + post-process (exposure + tonemap). Se agrega a UNA
 ///        entidad cualquiera de la scene (convencion: un objeto vacio
