@@ -19,6 +19,7 @@
 #include <Jolt/Physics/Body/Body.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
+#include <Jolt/Physics/Collision/ContactListener.h>  // F2H68
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 #include <Jolt/Physics/Constraints/Constraint.h>
 #include <Jolt/Physics/Ragdoll/Ragdoll.h>  // F2H66
@@ -28,7 +29,9 @@
 #include <glm/vec3.hpp>
 
 #include <memory>
+#include <mutex>  // F2H68: cola de impact events
 #include <unordered_map>
+#include <vector>
 
 namespace Mood::physics_internal {
 
@@ -95,6 +98,29 @@ struct CharacterEntry {
     glm::vec3 desiredVelocity{0.0f};
 };
 
+// F2H68: ContactListener para detectar impactos vehicle ↔ NPC y disparar
+// auto-ragdoll. Jolt prohibe mutar el world dentro del callback (cambiar
+// shapes / crear bodies); solo se puede tocar `ContactSettings`. Por eso
+// SOLO encolamos un evento ligero {bodyId, impulseWorld} y dejamos que el
+// `RagdollSystem` haga el trabajo en el siguiente tick (resolve entity,
+// chequear state == Animated, setear Ragdolling, etc).
+//
+// La cola vive en `PhysicsWorld::Impl::impactQueue` con un mutex porque
+// Jolt puede llamar al callback desde threads del JobSystem cuando los
+// substeps corren en paralelo.
+class ContactListener final : public JPH::ContactListener {
+public:
+    void OnContactAdded(const JPH::Body& body1,
+                          const JPH::Body& body2,
+                          const JPH::ContactManifold& manifold,
+                          JPH::ContactSettings& settings) override;
+
+    // Owner injection (set por PhysicsWorld ctor). El listener necesita
+    // acceso a la Impl para encolar y leer el `bodyToEntity` map +
+    // configuracion (threshold, factor).
+    PhysicsWorld::Impl* owner = nullptr;
+};
+
 } // namespace Mood::physics_internal
 
 namespace Mood {
@@ -136,6 +162,39 @@ struct PhysicsWorld::Impl {
     };
     std::unordered_map<u32, VehicleEntry> vehicles;
     u32 nextVehicleId = 1;
+
+    // --- F2H68: auto-ragdoll por impacto ---
+    //
+    // - `bodyToEntity`: lookup BodyID(u32) -> entt::entity (u32 raw) que
+    //   los sistemas dueños (PhysicsSystem para RigidBody, VehicleSystem
+    //   para chassis, RagdollSystem para cada part) mantienen via
+    //   registerBodyEntity/unregisterBodyEntity. PhysicsWorld no auto-
+    //   registra desde createBody porque no conoce la entity (createBody
+    //   es agnostico a ECS).
+    //
+    // - `impactQueue`: cola de eventos detectados por el ContactListener.
+    //   Drenada por RagdollSystem cada tick. Mutex porque el callback de
+    //   Jolt puede correr en threads del JobSystem si la sim usa
+    //   colision substeps en paralelo.
+    //
+    // - `impactSpeedThreshold`: velocidad relativa minima (m/s) en la
+    //   direccion de la normal de contacto para considerar "impacto
+    //   ragdoll-able". Default 4 m/s -- evita falsos disparos por roce.
+    //
+    // - `impactImpulseFactor`: multiplicador del impulse fisico exacto.
+    //   0.3 da feel "arcade GTA SA" (el impulse exacto manda los cuerpos
+    //   volando). Editable en runtime via PhysicsWorld::setRagdollImpactFactor.
+    struct ImpactEvent {
+        u32       victimBodyId = 0;
+        glm::vec3 impulseWorld{0.0f};
+        f32       impactSpeed  = 0.0f;
+    };
+    std::unordered_map<u32, u32> bodyToEntity;
+    std::vector<ImpactEvent>     impactQueue;
+    std::mutex                   impactQueueMutex;
+    f32                          impactSpeedThreshold = 4.0f;
+    f32                          impactImpulseFactor  = 0.3f;
+    physics_internal::ContactListener contactListener{};
 };
 
 } // namespace Mood

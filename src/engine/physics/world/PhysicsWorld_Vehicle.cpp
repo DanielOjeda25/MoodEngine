@@ -295,6 +295,9 @@ void PhysicsWorld::destroyVehicle(u32 vehicleId) {
         m_impl->physicsSystem->RemoveConstraint(it->second.constraint);
     }
     if (!it->second.chassisBodyId.IsInvalid()) {
+        // F2H68: limpiar el mapeo body->entity del chassis.
+        m_impl->bodyToEntity.erase(
+            it->second.chassisBodyId.GetIndexAndSequenceNumber());
         JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
         bi.RemoveBody(it->second.chassisBodyId);
         bi.DestroyBody(it->second.chassisBodyId);

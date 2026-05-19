@@ -103,6 +103,14 @@ PhysicsWorld::PhysicsWorld() : m_impl(std::make_unique<Impl>()) {
     // Gravedad default SI: 9.81 m/s^2 hacia -Y.
     m_impl->physicsSystem->SetGravity(JPH::Vec3(0.0f, -9.81f, 0.0f));
 
+    // F2H68: registrar ContactListener para auto-ragdoll por impacto. El
+    // listener guarda un raw pointer al Impl para acceder al bodyToEntity
+    // map + impactQueue. Lifecycle: la instancia vive en Impl (no heap),
+    // se destruye con Impl tras ~PhysicsWorld; ya habremos llamado reset()
+    // del physicsSystem antes asi que no quedan callbacks pendientes.
+    m_impl->contactListener.owner = m_impl.get();
+    m_impl->physicsSystem->SetContactListener(&m_impl->contactListener);
+
     Log::physics()->info(
         "Jolt inicializado (max_bodies={}, max_pairs={}, gravity=-9.81)",
         k_maxBodies, k_maxBodyPairs);
@@ -224,7 +232,8 @@ u32 PhysicsWorld::createBody(const glm::vec3& position,
                               BodyType type,
                               f32 mass,
                               f32 friction,
-                              const glm::vec4& rotationQuat) {
+                              const glm::vec4& rotationQuat,
+                              bool isSensor) {
     if (!m_impl) return 0;
 
     auto jphShape = createJPHShape(shape, halfExtents);
@@ -264,6 +273,13 @@ u32 PhysicsWorld::createBody(const glm::vec3& position,
     // RigidBodyComponent — el caller decide. Aplica a Static + Dynamic
     // (en Static no afecta al body, si al contacto contra otros bodies).
     settings.mFriction = friction;
+    // F2H68: sensor flag (Unity isTrigger / Unreal Overlap). Jolt llama
+    // ContactListener::OnContactAdded incluso para sensors, pero el solver
+    // de colision saltea la respuesta fisica — el body pasa atravesando
+    // sin rebote. Para NPCs con auto-ragdoll: el chassis cruza, el
+    // listener detecta el closingSpeed, dispara ragdoll, el sensor body
+    // se destruye en el siguiente tick.
+    settings.mIsSensor = isSensor;
 
     JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
     JPH::BodyID id = bi.CreateAndAddBody(settings,
@@ -279,6 +295,8 @@ u32 PhysicsWorld::createBody(const glm::vec3& position,
 
 void PhysicsWorld::destroyBody(u32 bodyId) {
     if (!m_impl || bodyId == 0) return;
+    // F2H68: limpiar el mapeo body->entity si quedo asociado. Idempotente.
+    m_impl->bodyToEntity.erase(bodyId);
     JPH::BodyID id(bodyId);
     JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
     bi.RemoveBody(id);

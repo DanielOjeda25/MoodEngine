@@ -384,6 +384,7 @@ add_library(mood_engine_lib STATIC
     src/engine/physics/vehicle/VehicleConfig.cpp  # F2H67 Bloque A
     src/engine/physics/world/PhysicsWorld_Vehicle.cpp  # F2H67 Bloque C
     src/systems/physics/VehicleSystem.cpp  # F2H67 Bloque D
+    src/engine/physics/world/PhysicsWorld_Impact.cpp  # F2H68 Bloque A
 
     src/engine/saving/SaveLoad.cpp
 

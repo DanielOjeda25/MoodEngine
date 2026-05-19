@@ -42,6 +42,10 @@ namespace ragdoll { struct RagdollLayout; }
 // F2H67: forward decl del vehicle config puro.
 namespace vehicle { struct VehicleConfig; }
 
+// F2H68: forward decl del ContactListener para friend-declaration sobre
+// `class PhysicsWorld`. El cuerpo vive en PhysicsWorld_Internal.h.
+namespace physics_internal { class ContactListener; }
+
 /// @brief Layers de la simulacion. 8-bit por Jolt — alcanzan.
 ///
 /// Hito 40 C (decision permanente): mantenemos solo Static + Moving.
@@ -109,13 +113,21 @@ public:
     ///                        rotation del Transform (antes el body
     ///                        arrancaba "derecho" aunque el save lo tuviera
     ///                        rotado).
+    /// @param isSensor F2H68. Si true, el body es un "trigger" en terminologia
+    ///        Unity (`isTrigger`) / Unreal (`Overlap`): detecta contactos y
+    ///        dispara `OnContactAdded` en el ContactListener, pero NO bloquea
+    ///        ni empuja a los bodies que lo atraviesan. Util para NPCs cuya
+    ///        hitbox debe disparar ragdoll al ser embestida por un vehiculo,
+    ///        sin que el vehiculo rebote contra el. Requiere `type != Static`
+    ///        en Jolt (usar Kinematic).
     u32 createBody(const glm::vec3& position,
                    CollisionShape shape,
                    const glm::vec3& halfExtents,
                    BodyType type,
                    f32 mass = 1.0f,
                    f32 friction = 0.5f,
-                   const glm::vec4& rotationQuat = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+                   const glm::vec4& rotationQuat = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f),
+                   bool isSensor = false);
 
     /// @brief Destruye y remueve un body. Llamar cuando la entidad se borra
     ///        del Scene. Idempotente (id invalido = no-op).
@@ -343,6 +355,64 @@ public:
     /// @brief Cantidad de vehiculos activos.
     u32 vehicleCount() const;
 
+    // --- F2H68: Auto-ragdoll por impacto (ContactListener + body→entity) ---
+    //
+    // Conecta los hitos F2H66 (ragdolls) + F2H67 (vehicles): cuando un body
+    // Dynamic (chassis de vehicle, prop pesado, etc) impacta un body que
+    // pertenece a una entidad con RagdollComponent::Animated, transicionar
+    // automaticamente a Ragdolling con un impulse derivado del momentum
+    // del impacto.
+    //
+    // PhysicsWorld solo provee la *infra*: el ContactListener encola
+    // eventos en `impactQueue`. El RagdollSystem drena la cola, resuelve
+    // entity via `entityOfBody(bodyId)` y filtra por state. Esta capa
+    // queda agnostica al ECS — el mapeo BodyID→Entity lo mantienen los
+    // sistemas dueños (PhysicsSystem para RigidBody, VehicleSystem para
+    // chassis, RagdollSystem para parts).
+
+    /// @brief Evento de impacto encolado por el ContactListener. El drain
+    ///        en RagdollSystem decide si la victima es ragdoll-able.
+    struct RagdollImpactEvent {
+        u32       victimBodyId = 0;       ///< body que recibe el impulse
+        glm::vec3 impulseWorld{0.0f};     ///< vector world-space, ya escalado
+                                          ///< por impactImpulseFactor
+        f32       impactSpeed  = 0.0f;    ///< |vrel · normal| pre-escalado
+                                          ///< (debug/tuning)
+    };
+
+    /// @brief Asocia un BodyID con una entt::entity (raw u32 handle). Los
+    ///        sistemas dueños (PhysicsSystem, VehicleSystem, RagdollSystem)
+    ///        llaman esto justo despues de crear el body. Idempotente:
+    ///        re-registrar el mismo bodyId sobrescribe el handle viejo.
+    void registerBodyEntity(u32 bodyId, u32 entityHandle);
+
+    /// @brief Remueve la asociacion. Llamar antes de destroyBody. Idempotente.
+    void unregisterBodyEntity(u32 bodyId);
+
+    /// @brief Resuelve la entity dueña de un body. Devuelve 0 si no hay
+    ///        mapeo (body no registrado o ya unregistered).
+    u32 entityOfBody(u32 bodyId) const;
+
+    /// @brief Drena la cola de impact events (swap-out atomico). Devuelve
+    ///        una copia para que el caller (RagdollSystem) la procese sin
+    ///        tener el mutex tomado.
+    std::vector<RagdollImpactEvent> drainImpactEvents();
+
+    /// @brief Tuning: minima velocidad relativa (m/s) en la direccion de
+    ///        la normal de contacto para considerar el impacto
+    ///        ragdoll-able. Default 4 m/s.
+    void setRagdollImpactSpeedThreshold(f32 metersPerSecond);
+
+    /// @brief Tuning: factor multiplicativo del impulse fisico exacto.
+    ///        Default 0.3 (arcade GTA SA). 1.0 = impulse exacto.
+    void setRagdollImpactFactor(f32 factor);
+
+    /// @brief BodyIDs de las parts internas de un ragdoll. Util para que
+    ///        el RagdollSystem las registre individualmente en el
+    ///        bodyToEntity map (todas mapean al mismo entity owner).
+    ///        Devuelve vector vacio si ragdollId invalido.
+    std::vector<u32> ragdollBodyIds(u32 ragdollId) const;
+
     // --- Hito 30: Character Controller (CharacterVirtual) ---
 
     /// @brief Crea un character controller (capsule kinematic-style) en
@@ -425,6 +495,12 @@ public:
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
+
+    // F2H68: el ContactListener guarda un raw pointer al `Impl` y necesita
+    // acceder a `bodyToEntity`, `impactQueue`, `impactSpeedThreshold`,
+    // `impactImpulseFactor`. Friend declaration para mantener `Impl`
+    // private al resto del mundo sin abrir el sello PIMPL.
+    friend class physics_internal::ContactListener;
 };
 
 } // namespace Mood

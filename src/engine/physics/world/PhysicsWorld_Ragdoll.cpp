@@ -220,6 +220,12 @@ void PhysicsWorld::destroyRagdoll(u32 ragdollId) {
     auto it = m_impl->ragdolls.find(ragdollId);
     if (it == m_impl->ragdolls.end()) return;
     if (it->second != nullptr) {
+        // F2H68: limpiar el mapeo body->entity de cada part antes de
+        // sacar el ragdoll del physics system.
+        const JPH::Array<JPH::BodyID>& partIds = it->second->GetBodyIDs();
+        for (const auto& id : partIds) {
+            m_impl->bodyToEntity.erase(id.GetIndexAndSequenceNumber());
+        }
         it->second->RemoveFromPhysicsSystem();
     }
     m_impl->ragdolls.erase(it);
