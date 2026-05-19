@@ -11,6 +11,49 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-19: F2H68 — Auto-ragdoll por impacto (infra completa, sample con bug conocido)
+
+**Contexto:** El dev preguntó al cerrar F2H67: *"si un vehiculo, si choca un NPC con trigger ragdoll, este caera o sentira el impacto?"*. Verificado que NO funcionaba (activación de ragdoll era 100% manual). Este hito monta la infra completa siguiendo standard industry. Tag `v1.55.0-fase2-hito68`. Detalle en [`hitos/F2H68.md`](hitos/F2H68.md).
+
+**Decisión clave 1 — Standard industry: `ContactListener` + `Sensor body` (no inventar pattern propio).**
+
+- **Approach:** `physics_internal::ContactListener` derivado de `JPH::ContactListener` registrado en `PhysicsWorld` via `SetContactListener`. Detecta contactos físicos reales (no overlaps de sensor virtual como `TriggerVolumeComponent`). Para NPCs hitbox sin rebote, se usa `mIsSensor=true` en `BodyCreationSettings` (Unity `Collider.isTrigger` / Unreal `CollisionResponseChannel::Overlap`).
+- **Razón:** El dev pidió textualmente *"enserio no quiero que reinventemos la RUEDA, osea reusemos conceptos que existan en internet"* tras un intento previo de "proxy hitbox Kinematic + destroy on ragdoll spawn" ad-hoc. ContactListener es el pattern documentado en Jolt / PhysX / Box2D / Bullet; sensor body es el pattern Unity/Unreal/Source de hace 15 años.
+- **Documentado en memoria** del agente como `feedback_no_reinventar_rueda.md`: regla permanente para el resto del proyecto.
+
+**Decisión clave 2 — Mapa `BodyID → entt::entity` mantenido por los sistemas dueños, NO auto-registrado por `createBody`.**
+
+- **Approach:** `PhysicsWorld::Impl::bodyToEntity` (raw `u32 → u32`). API pública `registerBodyEntity` / `unregisterBodyEntity` / `entityOfBody`. `createBody` queda agnostic a ECS — los callers que conocen la entity (PhysicsSystem para RigidBody, VehicleSystem para chassis, RagdollSystem para parts) registran tras crear. Cleanup automático en `destroyBody/Vehicle/Ragdoll`.
+- **Razón:** `PhysicsWorld` vive en capa `engine/physics/`, NO debe conocer EnTT. Si `createBody` auto-registrara, requeriría passar el handle como parámetro adicional (cae al mismo problema) o crear acoplamiento físico→ECS. Mantener PhysicsWorld puro permite tests headless sin Scene.
+
+**Decisión clave 3 — Cola deferred + mutex para mutar fuera del callback (regla Jolt documentada).**
+
+- **Approach:** `OnContactAdded` SOLO encola `ImpactEvent { victimBodyId, impulseWorld, impactSpeed }` en `Impl::impactQueue` bajo `std::mutex`. `RagdollSystem::tick` drena la cola pre-materialize via `drainImpactEvents()` (swap-out atómico).
+- **Razón:** Jolt prohíbe explícitamente mutar bodies / crear/destruir entities / cambiar shapes dentro del callback (puede correr en threads del `JobSystem` con substeps paralelos). Patrón "command queue" estándar de game engines (similar a `Unity.Mathematics.Job` con barriers, `Bevy ECS` events).
+
+**Decisión clave 4 — Tuning: `closingSpeed >= 4 m/s` umbral + `impulseFactor = 0.3` arcade.**
+
+- **Approach:** Sin masa (físicamente exacto manda volar absurdo). `impulseMag = closingSpeed * impactImpulseFactor`. Defaults expuestos en API `setRagdollImpactSpeedThreshold/Factor`.
+- **Razón:** `4 m/s` evita falsos disparos por roce (caminata = 5.5 m/s, OK; gravity-fall slow = no triggea). `0.3` da feel GTA SA tras tests subjetivos. Configurable runtime para tunear sin recompilar.
+
+**Decisión clave 5 — Banshee tuning derivado de docs públicos `handling.cfg` de GTA SA (no inventar números).**
+
+- **Valores derivados**: `maxTorque 500→800 Nm`, `brakeTorque 1500→4500 Nm` (3× motor, frenado snappy), `handbrakeTorque 4000→6000 Nm`.
+- **Razón:** Aplicación de la regla "no reinventar". El `handling.cfg` de SA está documentado en wikis/foros — los valores reales (Mass 1700, BrakeBias 50/50, all-wheel-drive) dan el feel que el dev pidió.
+
+**Decisión clave 6 — Revert del sub-mesh selector per-wheel; adoptado "1 entity por mesh-part" estándar Unity/Unreal/GTA.**
+
+- **Approach inicial F2H67:** `MeshRendererComponent::subMeshName` permitía que 5 entities compartieran 1 FBX (chassis "body" + 4 "wheel-*"). Render filtraba sub-meshes por nombre.
+- **Bug emergente:** Kenney `sedan.fbx` exporta sub-meshes con vértices "baked" en world del modelo (wheel-front-left tiene vértices en `(-0.85, 0.3, 1.5)` en vez de centrados en origen). Cuando el `VehicleSystem` sync-ea cada wheel-entity a su TF del physics, las wheels aparecen lejos del chassis.
+- **F2H68 intento polish:** calcular `SubMesh::pivotOffset` (centro AABB del sub-mesh) y aplicar `model * translate(-pivotOffset)` en el render. Funcionaba para wheels pero rompía el chassis "body" (re-centraba un mesh ya posicionado correctamente).
+- **Decisión final:** REVERT. Mantener `subMeshName` field como filter cosmético, pero abandonar el caso de uso "vehicle assembly via sub-meshes". **Standard industry**: 1 GameObject/Actor por mesh-part (Unity, Unreal, GTA, todos lo hacen así). El demo F2H68 usa 1 entity por vehículo. Las wheels visuales no rotan independientemente — limitación aceptada hasta F2H69 (pipeline glTF multi-node que separa nodes en `MeshAsset`s independientes al cargar).
+
+**Bug conocido — NPC sample no transiciona end-to-end.**
+
+La infra tiene 6 tests unit verde, pero el integration sample (atropellar al NPC con el Banshee) NO dispara el ragdoll. Documentado como Bug Conocido en [F2H68.md](hitos/F2H68.md) con hipótesis priorizadas a debugar en F2H69.
+
+---
+
 ## 2026-05-19: F2H67 — Vehicle physics estilo GTA San Andreas
 
 **Contexto:** cerrar plan original F2H25 (Vehicle physics) dentro de Sub-fase 2.4. El dev pidió específicamente "autos estilo GTA San Andreas — se manejan fácil, físicas más que suficiente". Cita: *"me gustan los autos de gta san andreas, se manejan facil y tienen fisicas mas que suficiente"*. Tag `v1.54.0-fase2-hito67`. Detalle en [`hitos/F2H67.md`](hitos/F2H67.md).

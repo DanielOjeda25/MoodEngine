@@ -30,7 +30,17 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H67 (2026-05-19)
+## 0.1. Último hito de feature — F2H68 (2026-05-19)
+
+**Auto-ragdoll por impacto (infra completa, sample con bug conocido).** Tag `v1.55.0-fase2-hito68`. Detalle completo en [`hitos/F2H68.md`](hitos/F2H68.md).
+
+**Lo que entregó**: stack completo de auto-ragdoll por contacto siguiendo standard industry (Unity `Collider.isTrigger` / Unreal `Overlap` / Jolt `ContactListener`). `physics_internal::ContactListener` registrado en `PhysicsWorld::Impl` + mapa `BodyID → entt::entity` mantenido por todos los sistemas (PhysicsSystem para RigidBody, VehicleSystem para chassis, RagdollSystem para parts) con auto-cleanup en destroy. `OnContactAdded` calcula `closingSpeed = vrel.Dot(normal)`, si > threshold (default 4 m/s) encola evento `{victimBodyId, ±normal*impulseMag, closingSpeed}` con mutex. `RagdollSystem::tick` drena la cola pre-materialize: si la entity víctima tiene `RagdollComponent::Animated`, setea `state=Ragdolling + spawnImpulse` (el materialize lazy de abajo dispara la creación). **Sensor bodies**: `RigidBodyComponent::isSensor` aditivo serializado como `is_sensor: true` → `JPH::BodyCreationSettings::mIsSensor` → bodies que detectan contacto sin bloquear/empujar (Unity `isTrigger` pattern). **Banshee tuning SA-style** derivado de docs públicos `handling.cfg` GTA SA: maxTorque 500→800 Nm, brakeTorque 1500→4500 Nm (3× motor, frenado snappy), handbrakeTorque 4000→6000. **6 tests headless** del API (register/entity roundtrip, auto-cleanup, ContactListener detecta > threshold, NO detecta < threshold, factor escala lineal, ragdollBodyIds vacío por id inválido). **Vehicle render**: revert del intento de sub-mesh selector per-wheel — adoptado pattern Unity/Unreal/GTA estándar (1 entity por mesh-part). **Suite 1029/10227 verde**.
+
+**Bug conocido (a debugar en F2H69)**: el sample end-to-end vehicle vs NPC sensor NO transiciona a Ragdolling. La infra unit-tested funciona; el integration sample falla en algún punto de la cadena trigger → drain → state transition. Hipótesis principales: callback no se dispara para Dynamic vs Sensor, closing speed mal proyectada, timing del register, orden de tick. Documentado en [F2H68.md § Bug conocido](hitos/F2H68.md).
+
+---
+
+## 0.2. Hito previo — F2H67 (2026-05-19)
 
 **Vehicle physics estilo GTA San Andreas.** Tag `v1.54.0-fase2-hito67`. Detalle completo en [`hitos/F2H67.md`](hitos/F2H67.md). **Cierra plan original F2H25** dentro de Sub-fase 2.4 (Física avanzada).
 
@@ -65,16 +75,22 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ### En curso
 
-- **Sub-fase 2.4** (Física avanzada): **F2H65 + F2H66 + F2H67** cerrados (Hinge/Distance/Point + Ragdolls Mixamo + Vehicle physics SA). Pendiente del plan original: force fields (F2H26), triggers avanzados (F2H27), cloth/soft body (F2H28), Slider/Fixed joints.
+- **Sub-fase 2.4** (Física avanzada): **F2H65 + F2H66 + F2H67 + F2H68** cerrados (Hinge/Distance/Point + Ragdolls Mixamo + Vehicle physics SA + ContactListener-driven auto-ragdoll infra). F2H68 cerrado con **bug conocido**: NPC sensor sample no transiciona end-to-end. Pendiente del plan original: force fields (F2H26), triggers avanzados (F2H27), cloth/soft body (F2H28), Slider/Fixed joints.
 - **Sub-fase 2.6** (Render polish): F2H55, F2H56, F2H58, F2H59, F2H60, F2H61, F2H62, F2H63, F2H64 cerrados. AUDIT-1, AUDIT-2, AUDIT-3 cerrados.
 
-### Próximo
+### Próximo — F2H69 (next)
 
-**Decisión del dev (2026-05-18):** cerrar lo que queda del **plan original** (`PLAN_FASE2.md`) antes de atacar follow-ups. Los 3 follow-ups de F2H64 quedaron archivados en [BACKLOG.md §1.-3/-2/-1](BACKLOG.md).
+**F2H69 — Vehicle pipeline glTF multi-node + debug del trigger NPC + reemplazar sedan Kenney por modelo correctamente armado.** Acordado con el dev al cerrar F2H68 (2026-05-19). El dev pidió no reinventar la rueda; este hito ataca el bug conocido de F2H68 + entrega pipeline de modelos vehiculares al standard industry.
 
-Sub-fases pendientes:
+**Scope estimado**: 4-6h, ~3 bloques:
 
-- **Sub-fase 2.4 — Física avanzada** (continúa post-F2H67): siguiente candidato del plan original = **F2H68 — Force fields y zonas físicas** (plan F2H26 — volúmenes que aplican fuerza: viento, gravedad alterada, buoyancy básica, explosiones puntuales). Alternativa: **F2H69 — Triggers avanzados** (plan F2H27 — shapes adicionales sphere/capsule/mesh, filtros por tag/layer, eventos extendidos) o **F2H70 — Cloth + soft body** (plan F2H28 — banderas, capas). **Slider / Fixed joints** quedan para un sub-hito chico si emerge presión.
+- **A — Debug del trigger NPC**: añadir logs temporales en `OnContactAdded` + drain en `RagdollSystem` para confirmar dónde se rompe la cadena. Hipótesis priorizadas: (1) callback no se invoca para Dynamic vs Sensor — fix: chequear `body.IsSensor()` flag y ajustar el filtro `IsDynamic()`. (2) `closingSpeed` mal proyectada — fix: log de los valores reales. (3) Timing del register tras `createBody` — fix: registrar ANTES de pushear contact desde el listener. (4) Orden de tick — fix: drain a inicio de `tick()` antes de cualquier scene.forEach.
+- **B — Pipeline glTF multi-node**: extender `MeshLoader` para que detecte aiNodes con mesh children y opcionalmente genere `MeshAsset`s separados por node (cada uno centrado en su origen). Usado por el patrón estándar Unity/Unreal: 1 GLB → N entities (chassis + wheels + doors) cargadas como assets independientes. Sin sub-mesh selector. La elección "1 mesh por entity" del editor consume el FBX/GLB y deja al dev armar la entity tree.
+- **C — Reemplazar sedan Kenney por modelo DCC-friendly**: usar el DeLorean GLB de Sketchfab (CC-BY, ya bajado a `assets/dmc_delorean/scene.gltf`) con escala correcta. Eliminar `assets/vehicles/banshee_sa/sedan.fbx` (el modelo Kenney compuesto incompatible con sub-mesh selector). El `.moodvehicle` y el `VehicleConfig::makeDefaultSA()` SE QUEDAN — son la "configuración" lógica del vehicle, no el asset visual.
+
+**Sub-fases más adelante** (sin presión inmediata):
+
+- **Sub-fase 2.4 — Física avanzada** (continúa post-F2H69): candidatos remanentes del plan original = **Force fields y zonas físicas** (F2H26), **Triggers avanzados** (F2H27), **Cloth + soft body** (F2H28), Slider/Fixed joints.
 - **Sub-fase 2.6 — Pipeline AI** (F2H35-F2H40 originales): Mixamo importer cubierto parcialmente por F2H49. Pendiente: Blender MCP server, armas procedurales, generador de props, validación automática.
 - **Sub-fase 2.7 — UI/UX final + cierre Fase 2** (F2H41-F2H44 originales): theming, atajos configurables, tutorial in-app, tag `v2.0.0`.
 

@@ -10,7 +10,14 @@
 
 ## 1. Pedido explícitamente por el dev en algún tour (alta presión)
 
-### 1.-4. Auto-ragdoll por impacto vehicle ↔ NPC (F2H67 tour, 2026-05-19)
+### 1.-4. ~~Auto-ragdoll por impacto vehicle ↔ NPC~~ — ✅ Cerrado en F2H68 (2026-05-19)
+
+Infra completa (`JPH::ContactListener` + body↔entity map + cola deferred + drain en RagdollSystem + sensor bodies via `mIsSensor`) cerrada con tag `v1.55.0-fase2-hito68`. **6 tests unit verde** del API. **Sample end-to-end queda con bug conocido** — el NPC no transiciona pese a tener toda la infra. Detalle en [`hitos/F2H68.md` § Bug conocido](hitos/F2H68.md). Debug del trigger + pipeline glTF multi-node + reemplazo del modelo Kenney por DeLorean GLB van a **F2H69** (en curso al cerrar F2H68 — ver [`ESTADO_ACTUAL.md` § Próximo](ESTADO_ACTUAL.md)).
+
+<details>
+<summary>Contexto original (archivado)</summary>
+
+### 1.-4 original — Auto-ragdoll por impacto vehicle ↔ NPC (F2H67 tour, 2026-05-19)
 
 **Contexto**: en la prueba de F2H67 (demo vehicle) el dev preguntó *"si un vehiculo, si choca un NPC con trigger ragdoll, este caera o sentira el impacto?"*. Verificado: **no**. La activación de `RagdollComponent` hoy es 100% manual (Lua `ragdoll.enable(tag, impulse?)` o set directo de `state = Ragdolling` en C++). No hay `JPH::ContactListener` registrado en `PhysicsWorld` — los únicos eventos físicos son overlaps de `TriggerVolumeComponent` (sensores), no contactos reales. Si el chassis embiste a un NPC animado con `RigidBodyComponent` Dynamic, lo empuja como una caja pero el NPC sigue animado.
 
@@ -23,6 +30,8 @@
 6. Tuning sample: NPC en `vehicle_demo.moodmap` para validar manualmente el feel.
 
 **Por qué NO atacamos ahora**: F2H67 ya está cerrado y el dev necesita probar primero los 3 fixes (dismount + hint UI + reverse). El feature es valuable pero merece su propio hito con tuning dedicado, no como polish apurado.
+
+</details>
 
 ---
 
