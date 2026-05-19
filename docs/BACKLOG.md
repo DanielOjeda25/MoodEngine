@@ -107,6 +107,16 @@ El `EnvironmentComponent` ES global por escena (`SceneRenderer::applyEnvironment
 
 ## 2. Sugerido por el agente durante turnos previos (presión media)
 
+### 2.0. Polish Inspector ragdoll (F2H66 follow-up, 2026-05-19)
+
+**Contexto**: F2H66 cerró `RagdollComponent` con campos persistibles (`totalMass`, `limbRadius`, `useGravity`, `spawnImpulse`) pero el Inspector todavía NO los pinta editables — solo se setean via `.moodmap` JSON o via Lua. Para tunear el feel del flopping (ej. NPC más pesado / brazos más gordos / impulse default mayor) hay que editar el JSON a mano.
+
+**Scope estimado**: ~1-2h. Nuevo archivo `InspectorPanel_Ragdoll.cpp` análogo a `InspectorPanel_Joint.cpp` de F2H65. Campos: DragFloat `totalMass` (10-200 kg), DragFloat `limbRadius` (0.02-0.15 m), checkbox `useGravity`, DragFloat3 `spawnImpulse`. Todos undoable via `EditPropertyCommand<T>`. Sección extra "Layout preview" (read-only) que muestra el conteo de bodies del `buildMixamoLayout` para feedback inmediato.
+
+**Por qué NO atacamos ahora**: el dev validó el feel de los defaults en el demo F2H66 sin pedir tweaks. La UI extra agrega LOC y el caso "ajustar el NPC default" se cubre editando el JSON. Atacar cuando emerja demanda real (varios NPCs distintos con masas diferentes en un mismo mapa).
+
+---
+
 ### 2.1. Overlay context-aware por workspace (F2H59)
 
 **Contexto**: el overlay flotante de F2H59 muestra 4 botones (Mover/Rotar/Escala/F) en todos los workspaces. Podría adaptarse: scripting/materials/gameplay/narrative no necesitan "F" (no editan mesh). map_editor podría sumar sub-modos Vertex/Edge.

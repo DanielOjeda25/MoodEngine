@@ -11,6 +11,62 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-19: F2H67 — Vehicle physics estilo GTA San Andreas
+
+**Contexto:** cerrar plan original F2H25 (Vehicle physics) dentro de Sub-fase 2.4. El dev pidió específicamente "autos estilo GTA San Andreas — se manejan fácil, físicas más que suficiente". Cita: *"me gustan los autos de gta san andreas, se manejan facil y tienen fisicas mas que suficiente"*. Tag `v1.54.0-fase2-hito67`. Detalle en [`hitos/F2H67.md`](hitos/F2H67.md).
+
+**Decisión clave 1 — Backend `JPH::WheeledVehicleController` nativo (no rolling-our-own).**
+
+- **Approach:** Wrapper sobre `JPH::VehicleConstraint` + `WheeledVehicleControllerSettings` con engine + transmission + differentials + per-wheel suspension + tire friction curves.
+- **Razón:** Jolt expone API completa y testeada para vehículos arcade/realistic. Reimplementarlo desde joints + raycasts sería 3-4x más LOC con bugs sutiles de stability (suspension oscilating, lateral grip blowups, etc.). El controller también maneja el auto-shift por RPM.
+- **Alternativa descartada:** Ensamblar con `HingeConstraint` por wheel + raycasts manuales. Funcional pero pierdes el auto-shift + friction curves + slip ratio que ya están en `WheeledVehicleController`.
+- **Cost:** Acoplamiento a la API de Jolt. Si en el futuro hay que swapear physics engine, este wrapper es lo único a re-escribir.
+
+**Decisión clave 2 — Defaults SA-style baked en `makeDefaultSA()`.**
+
+- **Approach:** Función pura que construye un `VehicleConfig` con números calibrados para feel arcade: tracción alta (lateral 1.4, longitudinal 1.6), CoM bajo (Y -0.20m → no flipea), motor responsivo (500 Nm @ 4000 RPM, 5 marchas, final drive 3.42), brakes fuertes (1500 Nm regular, 4000 Nm handbrake), steering 35° con lerp 4.0/s, 4WD por default.
+- **Razón:** GTA San Andreas tiene física arcade-ish: no es simulación realista, pero responde a inputs de gameplay (acelera fuerte, no patina sin handbrake, brakes potentes, doblar es responsivo, no flipea por golpes laterales). Estos números reproducen ese feel sin requerir tuning del dev. `.moodvehicle` JSON con campos opcionales permite override per-auto si emerge.
+- **4WD por default** sobre RWD/FWD: más estable para arcade (menos spin con throttle full + steering). Reduce frustración con autos que patinen en cada cruce.
+
+**Decisión clave 3 — Ensamblaje multi-entity (1 chassis + 4 wheels children).**
+
+- **Approach:** Una entity con `VehicleComponent` representa el chasis. Las 4 wheels son child entities separadas con tags fijos `Wheel_FL/FR/RL/RR`. El `VehicleSystem` las busca por tag al primer materialize y cachea los handles en `VehicleComponent.wheelEntities[4]`. Cada frame, escribe la Transform de cada child con la wheel pose post-suspension.
+- **Razón:** Permite swappear meshes de wheels independientes en el editor (ej. wheels de carrera para un modelo, off-road para otro) sin tocar physics ni recompilar config. Las child entities tienen `MeshRendererComponent` propio. Si el dev borra una wheel entity, el log warn pero el physics sigue (no crashea).
+- **Alternativa descartada:** Skinned mesh único con bones `chassis/wheel_*` y un Animator que rote las wheel bones. Más complejo (requiere import pipeline + bone mapping), menos flexible.
+
+**Decisión clave 4 — Sub-mesh selector en `MeshRendererComponent`.**
+
+- **Approach:** Nuevo campo `std::string subMeshName` opcional en `MeshRendererComponent` + `std::string name` en `SubMesh` poblado desde `aiMesh->mName` por MeshLoader. Render path en `SceneRenderer_Render.cpp` skipea sub-meshes cuyo `name != subMeshName` cuando el filtro está seteado. `RenderBatching` excluye estas entities del path instanced (van a `drawMeshRenderer` no-batched).
+- **Razón:** El Kenney Car Kit (CC0, único modelo de auto encontrado con partes separadas accesible) trae el FBX con 5 sub-meshes nombrados (`body`, `wheel-front-left`, etc.). Sin sub-mesh selector, la única opción era split a 5 archivos FBX en Blender (workflow extra para el dev cada vez que importa un modelo). El selector permite que 5 entities compartan UN solo MeshAsset, cada una renderizando su parte. Beneficio futuro: kitbashing modular en arquitectura/props (un mesh con varias partes nombradas → varias entities que cada una pinta su parte).
+- **Alternativa descartada:** Auto-spawn de 5 child meshes al cargar el FBX (cada sub-mesh = mesh asset separado). Más complejo para el AssetManager + entidades fantasma en el catalog que confunden al dev. El selector es opt-in y no afecta nada si está vacío.
+- **Trade-off:** Las entities con sub-mesh filter no van al path instanced. Para un auto (1 chassis + 4 wheels), son 5 draws no-batched por frame por vehicle — aceptable (pocos vehicles simultáneos en juego típico). Si emerge un caso de "100 props modulares con sub-mesh filter", agendar instancing-aware del filter.
+
+**Decisión clave 5 — Mount/dismount con tecla F + radio 3m.**
+
+- **Approach:** Flanco up→down de F detectado en `EditorPlayMode::updatePlayer`. Si on-foot, busca entities con `VehicleComponent` dentro de radio 3m del char position; primer match gana → mount. Si mounted, segundo F → dismount con teleport al costado del auto.
+- **Razón:** Convención de FPS games (Half-Life, GTA). 3m radio es generoso pero no excesivo — el dev tiene que caminar al auto. Sin componente Trigger del engine: el detect es directo en C++ con `forEach<VehicleComponent, TransformComponent>` (rápido). Lua tampoco interviene — input dispatch a `VehicleComponent.input*` es C++ directo, evita la latencia de pasar por la VM cada frame.
+- **Alternativa descartada:** Trigger volume custom alrededor del auto que dispara un Lua callback. Funcional pero más capas (engine → trigger → Lua → componente). El approach directo es más fácil de razonar.
+
+**Decisión clave 6 — Chase cam reusa `FpsCamera` con position-override.**
+
+- **Approach:** Cuando mounted, cada frame: `applyMouseMove` actualiza yaw/pitch de `m_playCamera` normalmente. Luego override de position: `chassisPos - forward() * 5m + (0, 1.5m, 0)`. El `forward()` del FpsCamera ya apunta a donde el dev mira → al teleportar la cam al "behind" del chassis, naturalmente mira hacia el chassis sin lookAt.
+- **Razón:** Evita crear una `ChaseCam` class nueva con su propia matemática + duplicar el handling de input. Reusa el `FpsCamera` que ya tiene yaw/pitch + applyMouseMove. El override de position cada frame es 1 línea — no hay state extra. Mouse rota el orbit sin necesidad de "modos" en la cámara.
+- **Gate adicional:** `EditorScene::updateRigidBodies` tiene un sync cam→char (Hito 30) que pisaba la chase cam con la pos del player. Agregué guard `m_playerMountedVehicleEntity == 0` para que el sync solo corra on-foot.
+
+**Decisión clave 7 — Asset `.moodvehicle` JSON aditivo con slot 0 = `makeDefaultSA()`.**
+
+- **Approach:** Nuevo asset type en AssetManager mirror de Dialog/Quest. Slot 0 lazy-init con `makeDefaultSA()`. `loadVehicleConfig(path)` parsea JSON con todos los campos opcionales (caen al default SA correspondiente). Si el archivo no parsea o `isValid()` rechaza, fallback a slot 0 + log warn.
+- **Razón:** Permite tener N autos con tunings distintos sin duplicar código. El JSON es human-editable, no requiere recompilar. Slot 0 garantiza que `getVehicleConfig(0)` nunca null — el `VehicleSystem` puede pedir el default sin checks.
+- **Sample shipado:** `assets/vehicles/banshee_sa/banshee_sa.moodvehicle` es una replica exacta de `makeDefaultSA()` — sirve como referencia del formato para el dev.
+
+**Decisión clave 8 — Persistencia aditiva, runtime no persiste.**
+
+- **Approach:** `VehicleComponent` aditivo en `.moodmap` v14. `configPath` persiste (que es lo único que define la identidad del vehicle entre sesiones). `vehicleId`, `wheelEntities[]`, `input*` NO persisten (runtime puro). Al cargar, `dirty=true` para que el `VehicleSystem` materialice. Mapas pre-F2H67 cargan sin el campo `vehicle` → entities sin `VehicleComponent`.
+- **Razón:** Mismo patrón aditivo que F2H65/F2H66. Los handles entt + Jolt nunca son estables entre sesiones; intentar persistirlos sería bug-bait. Input no tiene sentido persistir (el script o el player lo escribe cada frame).
+- **Gate extra del SceneSerializer:** Extendí el filtro `hasMr || hasLi || hasRb || ...` con `hasVeh` + reconocimiento de tags `Wheel_FL/FR/RL/RR`. Sin esto, las wheel entities placeholder se filtraban al guardar.
+
+---
+
 ## 2026-05-18: F2H66 — Ragdolls auto-build sobre `JPH::Ragdoll` (Mixamo)
 
 **Contexto:** continuar Sub-fase 2.4 (Física avanzada) inmediatamente después de F2H65. El dev quería flopping físico al matar a un NPC, estilo HL2 (cadáver vuela con impulse + sleeping nativo de Jolt cuando se queda quieto). Cierra plan original F2H24. Tag `v1.53.0-fase2-hito66`. Detalle en [`hitos/F2H66.md`](hitos/F2H66.md).
