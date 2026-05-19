@@ -379,6 +379,14 @@ void SceneRenderer::renderScene(Scene& scene,
             if (!mr.subMeshName.empty() && sub.name != mr.subMeshName) {
                 continue;
             }
+            // F2H68: el pivot-offset auto-center se evaluó y descartó —
+            // funcionaba para wheels pero desfasaba el chassis "body" porque
+            // restarle el centro del AABB lo movía 60cm hacia abajo del TF.
+            // Decisión: para vehículos, 1 entity por vehículo con UN mesh
+            // (sin sub-mesh selector por wheel). Las wheels físicas del
+            // VehicleConstraint siguen funcionando, solo se pierde animación
+            // visual de wheels rotando — aceptable hasta que tengamos un
+            // model authoring pipeline propio.
 
             const MaterialAssetId matId =
                 mr.materialOrMissing(sub.materialIndex);

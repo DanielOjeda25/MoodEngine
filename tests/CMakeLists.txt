@@ -51,6 +51,7 @@ add_executable(mood_tests
     test_physics_ragdoll.cpp  # F2H66 Bloque H
     test_vehicle_config.cpp  # F2H67 Bloque A
     test_physics_vehicle.cpp  # F2H67 Bloque C/J
+    test_physics_ragdoll_impact.cpp  # F2H68 Bloque D
     test_raycast.cpp
     test_trigger_system.cpp
     test_save_load.cpp
@@ -179,6 +180,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/physics/ragdoll/RagdollLayout.cpp  # F2H66 Bloque A
     ${CMAKE_SOURCE_DIR}/src/engine/physics/vehicle/VehicleConfig.cpp  # F2H67 Bloque A
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Vehicle.cpp  # F2H67 Bloque C
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Impact.cpp  # F2H68 Bloque A
     ${CMAKE_SOURCE_DIR}/src/core/i18n/I18n.cpp  # F2H43 (movido a core en AUDIT-3)
     ${CMAKE_SOURCE_DIR}/src/core/UserSettings.cpp  # F2H43
     ${CMAKE_SOURCE_DIR}/src/engine/nodegraph/Graph.cpp  # F2H46

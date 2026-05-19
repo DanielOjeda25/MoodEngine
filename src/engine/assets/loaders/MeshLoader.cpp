@@ -27,6 +27,7 @@
 #include <glm/trigonometric.hpp>
 
 #include <filesystem>
+#include <functional>  // F2H68: std::function en findNode recursivo
 #include <limits>
 
 namespace Mood {
@@ -143,9 +144,45 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
         SubMesh sm{};
         sm.materialIndex = m->mMaterialIndex;
         sm.vertexCount = static_cast<u32>(vertices.size() / detail::k_strideFloats);
-        // F2H67: nombre del sub-mesh para selector per-entity (chassis + wheels).
-        if (m->mName.length > 0) {
+        // F2H67/F2H68: nombre del sub-mesh para selector per-entity (chassis
+        // + wheels). Estrategia: priorizar aiNode->mName (nombre semantico
+        // que el dev ve en Blender/Maya — ej. "body", "wheel-front-left"),
+        // fallback a aiMesh->mName (puede ser generico "Mesh.001" o vacio).
+        //
+        // FBX guarda 2 capas: aiNode = object (semantico) -> aiMesh = data
+        // (puede ser shared). Para selector logico per-entity, el dev espera
+        // matchear el nombre del object visible en su DCC. Pre-F2H68 solo
+        // usabamos aiMesh->mName y eso devolvia "Mesh.001" para FBX Kenney
+        // (los submeshes se volvian invisibles en `sub_mesh_name` matching).
+        if (scene->mRootNode != nullptr) {
+            std::function<const aiNode*(const aiNode*, u32)> findNode =
+                [&](const aiNode* n, u32 meshIdx) -> const aiNode* {
+                    if (n == nullptr) return nullptr;
+                    for (u32 j = 0; j < n->mNumMeshes; ++j) {
+                        if (n->mMeshes[j] == meshIdx) return n;
+                    }
+                    for (u32 k = 0; k < n->mNumChildren; ++k) {
+                        if (const aiNode* hit = findNode(n->mChildren[k], meshIdx)) {
+                            return hit;
+                        }
+                    }
+                    return nullptr;
+                };
+            const aiNode* owner = findNode(scene->mRootNode, i);
+            if (owner != nullptr && owner->mName.length > 0) {
+                sm.name = std::string(owner->mName.C_Str(), owner->mName.length);
+            }
+        }
+        if (sm.name.empty() && m->mName.length > 0) {
             sm.name = std::string(m->mName.C_Str(), m->mName.length);
+        }
+        // Log para debug — util cuando un dev nuevo nota que su selector
+        // no matchea. Si aiMesh::mName != aiNode::mName, ahora usamos el
+        // del nodo (el visible en su DCC).
+        if (!sm.name.empty()) {
+            Log::assets()->debug(
+                "MeshLoader: '{}' submesh[{}] name='{}'",
+                logicalPath, i, sm.name);
         }
         sm.mesh = meshFactory(vertices, attrs);
         if (sm.mesh == nullptr) {

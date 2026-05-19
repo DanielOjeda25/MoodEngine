@@ -52,7 +52,13 @@ VehicleConfig makeDefaultSA() {
     cfg.wheels[WheelRR].handbraked = true;
 
     // Engine SA-like: torque amplio, RPM responsivo, 5 gears + 1 reverse.
-    cfg.engine.maxTorque = 500.0f;
+    // F2H68 tuning: el dev reporto frenado tipo GTA 4 (sim-floppy) en lugar
+    // de SA (arcade-snappy). Subimos torque + brakes para feel mas Banshee:
+    //   - maxTorque 500->800 Nm: arranque mas vigoroso (0-100 km/h ~6s).
+    //   - brakeTorque 1500->4500 Nm: deceleracion fuerte arcade
+    //     (autos reales frenan 3-4x mas que aceleran; SA exagera).
+    //   - handbrakeTorque 4000->6000 Nm: derrape SA-style mas pronunciado.
+    cfg.engine.maxTorque = 800.0f;
     cfg.engine.maxTorqueRPM = 4000.0f;
     cfg.engine.maxRPM = 6000.0f;
     cfg.engine.minRPM = 1000.0f;
@@ -61,8 +67,8 @@ VehicleConfig makeDefaultSA() {
     cfg.engine.gearRatios = {2.66f, 1.78f, 1.30f, 1.00f, 0.74f};
     cfg.engine.reverseGearRatios = {2.90f};
     cfg.engine.finalDriveRatio = 3.42f;
-    cfg.engine.brakeTorque = 1500.0f;
-    cfg.engine.handbrakeTorque = 4000.0f;
+    cfg.engine.brakeTorque = 4500.0f;
+    cfg.engine.handbrakeTorque = 6000.0f;
 
     // Steering responsivo (35deg + lerp 4.0/s).
     cfg.maxSteerAngleDeg = 35.0f;

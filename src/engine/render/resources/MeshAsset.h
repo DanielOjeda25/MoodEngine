@@ -47,11 +47,13 @@ struct SubMesh {
     std::unique_ptr<IMesh> mesh;
     u32 materialIndex = 0;
     u32 vertexCount = 0;
-    /// F2H67: nombre del sub-mesh segun el archivo origen (assimp `aiMesh->mName`).
-    /// Vacio = el archivo no le puso nombre. Lo consume el render path para
-    /// filtrar por `MeshRendererComponent.subMeshName` (un solo sub-mesh por
-    /// entity, ej. para que un auto descomponga chassis + 4 wheels en 5 entities
-    /// distintas que comparten el mismo MeshAsset).
+    /// F2H67: nombre del sub-mesh segun el archivo origen. F2H68 cambio el
+    /// resolver para priorizar aiNode->mName (semantico DCC) sobre
+    /// aiMesh->mName (data layer, suele ser "Mesh.001"). Vacio = el archivo
+    /// no le puso nombre. Lo consume el render path para filtrar por
+    /// `MeshRendererComponent.subMeshName`. F2H68 nota: para vehiculos
+    /// preferimos 1 entity por vehiculo (sin sub-mesh selector por wheel)
+    /// porque los FBX compuestos traen wheels offseteados del origen.
     std::string name;
 };
 
