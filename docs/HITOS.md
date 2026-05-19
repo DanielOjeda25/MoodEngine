@@ -134,6 +134,8 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 
 ### Sub-fase 2.4 — Física avanzada (joints / constraints)
 
+- [x] **F2H66** — Ragdolls auto-build sobre `JPH::Ragdoll` desde skeleton Mixamo (14 bodies, hinge en codos/rodillas, swing-twist en hombros/caderas/spine/cuello, mass por volumen) + `RagdollComponent` persistente aditivo + `PhysicsWorld_Ragdoll.cpp` (createRagdoll/destroy/readPose/applyImpulse) + `RagdollSystem` dedicado en módulo propio + Lua `ragdoll.enable(tag, {x,y,z})` estilo HL2 + debug overlay 3D (capsules naranjas + jerarquía amarilla bajo F1) + sample mapa `ragdoll_demo.moodmap` con trigger Lua + 13 tests headless (2026-05-18, tag `v1.53.0-fase2-hito66`) — [detalle](hitos/F2H66.md). Cierra plan original F2H24. Polish post-validación: fix race `AnimationSystem` pisaba skinning matrices del ragdoll cada frame (guard por `state == Ragdolling`). Split previo de `PhysicsWorld.cpp` (850→611 LOC) en 4 archivos. Suite **1000/10092**.
+
 - [x] **F2H65** — Jolt constraints (Hinge / Distance / Point) end-to-end: PhysicsWorld API + JointComponent + Inspector con drag-drop entity + persistencia `.moodmap` por TAG + debug overlay 3 colores + sample mapa `physics_joints_demo.moodmap` (puerta-péndulo Hinge + péndulo rígido Distance) + 11 tests headless (2026-05-18, tag `v1.52.0-fase2-hito65`) — [detalle](hitos/F2H65.md). Abre Sub-fase 2.4 del plan original. Bug fix de sentinel `kJointNoTarget = UINT32_MAX` (raw entt handle `0` colisionaba con la primera entity creada). Suite **987/10006**.
 
 ### Sub-fase 2.6 — Render polish

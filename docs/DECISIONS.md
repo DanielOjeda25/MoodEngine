@@ -11,6 +11,71 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-18: F2H66 — Ragdolls auto-build sobre `JPH::Ragdoll` (Mixamo)
+
+**Contexto:** continuar Sub-fase 2.4 (Física avanzada) inmediatamente después de F2H65. El dev quería flopping físico al matar a un NPC, estilo HL2 (cadáver vuela con impulse + sleeping nativo de Jolt cuando se queda quieto). Cierra plan original F2H24. Tag `v1.53.0-fase2-hito66`. Detalle en [`hitos/F2H66.md`](hitos/F2H66.md).
+
+**Decisión clave 1 — Backend `JPH::Ragdoll` nativo, no rolling-our-own.**
+
+- **Approach:** wrap sobre `JPH::Ragdoll` + `JPH::RagdollSettings`. Storage interno: `unordered_map<u32, { Ref<JPH::Ragdoll>, Ref<JPH::Skeleton> }>`.
+- **Razón:** Jolt expone API completa y testeada para ragdolls: declarativo (Parts + constraints + collision groups), activación con `AddToPhysicsSystem`, lectura de poses con `GetBodyState`, estabilización con `Stabilize` (requiere `JPH::Skeleton` paralelo a `mParts`). Reinventarlo desde `HingeConstraint`/`SwingTwistConstraint` sueltos sería trabajo redundante + perderíamos la estabilización implícita de Jolt.
+- **Alternativa descartada:** ensamblar el ragdoll manualmente desde la API de F2H65 (CreateHinge + CreatePoint por cada par). Funcional pero re-implementa lo que Jolt ya empaqueta y hay que mantener el bookkeeping de constraints + collision groups + activate-all-bodies-atomically.
+- **Cost:** un `JPH::Skeleton` espejo del `RagdollLayout` se construye al `createRagdoll` y queda en memoria mientras el ragdoll exista. Trivial (~14 bones × ~50 bytes).
+
+**Decisión clave 2 — Auto-build sobre convención Mixamo (`mixamorig:*`).**
+
+- **Approach:** `ragdoll::buildMixamoLayout(skeleton, totalMass, limbRadius)` retorna `RagdollLayout` con 14 bones fijos. Mapping hardcoded: Hips → Spine/Spine1/Spine2 → Neck → Head; Spine2 → LeftArm/RightArm → LeftForeArm/RightForeArm; Hips → LeftUpLeg/RightUpLeg → LeftLeg/RightLeg. Wrist/Foot/Shoulder/fingers NO se ragdollean (heredan del parent en el sync).
+- **Razón:** Mixamo es la convención canónica para humanoides en pipelines de gameplay (F2H49 ya importa Mixamo). El dev no quiere taggear bones a mano por NPC ("auto-build" = imperativo del scope). El layout hardcoded gana simplicidad + zero-config para el caso común; perder flexibilidad para esqueletos custom es aceptable.
+- **Cap defensivo:** si el esqueleto NO tiene prefijo `mixamorig:` en ningún bone, retornamos `RagdollLayout{}` vacío + `Log::warn`. El `RagdollSystem` chequea `empty()` y revierte `state = Animated` sin crashear. Esto cubre el caso Fox.glb o esqueletos custom: el `enable` se vuelve no-op visible en logs.
+- **Alternativa descartada:** layout configurable via JSON per-mesh. Más flexible pero exige UI nueva + serialización per-skeleton + el caso común (Mixamo) queda detrás de boilerplate. Diferido como follow-up si emerge presión.
+
+**Decisión clave 3 — 14 bones, no 22+ (wrist/foot/shoulder/fingers fuera).**
+
+- **Approach:** las extremidades terminales se montan sobre el parent ragdolleado (heredan su pose en el sync). El skeleton sigue teniendo 50+ bones; solo 14 tienen body físico.
+- **Razón:** cada body extra = 1 rigid body en simulación + 1 constraint + 1 entry en collision filter. Para NPCs distantes la diferencia visual entre "mano floppea independiente" y "mano sigue al antebrazo rígidamente" es imperceptible. Reducimos costo CPU (~36% menos bodies) sin pérdida visual relevante.
+- **Alternativa descartada:** full 22+ bones (manos + dedos + pies). Útil si el dev quiere close-ups con detalle de manos (third-person inspection); v1 NO lo necesita.
+- **Cuándo revisar:** si emerge un caso de gameplay donde el detail de extremidades importa (cinematic, photo-mode con close-up). Agendable como override per-component (flag `ragdollFingers = true`).
+
+**Decisión clave 4 — Mass distribution proporcional al volumen del capsule.**
+
+- **Approach:** cada body recibe `mass[i] = totalMass · (volume[i] / Σvolume)`. Volumen del capsule = cilindro central + 2 hemisferios = `π·r²·(2·h) + (4/3)·π·r³`.
+- **Razón:** más realista que `mass = totalMass / N`. El torso (capsule más grueso + largo) absorbe más impulse; la cabeza (capsule chico) se mueve "ligero" como debería. La estabilidad numérica de Jolt mejora cuando los ratios de masa entre bodies conectados quedan en rangos sanos.
+- **Alternativa descartada:** masa fija configurable por bone (anatómicamente exacta: head ~5 kg, torso ~35 kg, etc.). Más realista pero exige tabla con magic numbers que invitan a desincronizarse con `limbRadius`. La proporcional auto-tracks cualquier ajuste de radius.
+
+**Decisión clave 5 — Sin vuelta animación↔ragdoll en v1 (convención HL2).**
+
+- **Approach:** una vez `state = Ragdolling`, queda así para siempre. `ragdoll.is_ragdolling("Tag")` permite a Lua chequear sin re-llamar `enable`. Reset requiere recargar el mapa.
+- **Razón:** el return-from-ragdoll de calidad (NPC "se levanta") exige pose-matching (encontrar la keyframe del Animator más cercana al estado actual del ragdoll) + IK transition (blend continuo entre ragdoll y animator pose). Es scope de un hito propio. Implementarlo a medias produce snap-back desagradable.
+- **Cuándo revisar:** si emerge gameplay donde NPCs noqueados se levantan (RPG con knockdown temporal). Agendable como F2H7x con plan dedicado.
+- **Alternativa descartada:** mid-quality return (snap a la pose más cercana sin IK). Mejor no tenerlo que tenerlo mal.
+
+**Decisión clave 6 — Disparo via Lua `ragdoll.enable(tag, {x,y,z})`, no via componente Trigger del engine.**
+
+- **Approach:** Lua API en tabla global `ragdoll`. Lookup por TAG (no por handle entt). El componente solo expone el estado + impulse pending; la materialización física la hace `RagdollSystem` en el siguiente tick (lazy, mismo patrón `JointComponent.dirty` de F2H65).
+- **Razón:** el control queda en la gameplay layer (script del NPC, sistema de combate). Mismo patrón que `inventory.give(tag, item, qty)` de F2H52 — consistencia API. El engine no decide CUÁNDO un NPC muere ni con qué impulse.
+- **Trade-off:** primer match gana en lookup por tag (convención Hammer-style). Si hay 2 NPCs con tag `"Enemy"`, solo uno se ragdollea. Aceptable v1; si emerge dolor, el dev usa tags únicos.
+
+**Decisión clave 7 — Frame-order fix: `AnimationSystem` skipea entities ragdolleando.**
+
+- **Approach:** guard al inicio del lambda en `AnimationSystem::update`. Si `entity.hasComponent<RagdollComponent>() && state == Ragdolling`, return inmediato.
+- **Razón:** **bug descubierto en validación runtime**. El frame loop es `AnimationSystem → tickPhysics (= step + RagdollSystem) → render`. Aunque pongamos `anim.playing = false` al transicionar a Ragdolling, el AnimationSystem **igual** evalúa la pose congelada en `t = último frame` y la escribe a `skel.skinningMatrices`, pisando lo que el `RagdollSystem` escribió. Resultado: ragdoll creado en Jolt correcto, pero el mesh visual seguía en idle ("ni se inmutaba").
+- **Lección general:** `playing = false` significa "no avanzar el tiempo", NO "no escribir matrices". Esa distinción no era obvia leyendo el código del Animator (ambas lecturas son razonables). Cuando 2 sistemas escriben el mismo storage, el "más reciente del frame" gana — el bug es del orden, no del Animator.
+- **Alternativa descartada:** reordenar sistemas (RagdollSystem post-Animation). Funcionaría pero el `tickPhysics` debe correr atómicamente (step + sync) y separarlos invita a otros bugs de ordering.
+
+**Decisión clave 8 — Persistencia aditiva, `state` NO persiste.**
+
+- **Approach:** `RagdollComponent` opcional en `.moodmap` v14 (sin schema bump). Persiste `totalMass`, `limbRadius`, `useGravity`, `spawnImpulse`. NO persiste `state` ni `ragdollId`. Al cargar, `state = Animated`.
+- **Razón:** los ragdolls mid-flop no son save-able de forma significativa. Si el dev quiere "este NPC ya estaba muerto al cargar el mapa", la solución correcta es spawneal lo con `state = Ragdolling` desde Lua en `on_map_load`. Persistir `state = Ragdolling` exige también persistir las world poses de cada body (otherwise el ragdoll re-arranca en la bind pose). Scope inflación que no se justifica.
+- **Trade-off:** si el dev `save && quit && load` mid-combate, los NPCs muertos resucitan vivos. Aceptable v1; el dev guarda PRE-evento si quiere preservar el estado.
+
+**Decisión clave 9 — Split `PhysicsWorld.cpp` en 4 archivos antes de agregar API nueva.**
+
+- **Approach:** core + Constraints (F2H65) + Ragdoll (F2H66) + Internal PIMPL header. `PhysicsWorld.cpp` bajó 850 → 611 LOC.
+- **Razón:** misma regla soft 500 / hard 800 LOC que aplica para otros .cpp. `PhysicsWorld.cpp` ya estaba sobre el hard cap antes de F2H66; agregar la API ragdoll lo habría llevado a 1100+. Mejor hacer el refactor antes (commit "preparatorio" con 0 cambio funcional) que mezclar refactor + feature en el mismo commit.
+- **Patrón usado:** mismo `EditorUI_*.inl`, `InspectorPanel_*.cpp`, `EditorRenderPass*.cpp`. PIMPL via header interno (`PhysicsWorld_Internal.h`) que centraliza el Jolt setup + storage shared entre los .cpp.
+
+---
+
 ## 2026-05-18: F2H65 — Jolt constraints (Hinge / Distance / Point)
 
 **Contexto:** abrir Sub-fase 2.4 (Física avanzada) del plan original. El dev quería *"que este sea un motor físico realista, como el source"*. Tag `v1.52.0-fase2-hito65`. Detalle en [`hitos/F2H65.md`](hitos/F2H65.md). 3 tipos de constraint en v1 (Hinge para puertas/brazos, Distance para cuerdas/varillas, Point para ball joints) — Slider y Fixed quedan para sub-hito si emergen necesidades de gameplay.
