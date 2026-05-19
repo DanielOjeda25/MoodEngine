@@ -10,6 +10,22 @@
 
 ## 1. Pedido explícitamente por el dev en algún tour (alta presión)
 
+### 1.-4. Auto-ragdoll por impacto vehicle ↔ NPC (F2H67 tour, 2026-05-19)
+
+**Contexto**: en la prueba de F2H67 (demo vehicle) el dev preguntó *"si un vehiculo, si choca un NPC con trigger ragdoll, este caera o sentira el impacto?"*. Verificado: **no**. La activación de `RagdollComponent` hoy es 100% manual (Lua `ragdoll.enable(tag, impulse?)` o set directo de `state = Ragdolling` en C++). No hay `JPH::ContactListener` registrado en `PhysicsWorld` — los únicos eventos físicos son overlaps de `TriggerVolumeComponent` (sensores), no contactos reales. Si el chassis embiste a un NPC animado con `RigidBodyComponent` Dynamic, lo empuja como una caja pero el NPC sigue animado.
+
+**Scope estimado**: ~3-4h (mini-hito propio, F2H68 candidato). Bloques:
+1. Registrar `JPH::ContactListener` en `PhysicsWorld_Internal.h` + `SetContactListener` en ctor.
+2. Mapa `BodyID → entt::entity` (no existe explícito hoy — revisar si `VehicleSystem`/`RagdollSystem`/`PhysicsSystem` ya lo arman implícitamente).
+3. En `OnContactAdded`: leer velocidad relativa + masa; si supera umbral Y uno de los bodies pertenece a una entity con `RagdollComponent::state == Animated`, encolar transición en buffer thread-safe (Jolt prohíbe mutar dentro del callback).
+4. Procesar la cola en `RagdollSystem::tick` antes del materialize lazy. Setear `spawnImpulse = vel_rel × mass_chassis × factor_arcade` (0.3 default, tuneable).
+5. Tests: vehículo a 10 m/s impacta NPC → assert `state == Ragdolling` post-step.
+6. Tuning sample: NPC en `vehicle_demo.moodmap` para validar manualmente el feel.
+
+**Por qué NO atacamos ahora**: F2H67 ya está cerrado y el dev necesita probar primero los 3 fixes (dismount + hint UI + reverse). El feature es valuable pero merece su propio hito con tuning dedicado, no como polish apurado.
+
+---
+
 ### 1.-3. Shift+D duplicate (F2H64 tour, 2026-05-18)
 
 **Contexto**: al validar F2H64 el dev pidió un atajo Blender-style para duplicar la entidad seleccionada. Cita: *"no tengo la capacidad aun de duplicar un boton podemos hacer como en blender shift + D de un elemento seleccionado y crea una copia"*.
