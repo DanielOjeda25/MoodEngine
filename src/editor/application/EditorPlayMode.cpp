@@ -9,6 +9,9 @@
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/quest/QuestSystem.h"        // F2H53 H
 #include "engine/scene/queries/ViewportPick.h"
+#include "engine/scene/components/Components.h"  // F2H67: VehicleComponent
+#include "engine/scene/core/Entity.h"
+#include "engine/scene/core/Scene.h"
 #include "engine/world/grid/GridMap.h"
 #include "platform/Window.h"
 #include "systems/physics/PhysicsSystem.h"
@@ -17,9 +20,11 @@
 #include <imgui.h>  // F2H39: ImGui::GetIO().DeltaTime para HUD overlay
 
 #include <algorithm>  // std::min / std::max para crouch lerp clamp
+#include <cmath>      // F2H67: std::cos/sin para chase cam orbit
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/trigonometric.hpp>  // F2H67
 
 namespace Mood {
 
@@ -63,6 +68,9 @@ void EditorApplication::exitPlayMode() {
     }
     m_jumpCooldown = 0.0f;
     m_crouching    = false;
+    // F2H67 Bloque F: limpiar mount state (proximo Play arranca on-foot).
+    m_playerMountedVehicleEntity = 0;
+    m_fKeyPrevFrame              = false;
     // F2H41 fix lateral: resetear m_playCamera a la pose inicial. En
     // Play Mode, EditorScene::updateRigidBodies setea la cam cada
     // frame al char position. Si el char cae al vacio (camina fuera
@@ -112,6 +120,132 @@ void EditorApplication::updateCameras(f32 dt) {
         // jugador. El cursor esta libre para clickear botones / items.
         if (nowBlocked) return;
         if (!m_physicsWorld) return;
+
+        // F2H67 Bloque F: detectar flanco up->down de tecla F para
+        // mount/dismount del vehiculo. Si el player no esta montado y hay
+        // un vehiculo dentro de radio 3m del char position, monta. Si ya
+        // esta montado, desmonta (teleport a costado del auto).
+        const Uint8* keys_F2H67 = SDL_GetKeyboardState(nullptr);
+        const bool fPressed = !Mood::GameState::dialogActive()
+            && keys_F2H67[SDL_SCANCODE_F] != 0;
+        const bool fJustPressed = fPressed && !m_fKeyPrevFrame;
+        m_fKeyPrevFrame = fPressed;
+
+        if (fJustPressed && m_scene) {
+            if (m_playerMountedVehicleEntity == 0) {
+                // ON-FOOT -> intentar mount. Scanear scene buscando entities
+                // con VehicleComponent cerca del char.
+                const glm::vec3 charPos = (m_playerCharId != 0)
+                    ? m_physicsWorld->characterPosition(m_playerCharId)
+                    : m_playCamera.position();
+                constexpr f32 k_mountRadius = 3.0f;
+                u32 bestHandle = 0;
+                f32 bestDistSq = k_mountRadius * k_mountRadius;
+                m_scene->forEach<VehicleComponent, TransformComponent>(
+                    [&](Entity e, VehicleComponent&, TransformComponent& tf) {
+                        const glm::vec3 d = tf.position - charPos;
+                        const f32 dsq = glm::dot(d, d);
+                        if (dsq < bestDistSq) {
+                            bestDistSq = dsq;
+                            bestHandle = static_cast<u32>(e.handle());
+                        }
+                    });
+                if (bestHandle != 0) {
+                    m_playerMountedVehicleEntity = bestHandle;
+                    SDL_SetRelativeMouseMode(SDL_TRUE);  // chase cam usa mouse
+                    Log::editor()->info(
+                        "F2H67: mount vehicle (entity handle {})", bestHandle);
+                } else {
+                    Log::editor()->info(
+                        "F2H67: no hay vehicle dentro de {}m del player",
+                        k_mountRadius);
+                }
+            } else {
+                // MONTADO -> desmontar. Teleport el char al costado derecho
+                // del chassis y dejar el auto detenido.
+                Entity vehEnt = m_scene->entityFromHandle(
+                    static_cast<entt::entity>(m_playerMountedVehicleEntity));
+                if (vehEnt && vehEnt.hasComponent<VehicleComponent>()) {
+                    auto& veh = vehEnt.getComponent<VehicleComponent>();
+                    // Resetear input para que el auto no salga acelerado.
+                    veh.inputThrottle  = 0.0f;
+                    veh.inputBrake     = 1.0f;  // brake on para detener
+                    veh.inputSteer     = 0.0f;
+                    veh.inputHandbrake = 1.0f;
+                    if (vehEnt.hasComponent<TransformComponent>()
+                        && m_playerCharId != 0) {
+                        const auto& tf = vehEnt.getComponent<TransformComponent>();
+                        // Costado derecho del auto + 0.5m hacia arriba.
+                        // Para un sedan ~1.8m ancho, 1.5m de offset deja
+                        // espacio al jugador sin clip-through con la carroceria.
+                        const glm::vec3 dismountPos =
+                            tf.position + glm::vec3(1.5f, 1.0f, 0.0f);
+                        m_physicsWorld->setCharacterPosition(
+                            m_playerCharId, dismountPos);
+                    }
+                }
+                m_playerMountedVehicleEntity = 0;
+                Log::editor()->info("F2H67: dismount");
+            }
+        }
+
+        // Si esta montado, branchear a logica de vehicle drive y skipear
+        // el resto del char controller (que de todas formas no avanza
+        // porque queda pisado por la chase cam sync de abajo).
+        if (m_playerMountedVehicleEntity != 0 && m_scene) {
+            Entity vehEnt = m_scene->entityFromHandle(
+                static_cast<entt::entity>(m_playerMountedVehicleEntity));
+            if (!vehEnt || !vehEnt.hasComponent<VehicleComponent>()) {
+                // El vehiculo fue borrado del scene -- volver on-foot.
+                m_playerMountedVehicleEntity = 0;
+                return;
+            }
+            auto& veh = vehEnt.getComponent<VehicleComponent>();
+
+            // --- Mouse-look para chase cam (orbit alrededor del chasis) ---
+            int mx = 0, my = 0;
+            SDL_GetRelativeMouseState(&mx, &my);
+            if (mx != 0 || my != 0) {
+                m_playCamera.applyMouseMove(
+                    static_cast<f32>(mx), static_cast<f32>(my));
+            }
+
+            // --- WASD -> input al vehicle ---
+            // W = throttle forward, S = brake (Jolt auto-trans pasa a
+            // reverse si brake mantenido y vehicle detenido). A/D = steer.
+            // Space = handbrake (derrapes controlados).
+            veh.inputThrottle  = keys_F2H67[SDL_SCANCODE_W] ? 1.0f : 0.0f;
+            veh.inputBrake     = keys_F2H67[SDL_SCANCODE_S] ? 1.0f : 0.0f;
+            veh.inputSteer     = 0.0f;
+            if (keys_F2H67[SDL_SCANCODE_A]) veh.inputSteer -= 1.0f;
+            if (keys_F2H67[SDL_SCANCODE_D]) veh.inputSteer += 1.0f;
+            veh.inputHandbrake = keys_F2H67[SDL_SCANCODE_SPACE] ? 1.0f : 0.0f;
+
+            // --- Chase cam: posicionar m_playCamera detras-arriba del chasis ---
+            // Yaw/pitch del FpsCamera funcionan como el angulo del orbit.
+            // Cam pos = chassisPos - forward(yaw,pitch) * distance + Y up.
+            // Como forward apunta hacia el chassis, el camera "mira" hacia
+            // el auto naturalmente sin necesidad de lookAt.
+            const glm::vec3 chassisPos = vehEnt.hasComponent<TransformComponent>()
+                ? vehEnt.getComponent<TransformComponent>().position
+                : glm::vec3(0.0f);
+            const glm::vec3 fwd = m_playCamera.forward();
+            const glm::vec3 camPos =
+                chassisPos
+                - fwd * m_chaseDistance
+                + glm::vec3(0.0f, m_chaseHeightOffset, 0.0f);
+            m_playCamera.setPosition(camPos);
+
+            // Char controller queda quieto mientras se conduce (sino el
+            // EditorScene::updateRigidBodies lo seguiria moviendo a la cam
+            // pos que ahora es la chase cam, lo cual lo arrastraria por la
+            // escena en pose absurda).
+            if (m_playerCharId != 0) {
+                m_physicsWorld->setCharacterMovement(
+                    m_playerCharId, glm::vec3(0.0f));
+            }
+            return;  // No ejecutar el char controller block que sigue.
+        }
 
         // Hito 30: shape standing/crouching + lazy create.
         constexpr f32 k_charHalfHeightStand  = 0.5f;

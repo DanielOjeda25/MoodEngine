@@ -682,6 +682,22 @@ private:
     // EditorScene::updateRigidBodies para escalar la amplitud del bob.
     f32 m_horizSpeed01 = 0.0f;
 
+    // F2H67 Bloque F: estado de mount/dismount del player a un vehiculo.
+    // - m_playerMountedVehicleEntity: raw entt::entity handle (u32) de la
+    //   entity con VehicleComponent que el player esta conduciendo. 0 = on
+    //   foot (default). Mientras !=0: WASD escribe input al vehicle en
+    //   vez de moverse el char controller; la camara opera en chase-cam
+    //   orbital alrededor del chassis.
+    // - m_fKeyPrevFrame: flanco up->down de tecla F. Mount/dismount toggle.
+    // - m_chaseDistance: distancia de la cam al chassis en chase mode. Se
+    //   ajusta con scroll wheel (futuro polish). SA-default: 5 m atras.
+    // - m_chaseHeightOffset: cuanto arriba mirar respecto al centro del
+    //   chassis (apunta al techo del auto, no al piso). SA-feel: 1.5 m.
+    u32 m_playerMountedVehicleEntity = 0;
+    bool m_fKeyPrevFrame = false;
+    f32 m_chaseDistance     = 5.0f;
+    f32 m_chaseHeightOffset = 1.5f;
+
     // Mapa jugable (Hito 4). Se renderiza centrado en el origen del mundo;
     // tileSize=3m (escala SI realista, Hito 5 Bloque 0). Se reemplaza al
     // abrir proyectos y se resetea al mapa de prueba al cerrar.
