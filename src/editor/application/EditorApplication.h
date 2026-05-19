@@ -688,13 +688,17 @@ private:
     //   foot (default). Mientras !=0: WASD escribe input al vehicle en
     //   vez de moverse el char controller; la camara opera en chase-cam
     //   orbital alrededor del chassis.
-    // - m_fKeyPrevFrame: flanco up->down de tecla F. Mount/dismount toggle.
+    // - m_fEventPressed: latch del evento SDL_KEYDOWN de F (con repeat=0)
+    //   capturado en processEvents. updateCameras lo consume y resetea.
+    //   Se usa event-driven (no polling con prev-frame) para evitar perder
+    //   el press si el frame del editor se demora y el usuario apreta+suelta
+    //   F dentro de un tick — el repeat=0 del SDL event ya da edge.
     // - m_chaseDistance: distancia de la cam al chassis en chase mode. Se
     //   ajusta con scroll wheel (futuro polish). SA-default: 5 m atras.
     // - m_chaseHeightOffset: cuanto arriba mirar respecto al centro del
     //   chassis (apunta al techo del auto, no al piso). SA-feel: 1.5 m.
     u32 m_playerMountedVehicleEntity = 0;
-    bool m_fKeyPrevFrame = false;
+    bool m_fEventPressed = false;
     f32 m_chaseDistance     = 5.0f;
     f32 m_chaseHeightOffset = 1.5f;
 

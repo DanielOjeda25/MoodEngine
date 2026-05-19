@@ -70,7 +70,10 @@ void EditorApplication::exitPlayMode() {
     m_crouching    = false;
     // F2H67 Bloque F: limpiar mount state (proximo Play arranca on-foot).
     m_playerMountedVehicleEntity = 0;
-    m_fKeyPrevFrame              = false;
+    m_fEventPressed              = false;
+    // F2H67 polish: limpiar el interact_prompt — si quedo "[F] Subir al ..."
+    // del frame anterior, al salir de Play no queremos verlo pegado.
+    Mood::GameState::hud().interact_prompt.clear();
     // F2H41 fix lateral: resetear m_playCamera a la pose inicial. En
     // Play Mode, EditorScene::updateRigidBodies setea la cam cada
     // frame al char position. Si el char cae al vacio (camina fuera
@@ -121,15 +124,15 @@ void EditorApplication::updateCameras(f32 dt) {
         if (nowBlocked) return;
         if (!m_physicsWorld) return;
 
-        // F2H67 Bloque F: detectar flanco up->down de tecla F para
-        // mount/dismount del vehiculo. Si el player no esta montado y hay
-        // un vehiculo dentro de radio 3m del char position, monta. Si ya
-        // esta montado, desmonta (teleport a costado del auto).
+        // F2H67 Bloque F (polish): mount/dismount toggle via SDL event
+        // latch (m_fEventPressed) en vez de polling con prev-frame. Mas
+        // robusto cuando el frame tarda y el usuario apreta+suelta F
+        // dentro del mismo tick — el repeat=0 del SDL event ya
+        // garantiza edge detection.
         const Uint8* keys_F2H67 = SDL_GetKeyboardState(nullptr);
-        const bool fPressed = !Mood::GameState::dialogActive()
-            && keys_F2H67[SDL_SCANCODE_F] != 0;
-        const bool fJustPressed = fPressed && !m_fKeyPrevFrame;
-        m_fKeyPrevFrame = fPressed;
+        const bool fJustPressed =
+            m_fEventPressed && !Mood::GameState::dialogActive();
+        m_fEventPressed = false;  // consumir el latch siempre
 
         if (fJustPressed && m_scene) {
             if (m_playerMountedVehicleEntity == 0) {
@@ -198,9 +201,14 @@ void EditorApplication::updateCameras(f32 dt) {
             if (!vehEnt || !vehEnt.hasComponent<VehicleComponent>()) {
                 // El vehiculo fue borrado del scene -- volver on-foot.
                 m_playerMountedVehicleEntity = 0;
+                Mood::GameState::hud().interact_prompt.clear();
                 return;
             }
             auto& veh = vehEnt.getComponent<VehicleComponent>();
+
+            // --- Hint UI cuando montado ---
+            // Mantenido cada frame: el HUD lo limpia al exit Play.
+            Mood::GameState::hud().interact_prompt = "[F] Bajar";
 
             // --- Mouse-look para chase cam (orbit alrededor del chasis) ---
             int mx = 0, my = 0;
@@ -211,12 +219,39 @@ void EditorApplication::updateCameras(f32 dt) {
             }
 
             // --- WASD -> input al vehicle ---
-            // W = throttle forward, S = brake (Jolt auto-trans pasa a
-            // reverse si brake mantenido y vehicle detenido). A/D = steer.
+            // W = throttle forward, S = brake-or-reverse (logica estilo SA:
+            // si el vehicle se mueve adelante > 1 m/s, S frena; si esta
+            // parado o yendo atras, S acelera en reversa). A/D = steer.
             // Space = handbrake (derrapes controlados).
-            veh.inputThrottle  = keys_F2H67[SDL_SCANCODE_W] ? 1.0f : 0.0f;
-            veh.inputBrake     = keys_F2H67[SDL_SCANCODE_S] ? 1.0f : 0.0f;
-            veh.inputSteer     = 0.0f;
+            const bool wHeld = keys_F2H67[SDL_SCANCODE_W] != 0;
+            const bool sHeld = keys_F2H67[SDL_SCANCODE_S] != 0;
+            // Leer velocidad forward actual para decidir reverse vs brake.
+            f32 forwardSpeed = 0.0f;
+            if (m_physicsWorld && veh.vehicleId != 0) {
+                PhysicsWorld::VehicleState st{};
+                if (m_physicsWorld->readVehicleState(veh.vehicleId, st)) {
+                    forwardSpeed = st.forwardSpeed;
+                }
+            }
+            if (wHeld) {
+                veh.inputThrottle = 1.0f;
+                veh.inputBrake    = 0.0f;
+            } else if (sHeld) {
+                // GTA SA: S frena cuando avanzas, mete reverse cuando estas
+                // casi quieto o yendo para atras. Umbral 1 m/s para evitar
+                // chattering en la transicion brake<->reverse.
+                if (forwardSpeed > 1.0f) {
+                    veh.inputThrottle = 0.0f;
+                    veh.inputBrake    = 1.0f;
+                } else {
+                    veh.inputThrottle = -1.0f;  // reverse (clamp [-1,1])
+                    veh.inputBrake    = 0.0f;
+                }
+            } else {
+                veh.inputThrottle = 0.0f;
+                veh.inputBrake    = 0.0f;
+            }
+            veh.inputSteer = 0.0f;
             if (keys_F2H67[SDL_SCANCODE_A]) veh.inputSteer -= 1.0f;
             if (keys_F2H67[SDL_SCANCODE_D]) veh.inputSteer += 1.0f;
             veh.inputHandbrake = keys_F2H67[SDL_SCANCODE_SPACE] ? 1.0f : 0.0f;
@@ -245,6 +280,39 @@ void EditorApplication::updateCameras(f32 dt) {
                     m_playerCharId, glm::vec3(0.0f));
             }
             return;  // No ejecutar el char controller block que sigue.
+        }
+
+        // F2H67 polish: hint UI on-foot. Si hay un vehicle dentro de radio
+        // 3m del player, mostrar "[F] Subir al <tag>" para que el dev sepa
+        // que la tecla F monta. Idempotente: re-evaluamos cada frame y
+        // limpiamos cuando ya no aplica (mismo patron que ItemPickupSystem).
+        // Skip si dialog activo (ese sistema ya owner-ea el prompt).
+        if (m_scene && !Mood::GameState::dialogActive()) {
+            const glm::vec3 charPos = (m_playerCharId != 0)
+                ? m_physicsWorld->characterPosition(m_playerCharId)
+                : m_playCamera.position();
+            constexpr f32 k_mountRadius = 3.0f;
+            std::string bestTag;
+            f32 bestDistSq = k_mountRadius * k_mountRadius;
+            m_scene->forEach<VehicleComponent, TransformComponent, TagComponent>(
+                [&](Entity, VehicleComponent&, TransformComponent& tf,
+                    TagComponent& tag) {
+                    const glm::vec3 d = tf.position - charPos;
+                    const f32 dsq = glm::dot(d, d);
+                    if (dsq < bestDistSq) {
+                        bestDistSq = dsq;
+                        bestTag    = tag.name;
+                    }
+                });
+            auto& promptRef = Mood::GameState::hud().interact_prompt;
+            if (!bestTag.empty()) {
+                std::string desired = "[F] Subir al " + bestTag;
+                if (promptRef != desired) promptRef = std::move(desired);
+            } else if (!promptRef.empty()
+                       && promptRef.rfind("[F] Subir al ", 0) == 0) {
+                // Nosotros habiamos puesto el prompt y ya no aplica.
+                promptRef.clear();
+            }
         }
 
         // Hito 30: shape standing/crouching + lazy create.

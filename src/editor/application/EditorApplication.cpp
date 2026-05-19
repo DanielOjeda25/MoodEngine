@@ -78,6 +78,15 @@ void EditorApplication::processEvents() {
             m_debugDraw = !m_debugDraw;
             Log::editor()->info("Debug draw {}", m_debugDraw ? "activado" : "desactivado");
         } else if (ev.type == SDL_KEYDOWN &&
+                   ev.key.keysym.sym == SDLK_f &&
+                   ev.key.repeat == 0 &&
+                   m_mode == EditorMode::Play &&
+                   !ImGui::GetIO().WantTextInput) {
+            // F2H67 polish: mount/dismount toggle. Latch consumido por
+            // updateCameras. Edge detection via repeat==0 — mas robusto
+            // que el polling con prev-frame anterior.
+            m_fEventPressed = true;
+        } else if (ev.type == SDL_KEYDOWN &&
                    ev.key.keysym.sym == SDLK_s &&
                    (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
                    ev.key.repeat == 0 &&

@@ -280,7 +280,9 @@ public:
     //
     // El input (throttle/brake/steer/handbrake) se setea cada frame via
     // `setVehicleInput`. El wrapper internamente convierte:
-    //   - throttle: gas pedal [0, 1] => `WheeledVehicleController::mForward`
+    //   - throttle: [-1, 1] => `WheeledVehicleController::mForward` firmado.
+    //               Negativo => transmission auto entra a reverse gear
+    //               cuando el vehicle esta detenido o yendo atras.
     //   - brake:    brake pedal [0, 1]
     //   - steer:    [-1, 1] (izq..der)
     //   - handbrake: [0, 1]
@@ -317,10 +319,10 @@ public:
     /// @brief Setea el input del vehiculo este frame. Persiste hasta que
     ///        sea sobreescrito. El `WheeledVehicleController` consume
     ///        estos valores en su `PreCollide` interno (step listener).
-    /// @param throttle [0, 1] gas pedal. Para reverse, usar `brake=1` con
-    ///        velocidad casi cero — el automatic transmission cambia a
-    ///        reversa cuando el dev mantiene el brake pedal pisado y el
-    ///        vehicle esta detenido.
+    /// @param throttle [-1, 1] gas pedal firmado. Positivo = forward;
+    ///        negativo = reverse (auto transmission detecta el sign y
+    ///        engrana la marcha de reversa cuando el vehicle esta
+    ///        parado o yendo atras).
     /// @param brake    [0, 1].
     /// @param steer    [-1, 1]. Negativo = izquierda.
     /// @param handbrake [0, 1].

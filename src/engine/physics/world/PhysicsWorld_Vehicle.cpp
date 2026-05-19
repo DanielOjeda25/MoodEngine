@@ -309,15 +309,19 @@ void PhysicsWorld::setVehicleInput(u32 vehicleId, f32 throttle, f32 brake,
     if (it == m_impl->vehicles.end() || it->second.constraint == nullptr) return;
 
     // Clamps defensivos (Lua puede mandar fuera de rango).
-    throttle  = std::clamp(throttle,  0.0f, 1.0f);
+    // F2H67 polish: throttle es [-1, 1] para permitir reverse explicito
+    // (S held cuando vehicle ~quieto, estilo GTA SA). Jolt's
+    // WheeledVehicleController::SetDriverInput acepta forward firmado y
+    // la transmission auto detecta el sign para meter reverse gear.
+    throttle  = std::clamp(throttle, -1.0f, 1.0f);
     brake     = std::clamp(brake,     0.0f, 1.0f);
     steer     = std::clamp(steer,    -1.0f, 1.0f);
     handbrake = std::clamp(handbrake, 0.0f, 1.0f);
 
-    // Convencion Jolt: `mForward` = throttle pero firmado (auto trans
-    // mete reverse cuando es negativo Y el vehiculo esta detenido). Para
-    // arcade SA mas simple: `forward = throttle` salvo que steer hint sea
-    // de reversa via brake-press-on-stop, que ya maneja el auto.
+    // Convencion Jolt: `mForward` firmado. Negativo => transmission
+    // mete reverse gear cuando el chassis esta detenido o yendo atras.
+    // Positivo => forward. El input layer decide cuando S es brake
+    // (forward speed > umbral) vs reverse (parado o ya yendo atras).
     JPH::WheeledVehicleController* ctrl =
         static_cast<JPH::WheeledVehicleController*>(
             it->second.constraint->GetController());
@@ -328,8 +332,8 @@ void PhysicsWorld::setVehicleInput(u32 vehicleId, f32 throttle, f32 brake,
     // que algo lo despierte por colision).
     JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
     if (!it->second.chassisBodyId.IsInvalid()) {
-        if (throttle > 0.01f || brake > 0.01f || std::abs(steer) > 0.01f
-            || handbrake > 0.01f) {
+        if (std::abs(throttle) > 0.01f || brake > 0.01f
+            || std::abs(steer) > 0.01f || handbrake > 0.01f) {
             bi.ActivateBody(it->second.chassisBodyId);
         }
     }
