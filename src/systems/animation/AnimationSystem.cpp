@@ -71,8 +71,20 @@ thread_local std::vector<glm::mat4> g_localPose;
 
 void AnimationSystem::update(Scene& scene, AssetManager& assets, f32 dt) {
     scene.forEach<MeshRendererComponent, AnimatorComponent, SkeletonComponent>(
-        [&](Entity, MeshRendererComponent& mr, AnimatorComponent& anim,
+        [&](Entity e, MeshRendererComponent& mr, AnimatorComponent& anim,
             SkeletonComponent& skel) {
+            // F2H66 polish: si la entity esta ragdolleando, NO tocamos
+            // skel.skinningMatrices -- el RagdollSystem es el unico que
+            // las escribe. Pre-fix: AnimationSystem siempre pisaba las
+            // skinning matrices con la pose congelada del Animator (aun
+            // con playing=false) -> el ragdoll quedaba creado en physics
+            // pero el mesh seguia viendose en la pose idle, "ni se
+            // inmutaba".
+            if (e.hasComponent<RagdollComponent>() &&
+                e.getComponent<RagdollComponent>().state
+                    == RagdollComponent::State::Ragdolling) {
+                return;
+            }
             MeshAsset* asset = assets.getMesh(mr.mesh);
             if (asset == nullptr || !asset->hasSkeleton()) {
                 skel.skinningMatrices.clear();

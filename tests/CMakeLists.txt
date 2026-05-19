@@ -189,6 +189,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/inventory/ItemSpawn.cpp      # F2H52 H5
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Inventory.cpp # F2H52 E
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Quest.cpp # F2H53 E
+    ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Ragdoll.cpp # F2H66 E
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogScriptHost.cpp # F2H48.1
 )
 
