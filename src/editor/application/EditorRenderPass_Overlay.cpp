@@ -14,6 +14,8 @@
 #include "core/math/AABB.h"
 #include "core/math/Ray.h"  // AUDIT-3: pickRayFromNdc
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/physics/ragdoll/RagdollLayout.h"   // F2H66 F: overlay ragdolls
+#include "engine/physics/world/PhysicsWorld.h"      // F2H66 F: readRagdollPose
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/render/backend/opengl/OpenGLDebugRenderer.h"
@@ -24,6 +26,9 @@
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/queries/ScenePick.h"
 #include "engine/scene/queries/ViewportPick.h"
+
+#include <cmath>     // F2H66 F: sin/cos para wire capsules
+#include <vector>
 
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
@@ -193,6 +198,98 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                                      glm::vec3(1.0f, 1.0f, 0.2f));
                     }
                 });
+
+            // F2H66 Bloque F: overlay de ragdolls. Para cada entidad con
+            // RagdollComponent en estado Ragdolling, dibujamos cada body
+            // como wireframe capsule (linea central + 2 circulos en los
+            // extremos + 4 longitudinales) y lineas amarillas parent->
+            // child para visualizar la jerarquia de constraints. Util
+            // para diagnosticar pose anatomica (codos al reves, brazos
+            // mal limitados) sin tener que loguear matrices.
+            if (m_assetManager && m_physicsWorld) {
+                const glm::vec3 capsuleColor(1.0f, 0.55f, 0.10f);  // naranja
+                const glm::vec3 boneConnColor(1.0f, 0.85f, 0.20f); // amarillo
+                std::vector<glm::mat4> partWorlds;  // buffer reusado
+                m_scene->forEach<RagdollComponent, MeshRendererComponent>(
+                    [&](Entity, RagdollComponent& rag,
+                        MeshRendererComponent& mr) {
+                        if (rag.state != RagdollComponent::State::Ragdolling) return;
+                        if (rag.ragdollId == 0) return;
+                        const MeshAsset* mesh = m_assetManager->getMesh(mr.mesh);
+                        if (mesh == nullptr || !mesh->skeleton.has_value()) return;
+                        if (!m_physicsWorld->readRagdollPose(rag.ragdollId,
+                                                              partWorlds)) {
+                            return;
+                        }
+                        const auto layout = ragdoll::buildMixamoLayout(
+                            *mesh->skeleton, rag.totalMass, rag.limbRadius);
+                        if (layout.bones.size() != partWorlds.size()) return;
+
+                        // Helper: dibuja wireframe capsule en world space.
+                        // axis = Y local del transform (default Jolt capsule).
+                        auto drawWireCapsule = [&](const glm::mat4& xform,
+                                                     f32 halfHeight, f32 radius,
+                                                     const glm::vec3& color) {
+                            const glm::vec3 center(xform[3]);
+                            const glm::vec3 axis = glm::normalize(
+                                glm::vec3(xform[1]));
+                            // 2 tangentes perpendiculares al axis (basis
+                            // ortogonal estable para los circulos).
+                            glm::vec3 t1 = glm::cross(axis, glm::vec3(1, 0, 0));
+                            if (glm::length(t1) < 0.1f) {
+                                t1 = glm::cross(axis, glm::vec3(0, 0, 1));
+                            }
+                            t1 = glm::normalize(t1);
+                            const glm::vec3 t2 = glm::cross(axis, t1);
+                            const glm::vec3 endA = center - axis * halfHeight;
+                            const glm::vec3 endB = center + axis * halfHeight;
+                            // Linea central (eje del capsule).
+                            dbg.drawLine(endA, endB, color);
+                            // 2 circulos en endpoints (12 segmentos cada uno).
+                            constexpr int kSeg = 12;
+                            for (int e = 0; e < 2; ++e) {
+                                const glm::vec3 ec = (e == 0) ? endA : endB;
+                                glm::vec3 prev = ec + t1 * radius;
+                                for (int i = 1; i <= kSeg; ++i) {
+                                    const f32 a = static_cast<f32>(i) /
+                                        static_cast<f32>(kSeg) * 6.28318530718f;
+                                    const glm::vec3 p = ec
+                                        + t1 * (radius * std::cos(a))
+                                        + t2 * (radius * std::sin(a));
+                                    dbg.drawLine(prev, p, color);
+                                    prev = p;
+                                }
+                            }
+                            // 4 longitudinales conectando los circulos
+                            // (en X+, X-, Z+, Z- del plano tangente).
+                            for (int i = 0; i < 4; ++i) {
+                                const f32 a = static_cast<f32>(i) / 4.0f
+                                    * 6.28318530718f;
+                                const glm::vec3 off =
+                                    t1 * (radius * std::cos(a))
+                                    + t2 * (radius * std::sin(a));
+                                dbg.drawLine(endA + off, endB + off, color);
+                            }
+                        };
+
+                        for (usize i = 0; i < layout.bones.size(); ++i) {
+                            const auto& b = layout.bones[i];
+                            drawWireCapsule(partWorlds[i],
+                                             b.capsuleHalfHeight,
+                                             b.capsuleRadius, capsuleColor);
+                            // Linea amarilla parent->child (visualiza
+                            // donde estan los constraints).
+                            if (b.parentRagdollIndex >= 0 &&
+                                b.parentRagdollIndex <
+                                    static_cast<int>(partWorlds.size())) {
+                                const glm::vec3 myC(partWorlds[i][3]);
+                                const glm::vec3 parentC(
+                                    partWorlds[b.parentRagdollIndex][3]);
+                                dbg.drawLine(myC, parentC, boneConnColor);
+                            }
+                        }
+                    });
+            }
         }
     }
 
