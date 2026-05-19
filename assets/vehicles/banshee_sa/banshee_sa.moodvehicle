@@ -1,0 +1,70 @@
+{
+  "name": "Banshee_SA",
+  "_comment": "F2H67: sedan estilo GTA San Andreas. Arcade-ish (alta traccion, brakes fuertes, no flipea). 4WD por default.",
+  "chassis": {
+    "halfExtents": [0.9, 0.5, 2.0],
+    "mass": 1500.0,
+    "centerOfMassLocal": [0.0, -0.20, 0.0]
+  },
+  "engine": {
+    "maxTorque": 500.0,
+    "maxTorqueRPM": 4000.0,
+    "maxRPM": 6000.0,
+    "minRPM": 1000.0,
+    "inertia": 0.5,
+    "angularDamping": 0.2,
+    "gearRatios": [2.66, 1.78, 1.30, 1.00, 0.74],
+    "reverseGearRatios": [2.90],
+    "finalDriveRatio": 3.42,
+    "brakeTorque": 1500.0,
+    "handbrakeTorque": 4000.0
+  },
+  "maxSteerAngleDeg": 35.0,
+  "steerLerpSpeed": 4.0,
+  "wheels": [
+    {
+      "name": "FL",
+      "attachLocal": [-0.85, -0.30, 1.50],
+      "radius": 0.35,
+      "width": 0.20,
+      "longitudinalFriction": 1.6,
+      "lateralFriction": 1.4,
+      "driven": true,
+      "steered": true,
+      "handbraked": false
+    },
+    {
+      "name": "FR",
+      "attachLocal": [0.85, -0.30, 1.50],
+      "radius": 0.35,
+      "width": 0.20,
+      "longitudinalFriction": 1.6,
+      "lateralFriction": 1.4,
+      "driven": true,
+      "steered": true,
+      "handbraked": false
+    },
+    {
+      "name": "RL",
+      "attachLocal": [-0.85, -0.30, -1.50],
+      "radius": 0.35,
+      "width": 0.20,
+      "longitudinalFriction": 1.6,
+      "lateralFriction": 1.4,
+      "driven": true,
+      "steered": false,
+      "handbraked": true
+    },
+    {
+      "name": "RR",
+      "attachLocal": [0.85, -0.30, -1.50],
+      "radius": 0.35,
+      "width": 0.20,
+      "longitudinalFriction": 1.6,
+      "lateralFriction": 1.4,
+      "driven": true,
+      "steered": false,
+      "handbraked": true
+    }
+  ]
+}

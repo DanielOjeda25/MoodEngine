@@ -1,0 +1,185 @@
+{
+  "brushes": [
+    {
+      "blockColor": [0.30, 0.30, 0.32, 1.0],
+      "halfExtents": [10.0, 0.5, 10.0],
+      "kind": "solid",
+      "position": [0.0, -0.5, 0.0],
+      "rotationEuler": [0.0, 0.0, 0.0],
+      "tag": "Floor"
+    },
+    {
+      "blockColor": [0.55, 0.35, 0.20, 1.0],
+      "halfExtents": [3.0, 0.3, 3.0],
+      "kind": "solid",
+      "position": [-7.0, 1.0, 0.0],
+      "rotationEuler": [0.0, 0.0, 15.0],
+      "tag": "Rampa"
+    },
+    {
+      "blockColor": [0.40, 0.40, 0.45, 1.0],
+      "halfExtents": [10.0, 1.0, 0.3],
+      "kind": "solid",
+      "position": [0.0, 1.0, -10.0],
+      "rotationEuler": [0.0, 0.0, 0.0],
+      "tag": "ParedNorte"
+    },
+    {
+      "blockColor": [0.40, 0.40, 0.45, 1.0],
+      "halfExtents": [10.0, 1.0, 0.3],
+      "kind": "solid",
+      "position": [0.0, 1.0, 10.0],
+      "rotationEuler": [0.0, 0.0, 0.0],
+      "tag": "ParedSur"
+    },
+    {
+      "blockColor": [0.40, 0.40, 0.45, 1.0],
+      "halfExtents": [0.3, 1.0, 10.0],
+      "kind": "solid",
+      "position": [10.0, 1.0, 0.0],
+      "rotationEuler": [0.0, 0.0, 0.0],
+      "tag": "ParedEste"
+    }
+  ],
+  "entities": [
+    {
+      "mesh_renderer": {
+        "materials": [""],
+        "mesh_path": "vehicles/banshee_sa/sedan.fbx",
+        "sub_mesh_name": "body"
+      },
+      "tag": "Banshee",
+      "transform": {
+        "position": [0.0, 1.0, 0.0],
+        "rotationEuler": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      },
+      "vehicle": {
+        "configPath": "vehicles/banshee_sa/banshee_sa.moodvehicle"
+      }
+    },
+    {
+      "mesh_renderer": {
+        "materials": [""],
+        "mesh_path": "vehicles/banshee_sa/sedan.fbx",
+        "sub_mesh_name": "wheel-front-left"
+      },
+      "tag": "Wheel_FL",
+      "transform": {
+        "position": [-0.85, 0.7, 1.5],
+        "rotationEuler": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    },
+    {
+      "mesh_renderer": {
+        "materials": [""],
+        "mesh_path": "vehicles/banshee_sa/sedan.fbx",
+        "sub_mesh_name": "wheel-front-right"
+      },
+      "tag": "Wheel_FR",
+      "transform": {
+        "position": [0.85, 0.7, 1.5],
+        "rotationEuler": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    },
+    {
+      "mesh_renderer": {
+        "materials": [""],
+        "mesh_path": "vehicles/banshee_sa/sedan.fbx",
+        "sub_mesh_name": "wheel-back-left"
+      },
+      "tag": "Wheel_RL",
+      "transform": {
+        "position": [-0.85, 0.7, -1.5],
+        "rotationEuler": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    },
+    {
+      "mesh_renderer": {
+        "materials": [""],
+        "mesh_path": "vehicles/banshee_sa/sedan.fbx",
+        "sub_mesh_name": "wheel-back-right"
+      },
+      "tag": "Wheel_RR",
+      "transform": {
+        "position": [0.85, 0.7, -1.5],
+        "rotationEuler": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    }
+  ],
+  "height": 8,
+  "name": "vehicle_demo",
+  "tileSize": 3.0,
+  "tiles": [
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"}
+  ],
+  "version": 14,
+  "width": 8
+}
