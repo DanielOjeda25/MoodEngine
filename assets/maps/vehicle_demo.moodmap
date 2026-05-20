@@ -45,16 +45,16 @@
     {
       "mesh_renderer": {
         "materials": [""],
-        "mesh_path": "dmc_delorean/scene.gltf"
+        "mesh_path": "vehicles/delorean/delorean.glb"
       },
       "tag": "DeLorean",
       "transform": {
-        "position": [0.0, 1.0, 0.0],
+        "position": [0.0, 0.568, 0.0],
         "rotationEuler": [0.0, 180.0, 0.0],
-        "scale": [0.00015, 0.00015, 0.00015]
+        "scale": [1.0, 1.0, 1.0]
       },
       "vehicle": {
-        "configPath": "vehicles/banshee_sa/banshee_sa.moodvehicle"
+        "configPath": ""
       }
     },
     {
