@@ -16,6 +16,7 @@
 #include "engine/scripting/exposed/ExposedProperty.h" // Hito 24
 
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp> // F2H70: glm::quat para sync sin gimbal
 #include <glm/mat4x4.hpp>
 #include <glm/trigonometric.hpp>
 #include <glm/vec2.hpp>
@@ -39,24 +40,56 @@ struct TagComponent {
 };
 
 /// @brief Transform 3D con posicion / rotacion Euler (grados) / escala.
-///        Rotacion euler simplifica la UI del Inspector; si aparecen bugs
-///        de gimbal lock, migrar a quat internamente.
+///        Rotacion euler simplifica la UI del Inspector; F2H70 agrega un
+///        camino paralelo via `rotation` quaternion + flag `useQuaternion`
+///        para sistemas que necesitan sync sin gimbal lock (VehicleSystem
+///        leyendo poses de Jolt). El path por defecto sigue siendo euler
+///        (compatibilidad con serializacion existente + UI).
 struct TransformComponent {
     glm::vec3 position{0.0f};
     glm::vec3 rotationEuler{0.0f}; // X=pitch, Y=yaw, Z=roll; en grados
     glm::vec3 scale{1.0f};
 
+    // F2H70: rotacion como quaternion para sync sin gimbal lock. Cuando
+    // `useQuaternion == true`, `worldMatrix()` usa `rotation` en lugar de
+    // `rotationEuler`. Sistemas que extraen poses de matrices fisicas
+    // (VehicleSystem, RagdollSystem en F2H71+) lo activan via setter de
+    // matriz (mira `setWorldRotationFromMatrix`). El Inspector lo resetea
+    // a false cuando el usuario edita los campos euler para que la
+    // intencion del dev gane.
+    glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f}; // identity (w,x,y,z)
+    bool useQuaternion = false;
+
+    // F2H70 Bloque A: offset Y de auto-elevacion para el render.
+    // `worldMatrix()` aplica `position.y + pivotYOffset` para que el modelo
+    // se renderee elevado por encima de la posicion logica del entity.
+    // Caso de uso principal: vehicles con modelos cuyo origin esta en su
+    // centro vertical — el VehicleSystem (o el SceneLoader al cargar)
+    // setea `pivotYOffset = -aabbMin.y` y `position.y=0` del moodmap
+    // produce un auto apoyado en el piso. Sin persistir (runtime only) —
+    // se recalcula al cargar/spawnear. Drop-in para cualquier vehicle.
+    f32 pivotYOffset = 0.0f;
+
     TransformComponent() = default;
     TransformComponent(glm::vec3 p, glm::vec3 s = glm::vec3(1.0f))
         : position(p), scale(s) {}
 
-    /// @brief Matriz de modelo en coords de mundo. Orden: T * Ry * Rx * Rz * S
+    /// @brief Matriz de modelo en coords de mundo. Orden: T * R * S.
+    ///        Con `useQuaternion=false` (default): R = Ry * Rx * Rz
     ///        (yaw-pitch-roll; convencion FPS).
+    ///        Con `useQuaternion=true`: R = mat4_cast(rotation) — sin gimbal.
+    ///        F2H70: `pivotYOffset` se suma a `position.y` antes de translate.
     glm::mat4 worldMatrix() const {
-        glm::mat4 m = glm::translate(glm::mat4(1.0f), position);
-        m = glm::rotate(m, glm::radians(rotationEuler.y), glm::vec3(0, 1, 0));
-        m = glm::rotate(m, glm::radians(rotationEuler.x), glm::vec3(1, 0, 0));
-        m = glm::rotate(m, glm::radians(rotationEuler.z), glm::vec3(0, 0, 1));
+        glm::vec3 effectivePos = position;
+        effectivePos.y += pivotYOffset;
+        glm::mat4 m = glm::translate(glm::mat4(1.0f), effectivePos);
+        if (useQuaternion) {
+            m = m * glm::mat4_cast(rotation);
+        } else {
+            m = glm::rotate(m, glm::radians(rotationEuler.y), glm::vec3(0, 1, 0));
+            m = glm::rotate(m, glm::radians(rotationEuler.x), glm::vec3(1, 0, 0));
+            m = glm::rotate(m, glm::radians(rotationEuler.z), glm::vec3(0, 0, 1));
+        }
         m = glm::scale(m, scale);
         return m;
     }

@@ -19,9 +19,12 @@
 //   - Si la entity chassis tiene `parent_id`, las wheels se buscan en
 //     scope global -- los tags Wheel_* deben ser unicos en el mapa.
 
+#include "core/Types.h"
+
 namespace Mood {
 
 class AssetManager;
+class Entity;
 class PhysicsWorld;
 class Scene;
 
@@ -36,6 +39,18 @@ namespace VehicleSystem {
 ///                      En Bloque D v1 se ignora si `configPath` esta
 ///                      vacio -- usamos `makeDefaultSA()` como fallback.
 void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets);
+
+/// @brief F2H70 Bloque A: offset Y de auto-spawn-height para una entity
+///        vehicle. Calcula `-aabbMin.y` del MeshAsset asociado (via
+///        MeshRendererComponent) para que el bottom del modelo quede en
+///        `TC.position.y` independiente de la convencion de origin del
+///        modelo (base, centro vertical, etc.). Se aplica en 3 puntos:
+///        spawn del chassis Jolt, post-tick (restando del chassisWorld
+///        antes de escribir al TC, para que el TC quede "raw") y render
+///        path (3 sites en SceneRenderer / RenderBatching).
+///        Devuelve 0 si la entity no tiene MeshRendererComponent o si
+///        el mesh es invalido.
+f32 chassisRenderYOffset(Entity e, AssetManager& assets);
 
 } // namespace VehicleSystem
 } // namespace Mood

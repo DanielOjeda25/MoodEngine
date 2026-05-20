@@ -371,6 +371,24 @@ Entity applyOneEntity(const SavedEntity& se,
             veh.configPath = sv.configPath;
             veh.dirty = true;
             e.addComponent<VehicleComponent>(veh);
+
+            // F2H70 Bloque A: setea el pivotYOffset del TC para que el
+            // modelo se renderee elevado por encima de la posicion logica
+            // del entity en CUALQUIER MODO (Editor con o sin Play). El
+            // VehicleSystem materialize tambien lo setea como fallback
+            // para entities creadas via spawn manual del editor (que no
+            // pasan por SceneLoader). Sin esto, en Editor mode sin Play
+            // el modelo atraviesa el piso si su origin esta en su centro
+            // vertical.
+            if (e.hasComponent<MeshRendererComponent>() &&
+                e.hasComponent<TransformComponent>()) {
+                const auto& mr = e.getComponent<MeshRendererComponent>();
+                const MeshAsset* mesh = assets.getMesh(mr.mesh);
+                if (mesh != nullptr) {
+                    auto& tf = e.getComponent<TransformComponent>();
+                    tf.pivotYOffset = -mesh->aabbMin.y;
+                }
+            }
         }
         if (se.vehicleSeat.has_value()) {
             const auto& ss = *se.vehicleSeat;

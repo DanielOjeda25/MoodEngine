@@ -12,6 +12,9 @@
 
 #include <imgui.h>
 
+#include <glm/gtc/quaternion.hpp>
+#include <glm/trigonometric.hpp>
+
 #include <algorithm>
 
 namespace Mood {
@@ -87,11 +90,25 @@ void InspectorPanel::renderTransformSection(Entity e) {
         e.hasComponent<BrushComponent>() ||  // F2H14
         e.hasComponent<TriggerComponent>();
     if (showRotScale) {
+        // F2H70: si `useQuaternion=true` (post-sync de VehicleSystem o
+        // similar), refrescamos los euler displayed desde el quat real
+        // para que el Inspector muestre la rotacion actual del physics
+        // y no un valor stale del moodmap original. La conversion
+        // quat -> euler es ambigua (multiples euler representan la misma
+        // rotacion 3D) pero alcanza para que el dev edite desde un
+        // estado consistente. Al editar, abajo se resetea useQuaternion.
+        if (t.useQuaternion) {
+            t.rotationEuler = glm::degrees(glm::eulerAngles(t.rotation));
+        }
+
         // --- rotation ---
         const glm::vec3 preRot = t.rotationEuler;
         const std::string rotLabel = I18n::T("editor.panel.inspector.transform.rotation") + "##tr";
         if (ImGui::DragFloat3(rotLabel.c_str(), &t.rotationEuler.x, 0.5f)) {
             m_editedThisFrame = true;
+            // F2H70: la edicion manual del dev gana — reset useQuaternion
+            // para que `worldMatrix()` vuelva a usar el euler editado.
+            t.useQuaternion = false;
             applyDeltaToSelection(t.rotationEuler - preRot,
                 [](TransformComponent& tc) { return tc.rotationEuler; },
                 [](TransformComponent& tc, const glm::vec3& v) { tc.rotationEuler = v; },
