@@ -129,6 +129,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/systems/ai/NavSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/particles/ParticleSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/physics/PhysicsSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/physics/VehicleSystem.cpp  # F2H70.2: chassisRenderYOffset
     ${CMAKE_SOURCE_DIR}/src/systems/scripting/ScriptSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/physics/TriggerSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/exposed/ExposedProperty.cpp

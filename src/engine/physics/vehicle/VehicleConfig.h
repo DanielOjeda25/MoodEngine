@@ -165,4 +165,23 @@ VehicleConfig makeFallbackGenericSedan();
 ///        positivos. Util para tests + para gate de loader del asset.
 bool isValid(const VehicleConfig& cfg);
 
+/// @brief F2H70.2 Bloque B — distancia que comprime la suspension de una
+///        wheel bajo gravedad en equilibrio (mass-independent: depende solo
+///        de la frecuencia natural del resorte).
+///
+///        Para un sistema masa-resorte, en equilibrio:
+///          F_spring = F_gravedad => k * x = m * g
+///        Con `k = (2π * f)² * m` (definicion de frecuencia natural):
+///          x = g / (2π * f)²
+///
+///        Es decir, la `m` se cancela — el spring compression al settle
+///        natural depende solo de `f`. Para f=1.8 Hz (DeLorean default):
+///        x ≈ 0.077 m = 7.7 cm.
+///
+///        Usado por `VehicleSystem::chassisRenderYOffset` para elevar el
+///        spawn del chassis por encima del piso de modo que las wheels
+///        apoyen apenas la sim arranca (sino el chassis "cae" 7-10 cm
+///        post-spawn por el settle, generando un brinco visual).
+f32 wheelRestCompression(const WheelConfig& w);
+
 } // namespace Mood::vehicle

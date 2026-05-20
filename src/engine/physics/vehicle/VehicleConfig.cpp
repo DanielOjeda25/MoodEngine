@@ -77,6 +77,16 @@ VehicleConfig makeFallbackGenericSedan() {
     return cfg;
 }
 
+f32 wheelRestCompression(const WheelConfig& w) {
+    // x = g / (2π·f)² — independiente de masa. Default f=1.5 Hz → ~11 cm;
+    // f=1.8 Hz (DeLorean) → ~7.7 cm; f=2.5 Hz (sport stiff) → ~4 cm.
+    constexpr f32 k_g = 9.81f;
+    constexpr f32 k_twoPi = 2.0f * 3.14159265358979323846f;
+    const f32 omega = k_twoPi * w.suspensionFrequency;
+    if (omega <= 1e-6f) return 0.0f;  // freq invalida → no offset.
+    return k_g / (omega * omega);
+}
+
 namespace {
 bool isFinitePositive(f32 v) {
     return std::isfinite(v) && v > 0.0f;

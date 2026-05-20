@@ -11,6 +11,7 @@
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/scene/serialization/TilePersistence.h"
+#include "systems/physics/VehicleSystem.h"  // F2H70.2: chassisRenderYOffset
 
 #include "core/Log.h"
 
@@ -372,22 +373,19 @@ Entity applyOneEntity(const SavedEntity& se,
             veh.dirty = true;
             e.addComponent<VehicleComponent>(veh);
 
-            // F2H70 Bloque A: setea el pivotYOffset del TC para que el
-            // modelo se renderee elevado por encima de la posicion logica
-            // del entity en CUALQUIER MODO (Editor con o sin Play). El
-            // VehicleSystem materialize tambien lo setea como fallback
-            // para entities creadas via spawn manual del editor (que no
-            // pasan por SceneLoader). Sin esto, en Editor mode sin Play
-            // el modelo atraviesa el piso si su origin esta en su centro
-            // vertical.
-            if (e.hasComponent<MeshRendererComponent>() &&
-                e.hasComponent<TransformComponent>()) {
-                const auto& mr = e.getComponent<MeshRendererComponent>();
-                const MeshAsset* mesh = assets.getMesh(mr.mesh);
-                if (mesh != nullptr) {
-                    auto& tf = e.getComponent<TransformComponent>();
-                    tf.pivotYOffset = -mesh->aabbMin.y;
-                }
+            // F2H70 Bloque A + F2H70.2 Bloque B: setea el pivotYOffset del
+            // TC para que el modelo se renderee elevado por encima de la
+            // posicion logica del entity en CUALQUIER MODO (Editor con o sin
+            // Play). VehicleSystem materialize tambien lo setea como
+            // fallback para entities creadas via spawn manual del editor
+            // (que no pasan por SceneLoader). Sin esto, en Editor mode sin
+            // Play el modelo atraviesa el piso si su origin esta en su
+            // centro vertical, Y el chassis flotaba 7-10 cm post-Play por
+            // el spring settle de Jolt (F2H70.2 Bloque B agrega ese offset
+            // dentro de `chassisRenderYOffset`).
+            if (e.hasComponent<TransformComponent>()) {
+                auto& tf = e.getComponent<TransformComponent>();
+                tf.pivotYOffset = VehicleSystem::chassisRenderYOffset(e, assets);
             }
         }
         if (se.vehicleSeat.has_value()) {
