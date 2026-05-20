@@ -114,50 +114,20 @@ void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets) {
     // abajo (state==Ragdolling && ragdollId==0) se dispara el mismo tick,
     // asi no hay frame de delay visible.
     auto events = physicsWorld.drainImpactEvents();
-    if (!events.empty()) {
-        // F2H69-DEBUG: trazar el drain. Remover post-validacion del Bloque A.
-        Log::physics()->info(
-            "[F2H69-DEBUG] RagdollSystem drain: {} events", events.size());
-    }
     for (const auto& ev : events) {
         const u32 entHandle = physicsWorld.entityOfBody(ev.victimBodyId);
-        if (entHandle == 0) {
-            Log::physics()->info(
-                "[F2H69-DEBUG]   ev b={} -> entHandle=0 (no registrada)",
-                ev.victimBodyId);
-            continue;  // body sin entity asociada
-        }
+        if (entHandle == 0) continue;  // body sin entity asociada
         Entity victim = scene.entityFromHandle(
             static_cast<entt::entity>(entHandle));
-        if (!victim) {
-            Log::physics()->info(
-                "[F2H69-DEBUG]   ev b={} entHandle={} pero entity invalida",
-                ev.victimBodyId, entHandle);
-            continue;
-        }
-        if (!victim.hasComponent<RagdollComponent>()) {
-            Log::physics()->info(
-                "[F2H69-DEBUG]   ev entHandle={} sin RagdollComponent",
-                entHandle);
-            continue;
-        }
+        if (!victim) continue;
+        if (!victim.hasComponent<RagdollComponent>()) continue;
         auto& rd = victim.getComponent<RagdollComponent>();
-        if (rd.state != RagdollComponent::State::Animated) {
-            Log::physics()->info(
-                "[F2H69-DEBUG]   ev entHandle={} ya Ragdolling (skip)",
-                entHandle);
-            continue;
-        }
+        if (rd.state != RagdollComponent::State::Animated) continue;
         // Disparar la transicion. El spawnImpulse se aplica al torso en
         // el materialize de abajo (mismo path que activacion manual via
         // Lua `ragdoll.enable(tag, impulse)`).
         rd.state        = RagdollComponent::State::Ragdolling;
         rd.spawnImpulse = ev.impulseWorld;
-        Log::physics()->info(
-            "[F2H69-DEBUG]   TRANSITION entHandle={} -> Ragdolling "
-            "(closingSpeed={:.2f} m/s, impulse=({:.2f},{:.2f},{:.2f}))",
-            entHandle, ev.impactSpeed,
-            ev.impulseWorld.x, ev.impulseWorld.y, ev.impulseWorld.z);
     }
 
     scene.forEach<RagdollComponent, AnimatorComponent, SkeletonComponent,

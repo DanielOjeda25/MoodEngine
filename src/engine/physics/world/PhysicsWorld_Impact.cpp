@@ -69,22 +69,7 @@ void ContactListener::OnContactAdded(const JPH::Body& body1,
     const JPH::Vec3 normal = manifold.mWorldSpaceNormal;
     const f32 closingSpeed = vrel.Dot(normal);
 
-    const bool sensorInvolved = body1.IsSensor() || body2.IsSensor();
     if (closingSpeed < owner->impactSpeedThreshold) {
-        // F2H69-DEBUG: log solo si hay sensor — es exactamente el caso que
-        // queremos diagnosticar. Sin sensor, ruido de contactos legitimos
-        // sub-threshold (wheels vs floor, etc.) llena el log.
-        if (sensorInvolved) {
-            const u32 id1 = body1.GetID().GetIndexAndSequenceNumber();
-            const u32 id2 = body2.GetID().GetIndexAndSequenceNumber();
-            Log::physics()->info(
-                "[F2H69-DEBUG] sub-threshold (sensor involved): "
-                "b1={} (Dyn={}, Sensor={}) b2={} (Dyn={}, Sensor={}) "
-                "closingSpeed={:.2f} < {:.2f}",
-                id1, body1.IsDynamic(), body1.IsSensor(),
-                id2, body2.IsDynamic(), body2.IsSensor(),
-                closingSpeed, owner->impactSpeedThreshold);
-        }
         return;
     }
 
@@ -104,16 +89,6 @@ void ContactListener::OnContactAdded(const JPH::Body& body1,
 
     const u32 id1 = body1.GetID().GetIndexAndSequenceNumber();
     const u32 id2 = body2.GetID().GetIndexAndSequenceNumber();
-
-    // F2H69-DEBUG: log SOLO los impactos relevantes para diagnostico — los
-    // que involucran sensor. Los demas (ragdoll parts vs floor, wheels,
-    // body-vs-body normal) son ruido. Sigue encolando todos.
-    if (sensorInvolved) {
-        Log::physics()->info(
-            "[F2H69-DEBUG] ENCOLA: b1={} (Sensor={}) b2={} (Sensor={}) "
-            "closingSpeed={:.2f}",
-            id1, body1.IsSensor(), id2, body2.IsSensor(), closingSpeed);
-    }
 
     {
         std::lock_guard<std::mutex> lock(owner->impactQueueMutex);
