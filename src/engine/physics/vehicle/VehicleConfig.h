@@ -120,6 +120,18 @@ struct VehicleConfig {
     /// (LOCAL space). Y negativo = bajo el centro => mas estable, no flips.
     glm::vec3 centerOfMassLocal{0.0f, -0.20f, 0.0f};
 
+    /// F2H70.2: damping lineal del chasis (resistencia al movimiento sin
+    /// input). Aplicado a `JPH::BodyCreationSettings::mLinearDamping`. Sin
+    /// esto, el auto rueda infinito al soltar el acelerador (momentum sin
+    /// freno aerodinamico/friccional). Default 0.5 = arcade-ish (decae
+    /// notable en ~3-5s sin gas). 0.05 (Jolt default low) = sim-floppy.
+    f32 chassisLinearDamping = 0.5f;
+    /// F2H70.2: damping angular del chasis. Resistencia al giro libre (sin
+    /// steering input). Sin esto, un golpe lateral hace al chasis rotar
+    /// indefinidamente. Default 0.5 = arcade estable. Mismo path al
+    /// `mAngularDamping` de Jolt.
+    f32 chassisAngularDamping = 0.5f;
+
     /// 4 ruedas en orden fijo (FL, FR, RL, RR).
     std::array<WheelConfig, WheelCount> wheels{};
 

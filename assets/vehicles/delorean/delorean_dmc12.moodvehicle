@@ -12,7 +12,9 @@
   "body": {
     "dimensions_mm": [1853, 1136, 4220],
     "mass_kg": 1230,
-    "mass_center_override_mm": [0, -100, -400]
+    "mass_center_override_mm": [0, -100, -400],
+    "linear_damping": 0.5,
+    "angular_damping": 0.5
   },
   "axle_front": {
     "offset_z_mm": 1205,

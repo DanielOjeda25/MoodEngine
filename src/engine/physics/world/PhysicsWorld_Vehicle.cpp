@@ -100,10 +100,12 @@ u32 PhysicsWorld::createVehicle(const vehicle::VehicleConfig& cfg,
     chassisSettings.mOverrideMassProperties =
         JPH::EOverrideMassProperties::CalculateInertia;
     chassisSettings.mMassPropertiesOverride.mMass = cfg.chassisMass;
-    // Reduce bouncing al apoyar el vehiculo en el suelo (alta penetration
-    // recovery por defecto seria contraproducente con suspension blanda).
-    chassisSettings.mLinearDamping  = 0.05f;
-    chassisSettings.mAngularDamping = 0.05f;
+    // F2H70.2: damping del chasis configurable desde el .moodvehicle (campos
+    // `body.linear_damping` / `body.angular_damping`). Pre-F2H70.2 estaba
+    // hardcoded en 0.05 (sim-floppy) — el auto rodaba infinito al soltar el
+    // acelerador. Default arcade (0.5) decae notable en ~3-5s sin gas.
+    chassisSettings.mLinearDamping  = cfg.chassisLinearDamping;
+    chassisSettings.mAngularDamping = cfg.chassisAngularDamping;
     // El chasis NO duerme mientras el dev no haga release del input. Jolt
     // lo despierta solo, pero pre-arrancar awake reduce un frame de
     // arranque "muerto".

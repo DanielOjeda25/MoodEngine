@@ -140,6 +140,12 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
                 mc[1].get<f32>() / 1000.0f,
                 mc[2].get<f32>() / 1000.0f);
         }
+        // F2H70.2: damping del chassis. Opcional — si no aparece, el config
+        // mantiene los defaults (0.5 / 0.5 arcade) del struct. Bajar a
+        // 0.05-0.1 para feel sim (momentum largo, sensacion pesada);
+        // subir a 0.7-1.0 para arcade snappy (el auto se detiene rapido).
+        cfg.chassisLinearDamping  = jb.value("linear_damping",  cfg.chassisLinearDamping);
+        cfg.chassisAngularDamping = jb.value("angular_damping", cfg.chassisAngularDamping);
     }
 
     // axles → expand to 4 wheels
