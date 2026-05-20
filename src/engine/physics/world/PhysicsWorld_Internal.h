@@ -192,7 +192,16 @@ struct PhysicsWorld::Impl {
     std::unordered_map<u32, u32> bodyToEntity;
     std::vector<ImpactEvent>     impactQueue;
     std::mutex                   impactQueueMutex;
-    f32                          impactSpeedThreshold = 4.0f;
+    // F2H69 Bloque A: bajado de 4.0 a 1.0 m/s. Justificacion: con 4 m/s
+    // un Banshee SA-style necesita ~8m de pista lineal para llegar al
+    // threshold (mass 1500 kg, torque 800 Nm, traccion ~1.5 m/s²); en
+    // demos chicos con NPC a 5m el chassis tocaba el sensor a ~0.3 m/s
+    // (validado en log F2H69) y no encolaba. 1.0 m/s da feel arcade
+    // GTA SA: un toque suave tambien tira al NPC. No introduce falsos
+    // positivos porque las wheels Jolt son raycasts (no bodies) y no
+    // disparan ContactListener; los unicos contacts vs sensors son el
+    // chassis con velocidad real.
+    f32                          impactSpeedThreshold = 1.0f;
     f32                          impactImpulseFactor  = 0.3f;
     physics_internal::ContactListener contactListener{};
 };

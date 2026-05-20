@@ -1,11 +1,54 @@
 # PLAN_HITO_F2H69 — Debug del trigger NPC + pipeline glTF multi-node + DeLorean
 
-> **Estado:** En curso (2026-05-19)
+> **Estado:** En curso (2026-05-19) — **handoff a otra maquina del dev mid-hito**.
 > **Predecesor:** F2H68 (auto-ragdoll por impacto — infra completa, sample con bug conocido).
 > **Motivación:** Tres entregables acordados con el dev al cerrar F2H68:
 > 1. Resolver el bug conocido (NPC sensor no transiciona al ser embestido).
 > 2. Pipeline glTF multi-node estilo Unity/Unreal: 1 GLB → N entities (chassis + wheels + doors) sin sub-mesh selector.
 > 3. Reemplazar el sedan Kenney por el DeLorean GLB ya commiteado en `assets/dmc_delorean/`.
+
+---
+
+## HANDOFF (2026-05-19 20:45) — leer ANTES de continuar
+
+El dev cambio de maquina mid-hito. Estado real al momento del handoff:
+
+**✅ Bloque A — Auto-ragdoll bug F2H68 RESUELTO**. Validado runtime con log:
+```
+[F2H69-DEBUG] ENCOLA: b1=16777218 (Sensor=false) b2=33554432 (Sensor=true) closingSpeed=2.25
+[F2H69-DEBUG] RagdollSystem drain: 2 events
+[F2H69-DEBUG]   TRANSITION entHandle=2 -> Ragdolling (closingSpeed=2.25 m/s, impulse=(0.00,-0.60,-0.31))
+```
+Fix: `mAllowSleeping=false` para sensor bodies + `impactSpeedThreshold` bajado de 4.0 a 1.0 m/s
+(arcade feel SA, sin falsos positivos porque wheels Jolt son raycasts no bodies).
+
+**⏳ Bloques B+C — Polish visual del DeLorean parcial**. El MeshLoader ahora aplica node transforms
+para `.gltf/.glb` (sin esto el DeLorean salia gigante o overlapped en origen). PERO el DeLorean
+sigue en unidades del 3DS Max original (mm), AABB Y=0..7331 unidades. **Workaround temporal:**
+`Transform.scale = 0.00015` en `vehicle_demo.moodmap` para que se vea como auto de 4m.
+
+**El dev esta re-escalando el DeLorean en Blender** a medidas correctas:
+- Largo: 4.0 m (eje Y en Blender → Z en glTF). El "frente" del DeLorean debe apuntar a Y+ Blender.
+- Ancho: 1.8 m (X en Blender).
+- Alto: 1.0 m (Z en Blender → Y en glTF).
+
+Al re-importar el GLB re-escalado, **cambiar `scale: [0.00015, ...]` por `scale: [1.0, 1.0, 1.0]`**
+en `assets/maps/vehicle_demo.moodmap` y `c:/tmp/MoodDemo_F2H69/maps/vehicle_demo.moodmap`.
+
+**Pendientes despues del re-escale:**
+- Confirmar visual del DeLorean OK (no tumbado, no diagonal).
+- Quitar logs `[F2H69-DEBUG]` de `PhysicsWorld_Impact.cpp` + `RagdollSystem.cpp` + `MeshLoader.cpp`.
+- Decidir si el `impactSpeedThreshold = 1.0 m/s` queda como default o se justifica.
+- Tunear el feel "pesado" reportado por el dev (subir torque o bajar mass en `VehicleConfig::makeDefaultSA`).
+- Tests con assets reales (DeLorean GLB) si emerge bug del fix MeshLoader.
+- Cierre: docs/hitos/F2H69.md + HITOS.md + ESTADO_ACTUAL.md + DECISIONS.md + tag `v1.56.0-fase2-hito69`.
+
+**Cosas que NO entran en F2H69** (queda pipeline glTF multi-node como follow-up): el split-by-node real
+que separe wheels en MeshAssets independientes. Lo que hicimos es consolidacion (todos los nodes en
+1 MeshAsset con vertices preTransformed), suficiente para visual unitario tipo "1 auto solid", no
+para wheels que roten independientes. Si emerge demanda real (animacion wheels), abrir hito propio.
+
+---
 
 ---
 

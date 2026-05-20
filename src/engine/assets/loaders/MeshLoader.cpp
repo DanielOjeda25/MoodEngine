@@ -121,6 +121,20 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
     glm::vec3 aabbMin( std::numeric_limits<float>::max());
     glm::vec3 aabbMax(-std::numeric_limits<float>::max());
 
+    // F2H69 Bloque C: para GLTF/GLB consolidamos las node transforms al
+    // vertex data. Sin esto, modelos multi-node tipicos de Sketchfab/3DS
+    // Max exportan vertices en coords del modelo original (mm en
+    // miles) sin que las matrices intermedias se apliquen — el modelo
+    // sale gigante y desfasado. FBX queda intacto: la convencion
+    // Kenney/Mixamo ya trae vertices baked al world del mesh.
+    const auto toLower = [](std::string s) {
+        for (char& c : s) c = static_cast<char>(std::tolower(c));
+        return s;
+    };
+    const std::string ext = toLower(
+        std::filesystem::path(logicalPath).extension().string());
+    const bool applyNodeXform = (ext == ".gltf" || ext == ".glb");
+
     // F2H6: guardamos los floats LOD 0 en paralelo para alimentar a
     // meshoptimizer despues del loop. Si el mesh es skinned, este vector
     // se limpia y no se generan LODs.
@@ -138,7 +152,14 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
             influences = detail::buildPerVertexInfluences(*m, indexByName);
         }
 
-        auto vertices = detail::flattenAiMesh(*m, influences, aabbMin, aabbMax);
+        // F2H69 Bloque C: para GLTF/GLB calculamos AABB local primero y
+        // luego transformamos vertices por la node transform acumulada del
+        // owner; el AABB global lo expandimos con los valores post-transform.
+        glm::vec3 localMin( std::numeric_limits<float>::max());
+        glm::vec3 localMax(-std::numeric_limits<float>::max());
+        glm::vec3& fillMin = applyNodeXform ? localMin : aabbMin;
+        glm::vec3& fillMax = applyNodeXform ? localMax : aabbMax;
+        auto vertices = detail::flattenAiMesh(*m, influences, fillMin, fillMax);
         if (vertices.empty()) continue;
 
         SubMesh sm{};
@@ -171,6 +192,61 @@ std::unique_ptr<MeshAsset> loadMeshWithAssimp(const std::string& logicalPath,
             const aiNode* owner = findNode(scene->mRootNode, i);
             if (owner != nullptr && owner->mName.length > 0) {
                 sm.name = std::string(owner->mName.C_Str(), owner->mName.length);
+            }
+
+            // F2H69 Bloque C: para GLTF/GLB aplicar node transform
+            // acumulada (root->owner) a position + normal de cada vertex.
+            // Sin esto el DeLorean (y similares Sketchfab/3DS Max) renderiza
+            // con vertices en coords del 3DS Max original (miles de unidades)
+            // o todas las partes overlapping en (0,0,0). FBX queda intacto.
+            if (applyNodeXform) {
+                if (owner != nullptr) {
+                    aiMatrix4x4 acc;  // identity
+                    for (const aiNode* n = owner; n != nullptr; n = n->mParent) {
+                        acc = n->mTransformation * acc;
+                    }
+                    if (!acc.IsIdentity()) {
+                        const aiMatrix3x3 rs(acc);
+                        for (usize v = 0;
+                             v + detail::k_strideFloats <= vertices.size();
+                             v += detail::k_strideFloats) {
+                            aiVector3D p(vertices[v+0], vertices[v+1], vertices[v+2]);
+                            p = acc * p;
+                            vertices[v+0] = p.x;
+                            vertices[v+1] = p.y;
+                            vertices[v+2] = p.z;
+                            // Normal en offset 8 (pos3 + color3 + uv2 = 8).
+                            aiVector3D nrm(vertices[v+8], vertices[v+9], vertices[v+10]);
+                            nrm = rs * nrm;
+                            const f32 len2 = nrm.x*nrm.x + nrm.y*nrm.y + nrm.z*nrm.z;
+                            if (len2 > 1e-12f) {
+                                const f32 inv = 1.0f / std::sqrt(len2);
+                                nrm.x *= inv; nrm.y *= inv; nrm.z *= inv;
+                            }
+                            vertices[v+8] = nrm.x;
+                            vertices[v+9] = nrm.y;
+                            vertices[v+10] = nrm.z;
+                        }
+                        // Recalcular AABB local desde vertices transformados.
+                        localMin = glm::vec3( std::numeric_limits<float>::max());
+                        localMax = glm::vec3(-std::numeric_limits<float>::max());
+                        for (usize v = 0;
+                             v + detail::k_strideFloats <= vertices.size();
+                             v += detail::k_strideFloats) {
+                            localMin.x = std::min(localMin.x, vertices[v+0]);
+                            localMin.y = std::min(localMin.y, vertices[v+1]);
+                            localMin.z = std::min(localMin.z, vertices[v+2]);
+                            localMax.x = std::max(localMax.x, vertices[v+0]);
+                            localMax.y = std::max(localMax.y, vertices[v+1]);
+                            localMax.z = std::max(localMax.z, vertices[v+2]);
+                        }
+                    }
+                }
+                // Acumular el AABB local al global (post-transform si se
+                // aplico, pre-transform si owner null o matriz identity —
+                // los vertices quedan tal cual).
+                aabbMin = glm::min(aabbMin, localMin);
+                aabbMax = glm::max(aabbMax, localMax);
             }
         }
         if (sm.name.empty() && m->mName.length > 0) {
