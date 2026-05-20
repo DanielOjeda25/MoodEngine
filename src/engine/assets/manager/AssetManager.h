@@ -90,7 +90,7 @@ using ItemAssetId = u32;
 using QuestAssetId = u32;
 
 /// @brief F2H67: Identificador estable de un VehicleConfig (.moodvehicle).
-///        Valor 0 reservado para un config "default SA" (makeDefaultSA)
+///        Valor 0 reservado para un config fallback generico (makeFallbackGenericSedan)
 ///        que asegura `getVehicleConfig(0)` nunca null. Loadeo lazy + cache
 ///        por path logico, mismo patron que Dialog/Item/Quest.
 using VehicleConfigAssetId = u32;
@@ -453,20 +453,20 @@ public:
     // ---- VehicleConfig (F2H67) ----
 
     /// @brief Carga (o devuelve cacheado) un VehicleConfig por path logico
-    ///        (p.ej. "vehicles/banshee_sa.moodvehicle"). En fallo devuelve
-    ///        `missingVehicleConfigId()` (config default SA) y loguea al
-    ///        canal `assets`. Mismo patron que `loadQuest`.
+    ///        (p.ej. "vehicles/delorean/delorean_dmc12.moodvehicle"). En
+    ///        fallo devuelve `missingVehicleConfigId()` (fallback generico)
+    ///        y loguea warn al canal `assets`. Mismo patron que `loadQuest`.
     VehicleConfigAssetId loadVehicleConfig(std::string_view logicalPath);
 
     /// @brief Devuelve el config del id. Nunca null: ids invalidos caen al
-    ///        slot 0 (default SA).
+    ///        slot 0 (fallback generico sedan).
     const vehicle::VehicleConfig* getVehicleConfig(VehicleConfigAssetId id) const;
 
-    /// @brief Id del config default (slot 0) = `vehicle::makeDefaultSA()`.
+    /// @brief Id del config fallback (slot 0) = `vehicle::makeFallbackGenericSedan()`.
     VehicleConfigAssetId missingVehicleConfigId() const { return 0; }
 
     /// @brief Path logico con el que se cargo el config. Slot 0 devuelve
-    ///        el sentinela `"__default_vehicle_sa"`.
+    ///        el sentinela `"__fallback_generic_sedan"`.
     std::string vehicleConfigPathOf(VehicleConfigAssetId id) const;
 
     /// @brief Cantidad de configs cacheados (incluye slot 0).
@@ -524,7 +524,7 @@ private:
     std::vector<std::unique_ptr<Quest::Asset>> m_quests;
     std::vector<std::string> m_questPaths; // paralelo a m_quests
 
-    // VehicleConfig (F2H67). [0] = default SA (makeDefaultSA).
+    // VehicleConfig (F2H67). [0] = fallback generico (makeFallbackGenericSedan).
     std::unordered_map<std::string, VehicleConfigAssetId> m_vehicleConfigCache;
     std::vector<std::unique_ptr<vehicle::VehicleConfig>> m_vehicleConfigs;
     std::vector<std::string> m_vehicleConfigPaths; // paralelo a m_vehicleConfigs

@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 2,
+  "metadata": {
+    "name": "DeLorean DMC-12",
+    "make": "DMC",
+    "model": "DMC-12",
+    "year": 1981,
+    "source": "Sketchfab DeLorean (CC-BY)",
+    "license": "CC-BY 4.0",
+    "notes": "Specs reales del DMC-12 stock: 130 HP, 1230 kg, 5-speed manual, RWD, rear-engine."
+  },
+  "body": {
+    "dimensions_mm": [1853, 1136, 4220],
+    "mass_kg": 1230,
+    "mass_center_override_mm": [0, -100, -400]
+  },
+  "axle_front": {
+    "offset_z_mm": 1205,
+    "track_mm": 1588,
+    "attach_y_mm": -300,
+    "wheel": {
+      "radius_mm": 330,
+      "width_mm": 195,
+      "friction_long": 1.4,
+      "friction_lat": 1.3
+    },
+    "suspension": {
+      "frequency_hz": 1.8,
+      "damping": 0.6,
+      "max_length_mm": 300,
+      "min_length_mm": 100
+    },
+    "torque_factor": 0.0,
+    "steered": true,
+    "handbraked": false
+  },
+  "axle_rear": {
+    "offset_z_mm": -1205,
+    "track_mm": 1588,
+    "attach_y_mm": -300,
+    "wheel": {
+      "radius_mm": 330,
+      "width_mm": 235,
+      "friction_long": 1.5,
+      "friction_lat": 1.4
+    },
+    "suspension": {
+      "frequency_hz": 1.8,
+      "damping": 0.6,
+      "max_length_mm": 300,
+      "min_length_mm": 100
+    },
+    "torque_factor": 1.0,
+    "steered": false,
+    "handbraked": true
+  },
+  "engine": {
+    "horsepower": 130,
+    "peak_torque_nm": 208,
+    "peak_torque_rpm": 2750,
+    "redline_rpm": 5500,
+    "idle_rpm": 800,
+    "inertia": 0.45,
+    "angular_damping": 0.18,
+    "transmission": "5-speed-manual",
+    "final_drive_ratio": 3.444
+  },
+  "brakes": {
+    "deceleration_target_mps2": 8.0,
+    "handbrake_ratio": 0.5
+  },
+  "steering": {
+    "max_angle_deg_slow": 32,
+    "throttle_steering_rest_rate_slow": 4.0
+  }
+}
