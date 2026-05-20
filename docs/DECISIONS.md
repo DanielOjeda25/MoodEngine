@@ -11,6 +11,111 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-19: F2H69 — Trigger NPC debug + pipeline glTF multi-node + DeLorean swap
+
+### Decisión 1 — Sensor bodies fuerzan `mAllowSleeping=false` independiente del MotionType
+
+**Contexto:** El sample F2H68 (vehicle vs NPC sensor) no transicionaba a Ragdolling. Logs en runtime revelaron que `JPH::Body::IsSensor()` auto-fuerza `mAllowSleeping=false` solo si el body se crea Dynamic. Sensores Kinematic (caso del NPC: kinematic + `is_sensor: true`) heredan el default `mAllowSleeping=true` → entran a sleep tras ~5s sin movimiento → Jolt no genera `OnContactAdded` para sensores dormidos (optimización del broadphase).
+
+**Decisión:** En `PhysicsWorld::createBody`, si `isSensor==true`, force `mAllowSleeping=false` independiente del MotionType. Pattern Unity (`Collider.isTrigger` triggers permanentes) / Unreal (`Overlap` actors).
+
+**Razones:**
+- Un sensor que duerme deja de funcionar como trigger — semánticamente roto.
+- Cost: bodies sensor Kinematic estáticos consumen un slot del broadphase que no entra a sleep. Trade-off aceptable: triggers son contados (NPCs interactivos, zonas de daño), no son cientos.
+- Match con convención industrial: Unity/Unreal docs explícitamente recomiendan que triggers stay-awake siempre.
+
+**Alternativas descartadas:**
+- Wake periódico desde gameplay code: brittle (¿cada cuánto?), introduce dependencia del trigger en el script.
+- Setear `mAllowSleeping=false` solo en el callsite del NPC (no en `createBody`): asset-specific, próximo trigger sufre el mismo bug.
+
+### Decisión 2 — `impactSpeedThreshold` default 4.0 → 1.0 m/s
+
+**Contexto:** F2H68 dejó el threshold en 4 m/s. Validación en runtime: el dev necesitaba arrancar el auto con throttle pleno desde lejos para activar el trigger. El feel arcade-ish (estilo GTA SA) querido necesita activación a velocidades de maniobra normal.
+
+**Decisión:** Default permanente `impactSpeedThreshold = 1.0 m/s`. Atropellar caminando funciona; falsos positivos por contacto inicial (chassis tocando NPC al spawn) quedan filtrados por margen mínimo.
+
+**Razones:**
+- Alineado con tuning `makeDefaultSA()` (alta tracción + brakes 4500 Nm + handbrake 6000 Nm) — auto arcade que decelera/acelera rápido, no es realista esperar 4 m/s de cierre para que "sienta" el contacto.
+- Sobreescribible runtime con `setRagdollImpactSpeedThreshold(...)` si una escena requiere mayor robustez contra contactos accidentales (un sigilo donde el roce no activa, p. ej.).
+
+**Alternativas descartadas:**
+- Dejar 4 m/s y documentar: el dev tendría que recordar setearlo en cada mapa nuevo. Sin valor por defecto razonable.
+- 0.5 m/s: demasiado sensible — chassis empujando al NPC al spawn lo activaría.
+
+### Decisión 3 — `MeshLoader` para glTF/GLB hace **consolidation**, no split-by-node
+
+**Contexto:** Plan F2H69 Bloque C original incluía opt-in `splitByNode` flag para preservar cada node con mesh como `SubMesh` independiente (permitiendo, p. ej., rotar las ruedas del DeLorean separadas del chassis). Durante implementación, decidido consolidation only (todos los nodos en 1 MeshAsset con vertices pre-transformados, AABB local consolidado).
+
+**Decisión:** En `.gltf` / `.glb`, aplicar las node transforms acumuladas root→owner al vertex data (position + normal) + recalcular AABB local. FBX intacto. Sin split-by-node. Split real diferido a F2H70 si emerge demanda concreta (ruedas rotantes visuales independientes).
+
+**Razones:**
+- Consolidation alcanza el goal visual unitario del Bloque D (1 DeLorean entero, sin necesidad de rotar wheels independientes — Jolt simula la rotación física sin sync visual; el dev acepta wheels estáticas hasta F2H70).
+- Split-by-node implica refactor en cascada: `SceneSerializer` (¿`<gltf_path>#<node_name>` como reference? schema bump del moodmap?), `MeshRendererComponent` (¿múltiples mesh_ids o un MeshAsset con array de SubMeshes nombrados consumidos por filter?), `VehicleSystem` (cómo encuentra los wheel meshes para sincronizar — naming convention canónica). Hito propio.
+- Pattern hereda lo que motores grandes hacen al import default (Unity glTF importer "Combine Meshes" toggle, Unreal "Combine Meshes" en glTF/FBX import options) — el split es opt-in, no el path principal.
+
+**Alternativas descartadas:**
+- Implementar split desde F2H69: scope blow-up; el hito ya cubría 5 bloques (A-E) con un asset swap visible al usuario.
+- Skip consolidation también (cargar tal cual y dejar al renderer aplicar matrices): rompería `MeshRendererComponent` que asume vertices ya en world del mesh. Refactor mayor del render path.
+
+### Decisión 4 — `configPath: ""` → fallback automático a `makeDefaultSA()` (drop del `.moodvehicle` redundante)
+
+**Contexto:** F2H67 + F2H68 mantenían `assets/vehicles/banshee_sa/banshee_sa.moodvehicle` como archivo JSON con el tuning SA-style. Pero `AssetManager::loadVehicleConfig` ya tenía fallback al slot 0 (default SA) cuando el path no existe o está vacío. El JSON externo era redundante con `VehicleConfig::makeDefaultSA()` en código (que define los mismos valores).
+
+**Decisión:** Drop del `.moodvehicle` en `vehicle_demo.moodmap` (`configPath: ""`). El VehicleSystem usa `makeDefaultSA()` directo. La estructura para `.moodvehicle` queda disponible en `AssetManager_Vehicle.cpp` para overrides futuros (otro vehículo con tuning distinto: crear un `.moodvehicle` y referenciarlo), pero el default no necesita archivo aparte.
+
+**Razones:**
+- Fuente única de verdad para el tuning default: el código. Editar dos archivos para cambiar el default era un trap.
+- `configPath: ""` es semánticamente claro: "usá el default que ya conocés". No requiere recordar el path del `.moodvehicle`.
+- Reduce surface area: 1 archivo menos en el repo, 1 archivo menos que mantener consistente con `makeDefaultSA()`.
+
+**Alternativas descartadas:**
+- Mantener `.moodvehicle` solo para documentación: comments en `VehicleConfig.cpp` cumplen el rol sin file extra.
+- Hacer el `.moodvehicle` obligatorio: rompe drop-in (cada nuevo vehículo necesitaría ambos archivos al spawn).
+
+**Revisar si:**
+- Llega un caso con tuning per-vehículo no derivable de `makeDefaultSA()` (p. ej. una moto con `wheels=2`): crear `.moodvehicle` para ese vehículo y referenciarlo. El default sigue siendo `""` para los autos comunes.
+
+### Decisión 5 — DeLorean GLB procesado headless con scripts `pygltflib` (no Blender)
+
+**Contexto:** El modelo descargado por el dev venía con tres problemas estándar de assets Sketchfab/CGTrader exportados desde 3DS Max: escala incorrecta (2.27 m vs DeLorean real 4.22 m), mirror matrices baked en 7 de 17 nodos (`det(M) < 0` causa render con caras "hacia adentro" al pasar por backface culling), origin en la base del modelo (Y=0 = ruedas). Workflow tradicional: abrir Blender → escalar/Apply Transforms/centrar/re-export.
+
+**Decisión:** Procesar todo headless con scripts Python `pygltflib`, sin requerir Blender. Scripts persisten en `c:/tmp/` (no en repo) para reuso con futuros assets.
+
+**Razones:**
+- Repetibilidad: el flujo es scripted, no manual. Otros assets con mismos problemas se procesan con `python scale_glb.py modelo.glb x1.5` (etc.).
+- Sin dependencia de DCC tool: el dev no necesita tener Blender instalado o conocer su UI.
+- Determinismo: el script siempre produce el mismo output dado el mismo input. Blender Apply Transforms tiene variaciones por configuración de unidades / convención de ejes.
+- Velocidad: el ciclo "edit → verify dimensions → reapply" toma 30s en Python vs 2-3 minutos en Blender.
+
+**Alternativas descartadas:**
+- Blender CLI (`blender --background --python script.py`): requiere Blender 4.x instalado + script con bpy API. Más pesado.
+- `gltf-transform` npm CLI: tampoco genérico para "flip winding cuando det<0"; habría que extenderlo con plugin.
+- Bake en el motor (MeshLoader detect det<0 + flip): considerado follow-up — corregir el asset es one-time, corregir el motor es defensivo + benefit a todos los assets futuros con mismo problema. Diferido a F2H70.
+
+**Revisar si:**
+- Los scripts se vuelven inestables o frágiles con la siguiente versión de `pygltflib`: portar a `gltf-transform` o `assimp` Python bindings.
+
+### Decisión 6 — 3 bugs sistémicos del VehicleSystem diferidos a F2H70
+
+**Contexto:** Validación visual del DeLorean reveló tres bugs del engine (no del asset): (1) spawn flotando si `position.y < halfHeight del modelo`, (2) modelo rota distinto al chassis (gimbal lock por `extractEulerAngleXYZ` en el sync post-step), (3) ruedas no rotan visualmente con la simulación física. Workarounds asset-specific aplicados al moodmap para "que ande esta noche": `position.y=0.568`, `rotationEuler=[0,180,0]`, wheels estáticas aceptadas.
+
+**Decisión:** Cerrar F2H69 con esos workarounds documentados pero no atacar los bugs en este hito. Plan F2H70 propio para los tres fixes.
+
+**Razones:**
+- El dev explicitó durante la sesión: *"tenemos que hacer que esto funcione para cualquier auto que se integre no podemos estar arreglando valores arbitrarios para un simple delorean"*. Principio operacional: el engine absorbe las variaciones del asset, no el dev en el moodmap. Memoria `feedback-vehicle-sistemico` capturó la regla.
+- Los tres bugs comparten componente (`VehicleSystem.cpp` + integración con `TransformComponent`) y conviene atacarlos juntos para evitar parches incrementales que conflicten.
+- Scope alcanzable en hito propio: split-by-node solo es ~1-2 sesiones. Auto-spawn-height + quat sync requieren leer el AABB del MeshAsset desde el VehicleSystem (decisión arquitectónica sobre acceso del system layer al asset layer — discutible).
+- F2H69 ya cubre 5 bloques (A-E) con un asset visible al usuario. Apilar 3 fixes más es scope blow-up tras una sesión larga.
+
+**Alternativas descartadas:**
+- Atacar bug 2 (quat sync) en F2H69 porque es el más visible: parche aislado sin context del bug 1 (los tres están enlazados por cómo VehicleSystem inicializa+sincroniza el chassis con el Transform). Apilados conviene.
+- Aceptar workarounds permanentemente: viola el principio que el dev explicitó. Confunde a quien lea el moodmap (¿por qué position.y=0.568 y no 0? — la respuesta correcta es "no debería ser 0.568, hay un bug").
+
+**Revisar si:**
+- En F2H70 emerge que alguno de los 3 bugs es más complicado de lo estimado y conviene re-scopear.
+
+---
+
 ## 2026-05-19: F2H68 — Auto-ragdoll por impacto (infra completa, sample con bug conocido)
 
 **Contexto:** El dev preguntó al cerrar F2H67: *"si un vehiculo, si choca un NPC con trigger ragdoll, este caera o sentira el impacto?"*. Verificado que NO funcionaba (activación de ragdoll era 100% manual). Este hito monta la infra completa siguiendo standard industry. Tag `v1.55.0-fase2-hito68`. Detalle en [`hitos/F2H68.md`](hitos/F2H68.md).

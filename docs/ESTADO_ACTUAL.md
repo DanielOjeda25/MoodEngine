@@ -30,17 +30,25 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H68 (2026-05-19)
+## 0.1. Último hito de feature — F2H69 (2026-05-19)
 
-**Auto-ragdoll por impacto (infra completa, sample con bug conocido).** Tag `v1.55.0-fase2-hito68`. Detalle completo en [`hitos/F2H68.md`](hitos/F2H68.md).
+**Trigger NPC debug + pipeline glTF multi-node + DeLorean swap.** Tag `v1.57.0-fase2-hito69`. Detalle completo en [`hitos/F2H69.md`](hitos/F2H69.md). Cierra el bug conocido que F2H68 dejó abierto.
 
-**Lo que entregó**: stack completo de auto-ragdoll por contacto siguiendo standard industry (Unity `Collider.isTrigger` / Unreal `Overlap` / Jolt `ContactListener`). `physics_internal::ContactListener` registrado en `PhysicsWorld::Impl` + mapa `BodyID → entt::entity` mantenido por todos los sistemas (PhysicsSystem para RigidBody, VehicleSystem para chassis, RagdollSystem para parts) con auto-cleanup en destroy. `OnContactAdded` calcula `closingSpeed = vrel.Dot(normal)`, si > threshold (default 4 m/s) encola evento `{victimBodyId, ±normal*impulseMag, closingSpeed}` con mutex. `RagdollSystem::tick` drena la cola pre-materialize: si la entity víctima tiene `RagdollComponent::Animated`, setea `state=Ragdolling + spawnImpulse` (el materialize lazy de abajo dispara la creación). **Sensor bodies**: `RigidBodyComponent::isSensor` aditivo serializado como `is_sensor: true` → `JPH::BodyCreationSettings::mIsSensor` → bodies que detectan contacto sin bloquear/empujar (Unity `isTrigger` pattern). **Banshee tuning SA-style** derivado de docs públicos `handling.cfg` GTA SA: maxTorque 500→800 Nm, brakeTorque 1500→4500 Nm (3× motor, frenado snappy), handbrakeTorque 4000→6000. **6 tests headless** del API (register/entity roundtrip, auto-cleanup, ContactListener detecta > threshold, NO detecta < threshold, factor escala lineal, ragdollBodyIds vacío por id inválido). **Vehicle render**: revert del intento de sub-mesh selector per-wheel — adoptado pattern Unity/Unreal/GTA estándar (1 entity por mesh-part). **Suite 1029/10227 verde**.
+**Lo que entregó**: **Bloque A — fix sensor sleeping**: `JPH::Body::IsSensor()` auto-fuerza `mAllowSleeping=false` solo para bodies Dynamic. Los sensores Kinematic (caso del NPC sensor del demo) heredan default `true` y entran a sleep tras ~5s sin movimiento → Jolt no emite `OnContactAdded` para sensores dormidos (optimización broadphase). Fix en `PhysicsWorld::createBody`: si `isSensor==true` force `mAllowSleeping=false` independiente del MotionType (pattern Unity/Unreal para triggers permanentes). `impactSpeedThreshold` default 4.0→1.0 m/s para feel arcade-ish coherente con el tuning `makeDefaultSA()` (atropellar caminando funciona). **Bloque B — cleanup logs**: removidos los `[F2H69-DEBUG]` post-validación de `OnContactAdded` (sub-threshold sensor + ENCOLA) y `RagdollSystem::tick` (drain + per-event traces + TRANSITION). **Bloque C — pipeline glTF multi-node (consolidation)**: `MeshLoader.cpp` para `.gltf`/`.glb` aplica las node transforms acumuladas root→owner a vertex position + normal (`aiMatrix3x3` 3x3 con renormalize) + recalcula AABB local; FBX intacto (convención Kenney/Mixamo trae vertices baked al world). **Sin split-by-node**: consolidation only (1 MeshAsset con vertices pre-transformados), split real diferido a F2H70 si emerge demanda. **Bloque D — DeLorean swap**: deletes `assets/dmc_delorean/*` (Sketchfab v1 multi-archivo) + `assets/vehicles/banshee_sa/*` (Kenney F2H67; tuning SA-style queda en C++ `makeDefaultSA()`). Nuevo `assets/vehicles/delorean/delorean.glb` (293 KB single-file con texturas embedded) procesado headless con scripts `pygltflib` (no Blender): scale x1.86 (modelo 2.27m → 4.22m real DMC-12), flatten de matrices al vertex data + reverse winding/flip normales en 7 de 17 nodos con `det(M)<0` (mirror baked del export 3DS Max), origin centrado en su eje Y. Verificación headless walking del árbol confirma **4.220 × 1.853 × 1.136 m** (match exacto DeLorean real). `vehicle_demo.moodmap`: `configPath: ""` → fallback automático a `makeDefaultSA()` (drop del `.moodvehicle` redundante). **Lateral**: título de ventana del editor limpiado a `"MoodEngine Editor"` (sin `"v0.6.0-dev (Hito 6)"` que confundía). **Suite 1029/10227 verde** (sin tests nuevos — F2H69 es mostly fix runtime + asset integration).
 
-**Bug conocido (a debugar en F2H69)**: el sample end-to-end vehicle vs NPC sensor NO transiciona a Ragdolling. La infra unit-tested funciona; el integration sample falla en algún punto de la cadena trigger → drain → state transition. Hipótesis principales: callback no se dispara para Dynamic vs Sensor, closing speed mal proyectada, timing del register, orden de tick. Documentado en [F2H68.md § Bug conocido](hitos/F2H68.md).
+**Pendientes diferidos a F2H70** (3 bugs sistémicos del VehicleSystem identificados al validar visualmente el DeLorean): (1) **auto-spawn-height** — engine debe consultar AABB del mesh en `VehicleSystem::tick` para offset Y en vez de `position.y` ajustado asset-specific en moodmap. (2) **quat sync sin gimbal** — `extractEulerAngleXYZ` sufre gimbal lock con rotaciones 180°+; fix con quaternion opcional en `TransformComponent` o `worldMatrix` cached. (3) **split-by-node de wheels** — `MeshLoader` opt-in `splitByNode` flag + wheel meshes con nombres canónicos (`wheel_FL` / `_FR` / `_RL` / `_RR`) que `VehicleSystem` sincronice con `st.wheelWorlds[i]` para rotación visual independiente del chassis. Cuando F2H70 cierre, salen del moodmap `position.y=0.568` y `rotationEuler=[0,180,0]`. El dev explicitó durante la sesión que **workarounds asset-specific = bug del engine, no del asset** — los modelos deben drop-in si cumplen convención industrial (1u=1m, origin centrado, sin mirrors baked, facing forward).
 
 ---
 
-## 0.2. Hito previo — F2H67 (2026-05-19)
+## 0.2. Hito previo — F2H68 (2026-05-19)
+
+**Auto-ragdoll por impacto (infra completa).** Tag `v1.55.0-fase2-hito68`. Detalle completo en [`hitos/F2H68.md`](hitos/F2H68.md).
+
+Stack completo de auto-ragdoll por contacto: `physics_internal::ContactListener` registrado en `PhysicsWorld::Impl` + mapa `BodyID → entt::entity` mantenido por PhysicsSystem (RigidBody) / VehicleSystem (chassis) / RagdollSystem (parts) con auto-cleanup en destroy. `OnContactAdded` calcula `closingSpeed = vrel.Dot(normal)`, si > threshold encola evento `{victimBodyId, ±normal*impulseMag, closingSpeed}` con mutex. `RagdollSystem::tick` drena la cola pre-materialize: si la víctima tiene `RagdollComponent::Animated`, transiciona a Ragdolling con spawnImpulse. **Sensor bodies** (Unity `isTrigger` pattern): `RigidBodyComponent::isSensor` aditivo serializado como `is_sensor: true` → `JPH::BodyCreationSettings::mIsSensor`. Banshee tuning SA-style: maxTorque 500→800 Nm, brakeTorque 1500→4500 Nm, handbrakeTorque 4000→6000. 6 tests headless del API. Vehicle render: 1 entity por mesh-part (sin sub-mesh selector). **Bug conocido cerrado en F2H69**: el NPC sensor del demo no transicionaba — era el sleeping de sensores Kinematic.
+
+---
+
+## 0.3. Hito previo — F2H67 (2026-05-19)
 
 **Vehicle physics estilo GTA San Andreas.** Tag `v1.54.0-fase2-hito67`. Detalle completo en [`hitos/F2H67.md`](hitos/F2H67.md). **Cierra plan original F2H25** dentro de Sub-fase 2.4 (Física avanzada).
 
@@ -48,7 +56,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.2. Hito anterior — F2H66 (2026-05-18)
+## 0.4. Hito anterior — F2H66 (2026-05-18)
 
 **Ragdolls auto-build sobre `JPH::Ragdoll`.** Tag `v1.53.0-fase2-hito66`. Detalle completo en [`hitos/F2H66.md`](hitos/F2H66.md). Cierra plan original F2H24 dentro de Sub-fase 2.4 (Física avanzada).
 
@@ -56,7 +64,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.2. Hito anterior — F2H65 (2026-05-18)
+## 0.5. Hito anterior — F2H65 (2026-05-18)
 
 **Jolt constraints (Hinge / Distance / Point).** Tag `v1.52.0-fase2-hito65`. Detalle completo en [`hitos/F2H65.md`](hitos/F2H65.md). Abre Sub-fase 2.4 (Física avanzada) del plan original.
 
@@ -152,7 +160,7 @@ tools/sizeometer.sh 30
 ## 4. Qué hacer al arrancar la próxima sesión
 
 1. Leer este archivo entero (es chico — diseñado para eso).
-2. Leer el plan del hito en curso: `docs/PLAN_HITO_F2H<N>.md` (actualmente F2H63).
+2. Leer el plan del hito en curso: `docs/PLAN_HITO_F2H<N>.md` (próximo: F2H70 — vehicle engine fixes sistémicos).
 3. `git status` + `git log --oneline -10` + `git tag --sort=-v:refname | head -5`.
 4. Preguntar al dev: "¿seguimos con el hito en curso o pasó algo nuevo?"
 5. Si arrancamos hito nuevo: refinar el plan stub con el dev → bloques A-X concretos.
