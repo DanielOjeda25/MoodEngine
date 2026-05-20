@@ -35,7 +35,7 @@ TEST_CASE("PhysicsWorld_Vehicle F2H67 C: createVehicle handle valido") {
     PhysicsWorld w;
     const u32 ground = makeGround(w);
     (void)ground;
-    const VehicleConfig cfg = makeDefaultSA();
+    const VehicleConfig cfg = makeFallbackGenericSedan();
     // Arrancamos el vehicle a 2m sobre el piso (suspension lo asienta).
     const glm::mat4 xform = glm::translate(glm::mat4(1.0f),
                                             glm::vec3(0.0f, 2.0f, 0.0f));
@@ -47,7 +47,7 @@ TEST_CASE("PhysicsWorld_Vehicle F2H67 C: createVehicle handle valido") {
 
 TEST_CASE("PhysicsWorld_Vehicle F2H67 C: createVehicle config invalido -> 0") {
     PhysicsWorld w;
-    VehicleConfig cfg = makeDefaultSA();
+    VehicleConfig cfg = makeFallbackGenericSedan();
     cfg.chassisMass = -1.0f;  // invalido
     const u32 id = w.createVehicle(cfg, glm::mat4(1.0f));
     CHECK(id == 0);
@@ -58,7 +58,7 @@ TEST_CASE("PhysicsWorld_Vehicle F2H67 C: destroyVehicle idempotente") {
     PhysicsWorld w;
     const u32 ground = makeGround(w);
     (void)ground;
-    const VehicleConfig cfg = makeDefaultSA();
+    const VehicleConfig cfg = makeFallbackGenericSedan();
     const u32 id = w.createVehicle(cfg,
         glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f)));
     REQUIRE(id != 0);
@@ -74,7 +74,7 @@ TEST_CASE("PhysicsWorld_Vehicle F2H67 C: readVehicleState luego de settle") {
     PhysicsWorld w;
     const u32 ground = makeGround(w);
     (void)ground;
-    const VehicleConfig cfg = makeDefaultSA();
+    const VehicleConfig cfg = makeFallbackGenericSedan();
     const u32 id = w.createVehicle(cfg,
         glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f)));
     REQUIRE(id != 0);
@@ -98,7 +98,7 @@ TEST_CASE("PhysicsWorld_Vehicle F2H67 C: throttle -> forward speed > 0") {
     PhysicsWorld w;
     const u32 ground = makeGround(w);
     (void)ground;
-    const VehicleConfig cfg = makeDefaultSA();
+    const VehicleConfig cfg = makeFallbackGenericSedan();
     const u32 id = w.createVehicle(cfg,
         glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f)));
     REQUIRE(id != 0);
@@ -124,7 +124,7 @@ TEST_CASE("PhysicsWorld_Vehicle F2H67 C: brake decrece forward speed") {
     PhysicsWorld w;
     const u32 ground = makeGround(w);
     (void)ground;
-    const VehicleConfig cfg = makeDefaultSA();
+    const VehicleConfig cfg = makeFallbackGenericSedan();
     const u32 id = w.createVehicle(cfg,
         glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f)));
     REQUIRE(id != 0);
@@ -153,7 +153,7 @@ TEST_CASE("PhysicsWorld_Vehicle F2H67 C: applyVehicleImpulse mueve el chassis") 
     PhysicsWorld w;
     const u32 ground = makeGround(w);
     (void)ground;
-    const VehicleConfig cfg = makeDefaultSA();
+    const VehicleConfig cfg = makeFallbackGenericSedan();
     const u32 id = w.createVehicle(cfg,
         glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f)));
     REQUIRE(id != 0);
@@ -176,7 +176,7 @@ TEST_CASE("PhysicsWorld_Vehicle F2H67 C: multi-vehicle handles distintos") {
     PhysicsWorld w;
     const u32 ground = makeGround(w);
     (void)ground;
-    const VehicleConfig cfg = makeDefaultSA();
+    const VehicleConfig cfg = makeFallbackGenericSedan();
     const u32 a = w.createVehicle(cfg,
         glm::translate(glm::mat4(1.0f), glm::vec3(-5.0f, 2.0f, 0.0f)));
     const u32 b = w.createVehicle(cfg,

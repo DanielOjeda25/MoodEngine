@@ -44,7 +44,7 @@ Entity findEntityByTag(Scene& scene, const char* tag) {
 vehicle::VehicleConfig resolveConfig(const VehicleComponent& veh,
                                        AssetManager& assets) {
     if (veh.configPath.empty()) {
-        return vehicle::makeDefaultSA();
+        return vehicle::makeFallbackGenericSedan();
     }
     const VehicleConfigAssetId id = assets.loadVehicleConfig(veh.configPath);
     const vehicle::VehicleConfig* cfg = assets.getVehicleConfig(id);
@@ -52,7 +52,7 @@ vehicle::VehicleConfig resolveConfig(const VehicleComponent& veh,
         Log::physics()->warn(
             "VehicleSystem: configPath='{}' no resolvio; fallback default SA.",
             veh.configPath);
-        return vehicle::makeDefaultSA();
+        return vehicle::makeFallbackGenericSedan();
     }
     return *cfg;
 }

@@ -37,7 +37,7 @@ namespace VehicleSystem {
 /// @param physicsWorld  Backend Jolt (createVehicle / setInput / read).
 /// @param assets        Para futuras lookups de `.moodvehicle` (Bloque G).
 ///                      En Bloque D v1 se ignora si `configPath` esta
-///                      vacio -- usamos `makeDefaultSA()` como fallback.
+///                      vacio -- usamos `makeFallbackGenericSedan()` como fallback.
 void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets);
 
 /// @brief F2H70 Bloque A: offset Y de auto-spawn-height para una entity

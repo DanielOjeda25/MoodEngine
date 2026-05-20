@@ -108,7 +108,7 @@ struct EngineConfig {
 };
 
 /// @brief Config completa del vehiculo. Materializable en `.moodvehicle`
-///        (JSON) o construida en codigo con `makeDefaultSA()`.
+///        (JSON) o construida en codigo con `makeFallbackGenericSedan()`.
 struct VehicleConfig {
     /// Half-extents del chassis box (collision shape). SA sedan tipico:
     /// 2.0 m largo x 0.5 m alto x 0.9 m ancho => half = (0.9, 0.5, 2.0)
@@ -133,14 +133,19 @@ struct VehicleConfig {
     f32 steerLerpSpeed = 4.0f;
 };
 
-/// @brief Construye una `VehicleConfig` con valores estilo GTA San Andreas:
-///        sedan medio, 4WD, alta traccion, brakes fuertes, dirección
-///        responsiva, suspension blanda, no se vuelca facil. Usable
-///        directamente para el sample "Banshee_SA" del Bloque G.
+/// @brief Construye una `VehicleConfig` generica de fallback: sedan medio,
+///        4WD, alta traccion, brakes fuertes, dirección responsiva,
+///        suspension blanda, no se vuelca facil. Usada SOLO cuando un
+///        `.moodvehicle` no carga (path vacio o invalido) — los assets
+///        reales viven en `assets/vehicles/<name>/<name>.moodvehicle` con
+///        specs derivadas del modelo real (ver `delorean_dmc12.moodvehicle`).
+///
+///        Si `VehicleSystem` cae a este fallback, loguea warn — eso indica
+///        que algo esta mal con el config del vehicle.
 ///
 ///        Wheel layout: 4 ruedas en las 4 esquinas del chasis,
 ///        delanteras steered, traseras handbraked, todas driven (4WD).
-VehicleConfig makeDefaultSA();
+VehicleConfig makeFallbackGenericSedan();
 
 /// @brief Suma de los `gearRatios` y demas validaciones sanas. Devuelve
 ///        true si el config no tiene NaN/inf, `chassisMass > 0`, exactamente

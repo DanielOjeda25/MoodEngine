@@ -4,7 +4,7 @@
 
 namespace Mood::vehicle {
 
-VehicleConfig makeDefaultSA() {
+VehicleConfig makeFallbackGenericSedan() {
     VehicleConfig cfg;
 
     // Chasis: sedan SA tipico 1.8m alto x 4m largo x 1.8m ancho =>

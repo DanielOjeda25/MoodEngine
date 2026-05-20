@@ -42,7 +42,7 @@ void InspectorPanel::renderVehicleSection(Entity e) {
     }
     ImGui::TextDisabled(
         "%s",
-        "Vacio = makeDefaultSA(). Cambio + Enter rematerializa el vehicle.");
+        "Vacio = fallback generico (warn). Cambio + Enter rematerializa.");
 
     ImGui::Spacing();
     ImGui::TextDisabled("Runtime (read-only):");
