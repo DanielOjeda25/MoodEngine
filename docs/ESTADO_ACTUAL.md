@@ -30,7 +30,32 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H69 (2026-05-19)
+## 0.1. Último hito de feature — F2H70.1 (2026-05-20)
+
+**Sistema data-driven de vehículos (estilo Source/Valve).** Tag `v1.58.0-fase2-hito70-1`. Detalle completo en [`hitos/F2H70.md`](hitos/F2H70.md). Plan archivado en [`archive/plans/PLAN_HITO_F2H70.md`](archive/plans/PLAN_HITO_F2H70.md).
+
+**Pivot mid-hito**: el plan inicial era "fix 3 bugs sistémicos del VehicleSystem". El dev objetó verbatim *"qué pasa si mañana yo agrego 10 autos más? tener los valores hardcodeados, no lo veo realmente viable"* cuando propuse hardcodear specs reales del DMC-12 en `makeDefaultSA()`. Pivotamos a sistema data-driven completo estilo Source Engine (`scripts/vehicles/<car>.txt`).
+
+**Lo que entregó**:
+
+- **Bloque A — auto-spawn-height vía `TransformComponent.pivotYOffset`**: runtime-only field; `worldMatrix()` aplica `position.y + pivotYOffset` antes del translate. `VehicleSystem` materialize lazy + `SceneLoader::applyOneEntity` (también Editor mode sin Play) setean `tf.pivotYOffset = -mesh->aabbMin.y`. Post-tick resta el offset antes de escribir al TC → `tf.position` queda "raw" (lo que el dev escribe en moodmap), `worldMatrix()` lo re-aplica transparente. Patrón Unity/Unreal.
+- **Bloque B — quat sync sin gimbal**: `glm::quat rotation` + `bool useQuaternion` en TC. `VehicleSystem::writeWorldMatrixToTransform` extrae quat con `glm::quat_cast(mat3(world))` sin pasar por euler intermedio → resuelve gimbal lock cerca de rotaciones singulares (180° en Y). `InspectorPanel_Transform` refresca euler desde quat para display; edit manual resetea `useQuaternion=false`.
+- **Bloque C — Schema `.moodvehicle` v2 axle-based estilo Source**: `body / axle_front / axle_rear / engine / brakes / steering` con units dev-friendly (mm, kg, HP, Nm @ RPM) — conversión interna al SI. Axles expandidos a wheels FL+FR / RL+RR con `attachLocal` derivado de `offset_z_mm + ±track_mm/2`. Presets `transmission: "5-speed-manual" / "4-speed-auto" / "6-speed-manual"` cargan gear ratios típicos. `brakes.deceleration_target_mps2` deriva brakeTorque via física. `schemaVersion: 2` triggea el nuevo parser; v1 sigue funcionando.
+- **Bloque D — Convenciones de assets + `tools/glb/` versionado**: `docs/asset_conventions.md` (1u=1m, +Z forward glTF, origin libre absorbido por engine, sin det<0, naming `wheel_FL/FR/RL/RR`). 6 scripts genéricos en `tools/glb/` (scale/flatten/center_y/reorient/verify/diag) promocionados desde `c:/tmp/` con argparse + common.py compartido + README pipeline. `reorient.py` nuevo (rota yaw + hornea posiciones + normales).
+- **Bloque E — `assets/vehicles/delorean/delorean_dmc12.moodvehicle`** con specs reales DMC-12 stock (1230 kg, 130 HP, 208 Nm @ 2750 rpm, redline 5500, 5-speed manual + reverse, RWD, dimensions [1853, 1136, 4220] mm = match exacto AABB del modelo, track 1588mm front/rear, wheelbase 2410mm).
+- **Bloque G — Rename `makeDefaultSA() → makeFallbackGenericSedan()`** (9 archivos, 47 occurrences). Sentinel `__default_vehicle_sa → __fallback_generic_sedan`. Refleja el rol real: fallback genérico con warn log cuando se usa, no "default DeLorean-specific". Specs reales viven en el `.moodvehicle`, no en C++.
+
+**Validación visual**: hitbox del chassis Jolt ahora encaja con el modelo (mismas dimensiones), wheels físicas alineadas con las visuales del .glb. Moodmap demo extendido a camino largo 60m × 8m con NPC al final del recorrido.
+
+**Issues residuales agendados a F2H70.2** (no son scope del schema parsing): (1) **frame inverso post-reorient** — cuando reorienté el .glb a +Z forward, W/A/D quedaron invertidos (cámara FPS del seat mount asume convención vieja). Workaround pragmático: revertí el .glb + uso `rotationEuler: [0, 180, 0]` en moodmap del DeLorean. (2) **chassis flota 7-10cm** sobre el piso por Jolt spring settle del spawn — fix: `pivotYOffset` debe considerar `wheel_radius + spring_rest_length`, no solo `-aabbMin.y`. (3) **momentum indefinido** sin acelerador — el schema v2 no expone `chassis.linear_damping` ni `angular_damping`; agregar y propagar a `JPH::BodyCreationSettings`.
+
+**Lección operacional crítica** (memoria `feedback-build-validar-siempre`): durante la sesión el dev abrió `MoodEditor.exe` Release con timestamp del **10 de mayo** (9 días antes de los commits de Bloques A+B). Cuando reportó "modelos enormes + sin texturas", asumí regresión de mis cambios; en realidad el binario ni los contenía. Diagnóstico llevó 30+ minutos hasta comparar timestamps. **Tests verdes ≠ feature funcionando**: cualquier cambio C++ debe ir seguido de rebuild + abrir editor + validar visual antes de marcar bloque completo.
+
+**Suite 1029/10227 verde** (sin tests nuevos — el refactor es backward-compat con v1 + integration test coverage indirecto via VehicleConfig validator).
+
+---
+
+## 0.2. Hito previo — F2H69 (2026-05-19)
 
 **Trigger NPC debug + pipeline glTF multi-node + DeLorean swap.** Tag `v1.57.0-fase2-hito69`. Detalle completo en [`hitos/F2H69.md`](hitos/F2H69.md). Cierra el bug conocido que F2H68 dejó abierto.
 
@@ -40,7 +65,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.2. Hito previo — F2H68 (2026-05-19)
+## 0.3. Hito previo — F2H68 (2026-05-19)
 
 **Auto-ragdoll por impacto (infra completa).** Tag `v1.55.0-fase2-hito68`. Detalle completo en [`hitos/F2H68.md`](hitos/F2H68.md).
 
@@ -48,7 +73,7 @@ Stack completo de auto-ragdoll por contacto: `physics_internal::ContactListener`
 
 ---
 
-## 0.3. Hito previo — F2H67 (2026-05-19)
+## 0.4. Hito previo — F2H67 (2026-05-19)
 
 **Vehicle physics estilo GTA San Andreas.** Tag `v1.54.0-fase2-hito67`. Detalle completo en [`hitos/F2H67.md`](hitos/F2H67.md). **Cierra plan original F2H25** dentro de Sub-fase 2.4 (Física avanzada).
 
@@ -56,7 +81,7 @@ Stack completo de auto-ragdoll por contacto: `physics_internal::ContactListener`
 
 ---
 
-## 0.4. Hito anterior — F2H66 (2026-05-18)
+## 0.5. Hito anterior — F2H66 (2026-05-18)
 
 **Ragdolls auto-build sobre `JPH::Ragdoll`.** Tag `v1.53.0-fase2-hito66`. Detalle completo en [`hitos/F2H66.md`](hitos/F2H66.md). Cierra plan original F2H24 dentro de Sub-fase 2.4 (Física avanzada).
 
@@ -64,7 +89,7 @@ Stack completo de auto-ragdoll por contacto: `physics_internal::ContactListener`
 
 ---
 
-## 0.5. Hito anterior — F2H65 (2026-05-18)
+## 0.6. Hito anterior — F2H65 (2026-05-18)
 
 **Jolt constraints (Hinge / Distance / Point).** Tag `v1.52.0-fase2-hito65`. Detalle completo en [`hitos/F2H65.md`](hitos/F2H65.md). Abre Sub-fase 2.4 (Física avanzada) del plan original.
 

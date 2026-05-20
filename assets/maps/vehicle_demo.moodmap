@@ -2,43 +2,27 @@
   "brushes": [
     {
       "blockColor": [0.30, 0.30, 0.32, 1.0],
-      "halfExtents": [10.0, 0.5, 10.0],
+      "halfExtents": [4.0, 0.25, 30.0],
       "kind": "solid",
-      "position": [0.0, -0.5, 0.0],
+      "position": [0.0, -0.25, 0.0],
       "rotationEuler": [0.0, 0.0, 0.0],
-      "tag": "Floor"
+      "tag": "Camino"
     },
     {
-      "blockColor": [0.55, 0.35, 0.20, 1.0],
-      "halfExtents": [3.0, 0.3, 3.0],
+      "blockColor": [0.50, 0.40, 0.30, 1.0],
+      "halfExtents": [0.3, 0.5, 30.0],
       "kind": "solid",
-      "position": [-7.0, 1.0, 0.0],
-      "rotationEuler": [0.0, 0.0, 15.0],
-      "tag": "Rampa"
+      "position": [-4.3, 0.5, 0.0],
+      "rotationEuler": [0.0, 0.0, 0.0],
+      "tag": "BordeIzq"
     },
     {
-      "blockColor": [0.40, 0.40, 0.45, 1.0],
-      "halfExtents": [10.0, 1.0, 0.3],
+      "blockColor": [0.50, 0.40, 0.30, 1.0],
+      "halfExtents": [0.3, 0.5, 30.0],
       "kind": "solid",
-      "position": [0.0, 1.0, -10.0],
+      "position": [4.3, 0.5, 0.0],
       "rotationEuler": [0.0, 0.0, 0.0],
-      "tag": "ParedNorte"
-    },
-    {
-      "blockColor": [0.40, 0.40, 0.45, 1.0],
-      "halfExtents": [10.0, 1.0, 0.3],
-      "kind": "solid",
-      "position": [0.0, 1.0, 10.0],
-      "rotationEuler": [0.0, 0.0, 0.0],
-      "tag": "ParedSur"
-    },
-    {
-      "blockColor": [0.40, 0.40, 0.45, 1.0],
-      "halfExtents": [0.3, 1.0, 10.0],
-      "kind": "solid",
-      "position": [10.0, 1.0, 0.0],
-      "rotationEuler": [0.0, 0.0, 0.0],
-      "tag": "ParedEste"
+      "tag": "BordeDer"
     }
   ],
   "entities": [
@@ -49,12 +33,12 @@
       },
       "tag": "DeLorean",
       "transform": {
-        "position": [0.0, 0.0, 0.0],
-        "rotationEuler": [0.0, 0.0, 0.0],
+        "position": [0.0, 0.0, 25.0],
+        "rotationEuler": [0.0, 180.0, 0.0],
         "scale": [1.0, 1.0, 1.0]
       },
       "vehicle": {
-        "configPath": ""
+        "configPath": "vehicles/delorean/delorean_dmc12.moodvehicle"
       }
     },
     {
@@ -84,7 +68,7 @@
       },
       "tag": "NPC_Target",
       "transform": {
-        "position": [0.0, 0.0, -5.0],
+        "position": [0.0, 0.0, -20.0],
         "rotationEuler": [0.0, 0.0, 0.0],
         "scale": [1.0, 1.0, 1.0]
       }

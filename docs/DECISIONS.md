@@ -11,6 +11,112 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-20: F2H70.1 — Sistema data-driven de vehículos (Source/Valve-style)
+
+### Decisión 1 — Pivot mid-hito: "fix 3 bugs" → "sistema data-driven completo"
+
+**Contexto:** El plan original de F2H70 era resolver 3 bugs sistémicos del VehicleSystem identificados en F2H69 (auto-spawn-height, quat sync, split-by-node). Mid-sesión, propuse agregar una `makeDeLoreanDMC12()` con specs reales (mass 1230 kg, peak torque 208 Nm @ 2750 rpm, etc.) hardcoded en C++ junto al `makeDefaultSA()` genérico.
+
+**Objeción verbatim del dev:** *"qué pasa si mañana yo agrego 10 autos más? entiendo que tendremos que tener algo más complejo como un sistema para trabajar otros autos... tener los valores hardcodeados, no lo veo realmente viable."*
+
+**Decisión:** Pivot F2H70 de "fix 3 bugs" a "sistema data-driven completo estilo Source Engine/Valve". Los Bloques A+B (engine fixes spawn-height + quat sync) se conservan pero ahora sirven al sistema general, no al DeLorean-specific. Bloques C-I son nuevos: schema v2 axle-based, catálogo de assets reales, rename del fallback genérico, convenciones documentadas, scripts `tools/glb/` versionados. F2H70 se subdivide en .1 (sistema base) + .2 (tuning físico residual) + .3 (wheels visuales con split-by-node).
+
+**Razones:**
+- Hardcodear specs en C++ no escala a 10+ vehículos: cada uno requiere recompile + cambio de código vs simple `.moodvehicle` JSON drop-in.
+- Source Engine ships con `scripts/vehicles/jeep_test.txt`, `airboat.txt`, etc. — patrón battle-tested en 200+ mods de Half-Life 2 / Garry's Mod.
+- Engineering profesional ≠ parches a corto plazo. El dev explicitó: *"comencemos a pensar como verdaderos ingenieros y no juniors en este tema"*.
+- Alineación con la memoria `feedback-no-reinventar-rueda`: buscar standard industrial antes de diseñar algo propio.
+
+**Alternativas descartadas:**
+- Mantener plan original "fix 3 bugs": un hito que solo arregla bugs sin proveer el catálogo escalable. El dev hubiera tenido que crear `makeBanshee()`, `makeBuggy()`, etc. en C++ para cada vehículo futuro.
+- Hardcodear como struct C++: similar problema; obliga a recompile + linker dependency entre gameplay code y vehicle data.
+
+**Condiciones de revisión:** Si el patrón Source Engine resulta demasiado pesado en F2H70.2/.3 (al construir el Vehicle Browser UI) podemos simplificar — el schema v2 ya es backward-compat con v1 flat, así que devolver al patrón antiguo es trivial.
+
+---
+
+### Decisión 2 — Schema v2 axle-based en lugar de wheels-individuales
+
+**Contexto:** El v1 del `.moodvehicle` (F2H67) listaba las 4 wheels individualmente como array. Para refactor v2, había dos opciones: (a) ampliar v1 con más campos (PBR-like wheel granularity), (b) replicar el patrón axle-based de Source (1 axle delantero + 1 trasero, cada uno con su wheel/suspension/torque_factor/brake_factor).
+
+**Decisión:** v2 axle-based. El loader expande `axle_front` → wheels FL+FR con `attachLocal = [-track_mm/2000, attach_y_mm/1000, offset_z_mm/1000]` y mirror para FR. Similar para `axle_rear` → RL+RR.
+
+**Razones:**
+- **Conciso**: 2 axles vs 4 wheels reduce duplicación. Modificar `friction_long` de las dos ruedas traseras (tuning RWD oversteer típico) es 1 edit, no 2 ediciones idénticas.
+- **Semánticamente correcto**: `torque_factor` por axle modela exactamente lo que pasa físicamente en un diff (el diferencial reparte torque al axle, no a wheels individuales).
+- **Reusabilidad de modders**: devs viniendo del modding de Source (Gmod, HL2 mods) reconocen el patrón instantáneamente.
+- **Internamente sigue mapeado a 4 wheels en Jolt** (Jolt no soporta axles nativos): el loader hace la expansión, el resto del engine ve la misma estructura `wheels[4]`. Zero impact en `PhysicsWorld_Vehicle.cpp` y `VehicleSystem`.
+
+**Alternativas descartadas:**
+- Schema v1 ampliado con más campos por wheel: hubiera mantenido la verbosidad de 4 entradas para autos simétricos (mayoría).
+- Tomar el JSON literal de KeyValues VDF: incompatible con el resto del proyecto (nlohmann/json).
+
+**Condiciones de revisión:** Si emergen vehículos asimétricos (autos custom de drift con track distinto front/rear, motos con 2 wheels) reevaluar el patrón. Para autos estándar simétricos (95% del use case), axle-based es óptimo.
+
+---
+
+### Decisión 3 — Workaround `rotationEuler [0, 180, 0]` en moodmap del DeLorean (pragmático)
+
+**Contexto:** En Bloque D apliqué `reorient.py yaw=180°` al `delorean.glb` para alinearlo a +Z forward (convención glTF estándar). Al validar visualmente, emergió bug: TODOS los controles del auto quedaron invertidos (W/A/D al revés). El frame visual rotó pero algo del code-path sigue con convención vieja (probable: la cámara FPS del seat mount asume `-Z forward` mientras Jolt usa `+Z`).
+
+**Decisión:** Revertir el `.glb` reorientado al estado original (modelo mira -Z) + mantener `rotationEuler: [0, 180, 0]` en el moodmap del DeLorean específicamente. Asset-specific workaround. Bug sistémico agendado para F2H70.2.
+
+**Razones:**
+- **Cierre práctico de F2H70.1**: pelear el bug sistémico ahora alarga la sesión indefinidamente sin garantía de fix correcto. El dev explicitó cierre hoy.
+- **Workaround acotado**: el moodmap es 1 archivo, 1 línea modificada. El asset (`.glb`) queda intacto y reusable para cuando se arregle el bug.
+- **Visibilidad del problema**: dejar el workaround en el moodmap mantiene la "deuda" visible (el dev y agentes futuros ven el `[0, 180, 0]` y saben que es deuda técnica).
+- **Cualquier vehículo nuevo no-DeLorean** debería poder hacer drop-in sin esto si está procesado con `reorient.py` correctamente y el bug sistémico del seat-mount se arregla en F2H70.2.
+
+**Alternativas descartadas:**
+- Atacar el bug sistémico ahora: estima 1-3h adicionales (necesita debuggear cámara FPS + `VehicleSeatComponent` + Jolt forward convention + posible cambio en `MountSystem`).
+- Aceptar controles invertidos en F2H70.1: feel inutilizable para el dev al probar el sample.
+
+**Condiciones de revisión:** F2H70.2 debe atacar el bug y permitir borrar el `[0, 180, 0]` del moodmap del DeLorean. Memoria asociada: `feedback-vehicle-sistemico`.
+
+---
+
+### Decisión 4 — `tools/glb/` versionado en repo, no en `c:/tmp/`
+
+**Contexto:** En F2H69 creé scripts Python ad-hoc en `c:/tmp/` para procesar el `.glb` del DeLorean (scale, flatten, center_y). Funcionales pero con paths hardcoded, sin args, sin docstrings claros.
+
+**Decisión:** Promoción a `tools/glb/` versionado en git con 6 scripts genéricos (`scale.py / flatten.py / center_y.py / reorient.py / verify.py / diag.py`) + `common.py` (helpers compartidos) + `README.md` (pipeline recomendado).
+
+**Razones:**
+- Pipeline reusable: cualquier asset nuevo necesita el mismo flujo (verify → scale → flatten → reorient → verify). Scripts efímeros = re-escribirlos cada vez.
+- Engineering profesional: las herramientas del pipeline forman parte del proyecto, no del scratch del dev.
+- Alineación con `docs/asset_conventions.md`: el doc define la convención (1u=1m, +Z forward, etc.) y los scripts son la herramienta para conformar assets externos a esa convención.
+- argparse + sin paths hardcoded → reusables para futuros vehículos sin modificar el script.
+
+---
+
+### Decisión 5 — Rename `makeDefaultSA()` → `makeFallbackGenericSedan()`
+
+**Contexto:** El nombre `makeDefaultSA` (de F2H67) sugería que era el "default ideal" para vehículos del estilo GTA SA. Con el sistema data-driven, el rol real es **fallback genérico** cuando un `.moodvehicle` no carga (path vacío, JSON inválido).
+
+**Decisión:** Rename a `makeFallbackGenericSedan`. Sentinel interno `__default_vehicle_sa` → `__fallback_generic_sedan`. 47 ocurrencias en 9 archivos (src + tests). El log path emite warn cuando se cae al fallback ("vehicle '<path>' no carga, fallback a generic sedan") — alerta al dev que algo está mal con el config.
+
+**Razones:**
+- Specs reales del DeLorean (o cualquier otro vehículo) NO viven en C++ — están en `.moodvehicle` files. C++ solo provee fallback inocuo.
+- El nombre comunica el contrato: NO usar como punto de partida deliberado; SI usar implícitamente cuando todo lo demás falla.
+- Warn en logs detecta configs rotos temprano.
+
+---
+
+### Decisión 6 — Build + abrir editor obligatorios antes de cerrar bloque
+
+**Contexto:** Durante la sesión el dev abrió `MoodEditor.exe` Release con timestamp del **10 de mayo** (9 días antes de los commits de Bloques A+B). Cuando reportó visualmente "modelos enormes + sin texturas", asumí regresión de mis cambios; en realidad el binario ni los contenía. Diagnóstico llevó 30+ minutos hasta comparar timestamps. El dev objetó: *"no se supone que ante cada cambio deberías hacer un build como es que vengo probando cosas con 10 días de retraso?"*.
+
+**Decisión:** Cada cambio a `.cpp` o `.h` del engine requiere **rebuild + abrir editor + validar visualmente** antes de marcar bloque completo. Tests verdes (1029/10227) NO son suficientes — las suites no cubren render visual / asset loading / material binding.
+
+**Razones:**
+- Confianza basada en evidencia: tests headless solo validan contratos unitarios, no integration visual.
+- El dev confía en lo que ve en el editor, no en exit codes de tests.
+- El workflow correcto está alineado con [memoria `feedback-auto-accept`](../C:/Users/Daniel/.claude/projects/c--Users-Daniel-Documents-GitHub-MoodEngine/memory/feedback_auto_accept.md): el dev autoriza builds/tests automáticos; solo pedir permiso para correr el editor.
+
+**Memoria asociada:** [`feedback-build-validar-siempre`](../C:/Users/Daniel/.claude/projects/c--Users-Daniel-Documents-GitHub-MoodEngine/memory/feedback_build_validar_siempre.md).
+
+---
+
 ## 2026-05-19: F2H69 — Trigger NPC debug + pipeline glTF multi-node + DeLorean swap
 
 ### Decisión 1 — Sensor bodies fuerzan `mAllowSleeping=false` independiente del MotionType
