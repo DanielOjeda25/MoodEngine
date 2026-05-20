@@ -36,7 +36,7 @@
 namespace Mood {
 
 void EditorApplication::updateWindowTitle() {
-    std::string title = "MoodEngine Editor - v0.6.0-dev (Hito 6)";
+    std::string title = "MoodEngine Editor";
     if (m_project.has_value()) {
         title = "MoodEngine Editor - " + m_project->name;
         if (m_projectDirty) title += " *";
