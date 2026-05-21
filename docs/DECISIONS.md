@@ -11,6 +11,57 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-21: F2H70.4 — Ruedas que rotan (split-by-node) + HUD de conducción
+
+### Decisión 1 — Sub-mesh selector (include + exclude) en vez de splittear el `.glb`
+
+**Contexto:** Para que las ruedas roten independientes del chassis, cada una tiene que ser geometría posicionable por separado. Dos caminos: (a) splittear el `.glb` en 5 meshes (chassis + 4 ruedas) en disco, o (b) mantener un mesh consolidado y seleccionar sub-meshes en el render.
+
+**Decisión:** Mesh consolidado + selección por nombre de `SubMesh`. El chassis usa `MeshRendererComponent.hideSubMeshPrefix = "wheel_"` (exclude); cada wheel-entity usa `subMeshName = "wheel_FL/FR/RL/RR"` (include-only, ya existía). Los 4 wheel-entities + el chassis comparten el mismo `MeshAssetId` + materiales.
+
+**Razones:**
+- **Sin duplicar geometría** en disco ni en GPU (una sola carga de mesh).
+- **`subMeshName` ya existía** como include-only; agregar el exclude complementario (`hideSubMeshPrefix`) es un cambio chico y simétrico.
+- El render ya conoce `SubMesh.name` (= nombre del aiNode dueño), así que el filtro es trivial.
+
+**Alternativas descartadas:**
+- Split del `.glb` en meshes separados: duplica datos, complica el pipeline de assets, y obliga a cargar/trackear 5 meshes por auto.
+
+**Condiciones de revisión:** Si un auto tuviera muchísimos sub-meshes y el filtro lineal por nombre pesara, se podría precomputar el set de índices a saltear. No es el caso hoy.
+
+### Decisión 2 — Naming canónico de ruedas como único requisito asset-side
+
+**Contexto:** El engine tiene que saber cuáles sub-meshes son ruedas y cuál es cuál (FL/FR/RL/RR) para posicionarlas en los attach points de Jolt.
+
+**Decisión:** El engine es agnóstico al `.glb`; lo único que exige es que las 4 ruedas se llamen `wheel_FL/FR/RL/RR` y estén centradas en su hub. `tools/glb/split_wheels.py` produce eso desde cualquier auto, clasificando **por posición física** (no por el nombre original del nodo). Degradación elegante: un auto sin procesar simplemente no spawnea ruedas independientes (no crashea, no se rompe el render).
+
+**Razones:**
+- **Sistémico** (memoria `feedback-vehicle-sistemico`): el engine absorbe la variación del asset; el dev no tunea valores por-auto en C++.
+- **Clasificación por posición** tolera modelos cuyas ruedas se llamen `RUEDRA_*`, `b_t_l`, etc. — el nombre original es irrelevante.
+
+**Alternativas descartadas:**
+- Hardcodear nombres de nodo por-auto: anti-sistémico, no escala a 10+ autos.
+- Detección puramente geométrica (sin naming): más robusta pero más compleja; diferida al gestor de vehículos in-editor (backlog).
+
+**Condiciones de revisión:** El gestor in-editor debería hacer la detección geométrica y absorber `split_wheels.py`.
+
+### Decisión 3 — wheel-entities NO se serializan
+
+**Contexto:** Las wheel-entities que spawnea el `VehicleSystem` tienen `MeshRenderer`, así que entraban por el check `hasMr` del serializer y se guardaban. Pero `VehicleComponent.wheelEntities[]` no persiste → al recargar el sistema respawnea 4 nuevas → **8 ruedas** (4 huérfanas guardadas + 4 respawneadas).
+
+**Decisión:** El `SceneSerializer` saltea explícitamente las entities con tag `wheel_FL/FR/RL/RR` antes del resto de checks. Son estado runtime derivado del `VehicleComponent` del chassis; el `VehicleSystem` siempre las rematerializa al cargar (igual que ya hace con `vehicleId`). Se eliminó el `isWheelTag` capital (`Wheel_*`), código muerto del diseño placeholder de F2H67.
+
+**Razones:**
+- **Fuente de verdad única**: el auto se define por su chassis + `.moodvehicle`; las ruedas son consecuencia, no dato a persistir.
+- **Evita el bug de duplicación** sin agregar lógica de reconexión de handles al loader.
+
+**Alternativas descartadas:**
+- Persistir las ruedas + reconectar `wheelEntities[]` por tag en el loader: más código, más superficie de bugs, y contradice que ya son derivables.
+
+**Condiciones de revisión:** Cubierto por test de regresión (`test_scene_serializer_lighting_physics.cpp`).
+
+---
+
 ## 2026-05-20: F2H70.3 — Vehicle Browser + drag-and-drop de vehículos al viewport
 
 ### Decisión 1 — Mesh declarado en el `.moodvehicle` (`body.mesh_path`)

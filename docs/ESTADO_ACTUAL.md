@@ -30,7 +30,28 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H70.3 (2026-05-20)
+## 0.1. Último hito de feature — F2H70.4 (2026-05-21)
+
+**Ruedas que rotan (split-by-node) + HUD de conducción.** Tag `v1.61.0-fase2-hito70-4`. Detalle completo en [`hitos/F2H70-4.md`](hitos/F2H70-4.md). Cierra el Bloque H que F2H70.3 dejó pendiente: las ruedas dejan de estar horneadas en el chassis y rotan/giran independientes desde la pose física de Jolt.
+
+**Lo que entregó (Bloque H)**:
+- **`tools/glb/split_wheels.py`**: centra cada mesh-nodo de rueda en su hub + renombra al canónico `wheel_FL/FR/RL/RR` clasificando **por posición en espacio físico** (no por nombre original). Aplicado al `delorean.glb`.
+- **`MeshRendererComponent.hideSubMeshPrefix`**: filtro exclude (complementa el include `subMeshName`). El chassis renderea todo menos los sub-meshes `wheel_*`; `SceneRenderer_Render` saltea cualquier `SubMesh` cuyo `name` empiece con el prefijo.
+- **Auto-spawn de wheel-entities (`VehicleSystem`)**: 4 entities hijas que comparten `MeshAssetId` + materiales del chassis y rendean solo su sub-mesh. Spawn diferido fuera del `forEach` (crear entities durante la iteración invalida iteradores de entt). `wheelsNeedSpawn()` cubre handle-0, handle stale (delete+undo) y reload. En Play: `wheel.transform = chassisWorld * GetWheelLocalTransform(i)`.
+- **`VehicleSystem::previewRest()`**: pose analítica de reposo en Editor mode (sin Play, Jolt no simula) — `wheelLocal = attachLocal - (0, restLen, 0)`. `EditorScene` lo llama en el branch no-Play.
+- **Steering gradual**: rampa hacia el target (`k_steerTurnInRate=3.0`/s, `k_steerReturnRate=6.0`/s) en vez de snap `±1`. Las traseras giran más que las delanteras porque las delanteras reparten rotación entre rolido y steering (correcto).
+- **Cleanup al borrar**: `EditorScene::deleteSelectedEntity` destruye las 4 wheel-entities + resetea `wheelEntities[]` antes del `DeleteEntityCommand` (sin esto quedaban ruedas huérfanas).
+- **HUD de conducción**: `setDrivingHud(true)` al montar esconde `crosshair`/`health_number`/`stamina_bar`/`ammo_counter` y muestra `speedometer`. El velocímetro es un **popup anclado al mundo** que sigue al auto (`EditorPlayMode` proyecta `vtf.position + (0,1.3,0)` a pantalla → `HudState.vehicle_marker_x/y` + `onscreen`; `vehicle_speed_kmh = forwardSpeed * 3.6`).
+
+**Fix lateral — wheel-entities no se serializan**: tenían `MeshRenderer` → entraban por el check `hasMr` y se guardaban, pero `wheelEntities[]` no persiste → recargar dejaba **8 ruedas** (4 huérfanas + 4 respawneadas). `SceneSerializer` ahora saltea las entities con tag `wheel_*` (el `VehicleSystem` las rematerializa). Eliminado el `isWheelTag` capital (código muerto F2H67). Test de regresión agregado.
+
+**Assets movidos** (no integrados aún): `armor-car` y `tesla` a `assets/vehicles/<nombre>/` — geométricamente válidos (1u=1m, +Z forward, sin mirrors) pero les falta `.moodvehicle` + procesar ruedas (diferido al gestor de vehículos, backlog).
+
+**Suite 1030/10233 verde** (1029 + test de regresión del serializer).
+
+---
+
+## 0.2. Hito previo — F2H70.3 (2026-05-20)
 
 **Vehicle Browser + drag-and-drop de vehículos al viewport.** Tag `v1.60.0-fase2-hito70-3`. Detalle completo en [`hitos/F2H70-3.md`](hitos/F2H70-3.md). Cierra el loop de autoría del sistema data-driven `.moodvehicle`.
 
@@ -47,7 +68,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.2. Hito previo — F2H70.2 (2026-05-20)
+## 0.3. Hito previo — F2H70.2 (2026-05-20)
 
 **Tuning físico del vehicle (damping + spawn elevation + frame consistente).** Tag `v1.59.0-fase2-hito70-2`. Detalle completo en [`hitos/F2H70-2.md`](hitos/F2H70-2.md). Cierra los 3 bugs físicos que F2H70.1 dejó pendientes.
 
@@ -59,31 +80,6 @@ Pure helpers extracted: 0         0         1 + 7 tests
 - **Grounding final**: el spring-aware arregló el brinco pero no el float en equilibrio (chassis center a 0.85m, modelo half-height 0.568m → base flotaba 0.285m). Fix data-driven `attach_y_mm: -300 → -15` (`-(half_height - spring_rest - radius)`) en ambos ejes. Validado en Editor mode: DeLorean apoya en piso.
 
 **Suite 1029/10227 verde**. **Pendiente a F2H70.3**: Vehicle Browser UI (Bloque F) + split-by-node de wheels (Bloque H, permitiría auto-derivar `attach_y`).
-
----
-
-## 0.3. Hito previo — F2H70.1 (2026-05-20)
-
-**Sistema data-driven de vehículos (estilo Source/Valve).** Tag `v1.58.0-fase2-hito70-1`. Detalle completo en [`hitos/F2H70.md`](hitos/F2H70.md). Plan archivado en [`archive/plans/PLAN_HITO_F2H70.md`](archive/plans/PLAN_HITO_F2H70.md).
-
-**Pivot mid-hito**: el plan inicial era "fix 3 bugs sistémicos del VehicleSystem". El dev objetó verbatim *"qué pasa si mañana yo agrego 10 autos más? tener los valores hardcodeados, no lo veo realmente viable"* cuando propuse hardcodear specs reales del DMC-12 en `makeDefaultSA()`. Pivotamos a sistema data-driven completo estilo Source Engine (`scripts/vehicles/<car>.txt`).
-
-**Lo que entregó**:
-
-- **Bloque A — auto-spawn-height vía `TransformComponent.pivotYOffset`**: runtime-only field; `worldMatrix()` aplica `position.y + pivotYOffset` antes del translate. `VehicleSystem` materialize lazy + `SceneLoader::applyOneEntity` (también Editor mode sin Play) setean `tf.pivotYOffset = -mesh->aabbMin.y`. Post-tick resta el offset antes de escribir al TC → `tf.position` queda "raw" (lo que el dev escribe en moodmap), `worldMatrix()` lo re-aplica transparente. Patrón Unity/Unreal.
-- **Bloque B — quat sync sin gimbal**: `glm::quat rotation` + `bool useQuaternion` en TC. `VehicleSystem::writeWorldMatrixToTransform` extrae quat con `glm::quat_cast(mat3(world))` sin pasar por euler intermedio → resuelve gimbal lock cerca de rotaciones singulares (180° en Y). `InspectorPanel_Transform` refresca euler desde quat para display; edit manual resetea `useQuaternion=false`.
-- **Bloque C — Schema `.moodvehicle` v2 axle-based estilo Source**: `body / axle_front / axle_rear / engine / brakes / steering` con units dev-friendly (mm, kg, HP, Nm @ RPM) — conversión interna al SI. Axles expandidos a wheels FL+FR / RL+RR con `attachLocal` derivado de `offset_z_mm + ±track_mm/2`. Presets `transmission: "5-speed-manual" / "4-speed-auto" / "6-speed-manual"` cargan gear ratios típicos. `brakes.deceleration_target_mps2` deriva brakeTorque via física. `schemaVersion: 2` triggea el nuevo parser; v1 sigue funcionando.
-- **Bloque D — Convenciones de assets + `tools/glb/` versionado**: `docs/asset_conventions.md` (1u=1m, +Z forward glTF, origin libre absorbido por engine, sin det<0, naming `wheel_FL/FR/RL/RR`). 6 scripts genéricos en `tools/glb/` (scale/flatten/center_y/reorient/verify/diag) promocionados desde `c:/tmp/` con argparse + common.py compartido + README pipeline. `reorient.py` nuevo (rota yaw + hornea posiciones + normales).
-- **Bloque E — `assets/vehicles/delorean/delorean_dmc12.moodvehicle`** con specs reales DMC-12 stock (1230 kg, 130 HP, 208 Nm @ 2750 rpm, redline 5500, 5-speed manual + reverse, RWD, dimensions [1853, 1136, 4220] mm = match exacto AABB del modelo, track 1588mm front/rear, wheelbase 2410mm).
-- **Bloque G — Rename `makeDefaultSA() → makeFallbackGenericSedan()`** (9 archivos, 47 occurrences). Sentinel `__default_vehicle_sa → __fallback_generic_sedan`. Refleja el rol real: fallback genérico con warn log cuando se usa, no "default DeLorean-specific". Specs reales viven en el `.moodvehicle`, no en C++.
-
-**Validación visual**: hitbox del chassis Jolt ahora encaja con el modelo (mismas dimensiones), wheels físicas alineadas con las visuales del .glb. Moodmap demo extendido a camino largo 60m × 8m con NPC al final del recorrido.
-
-**Issues residuales agendados a F2H70.2** (no son scope del schema parsing): (1) **frame inverso post-reorient** — cuando reorienté el .glb a +Z forward, W/A/D quedaron invertidos (cámara FPS del seat mount asume convención vieja). Workaround pragmático: revertí el .glb + uso `rotationEuler: [0, 180, 0]` en moodmap del DeLorean. (2) **chassis flota 7-10cm** sobre el piso por Jolt spring settle del spawn — fix: `pivotYOffset` debe considerar `wheel_radius + spring_rest_length`, no solo `-aabbMin.y`. (3) **momentum indefinido** sin acelerador — el schema v2 no expone `chassis.linear_damping` ni `angular_damping`; agregar y propagar a `JPH::BodyCreationSettings`.
-
-**Lección operacional crítica** (memoria `feedback-build-validar-siempre`): durante la sesión el dev abrió `MoodEditor.exe` Release con timestamp del **10 de mayo** (9 días antes de los commits de Bloques A+B). Cuando reportó "modelos enormes + sin texturas", asumí regresión de mis cambios; en realidad el binario ni los contenía. Diagnóstico llevó 30+ minutos hasta comparar timestamps. **Tests verdes ≠ feature funcionando**: cualquier cambio C++ debe ir seguido de rebuild + abrir editor + validar visual antes de marcar bloque completo.
-
-**Suite 1029/10227 verde** (sin tests nuevos — el refactor es backward-compat con v1 + integration test coverage indirecto via VehicleConfig validator).
 
 ---
 
