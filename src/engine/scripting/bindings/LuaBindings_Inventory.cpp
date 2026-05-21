@@ -292,7 +292,7 @@ void setupInventoryBindings(sol::state& lua, Scene* scene,
     // Mismo patron que F2H48.1 DialogSystem::setEvaluator/Executor.
 
     inv.set_function("on_pickup",
-        [](sol::function fn) {
+        [](sol::protected_function fn) {
             if (!fn.valid()) {
                 Inventory::Hooks::setPickupHook(nullptr);
                 return;
@@ -310,7 +310,7 @@ void setupInventoryBindings(sol::state& lua, Scene* scene,
         });
 
     inv.set_function("on_drop",
-        [](sol::function fn) {
+        [](sol::protected_function fn) {
             if (!fn.valid()) {
                 Inventory::Hooks::setDropHook(nullptr);
                 return;
@@ -328,7 +328,7 @@ void setupInventoryBindings(sol::state& lua, Scene* scene,
         });
 
     inv.set_function("on_use",
-        [](sol::function fn) {
+        [](sol::protected_function fn) {
             if (!fn.valid()) {
                 Inventory::Hooks::setUseHook(nullptr);
                 return;
@@ -361,7 +361,7 @@ void setupInventoryBindings(sol::state& lua, Scene* scene,
     // bindings de UI (si los tiene), mutar HUD state, o ignorar (panel
     // vacio). Para volver al render default: `inventory.set_renderer(nil)`.
     inv.set_function("set_renderer",
-        [](sol::function fn) {
+        [](sol::protected_function fn) {
             if (!fn.valid()) {
                 Inventory::Hooks::setRenderHook(nullptr);
                 return;
