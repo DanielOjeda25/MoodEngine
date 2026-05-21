@@ -150,8 +150,11 @@ void InspectorPanel::renderJointSection(Entity e) {
         joint.dirty = true;
         m_editedThisFrame = true;
     }
-    detail::helpMarker(
-        I18n::T("editor.panel.inspector.joint.pivot_local_help").c_str());
+    // F2H74: pushEditIfDone ANTES del helpMarker — trackPropertyEdit lee
+    // el ID del ultimo item dibujado; si el helpMarker (TextDisabled no
+    // interactivo) va antes, IsItemActivated/Deactivated dan siempre false
+    // y el undo nunca dispara. El helpMarker no dibuja widget, su SameLine
+    // sigue pegandose al DragFloat.
     detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, joint.pivotLocal,
         [](Entity& en, const glm::vec3& v) {
             auto& j = en.getComponent<JointComponent>();
@@ -159,6 +162,8 @@ void InspectorPanel::renderJointSection(Entity e) {
             j.dirty = true;
         },
         "Editar Joint pivotLocal");
+    detail::helpMarker(
+        I18n::T("editor.panel.inspector.joint.pivot_local_help").c_str());
 
     // --- Conditional fields per type ---
     if (joint.type == JointComponent::Type::Hinge) {
@@ -167,8 +172,6 @@ void InspectorPanel::renderJointSection(Entity e) {
             joint.dirty = true;
             m_editedThisFrame = true;
         }
-        detail::helpMarker(
-            I18n::T("editor.panel.inspector.joint.axis_local_help").c_str());
         detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, joint.axisLocal,
             [](Entity& en, const glm::vec3& v) {
                 auto& j = en.getComponent<JointComponent>();
@@ -176,6 +179,8 @@ void InspectorPanel::renderJointSection(Entity e) {
                 j.dirty = true;
             },
             "Editar Joint axisLocal");
+        detail::helpMarker(
+            I18n::T("editor.panel.inspector.joint.axis_local_help").c_str());
 
         const std::string limMinLabel = I18n::T("editor.panel.inspector.joint.limit_min") + "##joint";
         if (ImGui::DragFloat(limMinLabel.c_str(), &joint.limitMinDeg, 1.0f, -180.0f, 180.0f)) {
@@ -195,8 +200,6 @@ void InspectorPanel::renderJointSection(Entity e) {
             joint.dirty = true;
             m_editedThisFrame = true;
         }
-        detail::helpMarker(
-            I18n::T("editor.panel.inspector.joint.limit_help").c_str());
         detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, joint.limitMaxDeg,
             [](Entity& en, const f32& v) {
                 auto& j = en.getComponent<JointComponent>();
@@ -204,6 +207,8 @@ void InspectorPanel::renderJointSection(Entity e) {
                 j.dirty = true;
             },
             "Editar Joint limitMaxDeg");
+        detail::helpMarker(
+            I18n::T("editor.panel.inspector.joint.limit_help").c_str());
     } else if (joint.type == JointComponent::Type::Distance) {
         const std::string minLabel = I18n::T("editor.panel.inspector.joint.min_distance") + "##joint";
         if (ImGui::DragFloat(minLabel.c_str(), &joint.minDistance, 0.05f, 0.0f, 1000.0f)) {
@@ -223,8 +228,6 @@ void InspectorPanel::renderJointSection(Entity e) {
             joint.dirty = true;
             m_editedThisFrame = true;
         }
-        detail::helpMarker(
-            I18n::T("editor.panel.inspector.joint.distance_help").c_str());
         detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, joint.maxDistance,
             [](Entity& en, const f32& v) {
                 auto& j = en.getComponent<JointComponent>();
@@ -232,6 +235,8 @@ void InspectorPanel::renderJointSection(Entity e) {
                 j.dirty = true;
             },
             "Editar Joint maxDistance");
+        detail::helpMarker(
+            I18n::T("editor.panel.inspector.joint.distance_help").c_str());
     } else if (joint.type == JointComponent::Type::Slider) {
         // Slider reusa axisLocal como direccion del riel.
         const std::string axisLabel = I18n::T("editor.panel.inspector.joint.slider_axis") + "##joint";
@@ -239,8 +244,6 @@ void InspectorPanel::renderJointSection(Entity e) {
             joint.dirty = true;
             m_editedThisFrame = true;
         }
-        detail::helpMarker(
-            I18n::T("editor.panel.inspector.joint.slider_axis_help").c_str());
         detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, joint.axisLocal,
             [](Entity& en, const glm::vec3& v) {
                 auto& j = en.getComponent<JointComponent>();
@@ -248,6 +251,8 @@ void InspectorPanel::renderJointSection(Entity e) {
                 j.dirty = true;
             },
             "Editar Joint slider axis");
+        detail::helpMarker(
+            I18n::T("editor.panel.inspector.joint.slider_axis_help").c_str());
 
         const std::string sMinLabel = I18n::T("editor.panel.inspector.joint.slider_limit_min") + "##joint";
         if (ImGui::DragFloat(sMinLabel.c_str(), &joint.sliderLimitMin, 0.05f, -1000.0f, 1000.0f)) {
@@ -267,8 +272,6 @@ void InspectorPanel::renderJointSection(Entity e) {
             joint.dirty = true;
             m_editedThisFrame = true;
         }
-        detail::helpMarker(
-            I18n::T("editor.panel.inspector.joint.slider_limit_help").c_str());
         detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, joint.sliderLimitMax,
             [](Entity& en, const f32& v) {
                 auto& j = en.getComponent<JointComponent>();
@@ -276,6 +279,8 @@ void InspectorPanel::renderJointSection(Entity e) {
                 j.dirty = true;
             },
             "Editar Joint sliderLimitMax");
+        detail::helpMarker(
+            I18n::T("editor.panel.inspector.joint.slider_limit_help").c_str());
     } else if (joint.type == JointComponent::Type::Fixed) {
         // Fixed: auto-detect de la pose relativa, sin campos editables.
         ImGui::TextWrapped("%s",
