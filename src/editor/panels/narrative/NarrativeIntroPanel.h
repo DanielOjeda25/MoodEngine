@@ -22,7 +22,7 @@ public:
 
     void onImGuiRender() override;
     const char* name() const override { return "Narrative Intro"; }
-    const char* category() const override { return "Debug"; }
+    const char* category() const override { return "Narrative"; }
 };
 
 } // namespace Mood

@@ -31,7 +31,7 @@ public:
 
     void onImGuiRender() override;
     const char* name() const override { return "Item Property Editor"; }
-    const char* category() const override { return "Assets"; }
+    const char* category() const override { return "Gameplay"; }
 
     void setEditorUi(EditorUI* ui) { m_ui = ui; }
 

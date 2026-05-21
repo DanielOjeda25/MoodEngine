@@ -168,7 +168,8 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             // El order de las categorias arriba es deliberado: Scene primero
             // (lo mas frecuente), Assets despues, Debug al final, World
             // placeholder hasta F2H10+ (CSG).
-            const char* kCategories[] = {"Scene", "Assets", "Debug", "World"};
+            const char* kCategories[] = {"Scene", "Assets", "Narrative",
+                                          "Gameplay", "Debug"};
             for (const char* cat : kCategories) {
                 if (ImGui::BeginMenu(cat)) {
                     bool any = false;
