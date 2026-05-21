@@ -30,7 +30,22 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H70.1 (2026-05-20)
+## 0.1. Último hito de feature — F2H70.2 (2026-05-20)
+
+**Tuning físico del vehicle (damping + spawn elevation + frame consistente).** Tag `v1.59.0-fase2-hito70-2`. Detalle completo en [`hitos/F2H70-2.md`](hitos/F2H70-2.md). Cierra los 3 bugs físicos que F2H70.1 dejó pendientes.
+
+**Lo que entregó**:
+- **Bloque C — chassis damping configurable**: pre-fix el chassis estaba hardcoded a `mLinearDamping=0.05` (sim-floppy, rodaba infinito al soltar W). `chassisLinearDamping` + `chassisAngularDamping` (default 0.3 arcade) leídos desde `body.linear_damping` / `angular_damping` en el `.moodvehicle`, aplicados a `JPH::BodyCreationSettings`.
+- **Bloque B — spawn elevation spring-aware**: helper `wheelRestCompression(WheelConfig) = g/(2π·f)²` (mass-independent) sumado al `pivotYOffset` en `VehicleSystem::chassisRenderYOffset`. `SceneLoader` usa el helper centralizado (aplica también en Editor mode). Resuelve el brinco visual al iniciar Play.
+- **Bloque D5 — mesh yaw offset data-driven**: `body.mesh_yaw_offset_deg` (número) o `body.mesh_forward_axis` (`"+Z"/"-Z"/"+X"/"-X"`) en el `.moodvehicle`. `TransformComponent::pivotYawOffsetDeg` runtime-only post-multiply `Ry` (visual-only, no afecta física). DeLorean declara `mesh_yaw_offset_deg: 180` → **moodmap limpio** (workaround `rotationEuler: [0,180,0]` de F2H70.1 eliminado). Drag-and-drop friendly: subís .glb, si controles salen invertidos editás un campo.
+- **Bloque E — S-key brake-stick + HUD/logs**: edge-detect en S decide brake-vs-reverse UNA vez al press (patrón GTA/Forza). HUD polish + debug logs de edges/speed.
+- **Grounding final**: el spring-aware arregló el brinco pero no el float en equilibrio (chassis center a 0.85m, modelo half-height 0.568m → base flotaba 0.285m). Fix data-driven `attach_y_mm: -300 → -15` (`-(half_height - spring_rest - radius)`) en ambos ejes. Validado en Editor mode: DeLorean apoya en piso.
+
+**Suite 1029/10227 verde**. **Pendiente a F2H70.3**: Vehicle Browser UI (Bloque F) + split-by-node de wheels (Bloque H, permitiría auto-derivar `attach_y`).
+
+---
+
+## 0.2. Hito previo — F2H70.1 (2026-05-20)
 
 **Sistema data-driven de vehículos (estilo Source/Valve).** Tag `v1.58.0-fase2-hito70-1`. Detalle completo en [`hitos/F2H70.md`](hitos/F2H70.md). Plan archivado en [`archive/plans/PLAN_HITO_F2H70.md`](archive/plans/PLAN_HITO_F2H70.md).
 
@@ -55,7 +70,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.2. Hito previo — F2H69 (2026-05-19)
+## 0.3. Hito previo — F2H69 (2026-05-19)
 
 **Trigger NPC debug + pipeline glTF multi-node + DeLorean swap.** Tag `v1.57.0-fase2-hito69`. Detalle completo en [`hitos/F2H69.md`](hitos/F2H69.md). Cierra el bug conocido que F2H68 dejó abierto.
 
@@ -65,7 +80,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.3. Hito previo — F2H68 (2026-05-19)
+## 0.4. Hito previo — F2H68 (2026-05-19)
 
 **Auto-ragdoll por impacto (infra completa).** Tag `v1.55.0-fase2-hito68`. Detalle completo en [`hitos/F2H68.md`](hitos/F2H68.md).
 
@@ -73,7 +88,7 @@ Stack completo de auto-ragdoll por contacto: `physics_internal::ContactListener`
 
 ---
 
-## 0.4. Hito previo — F2H67 (2026-05-19)
+## 0.5. Hito previo — F2H67 (2026-05-19)
 
 **Vehicle physics estilo GTA San Andreas.** Tag `v1.54.0-fase2-hito67`. Detalle completo en [`hitos/F2H67.md`](hitos/F2H67.md). **Cierra plan original F2H25** dentro de Sub-fase 2.4 (Física avanzada).
 
@@ -81,7 +96,7 @@ Stack completo de auto-ragdoll por contacto: `physics_internal::ContactListener`
 
 ---
 
-## 0.5. Hito anterior — F2H66 (2026-05-18)
+## 0.6. Hito anterior — F2H66 (2026-05-18)
 
 **Ragdolls auto-build sobre `JPH::Ragdoll`.** Tag `v1.53.0-fase2-hito66`. Detalle completo en [`hitos/F2H66.md`](hitos/F2H66.md). Cierra plan original F2H24 dentro de Sub-fase 2.4 (Física avanzada).
 
@@ -89,7 +104,7 @@ Stack completo de auto-ragdoll por contacto: `physics_internal::ContactListener`
 
 ---
 
-## 0.6. Hito anterior — F2H65 (2026-05-18)
+## 0.7. Hito anterior — F2H65 (2026-05-18)
 
 **Jolt constraints (Hinge / Distance / Point).** Tag `v1.52.0-fase2-hito65`. Detalle completo en [`hitos/F2H65.md`](hitos/F2H65.md). Abre Sub-fase 2.4 (Física avanzada) del plan original.
 

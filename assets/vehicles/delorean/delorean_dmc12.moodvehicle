@@ -21,7 +21,7 @@
   "axle_front": {
     "offset_z_mm": 1205,
     "track_mm": 1588,
-    "attach_y_mm": -300,
+    "attach_y_mm": -15,
     "wheel": {
       "radius_mm": 330,
       "width_mm": 195,
@@ -41,7 +41,7 @@
   "axle_rear": {
     "offset_z_mm": -1205,
     "track_mm": 1588,
-    "attach_y_mm": -300,
+    "attach_y_mm": -15,
     "wheel": {
       "radius_mm": 330,
       "width_mm": 235,

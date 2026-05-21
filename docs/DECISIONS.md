@@ -11,6 +11,70 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-20: F2H70.2 — Tuning físico del vehicle (damping + spawn elevation + frame consistente)
+
+### Decisión 1 — `meshYawOffsetDeg` data-driven en lugar de bakear el .glb
+
+**Contexto:** En F2H70.1 reorienté el `.glb` del DeLorean a +Z forward (bake con `reorient.py`) para cumplir la convención industrial. Eso rompió los controles (W/A/D invertidos) porque la cámara FPS del seat mount asume la convención vieja. El workaround fue revertir el .glb + `rotationEuler: [0, 180, 0]` en el moodmap (asset-specific).
+
+**Decisión:** En lugar de bakear el yaw al vertex buffer, la convención del modelo se declara en el `.moodvehicle` via `body.mesh_yaw_offset_deg` (número) o `body.mesh_forward_axis` (`"+Z"/"-Z"/"+X"/"-X"` como azúcar). El engine compensa visualmente con `TransformComponent::pivotYawOffsetDeg` (runtime-only, post-multiply `Ry` en `worldMatrix()`) — afecta solo lo visual, NO la física.
+
+**Razones:**
+- **El asset queda intacto**: bakear modifica el .glb permanentemente; declarar la convención lo deja reusable.
+- **Drag-and-drop friendly**: dev arrastra un .glb nuevo, genera `.moodvehicle` base; si al subirse los controles salen invertidos, edita un campo. Sin tocar el moodmap.
+- **Persiste con el vehículo, no con la escena**: vale en cualquier mapa donde aparezca el auto. El `rotationEuler` del moodmap era per-instancia (se duplicaba por cada spawn).
+- **No rompe la cámara mount**: la física (chassis Jolt) sigue en +Z forward; solo el mesh visual se rota. La cámara, anclada a la física, no se desfasa.
+
+**Alternativas descartadas:**
+- Bakear el .glb (F2H70.1): rompía cámara mount + requería revertir.
+- `rotationEuler` en el moodmap: per-instancia, se duplica, mezcla convención-de-modelo con pose-de-escena.
+- Arreglar la cámara mount para que detecte el forward del modelo: scope mayor, frágil (¿cómo detecta el forward de un .glb arbitrario?).
+
+**Condiciones de revisión:** Si emergen vehículos con forward en ejes no-cardinales (diagonal), `mesh_yaw_offset_deg` numérico ya lo cubre (acepta cualquier ángulo).
+
+---
+
+### Decisión 2 — `wheelRestCompression` mass-independent (`g/(2π·f)²`)
+
+**Contexto:** El chassis flotaba/brincaba al spawn porque `pivotYOffset = -aabbMin.y` no consideraba que Jolt spawnea las wheels en `suspensionMaxLength` extendida y el primer step las comprime hasta equilibrium (bajando el chassis).
+
+**Decisión:** Helper `wheelRestCompression(WheelConfig)` retorna `g/(2π·f)²` (la compresión del spring bajo gravedad en equilibrio). Sumado al `pivotYOffset` para spawnnear el chassis más alto, de modo que tras el settle quede en su lugar.
+
+**Razones:**
+- **Mass-independent**: en `k·x = m·g` con `k = (2π·f)²·m`, la masa se cancela → `x = g/(2π·f)²`. Solo depende de la frecuencia del spring. Esto evita meter `chassisMass` al cálculo del offset y mantiene la fórmula pura.
+- Físicamente correcto: f=1.5 Hz → ~11cm; f=1.8 Hz (DeLorean) → ~7.7cm; f=2.5 Hz (sport stiffer) → ~4cm. Coincide con la intuición (springs más rígidos comprimen menos).
+
+**Alternativa descartada:** aproximación pragmática `suspensionMaxLength - suspensionMinLength` (range del spring) — menos exacta físicamente; la fórmula cerrada es igual de simple y correcta.
+
+---
+
+### Decisión 3 — `attach_y_mm` como knob de grounding (no auto-derivar)
+
+**Contexto:** El spring-aware (Decisión 2) arregló el brinco al spawn pero no el float en equilibrio: el chassis físico equilibrium quedaba con su centro a `attach_y_abs + spring_rest + radius = 0.85m`, pero el modelo (centrado, half-height 0.568m) se renderea en ese centro → su base flotaba `0.85 - 0.568 ≈ 0.285m`.
+
+**Decisión:** Exponer `attach_y_mm` como knob data-driven (ya existía en el schema v2). Para el DeLorean se tuneó de -300 a **-15** (`-(half_height - spring_rest - radius)`), de modo que el chassis físico equilibrium quede con su centro exacto a la half-height del modelo → base apoyada.
+
+**Razones:**
+- **Auto-derivar requiere conocer la posición visual de las wheels** (sub-meshes `wheel_*`), que necesita split-by-node (Bloque H de F2H70.3, no implementado). Hasta entonces, el knob manual es el camino.
+- `attach_y_mm` es exactamente el grado de libertad correcto: define dónde se monta el shock en el chassis local, lo que determina la altura del equilibrium.
+- Las wheels físicas (invisibles, Jolt) y las visuales (parte del .glb) ambas terminan apoyando con el valor correcto.
+
+**Condiciones de revisión:** Cuando F2H70.3 implemente split-by-node, auto-derivar `attach_y` desde el centro visual de cada wheel sub-mesh → el dev no tiene que tunearlo manualmente.
+
+---
+
+### Decisión 4 — S-key brake-stick con edge-detection (patrón GTA/Forza)
+
+**Contexto:** Sin lógica de modo, apretar S mientras el auto avanza alternaba entre frenar y meter reverse según la velocidad instantánea cruzara 0.5 m/s — feel errático (el auto entraba a reverse antes de detenerse del todo).
+
+**Decisión:** Edge-detect en S: al press inicial decide UNA vez brake-vs-reverse según `forwardSpeed > 0.5 m/s`. Mientras siga pressed, mantiene el modo aunque la speed cruce el umbral. Reverse requiere release + repress.
+
+**Razones:**
+- Patrón estándar GTA/Forza/etc.: soltar W + apretar S sigue siendo "freno" hasta detenerse por completo; para ir en reverse hay que soltar y volver a apretar.
+- Evita el "auto entra a reverse mientras todavía estás frenando" que confunde al jugador.
+
+---
+
 ## 2026-05-20: F2H70.1 — Sistema data-driven de vehículos (Source/Valve-style)
 
 ### Decisión 1 — Pivot mid-hito: "fix 3 bugs" → "sistema data-driven completo"
