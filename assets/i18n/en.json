@@ -218,7 +218,7 @@
   "component.desc.inventory": "Item container with 3 layout modes (flat list / grid 2D / equipment slots).",
   "component.desc.item_pickup": "Marks the entity as a world pickup; the player grabs it with [E] inside a Trigger.",
   "component.desc.brush": "CSG brush (Box/Cylinder/etc) editable via Hammer-style tools.",
-  "component.desc.joint": "Jolt constraint that links this entity to another (Hinge / Distance / Point).",
+  "component.desc.joint": "Jolt constraint that links this entity to another (Hinge / Distance / Point / Slider / Fixed).",
 
   "editor.panel.inspector.transform.position": "position",
   "editor.panel.inspector.transform.rotation": "rotation (deg)",
@@ -406,6 +406,12 @@
   "editor.panel.inspector.joint.min_distance": "min distance",
   "editor.panel.inspector.joint.max_distance": "max distance",
   "editor.panel.inspector.joint.distance_help": "World-space distance range between the two pivots.\nmin = max -> rigid rod.\nmin < max -> slack rope.",
+  "editor.panel.inspector.joint.slider_axis": "rail axis (local A)",
+  "editor.panel.inspector.joint.slider_axis_help": "Slide direction in local space.\nY-up = vertical rail (elevator).\nX = horizontal rail (drawer).",
+  "editor.panel.inspector.joint.slider_limit_min": "limit min (m)",
+  "editor.panel.inspector.joint.slider_limit_max": "limit max (m)",
+  "editor.panel.inspector.joint.slider_limit_help": "Translation range in meters along the axis, relative to the start pose.\nmin = max -> locked.\n[0, 0.5] -> slides 50 cm.",
+  "editor.panel.inspector.joint.fixed_help": "Welds the two bodies: locks all 6 degrees of freedom. Auto-detects the current relative pose at Play start — no pivot or axis. Place the bodies where you want and the joint glues them.",
   "editor.panel.inspector.joint.constraint_id_hint": "constraint id: {} (0 = not materialized) — re-Play to rebuild",
   "editor.panel.inspector.joint.body_b_missing": "Target entity has no RigidBody — assign one to materialize the joint.",
 

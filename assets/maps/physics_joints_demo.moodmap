@@ -71,6 +71,75 @@
         "rotationEuler": [0.0, 0.0, 0.0],
         "scale": [1.0, 1.0, 1.0]
       }
+    },
+    {
+      "rigid_body": {
+        "halfExtents": [0.15, 0.15, 0.15],
+        "mass": 1.0,
+        "shape": "sphere",
+        "type": "static"
+      },
+      "tag": "RielSlider",
+      "transform": {
+        "position": [-1.0, 8.0, -2.0],
+        "rotationEuler": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    },
+    {
+      "joint": {
+        "axisLocal": [0.0, 1.0, 0.0],
+        "pivotLocal": [0.0, 0.0, 0.0],
+        "slider_limit_max": 0.0,
+        "slider_limit_min": -3.0,
+        "target_tag": "RielSlider",
+        "type": "slider"
+      },
+      "rigid_body": {
+        "halfExtents": [0.3, 0.3, 0.3],
+        "mass": 2.0,
+        "shape": "box",
+        "type": "dynamic"
+      },
+      "tag": "AscensorSlider",
+      "transform": {
+        "position": [-1.0, 5.5, -2.0],
+        "rotationEuler": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    },
+    {
+      "rigid_body": {
+        "halfExtents": [0.5, 0.1, 0.5],
+        "mass": 1.0,
+        "shape": "box",
+        "type": "static"
+      },
+      "tag": "PlataformaFixed",
+      "transform": {
+        "position": [2.0, 4.0, -2.0],
+        "rotationEuler": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    },
+    {
+      "joint": {
+        "pivotLocal": [0.0, 0.0, 0.0],
+        "target_tag": "PlataformaFixed",
+        "type": "fixed"
+      },
+      "rigid_body": {
+        "halfExtents": [0.3, 0.3, 0.3],
+        "mass": 5.0,
+        "shape": "box",
+        "type": "dynamic"
+      },
+      "tag": "CajaFixed",
+      "transform": {
+        "position": [2.0, 5.0, -2.0],
+        "rotationEuler": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
     }
   ],
   "height": 5,

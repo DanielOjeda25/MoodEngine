@@ -169,6 +169,10 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                             color = glm::vec3(0.40f, 1.00f, 0.30f); break;  // verde
                         case JointComponent::Type::Point:
                             color = glm::vec3(1.00f, 0.35f, 0.85f); break;  // magenta
+                        case JointComponent::Type::Slider:
+                            color = glm::vec3(0.30f, 0.95f, 0.95f); break;  // cyan
+                        case JointComponent::Type::Fixed:
+                            color = glm::vec3(1.00f, 0.60f, 0.15f); break;  // naranja
                     }
 
                     const glm::mat4 worldA = tA.worldMatrix();
@@ -196,6 +200,24 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                         // gizmos de eje en otros editores).
                         dbg.drawLine(pivotWorld, axisTip,
                                      glm::vec3(1.0f, 1.0f, 0.2f));
+                    } else if (joint.type == JointComponent::Type::Slider) {
+                        // F2H71: dibujamos el riel del slider — un segmento
+                        // que cubre el rango de travel [min, max] sobre el
+                        // axis, para que el dev vea hasta donde desliza.
+                        const glm::vec3 axisWorld =
+                            glm::normalize(glm::vec3(
+                                worldA * glm::vec4(joint.axisLocal, 0.0f)));
+                        const glm::vec3 railMin =
+                            pivotWorld + axisWorld * joint.sliderLimitMin;
+                        const glm::vec3 railMax =
+                            pivotWorld + axisWorld * joint.sliderLimitMax;
+                        dbg.drawLine(railMin, railMax,
+                                     glm::vec3(1.0f, 1.0f, 0.2f));
+                        // Topes en los extremos del riel.
+                        constexpr f32 k_stop = 0.05f;
+                        const glm::vec3 hs(k_stop);
+                        dbg.drawAabb(AABB{railMin - hs, railMin + hs}, color);
+                        dbg.drawAabb(AABB{railMax - hs, railMax + hs}, color);
                     }
                 });
 

@@ -375,6 +375,8 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
             case JointComponent::Type::Hinge:    typeStr = "hinge";    break;
             case JointComponent::Type::Distance: typeStr = "distance"; break;
             case JointComponent::Type::Point:    typeStr = "point";    break;
+            case JointComponent::Type::Slider:   typeStr = "slider";   break;
+            case JointComponent::Type::Fixed:    typeStr = "fixed";    break;
         }
         jj["type"] = typeStr;
         // Resolver targetEntity (raw handle) -> tag via scene back-ref.
@@ -401,8 +403,14 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         } else if (jc.type == JointComponent::Type::Distance) {
             jj["min_distance"] = jc.minDistance;
             jj["max_distance"] = jc.maxDistance;
+        } else if (jc.type == JointComponent::Type::Slider) {
+            if (jc.axisLocal != glm::vec3(0.0f, 1.0f, 0.0f)) {
+                jj["axisLocal"] = jc.axisLocal;
+            }
+            jj["slider_limit_min"] = jc.sliderLimitMin;
+            jj["slider_limit_max"] = jc.sliderLimitMax;
         }
-        // Point: no extra fields.
+        // Point / Fixed: no extra fields.
         je["joint"] = jj;
     }
 
@@ -686,6 +694,8 @@ SavedEntity parseEntityFromJson(const json& j) {
         sj.limitMaxDeg = jj.value("limit_max_deg",    180.0f);
         sj.minDistance = jj.value("min_distance",      0.0f);
         sj.maxDistance = jj.value("max_distance",      1.0f);
+        sj.sliderLimitMin = jj.value("slider_limit_min", 0.0f);
+        sj.sliderLimitMax = jj.value("slider_limit_max", 1.0f);
         se.joint = std::move(sj);
     }
 

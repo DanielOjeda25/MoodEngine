@@ -298,6 +298,24 @@ void EditorApplication::updateRigidBodies(f32 dt) {
                         rbA.bodyId, rbB.bodyId, pivotWorld);
                     break;
                 }
+                case JointComponent::Type::Slider: {
+                    // Mismo patron que Hinge: el axis es direccion (w=0)
+                    // para no desplazarse con la translation de worldA.
+                    const glm::vec3 axisWorld =
+                        glm::vec3(worldA * glm::vec4(joint.axisLocal, 0.0f));
+                    joint.constraintId = m_physicsWorld->createSliderConstraint(
+                        rbA.bodyId, rbB.bodyId,
+                        pivotWorld, axisWorld,
+                        joint.sliderLimitMin, joint.sliderLimitMax);
+                    break;
+                }
+                case JointComponent::Type::Fixed: {
+                    // Auto-detect: suelda los 2 bodies en su pose relativa
+                    // actual. No usa pivot ni axis.
+                    joint.constraintId = m_physicsWorld->createFixedConstraint(
+                        rbA.bodyId, rbB.bodyId);
+                    break;
+                }
             }
             if (joint.constraintId != 0) joint.dirty = false;
         });

@@ -294,6 +294,88 @@ TEST_CASE("SceneSerializer: JointComponent Distance round-trip y default fields 
     std::filesystem::remove(path);
 }
 
+TEST_CASE("SceneSerializer: round-trip JointComponent Slider (F2H71)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+
+    Entity rail = scene.createEntity("Riel");
+    {
+        RigidBodyComponent rb{};
+        rb.type = RigidBodyComponent::Type::Static;
+        rail.addComponent<RigidBodyComponent>(rb);
+    }
+    Entity drawer = scene.createEntity("Cajon");
+    {
+        RigidBodyComponent rb{};
+        rb.type = RigidBodyComponent::Type::Dynamic;
+        rb.mass = 3.0f;
+        drawer.addComponent<RigidBodyComponent>(rb);
+        JointComponent jc{};
+        jc.type           = JointComponent::Type::Slider;
+        jc.targetEntity   = static_cast<u32>(rail.handle());
+        jc.axisLocal      = glm::vec3(1.0f, 0.0f, 0.0f);  // riel horizontal
+        jc.sliderLimitMin = 0.0f;
+        jc.sliderLimitMax = 0.5f;
+        drawer.addComponent<JointComponent>(jc);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("joint_slider.moodmap");
+    SceneSerializer::save(empty, "slider", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    const SavedEntity* seD = nullptr;
+    for (const auto& se : loaded->entities) if (se.tag == "Cajon") seD = &se;
+    REQUIRE(seD != nullptr);
+    REQUIRE(seD->joint.has_value());
+    CHECK(seD->joint->type == "slider");
+    CHECK(seD->joint->targetTag == "Riel");
+    CHECK(seD->joint->axisLocal.x == doctest::Approx(1.0f));
+    CHECK(seD->joint->sliderLimitMin == doctest::Approx(0.0f));
+    CHECK(seD->joint->sliderLimitMax == doctest::Approx(0.5f));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SceneSerializer: round-trip JointComponent Fixed (F2H71)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+
+    Entity platform = scene.createEntity("Plataforma");
+    {
+        RigidBodyComponent rb{};
+        rb.type = RigidBodyComponent::Type::Static;
+        platform.addComponent<RigidBodyComponent>(rb);
+    }
+    Entity crate = scene.createEntity("Caja");
+    {
+        RigidBodyComponent rb{};
+        rb.type = RigidBodyComponent::Type::Dynamic;
+        rb.mass = 10.0f;
+        crate.addComponent<RigidBodyComponent>(rb);
+        JointComponent jc{};
+        jc.type         = JointComponent::Type::Fixed;
+        jc.targetEntity = static_cast<u32>(platform.handle());
+        crate.addComponent<JointComponent>(jc);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("joint_fixed.moodmap");
+    SceneSerializer::save(empty, "fixed", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    const SavedEntity* seC = nullptr;
+    for (const auto& se : loaded->entities) if (se.tag == "Caja") seC = &se;
+    REQUIRE(seC != nullptr);
+    REQUIRE(seC->joint.has_value());
+    CHECK(seC->joint->type == "fixed");
+    CHECK(seC->joint->targetTag == "Plataforma");
+
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("SceneLoader: JointComponent.targetEntity resuelve por tag tras applyEntitiesToScene (F2H65)") {
     AssetManager assets("assets", nullFactory());
     Scene scene;
@@ -384,9 +466,13 @@ TEST_CASE("SceneSerializer: sample map physics_joints_demo.moodmap carga con joi
     // Distance. Cada par tiene UN joint en el dynamic.
     const SavedEntity* sePuerta = nullptr;
     const SavedEntity* sePendulo = nullptr;
+    const SavedEntity* seAscensor = nullptr;  // F2H71 Slider
+    const SavedEntity* seCaja = nullptr;       // F2H71 Fixed
     for (const auto& se : loaded->entities) {
         if (se.tag == "PuertaHinge")     sePuerta = &se;
         if (se.tag == "PenduloDistance") sePendulo = &se;
+        if (se.tag == "AscensorSlider")  seAscensor = &se;
+        if (se.tag == "CajaFixed")       seCaja = &se;
     }
     REQUIRE(sePuerta  != nullptr);
     REQUIRE(sePendulo != nullptr);
@@ -400,6 +486,18 @@ TEST_CASE("SceneSerializer: sample map physics_joints_demo.moodmap carga con joi
     CHECK(sePendulo->joint->targetTag   == "SoporteDistance");
     CHECK(sePendulo->joint->minDistance == doctest::Approx(1.5f));
     CHECK(sePendulo->joint->maxDistance == doctest::Approx(1.5f));
+
+    // F2H71: el demo trae ademas un Slider (ascensor) y un Fixed (caja soldada).
+    REQUIRE(seAscensor != nullptr);
+    REQUIRE(seCaja != nullptr);
+    REQUIRE(seAscensor->joint.has_value());
+    REQUIRE(seCaja->joint.has_value());
+    CHECK(seAscensor->joint->type           == "slider");
+    CHECK(seAscensor->joint->targetTag      == "RielSlider");
+    CHECK(seAscensor->joint->sliderLimitMin == doctest::Approx(-3.0f));
+    CHECK(seAscensor->joint->sliderLimitMax == doctest::Approx(0.0f));
+    CHECK(seCaja->joint->type      == "fixed");
+    CHECK(seCaja->joint->targetTag == "PlataformaFixed");
 
     // Pasada de SceneLoader: el targetEntity debe quedar resuelto via tag.
     Scene scene;

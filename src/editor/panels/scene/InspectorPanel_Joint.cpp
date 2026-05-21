@@ -30,10 +30,10 @@ void InspectorPanel::renderJointSection(Entity e) {
     ImGui::SeparatorText(ICON_FA_LINK " Joint");
 
     // --- Type combo ---
-    const char* typeNames[] = {"Hinge", "Distance", "Point"};
+    const char* typeNames[] = {"Hinge", "Distance", "Point", "Slider", "Fixed"};
     int typeIdx = static_cast<int>(joint.type);
     const std::string typeLabel = I18n::T("editor.panel.inspector.joint.type") + "##joint";
-    if (ImGui::Combo(typeLabel.c_str(), &typeIdx, typeNames, 3)) {
+    if (ImGui::Combo(typeLabel.c_str(), &typeIdx, typeNames, 5)) {
         const auto oldType = joint.type;
         const auto newType = static_cast<JointComponent::Type>(typeIdx);
         if (oldType != newType) {
@@ -232,6 +232,54 @@ void InspectorPanel::renderJointSection(Entity e) {
                 j.dirty = true;
             },
             "Editar Joint maxDistance");
+    } else if (joint.type == JointComponent::Type::Slider) {
+        // Slider reusa axisLocal como direccion del riel.
+        const std::string axisLabel = I18n::T("editor.panel.inspector.joint.slider_axis") + "##joint";
+        if (ImGui::DragFloat3(axisLabel.c_str(), &joint.axisLocal.x, 0.01f, -1.0f, 1.0f)) {
+            joint.dirty = true;
+            m_editedThisFrame = true;
+        }
+        detail::helpMarker(
+            I18n::T("editor.panel.inspector.joint.slider_axis_help").c_str());
+        detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, joint.axisLocal,
+            [](Entity& en, const glm::vec3& v) {
+                auto& j = en.getComponent<JointComponent>();
+                j.axisLocal = v;
+                j.dirty = true;
+            },
+            "Editar Joint slider axis");
+
+        const std::string sMinLabel = I18n::T("editor.panel.inspector.joint.slider_limit_min") + "##joint";
+        if (ImGui::DragFloat(sMinLabel.c_str(), &joint.sliderLimitMin, 0.05f, -1000.0f, 1000.0f)) {
+            joint.dirty = true;
+            m_editedThisFrame = true;
+        }
+        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, joint.sliderLimitMin,
+            [](Entity& en, const f32& v) {
+                auto& j = en.getComponent<JointComponent>();
+                j.sliderLimitMin = v;
+                j.dirty = true;
+            },
+            "Editar Joint sliderLimitMin");
+
+        const std::string sMaxLabel = I18n::T("editor.panel.inspector.joint.slider_limit_max") + "##joint";
+        if (ImGui::DragFloat(sMaxLabel.c_str(), &joint.sliderLimitMax, 0.05f, -1000.0f, 1000.0f)) {
+            joint.dirty = true;
+            m_editedThisFrame = true;
+        }
+        detail::helpMarker(
+            I18n::T("editor.panel.inspector.joint.slider_limit_help").c_str());
+        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, joint.sliderLimitMax,
+            [](Entity& en, const f32& v) {
+                auto& j = en.getComponent<JointComponent>();
+                j.sliderLimitMax = v;
+                j.dirty = true;
+            },
+            "Editar Joint sliderLimitMax");
+    } else if (joint.type == JointComponent::Type::Fixed) {
+        // Fixed: auto-detect de la pose relativa, sin campos editables.
+        ImGui::TextWrapped("%s",
+            I18n::T("editor.panel.inspector.joint.fixed_help").c_str());
     }
     // Point: sin campos extra — los 3 ejes rotacion son libres por defecto.
 

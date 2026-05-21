@@ -275,7 +275,7 @@ struct SavedInventory {
 ///        PhysicsSystem deja el constraint sin materializar hasta que
 ///        el dev re-asigne via Inspector drag-drop.
 struct SavedJoint {
-    std::string type{"hinge"};       // "hinge" | "distance" | "point"
+    std::string type{"hinge"};       // "hinge"|"distance"|"point"|"slider"|"fixed"
     std::string targetTag;            // tag de la entity B; vacio = sin asignar
     glm::vec3   pivotLocal{0.0f};
     glm::vec3   axisLocal{0.0f, 1.0f, 0.0f};
@@ -283,6 +283,8 @@ struct SavedJoint {
     f32         limitMaxDeg = 180.0f;
     f32         minDistance = 0.0f;
     f32         maxDistance = 1.0f;
+    f32         sliderLimitMin = 0.0f;   // F2H71
+    f32         sliderLimitMax = 1.0f;   // F2H71
 };
 
 /// @brief F2H66: copia persistida de un RagdollComponent. Solo los

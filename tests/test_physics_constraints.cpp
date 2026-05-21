@@ -9,6 +9,8 @@
 #include <glm/vec3.hpp>
 #include <glm/geometric.hpp>  // glm::distance
 
+#include <cmath>  // std::abs
+
 using namespace Mood;
 
 namespace {
@@ -85,6 +87,103 @@ TEST_CASE("PhysicsWorld F2H65: createPointConstraint comparte pivot entre bodies
     // mas alla de 2m del pivot -- el constraint lo mantiene cerca.
     const f32 distToPivot = glm::distance(pa, glm::vec3(0.5f, 5.0f, 0.0f));
     CHECK(distToPivot < 2.0f);
+}
+
+TEST_CASE("PhysicsWorld F2H71: createSliderConstraint devuelve handle + constraintCount") {
+    PhysicsWorld pw;
+    const u32 a = pw.createBody(glm::vec3(0, 5, 0), CollisionShape::Box,
+                                  glm::vec3(0.5f), BodyType::Dynamic, 1.0f);
+    const u32 b = pw.createBody(glm::vec3(0, 7, 0), CollisionShape::Box,
+                                  glm::vec3(0.5f), BodyType::Static, 1.0f);
+    REQUIRE(pw.constraintCount() == 0u);
+
+    const u32 c = pw.createSliderConstraint(
+        a, b,
+        /*pivot*/ glm::vec3(0, 5, 0),
+        /*axis*/  glm::vec3(0, 1, 0),
+        /*min*/   0.0f, /*max*/ 1.0f);
+    CHECK(c != 0u);
+    CHECK(pw.constraintCount() == 1u);
+
+    pw.destroyConstraint(c);
+    CHECK(pw.constraintCount() == 0u);
+}
+
+TEST_CASE("PhysicsWorld F2H71: Slider restringe el movimiento a un solo eje") {
+    // Body A dynamic colgado de un static B con un slider vertical (eje Y)
+    // y travel limitado a [0, 0]. Gravedad tira hacia abajo pero el limit
+    // 0 lo bloquea (no puede deslizar) -> queda casi fijo. Verificamos que
+    // NO se desplaza lateralmente en X/Z (el slider lo confina al eje).
+    PhysicsWorld pw;
+    const u32 a = pw.createBody(glm::vec3(0, 5, 0), CollisionShape::Box,
+                                  glm::vec3(0.5f), BodyType::Dynamic, 1.0f);
+    const u32 b = pw.createBody(glm::vec3(0, 7, 0), CollisionShape::Box,
+                                  glm::vec3(0.5f), BodyType::Static, 1.0f);
+    const u32 c = pw.createSliderConstraint(
+        a, b, glm::vec3(0, 5, 0), glm::vec3(0, 1, 0), 0.0f, 0.0f);
+    REQUIRE(c != 0u);
+
+    for (int i = 0; i < 60; ++i) pw.step(k_dt);
+
+    const glm::vec3 pa = pw.bodyPosition(a);
+    // El slider bloquea translation lateral: X y Z se mantienen ~0.
+    CHECK(std::abs(pa.x) < 0.1f);
+    CHECK(std::abs(pa.z) < 0.1f);
+}
+
+TEST_CASE("PhysicsWorld F2H71: Slider desliza hasta el tope min y frena (ascensor)") {
+    // A dynamic en y=5, anclado a un static B via slider vertical con
+    // travel [-2, 0]. La gravedad lo desliza HACIA ABAJO sobre el eje hasta
+    // el tope min (-2) -> termina en y~3, sin caer mas alla.
+    PhysicsWorld pw;
+    const u32 a = pw.createBody(glm::vec3(0, 5, 0), CollisionShape::Box,
+                                  glm::vec3(0.3f), BodyType::Dynamic, 1.0f);
+    // Ancla ARRIBA de A (sin solapar) para que no colisionen al spawn.
+    const u32 b = pw.createBody(glm::vec3(0, 8, 0), CollisionShape::Box,
+                                  glm::vec3(0.15f), BodyType::Static, 1.0f);
+    const u32 c = pw.createSliderConstraint(
+        a, b, glm::vec3(0, 5, 0), glm::vec3(0, 1, 0), -2.0f, 0.0f);
+    REQUIRE(c != 0u);
+
+    for (int i = 0; i < 120; ++i) pw.step(k_dt);
+
+    const glm::vec3 pa = pw.bodyPosition(a);
+    // Bajo ~2m y freno en el tope (no cae al infinito).
+    CHECK(pa.y == doctest::Approx(3.0f).epsilon(0.1));
+    // No se fue de costado (slider confina al eje Y).
+    CHECK(std::abs(pa.x) < 0.1f);
+    CHECK(std::abs(pa.z) < 0.1f);
+}
+
+TEST_CASE("PhysicsWorld F2H71: createFixedConstraint suelda 2 bodies (distancia constante)") {
+    // A dynamic + B static separados 2m. El fixed los suelda en su pose
+    // relativa actual: A no cae aunque sea dynamic (queda pegado a B).
+    PhysicsWorld pw;
+    const u32 a = pw.createBody(glm::vec3(0, 5, 0), CollisionShape::Box,
+                                  glm::vec3(0.5f), BodyType::Dynamic, 1.0f);
+    const u32 b = pw.createBody(glm::vec3(2, 5, 0), CollisionShape::Box,
+                                  glm::vec3(0.5f), BodyType::Static, 1.0f);
+
+    const u32 c = pw.createFixedConstraint(a, b);
+    REQUIRE(c != 0u);
+    CHECK(pw.constraintCount() == 1u);
+
+    const glm::vec3 startA = pw.bodyPosition(a);
+    for (int i = 0; i < 60; ++i) pw.step(k_dt);
+    const glm::vec3 endA = pw.bodyPosition(a);
+
+    // Soldado a un static -> A practicamente no se mueve (no cae por gravedad).
+    CHECK(glm::distance(startA, endA) < 0.1f);
+}
+
+TEST_CASE("PhysicsWorld F2H71: createSliderConstraint con bodyB=0 retorna 0") {
+    PhysicsWorld pw;
+    const u32 a = pw.createBody(glm::vec3(0, 5, 0), CollisionShape::Box,
+                                  glm::vec3(0.5f), BodyType::Dynamic, 1.0f);
+    CHECK(pw.createSliderConstraint(a, 0, glm::vec3(0), glm::vec3(0,1,0),
+                                      0.0f, 1.0f) == 0u);
+    CHECK(pw.createFixedConstraint(a, 0) == 0u);
+    CHECK(pw.constraintCount() == 0u);
 }
 
 TEST_CASE("PhysicsWorld F2H65: createHingeConstraint con bodyA=0 retorna 0") {

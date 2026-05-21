@@ -419,6 +419,8 @@ Entity applyOneEntity(const SavedEntity& se,
             JointComponent jc{};
             if      (sj.type == "distance") jc.type = JointComponent::Type::Distance;
             else if (sj.type == "point")    jc.type = JointComponent::Type::Point;
+            else if (sj.type == "slider")   jc.type = JointComponent::Type::Slider;
+            else if (sj.type == "fixed")    jc.type = JointComponent::Type::Fixed;
             else                            jc.type = JointComponent::Type::Hinge;
             jc.pivotLocal   = sj.pivotLocal;
             jc.axisLocal    = sj.axisLocal;
@@ -426,6 +428,8 @@ Entity applyOneEntity(const SavedEntity& se,
             jc.limitMaxDeg  = sj.limitMaxDeg;
             jc.minDistance  = sj.minDistance;
             jc.maxDistance  = sj.maxDistance;
+            jc.sliderLimitMin = sj.sliderLimitMin;
+            jc.sliderLimitMax = sj.sliderLimitMax;
             jc.targetEntity = kJointNoTarget;
             jc.dirty        = true;
             if (!sj.targetTag.empty()) {

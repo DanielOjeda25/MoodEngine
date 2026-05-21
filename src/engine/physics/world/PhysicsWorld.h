@@ -226,6 +226,24 @@ public:
     u32 createPointConstraint(u32 bodyA, u32 bodyB,
                                 const glm::vec3& pivotWorld);
 
+    /// @brief F2H71: Slider constraint (prismatic joint). Body A desliza
+    ///        respecto a B a lo largo de `axisWorld` con limits de
+    ///        translation en metros `[limitMin, limitMax]` (relativos a la
+    ///        pose inicial). Rotacion bloqueada en los 3 ejes. Util para
+    ///        cajones, ascensores, pistones, plataformas sobre rieles.
+    ///        Pivot y axis en world coords (Jolt los convierte internamente).
+    u32 createSliderConstraint(u32 bodyA, u32 bodyB,
+                                 const glm::vec3& pivotWorld,
+                                 const glm::vec3& axisWorld,
+                                 f32 limitMin, f32 limitMax);
+
+    /// @brief F2H71: Fixed constraint. Suelda A y B locking los 6 DOF —
+    ///        se mueven como un solo cuerpo rigido. Auto-detecta la pose
+    ///        relativa actual al crear (estilo Fixed joint de Unity): no
+    ///        necesita pivot. Util para componer props de varias piezas o
+    ///        pegar un objeto a una plataforma movil.
+    u32 createFixedConstraint(u32 bodyA, u32 bodyB);
+
     /// @brief Destruye y remueve un constraint. Llamar cuando la entity
     ///        propietaria del JointComponent se borra o el dev cambia el
     ///        tipo. Idempotente (id invalido = no-op).

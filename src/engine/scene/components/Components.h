@@ -303,6 +303,8 @@ struct JointComponent {
         Hinge    = 0,   // 1 eje rotacion + limits (puertas, brazos)
         Distance = 1,   // distancia entre 2 puntos pivot (cuerdas)
         Point    = 2,   // 3 ejes rotacion libres, 0 translation (ball joint)
+        Slider   = 3,   // 1 eje translation + limits (cajones, ascensores, pistones)
+        Fixed    = 4,   // los 6 DOF locked; suelda 2 bodies (plataformas, props)
     };
 
     Type      type = Type::Hinge;
@@ -319,8 +321,9 @@ struct JointComponent {
     ///        que B(0,0,0)).
     glm::vec3 pivotLocal{0.0f};
 
-    /// @brief Solo Hinge: eje de rotacion en local space de A. Default
-    ///        Y-up = bisagra vertical estilo puerta de cuarto.
+    /// @brief Hinge: eje de rotacion en local space de A. Slider: eje de
+    ///        translation (la direccion del riel). Default Y-up = bisagra
+    ///        vertical estilo puerta / riel vertical estilo ascensor.
     glm::vec3 axisLocal{0.0f, 1.0f, 0.0f};
 
     /// @brief Solo Hinge: limits angulares en grados. Defaults a
@@ -334,6 +337,13 @@ struct JointComponent {
     ///        que puede flexionar entre los limites.
     f32       minDistance = 0.0f;
     f32       maxDistance = 1.0f;
+
+    /// @brief Solo Slider: rango de translation a lo largo de `axisLocal`
+    ///        en metros, relativo a la pose inicial. min==max -> bloqueado
+    ///        (no desliza). min<max -> desliza dentro del rango (ej. cajon
+    ///        [0, 0.5] = abre 50cm). Estilo prismatic joint (Unity/Unreal).
+    f32       sliderLimitMin = 0.0f;
+    f32       sliderLimitMax = 1.0f;
 
     // --- Runtime (NO se persiste) ---
 

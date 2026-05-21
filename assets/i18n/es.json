@@ -218,7 +218,7 @@
   "component.desc.inventory": "Contenedor de items con 3 modos de layout (lista plana / grid 2D / slots de equipo).",
   "component.desc.item_pickup": "Marca a la entidad como item recogible del mundo; el player lo levanta con [E] dentro de un Trigger.",
   "component.desc.brush": "Brush CSG (Box/Cylinder/etc) editable con herramientas Hammer-style.",
-  "component.desc.joint": "Constraint de Jolt que une esta entidad con otra (Hinge / Distance / Point).",
+  "component.desc.joint": "Constraint de Jolt que une esta entidad con otra (Hinge / Distance / Point / Slider / Fixed).",
 
   "editor.panel.inspector.transform.position": "posición",
   "editor.panel.inspector.transform.rotation": "rotación (deg)",
@@ -406,6 +406,12 @@
   "editor.panel.inspector.joint.min_distance": "distancia mín",
   "editor.panel.inspector.joint.max_distance": "distancia máx",
   "editor.panel.inspector.joint.distance_help": "Rango de distancia world-space entre los dos pivots.\nmín = máx -> varilla rígida.\nmín < máx -> cuerda holgada.",
+  "editor.panel.inspector.joint.slider_axis": "eje del riel (local A)",
+  "editor.panel.inspector.joint.slider_axis_help": "Dirección de deslizamiento en local space.\nY-up = riel vertical (ascensor).\nX = riel horizontal (cajón).",
+  "editor.panel.inspector.joint.slider_limit_min": "límite mín (m)",
+  "editor.panel.inspector.joint.slider_limit_max": "límite máx (m)",
+  "editor.panel.inspector.joint.slider_limit_help": "Rango de translation en metros sobre el eje, relativo a la pose inicial.\nmín = máx -> bloqueado.\n[0, 0.5] -> desliza 50 cm.",
+  "editor.panel.inspector.joint.fixed_help": "Suelda los dos cuerpos: bloquea los 6 grados de libertad. Auto-detecta la pose relativa actual al iniciar Play — no usa pivot ni eje. Posicioná los cuerpos donde quieras y el joint los pega.",
   "editor.panel.inspector.joint.constraint_id_hint": "constraint id: {} (0 = no materializado) — re-Play para reconstruir",
   "editor.panel.inspector.joint.body_b_missing": "La entidad destino no tiene RigidBody — asignale uno para materializar el joint.",
 

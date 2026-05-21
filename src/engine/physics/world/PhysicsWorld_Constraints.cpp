@@ -10,6 +10,8 @@
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/Constraints/DistanceConstraint.h>
 #include <Jolt/Physics/Constraints/PointConstraint.h>
+#include <Jolt/Physics/Constraints/SliderConstraint.h>
+#include <Jolt/Physics/Constraints/FixedConstraint.h>
 
 #include <glm/trigonometric.hpp>  // glm::radians
 
@@ -126,6 +128,81 @@ u32 PhysicsWorld::createPointConstraint(u32 bodyA, u32 bodyB,
     settings.mSpace = JPH::EConstraintSpace::WorldSpace;
     settings.mPoint1 = JPH::RVec3(pivotWorld.x, pivotWorld.y, pivotWorld.z);
     settings.mPoint2 = JPH::RVec3(pivotWorld.x, pivotWorld.y, pivotWorld.z);
+
+    JPH::Ref<JPH::Constraint> c = settings.Create(*a, *b);
+    m_impl->physicsSystem->AddConstraint(c);
+
+    const u32 handle = m_impl->nextConstraintId++;
+    m_impl->constraints.emplace(handle, c);
+    return handle;
+}
+
+u32 PhysicsWorld::createSliderConstraint(u32 bodyA, u32 bodyB,
+                                           const glm::vec3& pivotWorld,
+                                           const glm::vec3& axisWorld,
+                                           f32 limitMin, f32 limitMax) {
+    if (!m_impl || !m_impl->physicsSystem) return 0;
+    if (bodyA == 0 || bodyB == 0) return 0;
+
+    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
+    const JPH::BodyID idA{bodyA};
+    const JPH::BodyID idB{bodyB};
+    if (!bi.IsAdded(idA) || !bi.IsAdded(idB)) return 0;
+
+    const JPH::BodyID ids[2] = {idA, idB};
+    JPH::BodyLockMultiWrite lock(m_impl->physicsSystem->GetBodyLockInterface(),
+                                  ids, 2);
+    JPH::Body* a = lock.GetBody(0);
+    JPH::Body* b = lock.GetBody(1);
+    if (a == nullptr || b == nullptr) return 0;
+
+    JPH::SliderConstraintSettings settings;
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+    // SetSliderAxis setea slider axis + normal en ambos bodies a partir de
+    // un solo eje world. El pivot lo seteamos aparte (uno por body, mismo
+    // punto world = sin offset inicial).
+    const JPH::Vec3 axis(axisWorld.x, axisWorld.y, axisWorld.z);
+    settings.SetSliderAxis(axis.NormalizedOr(JPH::Vec3::sAxisY()));
+    settings.mPoint1 = JPH::RVec3(pivotWorld.x, pivotWorld.y, pivotWorld.z);
+    settings.mPoint2 = JPH::RVec3(pivotWorld.x, pivotWorld.y, pivotWorld.z);
+    // Jolt mide la posicion del slider como (point2 - point1) . axis, o sea
+    // body2(B) menos body1(A). Cuando A (el dueno del joint) se mueve a FAVOR
+    // del axis, el valor de Jolt baja. Para que la API publica sea intuitiva
+    // (limit = cuanto desliza A a lo largo de +axisLocal, + = a favor del eje)
+    // invertimos los limites: [userMin, userMax] -> Jolt [-userMax, -userMin].
+    settings.mLimitsMin = -limitMax;
+    settings.mLimitsMax = -limitMin;
+
+    JPH::Ref<JPH::Constraint> c = settings.Create(*a, *b);
+    m_impl->physicsSystem->AddConstraint(c);
+
+    const u32 handle = m_impl->nextConstraintId++;
+    m_impl->constraints.emplace(handle, c);
+    return handle;
+}
+
+u32 PhysicsWorld::createFixedConstraint(u32 bodyA, u32 bodyB) {
+    if (!m_impl || !m_impl->physicsSystem) return 0;
+    if (bodyA == 0 || bodyB == 0) return 0;
+
+    JPH::BodyInterface& bi = m_impl->physicsSystem->GetBodyInterface();
+    const JPH::BodyID idA{bodyA};
+    const JPH::BodyID idB{bodyB};
+    if (!bi.IsAdded(idA) || !bi.IsAdded(idB)) return 0;
+
+    const JPH::BodyID ids[2] = {idA, idB};
+    JPH::BodyLockMultiWrite lock(m_impl->physicsSystem->GetBodyLockInterface(),
+                                  ids, 2);
+    JPH::Body* a = lock.GetBody(0);
+    JPH::Body* b = lock.GetBody(1);
+    if (a == nullptr || b == nullptr) return 0;
+
+    JPH::FixedConstraintSettings settings;
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+    // Auto-detect: Jolt fija la pose relativa ACTUAL de los 2 bodies como
+    // el lock target (estilo Fixed joint de Unity). No hace falta pivot —
+    // el dev posiciona los bodies donde quiere y el constraint los suelda.
+    settings.mAutoDetectPoint = true;
 
     JPH::Ref<JPH::Constraint> c = settings.Create(*a, *b);
     m_impl->physicsSystem->AddConstraint(c);
