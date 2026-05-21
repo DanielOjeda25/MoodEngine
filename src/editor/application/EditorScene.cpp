@@ -12,6 +12,7 @@
 #include "systems/audio/AudioSystem.h"
 #include "systems/physics/RagdollSystem.h"  // F2H66
 #include "systems/physics/VehicleSystem.h"  // F2H67
+#include "systems/physics/ClothSystem.h"  // F2H75
 #include "systems/scripting/ScriptSystem.h"
 
 #include <glm/vec3.hpp>
@@ -349,6 +350,10 @@ void EditorApplication::updateRigidBodies(f32 dt) {
             VehicleSystem::tick(*m_scene, *m_physicsWorld, *m_assetManager);
         }
 
+        // F2H75: telas. Materializa el soft body si dirty y actualiza el
+        // buffer de render desde la pose post-step de las particulas.
+        ClothSystem::tick(*m_scene, *m_physicsWorld);
+
         // Hito 30: sync de la camara Play con la pos del character post-step.
         // eyeOffset cambia con crouch (halfHeight 0.1 vs standing 0.5).
         // Hito 31 D: el eye Y interpola con m_crouchVisualT (smooth) +
@@ -384,6 +389,9 @@ void EditorApplication::updateRigidBodies(f32 dt) {
         if (m_assetManager) {
             VehicleSystem::previewRest(*m_scene, *m_assetManager);
         }
+        // F2H75: tela plana en pose de reposo (sin fisica) para verla en el
+        // viewport del editor.
+        ClothSystem::previewRest(*m_scene);
     }
 }
 

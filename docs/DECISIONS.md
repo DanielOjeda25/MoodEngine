@@ -4408,4 +4408,49 @@ Total ~ 1-2 semanas de hito grande.
 **Revisar si:**
 - El dev pide explícitamente "ajustar params del operador post-spawn" (ej. cambiar `segments` de un cilindro tras spawnearlo): abrir hito propio con parametrización formal de comandos.
 
+---
+
+> **Nota:** entre F2H28 y F2H74 las decisiones se registraron en los docs por
+> hito (`docs/hitos/F2H<N>.md`) en vez de acá. F2H75 retoma el log para las
+> decisiones de mayor alcance arquitectónico.
+
+## 2026-05-21: F2H75 — render de mesh dinámico para cloth (renderer dedicado, no MeshRendererComponent)
+
+**Contexto:** la tela (cloth/soft body) necesita un mesh cuyos vértices se reescriben cada frame desde la simulación de Jolt. Hasta F2H74 TODA la geometría del engine era estática (`GL_STATIC_DRAW`) o skinneada por matrices de hueso — no existía un path para geometría procedural actualizada por frame.
+
+**Decisión:** renderer dedicado (`OpenGLClothRenderer`, espejo del `OpenGLParticleRenderer`) con VBO `GL_DYNAMIC_DRAW` re-subido por frame (orphan + `glBufferSubData`) + shader propio `cloth.{vert,frag}` lit simple (1 direccional + ambiente), doble cara vía `gl_FrontFacing`. NO se reusó `MeshRendererComponent` + el draw loop opaco.
+
+**Razones:**
+- El path de mesh estándar asume asset cacheado en `AssetManager` + `uModel` desde el Transform + geometría estática. La tela tiene vértices en world-space que cambian cada frame y no es un asset compartido.
+- Un renderer dedicado no perturba el pipeline de assets/materiales/PBR (blast radius chico) y reusa un patrón ya probado (partículas).
+- Costo aceptado: lit simple en vez de PBR completo (lights+shadows+IBL). Para una bandera/cortina alcanza; upgradeable si emerge demanda.
+
+**Alternativas descartadas:**
+- `MeshRendererComponent` + IMesh dinámico: reusaría el lit PBR completo, pero requería un IMesh dinámico fuera del cache de assets + un flag double-sided en el draw loop + transformar los vértices world→local por frame (inverse del Transform). Más acoplamiento al pipeline central por un beneficio visual marginal en v1.
+- Dibujar la tela como wireframe con el debug renderer: descartado por el dev (quería tela sólida iluminada).
+
+**Otras decisiones del hito** (detalle en `docs/hitos/F2H75.md`): grilla procedural NxM en vez de import de mesh; `stiffness [0,1] → compliance` de Jolt; viento tratado como aceleración sobre la velocidad de las partículas libres; `previewRest` analítico para el editor sin física.
+
+**Revisar si:**
+- Emerge demanda de telas con texturas/PBR/sombras (ropa de personajes, etc.): evaluar migrar al path de mesh estándar con un IMesh dinámico + flag double-sided.
+- Aparecen muchas telas simultáneas: el renderer re-sube cada una a un VBO compartido secuencialmente; considerar un VBO por tela o instancing.
+
+## 2026-05-21: F2H75 fix lateral — Slider constraint con límites iguales (Jolt v5.2.0 assert)
+
+**Contexto:** al correr la suite completa tras el Bloque B de F2H75, el test `test_physics_constraints.cpp` (Slider, F2H71) crasheaba con un assert de Jolt: `SliderConstraint.cpp:159 mLimitsMin != mLimitsMax || mFrequency > 0` ("Better use a fixed constraint"). El test crea un slider "bloqueado" con travel `[0,0]`. Pre-existente y ajeno al cloth.
+
+**Decisión:** `createSliderConstraint` expande `mLimitsMax` por un epsilon (`1e-4 m`) cuando `min == max`, dejando el slider efectivamente fijo pero válido para Jolt.
+
+**Razones:**
+- Un slider con travel cero (el dev lo "bloquea" desde el editor) es UX válida; no debe crashear la app en Debug.
+- El fix en el wrapper protege tanto el test como cualquier uso runtime (el dev podría setear min==max en el Inspector).
+- El epsilon es imperceptible (0.1 mm de travel).
+
+**Alternativas descartadas:**
+- Arreglar solo el test (usar min≠max): dejaría el crash latente para el dev en runtime.
+- Bloquear min==max en la UI: trata el síntoma, no la causa; el wrapper es el punto correcto.
+
+**Revisar si:**
+- El dev quiere un "lock real" rígido: el Fixed constraint (F2H71) es la vía correcta, no un slider de travel ~0.
+
 

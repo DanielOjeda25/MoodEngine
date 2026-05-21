@@ -30,18 +30,26 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H74 (2026-05-21)
+## 0.1. Último hito de feature — F2H75 (2026-05-21) — **cierra Sub-fase 2.4**
 
-**Cleanup UX (menú Ver) + capa de field-helpers del Inspector + fix undo.** Tag `v1.65.0-fase2-hito74`. Detalle completo en [`hitos/F2H74.md`](hitos/F2H74.md). El dev pidió reorganización de UX + limpieza del imgio disperso + mi recomendación (lente Unity/Unreal).
+**Cloth / telas que ondean.** Tag `v1.66.0-fase2-hito75`. Detalle completo en [`hitos/F2H75.md`](hitos/F2H75.md). Era el F2H28 original (último item de Física avanzada). Banderas/cortinas como soft body de Jolt que cuelgan por gravedad y flamean con las zonas de viento (`ForceFieldComponent` de F2H72).
 
-**Auditoría primero**: paneles/workspaces ya bien organizados (21 paneles en 6 workspaces = patrón Blender/Unity Layouts/Unreal Modes); las deudas "reorg de menús" (F2H18) y "HistoryStack residual" resultaron obsoletas → memorias borradas.
+**Scope acordado en mecánicas con el dev**: tela anclada por un borde + gravedad + viento, render sólido iluminado doble cara. NO choca con objetos, no es jelly/globo, no se rasga, grilla procedural NxM (no import de `.glb`).
 
 **Lo que entregó**:
-- **Fase 1 — menú Ver**: `kCategories` tenía `World` vacío y omitía `Narrative` (paneles de diálogo invisibles en el menú). Fix a **Scene/Assets/Narrative/Gameplay/Debug**; `Item*`/`Quest*` → `Gameplay`, `NarrativeIntro` → `Narrative`.
-- **Fase 2 — field-helpers** (`InspectorPanel_Internal.h`, estilo Unity `PropertyField` / Unreal `DetailsView`): `fieldDragFloat/3` + `fieldColorEdit3` colapsan el triplete *label i18n + widget + pushEditIfDone*. **25 campos** migrados en 6 partials, behaviour-preserving.
-- **Fix undo muerto por `helpMarker`**: `trackPropertyEdit` lee el ID del último item; con el `helpMarker` (`TextDisabled`) entre widget y `pushEditIfDone`, el undo nunca disparaba. Reordenado en **Joint** (6 campos), **Trigger** `requiredTag`, **ForceField** `strength`. Transform NO se toca (su undo viene de `applyDeltaToSelection`; el push final es dead code — reordenar daría doble-undo).
+- **`ClothLayout`** (header puro, sin Jolt, testeable): grilla mass-spring (structural/shear/bend) + anclajes (None/TopEdge/TopCorners/LeftEdge) + triángulos.
+- **`PhysicsWorld_SoftBody.cpp`**: wrapper sobre `JPH::SoftBody` (v5.2.0 ya viene compilado). create/destroy/readClothVertices/applyClothAcceleration. Ancladas con invMass 0; viento = aceleración sobre la velocidad de las libres.
+- **`ClothComponent`** + serialización round-trip aditiva + gate del serializer (tela standalone sin mesh).
+- **Mesh dinámico** (infra NUEVA — hasta F2H74 todo era estático/skinneado): `OpenGLClothRenderer` con VBO `GL_DYNAMIC_DRAW` re-subido/frame, shader `cloth.{vert,frag}` lit simple doble cara (`gl_FrontFacing`), invocado post-opaco por `SceneRenderer`.
+- **`ClothSystem`**: materialize lazy + sync sim→buffer (normales/frame) + `previewRest` analítico (editor) + reset en `enterPlayMode`.
+- **Editor**: *Add Component → Física → Tela* + Inspector (dimensiones/resolución/anclaje/masa/rigidez/damping/gravedad/color, i18n en/es).
+- **Viento**: `ForceFieldSystem` extendido a telas + demo `cloth_demo.moodmap`.
 
-**Suite 1046/10300 verde** (refactor de UI, validación visual).
+**Fix lateral reactivo** (ajeno al cloth): el Slider constraint con `min==max` crasheaba por un assert de Jolt v5.2.0 → `createSliderConstraint` expande un epsilon si los límites son iguales (protege test de F2H71 + runtime del editor).
+
+**Suite 1060/11015 verde.** Validado en vivo: bandera sólida + iluminada, en Play cuelga + ondea, feel "se siente bien".
+
+**⚠️ Bug conocido (pre-existente, ajeno al cloth)**: escalar un `RigidBody` Box hasta que su half-extent baje del *convex radius* de Jolt (~0.05 m) dispara un assert (`BoxShape.h:44`) y crashea el editor en Debug. El auto-sync `scale→halfExtents` de F2H40 no clampea ese mínimo. Fix reactivo chico pendiente (clampear en el path de resize) — el dev lo verá al cerrar este hito.
 
 ---
 
@@ -175,26 +183,19 @@ Stack completo de auto-ragdoll por contacto: `physics_internal::ContactListener`
 - **Sub-fase 2.3** (Renderer) del plan original: Hito 17 (PBR) + F2H55 (bloom) + F2H56 (SSAO) + F2H60 (CSM) + F2H61 (SSR) + F2H62 (shader graph). ✅ **cerrada con AUDIT-1**.
 - **Sub-fase 2.5** (gameplay loop): F2H43-F2H53 (i18n + dialogs + inventory + quests). ✅ Tag `v1.41.0-fase2-hito53`.
 
-### En curso
-
-- **Sub-fase 2.4** (Física avanzada): **F2H65 + F2H66 + F2H67 + F2H68** cerrados (Hinge/Distance/Point + Ragdolls Mixamo + Vehicle physics SA + ContactListener-driven auto-ragdoll infra). F2H68 cerrado con **bug conocido**: NPC sensor sample no transiciona end-to-end. Pendiente del plan original: force fields (F2H26), triggers avanzados (F2H27), cloth/soft body (F2H28), Slider/Fixed joints.
+- **Sub-fase 2.4** (Física avanzada): **CERRADA** ✅ con F2H75. Incluyó F2H65 (Hinge/Distance/Point) + F2H66 (Ragdolls Mixamo) + F2H67 (Vehicle physics SA) + F2H68 (auto-ragdoll por impacto) + F2H70.2/3/4 (vehicle polish + browser + wheels) + F2H71 (Slider/Fixed joints) + F2H72 (Force fields) + F2H73 (Triggers avanzados) + **F2H75 (Cloth/soft body)**. Todos los items del plan original (F2H24-F2H28) entregados.
 - **Sub-fase 2.6** (Render polish): F2H55, F2H56, F2H58, F2H59, F2H60, F2H61, F2H62, F2H63, F2H64 cerrados. AUDIT-1, AUDIT-2, AUDIT-3 cerrados.
 
-### Próximo — F2H69 (next)
+### Próximo — a definir con el dev
 
-**F2H69 — Vehicle pipeline glTF multi-node + debug del trigger NPC + reemplazar sedan Kenney por modelo correctamente armado.** Acordado con el dev al cerrar F2H68 (2026-05-19). El dev pidió no reinventar la rueda; este hito ataca el bug conocido de F2H68 + entrega pipeline de modelos vehiculares al standard industry.
+Con la Sub-fase 2.4 cerrada, las direcciones candidatas (a elegir con el dev):
 
-**Scope estimado**: 4-6h, ~3 bloques:
-
-- **A — Debug del trigger NPC**: añadir logs temporales en `OnContactAdded` + drain en `RagdollSystem` para confirmar dónde se rompe la cadena. Hipótesis priorizadas: (1) callback no se invoca para Dynamic vs Sensor — fix: chequear `body.IsSensor()` flag y ajustar el filtro `IsDynamic()`. (2) `closingSpeed` mal proyectada — fix: log de los valores reales. (3) Timing del register tras `createBody` — fix: registrar ANTES de pushear contact desde el listener. (4) Orden de tick — fix: drain a inicio de `tick()` antes de cualquier scene.forEach.
-- **B — Pipeline glTF multi-node**: extender `MeshLoader` para que detecte aiNodes con mesh children y opcionalmente genere `MeshAsset`s separados por node (cada uno centrado en su origen). Usado por el patrón estándar Unity/Unreal: 1 GLB → N entities (chassis + wheels + doors) cargadas como assets independientes. Sin sub-mesh selector. La elección "1 mesh por entity" del editor consume el FBX/GLB y deja al dev armar la entity tree.
-- **C — Reemplazar sedan Kenney por modelo DCC-friendly**: usar el DeLorean GLB de Sketchfab (CC-BY, ya bajado a `assets/dmc_delorean/scene.gltf`) con escala correcta. Eliminar `assets/vehicles/banshee_sa/sedan.fbx` (el modelo Kenney compuesto incompatible con sub-mesh selector). El `.moodvehicle` y el `VehicleConfig::makeDefaultSA()` SE QUEDAN — son la "configuración" lógica del vehicle, no el asset visual.
-
-**Sub-fases más adelante** (sin presión inmediata):
-
-- **Sub-fase 2.4 — Física avanzada** (continúa post-F2H69): candidatos remanentes del plan original = **Force fields y zonas físicas** (F2H26), **Triggers avanzados** (F2H27), **Cloth + soft body** (F2H28), Slider/Fixed joints.
 - **Sub-fase 2.6 — Pipeline AI** (F2H35-F2H40 originales): Mixamo importer cubierto parcialmente por F2H49. Pendiente: Blender MCP server, armas procedurales, generador de props, validación automática.
 - **Sub-fase 2.7 — UI/UX final + cierre Fase 2** (F2H41-F2H44 originales): theming, atajos configurables, tutorial in-app, tag `v2.0.0`.
+- **Backlog de vehículos**: integrar `armor-car` + `tesla` (faltan `.moodvehicle` + procesar ruedas), pipeline de packs multi-auto (`tools/glb/split.py` + `--scale`).
+- **Bug fixes pendientes**: el crash del resize de Box bodies (half-extent < convex radius de Jolt) — chico, reactivo.
+
+**Fix reactivo chico pendiente** (registrado en sección 0.1): clampear el half-extent de los Box bodies a ≥ convex radius en el path `scale→halfExtents` para que escalar un box muy chico no crashee el editor en Debug.
 
 ---
 

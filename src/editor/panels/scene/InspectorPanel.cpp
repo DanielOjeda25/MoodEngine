@@ -97,6 +97,7 @@ void InspectorPanel::onImGuiRender() {
     if (e.hasComponent<ParticleEmitterComponent>())  renderParticleEmitterSection(e);
     if (e.hasComponent<TriggerComponent>())          renderTriggerSection(e);
     if (e.hasComponent<ForceFieldComponent>())       renderForceFieldSection(e);  // F2H72
+    if (e.hasComponent<ClothComponent>())            renderClothSection(e);  // F2H75
     if (e.hasComponent<BrushComponent>())            renderBrushSection(e);
     if (e.hasComponent<InventoryComponent>())        renderInventorySection(e);  // F2H51
 
@@ -231,6 +232,13 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
         e.hasComponent<ForceFieldComponent>(),
         [](Entity en, std::string lbl) {
             return makeAddComponentCommand<ForceFieldComponent>(en, std::move(lbl));
+        });
+    // F2H75: ClothComponent en Physics.
+    add("component.name.cloth", "component.desc.cloth",
+        "editor.panel.inspector.add.cat.physics",
+        e.hasComponent<ClothComponent>(),
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<ClothComponent>(en, std::move(lbl));
         });
 
     // Audio

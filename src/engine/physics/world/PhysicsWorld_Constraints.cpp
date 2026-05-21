@@ -170,8 +170,20 @@ u32 PhysicsWorld::createSliderConstraint(u32 bodyA, u32 bodyB,
     // del axis, el valor de Jolt baja. Para que la API publica sea intuitiva
     // (limit = cuanto desliza A a lo largo de +axisLocal, + = a favor del eje)
     // invertimos los limites: [userMin, userMax] -> Jolt [-userMax, -userMin].
-    settings.mLimitsMin = -limitMax;
-    settings.mLimitsMax = -limitMin;
+    f32 jphMin = -limitMax;
+    f32 jphMax = -limitMin;
+    // F2H75 fix: Jolt v5.2.0 hace assert si mLimitsMin == mLimitsMax sin
+    // spring ("Better use a fixed constraint") y crashea en Debug. Un slider
+    // con travel cero (min==max, eg. el dev lo "bloquea" desde el editor) es
+    // un caso valido de UX; lo materializamos como un travel infinitesimal
+    // (epsilon) que queda efectivamente fijo pero no dispara el assert. Si el
+    // dev quiere algo realmente rigido, el Fixed constraint es la via.
+    constexpr f32 k_minSliderTravel = 1e-4f;
+    if (std::abs(jphMax - jphMin) < k_minSliderTravel) {
+        jphMax = jphMin + k_minSliderTravel;
+    }
+    settings.mLimitsMin = jphMin;
+    settings.mLimitsMax = jphMax;
 
     JPH::Ref<JPH::Constraint> c = settings.Create(*a, *b);
     m_impl->physicsSystem->AddConstraint(c);

@@ -47,6 +47,7 @@ class OpenGLFramebuffer;
 class OpenGLOitFramebuffer;  // F2H64
 class OpenGLInstanceBuffer;
 class OpenGLParticleRenderer;
+class OpenGLClothRenderer;  // F2H75
 class OpenGLSSBO;
 class BloomPass;
 class ColorGradingPass;
@@ -242,6 +243,7 @@ private:
     std::unique_ptr<ShadowPass>           m_shadowPass;
     std::unique_ptr<LightSystem>          m_lightSystem;
     std::unique_ptr<OpenGLParticleRenderer> m_particleRenderer;  // Hito 29 Bloque 2
+    std::unique_ptr<OpenGLClothRenderer>    m_clothRenderer;     // F2H75
 
     // Forward+ light grid (Hito 18). 3 SSBOs: point lights, tile data,
     // light indices. Bindings 2/3/4.

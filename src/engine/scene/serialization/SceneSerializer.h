@@ -177,6 +177,21 @@ struct SavedForceField {
     bool        enabled = true;
 };
 
+/// @brief F2H75: copia persistida de un ClothComponent. Solo params (sin
+///        estado runtime: clothId/dynamicMeshId/dirty). `anchor` como string.
+struct SavedCloth {
+    f32         width  = 2.0f;
+    f32         height = 2.0f;
+    int         resX = 16;
+    int         resY = 16;
+    std::string anchor{"top_edge"};  // none|top_edge|top_corners|left_edge
+    f32         totalMass = 1.0f;
+    f32         stiffness = 1.0f;
+    f32         damping = 0.1f;
+    bool        useGravity = true;
+    glm::vec3   color{0.75f, 0.2f, 0.2f};
+};
+
 /// @brief F2H48.1: copia persistida de un DialogComponent.
 ///        Solo dialogPath + autoStartOnInteract; el cachedDialogId
 ///        runtime no se persiste (el AssetManager lo recompone al
@@ -351,6 +366,7 @@ struct SavedEntity {
     std::optional<SavedParticleEmitter> particleEmitter; // Hito 29
     std::optional<SavedTrigger> trigger;                  // Hito 33
     std::optional<SavedForceField> forceField;            // F2H72
+    std::optional<SavedCloth>      cloth;                 // F2H75
     std::optional<SavedDialog>  dialog;                   // F2H48.1
     std::optional<SavedAnimator> animator;                // F2H50 Bloque D
     std::optional<SavedInventory> inventory;              // F2H51 Bloque I

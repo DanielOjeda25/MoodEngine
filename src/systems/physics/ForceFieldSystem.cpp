@@ -35,7 +35,7 @@ bool obbContainsWorldPoint(const TransformComponent& tf,
 
 } // namespace
 
-void ForceFieldSystem::update(Scene& scene, PhysicsWorld& physics, f32 /*dt*/) {
+void ForceFieldSystem::update(Scene& scene, PhysicsWorld& physics, f32 dt) {
     // Pre-recolectar los RigidBody Dynamic materializados (Static/Kinematic
     // no responden a fuerzas). Amortiza el costo si hay varias zonas.
     struct Body { u32 bodyId; glm::vec3 pos; f32 mass; };
@@ -46,7 +46,20 @@ void ForceFieldSystem::update(Scene& scene, PhysicsWorld& physics, f32 /*dt*/) {
             if (rb.bodyId == 0) return;
             bodies.push_back({rb.bodyId, physics.bodyPosition(rb.bodyId), rb.mass});
         });
-    if (bodies.empty()) return;
+
+    // F2H75: pre-recolectar telas (soft bodies) materializadas. El viento
+    // las hace ondear. Usamos la posicion del Transform (centro de la tela)
+    // para el test de pertenencia a la zona — barato y suficiente para que
+    // una bandera cerca de un WindZone reaccione.
+    struct ClothTarget { u32 clothId; glm::vec3 pos; };
+    std::vector<ClothTarget> cloths;
+    scene.forEach<TransformComponent, ClothComponent>(
+        [&](Entity, TransformComponent& tf, ClothComponent& cl) {
+            if (cl.clothId == 0) return;
+            cloths.push_back({cl.clothId, tf.position});
+        });
+
+    if (bodies.empty() && cloths.empty()) return;
 
     constexpr f32 k_eps = 1e-4f;
 
@@ -93,6 +106,37 @@ void ForceFieldSystem::update(Scene& scene, PhysicsWorld& physics, f32 /*dt*/) {
                 if (ff.ignoreMass) force *= b.mass;
 
                 physics.addForce(b.bodyId, force);
+            }
+
+            // --- Telas: el viento las empuja (mass-independent) ---
+            // F2H75: misma direccion/magnitud, pero como las particulas de
+            // un soft body no tienen "masa" expuesta uniforme, tratamos
+            // siempre la magnitud como ACELERACION (m/s²) e integramos por
+            // dt en applyClothAcceleration. Asi un WindZone direccional hace
+            // flamear la bandera de forma consistente.
+            for (const ClothTarget& c : cloths) {
+                bool inside;
+                if (sphere) {
+                    inside = glm::distance(c.pos, center) <= ff.radius;
+                } else {
+                    inside = obbContainsWorldPoint(tf, ff.halfExtents, c.pos);
+                }
+                if (!inside) continue;
+
+                glm::vec3 dir;
+                f32 mag = ff.strength;
+                if (ff.mode == ForceFieldComponent::Mode::Directional) {
+                    const f32 len = glm::length(ff.direction);
+                    dir = (len > k_eps) ? ff.direction / len : glm::vec3(0, 1, 0);
+                } else { // Radial
+                    const glm::vec3 d = c.pos - center;
+                    const f32 dist = glm::length(d);
+                    dir = (dist > k_eps) ? d / dist : glm::vec3(0, 1, 0);
+                    if (ff.linearFalloff && range > k_eps) {
+                        mag *= std::max(0.0f, 1.0f - dist / range);
+                    }
+                }
+                physics.applyClothAcceleration(c.clothId, dir * mag, dt);
             }
         });
 }

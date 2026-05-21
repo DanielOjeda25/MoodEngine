@@ -23,6 +23,7 @@
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 #include <Jolt/Physics/Constraints/Constraint.h>
 #include <Jolt/Physics/Ragdoll/Ragdoll.h>  // F2H66
+#include <Jolt/Physics/SoftBody/SoftBodySharedSettings.h>  // F2H75
 #include <Jolt/Physics/Vehicle/VehicleConstraint.h>  // F2H67
 #include <Jolt/Physics/Vehicle/VehicleCollisionTester.h>  // F2H67
 
@@ -148,6 +149,19 @@ struct PhysicsWorld::Impl {
     // constraints. Cada Ragdoll posee N bodies + (N-1) constraints internos.
     std::unordered_map<u32, JPH::Ref<JPH::Ragdoll>> ragdolls;
     u32 nextRagdollId = 1;
+
+    // F2H75: telas (soft bodies) indexadas por handle. Guardamos el BodyID
+    // del soft body (su lifecycle lo controlamos con createCloth/destroyCloth
+    // via el BodyInterface, igual que los rigid bodies) + el SharedSettings
+    // (JPH::Ref para mantenerlo vivo mientras el body lo use). El conteo de
+    // vertices se cachea para validar el read sin lockear.
+    struct ClothEntry {
+        JPH::BodyID bodyId;
+        JPH::Ref<JPH::SoftBodySharedSettings> shared;
+        u32 vertexCount = 0;
+    };
+    std::unordered_map<u32, ClothEntry> cloths;
+    u32 nextClothId = 1;
 
     // F2H67: vehicles indexados por handle. Cada entry mantiene la
     // VehicleConstraint (que es JPH::Ref-counted) + el chassis BodyID (que

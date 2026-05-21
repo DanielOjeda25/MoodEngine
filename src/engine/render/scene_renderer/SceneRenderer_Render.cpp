@@ -22,6 +22,7 @@
 #include "engine/render/backend/opengl/OpenGLInstanceBuffer.h"
 #include "engine/render/backend/opengl/OpenGLOitFramebuffer.h"  // F2H64
 #include "engine/render/backend/opengl/OpenGLParticleRenderer.h"
+#include "engine/render/backend/opengl/OpenGLClothRenderer.h"  // F2H75
 #include "engine/render/backend/opengl/OpenGLRenderer.h"
 #include "engine/render/backend/opengl/OpenGLSSBO.h"
 #include "engine/render/backend/opengl/OpenGLShader.h"
@@ -927,6 +928,18 @@ void SceneRenderer::renderScene(Scene& scene,
     if (m_particleRenderer) {
         MOOD_PROFILE_SCOPE("ParticleRenderer::render");
         m_particleRenderer->render(scene, assets, view, projection);
+    }
+
+    // F2H75: pase de telas (cloth). Geometria opaca dinamica — va junto a
+    // las particulas (post-opaco). Usa la luz direccional del frame para
+    // el lit; si no hay sun, el renderer cae a un fill default.
+    if (m_clothRenderer) {
+        MOOD_PROFILE_SCOPE("ClothRenderer::render");
+        const auto& sun = lights.directional;
+        m_clothRenderer->render(
+            scene, view, projection,
+            sun.direction, sun.color,
+            sun.enabled ? sun.intensity : 0.0f);
     }
 
     // Aqui retornamos con el scene FB todavia bindeado y el RHI dentro

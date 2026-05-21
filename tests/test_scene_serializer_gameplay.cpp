@@ -441,6 +441,53 @@ TEST_CASE("SceneSerializer: round-trip de ForceFieldComponent (F2H72)") {
 }
 
 // ============================================================
+// F2H75: ClothComponent round-trip
+// ============================================================
+
+TEST_CASE("SceneSerializer: round-trip de ClothComponent (F2H75)") {
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    {
+        Entity z = scene.createEntity("bandera");
+        ClothComponent cl{};
+        cl.width      = 3.0f;
+        cl.height     = 2.0f;
+        cl.resX       = 20;
+        cl.resY       = 12;
+        cl.anchor     = ClothComponent::Anchor::LeftEdge;
+        cl.totalMass  = 0.5f;
+        cl.stiffness  = 0.8f;
+        cl.damping    = 0.2f;
+        cl.useGravity = true;
+        cl.color      = glm::vec3(0.1f, 0.4f, 0.9f);
+        z.addComponent<ClothComponent>(cl);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("cloth_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1u);
+    const auto& se = loaded->entities[0];
+    REQUIRE(se.cloth.has_value());
+    CHECK(se.cloth->width  == doctest::Approx(3.0f));
+    CHECK(se.cloth->height == doctest::Approx(2.0f));
+    CHECK(se.cloth->resX == 20);
+    CHECK(se.cloth->resY == 12);
+    CHECK(se.cloth->anchor == "left_edge");
+    CHECK(se.cloth->totalMass == doctest::Approx(0.5f));
+    CHECK(se.cloth->stiffness == doctest::Approx(0.8f));
+    CHECK(se.cloth->damping == doctest::Approx(0.2f));
+    CHECK(se.cloth->useGravity);
+    CHECK(se.cloth->color.b == doctest::Approx(0.9f));
+
+    std::filesystem::remove(path);
+}
+
+// ============================================================
 // F2H73: TriggerComponent campos avanzados round-trip
 // ============================================================
 

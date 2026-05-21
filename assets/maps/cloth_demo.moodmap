@@ -1,0 +1,90 @@
+{
+  "brushes": [],
+  "entities": [
+    {
+      "rigid_body": {
+        "halfExtents": [15, 0.5, 15],
+        "mass": 0.0,
+        "shape": "box",
+        "type": "static"
+      },
+      "tag": "Floor",
+      "transform": {
+        "position": [0, 0, 0],
+        "rotationEuler": [0, 0, 0],
+        "scale": [1, 1, 1]
+      }
+    },
+    {
+      "cloth": {
+        "width": 3.0,
+        "height": 2.0,
+        "resX": 24,
+        "resY": 16,
+        "anchor": "left_edge",
+        "totalMass": 0.5,
+        "stiffness": 0.85,
+        "damping": 0.08,
+        "useGravity": true,
+        "color": [0.85, 0.15, 0.15]
+      },
+      "tag": "Bandera",
+      "transform": {
+        "position": [0, 4, 0],
+        "rotationEuler": [0, 0, 0],
+        "scale": [1, 1, 1]
+      }
+    },
+    {
+      "force_field": {
+        "shape": "box",
+        "mode": "directional",
+        "halfExtents": [4.0, 3.0, 4.0],
+        "direction": [0.0, 0.0, 1.0],
+        "strength": 14.0,
+        "ignoreMass": true,
+        "enabled": true,
+        "radius": 3.0,
+        "linearFalloff": false
+      },
+      "tag": "WindZone",
+      "transform": {
+        "position": [0, 4, 0],
+        "rotationEuler": [0, 0, 0],
+        "scale": [1, 1, 1]
+      }
+    }
+  ],
+  "height": 5,
+  "name": "cloth_demo",
+  "tileSize": 3.0,
+  "tiles": [
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"},
+    {"texture": "textures/missing.png", "type": "empty"}
+  ],
+  "version": 14,
+  "width": 5
+}

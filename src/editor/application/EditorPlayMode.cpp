@@ -78,6 +78,18 @@ void EditorApplication::enterPlayMode() {
             });
         m_scene->forEach<JointComponent>(
             [&](Entity, JointComponent& j) { j.dirty = true; });
+        // F2H75: resetear telas para que cada Play arranque con la sim
+        // fresca. Destruimos el soft body viejo (si quedo de una sesion
+        // anterior) y remarcamos dirty -> el ClothSystem lo recrea en el
+        // primer tick desde la pose actual del Transform.
+        m_scene->forEach<ClothComponent>(
+            [&](Entity, ClothComponent& cl) {
+                if (cl.clothId != 0) {
+                    m_physicsWorld->destroyCloth(cl.clothId);
+                    cl.clothId = 0;
+                }
+                cl.dirty = true;
+            });
     }
 
     Log::editor()->info("Play Mode activo (WASD + mouse. Esc para pausar)");

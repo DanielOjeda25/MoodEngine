@@ -31,6 +31,7 @@
 #include "engine/render/backend/opengl/OpenGLOitFramebuffer.h"  // F2H64
 #include "engine/render/backend/opengl/OpenGLInstanceBuffer.h"
 #include "engine/render/backend/opengl/OpenGLParticleRenderer.h"
+#include "engine/render/backend/opengl/OpenGLClothRenderer.h"  // F2H75
 #include "engine/render/backend/opengl/OpenGLRenderer.h"
 #include "engine/render/backend/opengl/OpenGLSSBO.h"
 #include "engine/render/backend/opengl/OpenGLShader.h"
@@ -290,6 +291,15 @@ SceneRenderer::SceneRenderer()
                              e.what());
         m_particleRenderer.reset();
     }
+
+    // F2H75: cloth renderer. Mismo manejo tolerante a fallo de shader.
+    try {
+        m_clothRenderer = std::make_unique<OpenGLClothRenderer>();
+    } catch (const std::exception& e) {
+        Log::render()->warn("ClothRenderer no disponible: {}. Telas desactivadas.",
+                             e.what());
+        m_clothRenderer.reset();
+    }
 }
 
 SceneRenderer::~SceneRenderer() {
@@ -297,6 +307,7 @@ SceneRenderer::~SceneRenderer() {
     // del refactor: recursos GL se tiran ANTES del contexto (que mata el
     // caller).
     m_particleRenderer.reset();
+    m_clothRenderer.reset();
     m_lightSystem.reset();
     m_iblBrdfLut.reset();
     m_iblPrefilter.reset();

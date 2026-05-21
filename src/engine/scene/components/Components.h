@@ -834,6 +834,57 @@ struct ForceFieldComponent {
     bool enabled = true;
 };
 
+/// F2H75: tela (cloth) simulada como soft body. Grilla procedural NxM de
+/// particulas unidas por resortes, anclada por un borde/esquinas; cuelga por
+/// gravedad y ondea con las zonas de viento (`ForceFieldComponent`). Se
+/// renderiza como mesh dinamico (vertices actualizados por frame desde Jolt).
+///
+/// El `ClothSystem` materializa la tela lazy (dirty -> createCloth) usando
+/// `cloth::buildGridCloth` + la API soft body del PhysicsWorld. El centro de
+/// la tela es `TransformComponent.position`; su orientacion, el rotation del
+/// Transform (una bandera en un asta vertical = rotar 90° para que cuelgue
+/// de un lado).
+struct ClothComponent {
+    /// Que parte de la tela queda fija (espejo de `cloth::AnchorEdge`; se
+    /// mantiene local para no acoplar Components.h al header de fisica, mismo
+    /// criterio que `RagdollComponent::State`).
+    enum class Anchor : u8 {
+        None       = 0,  ///< Cae libre (trapo/paracaidas).
+        TopEdge    = 1,  ///< Borde superior (cortina/bandera colgante).
+        TopCorners = 2,  ///< Esquinas de arriba (guirnalda).
+        LeftEdge   = 3,  ///< Borde izquierdo (bandera en asta).
+    };
+
+    // --- Parametros serializados (definen la tela) ---
+    f32    width  = 2.0f;            ///< Ancho en metros (eje X local).
+    f32    height = 2.0f;            ///< Alto en metros (eje Y local).
+    int    resX = 16;               ///< Particulas a lo ancho (>=2, cap ~40).
+    int    resY = 16;               ///< Particulas a lo alto (>=2, cap ~40).
+    Anchor anchor = Anchor::TopEdge;
+    f32    totalMass = 1.0f;         ///< Masa total repartida (kg).
+    /// Rigidez [0,1]: 1 = tela firme (compliance 0), 0 = muy elastica. El
+    /// ClothSystem la mapea a la compliance de los resortes de Jolt.
+    f32    stiffness = 1.0f;
+    /// Damping lineal del solver (Jolt default 0.1). Mas alto = la tela
+    /// amortigua antes el movimiento (menos "latigazo").
+    f32    damping = 0.1f;
+    bool   useGravity = true;
+    /// Color base de la tela (la luz direccional + ambiente lo modulan).
+    glm::vec3 color{0.75f, 0.2f, 0.2f};  // rojo bandera por default
+
+    // --- Runtime (NO se persiste) ---
+    /// Handle del soft body en PhysicsWorld. 0 = no creado.
+    u32  clothId = 0;
+    /// Marker de re-materializacion (al editar params o spawnear). Sigue el
+    /// patron F2H67 (`dirty=true` => destroy + recreate en el proximo tick).
+    bool dirty = true;
+    /// Buffer de render interleaved (pos.xyz, normal.xyz por vertice, con los
+    /// triangulos ya expandidos en world space). Lo produce el ClothSystem
+    /// cada frame desde la pose del soft body; lo consume el ClothRenderer
+    /// (sube a un VBO dinamico + dibuja doble cara). 6 floats por vertice.
+    std::vector<f32> renderVertices;
+};
+
 /// F2H48: marca una entidad como NPC con un dialog asociado. `dialogPath`
 /// es el path logico del `.mooddialog` (resolvible por AssetManager via
 /// VFS). `autoStartOnInteract`: si true y la entidad tambien tiene un

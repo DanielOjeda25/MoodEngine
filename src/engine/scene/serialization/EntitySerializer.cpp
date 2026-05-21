@@ -290,6 +290,32 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         je["force_field"] = jff;
     }
 
+    // F2H75: ClothComponent. Solo params (sin estado runtime: clothId,
+    // dynamicMeshId, dirty los rematerializa el ClothSystem). Anchor como
+    // string para edicion a mano.
+    if (entity.hasComponent<ClothComponent>()) {
+        const auto& cl = entity.getComponent<ClothComponent>();
+        json jcl;
+        const char* anchorStr = "top_edge";
+        switch (cl.anchor) {
+            case ClothComponent::Anchor::None:       anchorStr = "none"; break;
+            case ClothComponent::Anchor::TopEdge:    anchorStr = "top_edge"; break;
+            case ClothComponent::Anchor::TopCorners: anchorStr = "top_corners"; break;
+            case ClothComponent::Anchor::LeftEdge:   anchorStr = "left_edge"; break;
+        }
+        jcl["width"]      = cl.width;
+        jcl["height"]     = cl.height;
+        jcl["resX"]       = cl.resX;
+        jcl["resY"]       = cl.resY;
+        jcl["anchor"]     = anchorStr;
+        jcl["totalMass"]  = cl.totalMass;
+        jcl["stiffness"]  = cl.stiffness;
+        jcl["damping"]    = cl.damping;
+        jcl["useGravity"] = cl.useGravity;
+        jcl["color"]      = cl.color;
+        je["cloth"] = jcl;
+    }
+
     // F2H48.1: DialogComponent. Solo dialogPath + autoStartOnInteract;
     // el cachedDialogId runtime no se persiste (loadDialog al primer
     // tick del DialogInteractSystem lo repuebla via VFS).
@@ -623,6 +649,23 @@ SavedEntity parseEntityFromJson(const json& j) {
         sf.ignoreMass    = jff.value("ignoreMass",    false);
         sf.enabled       = jff.value("enabled",       true);
         se.forceField = std::move(sf);
+    }
+
+    // F2H75: cloth. Aditivo — mapas viejos sin el campo cargan igual.
+    if (j.contains("cloth")) {
+        const auto& jcl = j.at("cloth");
+        SavedCloth sc;
+        sc.width      = jcl.value("width",      2.0f);
+        sc.height     = jcl.value("height",     2.0f);
+        sc.resX       = jcl.value("resX",       16);
+        sc.resY       = jcl.value("resY",       16);
+        sc.anchor     = jcl.value("anchor",     std::string{"top_edge"});
+        sc.totalMass  = jcl.value("totalMass",  1.0f);
+        sc.stiffness  = jcl.value("stiffness",  1.0f);
+        sc.damping    = jcl.value("damping",    0.1f);
+        sc.useGravity = jcl.value("useGravity", true);
+        sc.color      = jcl.value("color",      glm::vec3{0.75f, 0.2f, 0.2f});
+        se.cloth = std::move(sc);
     }
 
     // F2H48.1: dialog.

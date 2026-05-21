@@ -188,4 +188,101 @@ void InspectorPanel::renderForceFieldSection(Entity e) {
     ImGui::Separator();
 }
 
+// F2H75: Cloth. Editar los params geometricos/sim marca `dirty` para que el
+// ClothSystem rematerialice el soft body; el color es live (lo lee el
+// renderer cada frame, sin recrear la tela).
+void InspectorPanel::renderClothSection(Entity e) {
+    auto& cl = e.getComponent<ClothComponent>();
+    ImGui::SeparatorText(I18n::T("component.name.cloth").c_str());
+
+    bool simChanged = false;  // requiere re-materializar
+
+    // --- Dimensiones ---
+    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+            "editor.panel.inspector.cloth.width", "##cloth", cl.width,
+            [](Entity& en, const f32& v) {
+                en.getComponent<ClothComponent>().width = v;
+            },
+            "Editar cloth width", 0.05f, 0.05f, 50.0f)) {
+        m_editedThisFrame = true; simChanged = true;
+    }
+    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+            "editor.panel.inspector.cloth.height", "##cloth", cl.height,
+            [](Entity& en, const f32& v) {
+                en.getComponent<ClothComponent>().height = v;
+            },
+            "Editar cloth height", 0.05f, 0.05f, 50.0f)) {
+        m_editedThisFrame = true; simChanged = true;
+    }
+
+    // --- Resolucion (particulas por lado) ---
+    int rx = cl.resX;
+    const std::string rxLabel =
+        I18n::T("editor.panel.inspector.cloth.res_x") + "##cloth";
+    if (ImGui::SliderInt(rxLabel.c_str(), &rx, 2, 40)) {
+        cl.resX = rx; m_editedThisFrame = true; simChanged = true;
+    }
+    int ry = cl.resY;
+    const std::string ryLabel =
+        I18n::T("editor.panel.inspector.cloth.res_y") + "##cloth";
+    if (ImGui::SliderInt(ryLabel.c_str(), &ry, 2, 40)) {
+        cl.resY = ry; m_editedThisFrame = true; simChanged = true;
+    }
+
+    // --- Anclaje ---
+    const char* anchorNames[] = {"None", "Top Edge", "Top Corners", "Left Edge"};
+    int aIdx = static_cast<int>(cl.anchor);
+    const std::string aLabel =
+        I18n::T("editor.panel.inspector.cloth.anchor") + "##cloth";
+    if (ImGui::Combo(aLabel.c_str(), &aIdx, anchorNames, 4)) {
+        cl.anchor = static_cast<ClothComponent::Anchor>(aIdx);
+        m_editedThisFrame = true; simChanged = true;
+    }
+
+    // --- Parametros de simulacion ---
+    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+            "editor.panel.inspector.cloth.mass", "##cloth", cl.totalMass,
+            [](Entity& en, const f32& v) {
+                en.getComponent<ClothComponent>().totalMass = v;
+            },
+            "Editar cloth mass", 0.05f, 0.01f, 100.0f)) {
+        m_editedThisFrame = true; simChanged = true;
+    }
+    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+            "editor.panel.inspector.cloth.stiffness", "##cloth", cl.stiffness,
+            [](Entity& en, const f32& v) {
+                en.getComponent<ClothComponent>().stiffness = v;
+            },
+            "Editar cloth stiffness", 0.01f, 0.0f, 1.0f)) {
+        m_editedThisFrame = true; simChanged = true;
+    }
+    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+            "editor.panel.inspector.cloth.damping", "##cloth", cl.damping,
+            [](Entity& en, const f32& v) {
+                en.getComponent<ClothComponent>().damping = v;
+            },
+            "Editar cloth damping", 0.01f, 0.0f, 2.0f)) {
+        m_editedThisFrame = true; simChanged = true;
+    }
+
+    const std::string gLabel =
+        I18n::T("editor.panel.inspector.cloth.use_gravity") + "##cloth";
+    if (ImGui::Checkbox(gLabel.c_str(), &cl.useGravity)) {
+        m_editedThisFrame = true; simChanged = true;
+    }
+
+    // --- Color (live, no re-materializa) ---
+    if (detail::fieldColorEdit3(m_editTracker, m_ui, e,
+            "editor.panel.inspector.cloth.color", "##cloth", cl.color,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<ClothComponent>().color = v;
+            },
+            "Editar cloth color")) {
+        m_editedThisFrame = true;
+    }
+
+    if (simChanged) cl.dirty = true;
+    ImGui::Separator();
+}
+
 } // namespace Mood

@@ -60,6 +60,7 @@ private:
     void renderParticleEmitterSection(Entity e);
     void renderTriggerSection(Entity e);
     void renderForceFieldSection(Entity e);  // F2H72
+    void renderClothSection(Entity e);  // F2H75
     void renderBrushSection(Entity e);
     void renderInventorySection(Entity e);  // F2H51
 

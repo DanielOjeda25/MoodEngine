@@ -42,6 +42,9 @@ namespace ragdoll { struct RagdollLayout; }
 // F2H67: forward decl del vehicle config puro.
 namespace vehicle { struct VehicleConfig; }
 
+// F2H75: forward decl del cloth layout puro.
+namespace cloth { struct ClothLayout; }
+
 // F2H68: forward decl del ContactListener para friend-declaration sobre
 // `class PhysicsWorld`. El cuerpo vive en PhysicsWorld_Internal.h.
 namespace physics_internal { class ContactListener; }
@@ -297,6 +300,55 @@ public:
 
     /// @brief Cantidad de ragdolls activos. Util para tests / debug.
     u32 ragdollCount() const;
+
+    // --- F2H75: Cloth / soft bodies (envuelve JPH::SoftBody) ---
+    //
+    // Una tela es un soft body: N particulas (vertices con masa) unidas por
+    // resortes (edges). El `cloth::ClothLayout` define la topologia pura; el
+    // wrapper la convierte en `JPH::SoftBodySharedSettings` + crea el body.
+    // Las particulas ancladas (`pinned`) van con invMass 0 (no caen). El
+    // render lee las posiciones por frame con `readClothVertices`.
+
+    /// @brief Crea una tela (soft body) desde un layout. Retorna handle u32
+    ///        estable; 0 si fallo.
+    /// @param layout         Grilla pura de particulas + edges (de
+    ///                       `cloth::buildGridCloth`).
+    /// @param worldTransform Pose inicial de la tela (las posiciones locales
+    ///                       del layout se llevan a world con esta matriz).
+    /// @param totalMass      Masa total repartida entre las particulas NO
+    ///                       ancladas (kg).
+    /// @param compliance     Inverso de la rigidez de los resortes. 0 =
+    ///                       rigido (tela firme); valores > 0 = mas elastico.
+    /// @param linearDamping  Damping del solver (Jolt default 0.1). Mas alto
+    ///                       = la tela "amortigua" mas rapido el movimiento.
+    /// @param useGravity     Si la tela cae por gravedad (default true).
+    u32 createCloth(const cloth::ClothLayout& layout,
+                     const glm::mat4& worldTransform,
+                     f32 totalMass,
+                     f32 compliance,
+                     f32 linearDamping,
+                     bool useGravity = true);
+
+    /// @brief Destruye + remueve la tela del physics system. Idempotente.
+    void destroyCloth(u32 clothId);
+
+    /// @brief Lee las posiciones WORLD de las particulas de la tela.
+    ///        `outWorldPositions` se redimensiona a la cantidad de vertices.
+    ///        Retorna false si el id es invalido. Llamar post-step para
+    ///        actualizar el mesh dinamico.
+    bool readClothVertices(u32 clothId,
+                            std::vector<glm::vec3>& outWorldPositions) const;
+
+    /// @brief Aplica una ACELERACION (m/s²) en world space a las particulas
+    ///        NO ancladas de la tela, integrada por `dt`. Mass-independent
+    ///        (suma a la velocidad directo) — pensado para viento. No-op si
+    ///        el id es invalido. Jolt solo permite mutar invMass/velocity de
+    ///        un soft body en runtime (mover posiciones rompe colisiones).
+    void applyClothAcceleration(u32 clothId, const glm::vec3& accelWorld,
+                                 f32 dt);
+
+    /// @brief Cantidad de telas activas. Util para tests / debug.
+    u32 clothCount() const;
 
     // --- F2H67: Vehicles (envuelve JPH::VehicleConstraint +
     //            WheeledVehicleController) ---

@@ -308,6 +308,28 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<ForceFieldComponent>(ff);
         }
 
+        // F2H75: ClothComponent. clothId/dynamicMeshId/dirty son runtime —
+        // el ClothSystem rematerializa la tela al primer tick (dirty=true).
+        if (se.cloth.has_value()) {
+            const auto& s = *se.cloth;
+            ClothComponent cl{};
+            cl.width      = s.width;
+            cl.height     = s.height;
+            cl.resX       = s.resX;
+            cl.resY       = s.resY;
+            if      (s.anchor == "none")        cl.anchor = ClothComponent::Anchor::None;
+            else if (s.anchor == "top_corners") cl.anchor = ClothComponent::Anchor::TopCorners;
+            else if (s.anchor == "left_edge")   cl.anchor = ClothComponent::Anchor::LeftEdge;
+            else                                 cl.anchor = ClothComponent::Anchor::TopEdge;
+            cl.totalMass  = s.totalMass;
+            cl.stiffness  = s.stiffness;
+            cl.damping    = s.damping;
+            cl.useGravity = s.useGravity;
+            cl.color      = s.color;
+            cl.dirty = true;
+            e.addComponent<ClothComponent>(cl);
+        }
+
         // F2H48.1: DialogComponent. cachedDialogId arranca en 0 — el
         // DialogInteractSystem llama loadDialog en el primer frame que
         // el player entra al trigger.

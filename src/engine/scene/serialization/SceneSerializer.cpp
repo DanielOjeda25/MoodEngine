@@ -244,8 +244,12 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             // MeshRenderer (caso normal) o standalone si el visual va a
             // child-entities.
             const bool hasVeh = e.hasComponent<VehicleComponent>();
+            // F2H75: una tela es una entity standalone (su mesh lo genera el
+            // ClothSystem dinamicamente; no tiene MeshRendererComponent).
+            const bool hasCloth = e.hasComponent<ClothComponent>();
             if (!hasMr && !hasLi && !hasRb && !hasEnv && !hasScript
-                && !hasPe && !hasInv && !hasVeh && !hasFF && !hasTrig) return;
+                && !hasPe && !hasInv && !hasVeh && !hasFF && !hasTrig
+                && !hasCloth) return;
             j["entities"].push_back(serializeEntity(e, assets));
         });
     }

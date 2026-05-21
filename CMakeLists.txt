@@ -385,6 +385,9 @@ add_library(mood_engine_lib STATIC
     src/engine/physics/world/PhysicsWorld_Vehicle.cpp  # F2H67 Bloque C
     src/systems/physics/VehicleSystem.cpp  # F2H67 Bloque D
     src/engine/physics/world/PhysicsWorld_Impact.cpp  # F2H68 Bloque A
+    src/engine/physics/cloth/ClothLayout.cpp  # F2H75 Bloque A
+    src/engine/physics/world/PhysicsWorld_SoftBody.cpp  # F2H75 Bloque B
+    src/systems/physics/ClothSystem.cpp  # F2H75 Bloque D
 
     src/engine/saving/SaveLoad.cpp
 
@@ -447,6 +450,7 @@ add_library(mood_engine_lib STATIC
     src/engine/render/backend/opengl/OpenGLDebugRenderer.cpp
     src/engine/render/backend/opengl/OpenGLInstanceBuffer.cpp
     src/engine/render/backend/opengl/OpenGLParticleRenderer.cpp
+    src/engine/render/backend/opengl/OpenGLClothRenderer.cpp  # F2H75 Bloque E
 
     src/engine/render/pipeline/LightGrid.cpp
     src/engine/render/preview/MaterialPreviewRenderer.cpp

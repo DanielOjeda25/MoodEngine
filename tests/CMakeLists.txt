@@ -55,6 +55,8 @@ add_executable(mood_tests
     test_raycast.cpp
     test_trigger_system.cpp
     test_force_field_system.cpp  # F2H72
+    test_cloth_layout.cpp  # F2H75 Bloque A
+    test_physics_cloth.cpp  # F2H75 Bloque B
     test_save_load.cpp
     test_frustum.cpp
     test_render_batching.cpp
@@ -181,6 +183,8 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Constraints.cpp  # F2H66 Bloque 0
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Ragdoll.cpp  # F2H66 Bloque C
     ${CMAKE_SOURCE_DIR}/src/engine/physics/ragdoll/RagdollLayout.cpp  # F2H66 Bloque A
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/cloth/ClothLayout.cpp  # F2H75 Bloque A
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_SoftBody.cpp  # F2H75 Bloque B
     ${CMAKE_SOURCE_DIR}/src/engine/physics/vehicle/VehicleConfig.cpp  # F2H67 Bloque A
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Vehicle.cpp  # F2H67 Bloque C
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Impact.cpp  # F2H68 Bloque A
