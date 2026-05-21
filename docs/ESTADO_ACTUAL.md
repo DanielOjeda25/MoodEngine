@@ -30,7 +30,23 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H71 (2026-05-21)
+## 0.1. Último hito de feature — F2H72 (2026-05-21)
+
+**Force fields / zonas de fuerza física.** Tag `v1.63.0-fase2-hito72`. Detalle completo en [`hitos/F2H72.md`](hitos/F2H72.md). Siguiente feature de Sub-fase 2.4. Referencia: Unreal `RadialForceComponent` + Unity Area Effectors.
+
+**Lo que entregó**:
+- **`ForceFieldComponent`**: zona sin colisión sólida que aplica fuerza a los `RigidBody` Dynamic adentro. `shape` (Box `halfExtents` / Sphere `radius`), `mode` (**Directional** = viento, fuerza constante en `direction` / **Radial** = explosión/atractor, fuerza centro→body, `strength>0` empuja, `<0` atrae), `strength`, `linearFalloff` (radial), `ignoreMass` (acceleration vs force), `enabled`.
+- **`ForceFieldSystem`** (`src/systems/physics/`): cada frame pre-recolecta los Dynamic materializados y por cada zona habilitada aplica `addForce` a los de adentro (test OBB Box / distancia Sphere, mismo patrón que el `TriggerSystem`). Sin API nueva de física, sin tocar render.
+- **Wiring**: antes del step (`updateRigidBodies`) en el loop de Play del editor + player, solo en Play.
+- **Editor**: *Add Component → Physics → Force Field*, sección de Inspector (combos + condicionales + toggles, i18n), debug-draw del overlay (`F1`): zona violeta (Box OBB / Sphere 3 círculos) + flecha (Directional) / cruz radial (Radial), gris si disabled.
+- **Serialización** round-trip aditiva; se agregó `ForceFieldComponent` al gate del serializer (zona standalone sin mesh).
+- **Demo** `physics_forcefields_demo.moodmap` (WindZone arrastra cajas + ExplosionZone las dispara).
+
+**Suite 1042/10287 verde**.
+
+---
+
+## 0.2. Hito previo — F2H71 (2026-05-21)
 
 **Slider + Fixed joints — completa la familia de constraints de Jolt.** Tag `v1.62.0-fase2-hito71`. Detalle completo en [`hitos/F2H71.md`](hitos/F2H71.md). F2H65 había dejado Hinge/Distance/Point; este cierra los 2 que faltaban, reusando el andamiaje existente (Inspector + serialización + dispatch + debug-draw).
 
@@ -48,7 +64,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.2. Hito previo — F2H70.4 (2026-05-21)
+## 0.3. Hito previo — F2H70.4 (2026-05-21)
 
 **Ruedas que rotan (split-by-node) + HUD de conducción.** Tag `v1.61.0-fase2-hito70-4`. Detalle completo en [`hitos/F2H70-4.md`](hitos/F2H70-4.md). Cierra el Bloque H que F2H70.3 dejó pendiente: las ruedas dejan de estar horneadas en el chassis y rotan/giran independientes desde la pose física de Jolt.
 
@@ -69,7 +85,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.3. Hito previo — F2H70.3 (2026-05-20)
+## 0.4. Hito previo — F2H70.3 (2026-05-20)
 
 **Vehicle Browser + drag-and-drop de vehículos al viewport.** Tag `v1.60.0-fase2-hito70-3`. Detalle completo en [`hitos/F2H70-3.md`](hitos/F2H70-3.md). Cierra el loop de autoría del sistema data-driven `.moodvehicle`.
 
@@ -83,21 +99,6 @@ Pure helpers extracted: 0         0         1 + 7 tests
 **Aclarado en validación (no-bugs)**: la colisión de vehículos solo se simula en Play mode (el engine solo hace `physicsWorld->step()` en Play; **F1** solo togglea debug-draw de AABBs, no habilita colisión). Copias spawneadas antes del hito (prefijo `Vehicle_`) que quedaron guardadas en un `.moodmap` conservan ese tag; drops nuevos usan `metadata.name`.
 
 **Pendiente** (a retomar, no scope ahora): **split-by-node de wheels** (rotación visual independiente + auto-derivar `attach_y`) + **pipeline de packs multi-auto** — el dev tiene un archivo con 24 autos estilo DeLorean a escala ~1.4cm (autoreados en otra unidad pese a `scale=1`); construir `tools/glb/split.py` (separar por nodo) + `--scale` para hornear 1u=1m → 24 `.glb` + 24 `.moodvehicle`.
-
----
-
-## 0.4. Hito previo — F2H70.2 (2026-05-20)
-
-**Tuning físico del vehicle (damping + spawn elevation + frame consistente).** Tag `v1.59.0-fase2-hito70-2`. Detalle completo en [`hitos/F2H70-2.md`](hitos/F2H70-2.md). Cierra los 3 bugs físicos que F2H70.1 dejó pendientes.
-
-**Lo que entregó**:
-- **Bloque C — chassis damping configurable**: pre-fix el chassis estaba hardcoded a `mLinearDamping=0.05` (sim-floppy, rodaba infinito al soltar W). `chassisLinearDamping` + `chassisAngularDamping` (default 0.3 arcade) leídos desde `body.linear_damping` / `angular_damping` en el `.moodvehicle`, aplicados a `JPH::BodyCreationSettings`.
-- **Bloque B — spawn elevation spring-aware**: helper `wheelRestCompression(WheelConfig) = g/(2π·f)²` (mass-independent) sumado al `pivotYOffset` en `VehicleSystem::chassisRenderYOffset`. `SceneLoader` usa el helper centralizado (aplica también en Editor mode). Resuelve el brinco visual al iniciar Play.
-- **Bloque D5 — mesh yaw offset data-driven**: `body.mesh_yaw_offset_deg` (número) o `body.mesh_forward_axis` (`"+Z"/"-Z"/"+X"/"-X"`) en el `.moodvehicle`. `TransformComponent::pivotYawOffsetDeg` runtime-only post-multiply `Ry` (visual-only, no afecta física). DeLorean declara `mesh_yaw_offset_deg: 180` → **moodmap limpio** (workaround `rotationEuler: [0,180,0]` de F2H70.1 eliminado). Drag-and-drop friendly: subís .glb, si controles salen invertidos editás un campo.
-- **Bloque E — S-key brake-stick + HUD/logs**: edge-detect en S decide brake-vs-reverse UNA vez al press (patrón GTA/Forza). HUD polish + debug logs de edges/speed.
-- **Grounding final**: el spring-aware arregló el brinco pero no el float en equilibrio (chassis center a 0.85m, modelo half-height 0.568m → base flotaba 0.285m). Fix data-driven `attach_y_mm: -300 → -15` (`-(half_height - spring_rest - radius)`) en ambos ejes. Validado en Editor mode: DeLorean apoya en piso.
-
-**Suite 1029/10227 verde**. **Pendiente a F2H70.3**: Vehicle Browser UI (Bloque F) + split-by-node de wheels (Bloque H, permitiría auto-derivar `attach_y`).
 
 ---
 

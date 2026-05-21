@@ -11,6 +11,52 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-21: F2H72 — Force fields / zonas de fuerza física
+
+### Decisión 1 — Reusar el overlap del TriggerSystem (iterar entities) vs broadphase de Jolt
+
+**Contexto:** Para aplicar fuerza a los bodies dentro de una zona hay que saber cuáles están adentro. Dos caminos: iterar las entities con `RigidBodyComponent` y testear su posición (como hace el `TriggerSystem`), o pedirle a Jolt un query de broadphase (`CollideSphere`/`CollideAABox`).
+
+**Decisión:** Iterar las entities con `RigidBodyComponent` Dynamic y testear inclusión (OBB para Box, distancia para Sphere), reusando el mismo patrón del `TriggerSystem`.
+
+**Razones:**
+- **Consistencia** con cómo el trigger ya detecta bodies — un solo modelo mental en el código.
+- **Sin API nueva** en `PhysicsWorld` (el broadphase query no está expuesto hoy).
+- **Costo trivial** para el caso real (pocas zonas × pocos bodies dynamic).
+
+**Condiciones de revisión:** Si emergen cientos de bodies y varias zonas, migrar a `BroadPhaseQuery::CollideSphere`/`CollideAABox` de Jolt (O(log n) vs O(n) por zona).
+
+### Decisión 2 — `ignoreMass` = aceleración (no una fuerza fija)
+
+**Contexto:** Una zona de viento o de gravedad debería mover todos los objetos igual sin importar su masa; un empuje "físico" (un chorro de aire a presión) debería mover menos a los objetos pesados.
+
+**Decisión:** `strength` es Newtons por default (`addForce` directo → los pesados se mueven menos). Con `ignoreMass = true`, el sistema multiplica la magnitud por la masa del body → la fuerza produce la misma **aceleración** sin importar la masa (modelo de viento / gravedad de zona).
+
+**Razones:**
+- Cubre los dos casos reales (Unity expone ambos via `ForceMode.Force` vs `ForceMode.Acceleration`).
+- Barato: la masa del body ya está en `RigidBodyComponent`.
+
+### Decisión 3 — Aplicar la fuerza ANTES del step de física
+
+**Contexto:** Jolt acumula las fuerzas de `AddForce` y las integra en su `Update`, limpiándolas después. El orden del sistema vs el step importa.
+
+**Decisión:** Invocar el `ForceFieldSystem` justo **antes** de `updateRigidBodies` (que stepea), solo en Play.
+
+**Razones:**
+- La fuerza actúa ese mismo frame (sin lag de 1 frame).
+- El primer frame de Play los bodies aún no están materializados (se crean dentro de `updateRigidBodies`), así que la zona empieza a actuar de frame 2 — invisible en la práctica.
+
+### Decisión 4 — La zona de fuerza es una entity standalone (gate del serializer)
+
+**Contexto:** El `SceneSerializer` solo persiste entities que tienen un componente "ancla" (mesh, light, rigidbody, etc.). Una zona de fuerza no tiene mesh.
+
+**Decisión:** Agregar `ForceFieldComponent` al gate del serializer (igual que `InventoryComponent`) — una zona se persiste por sí sola aunque sea la única cosa en la entity.
+
+**Razones:**
+- Una zona de fuerza es un objeto de nivel de pleno derecho (como un trigger o un cofre), no un accesorio de un mesh.
+
+---
+
 ## 2026-05-21: F2H71 — Slider + Fixed joints
 
 ### Decisión 1 — `FixedConstraint` con `mAutoDetectPoint = true` (sin pivot)
