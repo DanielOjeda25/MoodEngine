@@ -43,6 +43,11 @@ void EditorApplication::updateWindowTitle() {
     }
     SDL_SetWindowTitle(m_window->sdlHandle(), title.c_str());
     m_ui.setHasProject(m_project.has_value());
+    // F2H77: surfacear el "sin guardar" en la status bar (el " *" del titulo es
+    // facil de no ver). Este es el unico punto de sync — updateWindowTitle() ya
+    // se llama en cada transicion de m_projectDirty (markDirty / save / new /
+    // open / close), asi que no hace falta polling por frame.
+    m_ui.setProjectDirty(m_project.has_value() && m_projectDirty);
 }
 
 void EditorApplication::markDirty() {

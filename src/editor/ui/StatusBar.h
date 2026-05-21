@@ -22,11 +22,17 @@ public:
     ///        "Last Operator"). Sirve para que el dev sepa que va a
     ///        deshacer Ctrl+Z. Vacio = no muestra nada.
     void setLastCommand(std::string name) { m_lastCommand = std::move(name); }
+    /// @brief F2H77: hay cambios en el proyecto sin guardar. Surfacea el
+    ///        `m_projectDirty` de EditorApplication (que ya pone el " *" en el
+    ///        titulo del SO) dentro del editor, donde se ve. Sincronizado en
+    ///        `updateWindowTitle()` (cubre todas las transiciones de dirty).
+    void setProjectDirty(bool v) { m_projectDirty = v; }
 
 private:
     f32 m_fps = 0.0f;
     std::string m_message = "Listo";
     std::string m_lastCommand;
+    bool m_projectDirty = false;
 };
 
 } // namespace Mood

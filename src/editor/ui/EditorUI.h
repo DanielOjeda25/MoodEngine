@@ -64,6 +64,11 @@ public:
     /// @brief Mensaje libre de la status bar (ej. "Guardado" tras un save).
     void setStatusMessage(std::string msg) { m_statusBar.setMessage(std::move(msg)); }
 
+    /// @brief F2H77: propaga el estado "sin guardar" a la status bar. Lo llama
+    ///        EditorApplication::updateWindowTitle() (único punto de sync, cubre
+    ///        todas las transiciones de m_projectDirty).
+    void setProjectDirty(bool v) { m_statusBar.setProjectDirty(v); }
+
     /// @brief Lista de paneles, expuesta para que el menu "Ver" pueda togglear
     ///        su visibilidad.
     const std::vector<IPanel*>& panels() const { return m_panels; }

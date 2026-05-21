@@ -133,6 +133,7 @@
   "editor.statusbar.submode.edge": "Edge Mode (2)",
   "editor.statusbar.submode.face": "Face Mode (3)",
   "editor.statusbar.last_command": "Last command: {}",
+  "editor.statusbar.unsaved": "Unsaved",
 
   "editor.panel.hierarchy.scene_not_injected": "Scene not injected",
   "editor.panel.hierarchy.create_entity": "Create Entity",

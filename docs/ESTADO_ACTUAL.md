@@ -30,7 +30,23 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H76 (2026-05-21) — **abre Sub-fase 2.7**
+## 0.1. Último hito de feature — F2H77 (2026-05-21) — **Sub-fase 2.7**
+
+**Pulido visual base + indicador "sin guardar".** Tag `v1.68.0-fase2-hito77`. Detalle completo en [`hitos/F2H77.md`](hitos/F2H77.md). Segundo hito de la Sub-fase 2.7.
+
+**Origen**: tras F2H76 (redondeo, que al dev le gustó) pidió aplicar "esa forma" a otros paneles + recomendaciones UX. Se hizo una **auditoría UX completa** del editor. **Hallazgo clave: la mayoría de las quick wins ya estaban implementadas** (tooltips con atajos en ambas toolbars, pestaña Luces de F2H60, Inspector con estado vacío + hint, secciones colapsables) — el editor estaba más pulido de lo que el reporte inicial del agente explorador sugería. El hito se acotó honestamente a lo realmente faltante.
+
+**Lo que entregó**:
+- **Métricas unificadas** (`EditorThemes::applyRounding` → `applyMetrics`): suma al redondeo de F2H76 el espaciado (`WindowPadding (10,8)`, `FramePadding (8,5)`, `ItemSpacing (8,7)`, `ItemInnerSpacing (6,5)`, `CellPadding (6,5)`, `IndentSpacing 20`, `ScrollbarSize 12`, `GrabMinSize 11`). Común a los 4 temas, seteado aparte de los colores → sobrevive al theme-switch.
+- **Badge "● Sin guardar"** (ámbar) en la status bar: surfacea el `m_projectDirty` que **ya existía** (el título del SO ya ponía `*` pero era fácil de no ver). `StatusBar::setProjectDirty` + `EditorUI::setProjectDirty` + sync en `EditorApplication::updateWindowTitle()` (único punto, ya se llama en cada transición de dirty — sin polling). i18n en/es.
+
+**Fuera de scope (futuro 2.7)**: Ctrl+S contextual (guardar el panel con foco), unificar Undo en Material/Item/Quest editors, acento de marca único.
+
+**Suite 1061/11018 verde** (sin tests nuevos — UI sin superficie headless). Validado en vivo: espaciado OK + badge aparece al editar / desaparece con Ctrl+S, *"listo"*.
+
+---
+
+## 0.1ante. Hito previo — F2H76 (2026-05-21) — **abrió Sub-fase 2.7**
 
 **Preferencias + temas visuales del editor.** Tag `v1.67.0-fase2-hito76`. Detalle completo en [`hitos/F2H76.md`](hitos/F2H76.md). Primer hito de la **Sub-fase 2.7 (UI/UX final + cierre Fase 2)**. Abre la "casa de los ajustes" del editor; futuros hitos cuelgan ahí atajos de teclado, escala de UI, etc. (el bump a `v2.0.0` se reserva para el CIERRE de la sub-fase, no para este hito).
 

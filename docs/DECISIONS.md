@@ -4473,5 +4473,23 @@ Total ~ 1-2 semanas de hito grande.
 - Emerge demanda de paletas 100% custom editables por el usuario: agregar un tema "custom" cuyo `apply` lea colores del `settings.json`.
 - El runtime (MoodPlayer) necesita temas: hoy este hito tema-iza solo el editor.
 
+## 2026-05-21: F2H77 — hito acotado por auditoría + "sin guardar" reusa el dirty flag existente
+
+**Contexto:** tras F2H76 el dev pidió aplicar "esa forma" (el redondeo) a más paneles + recomendaciones UX. Una auditoría con agente explorador listó varias "quick wins". Al verificarlas en código, la mayoría **ya estaban implementadas** (tooltips con atajos en toolbars, pestaña Luces, Inspector con estado vacío + secciones colapsables).
+
+**Decisión:** acotar F2H77 a lo genuinamente faltante: (1) espaciado/padding unificado en el tema (hermano del redondeo), (2) un badge "sin guardar" en la status bar que **reusa el `m_projectDirty` existente** en vez de derivar dirty del undo stack.
+
+**Razones:**
+- Verificar el audit antes de implementar evita "trabajo falso" sobre features ya presentes (el reporte del explorador sobre-estimó los gaps).
+- `m_projectDirty` ya es un flag robusto (prendido en todos los `markDirty()`, apagado en save, ya pone el `*` en el título del SO). Surfacearlo en la status bar es cero riesgo. Derivar dirty del `HistoryStack` (que no tiene save-point) sería frágil y no capturaría ediciones fuera del stack.
+- Sync en `updateWindowTitle()` (ya invocado en cada transición de dirty) evita polling por frame y mantiene un único punto de verdad.
+
+**Alternativas descartadas:**
+- Trackear `undoCountAtLastSave` en el HistoryStack: más código, más frágil, redundante con `m_projectDirty`.
+- Implementar toda la lista del audit: la mayoría era trabajo ya hecho.
+
+**Revisar si:**
+- El dev quiere granularidad por-asset (script/shader/item con su propio "sin guardar"): hoy el badge refleja el dirty del proyecto/mapa, no de cada editor de asset.
+
 
 

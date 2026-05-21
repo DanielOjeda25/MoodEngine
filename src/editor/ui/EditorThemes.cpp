@@ -84,10 +84,13 @@ void applySepia(ImGuiStyle& style) {
     c[ImGuiCol_TabActive]       = bg2;
 }
 
-// F2H76: esquinas redondeadas en toda la UI. Las funciones StyleColorsX solo
-// tocan colores, no geometria, asi que el redondeo lo seteamos aparte y se
-// aplica igual a todos los temas. Look mas suave/moderno (vs. bordes en punta).
-void applyRounding(ImGuiStyle& style) {
+// F2H76/F2H77: geometria comun a todos los temas (redondeo + espaciado). Las
+// funciones StyleColorsX y las paletas custom solo tocan colores, no geometria,
+// asi que estas metricas las seteamos aparte y se aplican igual a los 4 temas
+// (y sobreviven al theme-switch). Look mas suave/moderno y un espaciado
+// consistente para que todos los paneles "respiren" igual.
+void applyMetrics(ImGuiStyle& style) {
+    // --- F2H76: redondeo (vs. bordes en punta) ---
     style.WindowRounding    = 6.0f;
     style.ChildRounding     = 6.0f;
     style.FrameRounding     = 4.0f;  // botones, combos, inputs
@@ -95,6 +98,18 @@ void applyRounding(ImGuiStyle& style) {
     style.ScrollbarRounding = 6.0f;
     style.GrabRounding      = 4.0f;  // grab de sliders
     style.TabRounding       = 5.0f;  // tabs de workspace / docking
+
+    // --- F2H77: espaciado/padding unificado (defaults de ImGui daban un look
+    // apretado e inconsistente entre paneles). Valores algo mas generosos para
+    // que las filas respiren y los click-targets sean comodos. ---
+    style.WindowPadding     = ImVec2(10.0f, 8.0f);   // margen interno de ventanas
+    style.FramePadding      = ImVec2(8.0f, 5.0f);    // padding de widgets (rows mas altas)
+    style.ItemSpacing       = ImVec2(8.0f, 7.0f);    // separacion vertical entre items
+    style.ItemInnerSpacing  = ImVec2(6.0f, 5.0f);    // label<->widget
+    style.CellPadding       = ImVec2(6.0f, 5.0f);    // tablas (stats de items, etc.)
+    style.IndentSpacing     = 20.0f;                 // arbol de jerarquia
+    style.ScrollbarSize     = 12.0f;
+    style.GrabMinSize       = 11.0f;
 }
 
 } // namespace
@@ -113,7 +128,7 @@ void apply(const std::string& id) {
         // "dark" + cualquier id desconocido.
         ImGui::StyleColorsDark(&style);
     }
-    applyRounding(style);  // F2H76: redondeo comun a todos los temas
+    applyMetrics(style);  // F2H76/F2H77: redondeo + espaciado comun a todos los temas
 }
 
 } // namespace Mood::EditorThemes

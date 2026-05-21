@@ -74,6 +74,18 @@ void StatusBar::draw(EditorMode mode, EditorSubMode subMode) {
                 ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.10f, 1.0f),
                                      "%s", subLabel.c_str());
             }
+            // F2H77: badge "sin guardar". El " *" del titulo del SO es facil
+            // de no ver; un punto ambar en la status bar lo hace evidente
+            // dentro del editor (estilo VS Code). Solo aparece con cambios
+            // pendientes (sin proyecto, m_projectDirty queda false).
+            if (m_projectDirty) {
+                ImGui::Separator();
+                const std::string dirtyLabel = std::string(ICON_FA_CIRCLE " ") +
+                    I18n::T("editor.statusbar.unsaved");
+                ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.28f, 1.0f),
+                                     "%s", dirtyLabel.c_str());
+            }
+
             ImGui::Separator();
             ImGui::TextUnformatted(m_message.c_str());
             // F2H16: "Ultimo comando: <name>" Blender-style. F2H23: castellano
