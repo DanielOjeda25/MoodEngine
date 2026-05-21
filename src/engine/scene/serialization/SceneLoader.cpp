@@ -280,7 +280,11 @@ Entity applyOneEntity(const SavedEntity& se,
         if (se.trigger.has_value()) {
             const auto& s = *se.trigger;
             TriggerComponent tc{};
-            tc.halfExtents = s.halfExtents;
+            tc.halfExtents      = s.halfExtents;
+            tc.requiredTag      = s.requiredTag;       // F2H73
+            tc.triggersOnPlayer = s.triggersOnPlayer;  // F2H73
+            tc.oneShot          = s.oneShot;           // F2H73
+            tc.enabled          = s.enabled;           // F2H73
             e.addComponent<TriggerComponent>(tc);
         }
 

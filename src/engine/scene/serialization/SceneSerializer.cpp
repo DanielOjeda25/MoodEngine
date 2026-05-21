@@ -228,8 +228,11 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             // F2H51: InventoryComponent es serializable standalone — un
             // chest/container puede no tener mesh visible.
             const bool hasInv = e.hasComponent<InventoryComponent>();
-    // F2H72: una zona de fuerza es una entity standalone (sin mesh).
-    const bool hasFF  = e.hasComponent<ForceFieldComponent>();
+            // F2H72: una zona de fuerza es una entity standalone (sin mesh).
+            const bool hasFF  = e.hasComponent<ForceFieldComponent>();
+            // F2H73: un trigger zone (kill volume, checkpoint) tambien es
+            // standalone — sin esto un trigger sin mesh no se persistia.
+            const bool hasTrig = e.hasComponent<TriggerComponent>();
             // F2H70.3 H: las wheel-entities (tags wheel_FL/FR/RL/RR) las
             // spawnea y rematerializa el VehicleSystem en cada load a partir
             // del VehicleComponent del chassis. NO se serializan: tienen
@@ -245,7 +248,7 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             // child-entities.
             const bool hasVeh = e.hasComponent<VehicleComponent>();
             if (!hasMr && !hasLi && !hasRb && !hasEnv && !hasScript
-                && !hasPe && !hasInv && !hasVeh && !hasFF) return;
+                && !hasPe && !hasInv && !hasVeh && !hasFF && !hasTrig) return;
             j["entities"].push_back(serializeEntity(e, assets));
         });
     }

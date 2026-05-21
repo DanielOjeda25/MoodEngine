@@ -262,6 +262,12 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         const auto& tc = entity.getComponent<TriggerComponent>();
         json jtr;
         jtr["halfExtents"] = tc.halfExtents;
+        // F2H73: campos avanzados — solo si != default (JSON limpio +
+        // backward-compat: mapas viejos no los traen y cargan igual).
+        if (!tc.requiredTag.empty())  jtr["required_tag"]      = tc.requiredTag;
+        if (!tc.triggersOnPlayer)     jtr["triggers_on_player"] = false;
+        if (tc.oneShot)               jtr["one_shot"]          = true;
+        if (!tc.enabled)              jtr["enabled"]           = false;
         je["trigger"] = jtr;
     }
 
@@ -595,7 +601,11 @@ SavedEntity parseEntityFromJson(const json& j) {
     if (j.contains("trigger")) {
         const auto& jtr = j.at("trigger");
         SavedTrigger st;
-        st.halfExtents = jtr.value("halfExtents", glm::vec3{1.0f});
+        st.halfExtents      = jtr.value("halfExtents", glm::vec3{1.0f});
+        st.requiredTag      = jtr.value("required_tag", std::string{});
+        st.triggersOnPlayer = jtr.value("triggers_on_player", true);
+        st.oneShot          = jtr.value("one_shot", false);
+        st.enabled          = jtr.value("enabled", true);
         se.trigger = std::move(st);
     }
 

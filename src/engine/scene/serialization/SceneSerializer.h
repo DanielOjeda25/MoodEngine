@@ -156,7 +156,11 @@ struct SavedScript {
 ///        Solo `halfExtents`; el flag runtime `playerInside` se reinicia
 ///        al cargar (la AABB-test del primer frame redetectara estado).
 struct SavedTrigger {
-    glm::vec3 halfExtents{1.0f, 1.0f, 1.0f};
+    glm::vec3   halfExtents{1.0f, 1.0f, 1.0f};
+    std::string requiredTag;              // F2H73; vacio = cualquier body
+    bool        triggersOnPlayer = true;  // F2H73
+    bool        oneShot = false;          // F2H73
+    bool        enabled = true;           // F2H73
 };
 
 /// @brief F2H72: copia persistida de un ForceFieldComponent. Todos los
