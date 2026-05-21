@@ -19,6 +19,26 @@ constexpr f32 k_dt = 0.016f;
 
 } // namespace
 
+TEST_CASE("PhysicsWorld F2H75: box diminuto no crashea (clamp convex radius)") {
+    // Regresion: escalar un Box body por debajo del convex radius de Jolt
+    // (~0.05 m) disparaba un assert en BoxShape y crasheaba en Debug.
+    // createJPHShape ahora clampea half-extent + baja el convex radius.
+    PhysicsWorld pw;
+    // Half-extents bien por debajo de 0.05 m en los 3 ejes.
+    const u32 a = pw.createBody(glm::vec3(0, 5, 0), CollisionShape::Box,
+                                  glm::vec3(0.005f), BodyType::Dynamic, 1.0f);
+    CHECK(a != 0u);
+    // Caso degenerado: half-extent 0 (no debe crashear; se clampea positivo).
+    const u32 b = pw.createBody(glm::vec3(2, 5, 0), CollisionShape::Box,
+                                  glm::vec3(0.0f), BodyType::Static, 0.0f);
+    CHECK(b != 0u);
+    // Resize en vivo a un tamaño diminuto (el path del editor que crasheaba).
+    pw.setBodyHalfExtents(a, CollisionShape::Box, glm::vec3(0.002f, 0.3f, 0.3f));
+    // Stepear no debe crashear.
+    for (int i = 0; i < 5; ++i) pw.step(k_dt);
+    CHECK(pw.bodyPosition(a).y < 5.1f);  // sigue vivo / simulando
+}
+
 TEST_CASE("PhysicsWorld F2H65: createHingeConstraint devuelve handle + constraintCount") {
     PhysicsWorld pw;
     const u32 a = pw.createBody(glm::vec3(0, 5, 0), CollisionShape::Box,

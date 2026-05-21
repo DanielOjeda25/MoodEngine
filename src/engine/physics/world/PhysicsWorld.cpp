@@ -25,6 +25,7 @@
 #include <Jolt/Physics/Body/BodyLock.h>
 #include <Jolt/Physics/Body/BodyFilter.h>
 
+#include <algorithm>  // std::min, std::max (clamp de half-extents)
 #include <cstdarg>
 #include <cstdio>
 #include <stdexcept>
@@ -204,13 +205,29 @@ namespace {
 JPH::RefConst<JPH::Shape> createJPHShape(CollisionShape shape,
                                           const glm::vec3& halfExtents) {
     switch (shape) {
-        case CollisionShape::Box:
-            return new JPH::BoxShape(
-                JPH::Vec3(halfExtents.x, halfExtents.y, halfExtents.z));
+        case CollisionShape::Box: {
+            // F2H75 fix: Jolt exige que el menor half-extent sea >= el convex
+            // radius del shape (default 0.05 m), sino `BoxShape` hace assert
+            // (`BoxShape.h:44`) y crashea en Debug. El dev puede escalar un
+            // box muy chico desde el editor (gizmo / Inspector) y el auto-sync
+            // scale->halfExtents (F2H40) lo materializa tal cual. Clampeamos
+            // el half-extent a un minimo positivo y BAJAMOS el convex radius
+            // para boxes finos (en vez de inflar el tamaño), preservando la
+            // dimension visual hasta donde Jolt lo permite.
+            constexpr f32 k_jphDefaultConvexRadius = 0.05f;  // JPH default
+            const f32 hx = std::max(halfExtents.x, 1e-3f);
+            const f32 hy = std::max(halfExtents.y, 1e-3f);
+            const f32 hz = std::max(halfExtents.z, 1e-3f);
+            const f32 minHe = std::min({hx, hy, hz});
+            const f32 convexR = std::min(k_jphDefaultConvexRadius, minHe * 0.9f);
+            return new JPH::BoxShape(JPH::Vec3(hx, hy, hz), convexR);
+        }
         case CollisionShape::Sphere:
-            return new JPH::SphereShape(halfExtents.x);
+            // Radio minimo positivo: una esfera de radio 0 tambien crashea.
+            return new JPH::SphereShape(std::max(halfExtents.x, 1e-3f));
         case CollisionShape::Capsule:
-            return new JPH::CapsuleShape(halfExtents.x, halfExtents.y);
+            return new JPH::CapsuleShape(std::max(halfExtents.x, 1e-3f),
+                                          std::max(halfExtents.y, 1e-3f));
     }
     return nullptr;
 }
