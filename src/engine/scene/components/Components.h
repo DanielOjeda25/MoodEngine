@@ -39,6 +39,17 @@ struct TagComponent {
     TagComponent(std::string n) : name(std::move(n)) {}
 };
 
+/// @brief ¿Es una wheel-entity interna del VehicleSystem? (tags canonicos
+///        wheel_FL/FR/RL/RR). El VehicleSystem las spawnea y rematerializa
+///        desde el VehicleComponent del chassis en cada load, asi que son
+///        internas del engine: no se serializan (SceneSerializer), no se
+///        listan en la jerarquia ni son pickeables en el viewport. Helper
+///        compartido para no repetir el check de los 4 tags.
+inline bool isWheelEntityTag(const std::string& name) {
+    return name == "wheel_FL" || name == "wheel_FR"
+        || name == "wheel_RL" || name == "wheel_RR";
+}
+
 /// @brief Transform 3D con posicion / rotacion Euler (grados) / escala.
 ///        Rotacion euler simplifica la UI del Inspector; F2H70 agrega un
 ///        camino paralelo via `rotation` quaternion + flag `useQuaternion`

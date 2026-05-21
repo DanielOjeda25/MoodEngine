@@ -239,10 +239,7 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             // MeshRenderer (entrarian por hasMr) pero persistirlas duplica
             // las ruedas al recargar (4 guardadas huerfanas + 4 respawneadas
             // = 8). Skip explicito antes del resto de checks.
-            const bool isWheelChild =
-                tag.name == "wheel_FL" || tag.name == "wheel_FR" ||
-                tag.name == "wheel_RL" || tag.name == "wheel_RR";
-            if (isWheelChild) return;
+            if (isWheelEntityTag(tag.name)) return;
             // F2H67: VehicleComponent puede aparecer en una entity con
             // MeshRenderer (caso normal) o standalone si el visual va a
             // child-entities.

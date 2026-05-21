@@ -15,6 +15,9 @@ void collectHierarchyEntries(Scene& scene,
                                std::vector<HierarchyEntry>& out) {
     out.clear();
     scene.forEach<TagComponent>([&](Entity e, TagComponent& tag) {
+        // F2H70.4 follow-up: las wheel-entities las maneja el VehicleSystem
+        // (spawn/rematerializa desde el chassis); son internas, no se listan.
+        if (isWheelEntityTag(tag.name)) return;
         out.push_back(HierarchyEntry{e.handle(), &tag});
     });
 }
