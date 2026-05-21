@@ -439,3 +439,39 @@ TEST_CASE("SceneSerializer: round-trip de ForceFieldComponent (F2H72)") {
 
     std::filesystem::remove(path);
 }
+
+// ============================================================
+// F2H73: TriggerComponent campos avanzados round-trip
+// ============================================================
+
+TEST_CASE("SceneSerializer: round-trip de TriggerComponent avanzado (F2H73)") {
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    {
+        Entity z = scene.createEntity("kill_zone");
+        TriggerComponent tc{glm::vec3(2.0f, 1.0f, 3.0f)};
+        tc.requiredTag      = "Enemy";
+        tc.triggersOnPlayer = false;
+        tc.oneShot          = true;
+        tc.enabled          = false;
+        z.addComponent<TriggerComponent>(tc);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("trigger_advanced_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1u);
+    const auto& se = loaded->entities[0];
+    REQUIRE(se.trigger.has_value());
+    CHECK(se.trigger->halfExtents.z == doctest::Approx(3.0f));
+    CHECK(se.trigger->requiredTag == "Enemy");
+    CHECK_FALSE(se.trigger->triggersOnPlayer);
+    CHECK(se.trigger->oneShot);
+    CHECK_FALSE(se.trigger->enabled);
+
+    std::filesystem::remove(path);
+}

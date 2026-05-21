@@ -378,3 +378,107 @@ TEST_CASE("TriggerSystem: NO dispatcha stay cuando el player esta fuera (Hito 36
 
     std::filesystem::remove(path);
 }
+
+// ============================================================
+// F2H73: triggers avanzados (requiredTag / oneShot / enabled)
+// ============================================================
+
+namespace {
+void addDynamicBoxAt(Mood::Entity e, const glm::vec3& pos) {
+    e.getComponent<Mood::TransformComponent>().position = pos;
+    e.addComponent<Mood::RigidBodyComponent>(Mood::RigidBodyComponent{
+        Mood::RigidBodyComponent::Type::Dynamic,
+        Mood::RigidBodyComponent::Shape::Box, glm::vec3(0.5f), 1.0f});
+}
+} // namespace
+
+TEST_CASE("TriggerSystem: requiredTag filtra los bodies (F2H73)") {
+    const auto path = writeTempScript(R"(
+        function on_trigger_body_enter(bodyId)
+            hud.setHp(hud.getHp() + 100)
+        end
+    )");
+
+    Scene scene;
+    Entity trig = scene.createEntity("trigger");
+    TriggerComponent tc{glm::vec3(2.0f)};
+    tc.requiredTag = "Enemy";
+    trig.addComponent<TriggerComponent>(tc);
+    trig.addComponent<ScriptComponent>(path.generic_string());
+
+    // Body con tag que NO coincide, dentro del AABB.
+    addDynamicBoxAt(scene.createEntity("box"), glm::vec3(0.0f));
+
+    PhysicsWorld pw;
+    ScriptSystem scripts;
+    TriggerSystem triggers;
+
+    GameState::hud().hp = 0;
+    scripts.update(scene, 0.016f);
+    triggers.update(scene, pw, scripts, /*playerCharId=*/0);
+    CHECK(GameState::hud().hp == 0);  // tag no coincide -> no dispara
+
+    // Body con tag "Enemy" dentro -> ahora si dispara.
+    addDynamicBoxAt(scene.createEntity("Enemy"), glm::vec3(0.0f));
+    triggers.update(scene, pw, scripts, /*playerCharId=*/0);
+    CHECK(GameState::hud().hp == 100);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("TriggerSystem: oneShot dispara una sola vez (F2H73)") {
+    const auto path = writeTempScript(R"(
+        function on_trigger_body_enter(bodyId)
+            hud.setHp(hud.getHp() + 1)
+        end
+    )");
+
+    Scene scene;
+    Entity trig = scene.createEntity("trigger");
+    TriggerComponent tc{glm::vec3(2.0f)};
+    tc.oneShot = true;
+    trig.addComponent<TriggerComponent>(tc);
+    trig.addComponent<ScriptComponent>(path.generic_string());
+    addDynamicBoxAt(scene.createEntity("box"), glm::vec3(0.0f));
+
+    PhysicsWorld pw;
+    ScriptSystem scripts;
+    TriggerSystem triggers;
+
+    GameState::hud().hp = 0;
+    scripts.update(scene, 0.016f);
+    triggers.update(scene, pw, scripts, 0);  // enter -> +1, fired=true
+    triggers.update(scene, pw, scripts, 0);  // ya disparo -> no-op
+    triggers.update(scene, pw, scripts, 0);
+    CHECK(GameState::hud().hp == 1);
+    CHECK(trig.getComponent<TriggerComponent>().fired);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("TriggerSystem: enabled=false no dispatcha (F2H73)") {
+    const auto path = writeTempScript(R"(
+        function on_trigger_body_enter(bodyId)
+            hud.setHp(hud.getHp() + 100)
+        end
+    )");
+
+    Scene scene;
+    Entity trig = scene.createEntity("trigger");
+    TriggerComponent tc{glm::vec3(2.0f)};
+    tc.enabled = false;
+    trig.addComponent<TriggerComponent>(tc);
+    trig.addComponent<ScriptComponent>(path.generic_string());
+    addDynamicBoxAt(scene.createEntity("box"), glm::vec3(0.0f));
+
+    PhysicsWorld pw;
+    ScriptSystem scripts;
+    TriggerSystem triggers;
+
+    GameState::hud().hp = 0;
+    scripts.update(scene, 0.016f);
+    triggers.update(scene, pw, scripts, 0);
+    CHECK(GameState::hud().hp == 0);
+
+    std::filesystem::remove(path);
+}
