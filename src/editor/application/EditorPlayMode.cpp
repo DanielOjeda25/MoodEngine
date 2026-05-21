@@ -156,6 +156,12 @@ void EditorApplication::updateCameras(f32 dt) {
                 if (bestHandle != 0) {
                     m_playerMountedVehicleEntity = bestHandle;
                     SDL_SetRelativeMouseMode(SDL_TRUE);  // chase cam usa mouse
+                    // F2H70.2 D2: limpiar el "[F] Subir al ..." residual al
+                    // instante del mount. El frame siguiente el mounted
+                    // block ya escribira "[F] Bajar". Sin esto, si el HUD
+                    // se renderea entre el set de mountedEntity y el
+                    // overwrite del prompt, podria mostrar "Subir" un frame.
+                    Mood::GameState::hud().interact_prompt.clear();
                     Log::editor()->info(
                         "F2H67: mount vehicle (entity handle {})", bestHandle);
                 } else {
@@ -188,6 +194,11 @@ void EditorApplication::updateCameras(f32 dt) {
                     }
                 }
                 m_playerMountedVehicleEntity = 0;
+                // F2H70.2 fix S-key: reset del edge-stick al desmontar
+                // para que el proximo mount empiece con S clean (sino el
+                // estado quedaria contaminado del session anterior).
+                m_sWasPressed  = false;
+                m_sBrakingMode = false;
                 Log::editor()->info("F2H67: dismount");
             }
         }
@@ -206,9 +217,14 @@ void EditorApplication::updateCameras(f32 dt) {
             }
             auto& veh = vehEnt.getComponent<VehicleComponent>();
 
-            // --- Hint UI cuando montado ---
-            // Mantenido cada frame: el HUD lo limpia al exit Play.
-            Mood::GameState::hud().interact_prompt = "[F] Bajar";
+            // F2H70.2 D4: NO mostramos hint "[F] Bajar" cuando estamos montados
+            // — es obvio. El prompt queda vacio mientras se conduce (el HUD
+            // tiene velocimetro u otros indicadores). Si en futuro hay otro
+            // contexto de interaccion (eg. "[E] Hablar con NPC desde el auto"),
+            // se setea recien cuando aplique; sino, vacio.
+            if (!Mood::GameState::hud().interact_prompt.empty()) {
+                Mood::GameState::hud().interact_prompt.clear();
+            }
 
             // --- Mouse-look para chase cam (orbit alrededor del chasis) ---
             int mx = 0, my = 0;
@@ -219,13 +235,15 @@ void EditorApplication::updateCameras(f32 dt) {
             }
 
             // --- WASD -> input al vehicle ---
-            // W = throttle forward, S = brake-or-reverse (logica estilo SA:
-            // si el vehicle se mueve adelante > 1 m/s, S frena; si esta
-            // parado o yendo atras, S acelera en reversa). A/D = steer.
-            // Space = handbrake (derrapes controlados).
+            // W = throttle forward. S = brake-or-reverse con edge-stick
+            // estilo GTA: al press inicial decide UNA vez entre "brake" (si
+            // el auto va adelante) o "reverse" (si esta parado o ya en
+            // reversa); el modo se mantiene hasta soltar S, sin importar
+            // que la speed cruce el umbral mientras frenas. Asi soltar W
+            // + apretar S sigue siendo "freno" hasta detenerse, y reverse
+            // requiere release+repress de S. A/D = steer. Space = handbrake.
             const bool wHeld = keys_F2H67[SDL_SCANCODE_W] != 0;
             const bool sHeld = keys_F2H67[SDL_SCANCODE_S] != 0;
-            // Leer velocidad forward actual para decidir reverse vs brake.
             f32 forwardSpeed = 0.0f;
             if (m_physicsWorld && veh.vehicleId != 0) {
                 PhysicsWorld::VehicleState st{};
@@ -233,14 +251,20 @@ void EditorApplication::updateCameras(f32 dt) {
                     forwardSpeed = st.forwardSpeed;
                 }
             }
+            // Edge detect en S: al primer frame pressed elegimos modo segun
+            // si vamos moviendonos adelante. Umbral 0.5 m/s: por debajo
+            // consideramos "parado" y S = reverse desde el toque inicial.
+            constexpr f32 k_brakeVsReverseSpeed = 0.5f;
+            if (sHeld && !m_sWasPressed) {
+                m_sBrakingMode = (forwardSpeed > k_brakeVsReverseSpeed);
+            }
+            m_sWasPressed = sHeld;
+
             if (wHeld) {
                 veh.inputThrottle = 1.0f;
                 veh.inputBrake    = 0.0f;
             } else if (sHeld) {
-                // GTA SA: S frena cuando avanzas, mete reverse cuando estas
-                // casi quieto o yendo para atras. Umbral 1 m/s para evitar
-                // chattering en la transicion brake<->reverse.
-                if (forwardSpeed > 1.0f) {
+                if (m_sBrakingMode) {
                     veh.inputThrottle = 0.0f;
                     veh.inputBrake    = 1.0f;
                 } else {

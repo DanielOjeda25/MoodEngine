@@ -70,6 +70,22 @@ struct TransformComponent {
     // se recalcula al cargar/spawnear. Drop-in para cualquier vehicle.
     f32 pivotYOffset = 0.0f;
 
+    // F2H70.2 D5: offset de yaw del MESH visual respecto al frame "logico"
+    // del entity. `worldMatrix()` aplica `Ry(pivotYawOffsetDeg)` despues
+    // de la rotacion del dev. Sirve para reconciliar la convencion forward
+    // del engine (+Z) con GLBs autoreados en otras convenciones (-Z, ±X)
+    // sin tocar el moodmap. El SceneLoader (y VehicleSystem al materialize)
+    // setea este campo desde `VehicleConfig::meshYawOffsetDeg`. Sin
+    // persistir (runtime only). Patron simetrico a `pivotYOffset`: TC
+    // queda en "frame logico" mientras el render path lo absorbe.
+    //
+    // Aplicado en LOCAL space del entity (post-multiply al R del dev). Si
+    // el dev rota la entity en el moodmap (eg. `rotationEuler [0, 45, 0]`
+    // para apuntar al auto en diagonal), la rotacion se compone correcto:
+    // primero el yaw offset alinea el mesh con el frame del chasis fisico,
+    // luego la R del dev orienta el chasis en el mundo.
+    f32 pivotYawOffsetDeg = 0.0f;
+
     TransformComponent() = default;
     TransformComponent(glm::vec3 p, glm::vec3 s = glm::vec3(1.0f))
         : position(p), scale(s) {}
@@ -89,6 +105,11 @@ struct TransformComponent {
             m = glm::rotate(m, glm::radians(rotationEuler.y), glm::vec3(0, 1, 0));
             m = glm::rotate(m, glm::radians(rotationEuler.x), glm::vec3(1, 0, 0));
             m = glm::rotate(m, glm::radians(rotationEuler.z), glm::vec3(0, 0, 1));
+        }
+        // F2H70.2 D5: yaw offset visual (post-multiply en LOCAL space).
+        if (pivotYawOffsetDeg != 0.0f) {
+            m = glm::rotate(m, glm::radians(pivotYawOffsetDeg),
+                              glm::vec3(0, 1, 0));
         }
         m = glm::scale(m, scale);
         return m;

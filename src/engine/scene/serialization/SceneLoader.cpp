@@ -11,6 +11,7 @@
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/scene/serialization/TilePersistence.h"
+#include "engine/physics/vehicle/VehicleConfig.h"  // F2H70.2 D5: meshYawOffsetDeg
 #include "systems/physics/VehicleSystem.h"  // F2H70.2: chassisRenderYOffset
 
 #include "core/Log.h"
@@ -386,6 +387,19 @@ Entity applyOneEntity(const SavedEntity& se,
             if (e.hasComponent<TransformComponent>()) {
                 auto& tf = e.getComponent<TransformComponent>();
                 tf.pivotYOffset = VehicleSystem::chassisRenderYOffset(e, assets);
+                // F2H70.2 D5: mesh yaw offset (data-driven). Drag-drop de
+                // cualquier GLB en otra convencion forward = setear el
+                // campo en el .moodvehicle, sin tocar el moodmap. Aplica
+                // en editor (sin Play) tambien — el render path usa
+                // `tf.worldMatrix()` que ya compone el yaw via
+                // `pivotYawOffsetDeg`.
+                if (!veh.configPath.empty()) {
+                    const VehicleConfigAssetId id =
+                        assets.loadVehicleConfig(veh.configPath);
+                    if (const auto* vcfg = assets.getVehicleConfig(id)) {
+                        tf.pivotYawOffsetDeg = vcfg->meshYawOffsetDeg;
+                    }
+                }
             }
         }
         if (se.vehicleSeat.has_value()) {

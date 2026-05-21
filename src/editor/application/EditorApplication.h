@@ -702,6 +702,18 @@ private:
     f32 m_chaseDistance     = 5.0f;
     f32 m_chaseHeightOffset = 1.5f;
 
+    // F2H70.2 fix S-key: edge-stick del modo brake-vs-reverse. Cuando S
+    // transiciona released->pressed, decidimos UNA SOLA VEZ si entra como
+    // "brake" (auto yendo adelante) o "reverse" (parado o yendo atras).
+    // Mientras S siga pressed, mantenemos el modo aunque la speed cruce
+    // el umbral — sin esto, soltar W + apretar S inmediatamente te tira
+    // a reverse en cuanto el damping baja la speed debajo del umbral, lo
+    // cual NO matchea ningun juego (GTA/Forza/etc.: S = freno hasta detenerse,
+    // y solo despues de soltar+volver-a-apretar entra a reverse). Se
+    // resetea al soltar S.
+    bool m_sWasPressed  = false;  // edge tracking previo frame
+    bool m_sBrakingMode = false;  // true=brake-mode (sticky), false=reverse-mode
+
     // Mapa jugable (Hito 4). Se renderiza centrado en el origen del mundo;
     // tileSize=3m (escala SI realista, Hito 5 Bloque 0). Se reemplaza al
     // abrir proyectos y se resetea al mapa de prueba al cerrar.

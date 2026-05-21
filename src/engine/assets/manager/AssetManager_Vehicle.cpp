@@ -146,6 +146,29 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
         // subir a 0.7-1.0 para arcade snappy (el auto se detiene rapido).
         cfg.chassisLinearDamping  = jb.value("linear_damping",  cfg.chassisLinearDamping);
         cfg.chassisAngularDamping = jb.value("angular_damping", cfg.chassisAngularDamping);
+        // F2H70.2 D5: mesh_yaw_offset_deg / mesh_forward_axis. El campo
+        // canonical es `mesh_yaw_offset_deg` (numero en grados). Como azucar
+        // para el dev, aceptamos tambien `mesh_forward_axis` con un string
+        // ("+Z" | "-Z" | "+X" | "-X") y lo convertimos al yaw equivalente.
+        // Convencion: axis "+Z" = 0° (default engine forward), "+X" = -90°,
+        // "-Z" = 180°, "-X" = +90°. Si ambos campos aparecen, gana el
+        // explicit numerico.
+        if (jb.contains("mesh_yaw_offset_deg")) {
+            cfg.meshYawOffsetDeg = jb.value("mesh_yaw_offset_deg",
+                                              cfg.meshYawOffsetDeg);
+        } else if (jb.contains("mesh_forward_axis")
+                   && jb.at("mesh_forward_axis").is_string()) {
+            const std::string ax = jb.at("mesh_forward_axis").get<std::string>();
+            if      (ax == "+Z" || ax == "Z")  cfg.meshYawOffsetDeg = 0.0f;
+            else if (ax == "-Z")               cfg.meshYawOffsetDeg = 180.0f;
+            else if (ax == "+X" || ax == "X")  cfg.meshYawOffsetDeg = -90.0f;
+            else if (ax == "-X")               cfg.meshYawOffsetDeg = 90.0f;
+            else {
+                Log::assets()->warn(
+                    "AssetManager: mesh_forward_axis='{}' no reconocido "
+                    "(esperaba +Z/-Z/+X/-X). Asumiendo +Z.", ax);
+            }
+        }
     }
 
     // axles → expand to 4 wheels

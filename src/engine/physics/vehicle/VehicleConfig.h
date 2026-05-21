@@ -123,14 +123,37 @@ struct VehicleConfig {
     /// F2H70.2: damping lineal del chasis (resistencia al movimiento sin
     /// input). Aplicado a `JPH::BodyCreationSettings::mLinearDamping`. Sin
     /// esto, el auto rueda infinito al soltar el acelerador (momentum sin
-    /// freno aerodinamico/friccional). Default 0.5 = arcade-ish (decae
-    /// notable en ~3-5s sin gas). 0.05 (Jolt default low) = sim-floppy.
-    f32 chassisLinearDamping = 0.5f;
+    /// freno aerodinamico/friccional).
+    /// Default 0.3 = arcade-ish responsivo: el auto frena en ~5s sin gas
+    /// pero NO se siente "pesado" al acelerar. Tuneado runtime con dev
+    /// reporte "se siente mas pesado al mover" en 0.5 → bajado a 0.3.
+    /// 0.05 (Jolt default low) = sim-floppy (rueda infinito).
+    f32 chassisLinearDamping = 0.3f;
     /// F2H70.2: damping angular del chasis. Resistencia al giro libre (sin
     /// steering input). Sin esto, un golpe lateral hace al chasis rotar
-    /// indefinidamente. Default 0.5 = arcade estable. Mismo path al
-    /// `mAngularDamping` de Jolt.
-    f32 chassisAngularDamping = 0.5f;
+    /// indefinidamente. Default 0.3 = arcade estable sin freno al girar.
+    /// Mismo path al `mAngularDamping` de Jolt.
+    f32 chassisAngularDamping = 0.3f;
+
+    /// F2H70.2 D5: yaw offset del MESH visual respecto al chasis fisico
+    /// (grados, alrededor del eje Y local del auto). Sirve para reconciliar
+    /// la convencion "+Z forward" del engine con GLBs autoreados en otra
+    /// convencion (-Z, +X, etc.) SIN tener que bakear el asset o parchear
+    /// cada moodmap con `rotationEuler`. La rotacion se aplica en LOCAL
+    /// space (post-multiply al world matrix del chasis Jolt) ANTES de
+    /// escribir al TransformComponent — afecta solo lo visual, NO la fisica.
+    ///
+    /// Casos tipicos:
+    ///   0   = mesh mira +Z (industry standard glTF/Source — nada a hacer)
+    ///   180 = mesh mira -Z (DeLorean Sketchfab y otros assets legacy)
+    ///   90  = mesh mira -X (modelos rotados sideways al exportar)
+    ///   -90 = mesh mira +X
+    ///
+    /// Drag-and-drop pipeline: arrastras un .glb nuevo, generas un
+    /// .moodvehicle base; si al subirte los controles se sienten invertidos
+    /// (W va para atras visualmente), editas este campo y listo. Persiste
+    /// con el auto, no con el map -- vale en cualquier escena donde aparezca.
+    f32 meshYawOffsetDeg = 0.0f;
 
     /// 4 ruedas en orden fijo (FL, FR, RL, RR).
     std::array<WheelConfig, WheelCount> wheels{};
