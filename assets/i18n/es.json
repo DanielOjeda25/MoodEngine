@@ -41,6 +41,13 @@
   "editor.menu.edit": "Editar",
   "editor.menu.edit.undo": "Deshacer",
   "editor.menu.edit.redo": "Rehacer",
+  "editor.menu.edit.preferences": "Preferencias...",
+  "editor.modal.preferences.title": "Preferencias",
+  "editor.preferences.theme": "Tema",
+  "theme.dark": "Oscuro",
+  "theme.light": "Claro",
+  "theme.midnight": "Medianoche",
+  "theme.sepia": "Sepia",
   "editor.menu.edit.undo_named": "Deshacer '{}'",
   "editor.menu.edit.redo_named": "Rehacer '{}'",
 

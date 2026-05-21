@@ -9,6 +9,7 @@
 
 #include "core/Log.h"
 #include "core/UserSettings.h"  // F2H43
+#include "editor/ui/EditorThemes.h"  // F2H76
 #include "engine/audio/device/AudioDevice.h"
 #include "engine/dialog/DialogScriptHost.h"  // F2H48.1
 #include "core/i18n/I18n.h"  // F2H43
@@ -209,7 +210,9 @@ EditorApplication::EditorApplication() {
     // — ambos importantes y siempre visibles.
     io.IniFilename = "imgui_layout_v8.ini";
 
-    ImGui::StyleColorsDark();
+    // F2H76: aplicar el tema persistido (default "dark"). El selector vive en
+    // Editar -> Preferencias.
+    EditorThemes::apply(UserSettings::theme());
 
     if (!ImGui_ImplSDL2_InitForOpenGL(m_window->sdlHandle(), m_window->glContext())) {
         throw std::runtime_error("ImGui_ImplSDL2_InitForOpenGL fallo");

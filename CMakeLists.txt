@@ -539,6 +539,7 @@ add_executable(MoodEditor
     src/editor/application/EditorRenderPass_Overlay.cpp  # AUDIT-2 split
     src/editor/application/EditorScene.cpp
     src/editor/ui/EditorUI.cpp
+    src/editor/ui/EditorThemes.cpp  # F2H76
     src/editor/ui/MenuBar.cpp
     src/editor/ui/StatusBar.cpp
     src/editor/ui/Dockspace.cpp

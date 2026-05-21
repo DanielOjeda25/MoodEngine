@@ -4453,4 +4453,25 @@ Total ~ 1-2 semanas de hito grande.
 **Revisar si:**
 - El dev quiere un "lock real" rígido: el Fixed constraint (F2H71) es la vía correcta, no un slider de travel ~0.
 
+## 2026-05-21: F2H76 — temas del editor como presets en código (no editor de paletas)
+
+**Contexto:** primer hito de la Sub-fase 2.7 (UI/UX). El dev quería poder cambiar el look del editor. Opciones: (a) un set de temas predefinidos, (b) un editor de colores donde el usuario arma su propia paleta.
+
+**Decisión:** 4 temas built-in (`EditorThemes`: dark/light/midnight/sepia), cada uno una función que rellena el `ImGuiStyle`. Registro `{id, i18nKey}` para poblar el combo. El redondeo de esquinas (`applyRounding`) se setea **aparte de los colores**, al final de `apply()`, común a todos los temas.
+
+**Razones:**
+- 4 presets cubren el 90% de la necesidad (oscuro/claro + 2 con personalidad) con esfuerzo acotado; un editor de paletas es un hito propio.
+- El registro `id → función` deja la puerta abierta a temas por JSON a futuro sin refactor.
+- El redondeo separado de los colores evita duplicarlo en cada preset y sobrevive al theme-switch (las `StyleColorsX` solo tocan `style.Colors`, no geometría).
+- Idioma centralizado en Preferencias (removido de Ver → Idioma): tenerlo en dos lados era redundante (señalado en la auditoría UX de la sesión).
+
+**Alternativas descartadas:**
+- Editor de paletas custom por usuario: futuro; el diseño lo admite pero excede el scope de "abrir la casa de los ajustes".
+- Persistencia con botón OK/Cancel: el combo aplica + guarda live; `settings.json` es chico, un OK agregaría fricción sin valor.
+
+**Revisar si:**
+- Emerge demanda de paletas 100% custom editables por el usuario: agregar un tema "custom" cuyo `apply` lea colores del `settings.json`.
+- El runtime (MoodPlayer) necesita temas: hoy este hito tema-iza solo el editor.
+
+
 

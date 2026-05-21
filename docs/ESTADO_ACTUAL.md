@@ -30,7 +30,24 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H75 (2026-05-21) — **cierra Sub-fase 2.4**
+## 0.1. Último hito de feature — F2H76 (2026-05-21) — **abre Sub-fase 2.7**
+
+**Preferencias + temas visuales del editor.** Tag `v1.67.0-fase2-hito76`. Detalle completo en [`hitos/F2H76.md`](hitos/F2H76.md). Primer hito de la **Sub-fase 2.7 (UI/UX final + cierre Fase 2)**. Abre la "casa de los ajustes" del editor; futuros hitos cuelgan ahí atajos de teclado, escala de UI, etc. (el bump a `v2.0.0` se reserva para el CIERRE de la sub-fase, no para este hito).
+
+**Lo que entregó**:
+- **`UserSettings`** gana campo `theme` (string id, default `"dark"`, back-compat si el JSON no lo trae).
+- **`EditorThemes.{h,cpp}`** (NUEVO): registro `{id, i18nKey}` + `apply(id)`. Dark/Light = presets ImGui; **Midnight** (dark + tinte azulado/acento celeste) y **Sepia** (light + tinte cálido papel/madera) con paletas `ImVec4` custom. Diseño abierto a temas por JSON a futuro (id → función).
+- **Startup** usa `EditorThemes::apply(UserSettings::theme())` (antes `StyleColorsDark` hardcodeado). **Editar → Preferencias** abre modal con combo de Tema (preview live + `save()` en cada cambio) + combo de Idioma (**centralizado** acá, removido de Ver → Idioma).
+- **Esquinas redondeadas** en toda la UI (añadido en validación a pedido del dev): `applyRounding` (Window/Child/Popup/Scrollbar=6px, Frame/Grab=4px, Tab=5px), seteado aparte de los colores → común a los 4 temas + sobrevive al theme-switch.
+- **i18n** en/es con paridad (`test_i18n`).
+
+**Suite 1061/11018 verde** (sin tests nuevos — ImGui style no tiene superficie testeable headless). Validado en vivo: 4 temas con preview live + idioma centralizado + persistencia al reabrir + redondeo, *"funciona okey"*.
+
+**De esta sesión salió una auditoría UX completa** del editor (paneles/workspaces/menús/modales/redundancias) → alimenta el plan de **F2H77** (polish UX transversal: tooltips con atajos, spacing/acento unificados, Inspector colapsable, indicador de "sin guardar", limpieza de redundancias).
+
+---
+
+## 0.1bis. Hito previo — F2H75 (2026-05-21) — **cerró Sub-fase 2.4**
 
 **Cloth / telas que ondean.** Tag `v1.66.0-fase2-hito75`. Detalle completo en [`hitos/F2H75.md`](hitos/F2H75.md). Era el F2H28 original (último item de Física avanzada). Banderas/cortinas como soft body de Jolt que cuelgan por gravedad y flamean con las zonas de viento (`ForceFieldComponent` de F2H72).
 

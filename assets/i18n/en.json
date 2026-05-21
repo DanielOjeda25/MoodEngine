@@ -41,6 +41,13 @@
   "editor.menu.edit": "Edit",
   "editor.menu.edit.undo": "Undo",
   "editor.menu.edit.redo": "Redo",
+  "editor.menu.edit.preferences": "Preferences...",
+  "editor.modal.preferences.title": "Preferences",
+  "editor.preferences.theme": "Theme",
+  "theme.dark": "Dark",
+  "theme.light": "Light",
+  "theme.midnight": "Midnight",
+  "theme.sepia": "Sepia",
   "editor.menu.edit.undo_named": "Undo '{}'",
   "editor.menu.edit.redo_named": "Redo '{}'",
 

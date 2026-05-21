@@ -18,6 +18,7 @@ public:
 private:
     bool m_showAboutPopup = false;
     bool m_showNotImplementedPopup = false;
+    bool m_showPreferencesPopup = false;  // F2H76
 };
 
 } // namespace Mood

@@ -12,6 +12,7 @@ namespace Mood::UserSettings {
 namespace {
 
 I18n::Language s_language = I18n::Language::Spanish;
+std::string s_theme = "dark";  // F2H76: default dark
 std::filesystem::path s_path;
 
 std::filesystem::path computePath() {
@@ -29,6 +30,7 @@ std::filesystem::path computePath() {
 void init() {
     s_path = computePath();
     s_language = I18n::Language::Spanish;  // default si no hay archivo
+    s_theme = "dark";
 
     std::ifstream in(s_path);
     if (!in.is_open()) {
@@ -49,8 +51,12 @@ void init() {
     if (j.contains("language") && j["language"].is_string()) {
         s_language = I18n::languageFromCode(j["language"].get<std::string>());
     }
-    Log::engine()->info("[settings] cargado '{}' (language={})",
-                         s_path.generic_string(), I18n::languageCode(s_language));
+    if (j.contains("theme") && j["theme"].is_string()) {
+        s_theme = j["theme"].get<std::string>();
+    }
+    Log::engine()->info("[settings] cargado '{}' (language={}, theme={})",
+                         s_path.generic_string(),
+                         I18n::languageCode(s_language), s_theme);
 }
 
 void shutdown() {
@@ -74,15 +80,21 @@ bool save() {
     }
     nlohmann::json j;
     j["language"] = I18n::languageCode(s_language);
+    j["theme"]    = s_theme;
     out << j.dump(2) << "\n";
-    Log::engine()->info("[settings] guardado '{}' (language={})",
-                         s_path.generic_string(), I18n::languageCode(s_language));
+    Log::engine()->info("[settings] guardado '{}' (language={}, theme={})",
+                         s_path.generic_string(),
+                         I18n::languageCode(s_language), s_theme);
     return true;
 }
 
 I18n::Language language() { return s_language; }
 
 void setLanguage(I18n::Language lang) { s_language = lang; }
+
+const std::string& theme() { return s_theme; }
+
+void setTheme(const std::string& id) { s_theme = id; }
 
 std::filesystem::path settingsPath() {
     if (s_path.empty()) return computePath();

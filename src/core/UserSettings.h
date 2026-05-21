@@ -14,6 +14,7 @@
 #include "core/i18n/I18n.h"
 
 #include <filesystem>
+#include <string>
 
 namespace Mood::UserSettings {
 
@@ -38,6 +39,16 @@ I18n::Language language();
 /// @brief Marca el idioma nuevo en memoria. NO escribe al disco — el
 ///        caller llama `save()` cuando corresponde.
 void setLanguage(I18n::Language lang);
+
+/// @brief F2H76: id del tema visual del editor (ej. "dark", "light",
+///        "midnight"). Cargado de `settings.json`; default "dark" si no
+///        habia archivo o campo. La resolucion id -> paleta ImGui la hace
+///        `EditorThemes::applyTheme` (el id desconocido cae a "dark").
+const std::string& theme();
+
+/// @brief Marca el tema nuevo en memoria. NO escribe al disco — el caller
+///        llama `save()` cuando corresponde.
+void setTheme(const std::string& id);
 
 /// @brief Path absoluto al `settings.json`. Util para debug/test.
 std::filesystem::path settingsPath();
