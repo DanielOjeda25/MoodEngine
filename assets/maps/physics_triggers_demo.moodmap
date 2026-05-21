@@ -1,0 +1,248 @@
+{
+  "brushes": [],
+  "entities": [
+    {
+      "rigid_body": {
+        "halfExtents": [
+          15,
+          0.5,
+          15
+        ],
+        "mass": 0.0,
+        "shape": "box",
+        "type": "static"
+      },
+      "mesh_renderer": {
+        "materials": [
+          "textures/grid.png"
+        ],
+        "mesh_path": "__missing_cube"
+      },
+      "tag": "Floor",
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          30,
+          1,
+          30
+        ]
+      }
+    },
+    {
+      "trigger": {
+        "halfExtents": [
+          2.5,
+          1.2,
+          2.5
+        ],
+        "required_tag": "VIP"
+      },
+      "tag": "ZonaTrigger",
+      "transform": {
+        "position": [
+          0,
+          1.2,
+          0
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "rigid_body": {
+        "halfExtents": [
+          0.4,
+          0.4,
+          0.4
+        ],
+        "mass": 1.0,
+        "shape": "box",
+        "type": "dynamic"
+      },
+      "mesh_renderer": {
+        "materials": [
+          "textures/brick.png"
+        ],
+        "mesh_path": "__missing_cube"
+      },
+      "tag": "VIP",
+      "transform": {
+        "position": [
+          -0.9,
+          4,
+          0
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.8,
+          0.8,
+          0.8
+        ]
+      }
+    },
+    {
+      "rigid_body": {
+        "halfExtents": [
+          0.4,
+          0.4,
+          0.4
+        ],
+        "mass": 1.0,
+        "shape": "box",
+        "type": "dynamic"
+      },
+      "mesh_renderer": {
+        "materials": [
+          "textures/grid.png"
+        ],
+        "mesh_path": "__missing_cube"
+      },
+      "tag": "Comun",
+      "transform": {
+        "position": [
+          0.9,
+          4,
+          0
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.8,
+          0.8,
+          0.8
+        ]
+      }
+    }
+  ],
+  "height": 5,
+  "name": "physics_triggers_demo",
+  "tileSize": 3.0,
+  "tiles": [
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    }
+  ],
+  "version": 14,
+  "width": 5
+}
