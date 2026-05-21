@@ -30,7 +30,24 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H70.2 (2026-05-20)
+## 0.1. Último hito de feature — F2H70.3 (2026-05-20)
+
+**Vehicle Browser + drag-and-drop de vehículos al viewport.** Tag `v1.60.0-fase2-hito70-3`. Detalle completo en [`hitos/F2H70-3.md`](hitos/F2H70-3.md). Cierra el loop de autoría del sistema data-driven `.moodvehicle`.
+
+**Lo que entregó (Bloque F)**:
+- **Tab "Vehiculos" en el Asset Browser**: `VehicleEntry` + scan recursivo de `assets/vehicles/**/*.moodvehicle`. Metadata legible (`metadata.name` + `body.mass_kg` + `engine.horsepower`) parseada del JSON al escanear → muestra nombre + `[kg, HP]`. Drag-source emite payload `MOOD_VEHICLE_ASSET` (path lógico, buffer 256B null-terminated).
+- **Drag-and-drop al viewport** (consistente con mesh/prefab/script/item): `ViewportPanel` acepta el payload → `m_pendingVehicleDrop`; `EditorApplication::processViewportVehicleDrop()` hace `pickTile` + crea entity con `TransformComponent` + `MeshRendererComponent` (mesh de `VehicleConfig.meshPath`) + `VehicleComponent(configPath, dirty=true)` + undo.
+- **`.moodvehicle` self-contained** (estilo Source): `VehicleConfig.meshPath` (de `body.mesh_path`) → arrastrar un solo `.moodvehicle` basta para un auto completo. `VehicleConfig.displayName` (de `metadata.name`) → tag legible del entity ("DeLorean DMC-12" en vez del filename stem).
+- **Drop dedicado en el Inspector** (vía secundaria, reasignar config): un `InputText` no funciona como `BeginDragDropTarget` (consume el drag); se usa un botón "Soltar .moodvehicle aquí", patrón de `InspectorPanel_Animation`.
+- **Grounding del spawn**: el drop replica `SceneLoader` (`tf.pivotYOffset = VehicleSystem::chassisRenderYOffset(e, assets)` + `pivotYawOffsetDeg = meshYawOffsetDeg`). Sin esto el auto atravesaba el piso en Editor mode.
+
+**Aclarado en validación (no-bugs)**: la colisión de vehículos solo se simula en Play mode (el engine solo hace `physicsWorld->step()` en Play; **F1** solo togglea debug-draw de AABBs, no habilita colisión). Copias spawneadas antes del hito (prefijo `Vehicle_`) que quedaron guardadas en un `.moodmap` conservan ese tag; drops nuevos usan `metadata.name`.
+
+**Pendiente** (a retomar, no scope ahora): **split-by-node de wheels** (rotación visual independiente + auto-derivar `attach_y`) + **pipeline de packs multi-auto** — el dev tiene un archivo con 24 autos estilo DeLorean a escala ~1.4cm (autoreados en otra unidad pese a `scale=1`); construir `tools/glb/split.py` (separar por nodo) + `--scale` para hornear 1u=1m → 24 `.glb` + 24 `.moodvehicle`.
+
+---
+
+## 0.2. Hito previo — F2H70.2 (2026-05-20)
 
 **Tuning físico del vehicle (damping + spawn elevation + frame consistente).** Tag `v1.59.0-fase2-hito70-2`. Detalle completo en [`hitos/F2H70-2.md`](hitos/F2H70-2.md). Cierra los 3 bugs físicos que F2H70.1 dejó pendientes.
 
@@ -45,7 +62,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.2. Hito previo — F2H70.1 (2026-05-20)
+## 0.3. Hito previo — F2H70.1 (2026-05-20)
 
 **Sistema data-driven de vehículos (estilo Source/Valve).** Tag `v1.58.0-fase2-hito70-1`. Detalle completo en [`hitos/F2H70.md`](hitos/F2H70.md). Plan archivado en [`archive/plans/PLAN_HITO_F2H70.md`](archive/plans/PLAN_HITO_F2H70.md).
 
@@ -70,7 +87,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.3. Hito previo — F2H69 (2026-05-19)
+## 0.4. Hito previo — F2H69 (2026-05-19)
 
 **Trigger NPC debug + pipeline glTF multi-node + DeLorean swap.** Tag `v1.57.0-fase2-hito69`. Detalle completo en [`hitos/F2H69.md`](hitos/F2H69.md). Cierra el bug conocido que F2H68 dejó abierto.
 
@@ -80,7 +97,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.4. Hito previo — F2H68 (2026-05-19)
+## 0.5. Hito previo — F2H68 (2026-05-19)
 
 **Auto-ragdoll por impacto (infra completa).** Tag `v1.55.0-fase2-hito68`. Detalle completo en [`hitos/F2H68.md`](hitos/F2H68.md).
 
@@ -88,7 +105,7 @@ Stack completo de auto-ragdoll por contacto: `physics_internal::ContactListener`
 
 ---
 
-## 0.5. Hito previo — F2H67 (2026-05-19)
+## 0.6. Hito previo — F2H67 (2026-05-19)
 
 **Vehicle physics estilo GTA San Andreas.** Tag `v1.54.0-fase2-hito67`. Detalle completo en [`hitos/F2H67.md`](hitos/F2H67.md). **Cierra plan original F2H25** dentro de Sub-fase 2.4 (Física avanzada).
 
@@ -96,7 +113,7 @@ Stack completo de auto-ragdoll por contacto: `physics_internal::ContactListener`
 
 ---
 
-## 0.6. Hito anterior — F2H66 (2026-05-18)
+## 0.7. Hito anterior — F2H66 (2026-05-18)
 
 **Ragdolls auto-build sobre `JPH::Ragdoll`.** Tag `v1.53.0-fase2-hito66`. Detalle completo en [`hitos/F2H66.md`](hitos/F2H66.md). Cierra plan original F2H24 dentro de Sub-fase 2.4 (Física avanzada).
 
@@ -104,7 +121,7 @@ Stack completo de auto-ragdoll por contacto: `physics_internal::ContactListener`
 
 ---
 
-## 0.7. Hito anterior — F2H65 (2026-05-18)
+## 0.8. Hito anterior — F2H65 (2026-05-18)
 
 **Jolt constraints (Hinge / Distance / Point).** Tag `v1.52.0-fase2-hito65`. Detalle completo en [`hitos/F2H65.md`](hitos/F2H65.md). Abre Sub-fase 2.4 (Física avanzada) del plan original.
 

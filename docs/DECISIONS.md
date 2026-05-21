@@ -11,6 +11,46 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-20: F2H70.3 — Vehicle Browser + drag-and-drop de vehículos al viewport
+
+### Decisión 1 — Mesh declarado en el `.moodvehicle` (`body.mesh_path`)
+
+**Contexto:** En el `.moodmap`, un vehículo es un entity con `mesh_renderer` (el `.glb`) + `vehicle` (el `.moodvehicle`) como componentes separados. Para que arrastrar un `.moodvehicle` al viewport spawnee un auto completo, el spawn necesita saber qué mesh usar.
+
+**Decisión:** El `.moodvehicle` declara su propio mesh visual via `body.mesh_path` → `VehicleConfig.meshPath`. El config se vuelve self-contained: arrastrar uno solo basta para tener un auto andando.
+
+**Razones:**
+- **Estilo Source/Valve**: el script del vehículo (`scripts/vehicles/<car>.txt`) referencia su `.mdl`. Misma filosofía: tuning + modelo viven juntos.
+- **Drag-and-drop de un solo archivo**: el dev no tiene que cablear el `mesh_renderer` aparte tras soltar.
+- **Coherente con el modelo data-driven**: el `.moodvehicle` ya es la fuente de verdad del auto; el mesh es parte de esa identidad.
+
+**Alternativas descartadas:**
+- Mesh asignado aparte al spawnear (el drop crea solo el `VehicleComponent`, el dev asigna el mesh después): menos cómodo, rompe el "drop = auto completo". El dev eligió explícitamente la opción self-contained.
+
+**Condiciones de revisión:** Si emergen vehículos sin mesh (puro proxy físico), `meshPath` vacío ya lo soporta (el drop omite el `MeshRenderer`).
+
+### Decisión 2 — Drop al viewport como flujo primario (no al Inspector)
+
+**Contexto:** El primer intento puso el drop-target en el campo `configPath` del Inspector. El dev señaló que el patrón natural es soltar en el viewport, como mesh/prefab/script/item.
+
+**Decisión:** El flujo primario es drag-and-drop al **viewport** (spawnea un entity nuevo bajo el cursor). El drop en el Inspector queda como vía **secundaria** para reasignar el config a un vehículo ya existente.
+
+**Razones:**
+- **Consistencia**: todos los demás assets spawneables se sueltan en el viewport. Un flujo distinto para vehículos sería sorpresa.
+- **Mental model claro**: viewport = "crear en el mundo"; Inspector = "editar lo seleccionado".
+
+### Decisión 3 — Botón dedicado como drop-target en el Inspector
+
+**Contexto:** El drop-target del Inspector se puso primero sobre el `InputText` del `configPath`. No disparaba.
+
+**Decisión:** Usar un botón dedicado ("Soltar .moodvehicle aquí") como zona de drop, no el `InputText`.
+
+**Razones:**
+- `ImGui::BeginDragDropTarget()` sobre un `InputText` no funciona: el widget es activo y consume el drag internamente.
+- Patrón ya validado en el repo: `InspectorPanel_Animation` usa exactamente un botón como drop-zone.
+
+---
+
 ## 2026-05-20: F2H70.2 — Tuning físico del vehicle (damping + spawn elevation + frame consistente)
 
 ### Decisión 1 — `meshYawOffsetDeg` data-driven en lugar de bakear el .glb
