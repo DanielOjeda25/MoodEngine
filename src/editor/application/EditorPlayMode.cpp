@@ -59,6 +59,27 @@ void EditorApplication::enterPlayMode() {
     // las queries player-implicit retornarian false silenciosamente.
     Dialog::DialogScriptHost::setSceneAndAssets(
         m_scene.get(), m_assetManager.get());
+
+    // F2H71: re-sincronizar bodies + joints a la pose VISUAL al entrar a Play.
+    // En Editor Mode los bodies se materializan en su pose inicial y NO siguen
+    // al Transform si el dev los mueve despues (updateRigidBodies solo crea
+    // bodies con bodyId==0; no reposiciona los existentes). Sin esto, al pisar
+    // Play el body salta a su pose de creacion — y el constraint de un joint
+    // (slider/fixed/etc.) ancla su reposo ahi, no donde el dev dejo el objeto.
+    // Alineamos cada body a su Transform y marcamos los joints dirty para que
+    // se re-creen capturando la pose actual.
+    if (m_scene && m_physicsWorld) {
+        m_scene->forEach<TransformComponent, RigidBodyComponent>(
+            [&](Entity, TransformComponent& t, RigidBodyComponent& rb) {
+                if (rb.bodyId == 0) return;
+                const glm::quat q = glm::quat(glm::radians(t.rotationEuler));
+                m_physicsWorld->setBodyPositionRot(
+                    rb.bodyId, t.position, glm::vec4(q.x, q.y, q.z, q.w));
+            });
+        m_scene->forEach<JointComponent>(
+            [&](Entity, JointComponent& j) { j.dirty = true; });
+    }
+
     Log::editor()->info("Play Mode activo (WASD + mouse. Esc para pausar)");
 }
 
