@@ -11,6 +11,54 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-21: F2H73 — Triggers avanzados (filtro por tag + one-shot + enabled)
+
+### Decisión 1 — `requiredTag` filtra solo bodies, no al player
+
+**Contexto:** El trigger reacciona a dos fuentes: el player char (único) y los `RigidBody` (N). Al agregar un filtro por tag, ¿debería aplicar también al player?
+
+**Decisión:** `requiredTag` filtra **solo los bodies físicos** (compara contra `TagComponent.name`). El player se togglea por separado con el bool `triggersOnPlayer`.
+
+**Razones:**
+- El player es único; "filtrarlo por tag" no tiene caso de uso — o cuenta o no cuenta, eso lo decide un bool.
+- Mezclar ambos (exigirle un tag al player) confundiría la API sin agregar expresividad.
+
+**Alternativas descartadas:** Un `requiredTag` que aplique a player y bodies por igual — el player no tiene un tag de gameplay significativo en este modelo.
+
+### Decisión 2 — `oneShot` se arma al primer enter de cualquier fuente válida
+
+**Contexto:** Un trigger one-shot (checkpoint, cinematic) debe dispararse una vez. Pero hay dos fuentes (player / bodies) y dos filtros (`triggersOnPlayer` / `requiredTag`).
+
+**Decisión:** El primer enter de **cualquier fuente que pase los filtros** (el player si `triggersOnPlayer`, o un body si matchea `requiredTag`) setea `fired=true` y mata el trigger hasta recargar el mapa.
+
+**Razones:**
+- `triggersOnPlayer` + `requiredTag` ya acotan **qué** puede armar el trigger; un "one-shot solo para X" sería redundante.
+- Simple de razonar: "dispara una vez con lo que sea que lo active".
+
+### Decisión 3 — Campos avanzados se serializan solo si difieren del default
+
+**Contexto:** Agregar 4 campos al JSON del trigger podría romper mapas viejos o ensuciar el formato.
+
+**Decisión:** `required_tag` / `triggers_on_player` / `one_shot` / `enabled` se escriben **solo si != default**. Mapas pre-F2H73 (sin las claves) cargan con los defaults correctos.
+
+**Razones:**
+- Back/forward compatible **sin bump de versión** del `.moodmap`.
+- JSON limpio: un trigger común (sin flags) serializa igual que antes.
+
+**Condiciones de revisión:** Ninguna — patrón ya usado en `ForceFieldComponent` (F2H72).
+
+### Decisión 4 — Agregar `TriggerComponent` al gate del `SceneSerializer` (tercer caso standalone)
+
+**Contexto:** El `SceneSerializer` solo persiste una entity si tiene un componente "ancla" reconocido. Un trigger suelto (sin mesh) no se guardaba — mismo bug que tuvieron `InventoryComponent` y `ForceFieldComponent`.
+
+**Decisión:** Agregar `hasTrig` al gate, igual que `hasInv` / `hasFF`.
+
+**Razones:** Un trigger es legítimamente una entity standalone (volumen invisible). Es el tercer componente standalone que cae en esta trampa — patrón ya conocido.
+
+**Condiciones de revisión:** Si aparece un cuarto componente standalone, evaluar invertir el gate (lista de componentes que NO anclan, en vez de los que sí).
+
+---
+
 ## 2026-05-21: F2H72 — Force fields / zonas de fuerza física
 
 ### Decisión 1 — Reusar el overlap del TriggerSystem (iterar entities) vs broadphase de Jolt

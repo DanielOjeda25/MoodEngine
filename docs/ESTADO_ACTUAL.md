@@ -30,7 +30,24 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H72 (2026-05-21)
+## 0.1. Último hito de feature — F2H73 (2026-05-21)
+
+**Triggers avanzados (filtro por tag + one-shot + enabled).** Tag `v1.64.0-fase2-hito73`. Detalle completo en [`hitos/F2H73.md`](hitos/F2H73.md). El `TriggerComponent` detectaba player + bodies pero siempre disparaba con cualquier cosa; F2H73 le agrega los filtros/modos estándar (Unreal `ActorHasTag`, Unity tag + `enabled`, `trigger_once` de Source). Flags sobre el `TriggerSystem` existente, sin reinventar nada.
+
+**Lo que entregó**:
+- **`TriggerComponent`** gana `requiredTag` (vacío = cualquier body; solo matchea el `TagComponent.name`, no afecta al player), `triggersOnPlayer` (default true), `oneShot` (default false; dispara una vez y queda muerto hasta recargar) y `enabled` (default true; master switch). Runtime nuevo `fired` (no serializado).
+- **`TriggerSystem`**: gate al tope (`!enabled` y `oneShot && fired` cortan); player gated por `triggersOnPlayer`; el pre-collect de bodies guarda el `tag` de cada uno para el filtro `requiredTag`; `oneShot` se arma en el primer enter.
+- **Editor**: Inspector ampliado (`InputText` requiredTag + 3 checkboxes + texto "one-shot ya disparó"), i18n en/es.
+- **Serialización** round-trip aditiva; los 4 campos se escriben solo si != default (back-compat sin bump). Se agregó `TriggerComponent` al gate del `SceneSerializer` (trigger standalone sin mesh, como `Inventory`/`ForceField`).
+- **Demo** `physics_triggers_demo.moodmap` (`ZonaTrigger` `required_tag="VIP"` + caja VIP dispara + caja Comun filtrada).
+
+**Validación en vivo** (logs del `TriggerSystem` al panel Console): de dos cajas que cruzan solo la VIP disparó (`required_tag`), one-shot dispara una vez, `enabled=false` no despacha nada, player gated por `triggers_on_player`. Las 4 features confirmadas.
+
+**Suite 1046/10300 verde**.
+
+---
+
+## 0.2. Hito previo — F2H72 (2026-05-21)
 
 **Force fields / zonas de fuerza física.** Tag `v1.63.0-fase2-hito72`. Detalle completo en [`hitos/F2H72.md`](hitos/F2H72.md). Siguiente feature de Sub-fase 2.4. Referencia: Unreal `RadialForceComponent` + Unity Area Effectors.
 
@@ -46,7 +63,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.2. Hito previo — F2H71 (2026-05-21)
+## 0.3. Hito previo — F2H71 (2026-05-21)
 
 **Slider + Fixed joints — completa la familia de constraints de Jolt.** Tag `v1.62.0-fase2-hito71`. Detalle completo en [`hitos/F2H71.md`](hitos/F2H71.md). F2H65 había dejado Hinge/Distance/Point; este cierra los 2 que faltaban, reusando el andamiaje existente (Inspector + serialización + dispatch + debug-draw).
 
@@ -64,7 +81,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.3. Hito previo — F2H70.4 (2026-05-21)
+## 0.4. Hito previo — F2H70.4 (2026-05-21)
 
 **Ruedas que rotan (split-by-node) + HUD de conducción.** Tag `v1.61.0-fase2-hito70-4`. Detalle completo en [`hitos/F2H70-4.md`](hitos/F2H70-4.md). Cierra el Bloque H que F2H70.3 dejó pendiente: las ruedas dejan de estar horneadas en el chassis y rotan/giran independientes desde la pose física de Jolt.
 
@@ -85,7 +102,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.4. Hito previo — F2H70.3 (2026-05-20)
+## 0.5. Hito previo — F2H70.3 (2026-05-20)
 
 **Vehicle Browser + drag-and-drop de vehículos al viewport.** Tag `v1.60.0-fase2-hito70-3`. Detalle completo en [`hitos/F2H70-3.md`](hitos/F2H70-3.md). Cierra el loop de autoría del sistema data-driven `.moodvehicle`.
 
