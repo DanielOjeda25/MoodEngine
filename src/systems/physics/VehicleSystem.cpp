@@ -19,6 +19,7 @@
 #include <chrono>
 #include <cmath>
 #include <unordered_map>
+#include <vector>
 
 namespace Mood::VehicleSystem {
 
@@ -68,21 +69,13 @@ bool inputEdge(f32 prev, f32 curr) {
     return wasOn != isOn;
 }
 
-// Tags fijos para las 4 child-entities wheel. Convencion del mapa v1.
-constexpr std::array<const char*, vehicle::WheelCount> k_wheelTags = {
-    "Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR",
+// F2H70.3 H: nombres canonicos de los sub-meshes de rueda en el .glb
+// (centrados en su hub por tools/glb/split_wheels.py). Orden = WheelIndex
+// (FL, FR, RL, RR). El chassis los excluye via hideSubMeshPrefix="wheel_" y
+// 4 wheel-entities los renderean por separado, sincronizadas a wheelWorlds[i].
+constexpr std::array<const char*, vehicle::WheelCount> k_wheelSubMesh = {
+    "wheel_FL", "wheel_FR", "wheel_RL", "wheel_RR",
 };
-
-// Busca una entity por tag exacto. Primer match gana (mismo patron que
-// LuaBindings_Ragdoll::findByTag).
-Entity findEntityByTag(Scene& scene, const char* tag) {
-    Entity out;
-    scene.forEach<TagComponent>([&](Entity e, TagComponent& t) {
-        if (out) return;
-        if (t.name == tag) out = e;
-    });
-    return out;
-}
 
 // Resuelve la VehicleConfig que la entity quiere usar. Si el path esta
 // vacio -> default SA. Si no, delega a `assets.loadVehicleConfig` que
@@ -194,7 +187,50 @@ f32 chassisRenderYOffset(Entity e, AssetManager& assets) {
     return meshOffset + springOffset;
 }
 
+// F2H70.3 H: true si el vehiculo necesita (re)spawnear sus wheel-entities.
+// Cubre 3 casos: nunca spawneadas (handle 0), o el handle quedo stale (la
+// entity fue destruida — p.ej. al borrar+undo el chassis, o tras recargar el
+// mapa donde wheelEntities[] no persiste). Comparar contra entity invalida
+// evita ruedas faltantes en esos casos.
+bool wheelsNeedSpawn(const VehicleComponent& veh, Scene& scene) {
+    if (veh.wheelEntities[0] == 0) return true;
+    return !scene.entityFromHandle(
+        static_cast<entt::entity>(veh.wheelEntities[0]));
+}
+
+// F2H70.3 H: crea las 4 wheel-entities de cada chassis encolado. Comparten el
+// MeshAssetId + materiales del chassis y renderean solo su sub-mesh wheel_*
+// (centrado en el hub). Se llama DESPUES del forEach de la view para no crear
+// entities (con Transform) mientras iteramos. Lo usan tick() (Play) y
+// previewRest() (Editor).
+void spawnPendingWheels(Scene& scene,
+                        const std::vector<entt::entity>& pending) {
+    for (entt::entity chassisHandle : pending) {
+        Entity chassis = scene.entityFromHandle(chassisHandle);
+        if (!chassis || !chassis.hasComponent<VehicleComponent>()
+            || !chassis.hasComponent<MeshRendererComponent>()) {
+            continue;
+        }
+        auto& veh = chassis.getComponent<VehicleComponent>();
+        const auto& chassisMr = chassis.getComponent<MeshRendererComponent>();
+        const MeshAssetId meshId = chassisMr.mesh;
+        const std::vector<MaterialAssetId> mats = chassisMr.materials;
+
+        for (int i = 0; i < vehicle::WheelCount; ++i) {
+            Entity w = scene.createEntity(k_wheelSubMesh[i]);
+            auto& wmr = w.addComponent<MeshRendererComponent>(meshId, mats);
+            wmr.subMeshName = k_wheelSubMesh[i];
+            veh.wheelEntities[i] = static_cast<u32>(w.handle());
+        }
+    }
+}
+
 void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets) {
+    // F2H70.3 H: chassis entities que necesitan spawn de wheel-entities. Se
+    // procesan despues del forEach para no crear entities (con Transform)
+    // mientras iteramos la view sobre TransformComponent.
+    std::vector<entt::entity> pendingWheelSpawn;
+
     scene.forEach<VehicleComponent, TransformComponent>(
         [&](Entity e, VehicleComponent& veh, TransformComponent& tf) {
             // --- 1) Materializacion lazy (dirty -> create) ---
@@ -249,22 +285,16 @@ void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets) {
                         chassisBody, static_cast<u32>(e.handle()));
                 }
 
-                // Buscar las 4 wheel-entities por tag fijo. Si faltan,
-                // log warn pero no aborto -- el physics sigue corriendo
-                // sin sync visual de esa wheel.
-                for (int i = 0; i < vehicle::WheelCount; ++i) {
-                    Entity w = findEntityByTag(scene, k_wheelTags[i]);
-                    if (!w) {
-                        Log::physics()->warn(
-                            "VehicleSystem: no se encontro entity con tag "
-                            "'{}' -- la rueda no sincronizara su Transform "
-                            "visual (physics sigue activa).",
-                            k_wheelTags[i]);
-                        veh.wheelEntities[i] = 0;
-                        continue;
-                    }
-                    veh.wheelEntities[i] =
-                        static_cast<u32>(w.handle());
+                // F2H70.3 H: las 4 wheel-entities se auto-spawnean DESPUES
+                // del forEach (crear entities con TransformComponent aca
+                // invalidaria el iterador de la view). Si el chassis tiene
+                // mesh, marcamos exclude de los sub-meshes wheel_* (los
+                // renderean las wheel-entities) + lo encolamos para spawn.
+                if (e.hasComponent<MeshRendererComponent>()
+                    && wheelsNeedSpawn(veh, scene)) {
+                    e.getComponent<MeshRendererComponent>().hideSubMeshPrefix =
+                        "wheel_";
+                    pendingWheelSpawn.push_back(e.handle());
                 }
                 veh.dirty = false;
             }
@@ -342,10 +372,10 @@ void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets) {
                 st.chassisWorld, tf, tf.pivotYOffset, tf.pivotYawOffsetDeg);
 
             // 4 wheels -> child-entity Transforms (si estan cacheadas).
-            // Las wheels no llevan offset propio: la pose Jolt ya esta en
-            // world absoluto, y la entity wheel no tiene MeshRenderer en el
-            // path consolidado (F2H69) — la visual de wheels viene del
-            // MeshAsset consolidado del chassis. Asi que pasamos offset 0.
+            // Las wheels no llevan offset propio: la pose Jolt (wheelWorlds[i])
+            // ya esta en world absoluto e incluye spin + steer. La wheel-entity
+            // renderea el sub-mesh wheel_* centrado en su hub (F2H70.3 H), asi
+            // que el TransformComponent la posiciona+rota desde cero. Offset 0.
             for (int i = 0; i < vehicle::WheelCount; ++i) {
                 if (veh.wheelEntities[i] == 0) continue;
                 Entity wheel = scene.entityFromHandle(
@@ -356,6 +386,77 @@ void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets) {
                 writeWorldMatrixToTransform(st.wheelWorlds[i], wtf, 0.0f, 0.0f);
             }
         });
+
+    spawnPendingWheels(scene, pendingWheelSpawn);
+}
+
+// F2H70.3 H: preview de las ruedas en Editor mode (sin Play). El tick de
+// fisica no corre, asi que posicionamos las wheel-entities en su pose de
+// REPOSO calculada analiticamente desde el config + la pose del chassis. Sin
+// esto, las ruedas (sub-meshes centrados en su hub) quedarian colapsadas en
+// el centro del auto hasta que el dev entre a Play.
+//
+// La pose fisica del chassis NO lleva el yaw visual (pivotYawOffsetDeg): el
+// mesh se rota 180 para mostrarse, pero las wheel-entities usan poses en
+// convencion fisica (+Z forward), igual que en Play (wheelWorlds[i]).
+void previewRest(Scene& scene, AssetManager& assets) {
+    std::vector<entt::entity> pendingWheelSpawn;
+
+    scene.forEach<VehicleComponent, TransformComponent>(
+        [&](Entity e, VehicleComponent& veh, TransformComponent& tf) {
+            if (!e.hasComponent<MeshRendererComponent>()) return;
+
+            // Spawn diferido (crear entities con Transform aca invalidaria
+            // la view). Este frame solo marca exclude + encola.
+            if (wheelsNeedSpawn(veh, scene)) {
+                e.getComponent<MeshRendererComponent>().hideSubMeshPrefix =
+                    "wheel_";
+                pendingWheelSpawn.push_back(e.handle());
+                return;
+            }
+
+            // Pose fisica del chassis = worldMatrix() SIN el pivotYawOffsetDeg
+            // (el yaw visual) ni scale (vehiculos = 1). Asi las ruedas siguen
+            // al chassis si el dev lo mueve con el gizmo.
+            glm::vec3 effPos = tf.position;
+            effPos.y += tf.pivotYOffset;
+            glm::mat4 physMat = glm::translate(glm::mat4(1.0f), effPos);
+            if (tf.useQuaternion) {
+                physMat = physMat * glm::mat4_cast(tf.rotation);
+            } else {
+                physMat = glm::rotate(physMat, glm::radians(tf.rotationEuler.y),
+                                       glm::vec3(0, 1, 0));
+                physMat = glm::rotate(physMat, glm::radians(tf.rotationEuler.x),
+                                       glm::vec3(1, 0, 0));
+                physMat = glm::rotate(physMat, glm::radians(tf.rotationEuler.z),
+                                       glm::vec3(0, 0, 1));
+            }
+
+            const vehicle::VehicleConfig cfg = resolveConfig(veh, assets);
+            for (int i = 0; i < vehicle::WheelCount; ++i) {
+                if (veh.wheelEntities[i] == 0) continue;
+                Entity wheel = scene.entityFromHandle(
+                    static_cast<entt::entity>(veh.wheelEntities[i]));
+                if (!wheel || !wheel.hasComponent<TransformComponent>()) continue;
+
+                const vehicle::WheelConfig& w = cfg.wheels[i];
+                // En reposo la suspension se comprime `wheelRestCompression`
+                // desde max. El centro de la rueda cuelga del attach por la
+                // longitud resultante (clamp al min de la suspension).
+                const f32 comp = vehicle::wheelRestCompression(w);
+                const f32 restLen = std::max(
+                    w.suspensionMinLength, w.suspensionMaxLength - comp);
+                const glm::vec3 wheelLocal =
+                    w.attachLocal - glm::vec3(0.0f, restLen, 0.0f);
+                const glm::mat4 wheelWorld =
+                    physMat * glm::translate(glm::mat4(1.0f), wheelLocal);
+
+                auto& wtf = wheel.getComponent<TransformComponent>();
+                writeWorldMatrixToTransform(wheelWorld, wtf, 0.0f, 0.0f);
+            }
+        });
+
+    spawnPendingWheels(scene, pendingWheelSpawn);
 }
 
 } // namespace Mood::VehicleSystem

@@ -52,5 +52,14 @@ void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets);
 ///        el mesh es invalido.
 f32 chassisRenderYOffset(Entity e, AssetManager& assets);
 
+/// @brief F2H70.3 H: preview de las wheel-entities en Editor mode (sin Play).
+///        El tick de fisica no corre, asi que esto spawnea (si faltan) las 4
+///        wheel-entities y las posiciona en su pose de REPOSO calculada
+///        analiticamente desde el `.moodvehicle` + la pose del chassis. Sin
+///        esto las ruedas (sub-meshes centrados en su hub) quedarian
+///        colapsadas en el centro del auto hasta entrar a Play. Llamar SOLO
+///        en Editor mode (en Play lo maneja `tick`).
+void previewRest(Scene& scene, AssetManager& assets);
+
 } // namespace VehicleSystem
 } // namespace Mood

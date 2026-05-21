@@ -142,6 +142,15 @@ struct MeshRendererComponent {
     ///        (log warn una vez por mesh para no inundar).
     std::string subMeshName;
 
+    /// @brief F2H70.3 H: si NO esta vacio, el render path SKIPea los sub-meshes
+    ///        cuyo `SubMesh.name` empieza con este prefijo. Complementa a
+    ///        `subMeshName` (que es "incluir solo uno"): esto es "excluir un
+    ///        grupo". Lo usa el chassis de un vehiculo para NO dibujar las
+    ///        ruedas (`wheel_*`) — esas las renderean 4 wheel-entities aparte
+    ///        que rotan independiente. Runtime-only (lo setea VehicleSystem al
+    ///        materializar); no se serializa.
+    std::string hideSubMeshPrefix;
+
     MeshRendererComponent() = default;
     MeshRendererComponent(MeshAssetId m, MaterialAssetId mat)
         : mesh(m), materials{mat} {}

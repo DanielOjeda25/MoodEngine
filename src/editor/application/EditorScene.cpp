@@ -357,6 +357,15 @@ void EditorApplication::updateRigidBodies(f32 dt) {
             const glm::vec3 charPos = m_physicsWorld->characterPosition(m_playerCharId);
             m_playCamera.setPosition(charPos + glm::vec3(0.0f, eye + bobY, 0.0f));
         }
+    } else {
+        // F2H70.3 H: en Editor mode (sin Play) el VehicleSystem::tick no corre,
+        // asi que las wheel-entities de los vehiculos no se spawnean/posicionan
+        // y los sub-meshes de rueda (centrados en su hub) quedarian colapsados
+        // en el centro del auto. previewRest las coloca en su pose de reposo
+        // analitica para que el auto se vea completo en el viewport del editor.
+        if (m_assetManager) {
+            VehicleSystem::previewRest(*m_scene, *m_assetManager);
+        }
     }
 }
 
@@ -406,6 +415,24 @@ void EditorApplication::deleteSelectedEntity() {
             "Delete: '{}' parece tile pero no pude parsear coords; abortado",
             tagName);
         return;
+    }
+
+    // F2H70.3 H: si es un vehiculo, destruir primero sus wheel-entities
+    // (spawneadas por VehicleSystem como entities aparte). El
+    // DeleteEntityCommand no las conoce; sin esto quedan ruedas huerfanas
+    // flotando al borrar el auto. Reseteamos wheelEntities a 0 ANTES del
+    // snapshot del comando para que un Ctrl+Z restaure el chassis con los
+    // handles limpios -> VehicleSystem las re-spawnea. No-undoable per se
+    // (regeneran solas).
+    if (selected.hasComponent<VehicleComponent>()) {
+        auto& veh = selected.getComponent<VehicleComponent>();
+        for (int i = 0; i < 4; ++i) {
+            if (veh.wheelEntities[i] == 0) continue;
+            Entity w = m_scene->entityFromHandle(
+                static_cast<entt::entity>(veh.wheelEntities[i]));
+            if (w) m_scene->destroyEntity(w);
+            veh.wheelEntities[i] = 0;
+        }
     }
 
     // Hito 27: ahora va por el HistoryStack — el comando captura un

@@ -379,6 +379,12 @@ void SceneRenderer::renderScene(Scene& scene,
             if (!mr.subMeshName.empty() && sub.name != mr.subMeshName) {
                 continue;
             }
+            // F2H70.3 H: exclude-prefix. El chassis de un vehiculo skipea las
+            // ruedas (`wheel_*`) — las renderean 4 wheel-entities aparte.
+            if (!mr.hideSubMeshPrefix.empty()
+                && sub.name.rfind(mr.hideSubMeshPrefix, 0) == 0) {
+                continue;
+            }
             // F2H68: el pivot-offset auto-center se evaluó y descartó —
             // funcionaba para wheels pero desfasaba el chassis "body" porque
             // restarle el centro del AABB lo movía 60cm hacia abajo del TF.
