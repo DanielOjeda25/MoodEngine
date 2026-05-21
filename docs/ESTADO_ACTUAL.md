@@ -30,7 +30,25 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H70.4 (2026-05-21)
+## 0.1. Último hito de feature — F2H71 (2026-05-21)
+
+**Slider + Fixed joints — completa la familia de constraints de Jolt.** Tag `v1.62.0-fase2-hito71`. Detalle completo en [`hitos/F2H71.md`](hitos/F2H71.md). F2H65 había dejado Hinge/Distance/Point; este cierra los 2 que faltaban, reusando el andamiaje existente (Inspector + serialización + dispatch + debug-draw).
+
+**Lo que entregó**:
+- **`JointComponent`**: enum `Type` gana `Slider=3` (prismatic — rieles/cajones/ascensores/pistones; reusa `axisLocal` como dirección del riel + `sliderLimitMin/Max` en metros) y `Fixed=4` (suelda los 6 DOF; auto-detecta la pose relativa, sin pivot).
+- **`PhysicsWorld`**: `createSliderConstraint()` (`SliderConstraintSettings` + `SetSliderAxis` + `mLimitsMin/Max`) y `createFixedConstraint()` (`FixedConstraintSettings` con `mAutoDetectPoint=true`, estilo Fixed joint de Unity). Mismo molde que los 3 de F2H65.
+- **Inspector** combo de 5 tipos (Slider: eje + límites; Fixed: nota) + claves i18n en `en.json`/`es.json`. **Debug-draw** (`F1`): Slider cyan con riel + topes, Fixed naranja. **Serialización** round-trip aditiva.
+- **Demo** `physics_joints_demo.moodmap` ampliado 4→8 entidades (Slider "ascensor" + Fixed "caja soldada").
+
+**Fix lateral 1 — signo de los límites del slider**: Jolt mide la posición como `(point2−point1)·axis`, así que A (dueño) moviéndose a favor del eje da valor negativo → los límites del Inspector iban al revés. Fix: invertir al pasar a Jolt → convención pública intuitiva (+límite = a favor del eje). Atrapado por un test.
+
+**Fix lateral 2 — bodies/joints siguen la pose visual al entrar a Play** (bug **general** de física, no solo joints): `updateRigidBodies` materializa el body en su pose inicial y no reposiciona los existentes; mover una entidad ya materializada y dar Play hacía que el body (pose vieja) pisara al Transform → el objeto saltaba. Fix en `enterPlayMode`: re-sincronizar cada RigidBody a su Transform (`setBodyPositionRot`) + marcar joints dirty. Solo afecta entidades con `RigidBodyComponent`.
+
+**Suite 1037/10273 verde**.
+
+---
+
+## 0.2. Hito previo — F2H70.4 (2026-05-21)
 
 **Ruedas que rotan (split-by-node) + HUD de conducción.** Tag `v1.61.0-fase2-hito70-4`. Detalle completo en [`hitos/F2H70-4.md`](hitos/F2H70-4.md). Cierra el Bloque H que F2H70.3 dejó pendiente: las ruedas dejan de estar horneadas en el chassis y rotan/giran independientes desde la pose física de Jolt.
 
@@ -51,7 +69,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.2. Hito previo — F2H70.3 (2026-05-20)
+## 0.3. Hito previo — F2H70.3 (2026-05-20)
 
 **Vehicle Browser + drag-and-drop de vehículos al viewport.** Tag `v1.60.0-fase2-hito70-3`. Detalle completo en [`hitos/F2H70-3.md`](hitos/F2H70-3.md). Cierra el loop de autoría del sistema data-driven `.moodvehicle`.
 
@@ -68,7 +86,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.3. Hito previo — F2H70.2 (2026-05-20)
+## 0.4. Hito previo — F2H70.2 (2026-05-20)
 
 **Tuning físico del vehicle (damping + spawn elevation + frame consistente).** Tag `v1.59.0-fase2-hito70-2`. Detalle completo en [`hitos/F2H70-2.md`](hitos/F2H70-2.md). Cierra los 3 bugs físicos que F2H70.1 dejó pendientes.
 
@@ -80,16 +98,6 @@ Pure helpers extracted: 0         0         1 + 7 tests
 - **Grounding final**: el spring-aware arregló el brinco pero no el float en equilibrio (chassis center a 0.85m, modelo half-height 0.568m → base flotaba 0.285m). Fix data-driven `attach_y_mm: -300 → -15` (`-(half_height - spring_rest - radius)`) en ambos ejes. Validado en Editor mode: DeLorean apoya en piso.
 
 **Suite 1029/10227 verde**. **Pendiente a F2H70.3**: Vehicle Browser UI (Bloque F) + split-by-node de wheels (Bloque H, permitiría auto-derivar `attach_y`).
-
----
-
-## 0.4. Hito previo — F2H69 (2026-05-19)
-
-**Trigger NPC debug + pipeline glTF multi-node + DeLorean swap.** Tag `v1.57.0-fase2-hito69`. Detalle completo en [`hitos/F2H69.md`](hitos/F2H69.md). Cierra el bug conocido que F2H68 dejó abierto.
-
-**Lo que entregó**: **Bloque A — fix sensor sleeping**: `JPH::Body::IsSensor()` auto-fuerza `mAllowSleeping=false` solo para bodies Dynamic. Los sensores Kinematic (caso del NPC sensor del demo) heredan default `true` y entran a sleep tras ~5s sin movimiento → Jolt no emite `OnContactAdded` para sensores dormidos (optimización broadphase). Fix en `PhysicsWorld::createBody`: si `isSensor==true` force `mAllowSleeping=false` independiente del MotionType (pattern Unity/Unreal para triggers permanentes). `impactSpeedThreshold` default 4.0→1.0 m/s para feel arcade-ish coherente con el tuning `makeDefaultSA()` (atropellar caminando funciona). **Bloque B — cleanup logs**: removidos los `[F2H69-DEBUG]` post-validación de `OnContactAdded` (sub-threshold sensor + ENCOLA) y `RagdollSystem::tick` (drain + per-event traces + TRANSITION). **Bloque C — pipeline glTF multi-node (consolidation)**: `MeshLoader.cpp` para `.gltf`/`.glb` aplica las node transforms acumuladas root→owner a vertex position + normal (`aiMatrix3x3` 3x3 con renormalize) + recalcula AABB local; FBX intacto (convención Kenney/Mixamo trae vertices baked al world). **Sin split-by-node**: consolidation only (1 MeshAsset con vertices pre-transformados), split real diferido a F2H70 si emerge demanda. **Bloque D — DeLorean swap**: deletes `assets/dmc_delorean/*` (Sketchfab v1 multi-archivo) + `assets/vehicles/banshee_sa/*` (Kenney F2H67; tuning SA-style queda en C++ `makeDefaultSA()`). Nuevo `assets/vehicles/delorean/delorean.glb` (293 KB single-file con texturas embedded) procesado headless con scripts `pygltflib` (no Blender): scale x1.86 (modelo 2.27m → 4.22m real DMC-12), flatten de matrices al vertex data + reverse winding/flip normales en 7 de 17 nodos con `det(M)<0` (mirror baked del export 3DS Max), origin centrado en su eje Y. Verificación headless walking del árbol confirma **4.220 × 1.853 × 1.136 m** (match exacto DeLorean real). `vehicle_demo.moodmap`: `configPath: ""` → fallback automático a `makeDefaultSA()` (drop del `.moodvehicle` redundante). **Lateral**: título de ventana del editor limpiado a `"MoodEngine Editor"` (sin `"v0.6.0-dev (Hito 6)"` que confundía). **Suite 1029/10227 verde** (sin tests nuevos — F2H69 es mostly fix runtime + asset integration).
-
-**Pendientes diferidos a F2H70** (3 bugs sistémicos del VehicleSystem identificados al validar visualmente el DeLorean): (1) **auto-spawn-height** — engine debe consultar AABB del mesh en `VehicleSystem::tick` para offset Y en vez de `position.y` ajustado asset-specific en moodmap. (2) **quat sync sin gimbal** — `extractEulerAngleXYZ` sufre gimbal lock con rotaciones 180°+; fix con quaternion opcional en `TransformComponent` o `worldMatrix` cached. (3) **split-by-node de wheels** — `MeshLoader` opt-in `splitByNode` flag + wheel meshes con nombres canónicos (`wheel_FL` / `_FR` / `_RL` / `_RR`) que `VehicleSystem` sincronice con `st.wheelWorlds[i]` para rotación visual independiente del chassis. Cuando F2H70 cierre, salen del moodmap `position.y=0.568` y `rotationEuler=[0,180,0]`. El dev explicitó durante la sesión que **workarounds asset-specific = bug del engine, no del asset** — los modelos deben drop-in si cumplen convención industrial (1u=1m, origin centrado, sin mirrors baked, facing forward).
 
 ---
 

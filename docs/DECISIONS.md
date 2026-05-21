@@ -11,6 +11,49 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-21: F2H71 — Slider + Fixed joints
+
+### Decisión 1 — `FixedConstraint` con `mAutoDetectPoint = true` (sin pivot)
+
+**Contexto:** Un Fixed joint suelda dos cuerpos (los 6 DOF locked). Jolt permite o bien especificar los puntos/ejes de anclaje, o auto-detectar la pose relativa actual de los bodies.
+
+**Decisión:** Usar `mAutoDetectPoint = true` — el constraint fija la pose relativa **actual** de A y B al crearse. El Inspector no muestra pivot para Fixed.
+
+**Razones:**
+- **Estilo Unity** (su Fixed joint hace exactamente esto): el dev posiciona los cuerpos donde quiere y el joint los pega. Un campo menos que tocar.
+- **Menos superficie de error**: no hay que alinear pivots a mano para que no haya un "salto" al materializar.
+
+**Alternativas descartadas:**
+- Pedir pivot explícito: redundante para un weld; el caso común es "pegá estos dos donde están".
+
+### Decisión 2 — Invertir el signo de los límites del slider en el wrapper
+
+**Contexto:** Jolt mide la posición del `SliderConstraint` como `(point2 − point1) · sliderAxis` = body2(B) menos body1(A). Cuando A (el dueño del joint) se mueve a FAVOR del `axis`, el valor de Jolt baja (negativo). Resultado pre-fix: los límites del Inspector funcionaban al revés (un `[-2, 0]` con eje +Y dejaba el cuerpo clavado arriba).
+
+**Decisión:** Invertir al pasar a Jolt: `mLimitsMin = -userMax`, `mLimitsMax = -userMin`. La API pública queda intuitiva: **límite = cuánto desliza A a lo largo de `+axisLocal`** (+ = a favor del eje).
+
+**Razones:**
+- **El dev no debería aprender la convención interna de Jolt.** Que el signo coincida con "a favor del eje = positivo" es lo esperable.
+- Atrapado y bloqueado por un test (`Slider desliza hasta el tope min y frena`) — sin él el bug pasaba (los otros tests solo cubrían lock total / lateral).
+
+**Condiciones de revisión:** Si se agrega motor/spring al slider, revisar que el signo del target también quede consistente con esta convención.
+
+### Decisión 3 — Re-sync de bodies + joints en `enterPlayMode` (no sync continuo en Editor)
+
+**Contexto:** Bug general de física: `updateRigidBodies` materializa el body en su pose inicial y solo crea bodies con `bodyId == 0` — no reposiciona los existentes. Mover una entidad ya materializada y dar Play hacía que el body (pose vieja) pisara al Transform en el sync `body→Transform` → el objeto saltaba. Con un slider/fixed se notaba más (el constraint anclaba su reposo en la pose vieja).
+
+**Decisión:** Al entrar a Play, re-sincronizar cada `RigidBody` a su `Transform` actual (`setBodyPositionRot`) + marcar todos los `JointComponent` dirty (re-materializan capturando la pose visual).
+
+**Razones:**
+- **Mínimo y correcto**: una pasada al entrar a Play garantiza "lo que ves es donde arranca", sin el costo/complejidad de un sync continuo body↔Transform en Editor Mode.
+- **Acotado**: solo toca entidades con `RigidBodyComponent`. Player char (CharacterVirtual), vehículos (VehicleConstraint) y ragdolls usan otros bodies y no se ven afectados.
+
+**Alternativas descartadas:**
+- Sync continuo en Editor Mode (el body sigue al Transform frame a frame): cambio mayor, sin demanda concreta más allá de este caso.
+- Reset completo del PhysicsWorld al entrar a Play: más caro y con riesgo de efectos colaterales (floor tiles, vehículos, ragdolls).
+
+---
+
 ## 2026-05-21: F2H70.4 — Ruedas que rotan (split-by-node) + HUD de conducción
 
 ### Decisión 1 — Sub-mesh selector (include + exclude) en vez de splittear el `.glb`
