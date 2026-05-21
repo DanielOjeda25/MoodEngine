@@ -410,7 +410,13 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
                         m_assets->createMaterialFromTexture(tex);
                     const usize slotIndex = i;
                     HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
-                    if (h != nullptr) {
+                    if (h == nullptr) {
+                        // Sin HistoryStack no mutamos: una asignacion directa
+                        // se saltearia el undo/redo (deuda historica). No deberia
+                        // pasar en una sesion normal — el stack siempre existe.
+                        Log::editor()->warn(
+                            "Drop de textura sobre material ignorado: sin HistoryStack");
+                    } else {
                         auto cmd = std::make_unique<EditPropertyCommand<u32>>(
                             e, oldMatId, newMatId,
                             [slotIndex](Entity& en, const u32& v) {
@@ -421,10 +427,8 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
                             },
                             "Reemplazar textura material");
                         h->push(std::move(cmd));  // execute() asigna newMatId
-                    } else {
-                        mr.materials[i] = newMatId;
+                        m_editedThisFrame = true;
                     }
-                    m_editedThisFrame = true;
                 }
             }
             ImGui::EndDragDropTarget();
