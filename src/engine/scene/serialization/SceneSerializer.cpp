@@ -228,17 +228,22 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             // F2H51: InventoryComponent es serializable standalone — un
             // chest/container puede no tener mesh visible.
             const bool hasInv = e.hasComponent<InventoryComponent>();
+            // F2H70.3 H: las wheel-entities (tags wheel_FL/FR/RL/RR) las
+            // spawnea y rematerializa el VehicleSystem en cada load a partir
+            // del VehicleComponent del chassis. NO se serializan: tienen
+            // MeshRenderer (entrarian por hasMr) pero persistirlas duplica
+            // las ruedas al recargar (4 guardadas huerfanas + 4 respawneadas
+            // = 8). Skip explicito antes del resto de checks.
+            const bool isWheelChild =
+                tag.name == "wheel_FL" || tag.name == "wheel_FR" ||
+                tag.name == "wheel_RL" || tag.name == "wheel_RR";
+            if (isWheelChild) return;
             // F2H67: VehicleComponent puede aparecer en una entity con
             // MeshRenderer (caso normal) o standalone si el visual va a
-            // child-entities. Tambien las entities-placeholder de las
-            // wheels (tags Wheel_FL/FR/RL/RR) son standalone -- las
-            // marcamos para persistir aunque solo tengan Tag+Transform.
+            // child-entities.
             const bool hasVeh = e.hasComponent<VehicleComponent>();
-            const bool isWheelTag =
-                tag.name == "Wheel_FL" || tag.name == "Wheel_FR" ||
-                tag.name == "Wheel_RL" || tag.name == "Wheel_RR";
             if (!hasMr && !hasLi && !hasRb && !hasEnv && !hasScript
-                && !hasPe && !hasInv && !hasVeh && !isWheelTag) return;
+                && !hasPe && !hasInv && !hasVeh) return;
             j["entities"].push_back(serializeEntity(e, assets));
         });
     }

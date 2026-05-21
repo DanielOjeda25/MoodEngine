@@ -530,6 +530,48 @@ TEST_CASE("SceneSerializer: round-trip VehicleComponent (F2H67)") {
     std::filesystem::remove(path);
 }
 
+// F2H70.3 H: las wheel-entities (tags wheel_FL/FR/RL/RR) que spawnea el
+// VehicleSystem tienen MeshRenderer, pero NO deben serializarse: el
+// VehicleSystem las rematerializa al cargar. Si se persistieran, recargar
+// dejaria 4 ruedas huerfanas + 4 respawneadas = 8.
+TEST_CASE("SceneSerializer: wheel-entities no se serializan (F2H70.3)") {
+    AssetManager assets("assets", nullFactory());
+    Scene scene;
+
+    Entity chassis = scene.createEntity("Banshee");
+    VehicleComponent veh{};
+    veh.configPath = "vehicles/banshee_sa.moodvehicle";
+    chassis.addComponent<VehicleComponent>(veh);
+
+    // 4 wheel-entities como las crea VehicleSystem::spawnPendingWheels:
+    // tag canonico + MeshRenderer (que normalmente las haria serializables).
+    for (const char* name : {"wheel_FL", "wheel_FR", "wheel_RL", "wheel_RR"}) {
+        Entity w = scene.createEntity(name);
+        w.addComponent<MeshRendererComponent>(0u, 0u);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("vehicle_wheels_skip.moodmap");
+    SceneSerializer::save(empty, "wheel_skip_test", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    // Solo el chassis debe persistir; ninguna entity con tag wheel_*.
+    for (const SavedEntity& e : loaded->entities) {
+        CHECK(e.tag != "wheel_FL");
+        CHECK(e.tag != "wheel_FR");
+        CHECK(e.tag != "wheel_RL");
+        CHECK(e.tag != "wheel_RR");
+    }
+    bool sawChassis = false;
+    for (const SavedEntity& e : loaded->entities) {
+        if (e.tag == "Banshee") sawChassis = true;
+    }
+    CHECK(sawChassis);
+
+    std::filesystem::remove(path);
+}
+
 // F2H67 Bloque J: VehicleComponent es opcional (aditivo). Mapas pre-F2H67
 // sin el campo "vehicle" cargan igual y la entity no tiene el componente.
 TEST_CASE("SceneSerializer: mapas pre-F2H67 sin VehicleComponent cargan (F2H67)") {
