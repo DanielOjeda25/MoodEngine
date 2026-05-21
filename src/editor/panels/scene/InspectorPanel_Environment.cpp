@@ -102,51 +102,40 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
             env.fogMode = static_cast<u32>(fogIdx);
             m_editedThisFrame = true;
         }
-        const std::string fogColorLabel =
-            I18n::T("editor.panel.inspector.environment.color") + "##envfog";
-        if (ImGui::ColorEdit3(fogColorLabel.c_str(), &env.fogColor.x)) {
+        if (detail::fieldColorEdit3(m_editTracker, m_ui, e,
+                "editor.panel.inspector.environment.color", "##envfog", env.fogColor,
+                [](Entity& en, const glm::vec3& v) {
+                    en.getComponent<EnvironmentComponent>().fogColor = v;
+                },
+                "Editar fog color")) {
             m_editedThisFrame = true;
         }
-        detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, env.fogColor,
-            [](Entity& en, const glm::vec3& v) {
-                en.getComponent<EnvironmentComponent>().fogColor = v;
-            },
-            "Editar fog color");
         if (env.fogMode == 1) {
-            const std::string startLabel =
-                I18n::T("editor.panel.inspector.environment.start") + "##env";
-            if (ImGui::DragFloat(startLabel.c_str(), &env.fogLinearStart,
-                                  0.1f, 0.0f, 500.0f)) {
+            if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+                    "editor.panel.inspector.environment.start", "##env", env.fogLinearStart,
+                    [](Entity& en, const f32& v) {
+                        en.getComponent<EnvironmentComponent>().fogLinearStart = v;
+                    },
+                    "Editar fog linear start", 0.1f, 0.0f, 500.0f)) {
                 m_editedThisFrame = true;
             }
-            detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.fogLinearStart,
-                [](Entity& en, const f32& v) {
-                    en.getComponent<EnvironmentComponent>().fogLinearStart = v;
-                },
-                "Editar fog linear start");
-            const std::string endLabel =
-                I18n::T("editor.panel.inspector.environment.end") + "##env";
-            if (ImGui::DragFloat(endLabel.c_str(),   &env.fogLinearEnd,
-                                  0.1f, 0.0f, 500.0f)) {
+            if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+                    "editor.panel.inspector.environment.end", "##env", env.fogLinearEnd,
+                    [](Entity& en, const f32& v) {
+                        en.getComponent<EnvironmentComponent>().fogLinearEnd = v;
+                    },
+                    "Editar fog linear end", 0.1f, 0.0f, 500.0f)) {
                 m_editedThisFrame = true;
             }
-            detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.fogLinearEnd,
-                [](Entity& en, const f32& v) {
-                    en.getComponent<EnvironmentComponent>().fogLinearEnd = v;
-                },
-                "Editar fog linear end");
         } else if (env.fogMode == 2 || env.fogMode == 3) {
-            const std::string densityLabel =
-                I18n::T("editor.panel.inspector.environment.density") + "##env";
-            if (ImGui::DragFloat(densityLabel.c_str(), &env.fogDensity,
-                                  0.001f, 0.0f, 1.0f)) {
+            if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+                    "editor.panel.inspector.environment.density", "##env", env.fogDensity,
+                    [](Entity& en, const f32& v) {
+                        en.getComponent<EnvironmentComponent>().fogDensity = v;
+                    },
+                    "Editar fog density", 0.001f, 0.0f, 1.0f)) {
                 m_editedThisFrame = true;
             }
-            detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.fogDensity,
-                [](Entity& en, const f32& v) {
-                    en.getComponent<EnvironmentComponent>().fogDensity = v;
-                },
-                "Editar fog density");
         }
         drawSectionResetButton("fog", [&]() {
             env.fogMode        = kEnvDefaults.fogMode;
@@ -174,17 +163,14 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
     if (ImGui::CollapsingHeader(
             I18n::T("editor.panel.inspector.environment.tonemap_section").c_str(),
             ImGuiTreeNodeFlags_DefaultOpen)) {
-        const std::string exposureLabel =
-            I18n::T("editor.panel.inspector.environment.exposure") + "##env";
-        if (ImGui::DragFloat(exposureLabel.c_str(), &env.exposure,
-                              0.05f, -5.0f, 5.0f)) {
+        if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+                "editor.panel.inspector.environment.exposure", "##env", env.exposure,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<EnvironmentComponent>().exposure = v;
+                },
+                "Editar exposure", 0.05f, -5.0f, 5.0f)) {
             m_editedThisFrame = true;
         }
-        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, env.exposure,
-            [](Entity& en, const f32& v) {
-                en.getComponent<EnvironmentComponent>().exposure = v;
-            },
-            "Editar exposure");
 
         const char* tonemaps[] = {"None", "Reinhard", "ACES"};
         int toneIdx = static_cast<int>(env.tonemapMode);

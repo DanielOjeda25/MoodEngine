@@ -74,37 +74,34 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
         }
     }
 
-    const std::string halfLabel = I18n::T("editor.panel.inspector.physics.half_extents") + "##rb";
-    if (ImGui::DragFloat3(halfLabel.c_str(), &rb.halfExtents.x, 0.05f, 0.01f, 100.0f)) {
+    if (detail::fieldDragFloat3(m_editTracker, m_ui, e,
+            "editor.panel.inspector.physics.half_extents", "##rb", rb.halfExtents,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<RigidBodyComponent>().halfExtents = v;
+            },
+            "Editar rigid body halfExtents", 0.05f, 0.01f, 100.0f)) {
         m_editedThisFrame = true;
     }
-    detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, rb.halfExtents,
-        [](Entity& en, const glm::vec3& v) {
-            en.getComponent<RigidBodyComponent>().halfExtents = v;
-        },
-        "Editar rigid body halfExtents");
     if (rb.type == RigidBodyComponent::Type::Dynamic) {
-        const std::string massLabel = I18n::T("editor.panel.inspector.physics.mass") + "##rb";
-        if (ImGui::DragFloat(massLabel.c_str(), &rb.mass, 0.1f, 0.001f, 10000.0f)) {
+        if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+                "editor.panel.inspector.physics.mass", "##rb", rb.mass,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<RigidBodyComponent>().mass = v;
+                },
+                "Editar rigid body mass", 0.1f, 0.001f, 10000.0f)) {
             m_editedThisFrame = true;
         }
-        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, rb.mass,
-            [](Entity& en, const f32& v) {
-                en.getComponent<RigidBodyComponent>().mass = v;
-            },
-            "Editar rigid body mass");
     }
     // Hito 34 A: friction. Aplica a static + dynamic (el contacto en
     // ambos lados afecta el comportamiento).
-    const std::string fricLabel = I18n::T("editor.panel.inspector.physics.friction") + "##rb";
-    if (ImGui::DragFloat(fricLabel.c_str(), &rb.friction, 0.01f, 0.0f, 2.0f)) {
+    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+            "editor.panel.inspector.physics.friction", "##rb", rb.friction,
+            [](Entity& en, const f32& v) {
+                en.getComponent<RigidBodyComponent>().friction = v;
+            },
+            "Editar friction (RigidBody)", 0.01f, 0.0f, 2.0f)) {
         m_editedThisFrame = true;
     }
-    detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, rb.friction,
-        [](Entity& en, const f32& v) {
-            en.getComponent<RigidBodyComponent>().friction = v;
-        },
-        "Editar friction (RigidBody)");
     ImGui::TextDisabled("%s",
         I18n::T("editor.panel.inspector.physics.body_id_hint", rb.bodyId).c_str());
     ImGui::Separator();

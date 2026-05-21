@@ -204,15 +204,14 @@ void InspectorPanel::renderAnimatorSection(Entity e) {
         }
     }
 
-    const std::string speedLabel = I18n::T("editor.panel.inspector.animator.speed") + "##anim";
-    if (ImGui::DragFloat(speedLabel.c_str(), &anim.speed, 0.05f, 0.0f, 10.0f)) {
+    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+            "editor.panel.inspector.animator.speed", "##anim", anim.speed,
+            [](Entity& en, const f32& v) {
+                en.getComponent<AnimatorComponent>().speed = v;
+            },
+            "Editar animator speed", 0.05f, 0.0f, 10.0f)) {
         m_editedThisFrame = true;
     }
-    detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, anim.speed,
-        [](Entity& en, const f32& v) {
-            en.getComponent<AnimatorComponent>().speed = v;
-        },
-        "Editar animator speed");
     const std::string playingLabel = I18n::T("editor.panel.inspector.animator.playing") + "##anim";
     if (ImGui::Checkbox(playingLabel.c_str(), &anim.playing)) { m_editedThisFrame = true; }
     detail::pushEditIfDone<bool>(m_editTracker, m_ui, e, anim.playing,

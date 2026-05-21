@@ -49,33 +49,32 @@ void InspectorPanel::renderLightSection(Entity e) {
             m_editedThisFrame = true;
         }
     }
-    const std::string colorLabel = I18n::T("editor.panel.inspector.light.color") + "##lt";
-    if (ImGui::ColorEdit3(colorLabel.c_str(), &lt.color.x)) m_editedThisFrame = true;
-    detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, lt.color,
-        [](Entity& en, const glm::vec3& v) {
-            en.getComponent<LightComponent>().color = v;
-        },
-        "Editar light color");
-    const std::string intensityLabel = I18n::T("editor.panel.inspector.light.intensity") + "##lt";
-    if (ImGui::DragFloat(intensityLabel.c_str(), &lt.intensity, 0.01f, 0.0f, 100.0f)) {
+    if (detail::fieldColorEdit3(m_editTracker, m_ui, e,
+            "editor.panel.inspector.light.color", "##lt", lt.color,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<LightComponent>().color = v;
+            },
+            "Editar light color")) {
         m_editedThisFrame = true;
     }
-    detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, lt.intensity,
-        [](Entity& en, const f32& v) {
-            en.getComponent<LightComponent>().intensity = v;
-        },
-        "Editar light intensity");
+    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+            "editor.panel.inspector.light.intensity", "##lt", lt.intensity,
+            [](Entity& en, const f32& v) {
+                en.getComponent<LightComponent>().intensity = v;
+            },
+            "Editar light intensity", 0.01f, 0.0f, 100.0f)) {
+        m_editedThisFrame = true;
+    }
 
     if (lt.type == LightComponent::Type::Point) {
-        const std::string radiusLabel = I18n::T("editor.panel.inspector.light.radius") + "##lt";
-        if (ImGui::DragFloat(radiusLabel.c_str(), &lt.radius, 0.1f, 0.1f, 1000.0f)) {
+        if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+                "editor.panel.inspector.light.radius", "##lt", lt.radius,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<LightComponent>().radius = v;
+                },
+                "Editar light radius", 0.1f, 0.1f, 1000.0f)) {
             m_editedThisFrame = true;
         }
-        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, lt.radius,
-            [](Entity& en, const f32& v) {
-                en.getComponent<LightComponent>().radius = v;
-            },
-            "Editar light radius");
     } else {
         const std::string dirLabel = I18n::T("editor.panel.inspector.light.direction") + "##lt";
         if (ImGui::DragFloat3(dirLabel.c_str(), &lt.direction.x, 0.01f, -1.0f, 1.0f)) {

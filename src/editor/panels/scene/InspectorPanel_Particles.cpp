@@ -55,40 +55,35 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
         m_editedThisFrame = true;
     }
     if (em.emissionShape != ES::Point) {
-        const std::string shapeSizeLabel = I18n::T("editor.panel.inspector.particles.shape_size") + "##pe";
-        if (ImGui::DragFloat(shapeSizeLabel.c_str(),
-                              &em.emissionShapeSize, 0.05f, 0.01f, 100.0f)) {
+        if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+                "editor.panel.inspector.particles.shape_size", "##pe", em.emissionShapeSize,
+                [](Entity& en, const f32& v) {
+                    en.getComponent<ParticleEmitterComponent>().emissionShapeSize = v;
+                },
+                "Editar emission shape size", 0.05f, 0.01f, 100.0f)) {
             m_editedThisFrame = true;
         }
-        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, em.emissionShapeSize,
-            [](Entity& en, const f32& v) {
-                en.getComponent<ParticleEmitterComponent>().emissionShapeSize = v;
-            },
-            "Editar emission shape size");
     }
     // Hito 40 A: cone axis solo visible si shape == Cone.
     if (em.emissionShape == ES::Cone) {
-        const std::string coneAxisLabel = I18n::T("editor.panel.inspector.particles.cone_axis") + "##pe";
-        if (ImGui::DragFloat3(coneAxisLabel.c_str(),
-                                &em.emissionConeAxis.x, 0.01f, -1.0f, 1.0f)) {
+        if (detail::fieldDragFloat3(m_editTracker, m_ui, e,
+                "editor.panel.inspector.particles.cone_axis", "##pe", em.emissionConeAxis,
+                [](Entity& en, const glm::vec3& v) {
+                    en.getComponent<ParticleEmitterComponent>().emissionConeAxis = v;
+                },
+                "Editar cone axis", 0.01f, -1.0f, 1.0f)) {
             m_editedThisFrame = true;
         }
-        detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, em.emissionConeAxis,
-            [](Entity& en, const glm::vec3& v) {
-                en.getComponent<ParticleEmitterComponent>().emissionConeAxis = v;
-            },
-            "Editar cone axis");
     }
 
-    const std::string rateLabel = I18n::T("editor.panel.inspector.particles.rate") + "##pe";
-    if (ImGui::DragFloat(rateLabel.c_str(), &em.emitRate, 1.0f, 0.0f, 10000.0f)) {
+    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+            "editor.panel.inspector.particles.rate", "##pe", em.emitRate,
+            [](Entity& en, const f32& v) {
+                en.getComponent<ParticleEmitterComponent>().emitRate = v;
+            },
+            "Editar emit rate", 1.0f, 0.0f, 10000.0f)) {
         m_editedThisFrame = true;
     }
-    detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, em.emitRate,
-        [](Entity& en, const f32& v) {
-            en.getComponent<ParticleEmitterComponent>().emitRate = v;
-        },
-        "Editar emit rate");
     const std::string lifeLabel = I18n::T("editor.panel.inspector.particles.lifetime") + "##pe";
     if (ImGui::DragFloatRange2(lifeLabel.c_str(),
                                  &em.lifetimeMin, &em.lifetimeMax,
@@ -104,24 +99,22 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             emc.lifetimeMax = v.second;
         },
         "Editar lifetime range");
-    const std::string velMinLabel = I18n::T("editor.panel.inspector.particles.vel_min") + "##pe";
-    if (ImGui::DragFloat3(velMinLabel.c_str(), &em.velocityMin.x, 0.05f)) {
+    if (detail::fieldDragFloat3(m_editTracker, m_ui, e,
+            "editor.panel.inspector.particles.vel_min", "##pe", em.velocityMin,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<ParticleEmitterComponent>().velocityMin = v;
+            },
+            "Editar particle velocityMin", 0.05f)) {
         m_editedThisFrame = true;
     }
-    detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, em.velocityMin,
-        [](Entity& en, const glm::vec3& v) {
-            en.getComponent<ParticleEmitterComponent>().velocityMin = v;
-        },
-        "Editar particle velocityMin");
-    const std::string velMaxLabel = I18n::T("editor.panel.inspector.particles.vel_max") + "##pe";
-    if (ImGui::DragFloat3(velMaxLabel.c_str(), &em.velocityMax.x, 0.05f)) {
+    if (detail::fieldDragFloat3(m_editTracker, m_ui, e,
+            "editor.panel.inspector.particles.vel_max", "##pe", em.velocityMax,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<ParticleEmitterComponent>().velocityMax = v;
+            },
+            "Editar particle velocityMax", 0.05f)) {
         m_editedThisFrame = true;
     }
-    detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, em.velocityMax,
-        [](Entity& en, const glm::vec3& v) {
-            en.getComponent<ParticleEmitterComponent>().velocityMax = v;
-        },
-        "Editar particle velocityMax");
     const std::string sizeLabel = I18n::T("editor.panel.inspector.particles.size") + "##pe";
     if (ImGui::DragFloatRange2(sizeLabel.c_str(),
                                  &em.sizeStart, &em.sizeEnd,
@@ -155,16 +148,14 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             en.getComponent<ParticleEmitterComponent>().colorEnd = v;
         },
         "Editar particle colorEnd");
-    const std::string gravLabel = I18n::T("editor.panel.inspector.particles.gravity_factor") + "##pe";
-    if (ImGui::DragFloat(gravLabel.c_str(), &em.gravityFactor, 0.01f,
-                          -2.0f, 2.0f)) {
+    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+            "editor.panel.inspector.particles.gravity_factor", "##pe", em.gravityFactor,
+            [](Entity& en, const f32& v) {
+                en.getComponent<ParticleEmitterComponent>().gravityFactor = v;
+            },
+            "Editar gravity factor (particles)", 0.01f, -2.0f, 2.0f)) {
         m_editedThisFrame = true;
     }
-    detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, em.gravityFactor,
-        [](Entity& en, const f32& v) {
-            en.getComponent<ParticleEmitterComponent>().gravityFactor = v;
-        },
-        "Editar gravity factor (particles)");
     const std::string maxLabel = I18n::T("editor.panel.inspector.particles.max_particles") + "##pe";
     if (ImGui::DragInt(maxLabel.c_str(),
                          reinterpret_cast<int*>(&em.maxParticles),
