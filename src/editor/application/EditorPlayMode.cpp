@@ -28,6 +28,22 @@
 
 namespace Mood {
 
+namespace {
+// F2H70.3 H: alterna el HUD entre on-foot y conduciendo. Al conducir ocultamos
+// los widgets de personaje (crosshair / vida / estamina / municion) y
+// mostramos el velocimetro; al bajar (o salir de Play) se restauran. Helper
+// unico para no olvidar ninguno en los varios call sites (mount / dismount /
+// auto-dismount / exit Play).
+void setDrivingHud(bool driving) {
+    auto& h = GameState::hud();
+    h.widget_enabled["crosshair"]     = !driving;
+    h.widget_enabled["health_number"] = !driving;
+    h.widget_enabled["stamina_bar"]   = !driving;
+    h.widget_enabled["ammo_counter"]  = !driving;
+    h.widget_enabled["speedometer"]   =  driving;
+}
+}  // namespace
+
 void EditorApplication::enterPlayMode() {
     m_mode = EditorMode::Play;
     m_ui.setMode(EditorMode::Play);
@@ -74,6 +90,9 @@ void EditorApplication::exitPlayMode() {
     // F2H67 polish: limpiar el interact_prompt — si quedo "[F] Subir al ..."
     // del frame anterior, al salir de Play no queremos verlo pegado.
     Mood::GameState::hud().interact_prompt.clear();
+    // F2H70.3 H: si salimos de Play mientras conduciamos, restaurar el HUD
+    // on-foot.
+    setDrivingHud(false);
     // F2H41 fix lateral: resetear m_playCamera a la pose inicial. En
     // Play Mode, EditorScene::updateRigidBodies setea la cam cada
     // frame al char position. Si el char cae al vacio (camina fuera
@@ -156,6 +175,9 @@ void EditorApplication::updateCameras(f32 dt) {
                 if (bestHandle != 0) {
                     m_playerMountedVehicleEntity = bestHandle;
                     SDL_SetRelativeMouseMode(SDL_TRUE);  // chase cam usa mouse
+                    // F2H70.3 H: HUD de conduccion (oculta widgets on-foot,
+                    // muestra velocimetro).
+                    setDrivingHud(true);
                     // F2H70.2 D2: limpiar el "[F] Subir al ..." residual al
                     // instante del mount. El frame siguiente el mounted
                     // block ya escribira "[F] Bajar". Sin esto, si el HUD
@@ -194,6 +216,8 @@ void EditorApplication::updateCameras(f32 dt) {
                     }
                 }
                 m_playerMountedVehicleEntity = 0;
+                // F2H70.3 H: restaurar HUD on-foot al bajar.
+                setDrivingHud(false);
                 // F2H70.2 fix S-key: reset del edge-stick al desmontar
                 // para que el proximo mount empiece con S clean (sino el
                 // estado quedaria contaminado del session anterior).
@@ -213,6 +237,7 @@ void EditorApplication::updateCameras(f32 dt) {
                 // El vehiculo fue borrado del scene -- volver on-foot.
                 m_playerMountedVehicleEntity = 0;
                 Mood::GameState::hud().interact_prompt.clear();
+                setDrivingHud(false);  // F2H70.3 H: restaurar HUD on-foot
                 return;
             }
             auto& veh = vehEnt.getComponent<VehicleComponent>();
@@ -251,6 +276,36 @@ void EditorApplication::updateCameras(f32 dt) {
                     forwardSpeed = st.forwardSpeed;
                 }
             }
+            // F2H70.3 H: alimentar el velocimetro del HUD (m/s -> km/h) +
+            // proyectar la pose del auto a pantalla para que el popup lo siga.
+            // El punto del marcador es ~2.2m sobre el origin logico (clarea el
+            // techo del modelo, que se renderea elevado por pivotYOffset).
+            {
+                auto& hud = Mood::GameState::hud();
+                hud.vehicle_speed_kmh = forwardSpeed * 3.6f;
+                if (vehEnt.hasComponent<TransformComponent>()) {
+                    const auto& vtf = vehEnt.getComponent<TransformComponent>();
+                    // ~1.3m sobre el origin logico: queda apenas sobre el techo
+                    // (el modelo se renderea elevado por pivotYOffset ~0.85m +
+                    // media altura ~0.57m, asi que el techo esta ~1.4m arriba).
+                    const glm::vec3 markerWorld =
+                        vtf.position + glm::vec3(0.0f, 1.3f, 0.0f);
+                    const glm::mat4 vp =
+                        m_playCamera.projectionMatrix(viewportAspect())
+                        * m_playCamera.viewMatrix();
+                    const glm::vec4 clip = vp * glm::vec4(markerWorld, 1.0f);
+                    if (clip.w > 0.0001f) {
+                        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+                        hud.vehicle_marker_x = ndc.x * 0.5f + 0.5f;
+                        hud.vehicle_marker_y = 1.0f - (ndc.y * 0.5f + 0.5f);
+                        hud.vehicle_marker_onscreen =
+                            ndc.z < 1.0f && ndc.x > -1.1f && ndc.x < 1.1f
+                            && ndc.y > -1.1f && ndc.y < 1.1f;
+                    } else {
+                        hud.vehicle_marker_onscreen = false;
+                    }
+                }
+            }
             // Edge detect en S: al primer frame pressed elegimos modo segun
             // si vamos moviendonos adelante. Umbral 0.5 m/s: por debajo
             // consideramos "parado" y S = reverse desde el toque inicial.
@@ -275,9 +330,21 @@ void EditorApplication::updateCameras(f32 dt) {
                 veh.inputThrottle = 0.0f;
                 veh.inputBrake    = 0.0f;
             }
-            veh.inputSteer = 0.0f;
-            if (keys_F2H67[SDL_SCANCODE_A]) veh.inputSteer -= 1.0f;
-            if (keys_F2H67[SDL_SCANCODE_D]) veh.inputSteer += 1.0f;
+            // A/D = steer. F2H70.3 H: rampa gradual hacia el target en lugar
+            // de saltar a +-1 al instante. Sin esto las ruedas delanteras
+            // pegan de tope a tope (snap); con la rampa giran progresivo,
+            // como un volante. Turn-in mas lento que el auto-centrado al
+            // soltar (sensacion natural de retorno). Rate en unidades/s.
+            f32 steerTarget = 0.0f;
+            if (keys_F2H67[SDL_SCANCODE_A]) steerTarget -= 1.0f;
+            if (keys_F2H67[SDL_SCANCODE_D]) steerTarget += 1.0f;
+            constexpr f32 k_steerTurnInRate = 3.0f;   // ~0.33s a tope
+            constexpr f32 k_steerReturnRate = 6.0f;   // centrado mas rapido
+            const f32 steerRate = (steerTarget != 0.0f)
+                ? k_steerTurnInRate : k_steerReturnRate;
+            const f32 steerMaxDelta = steerRate * dt;
+            const f32 steerDiff = steerTarget - veh.inputSteer;
+            veh.inputSteer += std::clamp(steerDiff, -steerMaxDelta, steerMaxDelta);
             veh.inputHandbrake = keys_F2H67[SDL_SCANCODE_SPACE] ? 1.0f : 0.0f;
 
             // --- Chase cam: posicionar m_playCamera detras-arriba del chasis ---

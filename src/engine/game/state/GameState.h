@@ -62,6 +62,18 @@ struct HudState {
     /// del overlay con dt.
     f32 hit_marker_t = 0.0f;
 
+    // --- F2H70.3 H: velocimetro del vehiculo montado ---
+    /// Velocidad escalar en km/h. La setea EditorPlayMode mientras el player
+    /// conduce; el widget `speedometer` (default OFF, on al montar) la dibuja.
+    f32 vehicle_speed_kmh = 0.0f;
+    /// Posicion del popup del velocimetro en pantalla, normalizada [0,1]
+    /// (x desde izquierda, y desde arriba). EditorPlayMode proyecta la pose
+    /// world del auto a pantalla cada frame para que el popup lo siga.
+    f32  vehicle_marker_x = 0.5f;
+    f32  vehicle_marker_y = 0.5f;
+    /// true si el auto esta dentro del frustum (sino el widget no dibuja).
+    bool vehicle_marker_onscreen = false;
+
     // --- F2H39: Damage indicator (vignette + arc direccional) ---
     /// Direccion 2D (x: derecha, y: enfrente) normalizada del atacante.
     /// (0,1) = enemigo enfrente. (1,0) = derecha. (-1,0) = izquierda.
@@ -104,6 +116,7 @@ struct HudState {
     /// que pocos juegos quieren prendido siempre).
     std::unordered_map<std::string, bool> widget_enabled{
         {"crt_scanline",    false},
+        {"speedometer",     false},  // F2H70.3 H: default OFF; on al montar
         {"inventory_panel", false},  // F2H52 H: default OFF; Tab lo togglea
         {"quest_log_panel", false},  // F2H53 G: default OFF; J lo togglea
     };

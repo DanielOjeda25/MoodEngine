@@ -657,6 +657,30 @@ void drawCrtScanline(const HudContext& ctx) {
 // (extraido en AUDIT-1, 2026-05-17). La declaracion esta en
 // GameOverlay_Internal.h y el registry de abajo lo referencia.
 
+// 12. SPEEDOMETER (F2H70.3 H) — popup de velocidad que SIGUE al auto montado.
+//     EditorPlayMode proyecta la pose world del auto a `vehicle_marker_x/y`
+//     (normalizado [0,1]) cada frame; este widget dibuja la cajita "NNN km/h"
+//     centrada en ese punto. Solo visible con el widget `speedometer` enabled
+//     (lo prende EditorPlayMode al montar) y si el auto esta on-screen.
+void drawSpeedometer(const HudContext& ctx) {
+    const HudState& h = *ctx.hud;
+    if (!h.vehicle_marker_onscreen) return;
+
+    char buf[32];
+    const int kmh = static_cast<int>(std::lround(std::fabs(h.vehicle_speed_kmh)));
+    std::snprintf(buf, sizeof(buf), "%d km/h", kmh);
+
+    const float cx = ctx.x0 + h.vehicle_marker_x * ctx.w;
+    const float cy = ctx.y0 + h.vehicle_marker_y * ctx.h;
+    const ImVec2 sz = ImGui::CalcTextSize(buf);
+    constexpr float padX = 12.0f, padY = 6.0f;
+    const ImVec2 a(cx - sz.x * 0.5f - padX, cy - sz.y * 0.5f - padY);
+    const ImVec2 b(cx + sz.x * 0.5f + padX, cy + sz.y * 0.5f + padY);
+    ctx.dl->AddRectFilled(a, b, palette::k_bg_box, 4.0f);
+    ctx.dl->AddRect(a, b, palette::k_yellow_dim, 4.0f, 0, 1.5f);
+    drawTextCentered(ctx.dl, cx, cy - sz.y * 0.5f, buf, palette::k_white);
+}
+
 // =============================================================
 // REGISTRY DE WIDGETS — orden = orden de dibujado (back-to-front)
 // =============================================================
@@ -677,6 +701,7 @@ const HudWidget k_widgets[] = {
     { "crosshair",        &drawCrosshair },
     { "hit_marker",       &drawHitMarker },
     { "interact_prompt",  &drawInteractPrompt },
+    { "speedometer",      &drawSpeedometer },      // F2H70.3 H (default OFF)
     { "pickup_queue",     &drawPickupNotifications },
     { "dialog_box",       &drawDialogBox },        // F2H48
     { "inventory_panel",  &drawInventoryPanel },   // F2H52 H (default OFF)
