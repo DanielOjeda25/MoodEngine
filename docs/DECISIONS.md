@@ -11,6 +11,49 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-21: F2H74 — Cleanup UX + capa de field-helpers del Inspector
+
+### Decisión 1 — Auditar antes de "reorganizar": la UX de paneles ya seguía el estándar
+
+**Contexto:** El pedido fue "reorganización de UX + limpiar que tenemos muchos imgui". Tentación: rediseñar la disposición de paneles.
+
+**Decisión:** Auditar primero. Los 21 paneles ya están repartidos en 6 workspaces curados (patrón Blender Workspaces / Unity Layouts / Unreal Modes). No se tocó la disposición — habría sido inventar churn. El único gap real era el menú **Ver** (categorías mal mapeadas).
+
+**Razones:** No reinventar lo que ya sigue el estándar industrial. El valor estaba en (a) el menú Ver y (b) la dispersión de código, no en mover ventanas.
+
+### Decisión 2 — Field-helpers en `InspectorPanel_Internal.h`, no en `editor/ui/widgets/`
+
+**Contexto:** Para colapsar el triplete *label+widget+undo* repetido ~76 veces, ¿una librería de widgets genéricos o helpers en el header del Inspector?
+
+**Decisión:** Helpers en `InspectorPanel_Internal.h` (`fieldDragFloat/3`, `fieldColorEdit3`), namespace `Mood::detail`.
+
+**Razones:**
+- Están **acoplados al `InspectorEditTracker`** (toman tracker+ui+entity para el undo) — no son widgets reutilizables fuera del Inspector. Llamarlos "widgets genéricos" sería deshonesto.
+- Cero includes nuevos: los 14 partials ya incluyen ese header.
+- La reducción de dispersión ocurre en los **call sites** (de ~6 líneas a 1), que es donde estaba el problema.
+
+**Alternativas descartadas:** `editor/ui/widgets/PropertyField.h` genérico — el acople al tracker lo haría un mal "widget genérico"; más archivos sin beneficio.
+
+### Decisión 3 — Migración behaviour-preserving (no agregar undo donde no había)
+
+**Contexto:** Al migrar, varios campos sin `pushEditIfDone` (checkboxes, light direction) podrían "ganarse" undo gratis con el helper.
+
+**Decisión:** Migrar SOLO los campos que ya tenían `pushEditIfDone`. Los demás quedan raw, sin cambio de comportamiento.
+
+**Razones:** Es un cleanup, no un cambio funcional. Agregar undo a campos que no lo tenían es una decisión aparte (y arriesgada en masa).
+
+### Decisión 4 — El `helpMarker` entre widget y tracker mataba el undo; fix por reorden, salvo Transform
+
+**Contexto:** `trackPropertyEdit` lee `GetItemID()`/`IsItemDeactivatedAfterEdit` del **último item dibujado**. Donde el `helpMarker` (`TextDisabled("(?)")` no interactivo) iba entre el widget y el `pushEditIfDone`, el tracker leía el ID del `(?)` → undo nunca disparaba (Joint, Trigger requiredTag, ForceField strength).
+
+**Decisión:** Reordenar — `pushEditIfDone` inmediatamente tras el widget, `helpMarker` después (no dibuja widget, su `SameLine` sigue pegándose al widget). **Excepto Transform**: ahí el undo real viene de `applyDeltaToSelection` (multi-select); el `pushEditIfDone` final es dead code redundante — reordenarlo daría **doble-undo**. Se deja intacto.
+
+**Razones:** Fix mínimo y quirúrgico del bug real, sin introducir un doble-registro donde ya hay otro mecanismo.
+
+**Condiciones de revisión:** Si Transform deja de usar `applyDeltaToSelection`, revisar su `pushEditIfDone` muerto.
+
+---
+
 ## 2026-05-21: F2H73 — Triggers avanzados (filtro por tag + one-shot + enabled)
 
 ### Decisión 1 — `requiredTag` filtra solo bodies, no al player

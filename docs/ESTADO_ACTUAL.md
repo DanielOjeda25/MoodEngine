@@ -30,7 +30,22 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H73 (2026-05-21)
+## 0.1. Último hito de feature — F2H74 (2026-05-21)
+
+**Cleanup UX (menú Ver) + capa de field-helpers del Inspector + fix undo.** Tag `v1.65.0-fase2-hito74`. Detalle completo en [`hitos/F2H74.md`](hitos/F2H74.md). El dev pidió reorganización de UX + limpieza del imgio disperso + mi recomendación (lente Unity/Unreal).
+
+**Auditoría primero**: paneles/workspaces ya bien organizados (21 paneles en 6 workspaces = patrón Blender/Unity Layouts/Unreal Modes); las deudas "reorg de menús" (F2H18) y "HistoryStack residual" resultaron obsoletas → memorias borradas.
+
+**Lo que entregó**:
+- **Fase 1 — menú Ver**: `kCategories` tenía `World` vacío y omitía `Narrative` (paneles de diálogo invisibles en el menú). Fix a **Scene/Assets/Narrative/Gameplay/Debug**; `Item*`/`Quest*` → `Gameplay`, `NarrativeIntro` → `Narrative`.
+- **Fase 2 — field-helpers** (`InspectorPanel_Internal.h`, estilo Unity `PropertyField` / Unreal `DetailsView`): `fieldDragFloat/3` + `fieldColorEdit3` colapsan el triplete *label i18n + widget + pushEditIfDone*. **25 campos** migrados en 6 partials, behaviour-preserving.
+- **Fix undo muerto por `helpMarker`**: `trackPropertyEdit` lee el ID del último item; con el `helpMarker` (`TextDisabled`) entre widget y `pushEditIfDone`, el undo nunca disparaba. Reordenado en **Joint** (6 campos), **Trigger** `requiredTag`, **ForceField** `strength`. Transform NO se toca (su undo viene de `applyDeltaToSelection`; el push final es dead code — reordenar daría doble-undo).
+
+**Suite 1046/10300 verde** (refactor de UI, validación visual).
+
+---
+
+## 0.2. Hito previo — F2H73 (2026-05-21)
 
 **Triggers avanzados (filtro por tag + one-shot + enabled).** Tag `v1.64.0-fase2-hito73`. Detalle completo en [`hitos/F2H73.md`](hitos/F2H73.md). El `TriggerComponent` detectaba player + bodies pero siempre disparaba con cualquier cosa; F2H73 le agrega los filtros/modos estándar (Unreal `ActorHasTag`, Unity tag + `enabled`, `trigger_once` de Source). Flags sobre el `TriggerSystem` existente, sin reinventar nada.
 
@@ -47,7 +62,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.2. Hito previo — F2H72 (2026-05-21)
+## 0.3. Hito previo — F2H72 (2026-05-21)
 
 **Force fields / zonas de fuerza física.** Tag `v1.63.0-fase2-hito72`. Detalle completo en [`hitos/F2H72.md`](hitos/F2H72.md). Siguiente feature de Sub-fase 2.4. Referencia: Unreal `RadialForceComponent` + Unity Area Effectors.
 
@@ -63,7 +78,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.3. Hito previo — F2H71 (2026-05-21)
+## 0.4. Hito previo — F2H71 (2026-05-21)
 
 **Slider + Fixed joints — completa la familia de constraints de Jolt.** Tag `v1.62.0-fase2-hito71`. Detalle completo en [`hitos/F2H71.md`](hitos/F2H71.md). F2H65 había dejado Hinge/Distance/Point; este cierra los 2 que faltaban, reusando el andamiaje existente (Inspector + serialización + dispatch + debug-draw).
 
@@ -81,7 +96,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.4. Hito previo — F2H70.4 (2026-05-21)
+## 0.5. Hito previo — F2H70.4 (2026-05-21)
 
 **Ruedas que rotan (split-by-node) + HUD de conducción.** Tag `v1.61.0-fase2-hito70-4`. Detalle completo en [`hitos/F2H70-4.md`](hitos/F2H70-4.md). Cierra el Bloque H que F2H70.3 dejó pendiente: las ruedas dejan de estar horneadas en el chassis y rotan/giran independientes desde la pose física de Jolt.
 
@@ -102,7 +117,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.5. Hito previo — F2H70.3 (2026-05-20)
+## 0.6. Hito previo — F2H70.3 (2026-05-20)
 
 **Vehicle Browser + drag-and-drop de vehículos al viewport.** Tag `v1.60.0-fase2-hito70-3`. Detalle completo en [`hitos/F2H70-3.md`](hitos/F2H70-3.md). Cierra el loop de autoría del sistema data-driven `.moodvehicle`.
 
