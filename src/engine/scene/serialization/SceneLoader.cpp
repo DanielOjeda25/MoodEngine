@@ -284,6 +284,26 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<TriggerComponent>(tc);
         }
 
+        // F2H72: ForceFieldComponent.
+        if (se.forceField.has_value()) {
+            const auto& s = *se.forceField;
+            ForceFieldComponent ff{};
+            ff.shape = (s.shape == "box")
+                ? ForceFieldComponent::Shape::Box
+                : ForceFieldComponent::Shape::Sphere;
+            ff.mode = (s.type == "directional")
+                ? ForceFieldComponent::Mode::Directional
+                : ForceFieldComponent::Mode::Radial;
+            ff.halfExtents   = s.halfExtents;
+            ff.radius        = s.radius;
+            ff.direction     = s.direction;
+            ff.strength      = s.strength;
+            ff.linearFalloff = s.linearFalloff;
+            ff.ignoreMass    = s.ignoreMass;
+            ff.enabled       = s.enabled;
+            e.addComponent<ForceFieldComponent>(ff);
+        }
+
         // F2H48.1: DialogComponent. cachedDialogId arranca en 0 — el
         // DialogInteractSystem llama loadDialog en el primer frame que
         // el player entra al trigger.

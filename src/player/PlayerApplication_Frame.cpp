@@ -465,6 +465,10 @@ int PlayerApplication::run() {
         prevMainMenu = m_inMainMenu;
         if (gameUpdating) {
             updateCamera(dt);
+            // F2H72: zonas de fuerza antes del step (updateRigidBodies stepea).
+            if (m_scene && m_physicsWorld) {
+                m_forceFieldSystem.update(*m_scene, *m_physicsWorld, dt);
+            }
             updateRigidBodies(dt);
         } else {
             GameState::paused() = true;  // freeze pause-aware systems

@@ -757,6 +757,51 @@ struct TriggerComponent {
     std::unordered_set<u32> bodiesInside;
 };
 
+/// @brief F2H72: zona de fuerza fisica. Cada frame en Play, el
+///        ForceFieldSystem aplica una fuerza a los RigidBody Dynamic cuyo
+///        centro cae dentro de la zona. Sin colision solida (los objetos
+///        atraviesan la zona libremente, igual que un TriggerComponent).
+///        Referencia industrial: Unreal RadialForceComponent + Unity Area
+///        Effectors.
+///
+///        Zona: Box (OBB que respeta rotation; `halfExtents` en metros
+///        directos, ignora el scale del Transform — igual que el trigger) o
+///        Sphere (`radius`). Centro = TransformComponent.position.
+struct ForceFieldComponent {
+    enum class Shape : u8 { Box = 0, Sphere = 1 };
+    /// Directional = viento (fuerza constante en `direction`).
+    /// Radial = explosion / atractor (fuerza a lo largo del vector
+    ///          centro->body; `strength` > 0 empuja afuera, < 0 atrae).
+    enum class Mode  : u8 { Directional = 0, Radial = 1 };
+
+    Shape shape = Shape::Sphere;
+    Mode  mode  = Mode::Radial;
+
+    glm::vec3 halfExtents{2.0f, 2.0f, 2.0f}; // Box (metros directos)
+    f32       radius = 3.0f;                  // Sphere
+
+    /// Solo Directional: direccion del "viento" en world space (se
+    /// normaliza). Ignorado en Radial.
+    glm::vec3 direction{0.0f, 1.0f, 0.0f};
+
+    /// Magnitud de la fuerza. Radial: > 0 empuja afuera (explosion),
+    /// < 0 atrae al centro (gravedad/iman). Newtons, o m/s^2 si
+    /// `ignoreMass == true`.
+    f32 strength = 20.0f;
+
+    /// Solo Radial: si true, escala la fuerza por (1 - dist/range) — max en
+    /// el centro, 0 en el borde de la zona (falloff lineal estilo explosion).
+    bool linearFalloff = true;
+
+    /// Si true, la fuerza es independiente de la masa (se interpreta como
+    /// aceleracion: el sistema la multiplica por la masa del body). Util
+    /// para viento / zonas de gravedad donde todo cae/flota igual.
+    bool ignoreMass = false;
+
+    /// Master switch — un script puede apagar/prender la zona.
+    bool enabled = true;
+};
+
 /// F2H48: marca una entidad como NPC con un dialog asociado. `dialogPath`
 /// es el path logico del `.mooddialog` (resolvible por AssetManager via
 /// VFS). `autoStartOnInteract`: si true y la entidad tambien tiene un

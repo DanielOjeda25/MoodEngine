@@ -59,6 +59,7 @@ private:
     void renderAnimatorSection(Entity e);
     void renderParticleEmitterSection(Entity e);
     void renderTriggerSection(Entity e);
+    void renderForceFieldSection(Entity e);  // F2H72
     void renderBrushSection(Entity e);
     void renderInventorySection(Entity e);  // F2H51
 

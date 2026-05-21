@@ -96,6 +96,7 @@ void InspectorPanel::onImGuiRender() {
     if (e.hasComponent<AnimatorComponent>())         renderAnimatorSection(e);
     if (e.hasComponent<ParticleEmitterComponent>())  renderParticleEmitterSection(e);
     if (e.hasComponent<TriggerComponent>())          renderTriggerSection(e);
+    if (e.hasComponent<ForceFieldComponent>())       renderForceFieldSection(e);  // F2H72
     if (e.hasComponent<BrushComponent>())            renderBrushSection(e);
     if (e.hasComponent<InventoryComponent>())        renderInventorySection(e);  // F2H51
 
@@ -223,6 +224,13 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
         e.hasComponent<JointComponent>(),
         [](Entity en, std::string lbl) {
             return makeAddComponentCommand<JointComponent>(en, std::move(lbl));
+        });
+    // F2H72: ForceFieldComponent en Physics.
+    add("component.name.force_field", "component.desc.force_field",
+        "editor.panel.inspector.add.cat.physics",
+        e.hasComponent<ForceFieldComponent>(),
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<ForceFieldComponent>(en, std::move(lbl));
         });
 
     // Audio

@@ -405,6 +405,16 @@ int EditorApplication::run() {
             updateCameras(dt);
         }
 
+        // F2H72: zonas de fuerza. Antes del step (updateRigidBodies stepea)
+        // para que las fuerzas que Jolt acumula se apliquen ESTE frame. Solo
+        // en Play (en Editor no hay step, no tiene sentido). Los bodies se
+        // materializan dentro de updateRigidBodies, asi que el primer frame
+        // de Play la zona aun no actua (de frame 2 en adelante, ok).
+        if (m_scene && m_physicsWorld && m_mode == EditorMode::Play) {
+            MOOD_PROFILE_SCOPE("ForceFieldSystem::update");
+            m_forceFieldSystem.update(*m_scene, *m_physicsWorld, dt);
+        }
+
         // 3.4) Fisica (Jolt, Hito 12): materializa bodies nuevos siempre y
         //      stepea la sim solo en Play Mode. Despues del input y antes
         //      de scripts — asi un script puede leer la posicion post-step.

@@ -424,6 +424,7 @@ add_library(mood_engine_lib STATIC
     src/systems/scripting/ScriptSystem.cpp
     src/systems/render/ShadowPass.cpp
     src/systems/physics/TriggerSystem.cpp
+    src/systems/physics/ForceFieldSystem.cpp    # F2H72
     src/systems/render/SkyboxRenderer.cpp
 
     src/engine/scripting/exposed/ExposedProperty.cpp

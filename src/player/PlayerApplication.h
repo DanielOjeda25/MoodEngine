@@ -17,6 +17,7 @@
 #include "engine/scene/core/FpsCamera.h"
 #include "engine/world/grid/GridMap.h"
 #include "systems/physics/TriggerSystem.h"
+#include "systems/physics/ForceFieldSystem.h"  // F2H72
 
 #include <glm/vec3.hpp>
 
@@ -94,6 +95,7 @@ private:
     std::unique_ptr<NavSystem>        m_navSystem;
     std::unique_ptr<ParticleSystem>   m_particleSystem;  // Hito 29
     TriggerSystem                     m_triggerSystem;   // Hito 33: stateless
+    ForceFieldSystem                  m_forceFieldSystem; // F2H72: stateless
     std::unique_ptr<PhysicsWorld>     m_physicsWorld;
 
     // Hito 30: character controller del jugador. 0 = no creado todavia.

@@ -221,6 +221,76 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                     }
                 });
 
+            // F2H72: overlay de ForceFieldComponents. Dibuja la zona (Box
+            // como OBB wireframe, Sphere como 3 circulos) + un indicador de
+            // modo: flecha amarilla para Directional (la direccion del
+            // viento), spokes radiales para Radial. Violeta = activo, gris
+            // = enabled==false.
+            m_scene->forEach<TransformComponent, ForceFieldComponent>(
+                [&](Entity, TransformComponent& tf, ForceFieldComponent& ff) {
+                    const glm::vec3 color = ff.enabled
+                        ? glm::vec3(0.70f, 0.40f, 1.00f)
+                        : glm::vec3(0.45f, 0.45f, 0.45f);
+                    const glm::vec3 center = tf.position;
+
+                    if (ff.shape == ForceFieldComponent::Shape::Box) {
+                        glm::mat4 m(1.0f);
+                        m = glm::translate(m, center);
+                        m = glm::rotate(m, glm::radians(tf.rotationEuler.y), glm::vec3(0, 1, 0));
+                        m = glm::rotate(m, glm::radians(tf.rotationEuler.x), glm::vec3(1, 0, 0));
+                        m = glm::rotate(m, glm::radians(tf.rotationEuler.z), glm::vec3(0, 0, 1));
+                        const glm::vec3& he = ff.halfExtents;
+                        glm::vec3 corners[8];
+                        int idx = 0;
+                        for (int xi = -1; xi <= 1; xi += 2)
+                        for (int yi = -1; yi <= 1; yi += 2)
+                        for (int zi = -1; zi <= 1; zi += 2) {
+                            corners[idx++] = glm::vec3(m * glm::vec4(
+                                static_cast<f32>(xi) * he.x,
+                                static_cast<f32>(yi) * he.y,
+                                static_cast<f32>(zi) * he.z, 1.0f));
+                        }
+                        for (int i = 0; i < 8; ++i)
+                            for (int b = 0; b < 3; ++b) {
+                                const int jj = i ^ (1 << b);
+                                if (jj > i) dbg.drawLine(corners[i], corners[jj], color);
+                            }
+                    } else {
+                        // Sphere: 3 circulos (planos XY, XZ, YZ) por segmentos.
+                        constexpr int kSeg = 24;
+                        const f32 r = ff.radius;
+                        for (int axis = 0; axis < 3; ++axis) {
+                            glm::vec3 prev(0.0f);
+                            for (int s = 0; s <= kSeg; ++s) {
+                                const f32 a = static_cast<f32>(s) / kSeg * 6.2831853f;
+                                const f32 c = std::cos(a) * r;
+                                const f32 sn = std::sin(a) * r;
+                                glm::vec3 p = (axis == 0) ? center + glm::vec3(c, sn, 0.0f)
+                                            : (axis == 1) ? center + glm::vec3(c, 0.0f, sn)
+                                                          : center + glm::vec3(0.0f, c, sn);
+                                if (s > 0) dbg.drawLine(prev, p, color);
+                                prev = p;
+                            }
+                        }
+                    }
+
+                    const glm::vec3 yellow(1.0f, 1.0f, 0.2f);
+                    if (ff.mode == ForceFieldComponent::Mode::Directional) {
+                        const f32 len = glm::length(ff.direction);
+                        const glm::vec3 d = (len > 1e-4f)
+                            ? ff.direction / len : glm::vec3(0, 1, 0);
+                        dbg.drawLine(center, center + d * 1.0f, yellow);
+                    } else {
+                        constexpr f32 k = 0.6f;
+                        dbg.drawLine(center, center + glm::vec3( k, 0, 0), yellow);
+                        dbg.drawLine(center, center + glm::vec3(-k, 0, 0), yellow);
+                        dbg.drawLine(center, center + glm::vec3(0,  k, 0), yellow);
+                        dbg.drawLine(center, center + glm::vec3(0, -k, 0), yellow);
+                        dbg.drawLine(center, center + glm::vec3(0, 0,  k), yellow);
+                        dbg.drawLine(center, center + glm::vec3(0, 0, -k), yellow);
+                    }
+                });
+
             // F2H66 Bloque F: overlay de ragdolls. Para cada entidad con
             // RagdollComponent en estado Ragdolling, dibujamos cada body
             // como wireframe capsule (linea central + 2 circulos en los

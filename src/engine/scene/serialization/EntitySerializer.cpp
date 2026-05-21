@@ -265,6 +265,25 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         je["trigger"] = jtr;
     }
 
+    // F2H72: ForceFieldComponent. Estado runtime no hay — todos los campos
+    // se persisten. Enums como string para legibilidad/edicion a mano.
+    if (entity.hasComponent<ForceFieldComponent>()) {
+        const auto& ff = entity.getComponent<ForceFieldComponent>();
+        json jff;
+        jff["shape"]         = (ff.shape == ForceFieldComponent::Shape::Sphere)
+                                   ? "sphere" : "box";
+        jff["mode"]          = (ff.mode == ForceFieldComponent::Mode::Radial)
+                                   ? "radial" : "directional";
+        jff["halfExtents"]   = ff.halfExtents;
+        jff["radius"]        = ff.radius;
+        jff["direction"]     = ff.direction;
+        jff["strength"]      = ff.strength;
+        jff["linearFalloff"] = ff.linearFalloff;
+        jff["ignoreMass"]    = ff.ignoreMass;
+        jff["enabled"]       = ff.enabled;
+        je["force_field"] = jff;
+    }
+
     // F2H48.1: DialogComponent. Solo dialogPath + autoStartOnInteract;
     // el cachedDialogId runtime no se persiste (loadDialog al primer
     // tick del DialogInteractSystem lo repuebla via VFS).
@@ -578,6 +597,22 @@ SavedEntity parseEntityFromJson(const json& j) {
         SavedTrigger st;
         st.halfExtents = jtr.value("halfExtents", glm::vec3{1.0f});
         se.trigger = std::move(st);
+    }
+
+    // F2H72: force_field. Aditivo — mapas viejos sin el campo cargan igual.
+    if (j.contains("force_field")) {
+        const auto& jff = j.at("force_field");
+        SavedForceField sf;
+        sf.type          = jff.value("mode",          std::string{"radial"});
+        sf.shape         = jff.value("shape",         std::string{"sphere"});
+        sf.halfExtents   = jff.value("halfExtents",   glm::vec3{2.0f});
+        sf.radius        = jff.value("radius",        3.0f);
+        sf.direction     = jff.value("direction",     glm::vec3{0.0f, 1.0f, 0.0f});
+        sf.strength      = jff.value("strength",      20.0f);
+        sf.linearFalloff = jff.value("linearFalloff", true);
+        sf.ignoreMass    = jff.value("ignoreMass",    false);
+        sf.enabled       = jff.value("enabled",       true);
+        se.forceField = std::move(sf);
     }
 
     // F2H48.1: dialog.

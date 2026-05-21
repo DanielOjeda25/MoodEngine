@@ -159,6 +159,20 @@ struct SavedTrigger {
     glm::vec3 halfExtents{1.0f, 1.0f, 1.0f};
 };
 
+/// @brief F2H72: copia persistida de un ForceFieldComponent. Todos los
+///        campos persisten (no hay estado runtime). Enums como string.
+struct SavedForceField {
+    std::string type{"radial"};               // "directional" | "radial"
+    std::string shape{"sphere"};              // "box" | "sphere"
+    glm::vec3   halfExtents{2.0f, 2.0f, 2.0f};
+    f32         radius = 3.0f;
+    glm::vec3   direction{0.0f, 1.0f, 0.0f};
+    f32         strength = 20.0f;
+    bool        linearFalloff = true;
+    bool        ignoreMass = false;
+    bool        enabled = true;
+};
+
 /// @brief F2H48.1: copia persistida de un DialogComponent.
 ///        Solo dialogPath + autoStartOnInteract; el cachedDialogId
 ///        runtime no se persiste (el AssetManager lo recompone al
@@ -332,6 +346,7 @@ struct SavedEntity {
     std::optional<SavedScript> script;            // Hito 24
     std::optional<SavedParticleEmitter> particleEmitter; // Hito 29
     std::optional<SavedTrigger> trigger;                  // Hito 33
+    std::optional<SavedForceField> forceField;            // F2H72
     std::optional<SavedDialog>  dialog;                   // F2H48.1
     std::optional<SavedAnimator> animator;                // F2H50 Bloque D
     std::optional<SavedInventory> inventory;              // F2H51 Bloque I

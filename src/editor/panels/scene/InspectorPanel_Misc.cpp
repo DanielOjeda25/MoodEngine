@@ -85,4 +85,85 @@ void InspectorPanel::renderTriggerSection(Entity e) {
     ImGui::Separator();
 }
 
+void InspectorPanel::renderForceFieldSection(Entity e) {
+    auto& ff = e.getComponent<ForceFieldComponent>();
+    ImGui::SeparatorText(ICON_FA_MAGNET " Force Field");
+
+    // --- Shape combo + parametro de la zona ---
+    const char* shapeNames[] = {"Box", "Sphere"};
+    int shapeIdx = static_cast<int>(ff.shape);
+    const std::string shapeLabel = I18n::T("editor.panel.inspector.force_field.shape") + "##ff";
+    if (ImGui::Combo(shapeLabel.c_str(), &shapeIdx, shapeNames, 2)) {
+        ff.shape = static_cast<ForceFieldComponent::Shape>(shapeIdx);
+        m_editedThisFrame = true;
+    }
+    if (ff.shape == ForceFieldComponent::Shape::Box) {
+        const std::string heLabel = I18n::T("editor.panel.inspector.force_field.half_extents") + "##ff";
+        if (ImGui::DragFloat3(heLabel.c_str(), &ff.halfExtents.x, 0.05f, 0.01f, 100.0f)) {
+            m_editedThisFrame = true;
+        }
+        detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, ff.halfExtents,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<ForceFieldComponent>().halfExtents = v;
+            },
+            "Editar force field halfExtents");
+    } else {
+        const std::string rLabel = I18n::T("editor.panel.inspector.force_field.radius") + "##ff";
+        if (ImGui::DragFloat(rLabel.c_str(), &ff.radius, 0.05f, 0.01f, 100.0f)) {
+            m_editedThisFrame = true;
+        }
+        detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, ff.radius,
+            [](Entity& en, const f32& v) {
+                en.getComponent<ForceFieldComponent>().radius = v;
+            },
+            "Editar force field radius");
+    }
+
+    // --- Mode combo + parametro especifico ---
+    const char* modeNames[] = {"Directional", "Radial"};
+    int modeIdx = static_cast<int>(ff.mode);
+    const std::string modeLabel = I18n::T("editor.panel.inspector.force_field.mode") + "##ff";
+    if (ImGui::Combo(modeLabel.c_str(), &modeIdx, modeNames, 2)) {
+        ff.mode = static_cast<ForceFieldComponent::Mode>(modeIdx);
+        m_editedThisFrame = true;
+    }
+    if (ff.mode == ForceFieldComponent::Mode::Directional) {
+        const std::string dirLabel = I18n::T("editor.panel.inspector.force_field.direction") + "##ff";
+        if (ImGui::DragFloat3(dirLabel.c_str(), &ff.direction.x, 0.01f, -1.0f, 1.0f)) {
+            m_editedThisFrame = true;
+        }
+        detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, ff.direction,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<ForceFieldComponent>().direction = v;
+            },
+            "Editar force field direction");
+    } else {
+        const std::string falloffLabel = I18n::T("editor.panel.inspector.force_field.linear_falloff") + "##ff";
+        if (ImGui::Checkbox(falloffLabel.c_str(), &ff.linearFalloff)) {
+            m_editedThisFrame = true;
+        }
+    }
+
+    // --- Strength (compartido) ---
+    const std::string sLabel = I18n::T("editor.panel.inspector.force_field.strength") + "##ff";
+    if (ImGui::DragFloat(sLabel.c_str(), &ff.strength, 0.5f, -10000.0f, 10000.0f)) {
+        m_editedThisFrame = true;
+    }
+    detail::helpMarker(I18n::T("editor.panel.inspector.force_field.strength_help").c_str());
+    detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, ff.strength,
+        [](Entity& en, const f32& v) {
+            en.getComponent<ForceFieldComponent>().strength = v;
+        },
+        "Editar force field strength");
+
+    // --- Toggles ---
+    const std::string imLabel = I18n::T("editor.panel.inspector.force_field.ignore_mass") + "##ff";
+    if (ImGui::Checkbox(imLabel.c_str(), &ff.ignoreMass)) m_editedThisFrame = true;
+    detail::helpMarker(I18n::T("editor.panel.inspector.force_field.ignore_mass_help").c_str());
+    const std::string enLabel = I18n::T("editor.panel.inspector.force_field.enabled") + "##ff";
+    if (ImGui::Checkbox(enLabel.c_str(), &ff.enabled)) m_editedThisFrame = true;
+
+    ImGui::Separator();
+}
+
 } // namespace Mood

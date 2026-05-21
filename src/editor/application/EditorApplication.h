@@ -11,6 +11,7 @@
 #include "editor/ui/EditorUI.h"
 #include "editor/commands/HistoryStack.h"
 #include "systems/physics/TriggerSystem.h"
+#include "systems/physics/ForceFieldSystem.h"  // F2H72
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/pipeline/Fog.h"
 #include "engine/scene/core/EditorCamera.h"
@@ -312,6 +313,7 @@ private:
     std::unique_ptr<NavSystem>       m_navSystem;       // Hito 23
     std::unique_ptr<ParticleSystem>  m_particleSystem;  // Hito 29
     TriggerSystem                    m_triggerSystem;   // Hito 33: stateless
+    ForceFieldSystem                 m_forceFieldSystem; // F2H72: stateless
 
     // Hito 20: HUD del juego (HP / Ammo / crosshair) y menu de pausa.
     // Implementado via el OverlayDraw del ViewportPanel — drawlist de
