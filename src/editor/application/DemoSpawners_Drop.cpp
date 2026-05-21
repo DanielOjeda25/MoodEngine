@@ -14,6 +14,8 @@
 #include "editor/commands/SetTileCommand.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/inventory/ItemAsset.h"   // F2H52 Bloque D
+#include "engine/physics/vehicle/VehicleConfig.h" // F2H70.3 Bloque F
+#include "systems/physics/VehicleSystem.h" // F2H70.3 Bloque F: render offset
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/Components.h"
@@ -634,6 +636,97 @@ void EditorApplication::processViewportItemDrop() {
         hasModelPath ? "from model" :
         hasIconPath  ? asset->icon_path : "default (missing)");
     pushCreatedEntities({e}, "Drop item '" + displayName + "'");
+}
+
+// F2H70.3 Bloque F: drop de un `.moodvehicle` al viewport -> spawnea un
+// entity completo y conducible. Components:
+//   - TransformComponent (centro del tile bajo el cursor, y=0; el
+//     VehicleSystem aplica el render offset del chassis + spring rest).
+//   - MeshRendererComponent (mesh tomado de `VehicleConfig.meshPath`; si el
+//     config no lo declara, se omite el mesh y queda solo el VehicleComponent
+//     — el dev asigna el mesh aparte).
+//   - VehicleComponent (configPath = path logico del .moodvehicle, dirty=true
+//     => el VehicleSystem materializa el constraint Jolt en el proximo tick).
+//
+// Self-contained estilo Source: el .moodvehicle declara su propio mesh, asi
+// arrastrar uno solo basta para tener un auto andando.
+void EditorApplication::processViewportVehicleDrop() {
+    const ViewportPanel::VehicleDrop drop = m_ui.viewport().consumeVehicleDrop();
+    if (!(drop.pending && m_mode == EditorMode::Editor && m_scene
+          && m_assetManager)) {
+        return;
+    }
+
+    const float aspect = viewportAspect();
+    const glm::mat4 view = m_editorCamera.viewMatrix();
+    const glm::mat4 projection = m_editorCamera.projectionMatrix(aspect);
+    const TilePickResult hit = pickTile(m_map, mapWorldOrigin(), view, projection,
+                                        glm::vec2(drop.ndcX, drop.ndcY));
+    if (!hit.hit) {
+        Log::editor()->info("Drop vehicle '{}': cursor fuera del mapa",
+                             drop.vehiclePath);
+        return;
+    }
+
+    // Resolver el config para leer su meshPath. loadVehicleConfig cae al
+    // fallback generico (id 0) si el JSON no parsea — igual spawneamos para
+    // que el dev vea el warning del VehicleSystem y no una UX rota.
+    const VehicleConfigAssetId cfgId =
+        m_assetManager->loadVehicleConfig(drop.vehiclePath);
+    const vehicle::VehicleConfig* cfg = m_assetManager->getVehicleConfig(cfgId);
+
+    // Nombre legible para el tag: metadata.name del config si esta; sino el
+    // filename stem. El tag alimenta el prompt "[F] Subir al <tag>" en Play.
+    namespace fs = std::filesystem;
+    std::string displayName;
+    if (cfg != nullptr && !cfg->displayName.empty()) {
+        displayName = cfg->displayName;
+    } else {
+        displayName = fs::path(drop.vehiclePath).stem().string();
+    }
+
+    Entity e = m_scene->createEntity(displayName);
+    auto& t = e.getComponent<TransformComponent>();
+    const glm::vec3 origin = mapWorldOrigin();
+    const f32 tileSize = m_map.tileSize();
+    t.position = glm::vec3(
+        origin.x + (static_cast<f32>(hit.tileX) + 0.5f) * tileSize,
+        origin.y,  // VehicleSystem eleva el chassis (render offset + spring)
+        origin.z + (static_cast<f32>(hit.tileY) + 0.5f) * tileSize);
+    t.scale = glm::vec3(1.0f);
+
+    // MeshRenderer si el config declara un mesh. createMaterialsForMesh
+    // extrae las texturas embebidas del .glb (igual que el drop de mesh).
+    if (cfg != nullptr && !cfg->meshPath.empty()) {
+        const MeshAssetId meshId = m_assetManager->loadMesh(cfg->meshPath);
+        auto mats = m_assetManager->createMaterialsForMesh(meshId);
+        e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
+    }
+
+    VehicleComponent vc;
+    vc.configPath = drop.vehiclePath;
+    vc.dirty = true;
+    e.addComponent<VehicleComponent>(std::move(vc));
+
+    // Mismo tratamiento que SceneLoader: elevar el mesh por encima del
+    // origin logico (chassis half-height + spring rest compression) y
+    // aplicar el yaw del config. Sin esto el modelo atraviesa el piso en
+    // Editor mode (sin Play) — su origin esta en el centro vertical.
+    // chassisRenderYOffset devuelve 0 si no hay MeshRenderer, asi que esto
+    // es no-op para configs sin mesh.
+    {
+        auto& tf = e.getComponent<TransformComponent>();
+        tf.pivotYOffset = VehicleSystem::chassisRenderYOffset(e, *m_assetManager);
+        if (cfg != nullptr) {
+            tf.pivotYawOffsetDeg = cfg->meshYawOffsetDeg;
+        }
+    }
+
+    Log::editor()->info(
+        "Drop vehicle '{}' -> tile ({}, {}) [mesh='{}']",
+        drop.vehiclePath, hit.tileX, hit.tileY,
+        (cfg != nullptr) ? cfg->meshPath : std::string{"(sin config)"});
+    pushCreatedEntities({e}, "Drop vehicle '" + displayName + "'");
 }
 
 } // namespace Mood

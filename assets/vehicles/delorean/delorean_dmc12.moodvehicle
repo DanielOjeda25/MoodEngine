@@ -10,6 +10,7 @@
     "notes": "Specs reales del DMC-12 stock: 130 HP, 1230 kg, 5-speed manual, RWD, rear-engine."
   },
   "body": {
+    "mesh_path": "vehicles/delorean/delorean.glb",
     "dimensions_mm": [1853, 1136, 4220],
     "mass_kg": 1230,
     "mass_center_override_mm": [0, -100, -400],

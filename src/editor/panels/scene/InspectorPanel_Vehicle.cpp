@@ -40,9 +40,29 @@ void InspectorPanel::renderVehicleSection(Entity e) {
             m_editedThisFrame = true;
         }
     }
+    // F2H70.3 Bloque F: drop target del Vehicle Browser. Un InputText no
+    // funciona como BeginDragDropTarget (es un widget activo que consume el
+    // drag), asi que usamos un boton dedicado como zona de drop — mismo patron
+    // que InspectorPanel_Animation. Arrastrar un `.moodvehicle` asigna su path
+    // al config + marca dirty para que el VehicleSystem rematerialice.
+    ImGui::Button("Soltar .moodvehicle aqui##vehicle_drop", ImVec2(-1.0f, 28.0f));
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload =
+                ImGui::AcceptDragDropPayload("MOOD_VEHICLE_ASSET")) {
+            const char* dropped = static_cast<const char*>(payload->Data);
+            const std::string newPath(dropped);
+            if (!newPath.empty() && newPath != veh.configPath) {
+                veh.configPath = newPath;
+                veh.dirty = true;
+                m_editedThisFrame = true;
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
     ImGui::TextDisabled(
         "%s",
-        "Vacio = fallback generico (warn). Cambio + Enter rematerializa.");
+        "Vacio = fallback generico (warn). Arrastra un .moodvehicle al boton "
+        "de arriba o edita + Enter para rematerializar.");
 
     ImGui::Spacing();
     ImGui::TextDisabled("Runtime (read-only):");

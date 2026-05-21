@@ -276,6 +276,7 @@ private:
     void processViewportMaterialDrop();
     void processViewportScriptDrop(); // Hito 22 Bloque 2
     void processViewportItemDrop();   // F2H52 Bloque D
+    void processViewportVehicleDrop(); // F2H70.3 Bloque F
 
     /// @brief Lee `<cwd>/.mood/editor_state.json` si existe:
     ///        - preferencias (debugDraw, etc.)

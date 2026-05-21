@@ -118,6 +118,14 @@ void applyAxleV2(const nlohmann::json& jaxle, vehicle::VehicleConfig& cfg,
 vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
     vehicle::VehicleConfig cfg = vehicle::makeFallbackGenericSedan();
 
+    // metadata.name -> displayName (nombre legible para tag/browser).
+    if (j.contains("metadata") && j.at("metadata").is_object()) {
+        const auto& jm = j.at("metadata");
+        if (jm.contains("name") && jm.at("name").is_string()) {
+            cfg.displayName = jm.at("name").get<std::string>();
+        }
+    }
+
     // body
     if (j.contains("body") && j.at("body").is_object()) {
         const auto& jb = j.at("body");
@@ -131,6 +139,10 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
                 d[2].get<f32>() / 2000.0f);
         }
         cfg.chassisMass = jb.value("mass_kg", cfg.chassisMass);
+        // F2H70.3 Bloque F: mesh visual self-contained. Path logico relativo
+        // a assets/ — usado por el viewport drop para spawnear el entity con
+        // su MeshRenderer ya cableado.
+        cfg.meshPath = jb.value("mesh_path", cfg.meshPath);
         if (jb.contains("mass_center_override_mm")
             && jb.at("mass_center_override_mm").is_array()
             && jb.at("mass_center_override_mm").size() >= 3) {

@@ -124,6 +124,7 @@ void ViewportPanel::onImGuiRender() {
         else if (p->IsDataType("MOOD_MATERIAL_ASSET")) m_assetDragKind = AssetDragKind::Material;
         else if (p->IsDataType("MOOD_SCRIPT_ASSET"))   m_assetDragKind = AssetDragKind::Script;
         else if (p->IsDataType("MOOD_ITEM_ASSET"))     m_assetDragKind = AssetDragKind::Item;
+        else if (p->IsDataType("MOOD_VEHICLE_ASSET"))  m_assetDragKind = AssetDragKind::Vehicle;
     }
 
     if (!visible) return;
@@ -253,6 +254,20 @@ void ViewportPanel::onImGuiRender() {
                         float ndcY = 0.0f;
                         mousePosToNdc(ImGui::GetMousePos(), ndcX, ndcY);
                         m_pendingItemDrop = ItemDrop{
+                            true, ndcX, ndcY, std::string{str}};
+                    }
+                }
+                if (const ImGuiPayload* payload =
+                        ImGui::AcceptDragDropPayload("MOOD_VEHICLE_ASSET")) {
+                    // F2H70.3 Bloque F: payload es el path logico del
+                    // .moodvehicle (buffer fijo 256 bytes null-terminated,
+                    // mismo formato que MOOD_SCRIPT_ASSET).
+                    if (payload->DataSize > 0) {
+                        const char* str = static_cast<const char*>(payload->Data);
+                        float ndcX = 0.0f;
+                        float ndcY = 0.0f;
+                        mousePosToNdc(ImGui::GetMousePos(), ndcX, ndcY);
+                        m_pendingVehicleDrop = VehicleDrop{
                             true, ndcX, ndcY, std::string{str}};
                     }
                 }

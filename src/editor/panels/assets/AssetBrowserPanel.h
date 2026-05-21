@@ -91,6 +91,20 @@ private:
         AnimationClipAssetId id = 0;
     };
 
+    // F2H70.3 Bloque F: catalogo de vehiculos `.moodvehicle`. La metadata
+    // (name / mass / hp) se parsea del JSON al escanear — el VehicleConfig
+    // struct no guarda el bloque `metadata`, asi que leemos el JSON directo
+    // para mostrar nombres legibles en el browser. El `id` carga el config
+    // via AssetManager para validar que parsea OK (fallback a generico si no).
+    struct VehicleEntry {
+        std::string logicalPath; // "vehicles/delorean/delorean_dmc12.moodvehicle"
+        std::string displayName; // "delorean/delorean_dmc12.moodvehicle"
+        std::string vehicleName; // metadata.name -> "DeLorean DMC-12"
+        f32 massKg = 0.0f;       // body.mass_kg
+        f32 horsepower = 0.0f;   // engine.horsepower
+        VehicleConfigAssetId id = 0;
+    };
+
     AssetManager* m_assetManager = nullptr;
     std::vector<Entry> m_entries;
     std::vector<AudioEntry> m_audioEntries;
@@ -99,6 +113,7 @@ private:
     std::vector<MaterialEntry> m_materialEntries;
     std::vector<ScriptEntry> m_scriptEntries;
     std::vector<AnimationClipEntry> m_animClipEntries;
+    std::vector<VehicleEntry> m_vehicleEntries;
     std::optional<std::string> m_selected;
     bool m_scanned = false;
     bool m_reloadRequested = false;

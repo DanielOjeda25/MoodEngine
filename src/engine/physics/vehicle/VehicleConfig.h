@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include <array>
+#include <string>
 #include <vector>
 
 namespace Mood::vehicle {
@@ -110,6 +111,19 @@ struct EngineConfig {
 /// @brief Config completa del vehiculo. Materializable en `.moodvehicle`
 ///        (JSON) o construida en codigo con `makeFallbackGenericSedan()`.
 struct VehicleConfig {
+    /// F2H70.3 Bloque F: nombre legible del vehiculo (de `metadata.name` en
+    /// el .moodvehicle, ej. "DeLorean DMC-12"). Usado como tag del entity al
+    /// spawnear via drop, y por el browser. Vacio = el callsite usa un
+    /// fallback (p.ej. el filename stem).
+    std::string displayName;
+
+    /// F2H70.3 Bloque F: mesh visual del vehiculo (path logico relativo a
+    /// assets/, ej. "vehicles/delorean/delorean.glb"). Hace al `.moodvehicle`
+    /// self-contained — soltar uno en el viewport spawnea un entity completo
+    /// (Transform + MeshRenderer(meshPath) + VehicleComponent). Vacio = el
+    /// callsite debe asignar el mesh aparte (p.ej. drop sobre entity existente).
+    std::string meshPath;
+
     /// Half-extents del chassis box (collision shape). SA sedan tipico:
     /// 2.0 m largo x 0.5 m alto x 0.9 m ancho => half = (0.9, 0.5, 2.0)
     /// (axis convencion: +Z forward, +Y up, +X right).

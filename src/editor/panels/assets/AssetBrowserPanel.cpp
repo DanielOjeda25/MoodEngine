@@ -9,6 +9,7 @@
 #include "engine/render/resources/MeshAsset.h"
 
 #include <imgui.h>
+#include <nlohmann/json.hpp>  // F2H70.3: parse metadata del .moodvehicle
 
 #include <algorithm>
 #include <array>
@@ -31,6 +32,7 @@ constexpr const char* k_charactersDir = "assets/characters";  // F2H49
 constexpr const char* k_prefabDir     = "assets/prefabs";
 constexpr const char* k_materialDir   = "assets/materials";
 constexpr const char* k_scriptDir     = "assets/scripts";
+constexpr const char* k_vehicleDir    = "assets/vehicles";  // F2H70.3
 constexpr float k_thumbSize = 64.0f;
 constexpr const char* k_logicalPrefix           = "textures/";
 constexpr const char* k_audioLogicalPrefix      = "audio/";
@@ -39,6 +41,7 @@ constexpr const char* k_charactersLogicalPrefix = "characters/";  // F2H49
 constexpr const char* k_prefabLogicalPrefix     = "prefabs/";
 constexpr const char* k_materialLogicalPrefix   = "materials/";
 constexpr const char* k_scriptLogicalPrefix     = "scripts/";
+constexpr const char* k_vehicleLogicalPrefix    = "vehicles/";  // F2H70.3
 
 bool isPng(const std::filesystem::path& p) {
     auto ext = p.extension().string();
@@ -94,6 +97,13 @@ bool isLuaScript(const std::filesystem::path& p) {
     std::transform(ext.begin(), ext.end(), ext.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return ext == ".lua";
+}
+
+bool isMoodVehicle(const std::filesystem::path& p) {
+    auto ext = p.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return ext == ".moodvehicle";
 }
 
 // Cuenta lineas de un archivo de texto sin cargar todo a memoria. Devuelve
@@ -278,13 +288,60 @@ void AssetBrowserPanel::rescan() {
                   });
     }
 
+    // F2H70.3 Bloque F: vehiculos `.moodvehicle`. Scan recursivo de
+    // assets/vehicles/ (estructura asset-centric: 1 carpeta por vehiculo).
+    // La metadata (name/mass/hp) se parsea del JSON directo — el
+    // VehicleConfig no guarda el bloque `metadata`. El `id` carga el config
+    // via AssetManager para validar (fallback a generico si el JSON es malo).
+    m_vehicleEntries.clear();
+    std::error_code veh_ec;
+    auto veh_it = std::filesystem::recursive_directory_iterator(
+        k_vehicleDir, veh_ec);
+    if (!veh_ec) {
+        for (const auto& entry : veh_it) {
+            if (!entry.is_regular_file() || !isMoodVehicle(entry.path())) continue;
+            VehicleEntry ve;
+            const auto rel = std::filesystem::relative(entry.path(), k_vehicleDir);
+            ve.displayName = rel.generic_string();
+            ve.logicalPath = std::string(k_vehicleLogicalPrefix) + ve.displayName;
+            ve.id = m_assetManager->loadVehicleConfig(ve.logicalPath);
+            // Metadata legible: parseo liviano del JSON (best-effort).
+            ve.vehicleName = entry.path().stem().string();  // fallback
+            std::ifstream vf(entry.path());
+            if (vf.good()) {
+                try {
+                    nlohmann::json vj;
+                    vf >> vj;
+                    if (vj.contains("metadata") && vj.at("metadata").is_object()) {
+                        ve.vehicleName = vj.at("metadata").value("name", ve.vehicleName);
+                    }
+                    if (vj.contains("body") && vj.at("body").is_object()) {
+                        ve.massKg = vj.at("body").value("mass_kg", 0.0f);
+                    }
+                    if (vj.contains("engine") && vj.at("engine").is_object()) {
+                        ve.horsepower = vj.at("engine").value("horsepower", 0.0f);
+                    }
+                } catch (const std::exception&) {
+                    // JSON malo — dejamos los defaults; el browser igual lo
+                    // lista (con el filename) para que el dev lo vea y corrija.
+                }
+            }
+            m_vehicleEntries.push_back(std::move(ve));
+        }
+        std::sort(m_vehicleEntries.begin(), m_vehicleEntries.end(),
+                  [](const VehicleEntry& a, const VehicleEntry& b) {
+                      return a.displayName < b.displayName;
+                  });
+    }
+
     m_scanned = true;
     Log::assets()->info(
         "AssetBrowserPanel: {} texturas, {} audios, {} meshes, {} prefabs, "
-        "{} materiales, {} scripts, {} clips de animacion listados",
+        "{} materiales, {} scripts, {} clips de animacion, {} vehiculos listados",
         m_entries.size(), m_audioEntries.size(), m_meshEntries.size(),
         m_prefabEntries.size(), m_materialEntries.size(),
-        m_scriptEntries.size(), m_animClipEntries.size());
+        m_scriptEntries.size(), m_animClipEntries.size(),
+        m_vehicleEntries.size());
 }
 
 void AssetBrowserPanel::onImGuiRender() {
@@ -433,6 +490,49 @@ void AssetBrowserPanel::onImGuiRender() {
                         I18n::T("editor.panel.assets.mesh_meta",
                                 static_cast<u32>(asset->submeshes.size()),
                                 asset->totalVertexCount()).c_str());
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
+
+        // ============================================================
+        // TAB: Vehicles (F2H70.3 Bloque F)
+        // ============================================================
+        // Lista los `.moodvehicle` del catalogo con metadata legible
+        // (name + mass + HP). Drag-source emite `MOOD_VEHICLE_ASSET` con el
+        // logicalPath (string) — el InspectorPanel_Vehicle lo recibe en su
+        // campo configPath para asignar el vehicle a la entity seleccionada.
+        const std::string vehTabLabel = std::string(ICON_FA_GAUGE " ") + "Vehiculos";
+        if (ImGui::BeginTabItem(vehTabLabel.c_str())) {
+            ImGui::TextDisabled("%zu vehiculos", m_vehicleEntries.size());
+            ImGui::BeginChild("##vehicles_scroll", ImVec2(0.0f, 0.0f), false);
+            for (const auto& ve : m_vehicleEntries) {
+                ImGui::PushID(ve.logicalPath.c_str());
+                const bool isSelected = m_selected.has_value() &&
+                                          *m_selected == ve.logicalPath;
+                if (ImGui::Selectable(ve.vehicleName.c_str(), isSelected)) {
+                    m_selected = ve.logicalPath;
+                }
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                    constexpr int kPayloadBufSize = 256;
+                    char buf[kPayloadBufSize] = {0};
+                    const auto n = std::min(ve.logicalPath.size(),
+                                              static_cast<size_t>(kPayloadBufSize - 1));
+                    std::memcpy(buf, ve.logicalPath.data(), n);
+                    ImGui::SetDragDropPayload("MOOD_VEHICLE_ASSET",
+                                                buf, kPayloadBufSize);
+                    ImGui::TextUnformatted(ve.vehicleName.c_str());
+                    ImGui::EndDragDropSource();
+                }
+                ImGui::SameLine();
+                if (ve.massKg > 0.0f || ve.horsepower > 0.0f) {
+                    ImGui::TextDisabled("[%.0f kg, %.0f HP]  %s",
+                                          ve.massKg, ve.horsepower,
+                                          ve.displayName.c_str());
+                } else {
+                    ImGui::TextDisabled("%s", ve.displayName.c_str());
                 }
                 ImGui::PopID();
             }
