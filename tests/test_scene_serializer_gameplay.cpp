@@ -397,3 +397,45 @@ TEST_CASE("SceneSerializer: entidad sin InventoryComponent no persiste el campo 
     CHECK_FALSE(loaded->entities[0].inventory.has_value());
     std::filesystem::remove(path);
 }
+
+// ============================================================
+// F2H72: ForceFieldComponent round-trip
+// ============================================================
+
+TEST_CASE("SceneSerializer: round-trip de ForceFieldComponent (F2H72)") {
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    {
+        Entity z = scene.createEntity("wind_zone");
+        ForceFieldComponent ff{};
+        ff.shape         = ForceFieldComponent::Shape::Box;
+        ff.mode          = ForceFieldComponent::Mode::Directional;
+        ff.halfExtents   = glm::vec3(3.0f, 1.0f, 4.0f);
+        ff.direction     = glm::vec3(1.0f, 0.0f, 0.0f);
+        ff.strength      = 35.0f;
+        ff.linearFalloff = false;
+        ff.ignoreMass    = true;
+        ff.enabled       = true;
+        z.addComponent<ForceFieldComponent>(ff);
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("force_field_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1u);
+    const auto& se = loaded->entities[0];
+    REQUIRE(se.forceField.has_value());
+    CHECK(se.forceField->shape == "box");
+    CHECK(se.forceField->type == "directional");
+    CHECK(se.forceField->halfExtents.z == doctest::Approx(4.0f));
+    CHECK(se.forceField->direction.x == doctest::Approx(1.0f));
+    CHECK(se.forceField->strength == doctest::Approx(35.0f));
+    CHECK_FALSE(se.forceField->linearFalloff);
+    CHECK(se.forceField->ignoreMass);
+
+    std::filesystem::remove(path);
+}

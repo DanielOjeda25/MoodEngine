@@ -1,0 +1,430 @@
+{
+  "brushes": [],
+  "entities": [
+    {
+      "rigid_body": {
+        "halfExtents": [
+          15,
+          0.5,
+          15
+        ],
+        "mass": 0.0,
+        "shape": "box",
+        "type": "static"
+      },
+      "tag": "Floor",
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "force_field": {
+        "shape": "box",
+        "mode": "directional",
+        "halfExtents": [
+          4.0,
+          3.0,
+          3.0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "strength": 25.0,
+        "ignoreMass": true,
+        "enabled": true,
+        "radius": 3.0,
+        "linearFalloff": true
+      },
+      "tag": "WindZone",
+      "transform": {
+        "position": [
+          -6,
+          3,
+          0
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "rigid_body": {
+        "halfExtents": [
+          0.3,
+          0.3,
+          0.3
+        ],
+        "mass": 1.0,
+        "shape": "box",
+        "type": "dynamic"
+      },
+      "tag": "WindBoxA",
+      "transform": {
+        "position": [
+          -7.5,
+          4.0,
+          0.0
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "rigid_body": {
+        "halfExtents": [
+          0.3,
+          0.3,
+          0.3
+        ],
+        "mass": 1.0,
+        "shape": "box",
+        "type": "dynamic"
+      },
+      "tag": "WindBoxB",
+      "transform": {
+        "position": [
+          -7.0,
+          5.0,
+          0.6
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "rigid_body": {
+        "halfExtents": [
+          0.3,
+          0.3,
+          0.3
+        ],
+        "mass": 1.0,
+        "shape": "box",
+        "type": "dynamic"
+      },
+      "tag": "WindBoxC",
+      "transform": {
+        "position": [
+          -8.0,
+          3.5,
+          -0.5
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "force_field": {
+        "shape": "sphere",
+        "mode": "radial",
+        "radius": 4.0,
+        "strength": 45.0,
+        "linearFalloff": false,
+        "ignoreMass": true,
+        "enabled": true,
+        "halfExtents": [
+          2.0,
+          2.0,
+          2.0
+        ],
+        "direction": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      "tag": "ExplosionZone",
+      "transform": {
+        "position": [
+          6,
+          2.5,
+          0
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "rigid_body": {
+        "halfExtents": [
+          0.3,
+          0.3,
+          0.3
+        ],
+        "mass": 1.0,
+        "shape": "box",
+        "type": "dynamic"
+      },
+      "tag": "FxBoxA",
+      "transform": {
+        "position": [
+          6.6,
+          2.5,
+          0.0
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "rigid_body": {
+        "halfExtents": [
+          0.3,
+          0.3,
+          0.3
+        ],
+        "mass": 1.0,
+        "shape": "box",
+        "type": "dynamic"
+      },
+      "tag": "FxBoxB",
+      "transform": {
+        "position": [
+          5.4,
+          2.5,
+          0.3
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "rigid_body": {
+        "halfExtents": [
+          0.3,
+          0.3,
+          0.3
+        ],
+        "mass": 1.0,
+        "shape": "box",
+        "type": "dynamic"
+      },
+      "tag": "FxBoxC",
+      "transform": {
+        "position": [
+          6.0,
+          2.5,
+          0.7
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "rigid_body": {
+        "halfExtents": [
+          0.3,
+          0.3,
+          0.3
+        ],
+        "mass": 1.0,
+        "shape": "box",
+        "type": "dynamic"
+      },
+      "tag": "FxBoxD",
+      "transform": {
+        "position": [
+          6.0,
+          3.2,
+          -0.4
+        ],
+        "rotationEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    }
+  ],
+  "height": 5,
+  "name": "physics_forcefields_demo",
+  "tileSize": 3.0,
+  "tiles": [
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    },
+    {
+      "texture": "textures/missing.png",
+      "type": "empty"
+    }
+  ],
+  "version": 14,
+  "width": 5
+}

@@ -54,6 +54,7 @@ add_executable(mood_tests
     test_physics_ragdoll_impact.cpp  # F2H68 Bloque D
     test_raycast.cpp
     test_trigger_system.cpp
+    test_force_field_system.cpp  # F2H72
     test_save_load.cpp
     test_frustum.cpp
     test_render_batching.cpp
@@ -132,6 +133,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/systems/physics/VehicleSystem.cpp  # F2H70.2: chassisRenderYOffset
     ${CMAKE_SOURCE_DIR}/src/systems/scripting/ScriptSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/physics/TriggerSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/systems/physics/ForceFieldSystem.cpp  # F2H72
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/exposed/ExposedProperty.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/game/state/GameState.cpp
