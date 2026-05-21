@@ -49,7 +49,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 **Suite 1060/11015 verde.** Validado en vivo: bandera sólida + iluminada, en Play cuelga + ondea, feel "se siente bien".
 
-**⚠️ Bug conocido (pre-existente, ajeno al cloth)**: escalar un `RigidBody` Box hasta que su half-extent baje del *convex radius* de Jolt (~0.05 m) dispara un assert (`BoxShape.h:44`) y crashea el editor en Debug. El auto-sync `scale→halfExtents` de F2H40 no clampea ese mínimo. Fix reactivo chico pendiente (clampear en el path de resize) — el dev lo verá al cerrar este hito.
+**Fix reactivo post-cierre** (commit `dc7c832`): el crash al escalar un Box body por debajo del *convex radius* de Jolt (~0.05 m) quedó arreglado — `createJPHShape` clampea el half-extent + baja el convex radius para boxes finos. Test de regresión agregado. Suite 1061/11018 verde.
 
 ---
 
@@ -193,9 +193,6 @@ Con la Sub-fase 2.4 cerrada, las direcciones candidatas (a elegir con el dev):
 - **Sub-fase 2.6 — Pipeline AI** (F2H35-F2H40 originales): Mixamo importer cubierto parcialmente por F2H49. Pendiente: Blender MCP server, armas procedurales, generador de props, validación automática.
 - **Sub-fase 2.7 — UI/UX final + cierre Fase 2** (F2H41-F2H44 originales): theming, atajos configurables, tutorial in-app, tag `v2.0.0`.
 - **Backlog de vehículos**: integrar `armor-car` + `tesla` (faltan `.moodvehicle` + procesar ruedas), pipeline de packs multi-auto (`tools/glb/split.py` + `--scale`).
-- **Bug fixes pendientes**: el crash del resize de Box bodies (half-extent < convex radius de Jolt) — chico, reactivo.
-
-**Fix reactivo chico pendiente** (registrado en sección 0.1): clampear el half-extent de los Box bodies a ≥ convex radius en el path `scale→halfExtents` para que escalar un box muy chico no crashee el editor en Debug.
 
 ---
 
