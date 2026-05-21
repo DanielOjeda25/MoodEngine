@@ -46,12 +46,19 @@ void TriggerSystem::update(Scene& scene,
     // con RigidBody (Dynamic + Kinematic — Static no se mueve, no aporta
     // valor para el flank-detection). Hacemos esto antes del loop de
     // triggers para amortizar el costo si hay muchos triggers.
-    struct BodyEntry { u32 entityRaw; glm::vec3 position; };
+    // F2H73: guardamos tambien el tag de cada body para el filtro
+    // `requiredTag` (solo disparan los bodies cuyo Tag coincide).
+    struct BodyEntry { u32 entityRaw; glm::vec3 position; std::string tag; };
     std::vector<BodyEntry> bodyEntries;
     scene.forEach<TransformComponent, RigidBodyComponent>(
         [&](Entity be, TransformComponent& bt, RigidBodyComponent& rb) {
             if (rb.type == RigidBodyComponent::Type::Static) return;
-            bodyEntries.push_back({static_cast<u32>(be.handle()), bt.position});
+            std::string tag;
+            if (be.hasComponent<TagComponent>()) {
+                tag = be.getComponent<TagComponent>().name;
+            }
+            bodyEntries.push_back(
+                {static_cast<u32>(be.handle()), bt.position, std::move(tag)});
         });
 
     const glm::vec3 playerPos = (playerCharId != 0)
@@ -61,11 +68,16 @@ void TriggerSystem::update(Scene& scene,
 
     scene.forEach<TransformComponent, TriggerComponent>(
         [&](Entity e, TransformComponent& tf, TriggerComponent& tr) {
+            // F2H73: disabled -> no dispatcha nada. oneShot ya disparado ->
+            // el trigger esta "muerto" hasta recargar el mapa.
+            if (!tr.enabled) return;
+            if (tr.oneShot && tr.fired) return;
+
             // === Player char (Hito 33 + 36 C) ===
-            if (!playerActive) {
-                // Sin player: forzar playerInside=false sin disparar exit
-                // (el player nunca estuvo "dentro" desde la perspectiva
-                // del juego). Cubre cambio de proyecto que recrea el char.
+            // F2H73: triggersOnPlayer=false ignora al player (solo bodies).
+            if (!playerActive || !tr.triggersOnPlayer) {
+                // Sin player (o ignorado): forzar playerInside=false sin
+                // disparar exit. Cubre cambio de proyecto que recrea el char.
                 tr.playerInside = false;
             } else {
                 const bool insideNow =
@@ -79,6 +91,11 @@ void TriggerSystem::update(Scene& scene,
                         static_cast<u32>(e.handle()),
                         insideNow ? "INSIDE" : "OUTSIDE", evt);
                     scripts.dispatchEvent(e.handle(), evt);
+                    // F2H73: one-shot se arma al primer enter.
+                    if (insideNow && tr.oneShot) {
+                        tr.fired = true;
+                        return;  // no procesar bodies este frame; ya disparo.
+                    }
                 } else if (insideNow) {
                     scripts.dispatchEvent(e.handle(), "on_trigger_stay");
                 }
@@ -89,6 +106,12 @@ void TriggerSystem::update(Scene& scene,
             //    + emitir stay para los que ya estaban dentro.
             std::unordered_set<u32> insideThisFrame;
             for (const auto& be : bodyEntries) {
+                // F2H73: filtro por tag — si requiredTag no esta vacio, solo
+                // los bodies con ese Tag cuentan (no entran al set ni
+                // disparan).
+                if (!tr.requiredTag.empty() && be.tag != tr.requiredTag) {
+                    continue;
+                }
                 if (!obbContainsWorldPoint(tf, tr.halfExtents, be.position)) {
                     continue;
                 }
@@ -100,6 +123,12 @@ void TriggerSystem::update(Scene& scene,
                         static_cast<u32>(e.handle()), be.entityRaw);
                     scripts.dispatchEvent(e.handle(),
                         "on_trigger_body_enter", be.entityRaw);
+                    // F2H73: one-shot se arma al primer body enter.
+                    if (tr.oneShot) {
+                        tr.fired = true;
+                        for (u32 eid : insideThisFrame) tr.bodiesInside.insert(eid);
+                        return;
+                    }
                 } else {
                     // Sigue dentro: stay.
                     scripts.dispatchEvent(e.handle(),

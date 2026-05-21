@@ -748,9 +748,30 @@ struct ParticleEmitterComponent {
 /// guarda el set runtime de bodies actualmente dentro (no serializado).
 struct TriggerComponent {
     glm::vec3 halfExtents{1.0f, 1.0f, 1.0f}; // 2x2x2m por default
-    // Estado runtime (no serializado): true mientras el jugador este
-    // dentro. TriggerSystem detecta el flanco (false→true / true→false).
+
+    // --- F2H73: triggers avanzados ---
+    /// @brief Si no-vacio, los eventos de body (`on_trigger_body_*`) solo
+    ///        disparan para entities cuyo TagComponent.name == requiredTag
+    ///        (filtro por tipo, estilo Unity layers / Unreal class filter).
+    ///        Vacio = cualquier body. No afecta al player (ver triggersOnPlayer).
+    std::string requiredTag;
+    /// @brief Si false, el trigger ignora al char del player (solo reacciona
+    ///        a bodies). Default true (comportamiento clasico).
+    bool triggersOnPlayer = true;
+    /// @brief Si true, tras el PRIMER enter (player o body) el trigger se
+    ///        marca `fired` y deja de disparar (checkpoints, cutscenes
+    ///        one-time). Se re-arma al recargar el mapa (fired no persiste).
+    bool oneShot = false;
+    /// @brief Master switch — un script puede apagar/prender el trigger
+    ///        (`hud`/entity API). Disabled = no dispatcha nada.
+    bool enabled = true;
+
+    // --- Estado runtime (NO serializado) ---
+    /// true mientras el jugador este dentro. TriggerSystem detecta el flanco.
     bool playerInside = false;
+    /// F2H73: true una vez que un oneShot disparo su enter. Mientras sea
+    /// true el trigger no vuelve a procesar. Arranca false al cargar.
+    bool fired = false;
     // Hito 37 B: set runtime de bodies actualmente dentro del AABB.
     // Forward decl-friendly: usamos entt::entity raw (typedef u32) en
     // lugar de incluir <entt/entt.hpp> aca.

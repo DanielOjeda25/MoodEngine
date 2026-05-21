@@ -79,9 +79,36 @@ void InspectorPanel::renderTriggerSection(Entity e) {
             en.getComponent<TriggerComponent>().halfExtents = v;
         },
         "Editar trigger halfExtents");
+
+    // --- F2H73: filtros + flags avanzados ---
+    char tagBuf[128];
+    std::snprintf(tagBuf, sizeof(tagBuf), "%s", tc.requiredTag.c_str());
+    const std::string tagLabel = I18n::T("editor.panel.inspector.trigger.required_tag") + "##trig";
+    if (ImGui::InputText(tagLabel.c_str(), tagBuf, sizeof(tagBuf))) {
+        tc.requiredTag = tagBuf;
+        m_editedThisFrame = true;
+    }
+    detail::helpMarker(I18n::T("editor.panel.inspector.trigger.required_tag_help").c_str());
+    detail::pushEditIfDone<std::string>(m_editTracker, m_ui, e, tc.requiredTag,
+        [](Entity& en, const std::string& v) {
+            en.getComponent<TriggerComponent>().requiredTag = v;
+        },
+        "Editar trigger requiredTag");
+
+    const std::string playerLabel = I18n::T("editor.panel.inspector.trigger.triggers_on_player") + "##trig";
+    if (ImGui::Checkbox(playerLabel.c_str(), &tc.triggersOnPlayer)) m_editedThisFrame = true;
+    const std::string oneShotLabel = I18n::T("editor.panel.inspector.trigger.one_shot") + "##trig";
+    if (ImGui::Checkbox(oneShotLabel.c_str(), &tc.oneShot)) m_editedThisFrame = true;
+    const std::string enabledLabel = I18n::T("editor.panel.inspector.trigger.enabled") + "##trig";
+    if (ImGui::Checkbox(enabledLabel.c_str(), &tc.enabled)) m_editedThisFrame = true;
+
     ImGui::TextDisabled("%s",
         I18n::T(tc.playerInside ? "editor.panel.inspector.trigger.player_inside_yes"
                                   : "editor.panel.inspector.trigger.player_inside_no").c_str());
+    if (tc.oneShot && tc.fired) {
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.trigger.fired").c_str());
+    }
     ImGui::Separator();
 }
 
