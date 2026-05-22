@@ -30,7 +30,21 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H77 (2026-05-21) — **Sub-fase 2.7**
+## 0.1. Último hito de feature — F2H78 (2026-05-21) — **Sub-fase 2.7**
+
+**Ctrl+S contextual + ajuste de redondeo.** Tag `v1.69.0-fase2-hito78`. Detalle completo en [`hitos/F2H78.md`](hitos/F2H78.md). Tercer hito de Sub-fase 2.7.
+
+**Lo que entregó**:
+- **Ctrl+S contextual**: `IPanel::consumesSaveShortcut()` (virtual nuevo, default false) lo declaran los 4 editores guardables (script/shader/item/quest), respaldado por `m_windowFocused` (seteado en su render vía `IsWindowFocused`). El handler global de Ctrl+S (evento SDL en `EditorApplication`) recorre los panels `visible`: si alguno consume el atajo → NO guarda proyecto (el editor enfocado se guarda solo en su render); si no → `ProjectAction::Save` como siempre. Script/Shader ya tenían self-save; Item/Quest lo ganan (`saveToDisk()` compartido por botón + atajo). Item/Quest exigen `!m_loadedPath.empty()`.
+- **Ajuste de redondeo** (`EditorThemes::applyMetrics`): el redondeo global de F2H76 se veía mal en regiones hijas/scrollbars/tabs → `ChildRounding/ScrollbarRounding/TabRounding = 0`; se mantienen ventanas(6)/popups(6)/frames(4)/grabs(4).
+
+**Suite 1061/11018 verde**. Validado con el badge "● Sin guardar" (F2H77) como delator.
+
+**Pendientes de 2.7** (en orden acordado): pulido de modales (título en titlebar + botón X de cerrar + remake del Welcome estilo Blender + reubicar el Play button), thumbnails 3D en Asset Browser/recientes (render-to-texture). Más atrás: Ctrl+S de "guardar como", unificar Undo en Material/Item/Quest, atajos configurables, escala de UI, y el bump a `v2.0.0` (cierre Fase 2).
+
+---
+
+## 0.1ante. Hito previo — F2H77 (2026-05-21) — **Sub-fase 2.7**
 
 **Pulido visual base + indicador "sin guardar".** Tag `v1.68.0-fase2-hito77`. Detalle completo en [`hitos/F2H77.md`](hitos/F2H77.md). Segundo hito de la Sub-fase 2.7.
 
@@ -46,7 +60,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1ante. Hito previo — F2H76 (2026-05-21) — **abrió Sub-fase 2.7**
+## 0.1bis. Hito previo — F2H76 (2026-05-21) — **abrió Sub-fase 2.7**
 
 **Preferencias + temas visuales del editor.** Tag `v1.67.0-fase2-hito76`. Detalle completo en [`hitos/F2H76.md`](hitos/F2H76.md). Primer hito de la **Sub-fase 2.7 (UI/UX final + cierre Fase 2)**. Abre la "casa de los ajustes" del editor; futuros hitos cuelgan ahí atajos de teclado, escala de UI, etc. (el bump a `v2.0.0` se reserva para el CIERRE de la sub-fase, no para este hito).
 
@@ -63,7 +77,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1bis. Hito previo — F2H75 (2026-05-21) — **cerró Sub-fase 2.4**
+## 0.1ter. Hito previo — F2H75 (2026-05-21) — **cerró Sub-fase 2.4**
 
 **Cloth / telas que ondean.** Tag `v1.66.0-fase2-hito75`. Detalle completo en [`hitos/F2H75.md`](hitos/F2H75.md). Era el F2H28 original (último item de Física avanzada). Banderas/cortinas como soft body de Jolt que cuelgan por gravedad y flamean con las zonas de viento (`ForceFieldComponent` de F2H72).
 
@@ -83,6 +97,21 @@ Pure helpers extracted: 0         0         1 + 7 tests
 **Suite 1060/11015 verde.** Validado en vivo: bandera sólida + iluminada, en Play cuelga + ondea, feel "se siente bien".
 
 **Fix reactivo post-cierre** (commit `dc7c832`): el crash al escalar un Box body por debajo del *convex radius* de Jolt (~0.05 m) quedó arreglado — `createJPHShape` clampea el half-extent + baja el convex radius para boxes finos. Test de regresión agregado. Suite 1061/11018 verde.
+
+---
+
+## 0.1quater. Hito previo — F2H74 (2026-05-21)
+
+**Cleanup UX (menú Ver) + capa de field-helpers del Inspector + fix undo.** Tag `v1.65.0-fase2-hito74`. Detalle completo en [`hitos/F2H74.md`](hitos/F2H74.md). El dev pidió reorganización de UX + limpieza del imgui disperso + recomendación (lente Unity/Unreal).
+
+**Auditoría primero**: paneles/workspaces ya bien organizados (21 paneles en 6 workspaces = patrón Blender/Unity Layouts/Unreal Modes); las deudas "reorg de menús" (F2H18) y "HistoryStack residual" resultaron obsoletas → memorias borradas.
+
+**Lo que entregó**:
+- **Fase 1 — menú Ver**: `kCategories` tenía `World` vacío y omitía `Narrative` (paneles de diálogo invisibles en el menú). Fix a **Scene/Assets/Narrative/Gameplay/Debug**; `Item*`/`Quest*` → `Gameplay`, `NarrativeIntro` → `Narrative`.
+- **Fase 2 — field-helpers** (`InspectorPanel_Internal.h`, estilo Unity `PropertyField` / Unreal `DetailsView`): `fieldDragFloat/3` + `fieldColorEdit3` colapsan el triplete *label i18n + widget + pushEditIfDone*. **25 campos** migrados en 6 partials, behaviour-preserving.
+- **Fix undo muerto por `helpMarker`**: `trackPropertyEdit` lee el ID del último item; con el `helpMarker` (`TextDisabled`) entre widget y `pushEditIfDone`, el undo nunca disparaba. Reordenado en **Joint** (6 campos), **Trigger** `requiredTag`, **ForceField** `strength`. Transform NO se toca (su undo viene de `applyDeltaToSelection`; reordenar daría doble-undo).
+
+**Suite 1046/10300 verde** (refactor de UI, validación visual).
 
 ---
 

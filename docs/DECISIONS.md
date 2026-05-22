@@ -11,6 +11,28 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-21: F2H78 — Ctrl+S contextual
+
+### Decisión 1 — Gatear el Ctrl+S global en vez de centralizar el guardado
+
+**Contexto:** Se quiere que Ctrl+S guarde el panel con foco (script/shader/item/quest) y, si no hay editor enfocado, el proyecto. Los editores Script/Shader ya manejaban Ctrl+S ellos mismos en su render (vía `ImGui::IsWindowFocused`). El Ctrl+S global vive en el handler de eventos SDL (`EditorApplication`), **fuera** del frame ImGui — ahí no se puede consultar foco.
+
+**Decisión:** Cada editor sigue guardando lo suyo en su propio render (patrón idiomático ImGui, ya usado por Script/Shader). El handler global solo **consulta** `IPanel::consumesSaveShortcut()` sobre los panels `visible`: si alguno lo consume, no dispara el project-save. Item/Quest ganan el self-save (no existía).
+
+**Razones:**
+- Menos invasivo: no hay que mover los 4 saves a un dispatcher central ni reescribir Script/Shader.
+- Idiomático: el foco se consulta donde ImGui lo expone (dentro del render del panel), no en el handler SDL.
+
+**Alternativas descartadas:** Centralizar todo en un dispatcher (`saveFromShortcut()` por panel llamado desde el handler) — más acople y reescritura de los que ya funcionaban.
+
+### Decisión 2 — El flag de foco es del frame previo (aceptable)
+
+**Contexto:** El handler SDL de Ctrl+S corre **antes** del render del frame; `m_windowFocused` se actualiza **durante** el render. Así que el handler lee el foco del frame anterior.
+
+**Decisión:** Aceptarlo. El foco no cambia entre el keydown y el render del mismo frame, y el editor enfocado procesa su propio Ctrl+S en ese render con el foco actual. La única discrepancia posible (el frame exacto en que el foco cambia) es inocua y se autocorrige.
+
+---
+
 ## 2026-05-21: F2H74 — Cleanup UX + capa de field-helpers del Inspector
 
 ### Decisión 1 — Auditar antes de "reorganizar": la UX de paneles ya seguía el estándar
