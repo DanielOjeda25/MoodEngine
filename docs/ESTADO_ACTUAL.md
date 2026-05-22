@@ -30,25 +30,31 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H80 (2026-05-22) — **Sub-fase 2.7**
+## 0.1. Último hito de feature — F2H81 (2026-05-22) — **Sub-fase 2.7**
 
-**Miniaturas 3D en "Crear Entidad" + Asset Browser.** Tag `v1.71.0-fase2-hito80`. Detalle completo en [`hitos/F2H80.md`](hitos/F2H80.md). Quinto hito de Sub-fase 2.7.
+**Preview de animaciones + Asset Browser visual + Inspector claro + break de auditoría.** Tag `v1.72.0-fase2-hito81`. Detalle completo en [`hitos/F2H81.md`](hitos/F2H81.md). Sexto hito de Sub-fase 2.7.
 
 **Lo que entregó**:
-- **`MeshThumbnailRenderer`** (engine/render/preview/): renderiza el mesh real (submeshes + materiales) a un FBO LDR 128² y **cachea la textura por mesh** (render-once). Reusa shader PBR + IBL; cámara encuadrada al AABB (3/4 view), `importRotationEuler` aplicado, sin animar. Setup PBR compartido entre el path de mesh y el de primitiva.
-- **Wiring**: `EditorApplication` lo posee (IBL del `SceneRenderer`), inyectado al `AssetBrowserPanel`.
-- **Grilla de cards** con miniatura 3D en el modal **+ Crear Entidad** (tab Meshes) y en el **Asset Browser** (tab Meshes); drag-source `MOOD_MESH_ASSET` intacto.
-- **Primitivas en 3D**: `thumbnailForPrimitive(PrimitiveKind)` construye el brush CSG (mismas dims que el spawn) → mesh dinámico → render-once. Tab Primitivas con cards 3D.
-- **Luces con ícono**: cards con ☀ (`ICON_FA_SUN`) / 💡 (`ICON_FA_LIGHTBULB`) a escala 2.6x (una luz no tiene modelo 3D).
-- **No-resize** del modal Crear Entidad.
+- **Preview de animaciones** (`AnimationPreviewRenderer`): cada clip standalone se previsualiza posando el NPC de Mixamo (`pbr_skinned.vert`+`pbr.frag`, uBoneMatrices[128]). **Hover-to-play**: la card con el mouse encima se reproduce en vivo (`renderClip`), el resto muestra miniatura estática cacheada (`staticThumbnail`).
+- **Asset Browser 100% visual**: Vehículos (miniatura 3D del mesh), Materiales (esfera cacheada vía `MaterialPreviewRenderer::thumbnail`), Scripts/Prefabs/Audio (ícono grande 2.6x). Drag&drop intacto.
+- **Inspector más claro**: componentes como **tarjetas plegables** (`beginComponentSection<T>`, default abierto, Tag fijo), **Plegar/Expandir todo**, **Quitar componente** por clic derecho (undoable, `makeRemoveComponentCommand<T>` snapshotea por move → soporta move-only como `BrushComponent`), MeshRenderer con stats en foldout **"Technical details" colapsado**.
+- **Fixes reactivos**: hint de jerarquía → `(?)` clásico ("Selección (?)"); sync de i18n a la copia de build; eliminado `banshee_sa` stale (solo en build, no en source) — ver memoria `project_asset_build_sync`.
+- **Break de auditoría** ("duros + DRY", luego "Components.h + DRY, diferir render"): `AssetBrowserPanel.cpp` 924→395 (+`_Tabs.cpp`), `EntitySerializer.cpp` 819→504 (+`_Parse.cpp`), `Components.h` 936→25 (agregador de 3 headers por categoría, todos <500); DRY de `lowerExt()` + helpers de card-grid. **3 diferidos por riesgo render** (`SceneRenderer_Render.cpp`, `EditorRenderPass_Overlay.cpp`, `EditorApplication.h`) → [BACKLOG.md § 4](BACKLOG.md).
 
-**Suite 1061/11018 verde** (render-to-texture + UI sin superficie headless). Validado en vivo: meshes, primitivas, luces, no-resize — *"todo okey"*.
+**Suite 1061/11018 verde**. Validado en vivo: preview hover, tabs, plegables/quitar/undo, `(?)`, save/load roundtrip — *"todo ok"*.
 
 **Pendientes de 2.7 (en orden acordado con el dev)**:
-- **F2H81 — preview de animaciones + Inspector más claro** (el dev pidió juntar ambas en un solo hito). (1) **Mini-player de animaciones**: previsualizar clips `anim_*.fbx` montados sobre un personaje con esqueleto, reproducidos (no miniatura estática — diferido de F2H80). (2) **Inspector más claro**: el dev reportó que "marea entre tantas opciones" (17 secciones); reducir carga visual / mejorar navegación (auditar primero — las secciones ya son colapsables). Plan en [`PLAN_HITO_F2H81.md`](PLAN_HITO_F2H81.md).
+- **F2H82 — integrar autos del backlog (`armor-car` + `tesla`)**: procesar ruedas (`split_wheels.py` — tienen nodos `b_t_*`/`f_t_*` y `RUEDRA_*` que se clasifican por posición) + crear `.moodvehicle` con **datos reales** (el agente investiga specs: Tesla Model 3/S; armor-car tipo Lenco BearCat) + probar que conducen como el DeLorean. Pedido del dev "ya que estamos tocando autos".
+- **Refactor diferido (riesgo render)**: los 3 archivos grandes del hot path (renderScene / overlay 3D / EditorApplication.h god-class) — hito dedicado con validación visual. Anotado en [BACKLOG.md § 4](BACKLOG.md).
 - **Atajos de teclado configurables** (era F2H42 del plan original, nunca hecho — hoy hardcodeados): keybindings + UI + persistencia + presets.
 - **Cierre Fase 2 + `v2.0.0`**: suite verde, docs al día, release notes, recap, planning Fase 3.
 - Menores: Ctrl+S "guardar como", unificar Undo en Material/Item/Quest. **Tutorial in-app**: diferido por el dev a post-Fase 2.
+
+---
+
+## 0.1ante3. Hito previo — F2H80 (2026-05-22) — **Sub-fase 2.7**
+
+**Miniaturas 3D en "Crear Entidad" + Asset Browser.** Tag `v1.71.0-fase2-hito80`. Detalle en [`hitos/F2H80.md`](hitos/F2H80.md). `MeshThumbnailRenderer` (render-once cacheado por mesh, reusa PBR+IBL) → grilla de cards 3D en Crear Entidad + Asset Browser; primitivas en 3D (vía brush CSG), luces con ícono, modal no-resize.
 
 ---
 

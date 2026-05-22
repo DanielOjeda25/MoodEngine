@@ -80,6 +80,10 @@ void InspectorPanel::onImGuiRender() {
         }
     }
 
+    // F2H81: barra de plegar/expandir todo (setea m_forceSectionState
+    // para este frame; cada beginComponentSection lo consume).
+    renderSectionToolbar();
+
     // Dispatch por componente. El orden es el mismo que tenia
     // `onImGuiRender` antes del split (F2H23+).
     if (e.hasComponent<TagComponent>())              renderTagSection(e);
@@ -106,7 +110,26 @@ void InspectorPanel::onImGuiRender() {
     // existentes.
     renderAddComponentSection(e);
 
+    // F2H81: la orden de plegar/expandir vale solo el frame en que se
+    // apreta el boton — reset para no forzar el estado el frame siguiente
+    // (asi el dev puede volver a plegar/expandir secciones a mano).
+    m_forceSectionState = 0;
+
     ImGui::End();
+}
+
+// F2H81: barra compacta arriba del dispatch con dos botones que pliegan
+// o expanden todas las tarjetas de componente de una. No-op visual si la
+// entidad tiene una sola seccion, pero la dejamos siempre por consistencia.
+void InspectorPanel::renderSectionToolbar() {
+    if (ImGui::SmallButton(I18n::T("editor.panel.inspector.collapse_all").c_str())) {
+        m_forceSectionState = -1;
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton(I18n::T("editor.panel.inspector.expand_all").c_str())) {
+        m_forceSectionState = 1;
+    }
+    ImGui::Spacing();
 }
 
 void InspectorPanel::renderAddComponentSection(Entity e) {

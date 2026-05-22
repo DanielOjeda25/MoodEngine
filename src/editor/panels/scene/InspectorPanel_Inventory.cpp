@@ -12,6 +12,7 @@
 //   5. Boton "Vaciar inventario" (clear).
 
 #include "editor/panels/scene/InspectorPanel.h"
+#include "editor/panels/scene/InspectorPanel_Internal.h"  // F2H81: beginComponentSection
 
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
@@ -51,9 +52,8 @@ void InspectorPanel::renderInventorySection(Entity e) {
     auto& inv = e.getComponent<InventoryComponent>();
     Inventory::State& st = inv.state;
 
-    if (!ImGui::CollapsingHeader(
-            I18n::T("editor.panel.inspector.inventory.header").c_str(),
-            ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!beginComponentSection<InventoryComponent>(
+            e, I18n::T("editor.panel.inspector.inventory.header").c_str())) {
         return;
     }
 

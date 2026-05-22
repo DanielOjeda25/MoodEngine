@@ -14,7 +14,9 @@
 
 namespace Mood {
 
-class MeshThumbnailRenderer;  // F2H80
+class MeshThumbnailRenderer;       // F2H80
+class AnimationPreviewRenderer;    // F2H81
+class MaterialPreviewRenderer;     // F2H81
 
 class AssetBrowserPanel : public IPanel {
 public:
@@ -30,6 +32,14 @@ public:
     ///        non-owning). Si es null, la sección de meshes cae al listado de
     ///        texto sin preview.
     void setThumbnailRenderer(MeshThumbnailRenderer* t) { m_thumbnails = t; }
+
+    /// @brief F2H81: preview de animaciones (inyectado por EditorApplication,
+    ///        non-owning). Si es null, el tab Animations cae al listado de texto.
+    void setAnimationPreviewRenderer(AnimationPreviewRenderer* a) { m_animPreview = a; }
+
+    /// @brief F2H81: preview de materiales (esfera, miniaturas cacheadas).
+    ///        Non-owning. Null → tab Materiales cae al listado de texto.
+    void setMaterialPreviewRenderer(MaterialPreviewRenderer* m) { m_matPreview = m; }
 
     /// @brief Path logico (relativo a la raiz de assets) del item seleccionado
     ///        por click en este panel. `nullopt` si nada esta seleccionado.
@@ -50,6 +60,18 @@ public:
     void rescan();
 
 private:
+    // F2H81 (auditoría): cada tab del browser se renderea en su propio
+    // método (cuerpo en AssetBrowserPanel_Tabs.cpp). `onImGuiRender` queda
+    // como shell del TabBar. Cada método arma su BeginTabItem/EndTabItem.
+    void renderTexturesTab();
+    void renderMeshesTab();
+    void renderVehiclesTab();
+    void renderAnimationsTab();
+    void renderPrefabsTab();
+    void renderMaterialsTab();
+    void renderScriptsTab();
+    void renderAudioTab();
+
     struct Entry {
         std::string logicalPath; // "textures/foo.png"
         std::string displayName; // "foo.png"
@@ -114,6 +136,12 @@ private:
 
     AssetManager* m_assetManager = nullptr;
     MeshThumbnailRenderer* m_thumbnails = nullptr;  // F2H80, non-owning
+    AnimationPreviewRenderer* m_animPreview = nullptr;  // F2H81, non-owning
+    MaterialPreviewRenderer* m_matPreview = nullptr;    // F2H81, non-owning
+    // F2H81: estado del preview de animaciones (tab Animations).
+    AnimationClipAssetId m_animPreviewClip = 0;  // clip seleccionado (0 = ninguno)
+    MeshAssetId m_animPreviewNpc = 0;            // NPC de referencia (lazy-load)
+    f32 m_animPreviewTime = 0.0f;                // tiempo de reproducción (loop)
     std::vector<Entry> m_entries;
     std::vector<AudioEntry> m_audioEntries;
     std::vector<MeshEntry> m_meshEntries;

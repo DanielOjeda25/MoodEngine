@@ -48,7 +48,7 @@ std::string defaultAliasFromPath(const std::string& logicalPath) {
 // el frame 0.
 void InspectorPanel::renderAnimatorSection(Entity e) {
     auto& anim = e.getComponent<AnimatorComponent>();
-    ImGui::SeparatorText(ICON_FA_PERSON_RUNNING " Animator");
+    if (!beginComponentSection<AnimatorComponent>(e, ICON_FA_PERSON_RUNNING " Animator")) return;
 
     // Necesitamos el MeshAsset para listar los clips. Lo resolvemos
     // via MeshRenderer (mismo flujo que el AnimationSystem).

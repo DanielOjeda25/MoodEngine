@@ -18,6 +18,7 @@
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/render/preview/MaterialPreviewRenderer.h"
 #include "engine/render/preview/MeshThumbnailRenderer.h"
+#include "engine/render/preview/AnimationPreviewRenderer.h"
 #include "engine/render/rhi/IFramebuffer.h"
 #include "engine/render/rhi/IRenderer.h"
 #include "engine/render/rhi/ITexture.h"
@@ -342,6 +343,7 @@ EditorApplication::EditorApplication() {
         m_sceneRenderer->iblPrefilter(),
         m_sceneRenderer->iblBrdfLut());
     m_ui.materialEditor().setPreviewRenderer(m_materialPreview.get());
+    m_ui.assetBrowser().setMaterialPreviewRenderer(m_materialPreview.get());  // F2H81
 
     // F2H80: renderer de miniaturas 3D de meshes (cache por mesh). Mismo IBL
     // que el material preview. Lo usa el modal "+ Crear Entidad" y se inyecta
@@ -352,6 +354,14 @@ EditorApplication::EditorApplication() {
         m_sceneRenderer->iblPrefilter(),
         m_sceneRenderer->iblBrdfLut());
     m_ui.assetBrowser().setThumbnailRenderer(m_meshThumbnails.get());
+
+    // F2H81: preview de animaciones (256², render por frame del NPC posado).
+    m_animPreview = std::make_unique<AnimationPreviewRenderer>(256u);
+    m_animPreview->setIblTextures(
+        m_sceneRenderer->iblIrradiance(),
+        m_sceneRenderer->iblPrefilter(),
+        m_sceneRenderer->iblBrdfLut());
+    m_ui.assetBrowser().setAnimationPreviewRenderer(m_animPreview.get());
 
     buildInitialTestMap();
     rebuildSceneFromMap();
@@ -415,6 +425,8 @@ EditorApplication::~EditorApplication() {
     m_materialPreview.reset();
     // F2H80: ídem para las miniaturas (FBOs propios + refs IBL no-owning).
     m_meshThumbnails.reset();
+    // F2H81: ídem para el preview de animaciones.
+    m_animPreview.reset();
     // SceneRenderer destruye en orden inverso al ctor todos sus recursos
     // GL (FBs, shaders, IBL textures, debug renderer, etc.).
     m_sceneRenderer.reset();

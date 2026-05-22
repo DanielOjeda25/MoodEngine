@@ -27,7 +27,7 @@ namespace Mood {
 
 void InspectorPanel::renderJointSection(Entity e) {
     auto& joint = e.getComponent<JointComponent>();
-    ImGui::SeparatorText(ICON_FA_LINK " Joint");
+    if (!beginComponentSection<JointComponent>(e, ICON_FA_LINK " Joint")) return;
 
     // --- Type combo ---
     const char* typeNames[] = {"Hinge", "Distance", "Point", "Slider", "Fixed"};

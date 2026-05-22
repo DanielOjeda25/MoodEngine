@@ -95,22 +95,57 @@ void MaterialPreviewRenderer::renderPreview(const MaterialAsset& mat,
                                               AssetManager& assets) {
     if (!m_fb || !m_pbrShader) return;
 
+    GLint prevViewport[4]{};
+    glGetIntegerv(GL_VIEWPORT, prevViewport);
+    m_fb->bind();
+    glViewport(0, 0,
+               static_cast<GLsizei>(m_width),
+               static_cast<GLsizei>(m_height));
+
+    // F2H21 polish: rotacion lenta sobre Y (tiempo absoluto del clock
+    // monotonico, ~22°/s) para que el preview "se vea 3D".
+    const auto now = std::chrono::steady_clock::now();
+    const f64 tSec = std::chrono::duration<f64>(now.time_since_epoch()).count();
+    renderSphereToBoundFbo(mat, assets, static_cast<f32>(tSec) * 0.4f);
+
+    m_fb->unbind();
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+}
+
+GLuint MaterialPreviewRenderer::thumbnail(u32 materialId, AssetManager& assets) {
+    if (!m_pbrShader) return 0u;
+    if (auto it = m_thumbCache.find(materialId); it != m_thumbCache.end()) {
+        return it->second ? it->second->glColorTextureId() : 0u;
+    }
+    MaterialAsset* mat = assets.getMaterial(materialId);
+    if (mat == nullptr) return 0u;
+
+    auto fb = std::make_unique<OpenGLFramebuffer>(
+        m_width, m_height, OpenGLFramebuffer::Format::LDR);
+    GLint prevViewport[4]{};
+    glGetIntegerv(GL_VIEWPORT, prevViewport);
+    fb->bind();
+    glViewport(0, 0, static_cast<GLsizei>(m_width), static_cast<GLsizei>(m_height));
+    renderSphereToBoundFbo(*mat, assets, 0.6f);  // ángulo fijo 3/4 (estático)
+    fb->unbind();
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+
+    const GLuint tex = fb->glColorTextureId();
+    m_thumbCache.emplace(materialId, std::move(fb));
+    return tex;
+}
+
+void MaterialPreviewRenderer::clearThumbnailCache() { m_thumbCache.clear(); }
+
+void MaterialPreviewRenderer::renderSphereToBoundFbo(const MaterialAsset& mat,
+                                                     AssetManager& assets,
+                                                     f32 angleRad) {
     const MeshAssetId sphereId = assets.primitiveSphereId();
     if (sphereId == 0) return;
     MeshAsset* sphere = assets.getMesh(sphereId);
     if (sphere == nullptr || sphere->submeshes.empty()) return;
     IMesh* mesh = sphere->submeshes[0].mesh.get();
     if (mesh == nullptr) return;
-
-    // Guardar viewport actual para restaurar al final.
-    GLint prevViewport[4]{};
-    glGetIntegerv(GL_VIEWPORT, prevViewport);
-
-    // ---- Bind FBO + clear ----
-    m_fb->bind();
-    glViewport(0, 0,
-               static_cast<GLsizei>(m_width),
-               static_cast<GLsizei>(m_height));
 
     // Clear con un gris neutro para que el material se distinga del fondo.
     glClearColor(0.18f, 0.18f, 0.20f, 1.0f);
@@ -122,17 +157,8 @@ void MaterialPreviewRenderer::renderPreview(const MaterialAsset& mat,
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
 
-    // ---- Camara fija frontal + rotacion lenta del modelo ----
-    // F2H21 polish: el dev pidio "que se vea 3D" — rotamos la esfera
-    // lentamente sobre Y para que muestre todas las caras. Tiempo
-    // absoluto del clock monotonico (sin dt acumulado en miembro);
-    // velocidad ~22 grados/segundo (1 vuelta cada ~16s).
-    const auto now = std::chrono::steady_clock::now();
-    const f64 tSec = std::chrono::duration<f64>(
-        now.time_since_epoch()).count();
-    const f32 angle = static_cast<f32>(tSec) * 0.4f;
     const glm::mat4 model =
-        glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::rotate(glm::mat4(1.0f), angleRad, glm::vec3(0.0f, 1.0f, 0.0f));
 
     const f32 aspect = static_cast<f32>(m_width) / static_cast<f32>(m_height);
     const glm::vec3 camPos(0.0f, 0.0f, 2.5f);
@@ -268,11 +294,6 @@ void MaterialPreviewRenderer::renderPreview(const MaterialAsset& mat,
     mesh->bind();
     glDrawArrays(GL_TRIANGLES, 0,
                  static_cast<GLsizei>(mesh->vertexCount()));
-
-    // ---- Restaurar estado ----
-    m_fb->unbind();
-    glViewport(prevViewport[0], prevViewport[1],
-               prevViewport[2], prevViewport[3]);
 }
 
 } // namespace Mood

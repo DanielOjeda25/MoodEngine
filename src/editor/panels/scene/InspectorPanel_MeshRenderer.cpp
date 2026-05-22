@@ -29,41 +29,49 @@ namespace Mood {
 // mesh resuelto y la lista de materiales.
 void InspectorPanel::renderMeshRendererSection(Entity e) {
     auto& mr = e.getComponent<MeshRendererComponent>();
-    ImGui::SeparatorText(ICON_FA_CUBE " MeshRenderer");
+    if (!beginComponentSection<MeshRendererComponent>(e, ICON_FA_CUBE " MeshRenderer")) return;
     if (m_assets != nullptr) {
         ImGui::Text("%s",
             I18n::T("editor.panel.inspector.mesh.mesh_id_path",
                     m_assets->meshPathOf(mr.mesh), mr.mesh).c_str());
         MeshAsset* asset = m_assets->getMesh(mr.mesh);
         if (asset != nullptr) {
-            ImGui::Text("%s",
-                I18n::T("editor.panel.inspector.mesh.submeshes_vertices",
-                        static_cast<u32>(asset->submeshes.size()),
-                        asset->totalVertexCount()).c_str());
+            // F2H81: las stats read-only del mesh (submeshes, vertices,
+            // LODs, distancias) volcaban inline y mareaban. Las metemos en
+            // un foldout colapsado por defecto — Unity tampoco las muestra
+            // arriba; el path del mesh + los materiales editables quedan
+            // visibles, el detalle tecnico queda a un clic.
+            if (ImGui::CollapsingHeader(
+                    I18n::T("editor.panel.inspector.mesh.tech_details").c_str())) {
+                ImGui::Text("%s",
+                    I18n::T("editor.panel.inspector.mesh.submeshes_vertices",
+                            static_cast<u32>(asset->submeshes.size()),
+                            asset->totalVertexCount()).c_str());
 
-            // F2H6: info de LODs (read-only en v1). Editar manualmente
-            // o regenerar = hito futuro.
-            const u32 lod0Tris = asset->totalVertexCount() / 3;
-            u32 lod1Tris = 0, lod2Tris = 0;
-            for (const auto& s : asset->lod1Submeshes) lod1Tris += s.vertexCount / 3;
-            for (const auto& s : asset->lod2Submeshes) lod2Tris += s.vertexCount / 3;
-            if (lod1Tris > 0 || lod2Tris > 0) {
-                ImGui::TextDisabled("%s",
-                    I18n::T("editor.panel.inspector.mesh.lod0_tris", lod0Tris).c_str());
-                ImGui::TextDisabled("%s",
-                    I18n::T("editor.panel.inspector.mesh.lod1_tris", lod1Tris).c_str());
-                ImGui::TextDisabled("%s",
-                    I18n::T("editor.panel.inspector.mesh.lod2_tris", lod2Tris).c_str());
-                ImGui::TextDisabled("%s",
-                    I18n::T("editor.panel.inspector.mesh.lod_distances",
-                            static_cast<double>(asset->lodDistances.x),
-                            static_cast<double>(asset->lodDistances.y)).c_str());
-            } else if (asset->hasSkeleton()) {
-                ImGui::TextDisabled("%s",
-                    I18n::T("editor.panel.inspector.mesh.lods_skinned").c_str());
-            } else {
-                ImGui::TextDisabled("%s",
-                    I18n::T("editor.panel.inspector.mesh.lods_na").c_str());
+                // F2H6: info de LODs (read-only en v1). Editar manualmente
+                // o regenerar = hito futuro.
+                const u32 lod0Tris = asset->totalVertexCount() / 3;
+                u32 lod1Tris = 0, lod2Tris = 0;
+                for (const auto& s : asset->lod1Submeshes) lod1Tris += s.vertexCount / 3;
+                for (const auto& s : asset->lod2Submeshes) lod2Tris += s.vertexCount / 3;
+                if (lod1Tris > 0 || lod2Tris > 0) {
+                    ImGui::TextDisabled("%s",
+                        I18n::T("editor.panel.inspector.mesh.lod0_tris", lod0Tris).c_str());
+                    ImGui::TextDisabled("%s",
+                        I18n::T("editor.panel.inspector.mesh.lod1_tris", lod1Tris).c_str());
+                    ImGui::TextDisabled("%s",
+                        I18n::T("editor.panel.inspector.mesh.lod2_tris", lod2Tris).c_str());
+                    ImGui::TextDisabled("%s",
+                        I18n::T("editor.panel.inspector.mesh.lod_distances",
+                                static_cast<double>(asset->lodDistances.x),
+                                static_cast<double>(asset->lodDistances.y)).c_str());
+                } else if (asset->hasSkeleton()) {
+                    ImGui::TextDisabled("%s",
+                        I18n::T("editor.panel.inspector.mesh.lods_skinned").c_str());
+                } else {
+                    ImGui::TextDisabled("%s",
+                        I18n::T("editor.panel.inspector.mesh.lods_na").c_str());
+                }
             }
         }
     } else {

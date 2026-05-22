@@ -19,6 +19,7 @@
 #include <glad/gl.h>
 
 #include <memory>
+#include <unordered_map>
 
 namespace Mood {
 
@@ -58,10 +59,24 @@ public:
     ///        para usar con `ImGui::Image`.
     GLuint outputTextureId() const;
 
+    /// @brief F2H81: miniatura ESTÁTICA de un material (esfera a ángulo fijo) en
+    ///        un FBO cacheado por materialId (render-once). Para el grid del
+    ///        Asset Browser (tab Materiales). Devuelve 0 si falla.
+    GLuint thumbnail(u32 materialId, AssetManager& assets);  // materialId = MaterialAssetId
+
+    /// @brief Invalida la cache de miniaturas (llamar al recargar/editar
+    ///        materiales — si no, las miniaturas quedan stale).
+    void clearThumbnailCache();
+
     u32 width() const { return m_width; }
     u32 height() const { return m_height; }
 
 private:
+    /// Renderiza la esfera con `mat` al FBO YA bindeado (viewport seteado),
+    /// rotada `angleRad` sobre Y. No toca el FBO (lo maneja el caller).
+    void renderSphereToBoundFbo(const MaterialAsset& mat, AssetManager& assets,
+                                f32 angleRad);
+
     u32 m_width = 0;
     u32 m_height = 0;
 
@@ -79,6 +94,9 @@ private:
     OpenGLCubemapTexture* m_iblIrradiance = nullptr;
     OpenGLCubemapTexture* m_iblPrefilter = nullptr;
     ITexture*             m_iblBrdfLut = nullptr;
+
+    // F2H81: cache de miniaturas por materialId (FBO con textura persistente).
+    std::unordered_map<u32, std::unique_ptr<OpenGLFramebuffer>> m_thumbCache;
 };
 
 } // namespace Mood

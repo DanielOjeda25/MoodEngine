@@ -5,8 +5,10 @@
 // privado del modulo — no incluir desde otro modulo.
 
 #include "core/i18n/I18n.h"  // F2H74: field-helpers arman el label traducido
+#include "editor/commands/AddComponentCommand.h"  // F2H81: makeRemoveComponentCommand
 #include "editor/commands/EditPropertyCommand.h"
 #include "editor/panels/scene/InspectorEditTracker.h"
+#include "editor/panels/scene/InspectorPanel.h"  // F2H81: def. de beginComponentSection
 #include "editor/ui/EditorUI.h"
 #include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons en headers de seccion
 #include "engine/scene/core/Entity.h"
@@ -98,3 +100,48 @@ inline bool fieldColorEdit3(InspectorEditTracker& tracker, EditorUI* ui,
 }
 
 } // namespace Mood::detail
+
+namespace Mood {
+
+// F2H81: definicion del header plegable (declarado en InspectorPanel.h).
+// Templado en T para que el menu "Quitar componente" arme un
+// makeRemoveComponentCommand<T> tipado. Reemplaza el SeparatorText
+// siempre-abierto: ahora cada componente es una tarjeta que se pliega.
+template<typename T>
+bool InspectorPanel::beginComponentSection(Entity e, const char* label,
+                                            bool removable) {
+    // Orden de "plegar/expandir todo" de este frame (botones del toolbar).
+    if (m_forceSectionState > 0) {
+        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+    } else if (m_forceSectionState < 0) {
+        ImGui::SetNextItemOpen(false, ImGuiCond_Always);
+    }
+
+    const bool open = ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen);
+
+    // Menu contextual (clic derecho sobre el header): quitar componente.
+    if (removable && ImGui::BeginPopupContextItem()) {
+        const std::string item =
+            ICON_FA_TRASH_CAN " " + I18n::T("editor.panel.inspector.remove_component");
+        if (ImGui::Selectable(item.c_str())) {
+            HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
+            auto cmd = makeRemoveComponentCommand<T>(
+                e, I18n::T("editor.panel.inspector.remove_component"));
+            if (h != nullptr) {
+                h->push(std::move(cmd));  // ejecuta + apila para undo
+            } else {
+                cmd->execute();  // fallback defensivo sin history
+            }
+            m_editedThisFrame = true;
+            ImGui::EndPopup();
+            // El componente ya no existe — el caller NO debe dibujar el
+            // cuerpo (su referencia al componente quedaria colgada).
+            return false;
+        }
+        ImGui::EndPopup();
+    }
+
+    return open;
+}
+
+} // namespace Mood

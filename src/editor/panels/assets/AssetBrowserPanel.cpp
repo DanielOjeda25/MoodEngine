@@ -8,6 +8,10 @@
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/preview/MeshThumbnailRenderer.h"  // F2H80
+#include "engine/render/preview/AnimationPreviewRenderer.h"  // F2H81
+#include "engine/render/preview/MaterialPreviewRenderer.h"  // F2H81
+#include "engine/physics/vehicle/VehicleConfig.h"  // F2H81: meshPath del vehículo
+#include "engine/render/resources/MaterialAsset.h"  // F2H81: getMaterial
 
 #include <imgui.h>
 #include <nlohmann/json.hpp>  // F2H70.3: parse metadata del .moodvehicle
@@ -44,68 +48,46 @@ constexpr const char* k_materialLogicalPrefix   = "materials/";
 constexpr const char* k_scriptLogicalPrefix     = "scripts/";
 constexpr const char* k_vehicleLogicalPrefix    = "vehicles/";  // F2H70.3
 
-bool isPng(const std::filesystem::path& p) {
-    auto ext = p.extension().string();
+// F2H81 (auditoría): los helpers visuales de card (bigIconButton, cardLabel,
+// cardGridCols) viven en AssetBrowserPanel_Internal.h — los usan los
+// render*Tab() de AssetBrowserPanel_Tabs.cpp.
+
+// F2H81 (auditoría/DRY): un solo helper para la extensión en minúsculas, en
+// vez de repetir el `transform(tolower)` en cada filtro `isX`.
+std::string lowerExt(const std::filesystem::path& p) {
+    std::string ext = p.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return ext == ".png";
+    return ext;
 }
 
+bool isPng(const std::filesystem::path& p) { return lowerExt(p) == ".png"; }
+
 bool isAudio(const std::filesystem::path& p) {
-    auto ext = p.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac";
+    const std::string e = lowerExt(p);
+    return e == ".wav" || e == ".ogg" || e == ".mp3" || e == ".flac";
 }
 
 bool isMesh(const std::filesystem::path& p) {
-    auto ext = p.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return ext == ".obj" || ext == ".gltf" || ext == ".glb" || ext == ".fbx";
+    const std::string e = lowerExt(p);
+    return e == ".obj" || e == ".gltf" || e == ".glb" || e == ".fbx";
 }
 
 // F2H49: archivos `anim_*.fbx` son clips standalone (Mixamo "Without Skin"),
 // no meshes con esqueleto. El tab Meshes los filtra y el tab Animations los
 // recoge — asi un anim_walk.fbx no aparece como "mesh vacio" en el browser.
 bool isAnimClip(const std::filesystem::path& p) {
-    auto ext = p.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    if (ext != ".fbx") return false;
+    if (lowerExt(p) != ".fbx") return false;
     auto stem = p.stem().string();
     std::transform(stem.begin(), stem.end(), stem.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return stem.rfind("anim_", 0) == 0;
 }
 
-bool isPrefab(const std::filesystem::path& p) {
-    auto ext = p.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return ext == ".moodprefab";
-}
-
-bool isMaterial(const std::filesystem::path& p) {
-    auto ext = p.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return ext == ".material";
-}
-
-bool isLuaScript(const std::filesystem::path& p) {
-    auto ext = p.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return ext == ".lua";
-}
-
-bool isMoodVehicle(const std::filesystem::path& p) {
-    auto ext = p.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return ext == ".moodvehicle";
-}
+bool isPrefab(const std::filesystem::path& p) { return lowerExt(p) == ".moodprefab"; }
+bool isMaterial(const std::filesystem::path& p) { return lowerExt(p) == ".material"; }
+bool isLuaScript(const std::filesystem::path& p) { return lowerExt(p) == ".lua"; }
+bool isMoodVehicle(const std::filesystem::path& p) { return lowerExt(p) == ".moodvehicle"; }
 
 // Cuenta lineas de un archivo de texto sin cargar todo a memoria. Devuelve
 // 0 si el archivo no existe o no se puede abrir — el browser solo lo usa
@@ -124,6 +106,11 @@ u32 countLines(const std::filesystem::path& p) {
 void AssetBrowserPanel::rescan() {
     m_entries.clear();
     if (m_assetManager == nullptr) return;
+
+    // F2H80/F2H81: invalidar miniaturas cacheadas — un re-scan implica que un
+    // asset pudo cambiar (material editado, mesh reimportado, etc.).
+    if (m_thumbnails != nullptr) m_thumbnails->clear();
+    if (m_matPreview != nullptr) m_matPreview->clearThumbnailCache();
 
     std::error_code ec;
     auto it = std::filesystem::directory_iterator(k_textureDir, ec);
@@ -388,366 +375,17 @@ void AssetBrowserPanel::onImGuiRender() {
     // verticalmente, lo que con muchos meshes inflaba el panel a varios
     // viewports de altura. Cada tab tiene scroll interno (BeginChild) si
     // su contenido excede el alto disponible.
-    if (ImGui::BeginTabBar("##asset_tabs",
-                            ImGuiTabBarFlags_None)) {
-
-        // ============================================================
-        // TAB: Texturas (con grid de miniaturas)
-        // ============================================================
-        const std::string texTabLabel = std::string(ICON_FA_IMAGE " ") +
-            I18n::T("editor.panel.assets.tab.textures");
-        if (ImGui::BeginTabItem(texTabLabel.c_str())) {
-            ImGui::TextDisabled("%s",
-                I18n::T("editor.panel.assets.count.textures",
-                        m_entries.size()).c_str());
-            ImGui::BeginChild("##texturas_scroll", ImVec2(0.0f, 0.0f), false);
-
-            const float avail = ImGui::GetContentRegionAvail().x;
-            const float cell = k_thumbSize + 12.0f;
-            int cols = std::max(1, static_cast<int>(avail / cell));
-
-            for (size_t i = 0; i < m_entries.size(); ++i) {
-                const Entry& e = m_entries[i];
-                ITexture* tex = m_assetManager->getTexture(e.id);
-                if (tex == nullptr) continue;
-
-                ImGui::PushID(static_cast<int>(i));
-                ImGui::BeginGroup();
-
-                const bool isSelected = m_selected.has_value() &&
-                                          *m_selected == e.logicalPath;
-                if (isSelected) {
-                    ImGui::PushStyleColor(ImGuiCol_Button,
-                                            ImVec4(0.25f, 0.45f, 0.75f, 1.0f));
-                }
-                if (ImGui::ImageButton("##thumb", tex->handle(),
-                                        ImVec2(k_thumbSize, k_thumbSize),
-                                        ImVec2(0, 1), ImVec2(1, 0))) {
-                    m_selected = e.logicalPath;
-                    Log::assets()->info(
-                        "AssetBrowserPanel: seleccionado '{}'", e.logicalPath);
-                }
-                if (isSelected) ImGui::PopStyleColor();
-
-                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                    ImGui::SetDragDropPayload("MOOD_TEXTURE_ASSET",
-                                                &e.id, sizeof(e.id));
-                    ImGui::Image(tex->handle(), ImVec2(48.0f, 48.0f),
-                                  ImVec2(0, 1), ImVec2(1, 0));
-                    ImGui::SameLine();
-                    ImGui::TextUnformatted(e.displayName.c_str());
-                    ImGui::EndDragDropSource();
-                }
-
-                const float textW = ImGui::CalcTextSize(e.displayName.c_str()).x;
-                if (textW <= k_thumbSize) {
-                    ImGui::TextUnformatted(e.displayName.c_str());
-                } else {
-                    std::string truncated = e.displayName;
-                    while (!truncated.empty() &&
-                            ImGui::CalcTextSize((truncated + "..").c_str()).x > k_thumbSize) {
-                        truncated.pop_back();
-                    }
-                    ImGui::Text("%s..", truncated.c_str());
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("%s", e.displayName.c_str());
-                    }
-                }
-
-                ImGui::EndGroup();
-                ImGui::PopID();
-
-                if (static_cast<int>((i + 1) % cols) != 0) {
-                    ImGui::SameLine();
-                }
-            }
-
-            ImGui::EndChild();
-            ImGui::EndTabItem();
-        }
-
-        // ============================================================
-        // TAB: Meshes
-        // ============================================================
-        const std::string meshTabLabel = std::string(ICON_FA_CUBE " ") +
-            I18n::T("editor.panel.assets.tab.meshes");
-        if (ImGui::BeginTabItem(meshTabLabel.c_str())) {
-            ImGui::TextDisabled("%s",
-                I18n::T("editor.panel.assets.count.meshes",
-                        m_meshEntries.size()).c_str());
-            ImGui::BeginChild("##meshes_scroll", ImVec2(0.0f, 0.0f), false);
-            // F2H80: grilla de cards con miniatura 3D (mismo patrón que el tab
-            // de texturas). Cae al listado de texto si no hay thumbnail renderer.
-            constexpr float kMeshThumb = 80.0f;
-            const float meshAvail = ImGui::GetContentRegionAvail().x;
-            const float meshCell = kMeshThumb + 12.0f;
-            const int meshCols = std::max(1, static_cast<int>(meshAvail / meshCell));
-            int drawn = 0;
-            for (const auto& me : m_meshEntries) {
-                MeshAsset* asset = m_assetManager->getMesh(me.id);
-                const GLuint thumb = (m_thumbnails != nullptr)
-                    ? m_thumbnails->thumbnailFor(me.id, *m_assetManager) : 0u;
-
-                ImGui::PushID(me.logicalPath.c_str());
-                ImGui::BeginGroup();
-
-                const bool isSelected = m_selected.has_value() &&
-                                          *m_selected == me.logicalPath;
-                if (isSelected) {
-                    ImGui::PushStyleColor(ImGuiCol_Button,
-                                            ImVec4(0.25f, 0.45f, 0.75f, 1.0f));
-                }
-                bool clicked = false;
-                if (thumb != 0u) {
-                    // FBO color texture: bottom-up → uv flip (0,1)-(1,0).
-                    clicked = ImGui::ImageButton("##meshthumb",
-                                    (ImTextureID)(uintptr_t)thumb,
-                                    ImVec2(kMeshThumb, kMeshThumb),
-                                    ImVec2(0, 1), ImVec2(1, 0));
-                } else {
-                    clicked = ImGui::Button("##meshnothumb",
-                                    ImVec2(kMeshThumb, kMeshThumb));
-                }
-                if (isSelected) ImGui::PopStyleColor();
-                if (clicked) m_selected = me.logicalPath;
-
-                // Drag-source: arrastrar al viewport spawnea la entidad.
-                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                    ImGui::SetDragDropPayload("MOOD_MESH_ASSET", &me.id, sizeof(me.id));
-                    if (thumb != 0u) {
-                        ImGui::Image((ImTextureID)(uintptr_t)thumb, ImVec2(48.0f, 48.0f),
-                                      ImVec2(0, 1), ImVec2(1, 0));
-                        ImGui::SameLine();
-                    }
-                    ImGui::TextUnformatted(me.displayName.c_str());
-                    ImGui::EndDragDropSource();
-                }
-                if (ImGui::IsItemHovered() && asset != nullptr) {
-                    ImGui::SetTooltip("%s\n%s", me.displayName.c_str(),
-                        I18n::T("editor.panel.assets.mesh_meta",
-                                static_cast<u32>(asset->submeshes.size()),
-                                asset->totalVertexCount()).c_str());
-                }
-
-                // Label truncado al ancho de la card.
-                const float textW = ImGui::CalcTextSize(me.displayName.c_str()).x;
-                if (textW <= kMeshThumb) {
-                    ImGui::TextUnformatted(me.displayName.c_str());
-                } else {
-                    std::string truncated = me.displayName;
-                    while (!truncated.empty() &&
-                            ImGui::CalcTextSize((truncated + "..").c_str()).x > kMeshThumb) {
-                        truncated.pop_back();
-                    }
-                    ImGui::Text("%s..", truncated.c_str());
-                }
-
-                ImGui::EndGroup();
-                ImGui::PopID();
-
-                if (static_cast<int>((drawn + 1) % meshCols) != 0) {
-                    ImGui::SameLine();
-                }
-                ++drawn;
-            }
-            ImGui::EndChild();
-            ImGui::EndTabItem();
-        }
-
-        // ============================================================
-        // TAB: Vehicles (F2H70.3 Bloque F)
-        // ============================================================
-        // Lista los `.moodvehicle` del catalogo con metadata legible
-        // (name + mass + HP). Drag-source emite `MOOD_VEHICLE_ASSET` con el
-        // logicalPath (string) — el InspectorPanel_Vehicle lo recibe en su
-        // campo configPath para asignar el vehicle a la entity seleccionada.
-        const std::string vehTabLabel = std::string(ICON_FA_GAUGE " ") + "Vehiculos";
-        if (ImGui::BeginTabItem(vehTabLabel.c_str())) {
-            ImGui::TextDisabled("%zu vehiculos", m_vehicleEntries.size());
-            ImGui::BeginChild("##vehicles_scroll", ImVec2(0.0f, 0.0f), false);
-            for (const auto& ve : m_vehicleEntries) {
-                ImGui::PushID(ve.logicalPath.c_str());
-                const bool isSelected = m_selected.has_value() &&
-                                          *m_selected == ve.logicalPath;
-                if (ImGui::Selectable(ve.vehicleName.c_str(), isSelected)) {
-                    m_selected = ve.logicalPath;
-                }
-                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                    constexpr int kPayloadBufSize = 256;
-                    char buf[kPayloadBufSize] = {0};
-                    const auto n = std::min(ve.logicalPath.size(),
-                                              static_cast<size_t>(kPayloadBufSize - 1));
-                    std::memcpy(buf, ve.logicalPath.data(), n);
-                    ImGui::SetDragDropPayload("MOOD_VEHICLE_ASSET",
-                                                buf, kPayloadBufSize);
-                    ImGui::TextUnformatted(ve.vehicleName.c_str());
-                    ImGui::EndDragDropSource();
-                }
-                ImGui::SameLine();
-                if (ve.massKg > 0.0f || ve.horsepower > 0.0f) {
-                    ImGui::TextDisabled("[%.0f kg, %.0f HP]  %s",
-                                          ve.massKg, ve.horsepower,
-                                          ve.displayName.c_str());
-                } else {
-                    ImGui::TextDisabled("%s", ve.displayName.c_str());
-                }
-                ImGui::PopID();
-            }
-            ImGui::EndChild();
-            ImGui::EndTabItem();
-        }
-
-        // ============================================================
-        // TAB: Animations (F2H49)
-        // ============================================================
-        // Clips standalone listados con metadata (tracks + duration). El
-        // drag-source emite `MOOD_ANIMCLIP_ASSET` con el AssetId — el
-        // Inspector del AnimatorComponent (Bloque G) lo recibe y agrega
-        // una entrada a `externalClips` con alias derivado del filename
-        // (`anim_walk.fbx` → "walk", o lo edita el usuario).
-        const std::string animTabLabel = std::string(ICON_FA_PERSON_RUNNING " ") +
-            I18n::T("editor.panel.assets.tab.animations");
-        if (ImGui::BeginTabItem(animTabLabel.c_str())) {
-            ImGui::TextDisabled("%s",
-                I18n::T("editor.panel.assets.count.anim_clips",
-                        m_animClipEntries.size()).c_str());
-            ImGui::BeginChild("##anim_clips_scroll", ImVec2(0.0f, 0.0f), false);
-            for (const auto& ce : m_animClipEntries) {
-                AnimationClip* clip = m_assetManager->getAnimationClip(ce.id);
-                ImGui::PushID(ce.logicalPath.c_str());
-                ImGui::Selectable(ce.displayName.c_str(), false);
-                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                    ImGui::SetDragDropPayload("MOOD_ANIMCLIP_ASSET",
-                                                &ce.id, sizeof(ce.id));
-                    ImGui::TextUnformatted(ce.displayName.c_str());
-                    ImGui::EndDragDropSource();
-                }
-                if (clip != nullptr) {
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("[%u tracks, %.2fs]",
-                                          static_cast<u32>(clip->tracks.size()),
-                                          clip->duration);
-                }
-                ImGui::PopID();
-            }
-            ImGui::EndChild();
-            ImGui::EndTabItem();
-        }
-
-        // ============================================================
-        // TAB: Prefabs
-        // ============================================================
-        const std::string prefabTabLabel = std::string(ICON_FA_BOX_OPEN " ") +
-            I18n::T("editor.panel.assets.tab.prefabs");
-        if (ImGui::BeginTabItem(prefabTabLabel.c_str())) {
-            ImGui::TextDisabled("%s",
-                I18n::T("editor.panel.assets.count.prefabs",
-                        m_prefabEntries.size()).c_str());
-            ImGui::BeginChild("##prefabs_scroll", ImVec2(0.0f, 0.0f), false);
-            for (const auto& pe : m_prefabEntries) {
-                ImGui::PushID(pe.logicalPath.c_str());
-                ImGui::Selectable(pe.displayName.c_str(), false);
-                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                    ImGui::SetDragDropPayload("MOOD_PREFAB_ASSET",
-                                                &pe.id, sizeof(pe.id));
-                    ImGui::TextUnformatted(pe.displayName.c_str());
-                    ImGui::EndDragDropSource();
-                }
-                ImGui::SameLine();
-                ImGui::TextDisabled("%s",
-                    I18n::T("editor.panel.assets.kind.prefab").c_str());
-                ImGui::PopID();
-            }
-            ImGui::EndChild();
-            ImGui::EndTabItem();
-        }
-
-        // ============================================================
-        // TAB: Materiales
-        // ============================================================
-        const std::string matTabLabel = std::string(ICON_FA_PALETTE " ") +
-            I18n::T("editor.panel.assets.tab.materials");
-        if (ImGui::BeginTabItem(matTabLabel.c_str())) {
-            ImGui::TextDisabled("%s",
-                I18n::T("editor.panel.assets.count.materials",
-                        m_materialEntries.size()).c_str());
-            ImGui::BeginChild("##materiales_scroll", ImVec2(0.0f, 0.0f), false);
-            for (const auto& me : m_materialEntries) {
-                ImGui::PushID(me.logicalPath.c_str());
-                ImGui::Selectable(me.displayName.c_str(), false);
-                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                    ImGui::SetDragDropPayload("MOOD_MATERIAL_ASSET",
-                                                &me.id, sizeof(me.id));
-                    ImGui::TextUnformatted(me.displayName.c_str());
-                    ImGui::EndDragDropSource();
-                }
-                ImGui::SameLine();
-                ImGui::TextDisabled("%s",
-                    I18n::T("editor.panel.assets.kind.material").c_str());
-                ImGui::PopID();
-            }
-            ImGui::EndChild();
-            ImGui::EndTabItem();
-        }
-
-        // ============================================================
-        // TAB: Scripts
-        // ============================================================
-        const std::string scriptTabLabel = std::string(ICON_FA_FILE_CODE " ") +
-            I18n::T("editor.panel.assets.tab.scripts");
-        if (ImGui::BeginTabItem(scriptTabLabel.c_str())) {
-            ImGui::TextDisabled("%s",
-                I18n::T("editor.panel.assets.count.scripts",
-                        m_scriptEntries.size()).c_str());
-            ImGui::BeginChild("##scripts_scroll", ImVec2(0.0f, 0.0f), false);
-            for (const auto& se : m_scriptEntries) {
-                ImGui::PushID(se.logicalPath.c_str());
-                ImGui::Selectable(se.displayName.c_str(), false);
-                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                    constexpr int kPayloadBufSize = 256;
-                    char buf[kPayloadBufSize] = {0};
-                    const auto n = std::min(se.logicalPath.size(),
-                                              static_cast<size_t>(kPayloadBufSize - 1));
-                    std::memcpy(buf, se.logicalPath.data(), n);
-                    ImGui::SetDragDropPayload("MOOD_SCRIPT_ASSET",
-                                                buf, kPayloadBufSize);
-                    ImGui::TextUnformatted(se.displayName.c_str());
-                    ImGui::EndDragDropSource();
-                }
-                ImGui::SameLine();
-                ImGui::TextDisabled("%s",
-                    I18n::T("editor.panel.assets.script_lines",
-                            se.lineCount).c_str());
-                ImGui::PopID();
-            }
-            ImGui::EndChild();
-            ImGui::EndTabItem();
-        }
-
-        // ============================================================
-        // TAB: Audio
-        // ============================================================
-        const std::string audioTabLabel = std::string(ICON_FA_MUSIC " ") +
-            I18n::T("editor.panel.assets.tab.audio");
-        if (ImGui::BeginTabItem(audioTabLabel.c_str())) {
-            ImGui::TextDisabled("%s",
-                I18n::T("editor.panel.assets.count.clips",
-                        m_audioEntries.size()).c_str());
-            ImGui::BeginChild("##audio_scroll", ImVec2(0.0f, 0.0f), false);
-            for (const auto& ae : m_audioEntries) {
-                AudioClip* clip = m_assetManager->getAudio(ae.id);
-                if (clip == nullptr) continue;
-                ImGui::Text("%s", ae.displayName.c_str());
-                ImGui::SameLine();
-                ImGui::TextDisabled("[%.2fs, %uHz, %uch]",
-                                     clip->durationSeconds(),
-                                     clip->sampleRate(),
-                                     clip->channels());
-            }
-            ImGui::EndChild();
-            ImGui::EndTabItem();
-        }
-
+    if (ImGui::BeginTabBar("##asset_tabs", ImGuiTabBarFlags_None)) {
+        // F2H81 (auditoría): cada tab vive en su propio método
+        // (AssetBrowserPanel_Tabs.cpp). El orden de las pestañas se preserva.
+        renderTexturesTab();
+        renderMeshesTab();
+        renderVehiclesTab();
+        renderAnimationsTab();
+        renderPrefabsTab();
+        renderMaterialsTab();
+        renderScriptsTab();
+        renderAudioTab();
         ImGui::EndTabBar();
     }
 

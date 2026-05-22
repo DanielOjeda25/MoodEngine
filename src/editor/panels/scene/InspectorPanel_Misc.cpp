@@ -35,7 +35,7 @@ void InspectorPanel::renderTagSection(Entity e) {
 
 void InspectorPanel::renderCameraSection(Entity e) {
     auto& cam = e.getComponent<CameraComponent>();
-    ImGui::SeparatorText(ICON_FA_VIDEO " Camera");
+    if (!beginComponentSection<CameraComponent>(e, ICON_FA_VIDEO " Camera")) return;
     if (detail::fieldDragFloat(m_editTracker, m_ui, e,
             "editor.panel.inspector.camera.fov", "##cam", cam.fovDeg,
             [](Entity& en, const f32& v) {
@@ -65,7 +65,7 @@ void InspectorPanel::renderCameraSection(Entity e) {
 
 void InspectorPanel::renderTriggerSection(Entity e) {
     auto& tc = e.getComponent<TriggerComponent>();
-    ImGui::SeparatorText(ICON_FA_BORDER_NONE " Trigger");
+    if (!beginComponentSection<TriggerComponent>(e, ICON_FA_BORDER_NONE " Trigger")) return;
     if (detail::fieldDragFloat3(m_editTracker, m_ui, e,
             "editor.panel.inspector.trigger.half_extents", "##trig", tc.halfExtents,
             [](Entity& en, const glm::vec3& v) {
@@ -111,7 +111,7 @@ void InspectorPanel::renderTriggerSection(Entity e) {
 
 void InspectorPanel::renderForceFieldSection(Entity e) {
     auto& ff = e.getComponent<ForceFieldComponent>();
-    ImGui::SeparatorText(ICON_FA_MAGNET " Force Field");
+    if (!beginComponentSection<ForceFieldComponent>(e, ICON_FA_MAGNET " Force Field")) return;
 
     // --- Shape combo + parametro de la zona ---
     const char* shapeNames[] = {"Box", "Sphere"};
@@ -193,7 +193,8 @@ void InspectorPanel::renderForceFieldSection(Entity e) {
 // renderer cada frame, sin recrear la tela).
 void InspectorPanel::renderClothSection(Entity e) {
     auto& cl = e.getComponent<ClothComponent>();
-    ImGui::SeparatorText(I18n::T("component.name.cloth").c_str());
+    if (!beginComponentSection<ClothComponent>(
+            e, I18n::T("component.name.cloth").c_str())) return;
 
     bool simChanged = false;  // requiere re-materializar
 

@@ -84,7 +84,7 @@ void drawSectionDivider() {
 
 void InspectorPanel::renderEnvironmentSection(Entity e) {
     auto& env = e.getComponent<EnvironmentComponent>();
-    ImGui::SeparatorText(ICON_FA_TREE " Environment");
+    if (!beginComponentSection<EnvironmentComponent>(e, ICON_FA_TREE " Environment")) return;
 
     // ----- Sky + Fog -----
     if (ImGui::CollapsingHeader(

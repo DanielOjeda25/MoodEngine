@@ -28,6 +28,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -83,6 +84,40 @@ makeAddComponentCommand(Entity entity, std::string label) {
         entity,
         [](Entity& e) { e.addComponent<T>(); },
         [](Entity& e) { e.removeComponent<T>(); },
+        std::move(label));
+}
+
+/// F2H81: quitar un componente (undoable). Reusa `AddComponentCommand`
+/// con las closures invertidas: `execute` (= add-slot) snapshotea el
+/// componente y lo remueve; `undo` (= remove-slot) lo re-agrega y
+/// restaura la copia, asi un quitar→deshacer recupera los valores
+/// editados (no un default). El snapshot vive en un shared_ptr capturado
+/// por ambas closures. Requiere T copy-assignable + default-constructible.
+template<typename T>
+std::unique_ptr<AddComponentCommand>
+makeRemoveComponentCommand(Entity entity, std::string label) {
+    auto snap = std::make_shared<std::optional<T>>();
+    return std::make_unique<AddComponentCommand>(
+        entity,
+        [snap](Entity& e) {
+            if (e.hasComponent<T>()) {
+                // Snapshot por MOVE: saca el componente del registro (deja
+                // un husk moved-from que removeComponent destruye). Funciona
+                // con componentes move-only como BrushComponent (copy borrado,
+                // move por defecto) y tambien con los copiables.
+                snap->emplace(std::move(e.getComponent<T>()));
+                e.removeComponent<T>();
+            }
+        },
+        [snap](Entity& e) {
+            if (!e.hasComponent<T>() && snap->has_value()) {
+                // Restaura por move/copy-CONSTRUCCION (no operator=): algunos
+                // componentes (ej. BrushComponent) tienen el copy-assign
+                // borrado por miembros const pero siguen siendo construibles.
+                e.addComponent<T>(std::move(**snap));
+                snap->reset();
+            }
+        },
         std::move(label));
 }
 

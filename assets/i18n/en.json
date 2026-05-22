@@ -173,6 +173,7 @@
   "editor.convert_modal.close": "Close",
 
   "editor.panel.hierarchy.empty": "Empty scene.",
+  "editor.panel.hierarchy.selection_label": "Selection",
   "editor.panel.hierarchy.shortcut_hint": "Click=sel | Shift+Click=add | Ctrl+Click=toggle",
   "editor.panel.hierarchy.shortcut_tooltip": "Click            -> replace selection (single).\nShift+Click      -> add entity to set (multi-selection).\nCtrl+Click       -> toggle (add if absent, remove if present).\n\nMulti-selection: the Inspector applies Transform\nchanges to ALL entities as the same delta.\n\nRow color:\nOrange    -> active entity (set primary).\nYellow    -> in selection but not active (secondary).\nGray      -> hidden by VisGroup (still clickable).",
   "editor.panel.hierarchy.count": "{} entities",
@@ -182,6 +183,10 @@
   "editor.panel.inspector.no_selection": "No entity selected",
   "editor.panel.inspector.no_selection_hint": "Click on the Hierarchy panel to pick one.",
   "editor.panel.inspector.multi_extra": "+{} additional entity(ies) selected — only the active one is edited",
+
+  "editor.panel.inspector.collapse_all": "Collapse all",
+  "editor.panel.inspector.expand_all": "Expand all",
+  "editor.panel.inspector.remove_component": "Remove component",
 
   "editor.panel.inspector.add.button": "+ Add Component",
   "editor.panel.inspector.add.popup_title": "Available Components",
@@ -350,6 +355,7 @@
 
   "editor.panel.inspector.mesh.mesh_id_path": "mesh: {} (id {})",
   "editor.panel.inspector.mesh.mesh_id": "mesh id: {}",
+  "editor.panel.inspector.mesh.tech_details": "Technical details",
   "editor.panel.inspector.mesh.submeshes_vertices": "submeshes: {}, vertices: {}",
   "editor.panel.inspector.mesh.lod0_tris": "LOD 0: {} tris (full)",
   "editor.panel.inspector.mesh.lod1_tris": "LOD 1: {} tris",
@@ -494,6 +500,7 @@
   "editor.panel.assets.count.scripts": "{} scripts",
   "editor.panel.assets.count.clips": "{} clips",
   "editor.panel.assets.count.anim_clips": "{} anim clips",
+  "editor.panel.assets.anim_preview_fail": "(could not preview this clip)",
   "editor.panel.assets.kind.prefab": "(prefab)",
   "editor.panel.assets.kind.material": "(material)",
   "editor.panel.assets.script_lines": "({} lines)",

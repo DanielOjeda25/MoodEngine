@@ -70,6 +70,21 @@ private:
     void renderAddComponentSection(Entity e);
     void drawAddComponentPopup(Entity e);
 
+    /// F2H81: header plegable de seccion de componente. Reemplaza el
+    /// `SeparatorText` siempre-abierto que mareaba al apilar 17 secciones.
+    /// Devuelve `true` si la seccion esta desplegada — el cuerpo debe
+    /// guardarse con `if (!beginComponentSection<T>(e, label)) return;`.
+    /// Con `removable=true` agrega menu contextual (clic derecho) "Quitar
+    /// componente" (undoable). Templado en T para tipar el remove command;
+    /// definido en InspectorPanel_Internal.h. Tag/Transform pasan
+    /// `removable=false` (son nucleo, no estan en el popup Add Component).
+    template<typename T>
+    bool beginComponentSection(Entity e, const char* label, bool removable = true);
+
+    /// F2H81: barra "Plegar / Expandir todo" arriba del dispatch. Setea
+    /// `m_forceSectionState` el frame en que se apreta.
+    void renderSectionToolbar();
+
     EditorUI* m_ui = nullptr;
     AssetManager* m_assets = nullptr;
     bool m_editedThisFrame = false;
@@ -96,6 +111,12 @@ private:
 
     /// F2H44 Bloque A: buffer del search input del popup Add Component.
     char m_addComponentSearch[64]{};
+
+    /// F2H81: orden de plegar/expandir TODAS las secciones este frame.
+    /// 0 = ninguno, +1 = expandir, -1 = colapsar. Lo setea
+    /// `renderSectionToolbar` y lo consume cada `beginComponentSection`
+    /// (via `SetNextItemOpen`); se resetea al final de `onImGuiRender`.
+    int m_forceSectionState = 0;
 };
 
 } // namespace Mood

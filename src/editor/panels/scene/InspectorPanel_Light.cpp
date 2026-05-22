@@ -20,7 +20,7 @@ namespace Mood {
 // direction (directional) + enabled.
 void InspectorPanel::renderLightSection(Entity e) {
     auto& lt = e.getComponent<LightComponent>();
-    ImGui::SeparatorText(ICON_FA_LIGHTBULB " Light");
+    if (!beginComponentSection<LightComponent>(e, ICON_FA_LIGHTBULB " Light")) return;
 
     const std::string enabledLabel = I18n::T("editor.panel.inspector.light.enabled") + "##lt";
     if (ImGui::Checkbox(enabledLabel.c_str(), &lt.enabled)) m_editedThisFrame = true;

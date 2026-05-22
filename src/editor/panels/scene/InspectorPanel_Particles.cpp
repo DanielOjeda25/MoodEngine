@@ -19,7 +19,7 @@ namespace Mood {
 // El render del proximo frame ya muestra los nuevos parametros.
 void InspectorPanel::renderParticleEmitterSection(Entity e) {
     auto& em = e.getComponent<ParticleEmitterComponent>();
-    ImGui::SeparatorText(ICON_FA_FIRE " Particle Emitter");
+    if (!beginComponentSection<ParticleEmitterComponent>(e, ICON_FA_FIRE " Particle Emitter")) return;
 
     const std::string emittingLabel = I18n::T("editor.panel.inspector.particles.emitting") + "##pe";
     if (ImGui::Checkbox(emittingLabel.c_str(), &em.emitting)) m_editedThisFrame = true;

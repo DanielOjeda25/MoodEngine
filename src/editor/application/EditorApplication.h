@@ -38,6 +38,7 @@ class IFramebuffer;
 class IMesh;
 class MaterialPreviewRenderer;
 class MeshThumbnailRenderer;
+class AnimationPreviewRenderer;
 class SceneRenderer;
 class ScriptSystem;
 class AudioDevice;
@@ -312,6 +313,12 @@ private:
     ///        vive en EditorApplication) y el Asset Browser (inyectado). IBL
     ///        del SceneRenderer, igual que m_materialPreview.
     std::unique_ptr<MeshThumbnailRenderer> m_meshThumbnails;
+
+    /// @brief F2H81: preview de animaciones (NPC skinneado posado por un clip,
+    ///        render por frame). IBL del SceneRenderer; inyectado al Asset
+    ///        Browser. Solo dibuja cuando el tab Animations tiene un clip
+    ///        seleccionado (cost ~0 si no).
+    std::unique_ptr<AnimationPreviewRenderer> m_animPreview;
 
     std::unique_ptr<ScriptSystem> m_scriptSystem;
     std::unique_ptr<AudioDevice> m_audioDevice;

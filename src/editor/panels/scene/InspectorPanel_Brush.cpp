@@ -29,7 +29,7 @@ namespace Mood {
 // drop de materiales; F2H15 agrega seleccion de cara individual.
 void InspectorPanel::renderBrushSection(Entity e) {
     auto& bc = e.getComponent<BrushComponent>();
-    ImGui::SeparatorText(ICON_FA_CUBES_STACKED " Brush (CSG)");
+    if (!beginComponentSection<BrushComponent>(e, ICON_FA_CUBES_STACKED " Brush (CSG)")) return;
 
     ImGui::Text("%s",
         I18n::T("editor.panel.inspector.brush.faces",

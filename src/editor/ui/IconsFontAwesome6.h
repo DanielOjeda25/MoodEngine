@@ -66,6 +66,7 @@ inline constexpr unsigned short k_FontAwesomeRange[] = { 0xE005, 0xF8FF, 0 };
 #define ICON_FA_PERSON_RUNNING                      "\xef\x9c\x8c" // 0xF70C animator
 #define ICON_FA_TREE                                "\xef\x86\xbb" // 0xF1BB environment
 #define ICON_FA_LINK                                "\xef\x83\x81" // 0xF0C1 joint (F2H65)
+#define ICON_FA_TRASH_CAN                           "\xef\x8b\xad" // 0xF2ED quitar componente (F2H81)
 
 // --- Asset types (AssetBrowserPanel tabs + rows) ---
 #define ICON_FA_IMAGE                               "\xef\x80\xbe" // 0xF03E texture

@@ -22,7 +22,7 @@ namespace Mood {
 // limpio de globals.
 void InspectorPanel::renderScriptSection(Entity e) {
     auto& sc = e.getComponent<ScriptComponent>();
-    ImGui::SeparatorText(ICON_FA_FILE_CODE " Script");
+    if (!beginComponentSection<ScriptComponent>(e, ICON_FA_FILE_CODE " Script")) return;
     char buf[512];
     std::snprintf(buf, sizeof(buf), "%s", sc.path.c_str());
     const std::string pathLabel = I18n::T("editor.panel.inspector.script.path") + "##sc";

@@ -13,6 +13,7 @@
 // Inspector NO undoable v1 (mantengo footprint chico; agendable polish).
 
 #include "editor/panels/scene/InspectorPanel.h"
+#include "editor/panels/scene/InspectorPanel_Internal.h"  // F2H81: beginComponentSection
 
 #include "editor/ui/EditorUI.h"
 #include "core/i18n/I18n.h"
@@ -26,7 +27,7 @@ namespace Mood {
 
 void InspectorPanel::renderVehicleSection(Entity e) {
     auto& veh = e.getComponent<VehicleComponent>();
-    ImGui::SeparatorText("Vehicle");
+    if (!beginComponentSection<VehicleComponent>(e, ICON_FA_GAUGE " Vehicle")) return;
 
     // configPath — InputText con buffer estatico-ish.
     char buf[256] = {0};

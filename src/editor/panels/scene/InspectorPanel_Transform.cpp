@@ -25,9 +25,13 @@ namespace Mood {
 // ocultarlos evita confundir al usuario con controles sin efecto.
 void InspectorPanel::renderTransformSection(Entity e) {
     auto& t = e.getComponent<TransformComponent>();
-    // F2H23: SeparatorText agrupa visualmente cada componente (antes
-    // era TextDisabled + Separator separados; menos claro).
-    ImGui::SeparatorText(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT " Transform");
+    // F2H81: tarjeta plegable. Transform es nucleo (no esta en el popup
+    // Add Component) → removable=false. Si esta plegada, no dibujamos el
+    // cuerpo.
+    if (!beginComponentSection<TransformComponent>(
+            e, ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT " Transform", /*removable*/ false)) {
+        return;
+    }
 
     // F2H23 fix: sliders Transform mas grandes + soportan multi-edit
     // sobre `selectionSet.selected`. Antes eran chicos y dificiles

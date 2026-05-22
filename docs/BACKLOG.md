@@ -276,6 +276,7 @@ El `EnvironmentComponent` ES global por escena (`SceneRenderer::applyEnvironment
 
 ## 4. Sin presión (capturar antes que olvidar)
 
+- **Refactor de archivos grandes de riesgo alto** (F2H81 auditoría, 2026-05-22) — el break de auditoría partió limpios los archivos >800 líneas multi-función (`AssetBrowserPanel.cpp` 924→395+Tabs, `EntitySerializer.cpp` 819→504+Parse) + `Components.h` 936→agregador de 3 headers por categoría. **Quedan 3 diferidos por riesgo alto** (1 sola función gigante / god-class en el hot path de render, difíciles de validar sin pruebas visuales, no cubiertos por el test suite): `SceneRenderer_Render.cpp` (951, `renderScene` → extraer render-passes a helpers), `EditorRenderPass_Overlay.cpp` (839, `drawEditorScene3DOverlay` → extraer overlays a helpers), `EditorApplication.h` (835, god-class → pimpl o subsistemas). Hito dedicado con validación visual propia. Decisión del dev: "Components.h + DRY, diferir los 3 de render".
 - **Plugin system para kits custom del modal Convertir** (F2H57) — Sub-fase 3+.
 - **Templates compuestos de escena** ("escena narrativa completa" como un kit) (F2H57).
 - **Vista ortográfica isométrica** (`OrthoCamera::View::Iso`) si emerge demanda de visualización 3/4 — F2H28.

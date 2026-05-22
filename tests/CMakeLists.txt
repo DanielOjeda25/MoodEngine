@@ -164,6 +164,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/assets/cache/LodCache.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/primitives/PrimitiveMeshes.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/EntitySerializer.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/EntitySerializer_Parse.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/SceneSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/ProjectSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/PrefabSerializer.cpp

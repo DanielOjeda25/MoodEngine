@@ -411,6 +411,7 @@ add_library(mood_engine_lib STATIC
     src/engine/saving/SaveLoad.cpp
 
     src/engine/scene/serialization/EntitySerializer.cpp
+    src/engine/scene/serialization/EntitySerializer_Parse.cpp   # F2H81 auditoría (split)
     src/engine/scene/serialization/SceneLoader.cpp
     src/engine/scene/serialization/SceneSerializer.cpp
     src/engine/scene/serialization/ProjectSerializer.cpp
@@ -474,6 +475,7 @@ add_library(mood_engine_lib STATIC
     src/engine/render/pipeline/LightGrid.cpp
     src/engine/render/preview/MaterialPreviewRenderer.cpp
     src/engine/render/preview/MeshThumbnailRenderer.cpp
+    src/engine/render/preview/AnimationPreviewRenderer.cpp
     src/engine/render/scene_renderer/RenderBatching.cpp
     src/engine/render/scene_renderer/SceneRenderer.cpp
     src/engine/render/scene_renderer/SceneRenderer_Render.cpp
@@ -598,6 +600,7 @@ add_executable(MoodEditor
     src/editor/panels/scene/InspectorPanel_Brush.cpp
     src/editor/panels/scene/InspectorPanel_Inventory.cpp   # F2H51
     src/editor/panels/assets/AssetBrowserPanel.cpp
+    src/editor/panels/assets/AssetBrowserPanel_Tabs.cpp   # F2H81 auditoría (split)
     src/editor/panels/debug/ConsolePanel.cpp
     src/editor/panels/scene/HierarchyPanel.cpp
     src/editor/panels/scene/HierarchyCollect.cpp

@@ -22,7 +22,7 @@ namespace Mood {
 // nuevo en el proximo update (util para preview sin entrar a Play Mode).
 void InspectorPanel::renderAudioSourceSection(Entity e) {
     auto& asrc = e.getComponent<AudioSourceComponent>();
-    ImGui::SeparatorText(ICON_FA_VOLUME_HIGH " AudioSource");
+    if (!beginComponentSection<AudioSourceComponent>(e, ICON_FA_VOLUME_HIGH " AudioSource")) return;
 
     // Lista de clips del manager como combo. Si aun no hay assets manager
     // inyectado, mostrar solo el id crudo.

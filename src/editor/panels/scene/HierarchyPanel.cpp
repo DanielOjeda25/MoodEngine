@@ -56,14 +56,16 @@ void HierarchyPanel::onImGuiRender() {
     SelectionSet& set = m_ui->selectionSet();
     const auto totalCount = static_cast<int>(m_entries.size());
 
-    // F2H23: hint de shortcuts arriba de la lista. Texto chico gris para
-    // no robar foco visual; tooltip al hover por si el dev quiere ver
-    // el detalle de cada modifier. F2H23 polish: Shift=add, Ctrl=toggle
-    // (convencion Maya / Hammer — pedido del dev).
-    ImGui::TextDisabled("%s", I18n::T("editor.panel.hierarchy.shortcut_hint").c_str());
+    // F2H81: hint de shortcuts como help-marker "(?)" clasico (estilo
+    // Dear ImGui demo) en vez del texto verboso "Click=sel | ..." que
+    // robaba una linea entera. El detalle completo (modifiers + leyenda
+    // de colores) vive en el tooltip al hover. Pedido del dev.
+    ImGui::TextDisabled("(?)");
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("%s", I18n::T("editor.panel.hierarchy.shortcut_tooltip").c_str());
     }
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", I18n::T("editor.panel.hierarchy.selection_label").c_str());
     ImGui::Separator();
 
     // F2H13: detectar modifiers para Shift+click (toggle) y

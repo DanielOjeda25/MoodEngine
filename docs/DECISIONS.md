@@ -4565,5 +4565,27 @@ Total ~ 1-2 semanas de hito grande.
 - Hay cientos de meshes: el cache es 1 FBO 128² por mesh; si la memoria importa, bajar a 96² o evictar LRU.
 - Se re-importa un mesh (su id cambia): hay `invalidate(id)` / `clear()` para refrescar.
 
+## 2026-05-22: F2H81 — preview de animaciones hover-to-play + Inspector plegable + break de auditoría acotado
+
+**Decisión (preview de animaciones):** cada clip es una card sobre el NPC de Mixamo; la card con el mouse encima se reproduce **en vivo**, el resto muestra una **miniatura estática cacheada**. No auto-reproducir todas ni un mini-player único.
+
+**Razones:** una grilla de N personajes animándose = N draws skinned/frame (caro) + distrae; un mini-player único es menos directo (clic → mirar otro lado). Hover-to-play da reconocimiento inmediato con costo de 1 render vivo. El huevo-y-gallina del hover (necesito la textura antes de dibujar el botón) se resuelve con el clip hovered del frame previo (1 frame de lag, imperceptible).
+
+**Decisión (Inspector):** cada componente pasa de `SeparatorText` (siempre abierto) a `CollapsingHeader` plegable vía `beginComponentSection<T>` (default abierto). Tag queda fijo (es el nombre). "Quitar componente" por clic derecho usa `makeRemoveComponentCommand<T>` que **snapshotea por move** y restaura por construcción.
+
+**Razones:** apilar 16 secciones siempre-abiertas mareaba (pedido literal del dev). El snapshot por move (no copy) es obligatorio: `BrushComponent` es move-only (copy borrado por miembros con ownership GPU); mover el componente fuera del registro antes de destruirlo + restaurar por `addComponent<T>(std::move(...))` evita `operator=`. Las stats read-only del MeshRenderer van a un foldout "Technical details" colapsado (estilo Unity) — no se borran, se esconden.
+
+**Decisión (break de auditoría):** acotado a **"Components.h + DRY, diferir los 3 de render"**. Se partieron los archivos >800 multi-función / data (`AssetBrowserPanel.cpp`, `EntitySerializer.cpp`, `Components.h`); se **difirieron** los 3 que son una sola función gigante / god-class en el hot path de render (`SceneRenderer_Render.cpp`, `EditorRenderPass_Overlay.cpp`, `EditorApplication.h`).
+
+**Razones:** partir un archivo multi-función o un header de structs es mecánico y los errores son loud (no compila). Partir una función gigante de render = extraer helpers identificando estado capturado + orden GL; un error ahí es **sutil y visual**, no lo agarra el test suite. Meterlo a las apuradas en un break de auditoría va contra "mejores prácticas". `Components.h` quedó como agregador de 3 headers por categoría → cero churn en los call-sites.
+
+**Alternativas descartadas:**
+- Forzar los 6 en un pase: riesgo de regresión visual sin validación automatizada.
+- Dejar Components.h sin partir: es el header más incluido; el split por categoría detrás del agregador mejora navegación + compile times sin romper a nadie.
+
+**Revisar si:**
+- Se hace el hito de refactor de render diferido: ver [BACKLOG.md § 4](BACKLOG.md).
+- Un componente nuevo no es ni copy ni move constructible: `makeRemoveComponentCommand<T>` no compilaría para ese T (caso teórico — todos los componentes actuales son al menos move-constructible).
+
 
 
