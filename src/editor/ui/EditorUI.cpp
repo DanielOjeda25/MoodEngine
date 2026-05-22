@@ -1,5 +1,6 @@
 #include "editor/ui/EditorUI.h"
 
+#include "editor/ui/IconsFontAwesome6.h"  // F2H79: ICON_FA_CIRCLE_XMARK (welcome)
 #include "core/Log.h"
 #include "core/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/BrushComponent.h"  // F2H12
@@ -390,54 +391,66 @@ void EditorUI::drawWelcomeModal() {
         viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
         viewport->WorkPos.y + viewport->WorkSize.y * 0.5f);
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(520.0f, 0.0f), ImGuiCond_Appearing);
+    // F2H79: remake estilo Blender (splash de "nuevo archivo"): banner con
+    // nombre+version arriba, y debajo dos columnas — EMPEZAR (acciones) a la
+    // izquierda, RECIENTES (lista) a la derecha. Tamano fijo (sin
+    // AlwaysAutoResize) para que el layout de 2 columnas no "respire".
+    ImGui::SetNextWindowSize(ImVec2(640.0f, 380.0f), ImGuiCond_Appearing);
 
     constexpr ImGuiWindowFlags flags =
         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
+        ImGuiWindowFlags_NoCollapse;
 
     if (ImGui::BeginPopupModal("MoodEngine - bienvenida", nullptr, flags)) {
-        ImGui::TextUnformatted(I18n::T("editor.welcome.no_project").c_str());
-        ImGui::TextUnformatted(I18n::T("editor.welcome.choose").c_str());
-        ImGui::Dummy(ImVec2(0.0f, 6.0f));
+        // --- Banner: nombre grande + version, sobre una banda mas oscura ---
+        const float bannerH = 78.0f;
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.13f, 0.16f, 1.0f));
+        ImGui::BeginChild("##welcome_banner", ImVec2(0.0f, bannerH), false);
+        ImGui::SetCursorPos(ImVec2(20.0f, 16.0f));
+        ImGui::SetWindowFontScale(1.9f);
+        ImGui::TextUnformatted("MoodEngine");
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::SetCursorPosX(22.0f);
+        ImGui::TextDisabled("%s", I18n::T("editor.modal.about.version").c_str());
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
 
-        // Accion principal: crear uno nuevo.
-        if (ImGui::Button(I18n::T("editor.welcome.new_project").c_str(), ImVec2(240.0f, 32.0f))) {
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+
+        // El cuerpo de 2 columnas usa toda la altura restante menos el hint.
+        const float footerH = ImGui::GetTextLineHeightWithSpacing() + 8.0f;
+        const float bodyH = ImGui::GetContentRegionAvail().y - footerH;
+        const float leftW = 210.0f;
+
+        // --- Columna izquierda: EMPEZAR ---
+        ImGui::BeginChild("##welcome_start", ImVec2(leftW, bodyH), false);
+        ImGui::TextDisabled("%s", I18n::T("editor.welcome.start_header").c_str());
+        ImGui::Dummy(ImVec2(0.0f, 6.0f));
+        const float btnW = ImGui::GetContentRegionAvail().x;
+        if (ImGui::Button(I18n::T("editor.welcome.new_project").c_str(),
+                          ImVec2(btnW, 36.0f))) {
             requestProjectAction(ProjectAction::NewProject);
             ImGui::CloseCurrentPopup();
         }
-        ImGui::SameLine();
-        if (ImGui::Button(I18n::T("editor.welcome.open_project").c_str(), ImVec2(240.0f, 32.0f))) {
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        if (ImGui::Button(I18n::T("editor.welcome.open_project").c_str(),
+                          ImVec2(btnW, 36.0f))) {
             requestProjectAction(ProjectAction::OpenProject);
             ImGui::CloseCurrentPopup();
         }
+        ImGui::EndChild();
 
-        // F2H57 Bloque E followup: botones de demos (F2H44 Fox animado,
-        // F2H50 narrativa) eliminados del welcome modal. El dev arranca
-        // con proyecto vacio y construye via "+ Crear Entidad" en el
-        // panel Escena + right-click "Cambiar tipo" (workflow Hammer).
+        ImGui::SameLine();
 
-        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+        // --- Columna derecha: RECIENTES (la propia child scrollea) ---
+        ImGui::BeginChild("##welcome_recents", ImVec2(0.0f, bodyH), false);
+        ImGui::TextDisabled("%s", I18n::T("editor.welcome.recents_header").c_str());
         ImGui::Separator();
-        ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
         if (m_recentProjects.empty()) {
-            ImGui::TextDisabled("%s",
-                I18n::T("editor.welcome.no_recent").c_str());
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+            ImGui::TextDisabled("%s", I18n::T("editor.welcome.no_recent").c_str());
         } else {
-            ImGui::TextUnformatted(I18n::T("editor.welcome.recents").c_str());
-            ImGui::SameLine();
-            // Boton al tope que filtra los recientes que ya no existen en
-            // disco. Util cuando se mueven o borran proyectos por afuera.
-            const float availX = ImGui::GetContentRegionAvail().x;
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availX - 160.0f);
-            if (ImGui::SmallButton(I18n::T("editor.welcome.clean_missing").c_str())) {
-                pruneMissingRecents();
-            }
-
-            // Lista scrollable por si crece. Cada fila: label clickeable +
-            // boton "X" al final para borrar manualmente esa entrada.
-            ImGui::BeginChild("##recents", ImVec2(0.0f, 180.0f), true);
             std::filesystem::path toErase; // diferido hasta despues del loop
             for (const auto& path : m_recentProjects) {
                 ImGui::PushID(path.generic_string().c_str());
@@ -450,48 +463,65 @@ void EditorUI::drawWelcomeModal() {
                                                   : std::string("  ") +
                                                     I18n::T("editor.welcome.missing_marker"));
 
-                // Boton X al final de la fila.
                 const float rowAvail = ImGui::GetContentRegionAvail().x;
-                const float xButtonW = 24.0f;
+                const float xButtonW = 30.0f; // margen suficiente para no recortar
 
-                // Selectable que toma todo menos el ancho del boton X.
                 if (!exists) {
                     ImGui::PushStyleColor(ImGuiCol_Text,
                         ImVec4(0.7f, 0.4f, 0.4f, 1.0f));
                 }
                 if (ImGui::Selectable(label.c_str(), false,
                                        ImGuiSelectableFlags_AllowDoubleClick,
-                                       ImVec2(rowAvail - xButtonW - 4.0f, 0))) {
+                                       ImVec2(rowAvail - xButtonW - 6.0f, 0))) {
                     if (exists) {
                         m_openProjectPath = path;
                         ImGui::CloseCurrentPopup();
                     } else {
-                        // Click sobre uno inexistente: marcarlo para sacar.
                         toErase = path;
                     }
                 }
                 if (!exists) ImGui::PopStyleColor();
 
-                ImGui::SameLine();
-                if (ImGui::SmallButton("X")) {
+                // Boton de quitar: icono ⊗ sin fondo, con hover gris sutil
+                // (no la cajita azul) y margen al borde para que no se recorte.
+                ImGui::SameLine(0.0f, 6.0f);
+                ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.40f, 0.40f, 0.45f, 0.55f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.50f, 0.50f, 0.55f, 0.70f));
+                ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.60f, 0.60f, 0.64f, 1.0f));
+                if (ImGui::SmallButton(ICON_FA_CIRCLE_XMARK)) {
                     toErase = path;
                 }
+                ImGui::PopStyleColor(4);
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("%s",
                         I18n::T("editor.welcome.remove_from_recents").c_str());
                 }
                 ImGui::PopID();
             }
-            ImGui::EndChild();
-
             if (!toErase.empty()) {
                 eraseRecent(toErase);
             }
         }
+        ImGui::EndChild();
 
-        ImGui::Dummy(ImVec2(0.0f, 6.0f));
-        ImGui::TextDisabled("%s",
-            I18n::T("editor.welcome.locked_hint").c_str());
+        // --- Footer: "Limpiar inexistentes" a la derecha (si hay recientes) ---
+        // F2H79: sin texto de bloqueo (ruido innecesario; el modal ya impide
+        // interactuar con el editor). El boton lleva padding propio para no
+        // verse apretado.
+        if (!m_recentProjects.empty()) {
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 6.0f));
+            const std::string cleanLabel = I18n::T("editor.welcome.clean_missing");
+            const float cleanBtnW = ImGui::CalcTextSize(cleanLabel.c_str()).x + 24.0f;
+            const float availX = ImGui::GetContentRegionAvail().x;
+            if (availX > cleanBtnW) {
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availX - cleanBtnW);
+            }
+            if (ImGui::Button(cleanLabel.c_str())) {
+                pruneMissingRecents();
+            }
+            ImGui::PopStyleVar();
+        }
 
         ImGui::EndPopup();
     }

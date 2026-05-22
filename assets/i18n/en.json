@@ -106,6 +106,8 @@
   "editor.welcome.choose": "Choose what to do to get started:",
   "editor.welcome.new_project": "New project",
   "editor.welcome.open_project": "Open project...",
+  "editor.welcome.start_header": "GET STARTED",
+  "editor.welcome.recents_header": "RECENT",
   "editor.panel.visgroups.help_tooltip": "VisGroups = visibility layers (Hammer/Source style).\n\nGroup entities into named layers and toggle them with the eye icon.\nHidden entities don't render and aren't picked, but stay in the .moodmap.\n\nUse case: hide all light gizmos while sculpting geometry, hide a draft\narea while you work on another, isolate a level zone for screenshots.\n\nHidden state lives in the project (persisted to .moodmap), not per-user.\nThe Player skips this entirely (convention: hidden = invisible only in editor).",
 
   "workspace.layout": "Layout",

@@ -106,6 +106,8 @@
   "editor.welcome.choose": "Elegí qué hacer para empezar:",
   "editor.welcome.new_project": "Nuevo proyecto",
   "editor.welcome.open_project": "Abrir proyecto...",
+  "editor.welcome.start_header": "EMPEZAR",
+  "editor.welcome.recents_header": "RECIENTES",
   "editor.panel.visgroups.help_tooltip": "VisGroups = capas de visibilidad (estilo Hammer/Source).\n\nAgrupa entidades en capas con nombre y togglealas con el ícono de ojo.\nLas entidades ocultas no rendean ni son pickeables, pero siguen en el .moodmap.\n\nCaso de uso: ocultar gizmos de luces mientras esculpís geometría, ocultar\nun área en draft mientras trabajas en otra, aislar una zona del nivel\npara screenshots.\n\nEl estado oculto vive en el proyecto (persistido en .moodmap), no por usuario.\nEl Player ignora todo esto (convención: oculto = invisible solo en editor).",
 
   "workspace.layout": "Layout",
