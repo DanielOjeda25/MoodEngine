@@ -90,6 +90,7 @@ inline constexpr unsigned short k_FontAwesomeRange[] = { 0xE005, 0xF8FF, 0 };
 // --- MenuBar (workspace tabs + Play/Stop) ---
 #define ICON_FA_PLAY                                "\xef\x81\x8b" // 0xF04B
 #define ICON_FA_STOP                                "\xef\x81\x8d" // 0xF04D
+#define ICON_FA_BARS                                "\xef\x83\x89" // 0xF0C9 hamburguesa (selector workspace)
 #define ICON_FA_TABLE_COLUMNS                       "\xef\x83\x9b" // 0xF0DB Layout workspace
 #define ICON_FA_CODE                                "\xef\x84\xa1" // 0xF121 Scripting workspace
 #define ICON_FA_GAUGE                               "\xef\x98\xa4" // 0xF624 Profile workspace

@@ -225,53 +225,20 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ImGui::EndMenu();
         }
 
-        // F2H7: workspace tabs en la misma menu bar — estilo Blender.
-        // Despues de los menus (Archivo/Editar/Ver/Ayuda) y antes del
-        // boton Play. Buttons con highlight del activo, sin BeginTabBar
-        // para evitar conflictos con state interno de ImGui.
+        // F2H79: barra estilo Unity — Play CENTRADO + selector de workspace
+        // (dropdown a la derecha). Antes los workspace tabs vivian aca
+        // (estilo Blender), pero el Play pegado a ellos se disfrazaba de tab.
         ImGui::Separator();
-        {
-            auto& wm = ui.workspaceManager();
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-            for (int i = 0; i < static_cast<int>(wm.count()); ++i) {
-                const auto& ws = wm.workspaces()[i];
-                const bool isActive = (i == wm.activeIndex());
-                if (isActive) {
-                    const ImVec4 hi = ImGui::GetStyleColorVec4(ImGuiCol_TabActive);
-                    ImGui::PushStyleColor(ImGuiCol_Button, hi);
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hi);
-                } else {
-                    const ImVec4 dim = ImGui::GetStyleColorVec4(ImGuiCol_Tab);
-                    ImGui::PushStyleColor(ImGuiCol_Button, dim);
-                }
-                // F2H37+F2H44: prefijo icon + label visible traducido.
-                // `ws.name` es el ID ASCII estable; el label muestra la
-                // traduccion via `T("workspace.<id>")`.
-                const std::string visibleLabel =
-                    I18n::T("workspace." + ws.name);
-                std::string label;
-                label.reserve(visibleLabel.size() + 8);
-                label += iconForWorkspace(ws.name);
-                label += ' ';
-                label += visibleLabel;
-                if (ImGui::Button(label.c_str())) {
-                    if (!isActive) ui.requestWorkspaceSwitch(i);
-                }
-                ImGui::PopStyleColor(isActive ? 2 : 1);
-            }
-            ImGui::PopStyleVar();
-        }
 
-        // Boton Play/Stop empujado a la derecha de la menu bar.
+        // --- Play / Stop centrado en la barra ---
         const bool isPlay = ui.mode() == EditorMode::Play;
         const std::string playStopLabel = isPlay
             ? (std::string(ICON_FA_STOP " ") + I18n::T("editor.menu.stop"))
             : (std::string(ICON_FA_PLAY " ") + I18n::T("editor.menu.play"));
-        const char* btnLabel = playStopLabel.c_str();
-        const float btnWidth = 80.0f; // F2H37: bumped 64->80 px para acomodar icon
-        const float avail = ImGui::GetContentRegionAvail().x;
-        if (avail > btnWidth) {
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - btnWidth));
+        const float playWidth = 90.0f;
+        const float playX = ImGui::GetWindowWidth() * 0.5f - playWidth * 0.5f;
+        if (playX > ImGui::GetCursorPosX()) {
+            ImGui::SetCursorPosX(playX);
         }
         if (isPlay) {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.20f, 0.20f, 1.0f));
@@ -282,10 +249,44 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.70f, 0.30f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.85f, 0.35f, 1.0f));
         }
-        if (ImGui::Button(btnLabel, ImVec2(btnWidth, 0.0f))) {
+        if (ImGui::Button(playStopLabel.c_str(), ImVec2(playWidth, 0.0f))) {
             ui.requestTogglePlay();
         }
         ImGui::PopStyleColor(3);
+
+        // --- Selector de workspace (boton hamburguesa a la derecha) ---
+        // F2H79: el dropdown con el nombre del workspace activo abria el popup
+        // ENCIMA del propio boton (tapaba "Layout"). Un boton hamburguesa fijo
+        // (icono ☰) deja el popup caer limpio debajo y no cambia de ancho.
+        {
+            auto& wm = ui.workspaceManager();
+            const float dropW = 34.0f;
+            const float dropX = ImGui::GetWindowWidth() - dropW - 8.0f;
+            if (dropX > ImGui::GetCursorPosX()) {
+                ImGui::SetCursorPosX(dropX);
+            }
+            if (ImGui::Button(ICON_FA_BARS, ImVec2(dropW, 0.0f))) {
+                ImGui::OpenPopup("##workspace_selector");
+            }
+            // Posiciona el popup justo debajo del boton, alineado a su borde
+            // derecho (pivote arriba-derecha) en vez de encima del cursor.
+            const ImVec2 btnMax = ImGui::GetItemRectMax();
+            ImGui::SetNextWindowPos(ImVec2(btnMax.x, btnMax.y), ImGuiCond_Appearing,
+                                    ImVec2(1.0f, 0.0f));
+            if (ImGui::BeginPopup("##workspace_selector")) {
+                for (int i = 0; i < static_cast<int>(wm.count()); ++i) {
+                    const auto& ws = wm.workspaces()[i];
+                    const std::string label =
+                        std::string(iconForWorkspace(ws.name)) + "  "
+                        + I18n::T("workspace." + ws.name);
+                    const bool isActive = (i == wm.activeIndex());
+                    if (ImGui::MenuItem(label.c_str(), nullptr, isActive)) {
+                        if (!isActive) ui.requestWorkspaceSwitch(i);
+                    }
+                }
+                ImGui::EndPopup();
+            }
+        }
 
         ImGui::EndMenuBar();
     }
@@ -304,7 +305,11 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
         m_showNotImplementedPopup = false;
     }
     if (m_showPreferencesPopup) {
-        ImGui::OpenPopup("##preferences_modal");
+        // F2H79: usamos "###preferences_modal" → el ID de ImGui es estable
+        // ("preferences_modal") aunque el titulo visible (i18n) cambie de
+        // idioma. m_prefsOpen habilita el boton X del titlebar.
+        m_prefsOpen = true;
+        ImGui::OpenPopup("###preferences_modal");
         m_showPreferencesPopup = false;
     }
 
@@ -331,11 +336,12 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
 
     // F2H76: modal de Preferencias (Tema + Idioma). Aplica/persiste live al
     // cambiar cada combo — settings.json es chico, sin boton OK/Cancel.
-    if (ImGui::BeginPopupModal("##preferences_modal", nullptr,
+    // F2H79: titulo en el titlebar (no en el body) + boton X de cerrar (via
+    // p_open). "###preferences_modal" mantiene el ID estable entre idiomas.
+    const std::string prefsTitle =
+        I18n::T("editor.modal.preferences.title") + "###preferences_modal";
+    if (ImGui::BeginPopupModal(prefsTitle.c_str(), &m_prefsOpen,
                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("%s", I18n::T("editor.modal.preferences.title").c_str());
-        ImGui::Separator();
-
         // --- Tema ---
         const auto& themes = EditorThemes::available();
         const std::string& curTheme = UserSettings::theme();

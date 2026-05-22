@@ -18,7 +18,8 @@ public:
 private:
     bool m_showAboutPopup = false;
     bool m_showNotImplementedPopup = false;
-    bool m_showPreferencesPopup = false;  // F2H76
+    bool m_showPreferencesPopup = false;  // F2H76: request de abrir
+    bool m_prefsOpen = false;             // F2H79: estado abierto (boton X del titlebar)
 };
 
 } // namespace Mood
