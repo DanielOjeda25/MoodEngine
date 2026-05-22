@@ -150,6 +150,8 @@ NodeId ShaderGraphEditorPanel::selectedNode() const {
 
 void ShaderGraphEditorPanel::onImGuiRender() {
     if (!visible) return;
+    // F2H78: reset por-frame; solo true en drawToolbar (con asset + foco).
+    m_windowFocused = false;
 
     ImGui::SetNextWindowSize(ImVec2(1100.0f, 650.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(name(), &visible)) {
@@ -351,11 +353,11 @@ void ShaderGraphEditorPanel::drawToolbar() {
     // aca (guarda el shader graph; el global Ctrl+S del editor tambien
     // dispara su save del proyecto, ambos no entran en conflicto).
     // IsKeyPressed con repeat=false: no spamear si el dev mantiene apretado.
-    const bool ctrlS = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)
+    m_windowFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    const bool ctrlS = m_windowFocused
         && ImGui::GetIO().KeyCtrl
         && ImGui::IsKeyPressed(ImGuiKey_S, /*repeat=*/false);
     if (ctrlS) {
-        Log::editor()->info("[ShaderGraphEditor] Ctrl+S detectado en panel");
         triggerSave();
     }
     // Feedback verde transitorio tras un save exitoso.

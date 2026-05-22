@@ -58,6 +58,10 @@ bool ScriptEditorPanel::saveToDisk() {
 
 void ScriptEditorPanel::onImGuiRender() {
     if (!visible) return;
+    // F2H78: reset por-frame; solo se pone true abajo cuando hay un script
+    // editable + foco (los early-return sin script lo dejan false → el
+    // Ctrl+S global guarda el proyecto).
+    m_windowFocused = false;
     if (!ImGui::Begin(name(), &visible)) {
         ImGui::End();
         return;
@@ -111,7 +115,8 @@ void ScriptEditorPanel::onImGuiRender() {
     // dev esta editando). Se chequea via ImGui input — solo dispara si
     // la ventana del panel esta enfocada para no pisar el Ctrl+S del
     // proyecto cuando el usuario esta en otro panel.
-    const bool hotkeySave = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)
+    m_windowFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    const bool hotkeySave = m_windowFocused
                           && ImGui::GetIO().KeyCtrl
                           && ImGui::IsKeyPressed(ImGuiKey_S, false);
 

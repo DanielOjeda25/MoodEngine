@@ -29,6 +29,8 @@ public:
     void onImGuiRender() override;
     const char* name() const override { return "Script Editor"; }
     const char* category() const override { return "Assets"; }
+    // F2H78: guarda el .lua con Ctrl+S al tener foco (gatea el Ctrl+S global).
+    bool consumesSaveShortcut() const override { return m_windowFocused; }
 
     /// @brief El EditorUI llama esto cada frame antes del draw para que
     ///        el panel sepa que entidad esta seleccionada. Si cambia de
@@ -48,6 +50,7 @@ private:
     std::string m_buffer;             // contenido editable
     bool        m_dirty = false;     // hay cambios sin guardar
     bool        m_loadFailed = false; // error al cargar (path invalido, etc)
+    bool        m_windowFocused = false; // F2H78: foco del ultimo render
 };
 
 } // namespace Mood

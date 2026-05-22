@@ -32,6 +32,10 @@ public:
     void onImGuiRender() override;
     const char* name() const override { return "Quest Property Editor"; }
     const char* category() const override { return "Gameplay"; }
+    // F2H78: guarda el .mooquest con Ctrl+S al tener foco (gatea el global).
+    bool consumesSaveShortcut() const override {
+        return m_windowFocused && !m_loadedPath.empty();
+    }
 
     void setEditorUi(EditorUI* ui) { m_ui = ui; }
 
@@ -44,6 +48,10 @@ private:
     void drawRewardsSection();
     void drawSaveBar();
 
+    /// @brief F2H78: escribe el quest al disco + refresca el browser.
+    ///        Compartido por el boton "Guardar" y el Ctrl+S contextual.
+    bool saveToDisk();
+
     // Renderer por objective (devuelve true si hay que borrarlo).
     bool drawObjective(size_t idx, Quest::Objective& o);
     // Renderer por reward (devuelve true si hay que borrarlo).
@@ -54,6 +62,7 @@ private:
     std::filesystem::path      m_loadedPath;
     Quest::Asset               m_loaded;
     bool                       m_dirty = false;
+    bool                       m_windowFocused = false; // F2H78: foco ult. render
 
     // Toggle UI (no se persiste — derivado de los campos del asset):
     bool                       m_useNameKey = false;

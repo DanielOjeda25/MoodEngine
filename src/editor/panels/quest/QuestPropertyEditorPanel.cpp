@@ -73,6 +73,7 @@ void QuestPropertyEditorPanel::syncWithBrowserSelection() {
 
 void QuestPropertyEditorPanel::onImGuiRender() {
     if (!visible) return;
+    m_windowFocused = false;  // F2H78: solo true en drawSaveBar (quest cargado)
     syncWithBrowserSelection();
 
     const std::string title = m_dirty
@@ -319,17 +320,31 @@ void QuestPropertyEditorPanel::drawRewardsSection() {
 // Save bar
 // =============================================================
 
+bool QuestPropertyEditorPanel::saveToDisk() {
+    if (!m_loaded.saveToFile(m_loadedPath)) return false;
+    Log::editor()->info("[QuestPropertyEditor] guardado '{}'",
+                          m_loadedPath.generic_string());
+    m_dirty = false;
+    if (m_ui) m_ui->questBrowser().refresh();
+    return true;
+}
+
 void QuestPropertyEditorPanel::drawSaveBar() {
+    // F2H78: Ctrl+S contextual — guarda este quest si el panel tiene foco
+    // (mismo patron que Script/Shader/Item). El handler global lo respeta
+    // via consumesSaveShortcut() y no guarda ademas el proyecto.
+    m_windowFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    const bool hotkeySave = m_windowFocused
+                          && ImGui::GetIO().KeyCtrl
+                          && ImGui::IsKeyPressed(ImGuiKey_S, false);
+
     ImGui::BeginDisabled(!m_dirty);
-    if (ImGui::Button(I18n::T("editor.panel.quest_editor.save").c_str())) {
-        if (m_loaded.saveToFile(m_loadedPath)) {
-            Log::editor()->info("[QuestPropertyEditor] guardado '{}'",
-                                  m_loadedPath.generic_string());
-            m_dirty = false;
-            if (m_ui) m_ui->questBrowser().refresh();
-        }
-    }
+    const bool clickedSave =
+        ImGui::Button(I18n::T("editor.panel.quest_editor.save").c_str());
     ImGui::EndDisabled();
+    if ((clickedSave || hotkeySave) && m_dirty) {
+        saveToDisk();
+    }
     ImGui::SameLine();
     ImGui::BeginDisabled(!m_dirty);
     if (ImGui::Button(I18n::T("editor.panel.quest_editor.revert").c_str())) {

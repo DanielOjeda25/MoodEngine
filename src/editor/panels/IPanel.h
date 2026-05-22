@@ -24,6 +24,15 @@ public:
     ///        Override por panel cuando aplique (ej. AssetBrowser → "Assets").
     virtual const char* category() const { return "Scene"; }
 
+    /// @brief F2H78 (Ctrl+S contextual): ¿este panel guarda SU contenido con
+    ///        Ctrl+S cuando tiene foco? (script/shader/item/quest editors).
+    ///        El handler global de Ctrl+S consulta esto sobre los panels
+    ///        `visible`: si alguno lo devuelve true, NO dispara ademas el
+    ///        guardado de proyecto (el editor enfocado ya se guarda solo en
+    ///        su render). Los panels guardables lo respaldan con un bool de
+    ///        foco actualizado en onImGuiRender via ImGui::IsWindowFocused.
+    virtual bool consumesSaveShortcut() const { return false; }
+
     /// @brief Toggle de visibilidad. El EditorUI revisa este flag antes de
     ///        invocar onImGuiRender.
     bool visible = true;

@@ -32,6 +32,10 @@ public:
     void onImGuiRender() override;
     const char* name() const override { return "Item Property Editor"; }
     const char* category() const override { return "Gameplay"; }
+    // F2H78: guarda el .mooditem con Ctrl+S al tener foco (gatea el global).
+    bool consumesSaveShortcut() const override {
+        return m_windowFocused && !m_loadedPath.empty();
+    }
 
     void setEditorUi(EditorUI* ui) { m_ui = ui; }
 
@@ -55,11 +59,16 @@ private:
     void drawSlotSizeSection();
     void drawSaveBar();
 
+    /// @brief F2H78: escribe el item al disco + refresca el browser.
+    ///        Compartido por el boton "Guardar" y el Ctrl+S contextual.
+    bool saveToDisk();
+
     EditorUI*                  m_ui = nullptr;
 
     std::filesystem::path      m_loadedPath;     // empty = no asset cargado
     Inventory::Asset           m_loaded;
     bool                       m_dirty = false;
+    bool                       m_windowFocused = false; // F2H78: foco ult. render
 
     // Toggles UI por field (no se persisten — derivados del state):
     bool                       m_useNameKey = false;

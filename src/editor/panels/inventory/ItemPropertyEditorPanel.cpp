@@ -45,6 +45,7 @@ void ItemPropertyEditorPanel::syncWithBrowserSelection() {
 
 void ItemPropertyEditorPanel::onImGuiRender() {
     if (!visible) return;
+    m_windowFocused = false;  // F2H78: solo true en drawSaveBar (item cargado)
     syncWithBrowserSelection();
 
     const std::string title = m_dirty
@@ -331,19 +332,33 @@ void ItemPropertyEditorPanel::drawSlotSizeSection() {
 // Save bar
 // =============================================================
 
+bool ItemPropertyEditorPanel::saveToDisk() {
+    if (!m_loaded.saveToFile(m_loadedPath)) return false;
+    Log::editor()->info("[ItemPropertyEditor] guardado '{}'",
+                          m_loadedPath.generic_string());
+    m_dirty = false;
+    // Refrescar el browser para que displayName/categoria se actualicen
+    // tras cambios al name_literal o tags.
+    if (m_ui) m_ui->itemBrowser().refresh();
+    return true;
+}
+
 void ItemPropertyEditorPanel::drawSaveBar() {
+    // F2H78: Ctrl+S contextual — guarda este item si el panel tiene foco
+    // (mismo patron que Script/Shader). El handler global lo respeta via
+    // consumesSaveShortcut() y no dispara ademas el guardado de proyecto.
+    m_windowFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    const bool hotkeySave = m_windowFocused
+                          && ImGui::GetIO().KeyCtrl
+                          && ImGui::IsKeyPressed(ImGuiKey_S, false);
+
     ImGui::BeginDisabled(!m_dirty);
-    if (ImGui::Button(I18n::T("editor.panel.item_editor.save").c_str())) {
-        if (m_loaded.saveToFile(m_loadedPath)) {
-            Log::editor()->info("[ItemPropertyEditor] guardado '{}'",
-                                  m_loadedPath.generic_string());
-            m_dirty = false;
-            // Refrescar el browser para que displayName/categoria se
-            // actualicen tras cambios al name_literal o tags.
-            if (m_ui) m_ui->itemBrowser().refresh();
-        }
-    }
+    const bool clickedSave =
+        ImGui::Button(I18n::T("editor.panel.item_editor.save").c_str());
     ImGui::EndDisabled();
+    if ((clickedSave || hotkeySave) && m_dirty) {
+        saveToDisk();
+    }
     ImGui::SameLine();
     ImGui::BeginDisabled(!m_dirty);
     if (ImGui::Button(I18n::T("editor.panel.item_editor.revert").c_str())) {

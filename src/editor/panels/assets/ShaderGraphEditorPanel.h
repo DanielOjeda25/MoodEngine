@@ -43,6 +43,8 @@ public:
     void onImGuiRender() override;
     const char* name() const override { return "Shader Graph"; }
     const char* category() const override { return "Assets"; }
+    // F2H78: guarda el shader graph con Ctrl+S al tener foco (gatea el global).
+    bool consumesSaveShortcut() const override { return m_windowFocused; }
 
     /// @brief Inyecta el EditorUI para acceder al HistoryStack.
     void setEditorUi(EditorUI* ui) { m_ui = ui; }
@@ -110,6 +112,7 @@ private:
     static const char* socketTypeOf(const NodeGraph::Node& node,
                                     NodeGraph::SocketId socketId);
 
+    bool                                   m_windowFocused = false; // F2H78
     EditorUI*                              m_ui = nullptr;
     AssetManager*                          m_assets = nullptr;
     ShaderGraph::Asset                     m_asset;

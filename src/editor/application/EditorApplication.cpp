@@ -19,6 +19,7 @@
 
 #include "core/Log.h"
 #include "core/Profiler.h"
+#include "editor/panels/IPanel.h"  // F2H78: consumesSaveShortcut() en Ctrl+S contextual
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H44: Ctrl+wheel snap step
 #include "engine/game/state/GameState.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
@@ -96,9 +97,20 @@ void EditorApplication::processEvents() {
                    (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
                    ev.key.repeat == 0 &&
                    m_mode == EditorMode::Editor) {
-            // Ctrl+S: atajo de Guardar. Emitimos la misma solicitud que el menu
-            // para reusar el dispatcher unico.
-            m_ui.requestProjectAction(ProjectAction::Save);
+            // Ctrl+S contextual (F2H78): si un editor guardable (script /
+            // shader / item / quest) tiene foco, el se guarda solo en su
+            // render — NO disparamos ademas el guardado de proyecto. Si no
+            // hay ninguno enfocado, Ctrl+S guarda proyecto+mapa como siempre.
+            bool panelHandlesSave = false;
+            for (const IPanel* p : m_ui.panels()) {
+                if (p->visible && p->consumesSaveShortcut()) {
+                    panelHandlesSave = true;
+                    break;
+                }
+            }
+            if (!panelHandlesSave) {
+                m_ui.requestProjectAction(ProjectAction::Save);
+            }
         } else if (ev.type == SDL_KEYDOWN &&
                    (ev.key.keysym.sym == SDLK_DELETE ||
                     ev.key.keysym.sym == SDLK_BACKSPACE) &&
