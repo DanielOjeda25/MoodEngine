@@ -17,6 +17,7 @@
 #include "engine/quest/QuestSystem.h"         // F2H53 shutdown order
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/render/preview/MaterialPreviewRenderer.h"
+#include "engine/render/preview/MeshThumbnailRenderer.h"
 #include "engine/render/rhi/IFramebuffer.h"
 #include "engine/render/rhi/IRenderer.h"
 #include "engine/render/rhi/ITexture.h"
@@ -342,6 +343,16 @@ EditorApplication::EditorApplication() {
         m_sceneRenderer->iblBrdfLut());
     m_ui.materialEditor().setPreviewRenderer(m_materialPreview.get());
 
+    // F2H80: renderer de miniaturas 3D de meshes (cache por mesh). Mismo IBL
+    // que el material preview. Lo usa el modal "+ Crear Entidad" y se inyecta
+    // al Asset Browser. 128² por miniatura (suficiente para cards).
+    m_meshThumbnails = std::make_unique<MeshThumbnailRenderer>(128u);
+    m_meshThumbnails->setIblTextures(
+        m_sceneRenderer->iblIrradiance(),
+        m_sceneRenderer->iblPrefilter(),
+        m_sceneRenderer->iblBrdfLut());
+    m_ui.assetBrowser().setThumbnailRenderer(m_meshThumbnails.get());
+
     buildInitialTestMap();
     rebuildSceneFromMap();
     updateWindowTitle();
@@ -402,6 +413,8 @@ EditorApplication::~EditorApplication() {
     // SceneRenderer. Liberar ANTES del SceneRenderer para evitar
     // dangling pointers en el dtor del preview.
     m_materialPreview.reset();
+    // F2H80: ídem para las miniaturas (FBOs propios + refs IBL no-owning).
+    m_meshThumbnails.reset();
     // SceneRenderer destruye en orden inverso al ctor todos sus recursos
     // GL (FBs, shaders, IBL textures, debug renderer, etc.).
     m_sceneRenderer.reset();

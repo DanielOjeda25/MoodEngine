@@ -7,6 +7,7 @@
 #include "core/i18n/I18n.h"  // F2H43
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MeshAsset.h"
+#include "engine/render/preview/MeshThumbnailRenderer.h"  // F2H80
 
 #include <imgui.h>
 #include <nlohmann/json.hpp>  // F2H70.3: parse metadata del .moodvehicle
@@ -475,23 +476,79 @@ void AssetBrowserPanel::onImGuiRender() {
                 I18n::T("editor.panel.assets.count.meshes",
                         m_meshEntries.size()).c_str());
             ImGui::BeginChild("##meshes_scroll", ImVec2(0.0f, 0.0f), false);
+            // F2H80: grilla de cards con miniatura 3D (mismo patrón que el tab
+            // de texturas). Cae al listado de texto si no hay thumbnail renderer.
+            constexpr float kMeshThumb = 80.0f;
+            const float meshAvail = ImGui::GetContentRegionAvail().x;
+            const float meshCell = kMeshThumb + 12.0f;
+            const int meshCols = std::max(1, static_cast<int>(meshAvail / meshCell));
+            int drawn = 0;
             for (const auto& me : m_meshEntries) {
                 MeshAsset* asset = m_assetManager->getMesh(me.id);
+                const GLuint thumb = (m_thumbnails != nullptr)
+                    ? m_thumbnails->thumbnailFor(me.id, *m_assetManager) : 0u;
+
                 ImGui::PushID(me.logicalPath.c_str());
-                ImGui::Selectable(me.displayName.c_str(), false);
+                ImGui::BeginGroup();
+
+                const bool isSelected = m_selected.has_value() &&
+                                          *m_selected == me.logicalPath;
+                if (isSelected) {
+                    ImGui::PushStyleColor(ImGuiCol_Button,
+                                            ImVec4(0.25f, 0.45f, 0.75f, 1.0f));
+                }
+                bool clicked = false;
+                if (thumb != 0u) {
+                    // FBO color texture: bottom-up → uv flip (0,1)-(1,0).
+                    clicked = ImGui::ImageButton("##meshthumb",
+                                    (ImTextureID)(uintptr_t)thumb,
+                                    ImVec2(kMeshThumb, kMeshThumb),
+                                    ImVec2(0, 1), ImVec2(1, 0));
+                } else {
+                    clicked = ImGui::Button("##meshnothumb",
+                                    ImVec2(kMeshThumb, kMeshThumb));
+                }
+                if (isSelected) ImGui::PopStyleColor();
+                if (clicked) m_selected = me.logicalPath;
+
+                // Drag-source: arrastrar al viewport spawnea la entidad.
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
                     ImGui::SetDragDropPayload("MOOD_MESH_ASSET", &me.id, sizeof(me.id));
+                    if (thumb != 0u) {
+                        ImGui::Image((ImTextureID)(uintptr_t)thumb, ImVec2(48.0f, 48.0f),
+                                      ImVec2(0, 1), ImVec2(1, 0));
+                        ImGui::SameLine();
+                    }
                     ImGui::TextUnformatted(me.displayName.c_str());
                     ImGui::EndDragDropSource();
                 }
-                if (asset != nullptr) {
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("%s",
+                if (ImGui::IsItemHovered() && asset != nullptr) {
+                    ImGui::SetTooltip("%s\n%s", me.displayName.c_str(),
                         I18n::T("editor.panel.assets.mesh_meta",
                                 static_cast<u32>(asset->submeshes.size()),
                                 asset->totalVertexCount()).c_str());
                 }
+
+                // Label truncado al ancho de la card.
+                const float textW = ImGui::CalcTextSize(me.displayName.c_str()).x;
+                if (textW <= kMeshThumb) {
+                    ImGui::TextUnformatted(me.displayName.c_str());
+                } else {
+                    std::string truncated = me.displayName;
+                    while (!truncated.empty() &&
+                            ImGui::CalcTextSize((truncated + "..").c_str()).x > kMeshThumb) {
+                        truncated.pop_back();
+                    }
+                    ImGui::Text("%s..", truncated.c_str());
+                }
+
+                ImGui::EndGroup();
                 ImGui::PopID();
+
+                if (static_cast<int>((drawn + 1) % meshCols) != 0) {
+                    ImGui::SameLine();
+                }
+                ++drawn;
             }
             ImGui::EndChild();
             ImGui::EndTabItem();

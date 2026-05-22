@@ -30,7 +30,28 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H79 (2026-05-21) — **Sub-fase 2.7**
+## 0.1. Último hito de feature — F2H80 (2026-05-22) — **Sub-fase 2.7**
+
+**Miniaturas 3D en "Crear Entidad" + Asset Browser.** Tag `v1.71.0-fase2-hito80`. Detalle completo en [`hitos/F2H80.md`](hitos/F2H80.md). Quinto hito de Sub-fase 2.7.
+
+**Lo que entregó**:
+- **`MeshThumbnailRenderer`** (engine/render/preview/): renderiza el mesh real (submeshes + materiales) a un FBO LDR 128² y **cachea la textura por mesh** (render-once). Reusa shader PBR + IBL; cámara encuadrada al AABB (3/4 view), `importRotationEuler` aplicado, sin animar. Setup PBR compartido entre el path de mesh y el de primitiva.
+- **Wiring**: `EditorApplication` lo posee (IBL del `SceneRenderer`), inyectado al `AssetBrowserPanel`.
+- **Grilla de cards** con miniatura 3D en el modal **+ Crear Entidad** (tab Meshes) y en el **Asset Browser** (tab Meshes); drag-source `MOOD_MESH_ASSET` intacto.
+- **Primitivas en 3D**: `thumbnailForPrimitive(PrimitiveKind)` construye el brush CSG (mismas dims que el spawn) → mesh dinámico → render-once. Tab Primitivas con cards 3D.
+- **Luces con ícono**: cards con ☀ (`ICON_FA_SUN`) / 💡 (`ICON_FA_LIGHTBULB`) a escala 2.6x (una luz no tiene modelo 3D).
+- **No-resize** del modal Crear Entidad.
+
+**Suite 1061/11018 verde** (render-to-texture + UI sin superficie headless). Validado en vivo: meshes, primitivas, luces, no-resize — *"todo okey"*.
+
+**Pendientes de 2.7 (en orden acordado con el dev)**:
+- **F2H81 — mini-player de animaciones**: previsualizar clips `anim_*.fbx` montados sobre un personaje con esqueleto, posado/reproducido (no una miniatura estática — feature de otra naturaleza). Diferido de F2H80.
+- **F2H82 — mejorar el Inspector**: el dev reportó que "marea entre tantas opciones" (17 secciones de componentes). Reducir carga visual / mejorar navegación (ej. secciones poco usadas colapsadas con memoria, agrupar, búsqueda, íconos por componente).
+- Más atrás: Ctrl+S "guardar como", unificar Undo en Material/Item/Quest, atajos configurables, escala de UI, y el bump a `v2.0.0` (cierre Fase 2).
+
+---
+
+## 0.1ante2. Hito previo — F2H79 (2026-05-21) — **Sub-fase 2.7**
 
 **Pulido de modales + hover circular + remake del Welcome.** Tag `v1.70.0-fase2-hito79`. Detalle completo en [`hitos/F2H79.md`](hitos/F2H79.md). Cuarto hito de Sub-fase 2.7.
 

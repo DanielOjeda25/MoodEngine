@@ -53,7 +53,8 @@ inline constexpr unsigned short k_FontAwesomeRange[] = { 0xE005, 0xF8FF, 0 };
 
 // --- Entity types (Hierarchy / VisGroups / Inspector headers) ---
 #define ICON_FA_CUBES_STACKED                       "\xee\x93\xa6" // 0xE4E6 brush (CSG)
-#define ICON_FA_LIGHTBULB                           "\xef\x83\xab" // 0xF0EB light
+#define ICON_FA_LIGHTBULB                           "\xef\x83\xab" // 0xF0EB light (point)
+#define ICON_FA_SUN                                 "\xef\x86\x85" // 0xF185 light (directional) F2H80
 #define ICON_FA_VOLUME_HIGH                         "\xef\x80\xa8" // 0xF028 audio source
 #define ICON_FA_FILE_CODE                           "\xef\x87\x89" // 0xF1C9 script (lua)
 #define ICON_FA_BORDER_NONE                         "\xef\xa1\x90" // 0xF850 trigger

@@ -4544,5 +4544,26 @@ Total ~ 1-2 semanas de hito grande.
 **Revisar si:**
 - El dev quiere granularidad por-asset (script/shader/item con su propio "sin guardar"): hoy el badge refleja el dirty del proyecto/mapa, no de cada editor de asset.
 
+## 2026-05-22: F2H80 — miniaturas 3D cacheadas (render-once) + primitivas reusando el path de brushes
+
+**Contexto:** el "+ Crear Entidad" y el Asset Browser listaban meshes como texto. Se quería un grid de cards con preview 3D (estilo SFM / Unreal). El `MaterialPreviewRenderer` ya renderizaba una esfera con un material, pero no un mesh arbitrario.
+
+**Decisión:** `MeshThumbnailRenderer` nuevo (no extender el de materiales): renderiza el mesh real a un FBO por mesh y **cachea la textura** (render-once, lazy). Las primitivas se previsualizan construyendo su `Csg::Brush` → `buildBrushMesh` → `createDynamicMesh` (reusa el path de brushes ya existente). Las luces NO se renderizan en 3D (no tienen modelo) → ícono. El mini-player de animaciones se difiere a F2H81.
+
+**Razones:**
+- **Render-once cacheado, no animado**: una grilla de N miniaturas rotando es cara (N draws/frame) y distrae; una textura fija a ángulo 3/4 cubre el reconocimiento visual. El preview animado del Material Editor se justifica porque es 1 sola esfera con foco.
+- **Clase nueva vs. extender MaterialPreviewRenderer**: la lógica de cache + camera-fit + multi-submesh es distinta; no tocar el preview de materiales (que anda). El setup PBR común se compartió con helpers privados.
+- **Primitivas reusando brushes**: `buildBrushMesh`/`brushSubmeshToInterleaved`/`createDynamicMesh` ya existían (la render layer ya dependía de Csg vía SceneRenderer); no se reinventó geometría.
+- **Luces = ícono**: una luz no tiene geometría; un thumbnail 3D no aporta (estándar Unity/Unreal).
+- **Animaciones a F2H81**: previsualizar un clip requiere montar un personaje con esqueleto + posarlo = mini-reproductor, feature de otra naturaleza que una miniatura estática.
+
+**Alternativas descartadas:**
+- Registrar las primitivas como MeshAssets sintéticos en el AssetManager: acoplaría el AssetManager a la generación CSG por un beneficio solo de preview.
+- Animar los thumbnails: caro y distractor en una grilla.
+
+**Revisar si:**
+- Hay cientos de meshes: el cache es 1 FBO 128² por mesh; si la memoria importa, bajar a 96² o evictar LRU.
+- Se re-importa un mesh (su id cambia): hay `invalidate(id)` / `clear()` para refrescar.
+
 
 

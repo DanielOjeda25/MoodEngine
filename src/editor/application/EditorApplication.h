@@ -37,6 +37,7 @@ namespace Mood {
 class IFramebuffer;
 class IMesh;
 class MaterialPreviewRenderer;
+class MeshThumbnailRenderer;
 class SceneRenderer;
 class ScriptSystem;
 class AudioDevice;
@@ -305,6 +306,12 @@ private:
     ///        SceneRenderer. Inyectado al MaterialEditorPanel. Solo
     ///        dibuja si el panel esta visible (cost ~0 cuando cerrado).
     std::unique_ptr<MaterialPreviewRenderer> m_materialPreview;
+
+    /// @brief F2H80: renderer de miniaturas 3D de meshes (cache por mesh,
+    ///        render-once). Lo usan el modal "+ Crear Entidad" (tab Meshes,
+    ///        vive en EditorApplication) y el Asset Browser (inyectado). IBL
+    ///        del SceneRenderer, igual que m_materialPreview.
+    std::unique_ptr<MeshThumbnailRenderer> m_meshThumbnails;
 
     std::unique_ptr<ScriptSystem> m_scriptSystem;
     std::unique_ptr<AudioDevice> m_audioDevice;

@@ -14,6 +14,8 @@
 
 namespace Mood {
 
+class MeshThumbnailRenderer;  // F2H80
+
 class AssetBrowserPanel : public IPanel {
 public:
     void onImGuiRender() override;
@@ -23,6 +25,11 @@ public:
     /// @brief El panel queda inerte (muestra "Asset manager no inyectado")
     ///        hasta que `EditorApplication` le pasa el manager real.
     void setAssetManager(AssetManager* am) { m_assetManager = am; }
+
+    /// @brief F2H80: renderer de miniaturas 3D (inyectado por EditorApplication,
+    ///        non-owning). Si es null, la sección de meshes cae al listado de
+    ///        texto sin preview.
+    void setThumbnailRenderer(MeshThumbnailRenderer* t) { m_thumbnails = t; }
 
     /// @brief Path logico (relativo a la raiz de assets) del item seleccionado
     ///        por click en este panel. `nullopt` si nada esta seleccionado.
@@ -106,6 +113,7 @@ private:
     };
 
     AssetManager* m_assetManager = nullptr;
+    MeshThumbnailRenderer* m_thumbnails = nullptr;  // F2H80, non-owning
     std::vector<Entry> m_entries;
     std::vector<AudioEntry> m_audioEntries;
     std::vector<MeshEntry> m_meshEntries;

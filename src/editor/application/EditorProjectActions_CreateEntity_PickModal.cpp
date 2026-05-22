@@ -11,16 +11,20 @@
 #include "editor/application/EditorProjectActions_CreateEntity_Internal.h"
 #include "editor/selection/SelectionSet.h"
 #include "editor/ui/EditorUI.h"
+#include "editor/ui/IconsFontAwesome6.h"  // F2H80: íconos de luz
 #include "engine/assets/manager/AssetManager.h"
 #include "core/i18n/I18n.h"
 #include "engine/render/resources/MeshAsset.h"
+#include "engine/render/preview/MeshThumbnailRenderer.h"  // F2H80
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 
+#include <glad/gl.h>  // F2H80: GLuint del thumbnail
 #include <imgui.h>
 #include <portable-file-dialogs.h>
 
+#include <algorithm>  // F2H80: std::max para el cálculo de columnas
 #include <filesystem>
 #include <string>
 #include <system_error>
@@ -65,8 +69,10 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
         ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(620.0f, 480.0f), ImGuiCond_Appearing);
 
+    // F2H80: NoResize — es un diálogo de tamaño fijo, no una ventana de
+    // trabajo. El dev no debería poder estirarlo.
     constexpr ImGuiWindowFlags flags =
-        ImGuiWindowFlags_NoCollapse;
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize;
 
     // F2H59: pasar &m_pickMeshModalActive como p_open hace que ImGui
     // pinte la X arriba a la derecha. Al cliquear, ImGui setea el bool
@@ -116,21 +122,59 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
         ImGui::TextDisabled("%s", I18n::T("editor.pick_mesh_modal.empty").c_str());
         ImGui::EndChild();
     } else {
+        // F2H80: grilla de cards con miniatura 3D del modelo real (estilo SFM /
+        // Unreal Content Browser). Cae a un botón con el nombre si no hay
+        // thumbnail renderer / falla el render.
         ImGui::BeginChild("##mesh_list", ImVec2(0.0f, kTabContentHeight), true);
         MeshAssetId selectedToSpawn = 0;
+        constexpr float kThumb = 88.0f;
+        const float availW = ImGui::GetContentRegionAvail().x;
+        const float cell = kThumb + 12.0f;
+        const int cols = std::max(1, static_cast<int>(availW / cell));
+        int drawn = 0;
         for (usize i = 1; i < meshCount; ++i) {
             const auto id = static_cast<MeshAssetId>(i);
             const std::string path = m_assetManager->meshPathOf(id);
             // Skip primitivos sintetizados (sphere/cube generados en ctor).
             if (path.rfind("__", 0) == 0) continue;
+
+            const std::string fileName =
+                std::filesystem::path(path).filename().generic_string();
+            const GLuint thumb = (m_meshThumbnails != nullptr)
+                ? m_meshThumbnails->thumbnailFor(id, *m_assetManager) : 0u;
+
             ImGui::PushID(static_cast<int>(id));
-            char buf[512];
-            std::snprintf(buf, sizeof(buf), "%s  (id %u)", path.c_str(), id);
-            if (ImGui::Selectable(buf, false,
-                                    ImGuiSelectableFlags_AllowDoubleClick)) {
-                selectedToSpawn = id;
+            ImGui::BeginGroup();
+            bool clicked = false;
+            if (thumb != 0u) {
+                // FBO color texture: bottom-up → uv flip (0,1)-(1,0).
+                clicked = ImGui::ImageButton("##meshthumb",
+                                (ImTextureID)(uintptr_t)thumb,
+                                ImVec2(kThumb, kThumb),
+                                ImVec2(0, 1), ImVec2(1, 0));
+            } else {
+                clicked = ImGui::Button(fileName.c_str(), ImVec2(kThumb, kThumb));
             }
+            if (clicked) selectedToSpawn = id;
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", path.c_str());
+
+            // Label truncado al ancho de la card.
+            const float textW = ImGui::CalcTextSize(fileName.c_str()).x;
+            if (textW <= kThumb) {
+                ImGui::TextUnformatted(fileName.c_str());
+            } else {
+                std::string truncated = fileName;
+                while (!truncated.empty() &&
+                        ImGui::CalcTextSize((truncated + "..").c_str()).x > kThumb) {
+                    truncated.pop_back();
+                }
+                ImGui::Text("%s..", truncated.c_str());
+            }
+            ImGui::EndGroup();
             ImGui::PopID();
+
+            if (static_cast<int>((drawn + 1) % cols) != 0) ImGui::SameLine();
+            ++drawn;
         }
         ImGui::EndChild();
 
@@ -213,24 +257,44 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
             I18n::T("editor.pick_mesh_modal.lights_hint").c_str());
         ImGui::Spacing();
 
-        struct LightSpec { const char* labelKey; ProjectAction action; };
-        constexpr LightSpec kLights[] = {
-            { "editor.menu.light.directional", ProjectAction::AddDirectionalLight },
-            { "editor.menu.light.point",       ProjectAction::AddPointLight       },
+        // F2H80: cards con ícono (una luz no tiene modelo 3D que renderizar —
+        // el estándar de los engines es un ícono claro: sol = direccional,
+        // foco = puntual).
+        struct LightSpec { const char* labelKey; const char* icon; ProjectAction action; };
+        const LightSpec kLights[] = {
+            { "editor.menu.light.directional", ICON_FA_SUN,       ProjectAction::AddDirectionalLight },
+            { "editor.menu.light.point",       ICON_FA_LIGHTBULB, ProjectAction::AddPointLight       },
         };
         constexpr int kLightCount = static_cast<int>(sizeof(kLights) / sizeof(kLights[0]));
-        constexpr float kBtnW = 220.0f;
-        constexpr float kBtnH = 56.0f;
+        constexpr float kCard = 96.0f;
 
         ProjectAction pendingAction = static_cast<ProjectAction>(-1);
         bool actionPicked = false;
         for (int i = 0; i < kLightCount; ++i) {
             if (i > 0) ImGui::SameLine();
             const std::string label = I18n::T(kLights[i].labelKey);
-            if (ImGui::Button(label.c_str(), ImVec2(kBtnW, kBtnH))) {
-                pendingAction = kLights[i].action;
-                actionPicked = true;
+            ImGui::PushID(i);
+            ImGui::BeginGroup();
+            // Ícono grande centrado (font scale 2.6x) como label de una card.
+            ImGui::SetWindowFontScale(2.6f);
+            const bool clicked = ImGui::Button(kLights[i].icon, ImVec2(kCard, kCard));
+            ImGui::SetWindowFontScale(1.0f);
+            if (clicked) { pendingAction = kLights[i].action; actionPicked = true; }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", label.c_str());
+
+            const float textW = ImGui::CalcTextSize(label.c_str()).x;
+            if (textW <= kCard) {
+                ImGui::TextUnformatted(label.c_str());
+            } else {
+                std::string truncated = label;
+                while (!truncated.empty() &&
+                        ImGui::CalcTextSize((truncated + "..").c_str()).x > kCard) {
+                    truncated.pop_back();
+                }
+                ImGui::Text("%s..", truncated.c_str());
             }
+            ImGui::EndGroup();
+            ImGui::PopID();
         }
 
         if (actionPicked) {
@@ -256,34 +320,65 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
             I18n::T("editor.pick_mesh_modal.primitives_hint").c_str());
         ImGui::Spacing();
 
-        struct PrimSpec { const char* labelKey; ProjectAction action; };
-        constexpr PrimSpec kPrims[] = {
-            { "editor.menu.brush.plane",     ProjectAction::AddPlaneBrush             },
-            { "editor.menu.brush.quad",      ProjectAction::AddQuadBrush              },
-            { "editor.menu.brush.box",       ProjectAction::AddBoxBrush               },
-            { "editor.menu.brush.cylinder",  ProjectAction::AddCylinderBrush          },
-            { "editor.menu.brush.sphere",    ProjectAction::AddSphereBrush            },
-            { "editor.menu.brush.cone",      ProjectAction::AddConeBrush              },
-            { "editor.menu.brush.capsule",   ProjectAction::AddCapsuleBrush           },
-            { "editor.menu.brush.pyramid",   ProjectAction::AddPyramidBrush           },
-            { "editor.menu.brush.wedge",     ProjectAction::AddWedgeBrush             },
-            { "editor.menu.brush.prism_tri", ProjectAction::AddPrismTriangularBrush   },
-            { "editor.menu.brush.prism_hex", ProjectAction::AddPrismHexagonalBrush    },
+        // F2H80: cards con miniatura 3D real de cada primitiva (el renderer
+        // construye el brush + mesh una vez y cachea). Cae a un botón con el
+        // nombre si no hay thumbnail renderer.
+        using PK = MeshThumbnailRenderer::PrimitiveKind;
+        struct PrimSpec { const char* labelKey; ProjectAction action; PK kind; };
+        const PrimSpec kPrims[] = {
+            { "editor.menu.brush.plane",     ProjectAction::AddPlaneBrush,           PK::Plane    },
+            { "editor.menu.brush.quad",      ProjectAction::AddQuadBrush,            PK::Quad     },
+            { "editor.menu.brush.box",       ProjectAction::AddBoxBrush,             PK::Box      },
+            { "editor.menu.brush.cylinder",  ProjectAction::AddCylinderBrush,        PK::Cylinder },
+            { "editor.menu.brush.sphere",    ProjectAction::AddSphereBrush,          PK::Sphere   },
+            { "editor.menu.brush.cone",      ProjectAction::AddConeBrush,            PK::Cone     },
+            { "editor.menu.brush.capsule",   ProjectAction::AddCapsuleBrush,         PK::Capsule  },
+            { "editor.menu.brush.pyramid",   ProjectAction::AddPyramidBrush,         PK::Pyramid  },
+            { "editor.menu.brush.wedge",     ProjectAction::AddWedgeBrush,           PK::Wedge    },
+            { "editor.menu.brush.prism_tri", ProjectAction::AddPrismTriangularBrush, PK::PrismTri },
+            { "editor.menu.brush.prism_hex", ProjectAction::AddPrismHexagonalBrush,  PK::PrismHex },
         };
         constexpr int kPrimCount = static_cast<int>(sizeof(kPrims) / sizeof(kPrims[0]));
-        constexpr int kCols = 3;
-        constexpr float kBtnW = 180.0f;
-        constexpr float kBtnH = 40.0f;
+        constexpr float kThumb = 88.0f;
+        const float availW = ImGui::GetContentRegionAvail().x;
+        const int cols = std::max(1, static_cast<int>(availW / (kThumb + 12.0f)));
 
         ProjectAction pendingAction = static_cast<ProjectAction>(-1);
         bool actionPicked = false;
         for (int i = 0; i < kPrimCount; ++i) {
-            if (i % kCols != 0) ImGui::SameLine();
             const std::string label = I18n::T(kPrims[i].labelKey);
-            if (ImGui::Button(label.c_str(), ImVec2(kBtnW, kBtnH))) {
-                pendingAction = kPrims[i].action;
-                actionPicked = true;
+            const GLuint thumb = (m_meshThumbnails != nullptr)
+                ? m_meshThumbnails->thumbnailForPrimitive(kPrims[i].kind, *m_assetManager)
+                : 0u;
+
+            ImGui::PushID(i);
+            ImGui::BeginGroup();
+            bool clicked = false;
+            if (thumb != 0u) {
+                clicked = ImGui::ImageButton("##primthumb",
+                                (ImTextureID)(uintptr_t)thumb,
+                                ImVec2(kThumb, kThumb), ImVec2(0, 1), ImVec2(1, 0));
+            } else {
+                clicked = ImGui::Button(label.c_str(), ImVec2(kThumb, kThumb));
             }
+            if (clicked) { pendingAction = kPrims[i].action; actionPicked = true; }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", label.c_str());
+
+            const float textW = ImGui::CalcTextSize(label.c_str()).x;
+            if (textW <= kThumb) {
+                ImGui::TextUnformatted(label.c_str());
+            } else {
+                std::string truncated = label;
+                while (!truncated.empty() &&
+                        ImGui::CalcTextSize((truncated + "..").c_str()).x > kThumb) {
+                    truncated.pop_back();
+                }
+                ImGui::Text("%s..", truncated.c_str());
+            }
+            ImGui::EndGroup();
+            ImGui::PopID();
+
+            if (static_cast<int>((i + 1) % cols) != 0) ImGui::SameLine();
         }
 
         if (actionPicked) {
