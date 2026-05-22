@@ -45,9 +45,10 @@ Pure helpers extracted: 0         0         1 + 7 tests
 **Suite 1061/11018 verde** (render-to-texture + UI sin superficie headless). Validado en vivo: meshes, primitivas, luces, no-resize — *"todo okey"*.
 
 **Pendientes de 2.7 (en orden acordado con el dev)**:
-- **F2H81 — mini-player de animaciones**: previsualizar clips `anim_*.fbx` montados sobre un personaje con esqueleto, posado/reproducido (no una miniatura estática — feature de otra naturaleza). Diferido de F2H80.
-- **F2H82 — mejorar el Inspector**: el dev reportó que "marea entre tantas opciones" (17 secciones de componentes). Reducir carga visual / mejorar navegación (ej. secciones poco usadas colapsadas con memoria, agrupar, búsqueda, íconos por componente).
-- Más atrás: Ctrl+S "guardar como", unificar Undo en Material/Item/Quest, atajos configurables, escala de UI, y el bump a `v2.0.0` (cierre Fase 2).
+- **F2H81 — preview de animaciones + Inspector más claro** (el dev pidió juntar ambas en un solo hito). (1) **Mini-player de animaciones**: previsualizar clips `anim_*.fbx` montados sobre un personaje con esqueleto, reproducidos (no miniatura estática — diferido de F2H80). (2) **Inspector más claro**: el dev reportó que "marea entre tantas opciones" (17 secciones); reducir carga visual / mejorar navegación (auditar primero — las secciones ya son colapsables). Plan en [`PLAN_HITO_F2H81.md`](PLAN_HITO_F2H81.md).
+- **Atajos de teclado configurables** (era F2H42 del plan original, nunca hecho — hoy hardcodeados): keybindings + UI + persistencia + presets.
+- **Cierre Fase 2 + `v2.0.0`**: suite verde, docs al día, release notes, recap, planning Fase 3.
+- Menores: Ctrl+S "guardar como", unificar Undo en Material/Item/Quest. **Tutorial in-app**: diferido por el dev a post-Fase 2.
 
 ---
 
