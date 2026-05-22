@@ -30,7 +30,23 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H78 (2026-05-21) — **Sub-fase 2.7**
+## 0.1. Último hito de feature — F2H79 (2026-05-21) — **Sub-fase 2.7**
+
+**Pulido de modales + hover circular + remake del Welcome.** Tag `v1.70.0-fase2-hito79`. Detalle completo en [`hitos/F2H79.md`](hitos/F2H79.md). Cuarto hito de Sub-fase 2.7.
+
+**Lo que entregó**:
+- **Modal Preferencias** (`MenuBar`): título traducido en la **titlebar** (`### ` mantiene el ID estable) + botón **X** vía `&m_prefsOpen`.
+- **Top bar estilo Unity**: se quitaron las tabs de workspace estilo Blender; **Play/Stop centrado** (verde/rojo) separado de la navegación, y **selector de workspace = botón hamburguesa ☰** a la derecha que abre un popup (6 workspaces) **debajo** del botón (no lo tapa). `ICON_FA_BARS` añadido al subset.
+- **Hover circular de la X** (parche CMake idempotente a `imgui_widgets.cpp`): `CloseButton`/`CollapseButton` usan `AddRectFilled` hardcodeado → `string(REPLACE)` en configure-time a `AddCircleFilled`, marca `MOOD_CIRCLE_CLOSE`. Aplica a **todas** las ventanas/modales.
+- **Remake del Welcome** (`drawWelcomeModal`): estilo splash Blender — banner (nombre+versión) + 2 columnas **EMPEZAR** / **RECIENTES**; ⊗ de quitar sin fondo (hover gris), "Limpiar inexistentes" al footer, texto de bloqueo eliminado. Sigue **sin X** (no se entra sin proyecto). i18n `start_header`/`recents_header`.
+
+**Suite 1061/11018 verde**. Validado en vivo (X+título, Play, hamburguesa, hover circular, Welcome).
+
+**Pendientes de 2.7** (en orden): **F2H80 — thumbnails 3D** en "Crear entidad" (grid de cards con preview render-to-texture, reusando `MaterialPreviewRenderer`); luego mismo grid en Welcome/Asset Browser. Más atrás: Ctrl+S "guardar como", unificar Undo en Material/Item/Quest, atajos configurables, escala de UI, y el bump a `v2.0.0` (cierre Fase 2).
+
+---
+
+## 0.1ante. Hito previo — F2H78 (2026-05-21) — **Sub-fase 2.7**
 
 **Ctrl+S contextual + ajuste de redondeo.** Tag `v1.69.0-fase2-hito78`. Detalle completo en [`hitos/F2H78.md`](hitos/F2H78.md). Tercer hito de Sub-fase 2.7.
 
@@ -44,7 +60,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1ante. Hito previo — F2H77 (2026-05-21) — **Sub-fase 2.7**
+## 0.1bis. Hito previo — F2H77 (2026-05-21) — **Sub-fase 2.7**
 
 **Pulido visual base + indicador "sin guardar".** Tag `v1.68.0-fase2-hito77`. Detalle completo en [`hitos/F2H77.md`](hitos/F2H77.md). Segundo hito de la Sub-fase 2.7.
 
@@ -60,7 +76,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1bis. Hito previo — F2H76 (2026-05-21) — **abrió Sub-fase 2.7**
+## 0.1ter. Hito previo — F2H76 (2026-05-21) — **abrió Sub-fase 2.7**
 
 **Preferencias + temas visuales del editor.** Tag `v1.67.0-fase2-hito76`. Detalle completo en [`hitos/F2H76.md`](hitos/F2H76.md). Primer hito de la **Sub-fase 2.7 (UI/UX final + cierre Fase 2)**. Abre la "casa de los ajustes" del editor; futuros hitos cuelgan ahí atajos de teclado, escala de UI, etc. (el bump a `v2.0.0` se reserva para el CIERRE de la sub-fase, no para este hito).
 
@@ -77,7 +93,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1ter. Hito previo — F2H75 (2026-05-21) — **cerró Sub-fase 2.4**
+## 0.1quater. Hito previo — F2H75 (2026-05-21) — **cerró Sub-fase 2.4**
 
 **Cloth / telas que ondean.** Tag `v1.66.0-fase2-hito75`. Detalle completo en [`hitos/F2H75.md`](hitos/F2H75.md). Era el F2H28 original (último item de Física avanzada). Banderas/cortinas como soft body de Jolt que cuelgan por gravedad y flamean con las zonas de viento (`ForceFieldComponent` de F2H72).
 
@@ -100,7 +116,7 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1quater. Hito previo — F2H74 (2026-05-21)
+## 0.1quinquies. Hito previo — F2H74 (2026-05-21)
 
 **Cleanup UX (menú Ver) + capa de field-helpers del Inspector + fix undo.** Tag `v1.65.0-fase2-hito74`. Detalle completo en [`hitos/F2H74.md`](hitos/F2H74.md). El dev pidió reorganización de UX + limpieza del imgui disperso + recomendación (lente Unity/Unreal).
 

@@ -11,6 +11,37 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-21: F2H79 — Pulido de modales + hover circular + Welcome
+
+### Decisión 1 — Hover circular de la X: parche idempotente a ImGui en configure-time, no fork
+
+**Contexto:** El dev pidió que el hover del botón de cerrar (la X) de las ventanas sea un **círculo** en vez de un cuadrado, en todos los modales. ImGui dibuja ese fondo (`CloseButton` y `CollapseButton` en `imgui_widgets.cpp`) con `AddRectFilled(bb.Min, bb.Max, bg_col)` **hardcodeado** — no hay hook en `ImGuiStyle` para cambiar la forma.
+
+**Decisión:** Parchear la fuente que baja CPM en **configure-time** desde `CMakeLists.txt`: `file(READ)` + `string(REPLACE)` cambia ambas ocurrencias a `AddCircleFilled(bb.GetCenter(), ImMax(2.0f, g.FontSize*0.5f), bg_col)`, con un comentario-marca `MOOD_CIRCLE_CLOSE`. Antes de parchear se busca el marcador (`string(FIND)`): si ya está, no se re-aplica.
+
+**Razones:**
+- No mantener un fork de imgui (CPM apunta al `docking` upstream).
+- Idempotente y auto-sanador: si el build dir se limpia, CPM re-baja la fuente original y CMake la vuelve a parchear; si ya está parcheada, el marcador lo evita.
+- `g.FontSize` y `bb` están en scope en ambas funciones → el reemplazo compila sin tocar nada más.
+
+**Alternativas descartadas:** (a) fork de imgui — costo de mantenimiento. (b) reimplementar `CloseButton` propio y reemplazar las llamadas — invasivo y se desincroniza con upstream.
+
+**Revisión:** Si un upgrade de imgui cambia la firma de esas líneas, el `string(REPLACE)` deja de matchear (no rompe el build, solo no aplica el círculo) → revisar el marcador.
+
+### Decisión 2 — Selector de workspace = hamburguesa, no dropdown con nombre
+
+**Contexto:** El primer intento (dropdown que mostraba el workspace activo y abría la lista) abría el popup **encima** del propio botón, tapando "Layout". 
+
+**Decisión:** Botón hamburguesa ☰ de ancho fijo a la derecha; el popup cae **debajo** (`SetNextWindowPos` con pivote arriba-derecha). Se acepta perder el nombre del workspace activo en la barra a cambio de un selector que no se solapa y no cambia de ancho.
+
+### Decisión 3 — El Welcome sigue bloqueado (sin descartar)
+
+**Contexto:** Tras el remake, el dev notó que no hay forma de cerrar el modal y entrar al editor.
+
+**Decisión:** Mantener el bloqueo (convención Unity/Godot: sin proyecto no hay escena que editar). Para salir se elige un reciente o se crea/abre uno. Se evaluó permitir descartar (entrar con escena vacía) y se descartó por dejar estado raro.
+
+---
+
 ## 2026-05-21: F2H78 — Ctrl+S contextual
 
 ### Decisión 1 — Gatear el Ctrl+S global en vez de centralizar el guardado
