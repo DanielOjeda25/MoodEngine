@@ -85,6 +85,25 @@ CPMAddPackage(
     DOWNLOAD_ONLY YES
 )
 
+# F2H79: hover de CloseButton (la X de las ventanas) y CollapseButton dibujado
+# como circulo en vez de cuadrado. ImGui los pinta con AddRectFilled hardcodeado
+# (no hay hook de estilo), asi que parcheamos la fuente que baja CPM en
+# configure-time. Idempotente: el marcador MOOD_CIRCLE_CLOSE evita re-aplicar el
+# parche; si CPM re-baja la fuente limpia, el parche se vuelve a aplicar solo.
+set(_mood_imgui_widgets "${imgui_SOURCE_DIR}/imgui_widgets.cpp")
+if(EXISTS "${_mood_imgui_widgets}")
+    file(READ "${_mood_imgui_widgets}" _mood_widgets_src)
+    string(FIND "${_mood_widgets_src}" "MOOD_CIRCLE_CLOSE" _mood_already_patched)
+    if(_mood_already_patched EQUAL -1)
+        string(REPLACE
+            "window->DrawList->AddRectFilled(bb.Min, bb.Max, bg_col);"
+            "window->DrawList->AddCircleFilled(bb.GetCenter(), ImMax(2.0f, g.FontSize * 0.5f), bg_col); /*MOOD_CIRCLE_CLOSE*/"
+            _mood_widgets_src "${_mood_widgets_src}")
+        file(WRITE "${_mood_imgui_widgets}" "${_mood_widgets_src}")
+        message(STATUS "MoodEngine: parcheado imgui_widgets.cpp (hover circular X/collapse)")
+    endif()
+endif()
+
 # imnodes (F2H62 migration from imgui-node-editor): editor de grafos
 # visuales con UX estilo Blender (cuerpo del nodo arrastrable desde
 # cualquier punto, pines = hot-area solo sobre el circulito, sin
