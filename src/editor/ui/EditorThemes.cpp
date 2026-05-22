@@ -91,13 +91,17 @@ void applySepia(ImGuiStyle& style) {
 // consistente para que todos los paneles "respiren" igual.
 void applyMetrics(ImGuiStyle& style) {
     // --- F2H76: redondeo (vs. bordes en punta) ---
+    // F2H78 polish: redondeo solo en contenedores "flotantes" y widgets
+    // (ventanas, popups, botones, grabs). Las regiones hijas, scrollbars y
+    // tabs van RECTAS — redondearlas dentro de un panel cuadrado se ve mal
+    // (esquinas que no cierran contra el borde del dock).
     style.WindowRounding    = 6.0f;
-    style.ChildRounding     = 6.0f;
+    style.ChildRounding     = 0.0f;  // regiones internas / tablas: rectas
     style.FrameRounding     = 4.0f;  // botones, combos, inputs
     style.PopupRounding     = 6.0f;  // menus desplegables + modales
-    style.ScrollbarRounding = 6.0f;
+    style.ScrollbarRounding = 0.0f;  // se integran con el borde del panel
     style.GrabRounding      = 4.0f;  // grab de sliders
-    style.TabRounding       = 5.0f;  // tabs de workspace / docking
+    style.TabRounding       = 0.0f;  // tabs de workspace / docking: rectas
 
     // --- F2H77: espaciado/padding unificado (defaults de ImGui daban un look
     // apretado e inconsistente entre paneles). Valores algo mas generosos para
