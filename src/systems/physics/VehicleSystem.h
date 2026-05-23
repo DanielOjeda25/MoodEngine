@@ -40,18 +40,6 @@ namespace VehicleSystem {
 ///                      vacio -- usamos `makeFallbackGenericSedan()` como fallback.
 void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets);
 
-/// @brief F2H70 Bloque A: offset Y de auto-spawn-height para una entity
-///        vehicle. Calcula `-aabbMin.y` del MeshAsset asociado (via
-///        MeshRendererComponent) para que el bottom del modelo quede en
-///        `TC.position.y` independiente de la convencion de origin del
-///        modelo (base, centro vertical, etc.). Se aplica en 3 puntos:
-///        spawn del chassis Jolt, post-tick (restando del chassisWorld
-///        antes de escribir al TC, para que el TC quede "raw") y render
-///        path (3 sites en SceneRenderer / RenderBatching).
-///        Devuelve 0 si la entity no tiene MeshRendererComponent o si
-///        el mesh es invalido.
-f32 chassisRenderYOffset(Entity e, AssetManager& assets);
-
 /// @brief F2H70.3 H: preview de las wheel-entities en Editor mode (sin Play).
 ///        El tick de fisica no corre, asi que esto spawnea (si faltan) las 4
 ///        wheel-entities y las posiciona en su pose de REPOSO calculada

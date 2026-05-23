@@ -1,4 +1,4 @@
-#include "systems/render/SSRPass.h"
+#include "engine/render/passes/SSRPass.h"
 
 #include "core/Log.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"

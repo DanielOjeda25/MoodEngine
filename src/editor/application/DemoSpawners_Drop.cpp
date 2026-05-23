@@ -15,7 +15,7 @@
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/inventory/ItemAsset.h"   // F2H52 Bloque D
 #include "engine/physics/vehicle/VehicleConfig.h" // F2H70.3 Bloque F
-#include "systems/physics/VehicleSystem.h" // F2H70.3 Bloque F: render offset
+#include "engine/physics/vehicle/VehicleRenderOffset.h" // break-B1: render offset
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/Components.h"
@@ -721,7 +721,7 @@ void EditorApplication::processViewportVehicleDrop() {
     // es no-op para configs sin mesh.
     {
         auto& tf = e.getComponent<TransformComponent>();
-        tf.pivotYOffset = VehicleSystem::chassisRenderYOffset(e, *m_assetManager);
+        tf.pivotYOffset = vehicle::chassisRenderYOffset(e, *m_assetManager);
         if (cfg != nullptr) {
             tf.pivotYawOffsetDeg = cfg->meshYawOffsetDeg;
         }

@@ -46,8 +46,8 @@
 #include "engine/scene/core/Scene.h"
 #include "engine/world/csg/BrushMesh.h"
 #include "systems/light/LightSystem.h"
-#include "systems/render/ShadowPass.h"
-#include "systems/render/SkyboxRenderer.h"
+#include "engine/render/passes/ShadowPass.h"
+#include "engine/render/passes/SkyboxRenderer.h"
 
 #include <glad/gl.h>
 

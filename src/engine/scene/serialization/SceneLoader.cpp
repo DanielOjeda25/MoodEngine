@@ -12,7 +12,7 @@
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/scene/serialization/TilePersistence.h"
 #include "engine/physics/vehicle/VehicleConfig.h"  // F2H70.2 D5: meshYawOffsetDeg
-#include "systems/physics/VehicleSystem.h"  // F2H70.2: chassisRenderYOffset
+#include "engine/physics/vehicle/VehicleRenderOffset.h"  // F2H70.2: chassisRenderYOffset (break-B1)
 
 #include "core/Log.h"
 
@@ -432,7 +432,7 @@ Entity applyOneEntity(const SavedEntity& se,
             // dentro de `chassisRenderYOffset`).
             if (e.hasComponent<TransformComponent>()) {
                 auto& tf = e.getComponent<TransformComponent>();
-                tf.pivotYOffset = VehicleSystem::chassisRenderYOffset(e, assets);
+                tf.pivotYOffset = vehicle::chassisRenderYOffset(e, assets);
                 // F2H70.2 D5: mesh yaw offset (data-driven). Drag-drop de
                 // cualquier GLB en otra convencion forward = setear el
                 // campo en el .moodvehicle, sin tocar el moodmap. Aplica

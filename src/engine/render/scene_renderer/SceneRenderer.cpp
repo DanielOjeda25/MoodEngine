@@ -43,13 +43,13 @@
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 #include "systems/light/LightSystem.h"
-#include "systems/render/BloomPass.h"
-#include "systems/render/ColorGradingPass.h"
-#include "systems/render/PostProcessPass.h"
-#include "systems/render/SSAOPass.h"
-#include "systems/render/SSRPass.h"  // F2H61
-#include "systems/render/ShadowPass.h"
-#include "systems/render/SkyboxRenderer.h"
+#include "engine/render/passes/BloomPass.h"
+#include "engine/render/passes/ColorGradingPass.h"
+#include "engine/render/passes/PostProcessPass.h"
+#include "engine/render/passes/SSAOPass.h"
+#include "engine/render/passes/SSRPass.h"  // F2H61
+#include "engine/render/passes/ShadowPass.h"
+#include "engine/render/passes/SkyboxRenderer.h"
 
 #include <glm/gtc/matrix_inverse.hpp>
 

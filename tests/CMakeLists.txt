@@ -137,7 +137,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/systems/ai/NavSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/particles/ParticleSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/physics/PhysicsSystem.cpp
-    ${CMAKE_SOURCE_DIR}/src/systems/physics/VehicleSystem.cpp  # F2H70.2: chassisRenderYOffset
+    ${CMAKE_SOURCE_DIR}/src/systems/physics/VehicleSystem.cpp  # F2H67 Bloque D
     ${CMAKE_SOURCE_DIR}/src/systems/scripting/ScriptSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/physics/TriggerSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/systems/physics/ForceFieldSystem.cpp  # F2H72
@@ -196,6 +196,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/physics/vehicle/VehicleMeshAnalyzer.cpp  # F2H82 Bloque A
     ${CMAKE_SOURCE_DIR}/src/engine/physics/vehicle/VehiclePresets.cpp  # F2H82 Bloque C
     ${CMAKE_SOURCE_DIR}/src/engine/physics/vehicle/VehicleConfigWriter.cpp  # F2H82 Bloque C
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/vehicle/VehicleRenderOffset.cpp  # break-B1
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Vehicle.cpp  # F2H67 Bloque C
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Impact.cpp  # F2H68 Bloque A
     ${CMAKE_SOURCE_DIR}/src/core/i18n/I18n.cpp  # F2H43 (movido a core en AUDIT-3)

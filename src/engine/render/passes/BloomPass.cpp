@@ -1,4 +1,4 @@
-#include "systems/render/BloomPass.h"
+#include "engine/render/passes/BloomPass.h"
 
 #include "core/Log.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"

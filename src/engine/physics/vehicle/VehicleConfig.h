@@ -252,7 +252,7 @@ bool isValid(const VehicleConfig& cfg);
 ///        natural depende solo de `f`. Para f=1.8 Hz (DeLorean default):
 ///        x ≈ 0.077 m = 7.7 cm.
 ///
-///        Usado por `VehicleSystem::chassisRenderYOffset` para elevar el
+///        Usado por `vehicle::chassisRenderYOffset` para elevar el
 ///        spawn del chassis por encima del piso de modo que las wheels
 ///        apoyen apenas la sim arranca (sino el chassis "cae" 7-10 cm
 ///        post-spawn por el settle, generando un brinco visual).

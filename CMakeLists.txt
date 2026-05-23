@@ -405,6 +405,7 @@ add_library(mood_engine_lib STATIC
     src/engine/physics/vehicle/VehicleMeshAnalyzer.cpp  # F2H82 Bloque A
     src/engine/physics/vehicle/VehiclePresets.cpp  # F2H82 Bloque C
     src/engine/physics/vehicle/VehicleConfigWriter.cpp  # F2H82 Bloque C
+    src/engine/physics/vehicle/VehicleRenderOffset.cpp  # break-B1
     src/engine/physics/world/PhysicsWorld_Vehicle.cpp  # F2H67 Bloque C
     src/systems/physics/VehicleSystem.cpp  # F2H67 Bloque D
     src/engine/physics/world/PhysicsWorld_Impact.cpp  # F2H68 Bloque A
@@ -443,16 +444,16 @@ add_library(mood_engine_lib STATIC
     src/systems/ai/NavSystem.cpp
     src/systems/particles/ParticleSystem.cpp
     src/systems/physics/PhysicsSystem.cpp
-    src/systems/render/BloomPass.cpp
-    src/systems/render/ColorGradingPass.cpp     # F2H58
-    src/systems/render/PostProcessPass.cpp
-    src/systems/render/SSAOPass.cpp
-    src/systems/render/SSRPass.cpp              # F2H61
+    src/engine/render/passes/BloomPass.cpp
+    src/engine/render/passes/ColorGradingPass.cpp     # F2H58
+    src/engine/render/passes/PostProcessPass.cpp
+    src/engine/render/passes/SSAOPass.cpp
+    src/engine/render/passes/SSRPass.cpp              # F2H61
     src/systems/scripting/ScriptSystem.cpp
-    src/systems/render/ShadowPass.cpp
+    src/engine/render/passes/ShadowPass.cpp
     src/systems/physics/TriggerSystem.cpp
     src/systems/physics/ForceFieldSystem.cpp    # F2H72
-    src/systems/render/SkyboxRenderer.cpp
+    src/engine/render/passes/SkyboxRenderer.cpp
 
     src/engine/scripting/exposed/ExposedProperty.cpp
     src/engine/scripting/bindings/LuaBindings.cpp

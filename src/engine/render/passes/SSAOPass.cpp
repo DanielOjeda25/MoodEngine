@@ -1,4 +1,4 @@
-#include "systems/render/SSAOPass.h"
+#include "engine/render/passes/SSAOPass.h"
 
 #include "core/Log.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
