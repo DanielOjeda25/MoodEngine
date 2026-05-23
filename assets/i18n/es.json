@@ -447,7 +447,15 @@
   "editor.panel.inspector.physics.half_extents": "halfExtents",
   "editor.panel.inspector.physics.mass": "masa (kg)",
   "editor.panel.inspector.physics.friction": "fricción",
+  "editor.panel.inspector.physics.is_sensor": "isSensor (trigger físico)",
+  "editor.panel.inspector.physics.is_sensor_tip": "Estilo Unity isTrigger: detecta contactos sin rebote (auto-ragdoll por embestida). Re-Play para aplicar.",
   "editor.panel.inspector.physics.body_id_hint": "body id: {} (0 = no materializado) — re-Play para aplicar fricción",
+
+  "editor.panel.inspector.ragdoll.total_mass": "masa total (kg)",
+  "editor.panel.inspector.ragdoll.limb_radius": "radio extremidades (m)",
+  "editor.panel.inspector.ragdoll.use_gravity": "usa gravedad",
+  "editor.panel.inspector.ragdoll.spawn_impulse": "impulse de spawn",
+  "editor.panel.inspector.ragdoll.state_hint": "state: {} (0=Animated, 1=Ragdolling) — ragdoll id: {} (0 = no materializado)",
 
   "editor.panel.inspector.joint.type": "tipo",
   "editor.panel.inspector.joint.target": "entidad destino",

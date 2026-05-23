@@ -447,7 +447,15 @@
   "editor.panel.inspector.physics.half_extents": "halfExtents",
   "editor.panel.inspector.physics.mass": "mass (kg)",
   "editor.panel.inspector.physics.friction": "friction",
+  "editor.panel.inspector.physics.is_sensor": "isSensor (physics trigger)",
+  "editor.panel.inspector.physics.is_sensor_tip": "Unity isTrigger style: detect contacts with no rebound (auto-ragdoll on chassis impact). Re-Play to apply.",
   "editor.panel.inspector.physics.body_id_hint": "body id: {} (0 = not materialized) — re-Play to apply friction",
+
+  "editor.panel.inspector.ragdoll.total_mass": "total mass (kg)",
+  "editor.panel.inspector.ragdoll.limb_radius": "limb radius (m)",
+  "editor.panel.inspector.ragdoll.use_gravity": "use gravity",
+  "editor.panel.inspector.ragdoll.spawn_impulse": "spawn impulse",
+  "editor.panel.inspector.ragdoll.state_hint": "state: {} (0=Animated, 1=Ragdolling) — ragdoll id: {} (0 = not materialized)",
 
   "editor.panel.inspector.joint.type": "type",
   "editor.panel.inspector.joint.target": "target entity",

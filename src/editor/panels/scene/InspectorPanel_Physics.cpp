@@ -102,8 +102,102 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
             "Editar friction (RigidBody)", 0.01f, 0.0f, 2.0f)) {
         m_editedThisFrame = true;
     }
+
+    // break-A5 (2026-05-23): checkbox isSensor (trigger fisico estilo
+    // Unity isTrigger). Llega a Jolt via mIsSensor desde F2H68. El
+    // change rebuilea el body al proximo Play (mismo criterio que
+    // type/shape combo); marcamos m_editedThisFrame para que el caller
+    // sepa que la escena cambio.
+    const std::string sensorLabel =
+        I18n::T("editor.panel.inspector.physics.is_sensor") + "##rb";
+    bool sensorBool = rb.isSensor;
+    if (ImGui::Checkbox(sensorLabel.c_str(), &sensorBool)) {
+        if (sensorBool != rb.isSensor) {
+            HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
+            if (h != nullptr) {
+                auto cmd = std::make_unique<EditPropertyCommand<bool>>(
+                    e, rb.isSensor, sensorBool,
+                    [](Entity& en, const bool& v) {
+                        en.getComponent<RigidBodyComponent>().isSensor = v;
+                    },
+                    "Cambiar RigidBody isSensor");
+                h->push(std::move(cmd));
+            } else {
+                rb.isSensor = sensorBool;
+            }
+            m_editedThisFrame = true;
+        }
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.panel.inspector.physics.is_sensor_tip").c_str());
+    }
+
     ImGui::TextDisabled("%s",
         I18n::T("editor.panel.inspector.physics.body_id_hint", rb.bodyId).c_str());
+    ImGui::Separator();
+}
+
+// break-A4 (2026-05-23): Inspector de RagdollComponent. Pre-A4 los
+// 4 campos (totalMass / limbRadius / useGravity / spawnImpulse) solo
+// se editaban a mano en JSON. Convencion: range 1-300 kg para masa
+// total (rango realista persona->bestia grande), 0.01-0.5 m para
+// limbRadius (proxy capsule humano->gordo), impulse ilimitado (el
+// dev decide la magnitud por contexto).
+void InspectorPanel::renderRagdollSection(Entity e) {
+    auto& rd = e.getComponent<RagdollComponent>();
+    if (!beginComponentSection<RagdollComponent>(e, ICON_FA_PERSON_RUNNING " Ragdoll")) return;
+
+    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+            "editor.panel.inspector.ragdoll.total_mass", "##rd", rd.totalMass,
+            [](Entity& en, const f32& v) {
+                en.getComponent<RagdollComponent>().totalMass = v;
+            },
+            "Editar ragdoll totalMass", 1.0f, 1.0f, 300.0f)) {
+        m_editedThisFrame = true;
+    }
+    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+            "editor.panel.inspector.ragdoll.limb_radius", "##rd", rd.limbRadius,
+            [](Entity& en, const f32& v) {
+                en.getComponent<RagdollComponent>().limbRadius = v;
+            },
+            "Editar ragdoll limbRadius", 0.005f, 0.01f, 0.5f)) {
+        m_editedThisFrame = true;
+    }
+
+    const std::string gravLabel =
+        I18n::T("editor.panel.inspector.ragdoll.use_gravity") + "##rd";
+    bool gravBool = rd.useGravity;
+    if (ImGui::Checkbox(gravLabel.c_str(), &gravBool)) {
+        if (gravBool != rd.useGravity) {
+            HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
+            if (h != nullptr) {
+                auto cmd = std::make_unique<EditPropertyCommand<bool>>(
+                    e, rd.useGravity, gravBool,
+                    [](Entity& en, const bool& v) {
+                        en.getComponent<RagdollComponent>().useGravity = v;
+                    },
+                    "Cambiar ragdoll useGravity");
+                h->push(std::move(cmd));
+            } else {
+                rd.useGravity = gravBool;
+            }
+            m_editedThisFrame = true;
+        }
+    }
+
+    if (detail::fieldDragFloat3(m_editTracker, m_ui, e,
+            "editor.panel.inspector.ragdoll.spawn_impulse", "##rd", rd.spawnImpulse,
+            [](Entity& en, const glm::vec3& v) {
+                en.getComponent<RagdollComponent>().spawnImpulse = v;
+            },
+            "Editar ragdoll spawnImpulse", 0.5f, -100.0f, 100.0f)) {
+        m_editedThisFrame = true;
+    }
+
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.inspector.ragdoll.state_hint",
+                static_cast<int>(rd.state), rd.ragdollId).c_str());
     ImGui::Separator();
 }
 
