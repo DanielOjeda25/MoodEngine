@@ -519,9 +519,7 @@ private:
     AssetRegistry<Dialog::Asset> m_dialogs;
 
     // AnimationClip standalone (F2H49). [0] = clip vacio (sin tracks).
-    std::unordered_map<std::string, AnimationClipAssetId> m_animationClipCache;
-    std::vector<std::unique_ptr<AnimationClip>> m_animationClips;
-    std::vector<std::string> m_animationClipPaths; // paralelo a m_animationClips
+    AssetRegistry<AnimationClip> m_animationClips;
 
     // Item (F2H51). [0] = asset vacio (id "", tags vacios).
     AssetRegistry<Inventory::Asset> m_items;

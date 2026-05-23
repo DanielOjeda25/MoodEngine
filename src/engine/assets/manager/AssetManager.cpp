@@ -246,10 +246,7 @@ AssetManager::AssetManager(std::string rootDir,
         auto empty = std::make_unique<AnimationClip>();
         empty->name = "(empty)";
         empty->duration = 0.0f;
-        m_animationClips.emplace_back(std::move(empty));
-        m_animationClipPaths.emplace_back(k_emptyAnimClipPath);
-        m_animationClipCache.emplace(k_emptyAnimClipPath,
-                                      missingAnimationClipId());
+        m_animationClips.initFallback(std::move(empty), k_emptyAnimClipPath);
     }
     Log::assets()->info("AssetManager: animation clip 'vacio' generado en slot 0");
 
