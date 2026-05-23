@@ -37,6 +37,10 @@ public:
     bool consumesSaveShortcut() const override {
         return m_windowFocused && !m_loadedPath.empty();
     }
+    // F2H85: Ctrl+Shift+S → "Guardar como" si el panel tiene foco.
+    bool consumesSaveAsShortcut() const override {
+        return m_windowFocused && !m_loadedPath.empty();
+    }
 
     void setEditorUi(EditorUI* ui) { m_ui = ui; }
 
@@ -52,6 +56,11 @@ private:
     /// @brief F2H78: escribe el quest al disco + refresca el browser.
     ///        Compartido por el boton "Guardar" y el Ctrl+S contextual.
     bool saveToDisk();
+
+    /// @brief F2H85: `pfd::save_file` con default `<stem>_copy.mooquest`,
+    ///        guarda copia y hace switch al quest nuevo. Compartido por
+    ///        Ctrl+Shift+S.
+    bool saveAsToDisk();
 
     // Renderer por objective (devuelve true si hay que borrarlo).
     bool drawObjective(size_t idx, Quest::Objective& o);

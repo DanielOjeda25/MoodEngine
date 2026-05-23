@@ -8,6 +8,7 @@
 #include "core/i18n/I18n.h"
 
 #include <imgui.h>
+#include <portable-file-dialogs.h>  // F2H85: Save As
 
 #include <algorithm>
 #include <cstring>
@@ -416,14 +417,61 @@ bool ItemPropertyEditorPanel::saveToDisk() {
     return true;
 }
 
+bool ItemPropertyEditorPanel::saveAsToDisk() {
+    // F2H85: Ctrl+Shift+S → "Guardar como". Sin item cargado, no hay
+    // base — el gate de consumesSaveAsShortcut ya filtra ese caso pero
+    // protegemos por defensa en profundidad si lo llamasen desde menu.
+    if (m_loadedPath.empty()) {
+        Log::editor()->warn("[ItemPropertyEditor] saveAs sin item cargado");
+        return false;
+    }
+    // Default: <stem>_copy.mooditem en la misma carpeta del item original.
+    const auto defaultName = m_loadedPath.stem().string() + "_copy.mooditem";
+    const auto defaultPath = m_loadedPath.parent_path() / defaultName;
+
+    const auto sel = pfd::save_file(
+        I18n::T("editor.panel.item_editor.save_as").c_str(),
+        defaultPath.string(),
+        {"Items MoodEngine (*.mooditem)", "*.mooditem"},
+        pfd::opt::none).result();
+    if (sel.empty()) {
+        Log::editor()->info("[ItemPropertyEditor] saveAs cancelado");
+        return false;
+    }
+    std::filesystem::path outPath(sel);
+    if (outPath.extension() != ".mooditem") outPath += ".mooditem";
+
+    if (!m_loaded.saveToFile(outPath)) {
+        Log::editor()->error("[ItemPropertyEditor] saveAs fallo: '{}'",
+                              outPath.generic_string());
+        return false;
+    }
+    Log::editor()->info("[ItemPropertyEditor] saveAs ok: '{}' -> '{}'",
+                          m_loadedPath.generic_string(),
+                          outPath.generic_string());
+    m_loadedPath = outPath;
+    m_dirty = false;
+    // El history queda obsoleto (lambdas capturan `this->m_loaded` y el
+    // path cambio). Patron F2H84 ya replicado en loadFromPath.
+    if (m_ui != nullptr) {
+        if (HistoryStack* h = m_ui->historyStack()) h->clear();
+        m_ui->itemBrowser().refresh();
+    }
+    return true;
+}
+
 void ItemPropertyEditorPanel::drawSaveBar() {
     // F2H78: Ctrl+S contextual — guarda este item si el panel tiene foco
     // (mismo patron que Script/Shader). El handler global lo respeta via
     // consumesSaveShortcut() y no dispara ademas el guardado de proyecto.
     m_windowFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-    const bool hotkeySave = m_windowFocused
-                          && ImGui::GetIO().KeyCtrl
-                          && ImGui::IsKeyPressed(ImGuiKey_S, false);
+    const bool sPressed = ImGui::IsKeyPressed(ImGuiKey_S, false);
+    // F2H85: distinguir Ctrl+S (save) de Ctrl+Shift+S (saveAs) por el
+    // modifier Shift — `IsKeyPressed` solo dice si la tecla fue pulsada.
+    const bool hotkeySave = m_windowFocused && ImGui::GetIO().KeyCtrl
+                          && !ImGui::GetIO().KeyShift && sPressed;
+    const bool hotkeySaveAs = m_windowFocused && ImGui::GetIO().KeyCtrl
+                            &&  ImGui::GetIO().KeyShift && sPressed;
 
     ImGui::BeginDisabled(!m_dirty);
     const bool clickedSave =
@@ -431,6 +479,9 @@ void ItemPropertyEditorPanel::drawSaveBar() {
     ImGui::EndDisabled();
     if ((clickedSave || hotkeySave) && m_dirty) {
         saveToDisk();
+    }
+    if (hotkeySaveAs && !m_loadedPath.empty()) {
+        saveAsToDisk();
     }
     ImGui::SameLine();
     ImGui::BeginDisabled(!m_dirty);

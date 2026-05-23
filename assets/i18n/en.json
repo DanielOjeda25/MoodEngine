@@ -678,6 +678,7 @@
   "editor.panel.item_editor.stat_add": "+ Add Stat",
   "editor.panel.item_editor.slot_size_hint": "Only honored by grid_2d layout. v1 ignores width/height (each item takes 1 cell).",
   "editor.panel.item_editor.save": "Save",
+  "editor.panel.item_editor.save_as": "Save item as",
   "editor.panel.item_editor.revert": "Discard Changes",
   "editor.panel.item_editor.unsaved": "unsaved changes",
 
@@ -720,6 +721,7 @@
   "editor.panel.quest_editor.add_reward": "+ Add Reward",
   "editor.panel.quest_editor.remove": "Remove",
   "editor.panel.quest_editor.save": "Save",
+  "editor.panel.quest_editor.save_as": "Save quest as",
   "editor.panel.quest_editor.revert": "Discard Changes",
   "editor.panel.quest_editor.unsaved": "unsaved changes",
 

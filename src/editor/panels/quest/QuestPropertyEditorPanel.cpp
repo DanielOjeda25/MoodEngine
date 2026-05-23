@@ -7,6 +7,8 @@
 #include "editor/ui/EditorUI.h"
 #include "core/i18n/I18n.h"
 
+#include <portable-file-dialogs.h>  // F2H85: Save As
+
 #include <imgui.h>
 
 #include <cstring>
@@ -366,14 +368,55 @@ bool QuestPropertyEditorPanel::saveToDisk() {
     return true;
 }
 
+bool QuestPropertyEditorPanel::saveAsToDisk() {
+    // F2H85: gemelo de ItemPropertyEditorPanel::saveAsToDisk.
+    if (m_loadedPath.empty()) {
+        Log::editor()->warn("[QuestPropertyEditor] saveAs sin quest cargado");
+        return false;
+    }
+    const auto defaultName = m_loadedPath.stem().string() + "_copy.mooquest";
+    const auto defaultPath = m_loadedPath.parent_path() / defaultName;
+
+    const auto sel = pfd::save_file(
+        I18n::T("editor.panel.quest_editor.save_as").c_str(),
+        defaultPath.string(),
+        {"Quests MoodEngine (*.mooquest)", "*.mooquest"},
+        pfd::opt::none).result();
+    if (sel.empty()) {
+        Log::editor()->info("[QuestPropertyEditor] saveAs cancelado");
+        return false;
+    }
+    std::filesystem::path outPath(sel);
+    if (outPath.extension() != ".mooquest") outPath += ".mooquest";
+
+    if (!m_loaded.saveToFile(outPath)) {
+        Log::editor()->error("[QuestPropertyEditor] saveAs fallo: '{}'",
+                              outPath.generic_string());
+        return false;
+    }
+    Log::editor()->info("[QuestPropertyEditor] saveAs ok: '{}' -> '{}'",
+                          m_loadedPath.generic_string(),
+                          outPath.generic_string());
+    m_loadedPath = outPath;
+    m_dirty = false;
+    if (m_ui != nullptr) {
+        if (HistoryStack* h = m_ui->historyStack()) h->clear();
+        m_ui->questBrowser().refresh();
+    }
+    return true;
+}
+
 void QuestPropertyEditorPanel::drawSaveBar() {
     // F2H78: Ctrl+S contextual — guarda este quest si el panel tiene foco
     // (mismo patron que Script/Shader/Item). El handler global lo respeta
     // via consumesSaveShortcut() y no guarda ademas el proyecto.
     m_windowFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-    const bool hotkeySave = m_windowFocused
-                          && ImGui::GetIO().KeyCtrl
-                          && ImGui::IsKeyPressed(ImGuiKey_S, false);
+    const bool sPressed = ImGui::IsKeyPressed(ImGuiKey_S, false);
+    // F2H85: distinguir Ctrl+S de Ctrl+Shift+S por el modifier Shift.
+    const bool hotkeySave = m_windowFocused && ImGui::GetIO().KeyCtrl
+                          && !ImGui::GetIO().KeyShift && sPressed;
+    const bool hotkeySaveAs = m_windowFocused && ImGui::GetIO().KeyCtrl
+                            &&  ImGui::GetIO().KeyShift && sPressed;
 
     ImGui::BeginDisabled(!m_dirty);
     const bool clickedSave =
@@ -381,6 +424,9 @@ void QuestPropertyEditorPanel::drawSaveBar() {
     ImGui::EndDisabled();
     if ((clickedSave || hotkeySave) && m_dirty) {
         saveToDisk();
+    }
+    if (hotkeySaveAs && !m_loadedPath.empty()) {
+        saveAsToDisk();
     }
     ImGui::SameLine();
     ImGui::BeginDisabled(!m_dirty);

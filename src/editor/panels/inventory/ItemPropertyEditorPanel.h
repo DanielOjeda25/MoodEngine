@@ -37,6 +37,11 @@ public:
     bool consumesSaveShortcut() const override {
         return m_windowFocused && !m_loadedPath.empty();
     }
+    // F2H85: Ctrl+Shift+S → "Guardar como" (pide ruta nueva). Aplica si
+    // el panel tiene foco y hay un item cargado para basar la copia.
+    bool consumesSaveAsShortcut() const override {
+        return m_windowFocused && !m_loadedPath.empty();
+    }
 
     void setEditorUi(EditorUI* ui) { m_ui = ui; }
 
@@ -63,6 +68,13 @@ private:
     /// @brief F2H78: escribe el item al disco + refresca el browser.
     ///        Compartido por el boton "Guardar" y el Ctrl+S contextual.
     bool saveToDisk();
+
+    /// @brief F2H85: abre `pfd::save_file` con default = path actual
+    ///        (sufijo `_copy` si ya existe) + extension `.mooditem`, copia
+    ///        el item a la ruta elegida, hace switch al item nuevo (el
+    ///        browser muestra el copy como cargado). Compartido por
+    ///        Ctrl+Shift+S y por un futuro item de menu.
+    bool saveAsToDisk();
 
     EditorUI*                  m_ui = nullptr;
     AssetEditTracker           m_editTracker;    // F2H84
