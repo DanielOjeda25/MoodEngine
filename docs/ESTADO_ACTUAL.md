@@ -30,7 +30,29 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H83 (2026-05-23) — **Sub-fase 2.7**
+## 0.1. Último hito de feature — F2H84 (2026-05-23) — **Sub-fase 2.7**
+
+**Undo unificado en Material / Item / Quest editors.** Tag `v1.75.0-fase2-hito84`. Detalle completo en [`hitos/F2H84.md`](hitos/F2H84.md). Noveno hito de Sub-fase 2.7.
+
+Cierra la deuda histórica de los 3 editors de assets que no tenían undo (el Inspector lo tenía desde Hito 32 D).
+
+**Lo que entregó**:
+- **Infra compartida** (NUEVA): `editor/commands/EditAssetPropertyCommand.h` + `editor/panels/assets/AssetEditTracker.h`. Gemelo de `EditPropertyCommand<T>` + `InspectorEditTracker` (Hito 32 D) pero sin dependencia de `Entity` — el Setter es `std::function<void(const T&)>` y el callsite captura el path al campo via lambda (`[mat](const f32& v){ mat->metallicMult = v; }`).
+- **Material Editor**: 4 widgets undoable (`albedo_tint` ColorEdit3, `metallic`/`roughness`/`ao` SliderFloat). Removidos los `m_xxxPreDrag` legacy. Cambio de material en el combo limpia el history.
+- **Item Property Editor**: 8 widgets undoable (`name`/`description`/`icon_path`/`model_path` strings, `stackable` bool, `max_stack`/`slot_width`/`slot_height` ints). `loadFromPath` limpia el history.
+- **Quest Property Editor**: 5 widgets undoable en sección Identity (`name`/`description`/`category`).
+- **Diferido**: vectores/maps (tags, stats, objectives, rewards) — vector commands son scope distinto, atacar si emerge fricción real.
+
+**Suite 1074/11103 verde**. Validado en vivo: editar campo + Ctrl+Z revierte en los 3 editors.
+
+**Pendientes de 2.7 (en orden acordado con el dev)**:
+- **F2H85 — atajos de teclado configurables** (era F2H42 del plan original, nunca hecho): keybindings + UI + persistencia + presets.
+- **Cierre Fase 2 + `v2.0.0`**: suite verde, docs al día, release notes, recap, planning Fase 3.
+- Menores: Ctrl+S "guardar como". **Tutorial in-app**: diferido por el dev a post-Fase 2.
+
+---
+
+## 0.1ante6. Hito previo — F2H83 (2026-05-23) — **Sub-fase 2.7**
 
 **Refactor de archivos grandes del editor (hot path render).** Tag `v1.74.0-fase2-hito83`. Detalle completo en [`hitos/F2H83.md`](hitos/F2H83.md). Octavo hito de Sub-fase 2.7.
 

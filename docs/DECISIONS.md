@@ -11,6 +11,48 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-23: F2H84 — Undo unificado en Material / Item / Quest editors
+
+### Decisión 1 — Setter sin entity, captura el path al campo via lambda
+
+**Contexto:** `EditPropertyCommand<T>` (Inspector, Hito 32 D) toma `Entity` + `Setter(Entity&, const T&)`. Los assets editados por Material/Item/Quest no son entities — viven en `AssetManager` (MaterialAsset) o en buffers internos del panel (m_loaded para Item/Quest). Adaptar el comando existente a "cualquier asset" sería invasivo.
+
+**Decisión:** Nuevo `EditAssetPropertyCommand<T>` con Setter `(const T&)`. El callsite captura el resto via lambda:
+- Material: `[mat](const f32& v) { mat->metallicMult = v; }`
+- Item: `[this](const std::string& v) { m_loaded.icon_path = v; m_dirty = true; }`
+
+**Razones:**
+- Un solo comando genérico para los 3 editors.
+- El callsite ya sabe qué campo está editando — abstraerlo no aporta.
+- `m_dirty = true` queda dentro del setter para que execute() y undo() ambos marquen el panel como sucio.
+
+**Trade-off:** los lambdas capturan `this` o `mat`. Si el panel descarga el asset entre push y undo, el lambda apunta a memoria inválida → ver Decisión 3.
+
+### Decisión 2 — Diferir vectores / maps (tags, stats, objectives, rewards)
+
+**Contexto:** Item editor tiene `tags` (vector<string> con add/remove inline) + `stats` (map<string,float>). Quest tiene `objectives` y `rewards` (vector de structs anidadas).
+
+**Decisión:** No incluir en F2H84. La infra de `EditAssetPropertyCommand<T>` cubre el caso de campo simple (90%). Vector/map mutations son un patrón distinto (snapshot del contenedor o diff insert/erase respetando orden post-insert).
+
+**Razones:**
+- Scope: hito propio si emerge fricción real.
+- Riesgo: vector commands con iteradores invalidantes son trampa para undo.
+
+**Revisión:** atacar si el dev pierde una mutación grande y reporta dolor concreto.
+
+### Decisión 3 — Limpiar history en cambio de asset vs migrar comandos
+
+**Contexto:** Los lambdas capturan punteros (`mat`, `this->m_loaded`) que dejan de ser válidos cuando cambia el asset cargado. Dos opciones: (a) cada comando detecta "ya no soy relevante" y se vuelve no-op; (b) limpiar history al cambio de asset.
+
+**Decisión:** (b). Patrón ya usado en `NodeGraphSandboxPanel` y `ShaderGraphEditorPanel`.
+
+**Razones:**
+- Cross-asset undo no es feature pedida.
+- Migrar comandos agrega complejidad: rastrear identidad path↔asset, etc.
+- Limpiar history es comportamiento predecible: Ctrl+Z opera sobre lo que estás viendo.
+
+---
+
 ## 2026-05-23: F2H83 — Refactor de archivos grandes del editor (hot path render)
 
 ### Decisión 1 — `.inl` partial dentro de la clase, no header con structs top-level
