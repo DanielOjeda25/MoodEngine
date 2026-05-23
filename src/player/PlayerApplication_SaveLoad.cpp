@@ -357,6 +357,55 @@ void PlayerApplication::applyLoadedSave(const SaveLoad::SaveData& data) {
             "[Load] Restored {}/{} quests (tracked='{}')",
             questsApplied, data.quests.size(), data.trackedQuestPath);
     }
+
+    // break-A1: restaurar inventarios por tag. Resuelve itemPath -> id
+    // via AssetManager. Vacia el state runtime del componente y lo
+    // re-llena desde el snapshot (no merge — el save reemplaza al
+    // .moodmap, ese es el contrato del save-game).
+    int inventoriesApplied = 0;
+    if (m_scene && m_assetManager && !data.inventories.empty()) {
+        std::unordered_map<std::string, const SaveLoad::InventorySnapshot*> byTag;
+        byTag.reserve(data.inventories.size());
+        for (const auto& s : data.inventories) byTag[s.entityTag] = &s;
+
+        m_scene->forEach<TagComponent, InventoryComponent>(
+            [&](Entity, TagComponent& tag, InventoryComponent& inv) {
+                auto it = byTag.find(tag.name);
+                if (it == byTag.end()) return; // sin snapshot — OK silencioso
+                const auto& snap = *it->second;
+                // Vaciar el state runtime (preserva mode + config del
+                // .moodmap) y re-llenar desde el snapshot.
+                inv.state.entries.clear();
+                inv.state.entries.reserve(snap.entries.size());
+                for (const auto& es : snap.entries) {
+                    const ItemAssetId id = m_assetManager->loadItem(es.itemPath);
+                    if (id == m_assetManager->missingItemId()) {
+                        Log::engine()->warn(
+                            "[Load] item huerfano: path '{}' no resuelve (asset borrado?)",
+                            es.itemPath);
+                        continue;
+                    }
+                    Mood::Inventory::Entry e;
+                    e.itemId     = id;
+                    e.quantity   = es.quantity;
+                    e.slot_index = es.slotIndex;
+                    inv.state.entries.push_back(std::move(e));
+                }
+                ++inventoriesApplied;
+            });
+        Log::engine()->info(
+            "[Load] Restored {}/{} inventories (tag matched)",
+            inventoriesApplied, data.inventories.size());
+    }
+
+    // break-A2: restaurar dialog vars. GameState::reset() arriba ya las
+    // limpio — solo cargamos las del snapshot. Si el snapshot esta vacio
+    // (saves pre-v4 o sin vars activas), no se hace nada.
+    if (!data.dialogVars.empty()) {
+        GameState::dialogVars() = data.dialogVars;
+        Log::engine()->info(
+            "[Load] Restored {} dialog vars", data.dialogVars.size());
+    }
 }
 
 SaveLoad::SaveData PlayerApplication::captureCurrentState() {
@@ -452,6 +501,37 @@ SaveLoad::SaveData PlayerApplication::captureCurrentState() {
         }
         Log::engine()->info("  - {} quests captured (tracked='{}')",
                               d.quests.size(), d.trackedQuestPath);
+    }
+
+    // break-A1: capturar snapshot del runtime de cada InventoryComponent.
+    // Identificamos por TagComponent.name (estable entre sesiones); los
+    // entries van como itemPath (paths-no-ids, ItemAssetId es volatil).
+    if (m_scene && m_assetManager) {
+        m_scene->forEach<TagComponent, InventoryComponent>(
+            [&](Entity, TagComponent& tag, InventoryComponent& inv) {
+                if (tag.name.empty()) return; // sin tag estable, skip
+                SaveLoad::InventorySnapshot snap;
+                snap.entityTag = tag.name;
+                snap.entries.reserve(inv.state.entries.size());
+                for (const auto& e : inv.state.entries) {
+                    if (e.itemId == 0 || e.quantity <= 0) continue;
+                    SaveLoad::InventoryEntrySnapshot es;
+                    es.itemPath  = m_assetManager->itemPathOf(e.itemId);
+                    es.quantity  = e.quantity;
+                    es.slotIndex = e.slot_index;
+                    if (es.itemPath.empty()) continue;
+                    snap.entries.push_back(std::move(es));
+                }
+                d.inventories.push_back(std::move(snap));
+            });
+        Log::engine()->info("  - {} inventories captured", d.inventories.size());
+    }
+
+    // break-A2: capturar dialog vars (GameState::dialogVars). Sobreviven
+    // al save/load — habilita "el NPC recuerda que ya hablaste con el".
+    d.dialogVars = GameState::dialogVars();
+    if (!d.dialogVars.empty()) {
+        Log::engine()->info("  - {} dialog vars captured", d.dialogVars.size());
     }
 
     return d;

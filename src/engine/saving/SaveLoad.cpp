@@ -9,7 +9,7 @@
 namespace Mood::SaveLoad {
 
 namespace {
-constexpr int k_supportedVersion = 3;  // F2H53 H: bump v2 -> v3 (quests)
+constexpr int k_supportedVersion = 4;  // break-A1+A2: bump v3 -> v4 (inventories + dialog_vars)
 
 // Convierte un ExposedValue al primitive JSON correspondiente.
 // Reusamos el patron del EntitySerializer (Hito 24) — lo duplicamos
@@ -109,6 +109,35 @@ bool save(const SaveData& d, const std::filesystem::path& path) {
         j["tracked_quest"] = d.trackedQuestPath;
     }
 
+    // break-A1 (v4): snapshots de InventoryComponent por tag. Solo se
+    // serializa el array si hay al menos un inventario.
+    if (!d.inventories.empty()) {
+        j["inventories"] = nlohmann::json::array();
+        for (const auto& inv : d.inventories) {
+            nlohmann::json jinv;
+            jinv["tag"]     = inv.entityTag;
+            jinv["entries"] = nlohmann::json::array();
+            for (const auto& e : inv.entries) {
+                nlohmann::json je;
+                je["item_path"]  = e.itemPath;
+                je["quantity"]   = e.quantity;
+                je["slot_index"] = e.slotIndex;
+                jinv["entries"].push_back(std::move(je));
+            }
+            j["inventories"].push_back(std::move(jinv));
+        }
+    }
+
+    // break-A2 (v4): dialog vars. Solo se serializa el objeto si hay
+    // al menos una var.
+    if (!d.dialogVars.empty()) {
+        nlohmann::json jdv = nlohmann::json::object();
+        for (const auto& [k, v] : d.dialogVars) {
+            jdv[k] = v;
+        }
+        j["dialog_vars"] = std::move(jdv);
+    }
+
     std::error_code ec;
     fs::create_directories(path.parent_path(), ec);
     std::ofstream f(path);
@@ -121,12 +150,14 @@ bool save(const SaveData& d, const std::filesystem::path& path) {
     f << j.dump(2);
     Log::engine()->info(
         "SaveLoad::save: '{}' OK ({} bytes, {} bodies, {} script globals, "
-        "{} quests, hp={}, ammo={})",
+        "{} quests, {} inventories, {} dialog vars, hp={}, ammo={})",
         path.generic_string(),
         static_cast<usize>(f.tellp()),
         d.bodies.size(),
         d.scriptGlobals.size(),
         d.quests.size(),
+        d.inventories.size(),
+        d.dialogVars.size(),
         d.hud.hp, d.hud.ammo);
     return true;
 }
@@ -266,12 +297,42 @@ std::optional<SaveData> load(const std::filesystem::path& path) {
         }
     }
 
+    // break-A1 (v4): inventories array (opcional — v1..v3 no lo tienen).
+    if (j.contains("inventories") && j.at("inventories").is_array()) {
+        for (const auto& jinv : j.at("inventories")) {
+            InventorySnapshot inv;
+            inv.entityTag = jinv.value("tag", std::string{});
+            if (inv.entityTag.empty()) continue;
+            if (jinv.contains("entries") && jinv.at("entries").is_array()) {
+                for (const auto& je : jinv.at("entries")) {
+                    InventoryEntrySnapshot es;
+                    es.itemPath  = je.value("item_path", std::string{});
+                    es.quantity  = je.value("quantity", 0);
+                    es.slotIndex = je.value("slot_index", -1);
+                    if (es.itemPath.empty() || es.quantity <= 0) continue;
+                    inv.entries.push_back(std::move(es));
+                }
+            }
+            d.inventories.push_back(std::move(inv));
+        }
+    }
+
+    // break-A2 (v4): dialog_vars object (opcional — v1..v3 no lo tienen).
+    if (j.contains("dialog_vars") && j.at("dialog_vars").is_object()) {
+        for (const auto& item : j.at("dialog_vars").items()) {
+            if (item.value().is_string()) {
+                d.dialogVars[item.key()] = item.value().get<std::string>();
+            }
+        }
+    }
+
     Log::engine()->info(
         "SaveLoad::load: '{}' OK (map='{}', hp={}, ammo={}, {} bodies, "
-        "{} script globals, {} quests)",
+        "{} script globals, {} quests, {} inventories, {} dialog vars)",
         path.generic_string(),
         d.mapPath, d.hud.hp, d.hud.ammo,
-        d.bodies.size(), d.scriptGlobals.size(), d.quests.size());
+        d.bodies.size(), d.scriptGlobals.size(), d.quests.size(),
+        d.inventories.size(), d.dialogVars.size());
     return d;
 }
 

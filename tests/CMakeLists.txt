@@ -61,6 +61,7 @@ add_executable(mood_tests
     test_cloth_layout.cpp  # F2H75 Bloque A
     test_physics_cloth.cpp  # F2H75 Bloque B
     test_save_load.cpp
+    test_saveload_inventory.cpp        # break-A1+A2
     test_frustum.cpp
     test_render_batching.cpp
     test_hierarchy_collect.cpp

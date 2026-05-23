@@ -126,7 +126,7 @@
 
 ### Diferidos sin orden (emergentes post-F2H48.1)
 
-- **Persistencia de `GameState::dialogVars` en `.moodsave`**: vars sobreviven en memoria entre dialogs pero se pierden al cerrar el juego. YAGNI confirmado para F2H49 (demo no usa save/load). Sumar cuando emerja necesidad de "guardia recuerda al cargar partida".
+- ~~**Persistencia de `GameState::dialogVars` en `.moodsave`**~~ — resuelto en break-A2 (2026-05-23). Schema v4 + `SaveData::dialogVars` + capture/restore en PlayerApplication. Test en `test_saveload_inventory.cpp` cubre set_var → save → load → has_var.
 - **Mouse clic sobre choices del HUD `dialog_box`**: v1 usa teclas 1-9 (HL2 style). YAGNI confirmado. Si el dev pide gamepad/touch tras F2H49, agregar `ImGui::IsMouseClicked + AABB test` por choice — incremento pequeño.
 - **`physics.raycast` desde DialogScriptHost**: el host expone solo `dialog`, `hud`, `log`. Si emerge caso "si el player está a < 2m, opción extra", agregar con cuidado.
 - **`dialog.jump_to(nodeId)` desde un on_select_lua**: control de flujo restringido en el host por riesgo de recursión. Si emerge demand, implementar con deferred transition (queue al final del frame).

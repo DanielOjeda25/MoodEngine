@@ -33,6 +33,14 @@
 // `script_globals` (Lua globals filtradas). Loader v2 sigue leyendo
 // archivos v1 (los nuevos campos quedan vacios).
 //
+// Schema v3 (F2H53 H): agrega `quests` + `tracked_quest`.
+//
+// Schema v4 (break-A1+A2, 2026-05-23): agrega `inventories` (snapshot
+// runtime de cada InventoryComponent por tag) y `dialog_vars`
+// (GameState::dialogVars persistido). Pre-F2H86 ambos viajes se
+// perdian al cargar — A1 era el placebo critico del cierre Fase 2.
+// Saves v3 cargan OK (vectors vacios por default).
+//
 // Convenciones:
 //   - Paths con `/` (forward slashes), sin Windows backslashes.
 //   - Floats con precision por default de nlohmann::json (suficiente).
@@ -88,6 +96,26 @@ struct QuestSnapshot {
     std::vector<bool> objectiveDone; // alineado por indice contra Asset::objectives
 };
 
+/// @brief break-A1: una entrada del inventario en el snapshot runtime.
+///        Mismo patron paths-no-ids que SavedInventoryEntry del
+///        SceneSerializer — los ItemAssetId no son estables entre
+///        sesiones. En load se resuelve via assets.loadItem(path).
+struct InventoryEntrySnapshot {
+    std::string itemPath;   // ej. "items/iron_sword.mooditem"
+    int         quantity   = 0;
+    int         slotIndex  = -1;  // -1 = FlatList (sin slot)
+};
+
+/// @brief break-A1: snapshot del estado runtime de un InventoryComponent
+///        identificado por tag de la entity owner. El layout (FlatList /
+///        Grid2D / EquipmentSlots) NO se persiste aca — viene del
+///        `.moodmap` (estatico). Solo guardamos las entries (items
+///        recogidos / quitados durante Play).
+struct InventorySnapshot {
+    std::string entityTag;
+    std::vector<InventoryEntrySnapshot> entries;
+};
+
 struct SaveData {
     std::string mapPath;        // path logico al `.moodmap` activo
     HudState    hud;
@@ -101,6 +129,14 @@ struct SaveData {
     /// F2H53 H: snapshot de quests activos + path del tracked. v3+.
     std::vector<QuestSnapshot> quests;
     std::string trackedQuestPath;  // "" = ninguno
+    /// break-A1 (v4+): snapshot del estado runtime del InventoryComponent
+    /// por entity tag. Persiste items recogidos/dropeados durante Play
+    /// (pre-F2H86 esto se perdia al cargar — placebo critico).
+    std::vector<InventorySnapshot> inventories;
+    /// break-A2 (v4+): dialog vars persistentes de GameState::dialogVars.
+    /// `dialog.set_var`/`has_var` de Lua escriben aca. Sobreviven al
+    /// save/load — habilita "el NPC recuerda que ya hablaste con el".
+    std::unordered_map<std::string, std::string> dialogVars;
 };
 
 /// @brief Escribe `d` como JSON en `path`. Crea directorios padre si
