@@ -266,9 +266,7 @@ AssetManager::AssetManager(std::string rootDir,
     //      objectives — el caller espera ese path.
     {
         auto empty = std::make_unique<Quest::Asset>();
-        m_quests.emplace_back(std::move(empty));
-        m_questPaths.emplace_back(k_emptyQuestPath);
-        m_questCache.emplace(k_emptyQuestPath, missingQuestId());
+        m_quests.initFallback(std::move(empty), k_emptyQuestPath);
     }
     Log::assets()->info("AssetManager: quest 'vacio' generado en slot 0");
 }

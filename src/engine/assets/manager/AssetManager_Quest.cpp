@@ -2,6 +2,8 @@
 // Mismo patron que `AssetManager_Item.cpp` (F2H51): lookup en cache, resolve
 // via VFS, carga desde disco con `Quest::Asset::loadFromFile`, fallback al
 // slot 0 (asset vacio) si algo falla.
+//
+// break-B5: storage delegado a AssetRegistry<Quest::Asset>.
 
 #include "engine/assets/manager/AssetManager.h"
 
@@ -13,9 +15,8 @@
 namespace Mood {
 
 QuestAssetId AssetManager::loadQuest(std::string_view logicalPath) {
-    const std::string key(logicalPath);
-    if (auto it = m_questCache.find(key); it != m_questCache.end()) {
-        return it->second;
+    if (m_quests.contains(logicalPath)) {
+        return m_quests.findByPath(logicalPath);
     }
 
     const auto fs = m_vfs.resolve(logicalPath);
@@ -23,42 +24,34 @@ QuestAssetId AssetManager::loadQuest(std::string_view logicalPath) {
         Log::assets()->warn(
             "AssetManager: quest path '{}' rechazado por VFS. Fallback al vacio.",
             logicalPath);
-        m_questCache.emplace(key, missingQuestId());
+        m_quests.cacheAsFallback(logicalPath);
         return missingQuestId();
     }
 
     auto loaded = Quest::Asset::loadFromFile(fs);
     if (!loaded.has_value()) {
         // Loggeo emitido por `loadFromFile`.
-        m_questCache.emplace(key, missingQuestId());
+        m_quests.cacheAsFallback(logicalPath);
         return missingQuestId();
     }
 
     auto stored = std::make_unique<Quest::Asset>(std::move(*loaded));
-    const QuestAssetId id = static_cast<QuestAssetId>(m_quests.size());
-    m_quests.push_back(std::move(stored));
-    m_questPaths.push_back(key);
-    m_questCache.emplace(key, id);
+    const QuestAssetId id = m_quests.add(std::string{logicalPath},
+                                           std::move(stored));
     Log::assets()->info("AssetManager: cargado quest {} -> id {}", logicalPath, id);
     return id;
 }
 
 const Quest::Asset* AssetManager::getQuest(QuestAssetId id) const {
-    if (id >= m_quests.size()) {
-        return m_quests[missingQuestId()].get();
-    }
-    return m_quests[id].get();
+    return m_quests.get(id);
 }
 
 std::string AssetManager::questPathOf(QuestAssetId id) const {
-    if (id >= m_questPaths.size()) {
-        return m_questPaths[missingQuestId()];
-    }
-    return m_questPaths[id];
+    return m_quests.pathOf(id);
 }
 
 usize AssetManager::questCount() const {
-    return m_quests.size();
+    return m_quests.count();
 }
 
 } // namespace Mood

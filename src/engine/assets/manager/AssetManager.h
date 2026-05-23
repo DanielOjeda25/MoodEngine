@@ -527,9 +527,7 @@ private:
     AssetRegistry<Inventory::Asset> m_items;
 
     // Quest (F2H53). [0] = asset vacio (id "", objectives vacios).
-    std::unordered_map<std::string, QuestAssetId> m_questCache;
-    std::vector<std::unique_ptr<Quest::Asset>> m_quests;
-    std::vector<std::string> m_questPaths; // paralelo a m_quests
+    AssetRegistry<Quest::Asset> m_quests;
 
     // VehicleConfig (F2H67). [0] = fallback generico (makeFallbackGenericSedan).
     std::unordered_map<std::string, VehicleConfigAssetId> m_vehicleConfigCache;
