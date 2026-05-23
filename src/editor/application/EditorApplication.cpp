@@ -95,6 +95,7 @@ void EditorApplication::processEvents() {
         } else if (ev.type == SDL_KEYDOWN &&
                    ev.key.keysym.sym == SDLK_s &&
                    (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
+                   (ev.key.keysym.mod & KMOD_SHIFT) == 0 &&
                    ev.key.repeat == 0 &&
                    m_mode == EditorMode::Editor) {
             // Ctrl+S contextual (F2H78): si un editor guardable (script /
@@ -111,6 +112,42 @@ void EditorApplication::processEvents() {
             if (!panelHandlesSave) {
                 m_ui.requestProjectAction(ProjectAction::Save);
             }
+        } else if (ev.type == SDL_KEYDOWN &&
+                   ev.key.keysym.sym == SDLK_s &&
+                   (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
+                   (ev.key.keysym.mod & KMOD_SHIFT) != 0 &&
+                   ev.key.repeat == 0 &&
+                   m_mode == EditorMode::Editor) {
+            // F2H85: Ctrl+Shift+S contextual ("Guardar como"). Gemelo del
+            // Ctrl+S de F2H78: si un editor guardable con foco lo consume,
+            // se guarda en una ruta nueva (pfd::save_file con su extension
+            // nativa) en su propio render. Si nadie lo consume, fallback al
+            // "Guardar proyecto como" tradicional.
+            bool panelHandlesSaveAs = false;
+            for (const IPanel* p : m_ui.panels()) {
+                if (p->visible && p->consumesSaveAsShortcut()) {
+                    panelHandlesSaveAs = true;
+                    break;
+                }
+            }
+            if (!panelHandlesSaveAs) {
+                m_ui.requestProjectAction(ProjectAction::SaveAs);
+            }
+        } else if (ev.type == SDL_KEYDOWN &&
+                   ev.key.keysym.sym == SDLK_d &&
+                   (ev.key.keysym.mod & KMOD_SHIFT) != 0 &&
+                   (ev.key.keysym.mod & KMOD_CTRL) == 0 &&
+                   (ev.key.keysym.mod & KMOD_ALT) == 0 &&
+                   ev.key.repeat == 0 &&
+                   m_mode == EditorMode::Editor &&
+                   !ImGui::GetIO().WantTextInput) {
+            // F2H85: Shift+D Blender-style duplicate de la(s) entidad(es)
+            // del SelectionSet. Gate por: solo Editor Mode (no Play),
+            // tecla sin Ctrl/Alt (Ctrl+D = undo/redo en otros editores,
+            // Alt+D viewports), sin foco en input de texto (no robar la
+            // 'D' a un campo). Convencion Blender — la copia aparece con
+            // offset +0.5 m en X.
+            duplicateSelectedEntities();
         } else if (ev.type == SDL_KEYDOWN &&
                    (ev.key.keysym.sym == SDLK_DELETE ||
                     ev.key.keysym.sym == SDLK_BACKSPACE) &&

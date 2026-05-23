@@ -33,6 +33,16 @@ public:
     ///        foco actualizado en onImGuiRender via ImGui::IsWindowFocused.
     virtual bool consumesSaveShortcut() const { return false; }
 
+    /// @brief F2H85 (Ctrl+Shift+S contextual, "Guardar como"): mismo gate
+    ///        que `consumesSaveShortcut` pero para el shortcut de "Guardar
+    ///        como". El handler global consulta esto: si algun panel
+    ///        guardable enfocado lo devuelve true, el panel se guarda en
+    ///        su propia ruta nueva (pfd::save_file con su extension nativa)
+    ///        y NO dispara ademas `ProjectAction::SaveAs`. Default false —
+    ///        si ningun editor con foco lo consume, Ctrl+Shift+S guarda el
+    ///        proyecto entero en un `.moodproj` nuevo.
+    virtual bool consumesSaveAsShortcut() const { return false; }
+
     /// @brief Toggle de visibilidad. El EditorUI revisa este flag antes de
     ///        invocar onImGuiRender.
     bool visible = true;
