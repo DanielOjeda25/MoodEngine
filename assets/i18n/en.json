@@ -38,6 +38,9 @@
   "editor.menu.light.directional": "Directional Light (sun)",
   "editor.menu.light.point": "Point Light",
 
+  "editor.menu.world.environment": "Environment (world)",
+  "editor.menu.world.environment_already_present": "Scene already has an Environment",
+
   "editor.menu.edit": "Edit",
   "editor.menu.edit.undo": "Undo",
   "editor.menu.edit.redo": "Redo",
@@ -303,6 +306,14 @@
   "editor.panel.inspector.light.cast_shadows": "castShadows",
 
   "editor.panel.inspector.environment.skybox": "Skybox: {} (asset catalog future)",
+  "editor.panel.inspector.environment.skybox_preset": "skybox",
+  "editor.panel.inspector.environment.skybox_preset_kloofendal": "Kloofendal (bright outdoor)",
+  "editor.panel.inspector.environment.skybox_preset_day": "Synthetic Day",
+  "editor.panel.inspector.environment.skybox_preset_custom": "Custom...",
+  "editor.panel.inspector.environment.skybox_preset_custom_active": "Custom: {}",
+  "editor.panel.inspector.environment.skybox_pick": "Pick HDRI/PNG",
+  "editor.panel.inspector.environment.skybox_filter": "Equirect PNG (*.png)",
+  "editor.panel.inspector.environment.skybox_hint": "Bake IBL offline with: python tools/bake_ibl.py <path>",
   "editor.panel.inspector.environment.fog": "Fog",
   "editor.panel.inspector.environment.mode": "mode",
   "editor.panel.inspector.environment.color": "color",

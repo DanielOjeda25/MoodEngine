@@ -38,6 +38,9 @@
   "editor.menu.light.directional": "Luz Direccional (sol)",
   "editor.menu.light.point": "Luz Puntual",
 
+  "editor.menu.world.environment": "Environment (mundo)",
+  "editor.menu.world.environment_already_present": "Ya existe un Environment en la escena",
+
   "editor.menu.edit": "Editar",
   "editor.menu.edit.undo": "Deshacer",
   "editor.menu.edit.redo": "Rehacer",
@@ -303,6 +306,14 @@
   "editor.panel.inspector.light.cast_shadows": "castShadows",
 
   "editor.panel.inspector.environment.skybox": "Skybox: {} (asset catalog futuro)",
+  "editor.panel.inspector.environment.skybox_preset": "skybox",
+  "editor.panel.inspector.environment.skybox_preset_kloofendal": "Kloofendal (exterior brillante)",
+  "editor.panel.inspector.environment.skybox_preset_day": "Día sintético",
+  "editor.panel.inspector.environment.skybox_preset_custom": "Personalizado...",
+  "editor.panel.inspector.environment.skybox_preset_custom_active": "Personalizado: {}",
+  "editor.panel.inspector.environment.skybox_pick": "Elegir HDRI/PNG",
+  "editor.panel.inspector.environment.skybox_filter": "PNG equirectangular (*.png)",
+  "editor.panel.inspector.environment.skybox_hint": "IBL bakeado offline con: python tools/bake_ibl.py <path>",
   "editor.panel.inspector.environment.fog": "Niebla",
   "editor.panel.inspector.environment.mode": "modo",
   "editor.panel.inspector.environment.color": "color",

@@ -90,9 +90,83 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
     if (ImGui::CollapsingHeader(
             I18n::T("editor.panel.inspector.environment.fog").c_str(),
             ImGuiTreeNodeFlags_DefaultOpen)) {
+
+        // F2H86: dropdown de skybox/HDRI con presets + "Personalizado...".
+        // Mismo patron que el dropdown de Color Grading LUT (F2H58 Bloque H).
+        // El SceneRenderer detecta el cambio en applyEnvironmentFromScene y
+        // hace swap del skybox + IBL bakeado. Si el HDRI custom no tiene
+        // bake, el shader cae a ambient escalar (skybox sigue visible).
+        struct SkyPreset { const char* labelKey; const char* path; };
+        constexpr SkyPreset kSkyPresets[] = {
+            { "editor.panel.inspector.environment.skybox_preset_kloofendal", "skyboxes/sky_kloofendal" },
+            { "editor.panel.inspector.environment.skybox_preset_day",        "skyboxes/sky_day"        },
+        };
+        constexpr int kSkyPresetCount = static_cast<int>(sizeof(kSkyPresets) / sizeof(kSkyPresets[0]));
+        constexpr int kSkyCustomIndex = kSkyPresetCount;
+
+        int currentSkyIdx = kSkyCustomIndex;
+        for (int i = 0; i < kSkyPresetCount; ++i) {
+            if (env.skyboxPath == kSkyPresets[i].path) {
+                currentSkyIdx = i;
+                break;
+            }
+        }
+        std::string skyPreviewStr;
+        if (currentSkyIdx == kSkyCustomIndex) {
+            namespace fs = std::filesystem;
+            const std::string fname =
+                fs::path(env.skyboxPath).filename().generic_string();
+            skyPreviewStr = I18n::T(
+                "editor.panel.inspector.environment.skybox_preset_custom_active",
+                fname);
+        } else {
+            skyPreviewStr = I18n::T(kSkyPresets[currentSkyIdx].labelKey);
+        }
+
+        const std::string skyComboLabel =
+            I18n::T("editor.panel.inspector.environment.skybox_preset") + "##envsky";
+        if (ImGui::BeginCombo(skyComboLabel.c_str(), skyPreviewStr.c_str())) {
+            for (int i = 0; i < kSkyPresetCount; ++i) {
+                const bool selected = (currentSkyIdx == i);
+                const std::string itemLabel = I18n::T(kSkyPresets[i].labelKey);
+                if (ImGui::Selectable(itemLabel.c_str(), selected)) {
+                    env.skyboxPath = kSkyPresets[i].path;
+                    m_editedThisFrame = true;
+                }
+                if (selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::Separator();
+            const std::string customItem = I18n::T(
+                "editor.panel.inspector.environment.skybox_preset_custom");
+            if (ImGui::Selectable(customItem.c_str(), false)) {
+                namespace fs = std::filesystem;
+                const fs::path skyboxesDir = fs::current_path() / "assets" / "skyboxes";
+                const std::string startDir = fs::exists(skyboxesDir)
+                    ? skyboxesDir.generic_string()
+                    : (fs::current_path() / "assets").generic_string();
+                const std::string filterPng = I18n::T(
+                    "editor.panel.inspector.environment.skybox_filter");
+                const auto picked = pfd::open_file(
+                    I18n::T("editor.panel.inspector.environment.skybox_pick"),
+                    startDir,
+                    { filterPng, "*.png" }).result();
+                if (!picked.empty()) {
+                    fs::path abs(picked[0]);
+                    const fs::path assetsRoot = fs::current_path() / "assets";
+                    std::error_code ec;
+                    fs::path rel = fs::relative(abs, assetsRoot, ec);
+                    if (!ec && !rel.empty()) {
+                        env.skyboxPath = rel.generic_string();
+                    } else {
+                        env.skyboxPath = abs.generic_string();
+                    }
+                    m_editedThisFrame = true;
+                }
+            }
+            ImGui::EndCombo();
+        }
         ImGui::TextDisabled("%s",
-            I18n::T("editor.panel.inspector.environment.skybox",
-                    env.skyboxPath).c_str());
+            I18n::T("editor.panel.inspector.environment.skybox_hint").c_str());
 
         const char* fogModes[] = {"Off", "Linear", "Exp", "Exp2"};
         int fogIdx = static_cast<int>(env.fogMode);
