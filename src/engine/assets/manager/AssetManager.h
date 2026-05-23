@@ -11,6 +11,7 @@
 // por un lookup mas completo; la API publica no cambia.
 
 #include "core/Types.h"
+#include "engine/assets/manager/AssetRegistry.h"  // break-B5
 #include "engine/render/rhi/RendererTypes.h"
 #include "platform/VFS.h"
 
@@ -513,9 +514,9 @@ private:
     std::vector<std::string> m_materialPaths; // paralelo a m_materials
 
     // Dialog (F2H48). [0] = asset vacio (sin nodos / sin start_node).
-    std::unordered_map<std::string, DialogAssetId> m_dialogCache;
-    std::vector<std::unique_ptr<Dialog::Asset>> m_dialogs;
-    std::vector<std::string> m_dialogPaths; // paralelo a m_dialogs
+    // break-B5: storage uniforme via AssetRegistry — primera familia
+    // migrada para validar el patron. El resto se migra incremental.
+    AssetRegistry<Dialog::Asset> m_dialogs;
 
     // AnimationClip standalone (F2H49). [0] = clip vacio (sin tracks).
     std::unordered_map<std::string, AnimationClipAssetId> m_animationClipCache;

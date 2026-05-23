@@ -230,12 +230,11 @@ AssetManager::AssetManager(std::string rootDir,
     //      Sirve como fallback cuando un id es invalido o el archivo no
     //      se pudo parsear. DialogSystem::start lo rechaza por start_node
     //      invalido — el caller espera ese path.
+    // break-B5: via AssetRegistry<Dialog::Asset>::initFallback.
     {
         auto empty = std::make_unique<Dialog::Asset>();
         empty->metadata().name = "(empty)";
-        m_dialogs.emplace_back(std::move(empty));
-        m_dialogPaths.emplace_back(k_emptyDialogPath);
-        m_dialogCache.emplace(k_emptyDialogPath, missingDialogId());
+        m_dialogs.initFallback(std::move(empty), k_emptyDialogPath);
     }
     Log::assets()->info("AssetManager: dialog 'vacio' generado en slot 0");
 
