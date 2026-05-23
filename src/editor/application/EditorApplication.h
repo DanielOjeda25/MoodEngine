@@ -379,6 +379,18 @@ private:
     ///        en `processEvents`.
     void deleteSelectedEntity();
 
+    /// @brief F2H85: duplica las entidades del `SelectionSet` con un
+    ///        offset chico en X (Blender-style Shift+D). Para cada entity
+    ///        seleccionada, `serializeEntityToJson` -> `parseEntityFromJson`
+    ///        para obtener un `SavedEntity`, mutamos su `position` + tag
+    ///        para distinguirla, y `SceneLoader::applyOneEntity` crea la
+    ///        copia. Wrappeado en `CreateEntityCommand` via
+    ///        `pushCreatedEntities` -> undoable. La nueva entity queda
+    ///        seleccionada (multi: la ultima como active). Skip silencioso
+    ///        de Tile_X_Y (vienen del GridMap, no se duplican). Llamado
+    ///        desde el handler Shift+D en `processEvents`.
+    void duplicateSelectedEntities();
+
     /// @brief Editor-side overlay 3D que se dibuja DENTRO del scene FB
     ///        entre `SceneRenderer::renderScene` y `endFrame`. Usa el
     ///        debug renderer del SceneRenderer para acumular: tile

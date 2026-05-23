@@ -3,11 +3,14 @@
 #include "core/Log.h"
 #include "editor/commands/DeleteEntityCommand.h"
 #include "editor/commands/SetTileCommand.h"  // F2H62 polish: delete tile -> Empty
+#include "editor/selection/SelectionSet.h"   // F2H85: duplicate -> select copies
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/physics/world/PhysicsWorld.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
+#include "engine/scene/serialization/EntitySerializer.h"  // F2H85: duplicate
+#include "engine/scene/serialization/SceneLoader.h"       // F2H85: applyOneEntity
 #include "engine/world/grid/GridMap.h"
 #include "systems/audio/AudioSystem.h"
 #include "systems/physics/RagdollSystem.h"  // F2H66
@@ -482,6 +485,55 @@ void EditorApplication::deleteSelectedEntity() {
         std::move(ragdollCleanup));    // F2H66
     m_history.push(std::move(cmd));
     markDirty();
+}
+
+void EditorApplication::duplicateSelectedEntities() {
+    // F2H85: Shift+D Blender-style. Por cada entity del SelectionSet:
+    // serializa -> parsea SavedEntity -> ajusta position + tag ->
+    // applyOneEntity para spawnar la copia. Wrap todas en un
+    // CreateEntityCommand (via pushCreatedEntities). La ultima creada
+    // queda como `active`. Skip silencioso de tiles del GridMap
+    // (`Tile_X_Y`, no se duplican porque son derivados de m_map).
+    if (!m_scene || !m_assetManager) return;
+    const auto& sel = m_ui.selectionSet();
+    if (sel.selected.empty()) return;
+
+    constexpr glm::vec3 kOffset(0.5f, 0.0f, 0.0f);
+    std::vector<Entity> created;
+    created.reserve(sel.selected.size());
+
+    for (const Entity& src : sel.selected) {
+        if (!src) continue;
+        const std::string srcTag = src.hasComponent<TagComponent>()
+            ? src.getComponent<TagComponent>().name
+            : std::string{};
+        if (srcTag.size() >= 5 && srcTag.compare(0, 5, "Tile_") == 0) {
+            // Tiles del GridMap no se duplican (la celda persistida es
+            // m_map, no la entity). Skip silencioso.
+            continue;
+        }
+        const auto json = serializeEntityToJson(src, *m_assetManager);
+        SavedEntity saved = parseEntityFromJson(json);
+        saved.position += kOffset;
+        saved.tag = srcTag + "_copy";
+        // applyVisGroupMembership=true: la copia hereda el VisGroup
+        // del original (convencion Hammer / Unity duplicate).
+        Entity dup = SceneLoader::applyOneEntity(saved, *m_scene,
+                                                   *m_assetManager,
+                                                   /*applyVisGroupMembership=*/true);
+        if (dup) created.push_back(dup);
+    }
+
+    if (created.empty()) return;
+
+    // Wrap undoable + markDirty.
+    pushCreatedEntities(created, "Duplicar entidad");
+
+    // Seleccionar las copias: clear el set previo y `add` por cada nueva.
+    // `add` ya setea la ultima agregada como `active`.
+    SelectionSet& mutSel = m_ui.selectionSet();
+    clear(mutSel);
+    for (Entity& e : created) add(mutSel, e);
 }
 
 void EditorApplication::updateTileEntity(u32 tileX, u32 tileY, TextureAssetId texture) {
