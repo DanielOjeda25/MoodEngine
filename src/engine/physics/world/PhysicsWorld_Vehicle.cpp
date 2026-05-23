@@ -186,6 +186,28 @@ u32 PhysicsWorld::createVehicle(const vehicle::VehicleConfig& cfg,
         vcSettings.mWheels[i] = ws;
     }
 
+    // Anti-roll bars (estandar arcade SA / Unity / Unreal): par opposing
+    // entre las wheels de un mismo eje cuando una se comprime mas que la
+    // otra → reduce el roll del chasis en curvas y evita que vuelque
+    // facil. Jolt los expone como `VehicleAntiRollBar` built-in (no hay
+    // que escribir torque manual). Stiffness ~3000 N/m es arcade-ish
+    // (sim seria 500-1500); subir para mas SA-feel. Aplicamos uno por
+    // eje (front: FL-FR, rear: RL-RR).
+    {
+        constexpr f32 kAntiRollStiffness = 3000.0f;
+        JPH::VehicleAntiRollBar frontBar;
+        frontBar.mLeftWheel  = vehicle::WheelFL;
+        frontBar.mRightWheel = vehicle::WheelFR;
+        frontBar.mStiffness  = kAntiRollStiffness;
+        vcSettings.mAntiRollBars.push_back(frontBar);
+
+        JPH::VehicleAntiRollBar rearBar;
+        rearBar.mLeftWheel  = vehicle::WheelRL;
+        rearBar.mRightWheel = vehicle::WheelRR;
+        rearBar.mStiffness  = kAntiRollStiffness;
+        vcSettings.mAntiRollBars.push_back(rearBar);
+    }
+
     // 3) Controller settings: engine + transmission + diferenciales.
     JPH::WheeledVehicleControllerSettings* wvSettings =
         new JPH::WheeledVehicleControllerSettings();
