@@ -11,6 +11,64 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-23: F2H86 — Environment como entidad de primera clase + HDRI swap
+
+### Decisión 1 — Cerrar 1.0 + 1.-1 en un mismo hito en vez de dos chicos
+
+**Contexto:** Releí el BACKLOG con el dev pidiendo crítica honesta. Los únicos items con fricción real + precedente industrial eran 1.0 (entry point del Environment, fricción documentada en F2H61) y 1.-1 (HDRI switcher, pedida durante validación de F2H64). Mi propuesta inicial fue cerrar **solo 1.0** porque descubrí durante el plan que el `skyboxPath` estaba serializado pero **no consumido** por el renderer (placebo) — el HDRI switcher requería más scope que la estimación de 2-3h del BACKLOG.
+
+**Decisión:** El dev autorizó el scope grande (1.0 + HDRI real, 6-8h).
+
+**Razones:**
+- Ambos items son del mismo subsistema (`EnvironmentComponent`). Cerrarlos juntos evita dos pasadas al `SceneRenderer` + `InspectorPanel_Environment.cpp`.
+- Si se cerraba solo 1.0, la UX quedaba mocha (Environment como entidad sin poder cambiar el skybox = fricción persistente).
+- El refactor `loadSkyboxAndIblFromBase` queda como infra reusable para futuros features de IBL dinámico.
+
+### Decisión 2 — Auto-detect equirect vs cubemap dir en el loader
+
+**Contexto:** Hay 2 formatos coexistiendo: `sky_kloofendal.png` (equirect, 1 archivo) y `sky_day/{px,nx,py,ny,pz,nz}.png` (cubemap dir, 6 archivos). `SkyboxRenderer` ya soportaba ambos modos (Hito 15).
+
+**Decisión:** `loadSkyboxAndIblFromBase(base)` chequea `<base>.png` primero, si no `<base>/px.png`. El usuario no se entera del formato — solo elige preset.
+
+**Razones:**
+- Compatibilidad histórica: HDRIs de Polyhaven vienen como equirect, cubemaps procedurales son dir.
+- Una única convención de path mataría el otro formato (perderíamos assets ya generados).
+
+### Decisión 3 — BRDF LUT global, no parte del swap
+
+**Contexto:** El IBL son 3 cubemaps + 1 LUT (irradiance, prefilter 5 mips, brdf_lut). El BRDF LUT es **tabular** — función de `(N·V, roughness)` precomputada, idéntica para todo environment.
+
+**Decisión:** BRDF LUT se carga **una vez en el init**, no por skybox.
+
+**Razones:**
+- No depende del HDRI → recargarlo es waste.
+- Reduce GL state churn per-swap.
+- Mismo patrón que Unity / Unreal (BRDF LUT es global del engine).
+
+### Decisión 4 — File picker custom sin auto-bake del IBL
+
+**Contexto:** El usuario puede elegir un HDRI custom via file picker. Bakear el IBL **en runtime** requiere compute shaders (importance sampling + prefilter convolution) — 4-6h de implementación adicional + scope distinto.
+
+**Decisión:** Aceptar el path, log warn si el IBL bake no existe, hint en el Inspector con el comando offline (`python tools/bake_ibl.py <path>`). El skybox visualmente cambia; los reflejos IBL caen a ambient escalar hasta que se bakee.
+
+**Razones:**
+- Workflow industrial: Unity y Unreal también bakean IBL offline (Reflection Probe = on-demand, no por frame).
+- Runtime bake = scope F2 o F3 (cuando se agregue compute shaders).
+- El bake offline ya existe (`tools/bake_ibl.py`) y es razonable (~30s/HDRI).
+
+### Decisión 5 — Cambio del default `skyboxPath` de `sky_day` a `sky_kloofendal`
+
+**Contexto:** Pre-F2H86, el componente decía `"skyboxes/sky_day"` pero el renderer cargaba `kloofendal` hardcoded — mismatch silencioso. Post-F2H86 el path se respeta runtime → si dejaba sky_day como default, todo Environment recién creado pediría swap a sky_day al cargar (innecesario).
+
+**Decisión:** Cambiar default del struct a `"skyboxes/sky_kloofendal"`. Test nuevo guarda la regresión.
+
+**Razones:**
+- Coherencia con el bootstrap del renderer.
+- `.moodmap` antiguos con `sky_day` explícito siguen funcionando (el parse respeta el JSON, default solo aplica cuando la key falta).
+- Tests existentes (test_scene_serializer, test_package_builder) setean valores explícitos — no afectados.
+
+---
+
 ## 2026-05-23: F2H85 — Save As contextual + Shift+D duplicate
 
 ### Decisión 1 — Save As con el mismo patrón de F2H78 (cada panel en su render)

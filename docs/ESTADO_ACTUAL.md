@@ -30,7 +30,33 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H85 (2026-05-23) — **Sub-fase 2.7**
+## 0.1. Último hito de feature — F2H86 (2026-05-23) — **Sub-fase 2.7**
+
+**Environment como entidad de primera clase + HDRI swap runtime.** Tag `v1.77.0-fase2-hito86`. Detalle completo en [`hitos/F2H86.md`](hitos/F2H86.md). Undécimo hito de Sub-fase 2.7.
+
+Cierra dos items del BACKLOG que se complementan en el mismo subsistema (`EnvironmentComponent`): 1.0 (entry point dedicado) + 1.-1 (skybox/HDRI switcher). El dev autorizó el scope grande (1.0 + HDRI real) tras el análisis crítico que mostró que `env.skyboxPath` estaba **serializado pero placebo** (el SceneRenderer cargaba `kloofendal` hardcoded).
+
+**Lo que entregó**:
+- **Entry point**: `ProjectAction::AddEnvironment` + `handleAddEnvironment` (gemelo de `handleAddPointLight` de F2H60 iter2). Spawnea `Tag + Transform + EnvironmentComponent` sin MeshRenderer placeholder. Guard de unicidad por escena (igual que `applyEnvironmentFromScene`). Card nueva en el modal `+ Crear Entidad > Luces` (3a card después de Direccional + Puntual), **disabled si ya existe Environment**.
+- **Ícono dedicado**: `EnvironmentComponent → ICON_FA_GLOBE` con prioridad alta en `iconForEntity` (antes de MeshRenderer). `ICON_FA_GLOBE` (0xF0AC) agregado al subset curado de FontAwesome.
+- **Refactor SceneRenderer**: `loadSkyboxAndIblFromBase(const std::string& base)` privado nuevo, auto-detecta equirect (`<base>.png`) vs cubemap dir (`<base>/px.png`), busca IBL bakeado en `assets/ibl/<stem>/`. **BRDF LUT global** (no depende del environment, una vez en init). Cache `m_currentSkyboxBase` → idempotente per-frame. Init llama con default `sky_kloofendal` (mismo bootstrap que pre-F2H86).
+- **Cableado swap**: `applyEnvironmentFromScene` captura `env.skyboxPath` y dispara `loadSkyboxAndIblFromBase` si cambió. Swap ocurre antes del primer draw del frame.
+- **Dropdown UI** en `InspectorPanel_Environment.cpp` sección "Niebla": reemplazo del `TextDisabled` placebo por `BeginCombo` con 2 presets ("Kloofendal exterior" / "Día sintético") + "Personalizado..." (file picker `*.png`). Hint debajo con instrucciones del bake offline (`python tools/bake_ibl.py <path>`).
+- **Generación `assets/skyboxes/sky_day/`**: 6 PNGs cubemap (IBL ya estaba bakeado). Ahora hay **2 skyboxes funcionales** end-to-end.
+- **Default actualizado**: `EnvironmentComponent::skyboxPath` de `sky_day` → `sky_kloofendal` (alineado con bootstrap del renderer; test guarda la regresión).
+- **Tests nuevos** (`test_environment_entity.cpp`, 4 casos / 16 asserts): default, iconForEntity → GLOBE, prioridad sobre MeshRenderer, roundtrip JSON.
+
+**Suite 1078/11119 verde**. Validación visual pendiente (Inspector → dropdown → ver cielo + reflejos PBR cambiar).
+
+**Pendientes de 2.7 (en orden acordado con el dev)**:
+- **Atajos de teclado configurables** (era F2H42 del plan original; el dev lo dejó "para futuro").
+- **Cierre Fase 2 + `v2.0.0`**: suite verde, docs al día, release notes, recap, planning Fase 3.
+- Menores: Save As de Material/Script/Shader (cuando emerja fricción). **Tutorial in-app**: diferido a post-Fase 2.
+- Backlog restante de baja presión: 1.-2 OIT brushes, 1.1 Map Tools híbrido (descartados por crítica honesta en F2H86 — sin fricción real).
+
+---
+
+## 0.1ante8. Hito previo — F2H85 (2026-05-23) — **Sub-fase 2.7**
 
 **Save As contextual + Shift+D duplicate.** Tag `v1.76.0-fase2-hito85`. Detalle completo en [`hitos/F2H85.md`](hitos/F2H85.md). Décimo hito de Sub-fase 2.7.
 
@@ -43,11 +69,6 @@ Dos quality-of-life chicos que cierran items históricos del BACKLOG.
 - **Diferidos** (documentados): Save As de Material/Script/Shader (requieren refactor del AssetManager o de ScriptComponent — scope distinto). Shift+D mouse-tracked (Blender's drag modal) — F2 si emerge fricción.
 
 **Suite 1074/11103 verde**. Validación visual pendiente (sesión dejada para futuro).
-
-**Pendientes de 2.7 (en orden acordado con el dev)**:
-- **F2H86 — atajos de teclado configurables** (era F2H42 del plan original; el dev lo dejó "para futuro" porque va a seguir agregando/arreglando cosas).
-- **Cierre Fase 2 + `v2.0.0`**: suite verde, docs al día, release notes, recap, planning Fase 3.
-- Menores: Save As de Material/Script/Shader (cuando emerja fricción). **Tutorial in-app**: diferido por el dev a post-Fase 2.
 
 ---
 

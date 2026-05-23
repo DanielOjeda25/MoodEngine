@@ -53,34 +53,15 @@ Implementado en F2H85 (`v1.76.0-fase2-hito85`). Handler en `EditorApplication::p
 
 ---
 
-### 1.-1. Skybox / HDRI switcher (F2H64 tour, 2026-05-18)
+### 1.-1. ~~Skybox / HDRI switcher~~ — ✅ Cerrado en F2H86 (2026-05-23)
 
-**Contexto**: al validar las sombras tintadas de F2H64 el dev tuvo dificultad para distinguir los colores porque el HDRI default (`sky_kloofendal`) es muy luminoso. Cita: *"creo que debemos tratar de tener un HDRI mas dinamico, como los motores, y ahi resolveria mas rapido ver estos test de colores en cosas traslucidas"*.
-
-**Scope estimado**: ~2-3h. Dropdown en el Inspector del `EnvironmentComponent` con: HDRIs shipados (kloofendal brillante / neutro / atardecer / interior oscuro / nocturno) + opción "Cargar custom..." desde AssetBrowser. Reuso del patrón F2H42 (Material Editor) y F2H58 (Color Grading LUT). Persistir el path en `EnvironmentComponent.skyboxPath`.
-
-**Workaround mientras tanto**: bajar Exposure del Environment a -2 o -3 cuando hay que validar tintes tenues. Funciona pero es manual y se olvida.
-
-**Por qué NO atacamos ahora**: friction emerge solo cuando hay que validar tintes sutiles. Hoy con el editor en producción/edición normal el HDRI fijo no molesta.
+Implementado en F2H86 junto con 1.0 (entry point del Environment) bajo el mismo subsistema. `SceneRenderer::loadSkyboxAndIblFromBase` auto-detecta equirect (`<base>.png`) o cubemap dir (`<base>/px.png`) e invoca el swap del IBL bakeado. Dropdown en `InspectorPanel_Environment.cpp` sección "Niebla" con 2 presets shipados (Kloofendal exterior brillante + Día sintético) + "Personalizado..." (file picker). HDRIs custom requieren bake offline (`python tools/bake_ibl.py <path>`) — no hay runtime bake (scope F3 + compute shaders). Detalle en [`hitos/F2H86.md`](hitos/F2H86.md).
 
 ---
 
-### 1.0. EnvironmentComponent con entry point dedicado (F2H61 tour)
+### 1.0. ~~EnvironmentComponent con entry point dedicado~~ — ✅ Cerrado en F2H86 (2026-05-23)
 
-**Contexto**: durante la validación visual de F2H61 (SSR) el dev creó una entidad placeholder (cubo missing-texture) **solo para colgarle el `EnvironmentComponent`** y poder activar el SSR. Cita verbatim: *"el cubo con la textura missing es mi environmentCOmponent, mas adelante me gustaria que tenga un icono y una opcion propia, porque de la forma que hago ahora es agregar un empty y ahi agregar el componentEnviroment y no le veo el sentido si es un componente global"*.
-
-El `EnvironmentComponent` ES global por escena (`SceneRenderer::applyEnvironmentFromScene` solo aplica el primer Environment encontrado). Tenerlo colgado de una entidad placeholder rompe la convención de otros motores:
-- **Unity**: Render Settings global (no anclado a GameObject) + Volume actor especial con icono propio.
-- **Unreal**: Post Process Volume actor con icono y categoría propia en el outliner.
-- **Godot**: `WorldEnvironment` node específico con icono y entry point en el menú Add Node.
-
-**Scope estimado**: 2-3h. Cambios mínimos:
-1. Entry point dedicado: en el modal `+ Crear Entidad` (F2H57/F2H59) agregar una sub-sección "World/Environment" o un kit en el modal Convertir, con un botón "Crear Environment" que spawnea una entidad con sólo `TagComponent` + `TransformComponent` + `EnvironmentComponent`.
-2. Icono dedicado en el Hierarchy panel: `IconHelpers::iconForEntity` ya detecta tipo de componente — añadir branch para `EnvironmentComponent` con `ICON_FA_TREE` o `ICON_FA_GLOBE` (probablemente FA_GLOBE para distinguirlo del header del Inspector).
-3. UI guard: si la escena ya tiene un Environment, el botón queda disabled o agrega al existente.
-4. Opcional UX nice: skip del MeshRenderer placeholder en la entidad Environment (no debe verse en el viewport — es una "config entity", no geometría).
-
-**Por qué NO atacamos ahora**: F2H61 ship SSR funcional. El workaround "crear empty + agregar Environment" es feo pero funciona. Atacar como sub-hito propio o como bloque temprano del F2H62 (UX cleanup de Sub-fase 2.3) si emerge fricción real.
+Implementado en F2H86 junto con 1.-1 (HDRI switcher) en un mismo hito. `ProjectAction::AddEnvironment` + `handleAddEnvironment` spawnea `Tag + Transform + EnvironmentComponent` sin MeshRenderer placeholder. Guard de unicidad: si ya existe, log info + no-op. Card nueva en el modal `+ Crear Entidad > Luces` (disabled si ya hay Environment). `IconHelpers::iconForEntity` retorna `ICON_FA_GLOBE` con prioridad alta. Tests headless cubren default + ícono + roundtrip JSON. Detalle en [`hitos/F2H86.md`](hitos/F2H86.md).
 
 ---
 
