@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>  // break-B8: unique_ptr ownership del WheeledVehicleControllerSettings
 
 namespace Mood {
 
@@ -209,8 +210,11 @@ u32 PhysicsWorld::createVehicle(const vehicle::VehicleConfig& cfg,
     }
 
     // 3) Controller settings: engine + transmission + diferenciales.
-    JPH::WheeledVehicleControllerSettings* wvSettings =
-        new JPH::WheeledVehicleControllerSettings();
+    // break-B8: ownership via unique_ptr para que cualquier return/throw
+    // entre aca y `vcSettings.mController = wvSettings.release()` libere
+    // sin leak. Jolt toma ownership via JPH::Ref<> al asignar el raw
+    // pointer del release() al campo mController.
+    auto wvSettings = std::make_unique<JPH::WheeledVehicleControllerSettings>();
     wvSettings->mEngine.mMaxTorque = cfg.engine.maxTorque;
     wvSettings->mEngine.mMinRPM    = cfg.engine.minRPM;
     wvSettings->mEngine.mMaxRPM    = cfg.engine.maxRPM;
@@ -255,7 +259,8 @@ u32 PhysicsWorld::createVehicle(const vehicle::VehicleConfig& cfg,
             "El vehiculo no recibira torque. Abortando.");
         bi.RemoveBody(chassisId);
         bi.DestroyBody(chassisId);
-        delete wvSettings;
+        // break-B8: wvSettings (unique_ptr) se libera automaticamente al
+        // salir del scope.
         return 0;
     }
     const f32 torquePerDiff = 1.0f / static_cast<f32>(activeDiffs);
@@ -276,7 +281,9 @@ u32 PhysicsWorld::createVehicle(const vehicle::VehicleConfig& cfg,
         wvSettings->mDifferentials.push_back(d);
     }
 
-    vcSettings.mController = wvSettings;  // ownership transferida via Ref
+    // break-B8: ownership transferida al JPH::Ref<> via release(). Desde
+    // aca Jolt es duenio del puntero (refcount controlado por VehicleConstraint).
+    vcSettings.mController = wvSettings.release();
 
     // 4) Crear el constraint, registrar como step listener, agregar al
     //    physics system. VehicleConstraint constructor toma referencia al
