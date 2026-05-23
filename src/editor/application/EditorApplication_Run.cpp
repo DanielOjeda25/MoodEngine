@@ -278,6 +278,8 @@ int EditorApplication::run() {
             // F2H60 polish iter2: spawn directo de luces desde el modal.
             case ProjectAction::AddDirectionalLight:     handleAddDirectionalLight();      break;
             case ProjectAction::AddPointLight:           handleAddPointLight();            break;
+            // F2H86: Environment como entidad de primera clase (sin mesh placeholder).
+            case ProjectAction::AddEnvironment:          handleAddEnvironment();           break;
             // F2H20: compilacion brush -> mesh estatica + export OBJ.
             case ProjectAction::CompileMap:              handleCompileMap();               break;
             case ProjectAction::ExportObj:               handleExportObj();                break;

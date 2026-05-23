@@ -487,4 +487,54 @@ void EditorApplication::handleAddPointLight() {
     pushCreatedEntities({e}, std::string("Crear luz '") + name + "'");
 }
 
+// ============================================================================
+// F2H86: Environment como entidad de primera clase.
+//
+// Pre-F2H86, para activar SSR/Bloom/Color Grading/etc el dev tenia que
+// spawnar un placeholder (cubo missing-texture o similar) solo para
+// colgar el EnvironmentComponent. El resultado: una entidad fantasma
+// con un cubo magenta visible en el viewport cuya unica funcion era ser
+// portador del config global.
+//
+// Convencion industrial:
+//   - Unity: Render Settings (global, no anclado a GameObject) +
+//     Volume actor con icono propio.
+//   - Unreal: PostProcessVolume actor con icono y categoria propia.
+//   - Godot: WorldEnvironment node con icono y entry point dedicado.
+//
+// F2H86 sigue ese patron: spawn de entidad solo con Tag + Transform +
+// EnvironmentComponent. Sin MeshRenderer; el Hierarchy panel la
+// identifica via IconHelpers (ICON_FA_GLOBE). Guard de unicidad: si
+// ya hay un Environment en la escena, log y no-op (igual que
+// applyEnvironmentFromScene del SceneRenderer que solo aplica el
+// primer Environment encontrado).
+// ============================================================================
+
+void EditorApplication::handleAddEnvironment() {
+    if (!m_scene) return;
+
+    bool alreadyExists = false;
+    m_scene->forEach<EnvironmentComponent>(
+        [&](Entity, EnvironmentComponent&) { alreadyExists = true; });
+    if (alreadyExists) {
+        Log::editor()->info(
+            "[create_environment] Ya existe un Environment en la escena. Skip.");
+        return;
+    }
+
+    const std::string name = uniqueEntityName(*m_scene, "Environment");
+    Entity e = m_scene->createEntity(name);
+
+    auto& t = e.getComponent<TransformComponent>();
+    t.position = glm::vec3(0.0f); // posicion irrelevante (componente global).
+
+    EnvironmentComponent env{}; // defaults del struct: kloofendal + fog Off + tonemap ACES, etc.
+    e.addComponent<EnvironmentComponent>(env);
+
+    Log::editor()->info("[create_environment] Spawned '{}' (Environment global)", name);
+
+    replaceWithSingle(m_ui.selectionSet(), e);
+    pushCreatedEntities({e}, std::string("Crear environment '") + name + "'");
+}
+
 } // namespace Mood

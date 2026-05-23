@@ -195,6 +195,11 @@ private:
     void handleAddDirectionalLight(); // dir=(-0.3,-1.0,-0.2), castShadows=true.
     void handleAddPointLight();       // pos=(0,1,0), radius=10m, color calido.
 
+    /// @brief F2H86: spawn entidad con `Tag + Transform + EnvironmentComponent`
+    ///        (sin MeshRenderer — es config global de escena, no geometria).
+    ///        Guard: si ya existe un Environment en la escena, no-op + log.
+    void handleAddEnvironment();
+
     /// @brief F2H20: compila los brushes del mapa actual a una mesh
     ///        estatica unificada (weld + cull caras internas + merge
     ///        por material) y muestra dialog con stats.

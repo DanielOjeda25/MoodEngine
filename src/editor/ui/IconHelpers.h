@@ -20,6 +20,11 @@
 namespace Mood {
 
 inline const char* iconForEntity(Entity e) {
+    // F2H86: Environment (config global) tiene prioridad alta — convencion
+    // Unity Volume / Unreal PostProcessVolume / Godot WorldEnvironment.
+    // Antes de MeshRenderer porque si alguien adjunta ambos (defensivo),
+    // el rol del entity es "Environment", no "geometria".
+    if (e.hasComponent<EnvironmentComponent>())       return ICON_FA_GLOBE;
     if (e.hasComponent<MeshRendererComponent>())     return ICON_FA_CUBE;
     if (e.hasComponent<BrushComponent>())             return ICON_FA_CUBES_STACKED;
     if (e.hasComponent<LightComponent>())             return ICON_FA_LIGHTBULB;

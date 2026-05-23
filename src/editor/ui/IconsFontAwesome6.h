@@ -60,6 +60,7 @@ inline constexpr unsigned short k_FontAwesomeRange[] = { 0xE005, 0xF8FF, 0 };
 #define ICON_FA_BORDER_NONE                         "\xef\xa1\x90" // 0xF850 trigger
 #define ICON_FA_VIDEO                               "\xef\x80\xbd" // 0xF03D camera
 #define ICON_FA_FIRE                                "\xef\x81\xad" // 0xF06D particle emitter
+#define ICON_FA_GLOBE                               "\xef\x82\xac" // 0xF0AC environment como entidad (F2H86)
 
 // --- Inspector component headers (extra mas alla de entity types) ---
 #define ICON_FA_WEIGHT_HANGING                      "\xef\x97\x8d" // 0xF5CD rigidbody (physics)

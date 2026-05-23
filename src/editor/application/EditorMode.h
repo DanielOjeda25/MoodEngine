@@ -100,6 +100,11 @@ enum class ProjectAction {
     // (no hay mesh todavia).
     AddDirectionalLight, // luz direccional (sol) con castShadows ON.
     AddPointLight,       // luz puntual omnidireccional con radius=10m.
+    // F2H86: Environment como entidad de primera clase. Spawnea Tag +
+    // Transform + EnvironmentComponent sin MeshRenderer (es config global,
+    // no geometria). Convencion Unity Render Settings / Unreal Post
+    // Process Volume / Godot WorldEnvironment.
+    AddEnvironment,
     // F2H20: compilacion brush -> mesh estatica + export OBJ.
     CompileMap,
     ExportObj,

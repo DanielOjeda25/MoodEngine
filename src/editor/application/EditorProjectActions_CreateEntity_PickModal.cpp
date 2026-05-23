@@ -260,10 +260,21 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
         // F2H80: cards con ícono (una luz no tiene modelo 3D que renderizar —
         // el estándar de los engines es un ícono claro: sol = direccional,
         // foco = puntual).
-        struct LightSpec { const char* labelKey; const char* icon; ProjectAction action; };
-        const LightSpec kLights[] = {
-            { "editor.menu.light.directional", ICON_FA_SUN,       ProjectAction::AddDirectionalLight },
-            { "editor.menu.light.point",       ICON_FA_LIGHTBULB, ProjectAction::AddPointLight       },
+        // F2H86: Environment (config global) tambien vive aca como tercera
+        // card. Sigue el patron Unity Volume / Unreal PostProcessVolume /
+        // Godot WorldEnvironment. Disabled si la escena ya tiene un
+        // EnvironmentComponent (unico por escena — applyEnvironmentFromScene
+        // del SceneRenderer solo usa el primero).
+        struct LightSpec { const char* labelKey; const char* icon; ProjectAction action; bool disabled; };
+        bool hasEnvironment = false;
+        if (m_scene != nullptr) {
+            m_scene->forEach<EnvironmentComponent>(
+                [&](Entity, EnvironmentComponent&) { hasEnvironment = true; });
+        }
+        LightSpec kLights[] = {
+            { "editor.menu.light.directional", ICON_FA_SUN,       ProjectAction::AddDirectionalLight, false           },
+            { "editor.menu.light.point",       ICON_FA_LIGHTBULB, ProjectAction::AddPointLight,       false           },
+            { "editor.menu.world.environment", ICON_FA_GLOBE,     ProjectAction::AddEnvironment,      hasEnvironment },
         };
         constexpr int kLightCount = static_cast<int>(sizeof(kLights) / sizeof(kLights[0]));
         constexpr float kCard = 96.0f;
@@ -276,11 +287,18 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
             ImGui::PushID(i);
             ImGui::BeginGroup();
             // Ícono grande centrado (font scale 2.6x) como label de una card.
+            if (kLights[i].disabled) ImGui::BeginDisabled();
             ImGui::SetWindowFontScale(2.6f);
             const bool clicked = ImGui::Button(kLights[i].icon, ImVec2(kCard, kCard));
             ImGui::SetWindowFontScale(1.0f);
+            if (kLights[i].disabled) ImGui::EndDisabled();
             if (clicked) { pendingAction = kLights[i].action; actionPicked = true; }
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", label.c_str());
+            if (ImGui::IsItemHovered()) {
+                const char* tipKey = kLights[i].disabled
+                    ? "editor.menu.world.environment_already_present"
+                    : kLights[i].labelKey;
+                ImGui::SetTooltip("%s", I18n::T(tipKey).c_str());
+            }
 
             const float textW = ImGui::CalcTextSize(label.c_str()).x;
             if (textW <= kCard) {
