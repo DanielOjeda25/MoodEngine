@@ -15,6 +15,7 @@ add_executable(mood_tests
     test_scene_serializer.cpp
     test_scene_serializer_lighting_physics.cpp  # AUDIT-3 split
     test_scene_serializer_gameplay.cpp          # AUDIT-3 split
+    test_environment_entity.cpp                 # F2H86
     test_ray.cpp                                # AUDIT-3 (pickRayFromNdc)
     test_project_serializer.cpp
     test_scene.cpp
