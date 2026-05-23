@@ -257,9 +257,7 @@ AssetManager::AssetManager(std::string rootDir,
     //      como fallback cuando un id es invalido o el archivo no parsea.
     {
         auto empty = std::make_unique<Inventory::Asset>();
-        m_items.emplace_back(std::move(empty));
-        m_itemPaths.emplace_back(k_emptyItemPath);
-        m_itemCache.emplace(k_emptyItemPath, missingItemId());
+        m_items.initFallback(std::move(empty), k_emptyItemPath);
     }
     Log::assets()->info("AssetManager: item 'vacio' generado en slot 0");
 

@@ -524,9 +524,7 @@ private:
     std::vector<std::string> m_animationClipPaths; // paralelo a m_animationClips
 
     // Item (F2H51). [0] = asset vacio (id "", tags vacios).
-    std::unordered_map<std::string, ItemAssetId> m_itemCache;
-    std::vector<std::unique_ptr<Inventory::Asset>> m_items;
-    std::vector<std::string> m_itemPaths; // paralelo a m_items
+    AssetRegistry<Inventory::Asset> m_items;
 
     // Quest (F2H53). [0] = asset vacio (id "", objectives vacios).
     std::unordered_map<std::string, QuestAssetId> m_questCache;
