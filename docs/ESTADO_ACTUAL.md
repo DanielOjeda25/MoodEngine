@@ -6,6 +6,16 @@
 
 ---
 
+## 🏁 Fase 2 CERRADA — `v2.0.0` (2026-05-23)
+
+**88 hitos** completados (F2H1 → F2H86 + 3 audits + breaks). **Suite 1078/11119 verde**. Recap completo de la fase en [`RELEASE_v2.0.0.md`](RELEASE_v2.0.0.md).
+
+**BACKLOG vaciado** por decisión del dev: *"elimina todo lo que quedó del backlog o pendientes así luego comenzamos de 0 con la fase 3"*. Items históricos viven en el git history. `docs/BACKLOG.md` queda como stub explícito.
+
+**Sin plan de Fase 3 acá** — el dev pidió arrancar de cero cuando vuelva.
+
+---
+
 ## 0. Último cierre — AUDIT-3 (2026-05-17)
 
 **Cierre de la tanda inicial de audits.** Tag `v1.49.3-audit-3`. Reporte completo en [`audits/AUDIT_3.md`](audits/AUDIT_3.md).
