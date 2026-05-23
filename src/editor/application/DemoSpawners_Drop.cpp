@@ -693,7 +693,12 @@ void EditorApplication::processViewportVehicleDrop() {
         origin.x + (static_cast<f32>(hit.tileX) + 0.5f) * tileSize,
         origin.y,  // VehicleSystem eleva el chassis (render offset + spring)
         origin.z + (static_cast<f32>(hit.tileY) + 0.5f) * tileSize);
-    t.scale = glm::vec3(1.0f);
+    // F2H82 polish: el .moodvehicle puede declarar un mesh_scale (modelos
+    // exportados en cm/mm que se ven minusculos). Lo aplicamos al
+    // TransformComponent.scale del entity para que el mesh visual quede en
+    // metros reales. Los valores fisicos ya estan en metros reales.
+    const f32 mscale = (cfg != nullptr) ? cfg->meshImportScale : 1.0f;
+    t.scale = glm::vec3(mscale);
 
     // MeshRenderer si el config declara un mesh. createMaterialsForMesh
     // extrae las texturas embebidas del .glb (igual que el drop de mesh).

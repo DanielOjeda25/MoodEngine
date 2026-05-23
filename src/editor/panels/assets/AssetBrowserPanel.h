@@ -7,6 +7,8 @@
 
 #include "editor/panels/IPanel.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/physics/vehicle/VehicleMeshAnalyzer.h"  // F2H82
+#include "engine/physics/vehicle/VehiclePresets.h"       // F2H82
 
 #include <optional>
 #include <string>
@@ -71,6 +73,13 @@ private:
     void renderMaterialsTab();
     void renderScriptsTab();
     void renderAudioTab();
+
+    // F2H82: modal de "Importar vehiculo". File picker → analyzer → form de
+    // preset (clase + ajuste fino) → writer .moodvehicle + rescan. Cuerpo en
+    // AssetBrowserPanel_ImportVehicle.cpp.
+    void openImportVehicleModal();
+    void drawImportVehicleModal();
+    bool saveImportedVehicle(std::string& err);
 
     struct Entry {
         std::string logicalPath; // "textures/foo.png"
@@ -153,6 +162,25 @@ private:
     std::optional<std::string> m_selected;
     bool m_scanned = false;
     bool m_reloadRequested = false;
+
+    // F2H82: estado del modal "Importar vehiculo".
+    bool m_importModalOpen = false;
+    std::string m_importFsPath;       // filesystem absoluto del .glb/.fbx
+    std::string m_importDisplayName;  // editable; default = stem del file
+    std::string m_importSaveError;    // mensaje rojo en el modal si guardar falla
+    vehicle::VehicleAnalysis m_importAnalysis{};
+    vehicle::VehicleClass m_importClass = vehicle::VehicleClass::Sedan;
+    vehicle::VehiclePhysicsPreset m_importPreset{};
+    // F2H82 polish: factor de escala del mesh (modelos exportados con vertices
+    // en cm/mm; default 1.0 = ya esta en metros). El modal sugiere x100 / x1000
+    // si las dimensiones detectadas son sospechosas.
+    float m_importMeshScale = 1.0f;
+
+    // F2H82: borrado de vehiculos via right-click. La accion abre un modal de
+    // confirmacion (no se borra al toque). `m_pendingDeleteVehicle` guarda el
+    // path logico mientras espera confirmacion.
+    std::string m_pendingDeleteVehicle;
+    void confirmAndDeleteVehicle();   // dibuja el modal de confirmacion
 };
 
 } // namespace Mood

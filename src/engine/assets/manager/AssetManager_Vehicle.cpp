@@ -295,6 +295,10 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
             js.value("steer_lerp_speed", cfg.steerLerpSpeed));
     }
 
+    // F2H82 polish: factor de escala visual del mesh (back-compat: si no esta
+    // en el JSON, se asume 1.0 — mesh ya viene en metros).
+    cfg.meshImportScale = j.value("mesh_scale", 1.0f);
+
     return cfg;
 }
 
@@ -447,6 +451,13 @@ const vehicle::VehicleConfig* AssetManager::getVehicleConfig(
     if (id >= m_vehicleConfigs.size()) {
         return m_vehicleConfigs[0].get();  // fallback slot 0
     }
+    return m_vehicleConfigs[id].get();
+}
+
+vehicle::VehicleConfig* AssetManager::getMutableVehicleConfig(
+    VehicleConfigAssetId id) {
+    // F2H82: solo se permite mutar slots reales (no el 0 = fallback estatico).
+    if (id == 0 || id >= m_vehicleConfigs.size()) return nullptr;
     return m_vehicleConfigs[id].get();
 }
 

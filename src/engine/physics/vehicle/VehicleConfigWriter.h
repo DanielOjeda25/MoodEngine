@@ -19,6 +19,12 @@ namespace Mood::vehicle {
 struct VehicleImportMeta {
     std::string displayName;   ///< Nombre legible (tag/browser).
     std::string meshPath;      ///< Path lógico relativo a assets/ del .glb.
+    /// F2H82 polish: multiplicador para el mesh visual cuando el GLB esta en
+    /// unidades no-metros (cm/mm, tipico Sketchfab). Se guarda como `mesh_scale`
+    /// en el JSON y se aplica a `TransformComponent.scale` al spawnear. Los
+    /// valores fisicos del JSON (dimensions_mm, attach_y, radius...) van ya en
+    /// metros reales — quien los escala es el caller (el modal de import).
+    f32 meshScale = 1.0f;
 };
 
 /// Construye el texto JSON del .moodvehicle (schema v2) desde análisis+preset.

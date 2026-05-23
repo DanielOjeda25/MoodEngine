@@ -462,6 +462,14 @@ public:
     ///        slot 0 (fallback generico sedan).
     const vehicle::VehicleConfig* getVehicleConfig(VehicleConfigAssetId id) const;
 
+    /// @brief F2H82: accessor mutable para live-tuning en el Inspector. Mutar
+    ///        in-place + setear `VehicleComponent::dirty = true` rematerializa
+    ///        el vehiculo en el siguiente tick con los valores nuevos. Para
+    ///        persistir, escribir el .moodvehicle aparte via `VehicleConfigWriter`.
+    ///        Devuelve nullptr si el id es invalido (incluido el slot 0
+    ///        fallback, que es estatico y no debe editarse).
+    vehicle::VehicleConfig* getMutableVehicleConfig(VehicleConfigAssetId id);
+
     /// @brief Id del config fallback (slot 0) = `vehicle::makeFallbackGenericSedan()`.
     VehicleConfigAssetId missingVehicleConfigId() const { return 0; }
 

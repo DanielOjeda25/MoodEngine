@@ -207,6 +207,16 @@ struct VehicleConfig {
     /// Velocidad de lerp del steering input al angulo real (1/s).
     /// SA: 4.0 (cambia rapido pero no instantaneo).
     f32 steerLerpSpeed = 4.0f;
+
+    /// F2H82 polish: factor de escala visual del mesh. Aplica a
+    /// `TransformComponent.scale` cuando se spawnea el vehiculo. Caso de uso:
+    /// modelos exportados con vertices en mm o cm (tipico Sketchfab/Maya) cuyo
+    /// AABB resulta minusculo (4 cm en vez de 4 m). El modal del importador
+    /// ofrece este multiplicador (default 1.0 = mesh ya en metros). Los valores
+    /// FISICOS (chassisHalfExtents, attachLocal, wheel.radius...) se guardan ya
+    /// scaled (en metros reales). Solo el render del MESH necesita el
+    /// multiplicador adicional porque sus vertices estan en unidades crudas.
+    f32 meshImportScale = 1.0f;
 };
 
 /// @brief Construye una `VehicleConfig` generica de fallback: sedan medio,

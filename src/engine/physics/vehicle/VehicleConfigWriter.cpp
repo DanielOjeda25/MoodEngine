@@ -49,7 +49,7 @@ nlohmann::json vec3mm(const glm::vec3& v) {
 
 } // namespace
 
-std::string buildVehicleConfigJson(const VehicleAnalysis& a,
+std::string buildVehicleConfigJson(const VehicleAnalysis& aRaw,
                                    const VehiclePhysicsPreset& p,
                                    const VehicleImportMeta& meta,
                                    bool pretty) {
@@ -58,6 +58,34 @@ std::string buildVehicleConfigJson(const VehicleAnalysis& a,
     j["schemaVersion"] = 2;
     j["metadata"] = {{"name", meta.displayName},
                      {"generated_by", "MoodEngine vehicle importer (F2H82)"}};
+
+    // F2H82 polish: aplicar `meta.meshScale` a las medidas FISICAS del analisis
+    // (chassis, ruedas) — el modelo viene en cm/mm y el dev pidio convertir a
+    // metros. NO escalamos `mesh_wheels.hub_offset_mm` (queda en unidades crudas
+    // del mesh, lo aplica el render multiplicando por TransformComponent.scale).
+    const f32 ms = (meta.meshScale > 0.0f) ? meta.meshScale : 1.0f;
+    VehicleAnalysis a = aRaw;
+    if (std::fabs(ms - 1.0f) > 1e-6f) {
+        a.chassisAabbMin     *= ms;
+        a.chassisAabbMax     *= ms;
+        a.chassisCenter      *= ms;
+        a.overallAabbMin     *= ms;
+        a.overallAabbMax     *= ms;
+        a.chassisHalfExtents *= ms;
+        a.centerOfMassLocal  *= ms;
+        a.trackFront         *= ms;
+        a.trackRear          *= ms;
+        a.wheelbase          *= ms;
+        a.wheelRadius        *= ms;
+        a.wheelWidth         *= ms;
+        for (auto& w : a.wheels) {
+            w.part.center *= ms;
+            w.part.aabbMin *= ms;
+            w.part.aabbMax *= ms;
+            w.radius *= ms;
+            w.width  *= ms;
+        }
+    }
 
     // --- frame mesh→física ---
     // El análisis está en MODEL space. La física usa +Z forward / +X right.
@@ -177,19 +205,27 @@ std::string buildVehicleConfigJson(const VehicleAnalysis& a,
     };
 
     // --- mesh_wheels (Bloque B): binding visual por rol detectado ---
+    // OJO: el hub_offset_mm se guarda en unidades CRUDAS del mesh (NO se
+    // multiplica por meta.meshScale). El render aplica TransformComponent.scale
+    // al chassis y a la wheel-entity, que ya incluye meshScale — escalar aca
+    // duplicaria.
     json mw = json::object();
     static const std::array<std::pair<const char*, WheelRole>, 4> kRoles = {{
         {"FL", WheelRole::FL}, {"FR", WheelRole::FR},
         {"RL", WheelRole::RL}, {"RR", WheelRole::RR}}};
     for (const auto& [key, role] : kRoles) {
-        const DetectedWheel& w = a.wheels[static_cast<int>(role)];
-        if (w.role == WheelRole::Unknown) continue;
+        const DetectedWheel& wRaw = aRaw.wheels[static_cast<int>(role)];
+        if (wRaw.role == WheelRole::Unknown) continue;
         mw[key] = {
-            {"submesh", w.part.nodeName},
-            {"hub_offset_mm", vec3mm(w.part.center)},
+            {"submesh", wRaw.part.nodeName},
+            {"hub_offset_mm", vec3mm(wRaw.part.center)},
         };
     }
     if (!mw.empty()) j["mesh_wheels"] = std::move(mw);
+
+    // F2H82 polish: NO escribimos `mesh_scale` en el JSON nuevo: la escala se
+    // bakeó en el nodo raíz del .glb al copiarlo. El reader sigue soportando
+    // `mesh_scale` para back-compat con .moodvehicle viejos.
 
     return pretty ? j.dump(2) : j.dump();
 }

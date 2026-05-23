@@ -170,7 +170,21 @@ void AssetBrowserPanel::renderVehiclesTab() {
     const std::string label = std::string(ICON_FA_GAUGE " ") + "Vehiculos";
     if (!ImGui::BeginTabItem(label.c_str())) return;
 
+    // F2H82: boton para abrir el modal de importacion (.glb/.fbx -> .moodvehicle).
+    if (ImGui::Button("+ Importar...##veh_import")) {
+        openImportVehicleModal();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Importar un modelo de auto (.glb/.fbx) y generar su .moodvehicle.");
+    }
+    ImGui::SameLine();
     ImGui::TextDisabled("%zu vehiculos", m_vehicleEntries.size());
+
+    // Dibuja el modal si esta abierto (la llamada es cheap si no lo esta).
+    drawImportVehicleModal();
+    // F2H82: modal de confirmacion de borrado (cheap si no hay pending).
+    confirmAndDeleteVehicle();
+
     ImGui::BeginChild("##vehicles_scroll", ImVec2(0.0f, 0.0f), false);
     constexpr float kCard = 110.0f;
     const int cols = cardGridCols(kCard);
@@ -210,8 +224,21 @@ void AssetBrowserPanel::renderVehiclesTab() {
                                       static_cast<size_t>(kPayloadBufSize - 1));
             std::memcpy(buf, ve.logicalPath.data(), n);
             ImGui::SetDragDropPayload("MOOD_VEHICLE_ASSET", buf, kPayloadBufSize);
+            if (tex != 0u) {
+                ImGui::Image((ImTextureID)(uintptr_t)tex, ImVec2(48.0f, 48.0f),
+                              ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::SameLine();
+            }
             ImGui::TextUnformatted(ve.vehicleName.c_str());
             ImGui::EndDragDropSource();
+        }
+        // F2H82: right-click sobre la card abre menu contextual con "Eliminar".
+        // La eliminacion pasa por un modal de confirmacion (no se borra al toque).
+        if (ImGui::BeginPopupContextItem("##veh_ctx_menu")) {
+            if (ImGui::MenuItem("Eliminar...")) {
+                m_pendingDeleteVehicle = ve.logicalPath;
+            }
+            ImGui::EndPopup();
         }
         if (ImGui::IsItemHovered()) {
             if (ve.massKg > 0.0f || ve.horsepower > 0.0f) {

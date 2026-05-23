@@ -604,6 +604,7 @@ add_executable(MoodEditor
     src/editor/panels/scene/InspectorPanel_Inventory.cpp   # F2H51
     src/editor/panels/assets/AssetBrowserPanel.cpp
     src/editor/panels/assets/AssetBrowserPanel_Tabs.cpp   # F2H81 auditoría (split)
+    src/editor/panels/assets/AssetBrowserPanel_ImportVehicle.cpp  # F2H82 modal
     src/editor/panels/debug/ConsolePanel.cpp
     src/editor/panels/scene/HierarchyPanel.cpp
     src/editor/panels/scene/HierarchyCollect.cpp

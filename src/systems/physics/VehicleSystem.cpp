@@ -266,6 +266,12 @@ void spawnPendingWheels(Scene& scene, AssetManager& assets,
             auto& wmr = w.addComponent<MeshRendererComponent>(meshId, mats);
             wmr.subMeshName = bind[i].subMesh;
             wmr.subMeshPivotOffset = bind[i].pivot;
+            // F2H82 polish: la wheel-entity hereda el meshImportScale del
+            // chasis (modelos en cm/mm). Sin esto, la rueda renderea minuscula
+            // mientras el chasis (que tiene su Transform.scale = meshScale)
+            // sale en metros reales.
+            auto& wtf = w.getComponent<TransformComponent>();
+            wtf.scale = glm::vec3(cfg.meshImportScale);
             // F2H82: marker para que el editor (picking / jerarquia / serial)
             // trate a la rueda como entity interna del motor, NO seleccionable
             // ni listada. Reemplaza el check legacy por nombre canonico que
