@@ -11,6 +11,7 @@
 #include "core/UserSettings.h"  // F2H43
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/dialog/DialogScriptHost.h"  // F2H48.1
+#include "engine/quest/QuestScriptHost.h"     // break-A3
 #include "core/i18n/I18n.h"  // F2H43
 #include "engine/inventory/InventoryHooks.h"  // F2H53 shutdown order
 #include "engine/quest/QuestSystem.h"         // F2H53 shutdown order
@@ -60,6 +61,7 @@ PlayerApplication::PlayerApplication() {
     UserSettings::init();
     I18n::init(UserSettings::language());
     Dialog::DialogScriptHost::init();  // F2H48.1
+    Quest::QuestScriptHost::init();    // break-A3 (2026-05-23)
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0) {
         throw std::runtime_error(std::string("SDL_Init fallo: ") + SDL_GetError());
@@ -164,6 +166,10 @@ PlayerApplication::PlayerApplication() {
     // contra el inventario REAL del player. El player corre todo Play
     // Mode desde el inicio (no hay exit), asi que esto persiste.
     Dialog::DialogScriptHost::setSceneAndAssets(
+        m_scene.get(), m_assetManager.get());
+    // break-A3: misma inyeccion para QuestScriptHost (binding `inventory`
+    // necesita scene + assets para resolver player implicit + items).
+    Quest::QuestScriptHost::setSceneAndAssets(
         m_scene.get(), m_assetManager.get());
 
     if (m_sceneRenderer && m_scene) {

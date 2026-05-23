@@ -3,6 +3,7 @@
 #include "core/Log.h"
 #include "core/math/AABB.h"
 #include "engine/dialog/DialogScriptHost.h"  // F2H52 G
+#include "engine/quest/QuestScriptHost.h"    // break-A3
 #include "engine/game/overlay/GameOverlay.h"
 #include "engine/game/state/GameState.h"
 #include "core/i18n/I18n.h"  // F2H43
@@ -58,6 +59,10 @@ void EditorApplication::enterPlayMode() {
     // contra el inventario REAL del player en este Play Mode. Sin esto,
     // las queries player-implicit retornarian false silenciosamente.
     Dialog::DialogScriptHost::setSceneAndAssets(
+        m_scene.get(), m_assetManager.get());
+    // break-A3: misma inyeccion para el host de quest (binding `inventory`
+    // necesita scene + assets para resolver player implicit + items).
+    Quest::QuestScriptHost::setSceneAndAssets(
         m_scene.get(), m_assetManager.get());
 
     // F2H71: re-sincronizar bodies + joints a la pose VISUAL al entrar a Play.
@@ -138,6 +143,9 @@ void EditorApplication::exitPlayMode() {
     // queryable se pone a null para que un eventual dialog que dispare
     // post-Play no opere contra una scene que dejo de ser la activa.
     Dialog::DialogScriptHost::setSceneAndAssets(nullptr, nullptr);
+    // break-A3: limpiar scene/assets del QuestScriptHost para que un
+    // tick post-Play no opere contra una scene que dejo de ser activa.
+    Quest::QuestScriptHost::setSceneAndAssets(nullptr, nullptr);
     Log::editor()->info("Editor Mode activo");
 }
 

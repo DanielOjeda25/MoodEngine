@@ -249,50 +249,23 @@ void setupQuestBindings(sol::state& lua, AssetManager* assets) {
                 });
         });
 
-    // -------- LuaEvaluator + LuaExecutor (integracion runtime) --------
+    // -------- LuaEvaluator + LuaExecutor: NO se registran aca --------
     //
-    // Cada tick() de QuestSystem necesita evaluar predicates ("inventory.count(...) >= 3")
-    // y aplicar rewards ("inventory.add(...)" / "dialog.set_var(...)"). El motor
-    // delega ese eval/exec a la sol::state donde estan registrados los bindings
-    // de inventory/dialog. Sin esto, los objectives nunca se auto-completan
-    // y las rewards no se aplican.
+    // Pre-break-A3, cada entidad-script con `setupQuestBindings` seteaba
+    // QS::setEvaluator/setExecutor capturando &lua de su propia state.
+    // Eso significaba:
+    //   - Si una escena no tenia ninguna entidad con ScriptComponent,
+    //     el evaluator/executor quedaban en nullptr y `tick()` nunca
+    //     auto-completaba ningun objective Collect/Talk/Reach.
+    //   - El evaluator quedaba apuntando al state del ULTIMO script
+    //     cargado (acoplamiento fragil entre entidades).
     //
-    // CRITICO: el `sol::state&` capturado por referencia tiene que vivir
-    // mientras los hooks esten activos. Los tests + el ScriptSystem llaman
-    // `QS::clearHooks()` en teardown para desconectar antes de destruir la
-    // state. Capturamos `&lua` (no por valor) porque `sol::state` no es
-    // copy-constructible; ademas evita el lifetime mismatch con state_view.
-    sol::state* statePtr = &lua;
-    QS::setEvaluator(
-        [statePtr](const std::string& expr) -> bool {
-            // "return <expr>" para que loadstring devuelva el valor.
-            sol::protected_function_result r =
-                statePtr->safe_script("return (" + expr + ")",
-                                       sol::script_pass_on_error);
-            if (!r.valid()) {
-                sol::error err = r;
-                Log::script()->warn("[quest.evaluator] '{}' -> {}",
-                                     expr, err.what());
-                return false;
-            }
-            sol::object v = r;
-            if (v.is<bool>()) return v.as<bool>();
-            // Permitir que predicates devuelvan numero (truthy si != 0) o
-            // string (truthy si no empty), siguiendo convencion Lua.
-            return v.valid() && !v.is<sol::nil_t>();
-        });
-
-    QS::setExecutor(
-        [statePtr](const std::string& code) {
-            if (code.empty()) return;
-            sol::protected_function_result r =
-                statePtr->safe_script(code, sol::script_pass_on_error);
-            if (!r.valid()) {
-                sol::error err = r;
-                Log::script()->warn("[quest.executor] '{}' -> {}",
-                                     code, err.what());
-            }
-        });
+    // Solucion (break-A3, 2026-05-23): el evaluator y executor del
+    // QuestSystem los provee `Quest::QuestScriptHost` (sol::state propia,
+    // vive todo el editor/player). Se inicializa una vez en
+    // EditorApplication_Init.cpp + PlayerApplication_Init.cpp. Los
+    // scripts de entity siguen pudiendo usar `quest.start/complete/fail`
+    // + `on_start/on_complete/on_fail` que SI son entity-specific.
 }
 
 } // namespace Mood

@@ -62,6 +62,7 @@ add_executable(mood_tests
     test_physics_cloth.cpp  # F2H75 Bloque B
     test_save_load.cpp
     test_saveload_inventory.cpp        # break-A1+A2
+    test_quest_no_script_entity.cpp    # break-A3
     test_frustum.cpp
     test_render_batching.cpp
     test_hierarchy_collect.cpp
@@ -160,6 +161,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Vehicle.cpp # F2H67 Polish 2
     ${CMAKE_SOURCE_DIR}/src/engine/quest/QuestAsset.cpp                  # F2H53 Bloque A
     ${CMAKE_SOURCE_DIR}/src/engine/quest/QuestSystem.cpp                 # F2H53 Bloque C
+    ${CMAKE_SOURCE_DIR}/src/engine/quest/QuestScriptHost.cpp             # break-A3
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Animation.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/loaders/MeshLoader_Geometry.cpp

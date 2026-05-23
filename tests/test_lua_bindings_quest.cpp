@@ -181,6 +181,31 @@ std::unique_ptr<QuestLuaFixture> makeFixture(const std::string& tag) {
     setupInventoryBindings(fx->lua, &fx->scene, fx->am.get());
     registerDialogVarsBindings(fx->lua);
     setupQuestBindings(fx->lua, fx->am.get());
+
+    // break-A3 (2026-05-23): `setupQuestBindings` ya NO setea el
+    // evaluator/executor del QuestSystem (lo hace QuestScriptHost en
+    // produccion). Estos tests siguen necesitando un evaluator/executor
+    // que corra contra `fx->lua` (donde estan bindeados inventory +
+    // dialog vars), asi que los cableamos manualmente aca como mini-host
+    // del test. No reintroduce el bug que A3 arreglo: el bug era que
+    // el motor unico setter era setupQuestBindings; aca es codigo de
+    // test, controlado.
+    sol::state* statePtr = &fx->lua;
+    QS::setEvaluator(
+        [statePtr](const std::string& expr) -> bool {
+            sol::protected_function_result r =
+                statePtr->safe_script("return (" + expr + ")",
+                                       sol::script_pass_on_error);
+            if (!r.valid()) return false;
+            sol::object v = r;
+            if (v.is<bool>()) return v.as<bool>();
+            return v.valid() && !v.is<sol::nil_t>();
+        });
+    QS::setExecutor(
+        [statePtr](const std::string& code) {
+            if (code.empty()) return;
+            statePtr->safe_script(code, sol::script_pass_on_error);
+        });
     return fx;
 }
 

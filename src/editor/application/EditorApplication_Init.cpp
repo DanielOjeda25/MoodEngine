@@ -12,6 +12,7 @@
 #include "editor/ui/EditorThemes.h"  // F2H76
 #include "engine/audio/device/AudioDevice.h"
 #include "engine/dialog/DialogScriptHost.h"  // F2H48.1
+#include "engine/quest/QuestScriptHost.h"     // break-A3
 #include "core/i18n/I18n.h"  // F2H43
 #include "engine/inventory/InventoryHooks.h"  // F2H53 shutdown order
 #include "engine/quest/QuestSystem.h"         // F2H53 shutdown order
@@ -111,6 +112,13 @@ EditorApplication::EditorApplication() {
     // este wireup, los hooks se ignoran silenciosamente (paridad con
     // tests headless).
     Dialog::DialogScriptHost::init();
+
+    // break-A3 (2026-05-23): inicializar QuestScriptHost — registra el
+    // evaluator + executor del QuestSystem contra una sol::state propia
+    // (paralela a DialogScriptHost). Pre-A3 los hooks los seteaba
+    // cada entidad-script en su setupQuestBindings, lo que dejaba
+    // los quests congelados en mapas con 0 entidades-script.
+    Quest::QuestScriptHost::init();
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0) {
         throw std::runtime_error(std::string("SDL_Init fallo: ") + SDL_GetError());
