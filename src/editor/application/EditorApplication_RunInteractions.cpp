@@ -41,7 +41,27 @@
 
 namespace Mood {
 
+// break-B3: dispatcher delgado. Cada handler aplica sus propios guards
+// y es no-op si no aplica.
 void EditorApplication::processViewportInteractions() {
+    handlePerspectiveClickSelect();
+    handlePolygonDrawClicks();
+    handleClipToolClicks();
+    handleOrthoClickSelect();
+    handleOrthoDragEdit();
+    // 2.4d/2.4f/2.4e) Modos de herramienta ortografica (block tool +
+    //                 marquee select + vertex/edge edit). Extraidos a
+    //                 EditorApplication_RunInteractions_ToolModes.cpp en
+    //                 AUDIT-2 (sub-split del archivo de 1065 LOC).
+    //                 break-B3: ese dispatcher tambien fue split a 3 handlers.
+    processOrthoToolModes();
+}
+
+// 2.4) Click-to-select perspectiva (Hito 13 Bloque 2). Face Mode
+// internamente: pick brush -> pick face del brush; fallback al Object
+// path si no hay face hit. Object Mode: pick entity + Shift/Ctrl
+// modifiers. Click en vacio (sin modifier) limpia la seleccion.
+void EditorApplication::handlePerspectiveClickSelect() {
         // 2.4) Click-to-select (Hito 13 Bloque 2): raycast desde el cursor
         //      y selecciona la entidad mas cercana. Click en vacio deselecciona.
         //      Solo en Editor Mode — en Play Mode el mouse es para la camara.
@@ -179,6 +199,11 @@ void EditorApplication::processViewportInteractions() {
             }
         }
 
+}
+
+// 2.4a-poly) F2H30 Bloque C: pincel poligonal — consume clicks de las
+// ortos ANTES del click-select. Lock a 1 orto para mantener coplanaridad.
+void EditorApplication::handlePolygonDrawClicks() {
         // 2.4a-poly) F2H30 Bloque C: pincel poligonal — consume clicks
         //            de las ortos ANTES del click-select. Cada click
         //            agrega un vertex snappeado al grid. Lock a 1 orto
@@ -276,6 +301,12 @@ void EditorApplication::processViewportInteractions() {
                 + std::to_string(m_polyDraw.pointsWorld.size()) + " pts]");
         }
 
+}
+
+// 2.4a-clip) F2H32 Bloque B: clip tool — 2 clicks en orto definen una
+// linea; el plano resultante es perpendicular al view plane. Tecla T
+// cycle keepMode; Enter confirma; Esc cancela.
+void EditorApplication::handleClipToolClicks() {
         // 2.4a-clip) F2H32 Bloque B: clip tool — 2 clicks en orto
         //            definen una linea; el plano resultante es
         //            perpendicular al view plane (extendido sobre el
@@ -353,6 +384,12 @@ void EditorApplication::processViewportInteractions() {
             m_ui.setStatusMessage(hint);
         }
 
+}
+
+// 2.4b) F2H28 Bloque F: click-select desde los 3 viewports ortograficos
+// del workspace "Editor de mapas". Reusa pickEntityFromRay con un rayo
+// paralelo a forwardAxis del orto.
+void EditorApplication::handleOrthoClickSelect() {
         // 2.4b) F2H28 Bloque F: click-select desde los 3 viewports
         //       ortograficos del workspace "Editor de mapas". Solo se
         //       consume si el panel reporta `pending=true` — el panel
@@ -418,6 +455,12 @@ void EditorApplication::processViewportInteractions() {
             }
         }
 
+}
+
+// 2.4c) F2H29 Bloque B: drag-edit de brushes en ortos. Una sesion =
+// LMB-down sobre brush + drag (>4 px) + LMB-up. Aplica delta snappeado
+// en vivo y pushea MultiEditTransformCommand al cerrar.
+void EditorApplication::handleOrthoDragEdit() {
         // 2.4c) F2H29 Bloque B: drag-edit de brushes en ortos.
         //       Una sesion de drag = LMB-down sobre brush + drag (>4 px) +
         //       LMB-up. Captura posiciones iniciales al arrancar, aplica
@@ -581,11 +624,6 @@ void EditorApplication::processViewportInteractions() {
             }
         }
 
-        // 2.4d/2.4f/2.4e) Modos de herramienta ortografica (block tool +
-        //                 marquee select + vertex/edge edit). Extraidos a
-        //                 `EditorApplication_RunInteractions_ToolModes.cpp`
-        //                 en AUDIT-2 (sub-split del archivo de 1065 LOC).
-        processOrthoToolModes();
 }
 
 } // namespace Mood

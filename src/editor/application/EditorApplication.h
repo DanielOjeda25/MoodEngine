@@ -74,6 +74,17 @@ private:
     ///        `processOrthoToolModes()` (sub-split AUDIT-2).
     void processViewportInteractions();
 
+    // break-B3: sub-pasos de processViewportInteractions, uno por
+    // contexto de interaccion. Cada uno tiene sus propios guards en el
+    // entry y es no-op si no aplica. Orden: el dispatcher los llama en
+    // secuencia y la independencia entre handlers esta auditada (no hay
+    // estado producido por uno consumido por otro dentro del mismo frame).
+    void handlePerspectiveClickSelect();
+    void handlePolygonDrawClicks();
+    void handleClipToolClicks();
+    void handleOrthoClickSelect();
+    void handleOrthoDragEdit();
+
     /// @brief Modos de herramienta de los viewports ortograficos: block
     ///        tool, marquee select, vertex/edge edit. Definido en
     ///        `EditorApplication_RunInteractions_ToolModes.cpp` (sub-split
