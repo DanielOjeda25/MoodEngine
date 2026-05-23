@@ -263,6 +263,11 @@ private:
     glm::mat4 m_lastProjection{1.0f};
     f32 m_lastAspect = 1.0f;
 
+    // F2H86: cache del base actualmente cargado en m_skyboxRenderer +
+    // m_iblIrradiance + m_iblPrefilter. loadSkyboxAndIblFromBase compara
+    // contra esto para hacer idempotente la llamada por frame.
+    std::string m_currentSkyboxBase;
+
     // Environment cache (reset + override en applyEnvironmentFromScene).
     FogParams m_fog{};
     f32 m_exposure = 0.0f;
@@ -316,6 +321,17 @@ private:
     ///        depth del scene FB (que puede haberse recreado en su resize).
     ///        Idempotente — seguro llamarlo cada frame.
     void ensureOitFb(u32 width, u32 height);
+
+    /// @brief F2H86: (re)carga el SkyboxRenderer + cubemaps IBL (irradiance
+    ///        + prefilter) para un `skyboxBase` dado.
+    ///        - Si `assets/<base>.png` existe → modo equirectangular.
+    ///        - Si `assets/<base>/px.png` existe → modo cubemap dir.
+    ///        El IBL se busca en `assets/ibl/<stem>/`, donde `stem` es el
+    ///        ultimo segmento de `base` sin extension. BRDF LUT global
+    ///        (`assets/ibl/brdf_lut.png`) no se recarga.
+    ///        Idempotente: si `base == m_currentSkyboxBase` no hace nada.
+    ///        Tolera errores: si falla la carga, deja los renderers viejos.
+    void loadSkyboxAndIblFromBase(const std::string& skyboxBase);
 
     /// @brief F2H63: blittea el color attachment de `m_sceneFb` a
     ///        `m_backbufferCopyFb`. Llamar justo antes del translucent

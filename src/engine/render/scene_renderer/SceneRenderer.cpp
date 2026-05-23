@@ -58,6 +58,7 @@
 #include <glad/gl.h>  // F2H28 Bloque E: glGenVertexArrays / glDeleteVertexArrays
 
 #include <array>
+#include <filesystem>  // F2H86: detectar equirect vs cubemap dir.
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -176,52 +177,21 @@ SceneRenderer::SceneRenderer()
 
     m_debugRenderer = std::make_unique<OpenGLDebugRenderer>();
 
-    // Skybox (Hito 15). Tolera fallo de carga.
+    // F2H86: BRDF LUT global (no depende del skybox, mismo lookup tabular
+    // para todos los environments). Carga separada del swap por-skybox.
     try {
-        m_skyboxRenderer =
-            std::make_unique<SkyboxRenderer>(
-                SkyboxRenderer::Equirect{},
-                "assets/skyboxes/sky_kloofendal.png");
-    } catch (const std::exception& e) {
-        Log::render()->warn("SkyboxRenderer no disponible: {}. Sky fallback al clear color.",
-                             e.what());
-        m_skyboxRenderer.reset();
-    }
-
-    // IBL (Hito 17 Bloque 3). Si alguno falta, el shader cae a uAmbient.
-    // Hito 26 G: bakeado desde el equirect kloofendal (mismo cielo que
-    // muestra el SkyboxRenderer en modo Equirect), asi las esferas PBR
-    // reflejan lo que el dev ve. Antes apuntaba a `sky_day` cubemap, lo
-    // cual produciá mismatch visual.
-    try {
-        const std::string base = "assets/ibl/sky_kloofendal";
-        std::array<std::string, 6> irrPaths{
-            base + "/irradiance/px.png", base + "/irradiance/nx.png",
-            base + "/irradiance/py.png", base + "/irradiance/ny.png",
-            base + "/irradiance/pz.png", base + "/irradiance/nz.png"};
-        m_iblIrradiance = std::make_unique<OpenGLCubemapTexture>(irrPaths);
-
-        std::vector<std::array<std::string, 6>> prefilterMips;
-        for (int mip = 0; mip < 5; ++mip) {
-            const std::string m = base + "/prefilter/mip_" + std::to_string(mip);
-            prefilterMips.push_back({
-                m + "/px.png", m + "/nx.png",
-                m + "/py.png", m + "/ny.png",
-                m + "/pz.png", m + "/nz.png"});
-        }
-        m_iblPrefilter = std::make_unique<OpenGLCubemapTexture>(prefilterMips);
-
         m_iblBrdfLut = std::make_unique<OpenGLTexture>("assets/ibl/brdf_lut.png");
-
-        Log::render()->info(
-            "IBL cargado: irradiance + prefilter (5 mips) + BRDF LUT.");
     } catch (const std::exception& e) {
-        Log::render()->warn("IBL no disponible: {}. Cae al ambient escalar.",
+        Log::render()->warn("BRDF LUT no disponible: {}. Cae al ambient escalar.",
                              e.what());
-        m_iblIrradiance.reset();
-        m_iblPrefilter.reset();
         m_iblBrdfLut.reset();
     }
+
+    // F2H86: skybox + IBL (irradiance + prefilter). Default kloofendal
+    // (mismo cielo que mostraba el SkyboxRenderer en modo Equirect
+    // pre-F2H86). El loader detecta automaticamente equirect vs cubemap
+    // dir y cae silencioso si los assets no existen.
+    loadSkyboxAndIblFromBase("skyboxes/sky_kloofendal");
 
     m_postProcess = std::make_unique<PostProcessPass>();
 
@@ -356,6 +326,96 @@ FrameStats SceneRenderer::frameStats() const {
     return m_renderer ? m_renderer->frameStats() : FrameStats{};
 }
 
+void SceneRenderer::loadSkyboxAndIblFromBase(const std::string& skyboxBase) {
+    if (skyboxBase.empty()) return;
+    if (skyboxBase == m_currentSkyboxBase) return; // idempotente per-frame.
+
+    namespace fs = std::filesystem;
+
+    // Resolver fuente: assets/<base>.png -> equirect; assets/<base>/ -> cubemap dir.
+    // El sufijo .png puede venir incluido en el path tambien.
+    const fs::path baseFs = fs::path("assets") / skyboxBase;
+    fs::path equirectPath;
+    fs::path cubemapDir;
+    if (baseFs.extension() == ".png" && fs::exists(baseFs)) {
+        equirectPath = baseFs;
+    } else if (fs::exists(fs::path(baseFs.string() + ".png"))) {
+        equirectPath = fs::path(baseFs.string() + ".png");
+    } else if (fs::is_directory(baseFs) &&
+               fs::exists(baseFs / "px.png")) {
+        cubemapDir = baseFs;
+    } else {
+        Log::render()->warn(
+            "[skybox] base '{}' no resolvible (ni equirect '<base>.png' ni cubemap dir '<base>/px.png'). Skip swap.",
+            skyboxBase);
+        return;
+    }
+
+    // Skybox renderer (equirect o cubemap dir).
+    try {
+        if (!equirectPath.empty()) {
+            m_skyboxRenderer = std::make_unique<SkyboxRenderer>(
+                SkyboxRenderer::Equirect{},
+                equirectPath.generic_string());
+        } else {
+            m_skyboxRenderer = std::make_unique<SkyboxRenderer>(
+                cubemapDir.generic_string());
+        }
+    } catch (const std::exception& e) {
+        Log::render()->warn(
+            "[skybox] no se pudo cargar '{}': {}. Sky fallback al clear color.",
+            skyboxBase, e.what());
+        m_skyboxRenderer.reset();
+    }
+
+    // IBL: derivar stem (ultimo segmento sin extension). Convencion:
+    // assets/ibl/<stem>/irradiance + prefilter ya generados por
+    // tools/bake_ibl.py. Si no existen, IBL se desactiva y el shader
+    // cae a uAmbient escalar.
+    const std::string stem = fs::path(skyboxBase).stem().string();
+    const fs::path iblBase = fs::path("assets/ibl") / stem;
+    if (!fs::exists(iblBase / "irradiance" / "px.png")) {
+        Log::render()->warn(
+            "[ibl] no hay bake para stem '{}' en '{}'. IBL desactivado (cae a ambient).",
+            stem, iblBase.generic_string());
+        m_iblIrradiance.reset();
+        m_iblPrefilter.reset();
+        m_currentSkyboxBase = skyboxBase;
+        return;
+    }
+
+    try {
+        const std::string base = iblBase.generic_string();
+        std::array<std::string, 6> irrPaths{
+            base + "/irradiance/px.png", base + "/irradiance/nx.png",
+            base + "/irradiance/py.png", base + "/irradiance/ny.png",
+            base + "/irradiance/pz.png", base + "/irradiance/nz.png"};
+        m_iblIrradiance = std::make_unique<OpenGLCubemapTexture>(irrPaths);
+
+        std::vector<std::array<std::string, 6>> prefilterMips;
+        for (int mip = 0; mip < 5; ++mip) {
+            const std::string m = base + "/prefilter/mip_" + std::to_string(mip);
+            prefilterMips.push_back({
+                m + "/px.png", m + "/nx.png",
+                m + "/py.png", m + "/ny.png",
+                m + "/pz.png", m + "/nz.png"});
+        }
+        m_iblPrefilter = std::make_unique<OpenGLCubemapTexture>(prefilterMips);
+
+        Log::render()->info(
+            "[skybox+ibl] swap a '{}' OK (irradiance + 5 prefilter mips).",
+            skyboxBase);
+    } catch (const std::exception& e) {
+        Log::render()->warn(
+            "[ibl] error cargando bake de '{}': {}. IBL desactivado.",
+            stem, e.what());
+        m_iblIrradiance.reset();
+        m_iblPrefilter.reset();
+    }
+
+    m_currentSkyboxBase = skyboxBase;
+}
+
 void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
     // Reset a defaults primero. Sin este reset, abrir un proyecto sin
     // Environment hereda los valores del proyecto anterior.
@@ -387,10 +447,12 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
     m_ssrIntensity = 0.5f;
 
     bool envFound = false;
+    std::string envSkyboxPath; // F2H86: capturar para swap fuera del lambda.
     scene.forEach<EnvironmentComponent>(
         [&](Entity, EnvironmentComponent& env) {
             if (envFound) return; // primer Environment gana
             envFound = true;
+            envSkyboxPath     = env.skyboxPath;
             m_fog.mode        = static_cast<FogMode>(env.fogMode);
             m_fog.color       = env.fogColor;
             m_fog.density     = env.fogDensity;
@@ -422,6 +484,15 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
             m_ssrStepSize  = env.ssrStepSize;
             m_ssrIntensity = env.ssrIntensity;
         });
+
+    // F2H86: swap del skybox + IBL si el path del Environment cambio
+    // respecto al ultimo cargado. Idempotente: el loader hace early-out
+    // si base == m_currentSkyboxBase, asi que llamar cada frame es OK.
+    // Si la escena no tiene Environment, el skybox queda como lo dejo
+    // el ultimo proyecto (defaults del SceneRenderer en su init).
+    if (envFound && !envSkyboxPath.empty()) {
+        loadSkyboxAndIblFromBase(envSkyboxPath);
+    }
 
     // F2H60 polish iter5: diagnostico. Loguea cuando los valores del
     // Environment cambian frame-a-frame (slider movido) o cuando no

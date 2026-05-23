@@ -213,13 +213,21 @@ struct LightComponent {
 ///        componente, `EditorApplication` usa la primera que encuentra.
 ///        Si no hay ninguna, los uniforms quedan en sus defaults.
 ///
-///        El campo `skyboxPath` esta reservado para un futuro asset
-///        catalog de skyboxes (cubemap por proyecto). Hito 15 sigue
-///        usando un cubemap fijo cargado al iniciar (`sky_day`); el campo
-///        se persiste pero no se aplica todavia.
+///        El campo `skyboxPath` se aplica al renderer desde F2H86: el
+///        `SceneRenderer::applyEnvironmentFromScene` detecta cambio de
+///        path y hace swap del skybox + IBL bakeado (irradiance +
+///        prefilter). Soporta dos modos auto-detectados:
+///          - `<path>.png`         -> equirectangular (1 PNG).
+///          - `<path>/px.png` etc. -> cubemap dir (6 PNGs).
+///        El IBL se busca en `assets/ibl/<stem>/` (bake offline con
+///        `python tools/bake_ibl.py <equirect|cubemap_dir>`).
+///        Si el bake no existe, IBL se desactiva y el shader cae a
+///        ambient escalar (skybox sigue visible).
 struct EnvironmentComponent {
-    // Skybox (placeholder hasta que haya catalogo de cubemaps).
-    std::string skyboxPath{"skyboxes/sky_day"};
+    // Skybox: path relativo a `assets/`. Default kloofendal (mismo cielo
+    // que F2H86 inicializa en SceneRenderer). Cambiar via Inspector ->
+    // applyEnvironmentFromScene dispara swap.
+    std::string skyboxPath{"skyboxes/sky_kloofendal"};
 
     // Fog
     u32 fogMode = 0;                    // 0=Off, 1=Linear, 2=Exp, 3=Exp2
