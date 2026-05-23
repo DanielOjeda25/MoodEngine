@@ -82,6 +82,14 @@ private:
     ///        LOC). Invocado al final de `processViewportInteractions()`.
     void processOrthoToolModes();
 
+    // break-B3: sub-pasos de processOrthoToolModes, uno por sub-modo.
+    // Cada uno corre con sus propios guards (modo+scene+subMode+tool);
+    // el caller `processOrthoToolModes()` los llama en secuencia y
+    // ningun handler depende del estado producido por el anterior.
+    void handleOrthoBlockToolDrag();
+    void handleOrthoMarqueeSelect();
+    void handleOrthoVertexEdgeEdit();
+
     /// @brief Renderiza la escena al framebuffer offscreen que muestra el
     ///        panel Viewport.
     void renderSceneToViewport(f32 dt);
