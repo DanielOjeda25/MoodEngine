@@ -85,6 +85,15 @@ private:
     void handleOrthoClickSelect();
     void handleOrthoDragEdit();
 
+    // break-B3: fases de run() extraidas (560 LOC -> dispatcher + 5 fases).
+    // Cada fase asume las precondiciones documentadas en el caller. dt
+    // viaja por parametro (no captura de loop locals).
+    void tickHotReload(f32 dt);
+    void tickFrameMetrics(f32 dt, f64 dtD);
+    void pumpUiRequests();
+    void pumpSpawnAndDropRequests();
+    void tickSystems(f32 dt);
+
     /// @brief Modos de herramienta de los viewports ortograficos: block
     ///        tool, marquee select, vertex/edge edit. Definido en
     ///        `EditorApplication_RunInteractions_ToolModes.cpp` (sub-split
