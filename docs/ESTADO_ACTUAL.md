@@ -30,25 +30,51 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H81 (2026-05-22) — **Sub-fase 2.7**
+## 0.1. Último hito de feature — F2H82 (2026-05-23) — **Sub-fase 2.7**
 
-**Preview de animaciones + Asset Browser visual + Inspector claro + break de auditoría.** Tag `v1.72.0-fase2-hito81`. Detalle completo en [`hitos/F2H81.md`](hitos/F2H81.md). Sexto hito de Sub-fase 2.7.
+**Modal Importar vehículo + Live tuning + bake GLB + anti-roll + polish.** Tag `v1.73.0-fase2-hito82`. Detalle completo en [`hitos/F2H82.md`](hitos/F2H82.md). Séptimo hito de Sub-fase 2.7.
+
+Convierte el pipeline de vehículos de "editar JSON a mano" a "drop-in del `.glb` desde el editor". Cierre de la deuda de **integrar los autos del backlog** declarada en F2H81 y mucho más arriba.
 
 **Lo que entregó**:
-- **Preview de animaciones** (`AnimationPreviewRenderer`): cada clip standalone se previsualiza posando el NPC de Mixamo (`pbr_skinned.vert`+`pbr.frag`, uBoneMatrices[128]). **Hover-to-play**: la card con el mouse encima se reproduce en vivo (`renderClip`), el resto muestra miniatura estática cacheada (`staticThumbnail`).
-- **Asset Browser 100% visual**: Vehículos (miniatura 3D del mesh), Materiales (esfera cacheada vía `MaterialPreviewRenderer::thumbnail`), Scripts/Prefabs/Audio (ícono grande 2.6x). Drag&drop intacto.
-- **Inspector más claro**: componentes como **tarjetas plegables** (`beginComponentSection<T>`, default abierto, Tag fijo), **Plegar/Expandir todo**, **Quitar componente** por clic derecho (undoable, `makeRemoveComponentCommand<T>` snapshotea por move → soporta move-only como `BrushComponent`), MeshRenderer con stats en foldout **"Technical details" colapsado**.
-- **Fixes reactivos**: hint de jerarquía → `(?)` clásico ("Selección (?)"); sync de i18n a la copia de build; eliminado `banshee_sa` stale (solo en build, no en source) — ver memoria `project_asset_build_sync`.
-- **Break de auditoría** ("duros + DRY", luego "Components.h + DRY, diferir render"): `AssetBrowserPanel.cpp` 924→395 (+`_Tabs.cpp`), `EntitySerializer.cpp` 819→504 (+`_Parse.cpp`), `Components.h` 936→25 (agregador de 3 headers por categoría, todos <500); DRY de `lowerExt()` + helpers de card-grid. **3 diferidos por riesgo render** (`SceneRenderer_Render.cpp`, `EditorRenderPass_Overlay.cpp`, `EditorApplication.h`) → [BACKLOG.md § 4](BACKLOG.md).
+- **Anti-roll bars (Jolt built-in)**: `JPH::VehicleAntiRollBar` en eje delantero (FL↔FR) y trasero (RL↔RR), `mStiffness=3000`, idéntico concepto a Wheel Collider de Unity / Chaos de Unreal. Cero código nuevo de física — solo poblar `VehicleConstraintSettings::mAntiRollBars`. Memoria `feedback_no_reinventar_rueda` aplicada.
+- **CoM bajo en autos del backlog**: Tesla `mass_center_override_mm.y` 514→**150**, armor-car 569→**200**. Truco arcade GTA SA/Burnout/NFS: bajar el CoM debajo del centro físico reduce drásticamente el vuelco sin tocar la física.
+- **Drag preview con thumbnail 3D**: `BeginDragDropSource` dibuja `Image((ImTextureID)tex, 48x48)` antes del label en cada card del tab Vehículos. Antes solo veías texto suelto.
+- **Modal Importar vehículo** (`AssetBrowserPanel_ImportVehicle.cpp` NUEVO ~400 LOC): botón *+ Importar...* → `pfd::open_file` → `analyzeVehicleMesh` → form en `CollapsingHeader`s (Análisis: scale + 4 ruedas con role/pos/radius + `Invertir adelante/atrás`/`izq/der`; Identidad: nombre+clase combo; Motor/Frenos/Suspensión/Chasis con tooltips por campo) → `saveImportedVehicle` (copia `.glb` a `assets/vehicles/<slug>/`, hornea scale si !=1, `writeVehicleConfigFile`, `rescan` + `m_reloadRequested`). UX: `BeginChild(-footerH)` para que **Guardar/Cancelar siempre estén visibles**, `NoResize`, errores rojos con `TextWrapped`.
+- **Live tuning del VehicleComponent** en Inspector (`InspectorPanel_Vehicle.cpp`): `AssetManager::getMutableVehicleConfig(id)` devuelve el config compartido. `CollapsingHeader "Live tuning"` con combo de presets (cambia clase → `applyPresetToConfig` copia físicos preservando geometría) + DragFloats para mass/torque/maxRPM/brake/handbrake/maxSteer/steerLerp/damping/CoM/frictLong/frictLat. Cualquier cambio → `veh.dirty=true` y el `VehicleSystem` reaplica al body Jolt next frame.
+- **Borrar vehículo por clic derecho**: `BeginPopupContextItem` con `MenuItem("Eliminar...")` → modal de confirmación → `fs::remove(.moodvehicle)` (el `.glb` queda).
+- **Bake del scale en GLB root node** (decisión clave): primer intento de persistir `mesh_scale` en runtime descartado por dos convenciones de unidades en el proyecto. Definitivo: hornear el scale en el root node del `.glb` copiado (cirugía del chunk 0 JSON, **chunk 1 BIN se preserva verbatim**). Soporta **ambas formas** del transform de glTF: `scale: [sx,sy,sz]` (multiplica componentes) **y `matrix` 4x4** (multiplica indices 0,1,2,4,5,6,8,9,10 del 3x3 + 12,13,14 traslación; skipea 3,7,11,15). Sin soporte de matrix no entraban modelos Sketchfab/FBX→glTF (~50% de la web).
+- **`meshScale` end-to-end (back-compat)**: aunque el bake es definitivo, se preserva `VehicleConfig::meshImportScale` para `.moodvehicle` legacy; aplicación en `DemoSpawners_Drop` (chassis) + `VehicleSystem` (wheel-entities). El **writer ya no escribe** `mesh_scale` post-F2H82.
+- **Migración del skip de wheel-entities** (`VehicleWheelMarker { chassisHandle, wheelIndex }` en `Components_Physics.h`): el `SceneSerializer` skipeaba por tag matcheando `wheel_FL/FR/RL/RR`, fallaba con autos importados cuyas ruedas tienen tags reales del modelo (`f_t_l`, `RUEDA_*`); migrado a `e.hasComponent<VehicleWheelMarker>()`. `ScenePick`/`HierarchyCollect` también lo consumen. **Side effect en tests**: `test_scene_serializer_lighting_physics.cpp` (caso F2H70.3 H) actualizado para añadir el marker — refleja el contrato nuevo, no afloja el test.
 
-**Suite 1061/11018 verde**. Validado en vivo: preview hover, tabs, plegables/quitar/undo, `(?)`, save/load roundtrip — *"todo ok"*.
+**Suite 1074/11103 verde**. Validado en vivo: Tesla + armor-car en curvas cerradas sin volcar, DELOREAN.glb de Sketchfab importado a tamaño correcto, live tuning de masa en Play persiste al re-spawnear, drag preview con miniatura, clic-derecho-Eliminar.
+
+Cerrado por el dev: *"lo logrado hasta ahora esta bien, cerremos aca para terminar con esto y luego en la fase 3 veremos como mejorar esto"*.
+
+**Diferidos a F2H83 / Fase 3**:
+- **Extracción de texturas embebidas a disco** al importar (estándar Unity gLTFast / Unreal glTF Importer): hoy modelos Sketchfab tipo BTTF DeLorean entran con materiales rosa-grid porque el loader cae a `missingMaterial`. F2H83 dedicado.
+- **Limitación conocida**: re-importar un `.glb` mientras el editor tiene esa entity cargada → Windows file lock. Workaround: borrar la entity antes, o usar otro nombre.
 
 **Pendientes de 2.7 (en orden acordado con el dev)**:
-- **F2H82 — integrar autos del backlog (`armor-car` + `tesla`)**: procesar ruedas (`split_wheels.py` — tienen nodos `b_t_*`/`f_t_*` y `RUEDRA_*` que se clasifican por posición) + crear `.moodvehicle` con **datos reales** (el agente investiga specs: Tesla Model 3/S; armor-car tipo Lenco BearCat) + probar que conducen como el DeLorean. Pedido del dev "ya que estamos tocando autos".
+- **F2H83 — extracción de texturas embebidas + asset extraction pipeline**.
 - **Refactor diferido (riesgo render)**: los 3 archivos grandes del hot path (renderScene / overlay 3D / EditorApplication.h god-class) — hito dedicado con validación visual. Anotado en [BACKLOG.md § 4](BACKLOG.md).
 - **Atajos de teclado configurables** (era F2H42 del plan original, nunca hecho — hoy hardcodeados): keybindings + UI + persistencia + presets.
 - **Cierre Fase 2 + `v2.0.0`**: suite verde, docs al día, release notes, recap, planning Fase 3.
 - Menores: Ctrl+S "guardar como", unificar Undo en Material/Item/Quest. **Tutorial in-app**: diferido por el dev a post-Fase 2.
+
+---
+
+## 0.1ante4. Hito previo — F2H81 (2026-05-22) — **Sub-fase 2.7**
+
+**Preview de animaciones + Asset Browser visual + Inspector claro + break de auditoría.** Tag `v1.72.0-fase2-hito81`. Detalle completo en [`hitos/F2H81.md`](hitos/F2H81.md). Sexto hito de Sub-fase 2.7.
+
+**Lo que entregó** (resumen):
+- **Preview de animaciones** (`AnimationPreviewRenderer`) con NPC de Mixamo; hover-to-play.
+- **Asset Browser 100% visual**: Vehículos/Materiales/Scripts/Prefabs/Audio con cards.
+- **Inspector más claro**: tarjetas plegables, Plegar/Expandir todo, Quitar componente undoable, MeshRenderer con "Technical details" colapsado.
+- **Break de auditoría**: `AssetBrowserPanel.cpp` 924→395, `EntitySerializer.cpp` 819→504, `Components.h` 936→25 (agregador). DRY de `lowerExt()`.
+
+**Suite 1061/11018 verde**. Validado en vivo — *"todo ok"*.
 
 ---
 

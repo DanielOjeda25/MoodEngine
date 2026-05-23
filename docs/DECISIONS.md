@@ -11,6 +11,102 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-23: F2H82 — Modal Importar vehículo + bake GLB + anti-roll
+
+### Decisión 1 — Anti-roll bars: Jolt built-in, no inventar nada
+
+**Contexto:** Tesla + armor-car del backlog volcaban en cualquier curva mínima. Falta el componente que en autos reales evita el roll: la barra estabilizadora.
+
+**Decisión:** Poblar `JPH::VehicleConstraintSettings::mAntiRollBars` con dos `VehicleAntiRollBar` (eje delantero FL↔FR, eje trasero RL↔RR, `mStiffness=3000`). Cero código nuevo de física.
+
+**Razones:**
+- Jolt expone la primitiva como parte estándar de `WheeledVehicleController` — es el mismo modelo que Unity Wheel Collider (`anti-roll bar` setting) y Chaos Vehicle de Unreal.
+- Memoria `feedback_no_reinventar_rueda`: buscar estándar antes de codear.
+
+**Alternativas descartadas:** simular el efecto con torques manuales sobre el chassis → reinventar mal lo que la lib ya resuelve.
+
+### Decisión 2 — Bajar el CoM a mano, no introducir "anti-roll arcade"
+
+**Contexto:** Aún con anti-roll bars, el Tesla tendía al vuelco porque su `mass_center_override_mm.y` estaba en 514 mm (más alto que el centro físico del modelo).
+
+**Decisión:** Solo data — tunear el `.moodvehicle` (Tesla 514→150, armor-car 569→200). Sin código nuevo.
+
+**Razones:**
+- Es el truco clásico GTA SA / Burnout / NFS: bajar el CoM **por debajo** del centro físico colapsa la tendencia al vuelco. Modelado correctamente físico (el momento de inercia recibe menos torque de roll).
+- Una sola línea de JSON por auto, reversible, no afecta a otros vehículos.
+
+### Decisión 3 — Bake del scale en el GLB root node, no `mesh_scale` en runtime
+
+**Contexto:** Modelos Sketchfab/FBX→glTF típicos vienen a escala 1/100 o 1/1000 (vértices en cm/mm). Hay que escalarlos al importar. Dos rutas:
+- (a) Persistir un `mesh_scale: 100.0` en el `.moodvehicle` y multiplicar el Transform al spawnar.
+- (b) **Hornear** el scale en el `.glb` copiado (root node), dejando el `.moodvehicle` con `scale=1.0`.
+
+**Decisión:** (b). Tras intentar (a) en una iteración y notar que introduce **dos convenciones de unidades en el proyecto** (algunos assets a escala real y otros con un multiplicador implícito), pivot definitivo a hornear.
+
+**Razones:**
+- Una sola fuente de verdad: el GLB en disco está a escala real.
+- AABB / colisión / iluminación / analyzer coinciden con el modelo en disco sin truco.
+- El `.moodvehicle` queda comparable con los demás (mismos rangos numéricos).
+
+**Alternativas descartadas:**
+- Persistir `mesh_scale` permanente: dos convenciones = bug fest a futuro (cualquier código nuevo de física tiene que recordar consultar el campo).
+- Re-exportar el GLB con todos los buffers re-escalados: orden de magnitud más complejo, sin beneficio frente al root node.
+
+**Revisión:** si un modelo trae transform en cada nodo (no solo en root), el bake al root no escala todo. No es el caso de los exports comunes (Sketchfab / Mixamo / Blender export). Se mantiene la convención.
+
+### Decisión 4 — Soporte de `matrix` y `scale` en el bake, no solo `scale`
+
+**Contexto:** El DELOREAN.glb que el dev intentó importar tenía el transform del root como `matrix` 4x4 (típico de FBX→glTF pipeline de Sketchfab). El parser inicial solo soportaba la forma `scale: [sx,sy,sz]` y fallaba con "root node usa matrix (no soportado)".
+
+**Decisión:** Extender `injectGlbRootScale` para detectar y multiplicar `matrix` también. Indices afectados: 0,1,2 (col0), 4,5,6 (col1), 8,9,10 (col2) — el rectángulo 3x3 — más 12,13,14 (traslación). Se skipean 3,7,11,15 (última fila `(0,0,0,1)` debe quedar intacta en column-major).
+
+**Razones:**
+- La spec de glTF permite ambas formas. Cualquiera de las dos es legal.
+- Sin esto, ~50% de los modelos descargados de la web no entran.
+
+**Alternativas descartadas:** convertir la matrix a `scale: [s,s,s]` y reescribir el nodo → pierde la rotación inicial del modelo (la matrix muchas veces trae también rotación de Z-up→Y-up).
+
+### Decisión 5 — Wheel-entity skip por componente, no por tag
+
+**Contexto:** `SceneSerializer` skipeaba las 4 wheel-entities matcheando `e.tag == "wheel_FL" || ... "wheel_RR"`. Funciona con autos que **nosotros nombramos** (delorean, banshee_sa) pero falla con autos importados cuyas ruedas tienen tags reales del modelo (`f_t_l`, `b_t_r`, `RUEDA_DEL_IZQ`). Al recargar el mapa: 4 ruedas viejas (persistidas) + 4 ruedas nuevas (respawneadas por `VehicleSystem`) = 8.
+
+**Decisión:** Agregar `VehicleWheelMarker { chassisHandle, wheelIndex }` (`Components_Physics.h`). `VehicleSystem::spawnPendingWheels` lo añade a cada wheel entity. `SceneSerializer` skipea por `e.hasComponent<VehicleWheelMarker>()`. `ScenePick` y `HierarchyCollect` también lo consumen.
+
+**Razones:**
+- El marker es invariante (no depende del nombre del modelo).
+- El tag vuelve a ser **solo display**, sin semántica oculta.
+- Robusto frente al pipeline futuro de imports.
+
+**Test impactado:** `test_scene_serializer_lighting_physics.cpp` (caso F2H70.3 H) creaba wheel entities con tag canónico pero sin el marker → fallaba tras la migración. Actualizado para añadir el marker. **No se afloja el test**: sigue verificando que las wheel-entities no se serializan, solo que la condición es "tiene marker" no "tag matchea".
+
+### Decisión 6 — Live tuning edita el VehicleConfig compartido, no una copia per-entity
+
+**Contexto:** Cuando el dev tunea un auto en Play y le gusta el resultado, quiere que el cambio quede para todos los spawns futuros, no solo esta entity. Dos formas:
+- (a) Copiar el `VehicleConfig` a la entity y editar la copia.
+- (b) Editar el config compartido del `AssetManager`.
+
+**Decisión:** (b). `AssetManager::getMutableVehicleConfig(id)` devuelve un puntero al config compartido (nullptr para el slot 0 fallback). El Inspector edita ese puntero. Cualquier cambio marca `veh.dirty=true` y el `VehicleSystem` reaplica al body Jolt next frame.
+
+**Razones:**
+- Hoy un `VehicleComponent` solo guarda `configPath` + `dirty`, no una copia del config. Cambiar a "copia per-entity" implica tocar serialización + reload del config + flujos de assets — scope mucho mayor.
+- Tunear el compartido es lo que el dev quiere: *"que el siguiente spawn también salga así"*.
+
+**Trade-off aceptado:** si se spawnean dos autos del mismo modelo, tunear uno cambia el otro. Razonable para esta etapa — el dev valida un auto a la vez. Si emerge dolor real, F3 mete copy-on-write per-entity.
+
+### Decisión 7 — Diferir extracción de texturas embebidas a F2H83 (no atacar acá)
+
+**Contexto:** El BTTF DeLorean importado entró bien geométricamente pero las texturas se ven rosa-grid (fallback de material faltante). Causa: las texturas vienen embebidas en el GLB y el loader las nombra `__runtime_tex#N` en memoria; al fallar la asociación material→texture cae a `missingMaterialId()`. Estándar industrial (Unity gLTFast, Unreal glTF Importer) extrae las texturas a disco en `assets/<asset>/textures/` al importar.
+
+**Decisión:** Diferir a F2H83 dedicado. F2H82 cierra con la limitación documentada y validada por el dev.
+
+**Razones:**
+- Es feature ortogonal al pipeline de vehículos: aplica a cualquier import (props, character, env).
+- Tocaría: loader, materials, asset extraction layer, AssetManager. Scope que no se justifica meter al final de F2H82.
+
+**Cita verbatim del dev:** *"lo logrado hasta ahora esta bien, cerremos aca para terminar con esto y luego en la fase 3 veremos como mejorar esto"*.
+
+---
+
 ## 2026-05-21: F2H79 — Pulido de modales + hover circular + Welcome
 
 ### Decisión 1 — Hover circular de la X: parche idempotente a ImGui en configure-time, no fork
