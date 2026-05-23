@@ -90,6 +90,14 @@ private:
     ///        (Editor Mode) o de SDL en relative mouse mode (Play Mode).
     void updateCameras(f32 dt);
 
+    // break-B3: sub-pasos de updateCameras separados por contexto.
+    // Cada uno asume que el caller ya verifico el modo + early-returns.
+    void updateEditorCamera();
+    void processMountDismountToggle();
+    void updateVehicleChaseCamera(f32 dt);
+    void updateMountPromptHint();
+    void updateOnFootCharController(f32 dt);
+
     void enterPlayMode();
     void exitPlayMode();
 

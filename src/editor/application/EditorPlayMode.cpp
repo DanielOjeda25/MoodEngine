@@ -149,450 +149,487 @@ void EditorApplication::exitPlayMode() {
     Log::editor()->info("Editor Mode activo");
 }
 
+// break-B3: updateCameras paso de ~446 LOC (espagueti) a un dispatcher
+// chico que delega en 5 sub-pasos. Cada sub-paso asume sus precondiciones
+// (modo, input bloqueado, mounted/on-foot) cubiertas por el caller.
 void EditorApplication::updateCameras(f32 dt) {
     if (m_mode == EditorMode::Editor) {
-        const float dx = m_ui.viewport().cameraRotateDx();
-        const float dy = m_ui.viewport().cameraRotateDy();
-        const float panDx = m_ui.viewport().cameraPanDx();
-        const float panDy = m_ui.viewport().cameraPanDy();
-        const float wheel = m_ui.viewport().cameraWheel();
-        if (dx != 0.0f || dy != 0.0f) m_editorCamera.applyMouseDrag(dx, dy);
-        if (panDx != 0.0f || panDy != 0.0f) m_editorCamera.applyPan(panDx, panDy);
-        if (wheel != 0.0f) m_editorCamera.applyWheel(wheel);
+        updateEditorCamera();
+        return;
+    }
+
+    // --- Play mode: gestion de cursor + pausa ---
+    // Sync cursor con input bloqueado (pausa OR inventory_panel
+    // abierto). Detectamos la transicion (no llamamos SDL cada
+    // frame) para soportar todos los caminos: tecla Esc, click en
+    // "Continuar", tecla Tab para inventario, o un script Lua via
+    // `hud.setPaused` / `hud.setWidget`.
+    // SDL_SetRelativeMouseMode(FALSE) muestra el cursor; (TRUE) lo
+    // atrapa para gameplay.
+    const bool nowBlocked = GameState::isInputBlocked();
+    if (nowBlocked != m_pausedLastFrame) {
+        if (nowBlocked) {
+            SDL_SetRelativeMouseMode(SDL_FALSE);
+        } else {
+            SDL_SetRelativeMouseMode(SDL_TRUE);
+            SDL_GetRelativeMouseState(nullptr, nullptr); // descartar delta
+        }
+        m_pausedLastFrame = nowBlocked;
+    }
+
+    // Con input bloqueado (pausa o inventory abierto) el gameplay se
+    // congela — no leemos input ni actualizamos posicion del jugador.
+    // El cursor esta libre para clickear botones / items.
+    if (nowBlocked) return;
+    if (!m_physicsWorld) return;
+
+    // F2H67 Bloque F: toggle F-key mount/dismount.
+    processMountDismountToggle();
+
+    // Si esta montado, branchear a logica de vehicle drive y skipear
+    // el resto del char controller (que de todas formas no avanza
+    // porque queda pisado por la chase cam sync de abajo).
+    if (m_playerMountedVehicleEntity != 0 && m_scene) {
+        updateVehicleChaseCamera(dt);
+        return;
+    }
+
+    // F2H67 polish: hint UI on-foot. "[F] Subir al <tag>" si hay un
+    // vehicle dentro de radio.
+    updateMountPromptHint();
+
+    // Char controller on-foot: movimiento WASD, jump (coyote+buffer),
+    // crouch, headbob, mouse-look.
+    updateOnFootCharController(dt);
+}
+
+// break-B3: editor mode camera. Lee input del panel Viewport (drag /
+// pan / wheel) y aplica al `m_editorCamera`. Solo se llama en
+// EditorMode::Editor.
+void EditorApplication::updateEditorCamera() {
+    const float dx = m_ui.viewport().cameraRotateDx();
+    const float dy = m_ui.viewport().cameraRotateDy();
+    const float panDx = m_ui.viewport().cameraPanDx();
+    const float panDy = m_ui.viewport().cameraPanDy();
+    const float wheel = m_ui.viewport().cameraWheel();
+    if (dx != 0.0f || dy != 0.0f) m_editorCamera.applyMouseDrag(dx, dy);
+    if (panDx != 0.0f || panDy != 0.0f) m_editorCamera.applyPan(panDx, panDy);
+    if (wheel != 0.0f) m_editorCamera.applyWheel(wheel);
+}
+
+// break-B3: F-key mount/dismount toggle (F2H67 Bloque F).
+// Edge-trigger via `m_fEventPressed` (latch de SDL event con repeat=0)
+// para soportar press+release dentro del mismo tick robustamente. Se
+// llama tras descartar el early-return de pausa.
+void EditorApplication::processMountDismountToggle() {
+    const bool fJustPressed =
+        m_fEventPressed && !Mood::GameState::dialogActive();
+    m_fEventPressed = false;  // consumir el latch siempre
+
+    if (!fJustPressed || !m_scene) return;
+
+    if (m_playerMountedVehicleEntity == 0) {
+        // ON-FOOT -> intentar mount. Scanear scene buscando entities
+        // con VehicleComponent cerca del char.
+        const glm::vec3 charPos = (m_playerCharId != 0)
+            ? m_physicsWorld->characterPosition(m_playerCharId)
+            : m_playCamera.position();
+        constexpr f32 k_mountRadius = 3.0f;
+        u32 bestHandle = 0;
+        f32 bestDistSq = k_mountRadius * k_mountRadius;
+        m_scene->forEach<VehicleComponent, TransformComponent>(
+            [&](Entity e, VehicleComponent&, TransformComponent& tf) {
+                const glm::vec3 d = tf.position - charPos;
+                const f32 dsq = glm::dot(d, d);
+                if (dsq < bestDistSq) {
+                    bestDistSq = dsq;
+                    bestHandle = static_cast<u32>(e.handle());
+                }
+            });
+        if (bestHandle != 0) {
+            m_playerMountedVehicleEntity = bestHandle;
+            SDL_SetRelativeMouseMode(SDL_TRUE);  // chase cam usa mouse
+            // F2H70.3 H: HUD de conduccion (oculta widgets on-foot,
+            // muestra velocimetro).
+            setDrivingHud(true);
+            // F2H70.2 D2: limpiar el "[F] Subir al ..." residual al
+            // instante del mount. El frame siguiente el mounted
+            // block ya escribira "[F] Bajar". Sin esto, si el HUD
+            // se renderea entre el set de mountedEntity y el
+            // overwrite del prompt, podria mostrar "Subir" un frame.
+            Mood::GameState::hud().interact_prompt.clear();
+            Log::editor()->info(
+                "F2H67: mount vehicle (entity handle {})", bestHandle);
+        } else {
+            Log::editor()->info(
+                "F2H67: no hay vehicle dentro de {}m del player",
+                k_mountRadius);
+        }
     } else {
-        // Sync cursor con input bloqueado (pausa OR inventory_panel
-        // abierto). Detectamos la transicion (no llamamos SDL cada
-        // frame) para soportar todos los caminos: tecla Esc, click en
-        // "Continuar", tecla Tab para inventario, o un script Lua via
-        // `hud.setPaused` / `hud.setWidget`.
-        // SDL_SetRelativeMouseMode(FALSE) muestra el cursor; (TRUE) lo
-        // atrapa para gameplay.
-        const bool nowBlocked = GameState::isInputBlocked();
-        if (nowBlocked != m_pausedLastFrame) {
-            if (nowBlocked) {
-                SDL_SetRelativeMouseMode(SDL_FALSE);
-            } else {
-                SDL_SetRelativeMouseMode(SDL_TRUE);
-                SDL_GetRelativeMouseState(nullptr, nullptr); // descartar delta
-            }
-            m_pausedLastFrame = nowBlocked;
-        }
-
-        // Con input bloqueado (pausa o inventory abierto) el gameplay
-        // se congela — no leemos input ni actualizamos posicion del
-        // jugador. El cursor esta libre para clickear botones / items.
-        if (nowBlocked) return;
-        if (!m_physicsWorld) return;
-
-        // F2H67 Bloque F (polish): mount/dismount toggle via SDL event
-        // latch (m_fEventPressed) en vez de polling con prev-frame. Mas
-        // robusto cuando el frame tarda y el usuario apreta+suelta F
-        // dentro del mismo tick — el repeat=0 del SDL event ya
-        // garantiza edge detection.
-        const Uint8* keys_F2H67 = SDL_GetKeyboardState(nullptr);
-        const bool fJustPressed =
-            m_fEventPressed && !Mood::GameState::dialogActive();
-        m_fEventPressed = false;  // consumir el latch siempre
-
-        if (fJustPressed && m_scene) {
-            if (m_playerMountedVehicleEntity == 0) {
-                // ON-FOOT -> intentar mount. Scanear scene buscando entities
-                // con VehicleComponent cerca del char.
-                const glm::vec3 charPos = (m_playerCharId != 0)
-                    ? m_physicsWorld->characterPosition(m_playerCharId)
-                    : m_playCamera.position();
-                constexpr f32 k_mountRadius = 3.0f;
-                u32 bestHandle = 0;
-                f32 bestDistSq = k_mountRadius * k_mountRadius;
-                m_scene->forEach<VehicleComponent, TransformComponent>(
-                    [&](Entity e, VehicleComponent&, TransformComponent& tf) {
-                        const glm::vec3 d = tf.position - charPos;
-                        const f32 dsq = glm::dot(d, d);
-                        if (dsq < bestDistSq) {
-                            bestDistSq = dsq;
-                            bestHandle = static_cast<u32>(e.handle());
-                        }
-                    });
-                if (bestHandle != 0) {
-                    m_playerMountedVehicleEntity = bestHandle;
-                    SDL_SetRelativeMouseMode(SDL_TRUE);  // chase cam usa mouse
-                    // F2H70.3 H: HUD de conduccion (oculta widgets on-foot,
-                    // muestra velocimetro).
-                    setDrivingHud(true);
-                    // F2H70.2 D2: limpiar el "[F] Subir al ..." residual al
-                    // instante del mount. El frame siguiente el mounted
-                    // block ya escribira "[F] Bajar". Sin esto, si el HUD
-                    // se renderea entre el set de mountedEntity y el
-                    // overwrite del prompt, podria mostrar "Subir" un frame.
-                    Mood::GameState::hud().interact_prompt.clear();
-                    Log::editor()->info(
-                        "F2H67: mount vehicle (entity handle {})", bestHandle);
-                } else {
-                    Log::editor()->info(
-                        "F2H67: no hay vehicle dentro de {}m del player",
-                        k_mountRadius);
-                }
-            } else {
-                // MONTADO -> desmontar. Teleport el char al costado derecho
-                // del chassis y dejar el auto detenido.
-                Entity vehEnt = m_scene->entityFromHandle(
-                    static_cast<entt::entity>(m_playerMountedVehicleEntity));
-                if (vehEnt && vehEnt.hasComponent<VehicleComponent>()) {
-                    auto& veh = vehEnt.getComponent<VehicleComponent>();
-                    // Resetear input para que el auto no salga acelerado.
-                    veh.inputThrottle  = 0.0f;
-                    veh.inputBrake     = 1.0f;  // brake on para detener
-                    veh.inputSteer     = 0.0f;
-                    veh.inputHandbrake = 1.0f;
-                    if (vehEnt.hasComponent<TransformComponent>()
-                        && m_playerCharId != 0) {
-                        const auto& tf = vehEnt.getComponent<TransformComponent>();
-                        // Costado derecho del auto + 0.5m hacia arriba.
-                        // Para un sedan ~1.8m ancho, 1.5m de offset deja
-                        // espacio al jugador sin clip-through con la carroceria.
-                        const glm::vec3 dismountPos =
-                            tf.position + glm::vec3(1.5f, 1.0f, 0.0f);
-                        m_physicsWorld->setCharacterPosition(
-                            m_playerCharId, dismountPos);
-                    }
-                }
-                m_playerMountedVehicleEntity = 0;
-                // F2H70.3 H: restaurar HUD on-foot al bajar.
-                setDrivingHud(false);
-                // F2H70.2 fix S-key: reset del edge-stick al desmontar
-                // para que el proximo mount empiece con S clean (sino el
-                // estado quedaria contaminado del session anterior).
-                m_sWasPressed  = false;
-                m_sBrakingMode = false;
-                Log::editor()->info("F2H67: dismount");
-            }
-        }
-
-        // Si esta montado, branchear a logica de vehicle drive y skipear
-        // el resto del char controller (que de todas formas no avanza
-        // porque queda pisado por la chase cam sync de abajo).
-        if (m_playerMountedVehicleEntity != 0 && m_scene) {
-            Entity vehEnt = m_scene->entityFromHandle(
-                static_cast<entt::entity>(m_playerMountedVehicleEntity));
-            if (!vehEnt || !vehEnt.hasComponent<VehicleComponent>()) {
-                // El vehiculo fue borrado del scene -- volver on-foot.
-                m_playerMountedVehicleEntity = 0;
-                Mood::GameState::hud().interact_prompt.clear();
-                setDrivingHud(false);  // F2H70.3 H: restaurar HUD on-foot
-                return;
-            }
+        // MONTADO -> desmontar. Teleport el char al costado derecho
+        // del chassis y dejar el auto detenido.
+        Entity vehEnt = m_scene->entityFromHandle(
+            static_cast<entt::entity>(m_playerMountedVehicleEntity));
+        if (vehEnt && vehEnt.hasComponent<VehicleComponent>()) {
             auto& veh = vehEnt.getComponent<VehicleComponent>();
+            // Resetear input para que el auto no salga acelerado.
+            veh.inputThrottle  = 0.0f;
+            veh.inputBrake     = 1.0f;  // brake on para detener
+            veh.inputSteer     = 0.0f;
+            veh.inputHandbrake = 1.0f;
+            if (vehEnt.hasComponent<TransformComponent>()
+                && m_playerCharId != 0) {
+                const auto& tf = vehEnt.getComponent<TransformComponent>();
+                // Costado derecho del auto + 0.5m hacia arriba.
+                // Para un sedan ~1.8m ancho, 1.5m de offset deja
+                // espacio al jugador sin clip-through con la carroceria.
+                const glm::vec3 dismountPos =
+                    tf.position + glm::vec3(1.5f, 1.0f, 0.0f);
+                m_physicsWorld->setCharacterPosition(
+                    m_playerCharId, dismountPos);
+            }
+        }
+        m_playerMountedVehicleEntity = 0;
+        // F2H70.3 H: restaurar HUD on-foot al bajar.
+        setDrivingHud(false);
+        // F2H70.2 fix S-key: reset del edge-stick al desmontar
+        // para que el proximo mount empiece con S clean (sino el
+        // estado quedaria contaminado del session anterior).
+        m_sWasPressed  = false;
+        m_sBrakingMode = false;
+        Log::editor()->info("F2H67: dismount");
+    }
+}
 
-            // F2H70.2 D4: NO mostramos hint "[F] Bajar" cuando estamos montados
-            // — es obvio. El prompt queda vacio mientras se conduce (el HUD
-            // tiene velocimetro u otros indicadores). Si en futuro hay otro
-            // contexto de interaccion (eg. "[E] Hablar con NPC desde el auto"),
-            // se setea recien cuando aplique; sino, vacio.
-            if (!Mood::GameState::hud().interact_prompt.empty()) {
-                Mood::GameState::hud().interact_prompt.clear();
-            }
+// break-B3: chase camera + WASD-to-vehicle-input cuando el jugador
+// esta montado. Solo se llama con `m_playerMountedVehicleEntity != 0`
+// y `m_scene != nullptr`.
+void EditorApplication::updateVehicleChaseCamera(f32 dt) {
+    Entity vehEnt = m_scene->entityFromHandle(
+        static_cast<entt::entity>(m_playerMountedVehicleEntity));
+    if (!vehEnt || !vehEnt.hasComponent<VehicleComponent>()) {
+        // El vehiculo fue borrado del scene -- volver on-foot.
+        m_playerMountedVehicleEntity = 0;
+        Mood::GameState::hud().interact_prompt.clear();
+        setDrivingHud(false);  // F2H70.3 H: restaurar HUD on-foot
+        return;
+    }
+    auto& veh = vehEnt.getComponent<VehicleComponent>();
 
-            // --- Mouse-look para chase cam (orbit alrededor del chasis) ---
-            int mx = 0, my = 0;
-            SDL_GetRelativeMouseState(&mx, &my);
-            if (mx != 0 || my != 0) {
-                m_playCamera.applyMouseMove(
-                    static_cast<f32>(mx), static_cast<f32>(my));
-            }
+    // F2H70.2 D4: NO mostramos hint "[F] Bajar" cuando estamos montados
+    // — es obvio. El prompt queda vacio mientras se conduce (el HUD
+    // tiene velocimetro u otros indicadores). Si en futuro hay otro
+    // contexto de interaccion (eg. "[E] Hablar con NPC desde el auto"),
+    // se setea recien cuando aplique; sino, vacio.
+    if (!Mood::GameState::hud().interact_prompt.empty()) {
+        Mood::GameState::hud().interact_prompt.clear();
+    }
 
-            // --- WASD -> input al vehicle ---
-            // W = throttle forward. S = brake-or-reverse con edge-stick
-            // estilo GTA: al press inicial decide UNA vez entre "brake" (si
-            // el auto va adelante) o "reverse" (si esta parado o ya en
-            // reversa); el modo se mantiene hasta soltar S, sin importar
-            // que la speed cruce el umbral mientras frenas. Asi soltar W
-            // + apretar S sigue siendo "freno" hasta detenerse, y reverse
-            // requiere release+repress de S. A/D = steer. Space = handbrake.
-            const bool wHeld = keys_F2H67[SDL_SCANCODE_W] != 0;
-            const bool sHeld = keys_F2H67[SDL_SCANCODE_S] != 0;
-            f32 forwardSpeed = 0.0f;
-            if (m_physicsWorld && veh.vehicleId != 0) {
-                PhysicsWorld::VehicleState st{};
-                if (m_physicsWorld->readVehicleState(veh.vehicleId, st)) {
-                    forwardSpeed = st.forwardSpeed;
-                }
-            }
-            // F2H70.3 H: alimentar el velocimetro del HUD (m/s -> km/h) +
-            // proyectar la pose del auto a pantalla para que el popup lo siga.
-            // El punto del marcador es ~2.2m sobre el origin logico (clarea el
-            // techo del modelo, que se renderea elevado por pivotYOffset).
-            {
-                auto& hud = Mood::GameState::hud();
-                hud.vehicle_speed_kmh = forwardSpeed * 3.6f;
-                if (vehEnt.hasComponent<TransformComponent>()) {
-                    const auto& vtf = vehEnt.getComponent<TransformComponent>();
-                    // ~1.3m sobre el origin logico: queda apenas sobre el techo
-                    // (el modelo se renderea elevado por pivotYOffset ~0.85m +
-                    // media altura ~0.57m, asi que el techo esta ~1.4m arriba).
-                    const glm::vec3 markerWorld =
-                        vtf.position + glm::vec3(0.0f, 1.3f, 0.0f);
-                    const glm::mat4 vp =
-                        m_playCamera.projectionMatrix(viewportAspect())
-                        * m_playCamera.viewMatrix();
-                    const glm::vec4 clip = vp * glm::vec4(markerWorld, 1.0f);
-                    if (clip.w > 0.0001f) {
-                        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
-                        hud.vehicle_marker_x = ndc.x * 0.5f + 0.5f;
-                        hud.vehicle_marker_y = 1.0f - (ndc.y * 0.5f + 0.5f);
-                        hud.vehicle_marker_onscreen =
-                            ndc.z < 1.0f && ndc.x > -1.1f && ndc.x < 1.1f
-                            && ndc.y > -1.1f && ndc.y < 1.1f;
-                    } else {
-                        hud.vehicle_marker_onscreen = false;
-                    }
-                }
-            }
-            // Edge detect en S: al primer frame pressed elegimos modo segun
-            // si vamos moviendonos adelante. Umbral 0.5 m/s: por debajo
-            // consideramos "parado" y S = reverse desde el toque inicial.
-            constexpr f32 k_brakeVsReverseSpeed = 0.5f;
-            if (sHeld && !m_sWasPressed) {
-                m_sBrakingMode = (forwardSpeed > k_brakeVsReverseSpeed);
-            }
-            m_sWasPressed = sHeld;
+    // --- Mouse-look para chase cam (orbit alrededor del chasis) ---
+    int mx = 0, my = 0;
+    SDL_GetRelativeMouseState(&mx, &my);
+    if (mx != 0 || my != 0) {
+        m_playCamera.applyMouseMove(
+            static_cast<f32>(mx), static_cast<f32>(my));
+    }
 
-            if (wHeld) {
-                veh.inputThrottle = 1.0f;
-                veh.inputBrake    = 0.0f;
-            } else if (sHeld) {
-                if (m_sBrakingMode) {
-                    veh.inputThrottle = 0.0f;
-                    veh.inputBrake    = 1.0f;
-                } else {
-                    veh.inputThrottle = -1.0f;  // reverse (clamp [-1,1])
-                    veh.inputBrake    = 0.0f;
-                }
+    // --- WASD -> input al vehicle ---
+    // W = throttle forward. S = brake-or-reverse con edge-stick
+    // estilo GTA: al press inicial decide UNA vez entre "brake" (si
+    // el auto va adelante) o "reverse" (si esta parado o ya en
+    // reversa); el modo se mantiene hasta soltar S, sin importar
+    // que la speed cruce el umbral mientras frenas. Asi soltar W
+    // + apretar S sigue siendo "freno" hasta detenerse, y reverse
+    // requiere release+repress de S. A/D = steer. Space = handbrake.
+    const Uint8* keys = SDL_GetKeyboardState(nullptr);
+    const bool wHeld = keys[SDL_SCANCODE_W] != 0;
+    const bool sHeld = keys[SDL_SCANCODE_S] != 0;
+    f32 forwardSpeed = 0.0f;
+    if (m_physicsWorld && veh.vehicleId != 0) {
+        PhysicsWorld::VehicleState st{};
+        if (m_physicsWorld->readVehicleState(veh.vehicleId, st)) {
+            forwardSpeed = st.forwardSpeed;
+        }
+    }
+    // F2H70.3 H: alimentar el velocimetro del HUD (m/s -> km/h) +
+    // proyectar la pose del auto a pantalla para que el popup lo siga.
+    // El punto del marcador es ~2.2m sobre el origin logico (clarea el
+    // techo del modelo, que se renderea elevado por pivotYOffset).
+    {
+        auto& hud = Mood::GameState::hud();
+        hud.vehicle_speed_kmh = forwardSpeed * 3.6f;
+        if (vehEnt.hasComponent<TransformComponent>()) {
+            const auto& vtf = vehEnt.getComponent<TransformComponent>();
+            // ~1.3m sobre el origin logico: queda apenas sobre el techo
+            // (el modelo se renderea elevado por pivotYOffset ~0.85m +
+            // media altura ~0.57m, asi que el techo esta ~1.4m arriba).
+            const glm::vec3 markerWorld =
+                vtf.position + glm::vec3(0.0f, 1.3f, 0.0f);
+            const glm::mat4 vp =
+                m_playCamera.projectionMatrix(viewportAspect())
+                * m_playCamera.viewMatrix();
+            const glm::vec4 clip = vp * glm::vec4(markerWorld, 1.0f);
+            if (clip.w > 0.0001f) {
+                const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+                hud.vehicle_marker_x = ndc.x * 0.5f + 0.5f;
+                hud.vehicle_marker_y = 1.0f - (ndc.y * 0.5f + 0.5f);
+                hud.vehicle_marker_onscreen =
+                    ndc.z < 1.0f && ndc.x > -1.1f && ndc.x < 1.1f
+                    && ndc.y > -1.1f && ndc.y < 1.1f;
             } else {
-                veh.inputThrottle = 0.0f;
-                veh.inputBrake    = 0.0f;
-            }
-            // A/D = steer. F2H70.3 H: rampa gradual hacia el target en lugar
-            // de saltar a +-1 al instante. Sin esto las ruedas delanteras
-            // pegan de tope a tope (snap); con la rampa giran progresivo,
-            // como un volante. Turn-in mas lento que el auto-centrado al
-            // soltar (sensacion natural de retorno). Rate en unidades/s.
-            f32 steerTarget = 0.0f;
-            if (keys_F2H67[SDL_SCANCODE_A]) steerTarget -= 1.0f;
-            if (keys_F2H67[SDL_SCANCODE_D]) steerTarget += 1.0f;
-            constexpr f32 k_steerTurnInRate = 3.0f;   // ~0.33s a tope
-            constexpr f32 k_steerReturnRate = 6.0f;   // centrado mas rapido
-            const f32 steerRate = (steerTarget != 0.0f)
-                ? k_steerTurnInRate : k_steerReturnRate;
-            const f32 steerMaxDelta = steerRate * dt;
-            const f32 steerDiff = steerTarget - veh.inputSteer;
-            veh.inputSteer += std::clamp(steerDiff, -steerMaxDelta, steerMaxDelta);
-            veh.inputHandbrake = keys_F2H67[SDL_SCANCODE_SPACE] ? 1.0f : 0.0f;
-
-            // --- Chase cam: posicionar m_playCamera detras-arriba del chasis ---
-            // Yaw/pitch del FpsCamera funcionan como el angulo del orbit.
-            // Cam pos = chassisPos - forward(yaw,pitch) * distance + Y up.
-            // Como forward apunta hacia el chassis, el camera "mira" hacia
-            // el auto naturalmente sin necesidad de lookAt.
-            const glm::vec3 chassisPos = vehEnt.hasComponent<TransformComponent>()
-                ? vehEnt.getComponent<TransformComponent>().position
-                : glm::vec3(0.0f);
-            const glm::vec3 fwd = m_playCamera.forward();
-            const glm::vec3 camPos =
-                chassisPos
-                - fwd * m_chaseDistance
-                + glm::vec3(0.0f, m_chaseHeightOffset, 0.0f);
-            m_playCamera.setPosition(camPos);
-
-            // Char controller queda quieto mientras se conduce (sino el
-            // EditorScene::updateRigidBodies lo seguiria moviendo a la cam
-            // pos que ahora es la chase cam, lo cual lo arrastraria por la
-            // escena en pose absurda).
-            if (m_playerCharId != 0) {
-                m_physicsWorld->setCharacterMovement(
-                    m_playerCharId, glm::vec3(0.0f));
-            }
-            return;  // No ejecutar el char controller block que sigue.
-        }
-
-        // F2H67 polish: hint UI on-foot. Si hay un vehicle dentro de radio
-        // 3m del player, mostrar "[F] Subir al <tag>" para que el dev sepa
-        // que la tecla F monta. Idempotente: re-evaluamos cada frame y
-        // limpiamos cuando ya no aplica (mismo patron que ItemPickupSystem).
-        // Skip si dialog activo (ese sistema ya owner-ea el prompt).
-        if (m_scene && !Mood::GameState::dialogActive()) {
-            const glm::vec3 charPos = (m_playerCharId != 0)
-                ? m_physicsWorld->characterPosition(m_playerCharId)
-                : m_playCamera.position();
-            constexpr f32 k_mountRadius = 3.0f;
-            std::string bestTag;
-            f32 bestDistSq = k_mountRadius * k_mountRadius;
-            m_scene->forEach<VehicleComponent, TransformComponent, TagComponent>(
-                [&](Entity, VehicleComponent&, TransformComponent& tf,
-                    TagComponent& tag) {
-                    const glm::vec3 d = tf.position - charPos;
-                    const f32 dsq = glm::dot(d, d);
-                    if (dsq < bestDistSq) {
-                        bestDistSq = dsq;
-                        bestTag    = tag.name;
-                    }
-                });
-            auto& promptRef = Mood::GameState::hud().interact_prompt;
-            if (!bestTag.empty()) {
-                std::string desired = "[F] Subir al " + bestTag;
-                if (promptRef != desired) promptRef = std::move(desired);
-            } else if (!promptRef.empty()
-                       && promptRef.rfind("[F] Subir al ", 0) == 0) {
-                // Nosotros habiamos puesto el prompt y ya no aplica.
-                promptRef.clear();
+                hud.vehicle_marker_onscreen = false;
             }
         }
+    }
+    // Edge detect en S: al primer frame pressed elegimos modo segun
+    // si vamos moviendonos adelante. Umbral 0.5 m/s: por debajo
+    // consideramos "parado" y S = reverse desde el toque inicial.
+    constexpr f32 k_brakeVsReverseSpeed = 0.5f;
+    if (sHeld && !m_sWasPressed) {
+        m_sBrakingMode = (forwardSpeed > k_brakeVsReverseSpeed);
+    }
+    m_sWasPressed = sHeld;
 
-        // Hito 30: shape standing/crouching + lazy create.
-        constexpr f32 k_charHalfHeightStand  = 0.5f;
-        constexpr f32 k_charHalfHeightCrouch = 0.1f;
-        constexpr f32 k_charRadius           = 0.4f;
-        constexpr f32 k_jumpVel              = 5.5f;
-        constexpr f32 k_jumpCooldown         = 0.2f;
-        // Hito 40 G: ventanas del char controller editables per-proyecto
-        // (ver `.moodproj`). Si no hay project cargado, usa los defaults
-        // del Hito 34 C.
-        const f32 k_coyoteWindow     = m_project ? m_project->coyoteWindowSec     : 0.10f;
-        const f32 k_jumpBufferWindow = m_project ? m_project->jumpBufferWindowSec : 0.15f;
-        // F2H41 fix lateral: tuning del feel de caminata. Pre-F2H41
-        // walk=4 m/s daba sensacion lenta vs convencion FPS (HL2 ~5.5,
-        // CoD ~6, Doom Eternal ~7). 5.5 m/s con freq de bob mas bajo
-        // (ver mas abajo) da pasitos largos + paso rapido sin sentir
-        // que el char "trota muy chiquito".
-        constexpr f32 k_walkSpeed            = 5.5f;
-        constexpr f32 k_crouchSpeed          = 3.0f;
-        if (m_playerCharId == 0) {
-            const f32 eyeStand = k_charHalfHeightStand + k_charRadius - 0.2f;
-            const glm::vec3 camPos = m_playCamera.position();
-            m_playerCharId = m_physicsWorld->createCharacter(
-                camPos - glm::vec3(0.0f, eyeStand, 0.0f),
-                k_charHalfHeightStand, k_charRadius);
+    if (wHeld) {
+        veh.inputThrottle = 1.0f;
+        veh.inputBrake    = 0.0f;
+    } else if (sHeld) {
+        if (m_sBrakingMode) {
+            veh.inputThrottle = 0.0f;
+            veh.inputBrake    = 1.0f;
+        } else {
+            veh.inputThrottle = -1.0f;  // reverse (clamp [-1,1])
+            veh.inputBrake    = 0.0f;
         }
+    } else {
+        veh.inputThrottle = 0.0f;
+        veh.inputBrake    = 0.0f;
+    }
+    // A/D = steer. F2H70.3 H: rampa gradual hacia el target en lugar
+    // de saltar a +-1 al instante. Sin esto las ruedas delanteras
+    // pegan de tope a tope (snap); con la rampa giran progresivo,
+    // como un volante. Turn-in mas lento que el auto-centrado al
+    // soltar (sensacion natural de retorno). Rate en unidades/s.
+    f32 steerTarget = 0.0f;
+    if (keys[SDL_SCANCODE_A]) steerTarget -= 1.0f;
+    if (keys[SDL_SCANCODE_D]) steerTarget += 1.0f;
+    constexpr f32 k_steerTurnInRate = 3.0f;   // ~0.33s a tope
+    constexpr f32 k_steerReturnRate = 6.0f;   // centrado mas rapido
+    const f32 steerRate = (steerTarget != 0.0f)
+        ? k_steerTurnInRate : k_steerReturnRate;
+    const f32 steerMaxDelta = steerRate * dt;
+    const f32 steerDiff = steerTarget - veh.inputSteer;
+    veh.inputSteer += std::clamp(steerDiff, -steerMaxDelta, steerMaxDelta);
+    veh.inputHandbrake = keys[SDL_SCANCODE_SPACE] ? 1.0f : 0.0f;
 
-        const Uint8* keys = SDL_GetKeyboardState(nullptr);
-        // F2H48: si hay dialog activo, ignorar input de movimiento + jump
-        // + crouch (el jugador esta hablando — no deberia caminar). El
-        // mouse-look queda libre para que pueda mirar al NPC con
-        // naturalidad mientras conversa.
-        const bool dialogLocked = Mood::GameState::dialogActive();
-        glm::vec3 inputDir(0.0f);
-        if (!dialogLocked) {
-            if (keys[SDL_SCANCODE_W]) inputDir.z += 1.0f;
-            if (keys[SDL_SCANCODE_S]) inputDir.z -= 1.0f;
-            if (keys[SDL_SCANCODE_D]) inputDir.x += 1.0f;
-            if (keys[SDL_SCANCODE_A]) inputDir.x -= 1.0f;
-        }
+    // --- Chase cam: posicionar m_playCamera detras-arriba del chasis ---
+    // Yaw/pitch del FpsCamera funcionan como el angulo del orbit.
+    // Cam pos = chassisPos - forward(yaw,pitch) * distance + Y up.
+    // Como forward apunta hacia el chassis, el camera "mira" hacia
+    // el auto naturalmente sin necesidad de lookAt.
+    const glm::vec3 chassisPos = vehEnt.hasComponent<TransformComponent>()
+        ? vehEnt.getComponent<TransformComponent>().position
+        : glm::vec3(0.0f);
+    const glm::vec3 fwd = m_playCamera.forward();
+    const glm::vec3 camPos =
+        chassisPos
+        - fwd * m_chaseDistance
+        + glm::vec3(0.0f, m_chaseHeightOffset, 0.0f);
+    m_playCamera.setPosition(camPos);
 
-        // Crouch toggle. SetShape NO mueve el centro del char — ajusta
-        // pos manual para mantener base al ras (mismo patron que en
-        // PlayerApplication).
-        const bool wantCrouch = keys[SDL_SCANCODE_LCTRL] != 0;
-        constexpr f32 k_centerDelta = k_charHalfHeightStand - k_charHalfHeightCrouch;
-        if (wantCrouch && !m_crouching) {
-            if (m_physicsWorld->setCharacterShape(m_playerCharId,
-                                                    k_charHalfHeightCrouch,
-                                                    k_charRadius)) {
-                const glm::vec3 p = m_physicsWorld->characterPosition(m_playerCharId);
-                m_physicsWorld->setCharacterPosition(m_playerCharId,
-                    p - glm::vec3(0.0f, k_centerDelta, 0.0f));
-                m_crouching = true;
+    // Char controller queda quieto mientras se conduce (sino el
+    // EditorScene::updateRigidBodies lo seguiria moviendo a la cam
+    // pos que ahora es la chase cam, lo cual lo arrastraria por la
+    // escena en pose absurda).
+    if (m_playerCharId != 0) {
+        m_physicsWorld->setCharacterMovement(
+            m_playerCharId, glm::vec3(0.0f));
+    }
+}
+
+// break-B3: on-foot, busca un vehicle cercano y escribe "[F] Subir al X"
+// al `hud.interact_prompt`. Idempotente: re-evaluamos cada frame y
+// limpiamos cuando ya no aplica. Skip si dialog activo (ese sistema
+// ya owner-ea el prompt).
+void EditorApplication::updateMountPromptHint() {
+    if (!m_scene || Mood::GameState::dialogActive()) return;
+
+    const glm::vec3 charPos = (m_playerCharId != 0)
+        ? m_physicsWorld->characterPosition(m_playerCharId)
+        : m_playCamera.position();
+    constexpr f32 k_mountRadius = 3.0f;
+    std::string bestTag;
+    f32 bestDistSq = k_mountRadius * k_mountRadius;
+    m_scene->forEach<VehicleComponent, TransformComponent, TagComponent>(
+        [&](Entity, VehicleComponent&, TransformComponent& tf,
+            TagComponent& tag) {
+            const glm::vec3 d = tf.position - charPos;
+            const f32 dsq = glm::dot(d, d);
+            if (dsq < bestDistSq) {
+                bestDistSq = dsq;
+                bestTag    = tag.name;
             }
-        } else if (!wantCrouch && m_crouching) {
+        });
+    auto& promptRef = Mood::GameState::hud().interact_prompt;
+    if (!bestTag.empty()) {
+        std::string desired = "[F] Subir al " + bestTag;
+        if (promptRef != desired) promptRef = std::move(desired);
+    } else if (!promptRef.empty()
+               && promptRef.rfind("[F] Subir al ", 0) == 0) {
+        // Nosotros habiamos puesto el prompt y ya no aplica.
+        promptRef.clear();
+    }
+}
+
+// break-B3: char controller on-foot. WASD horizontal, jump con coyote +
+// buffer, crouch toggle, headbob, mouse-look. Lazy-create del char en el
+// primer tick. Asume early-returns de pausa/physicsWorld ya pasados.
+void EditorApplication::updateOnFootCharController(f32 dt) {
+    // Hito 30: shape standing/crouching + lazy create.
+    constexpr f32 k_charHalfHeightStand  = 0.5f;
+    constexpr f32 k_charHalfHeightCrouch = 0.1f;
+    constexpr f32 k_charRadius           = 0.4f;
+    constexpr f32 k_jumpVel              = 5.5f;
+    constexpr f32 k_jumpCooldown         = 0.2f;
+    // Hito 40 G: ventanas del char controller editables per-proyecto
+    // (ver `.moodproj`). Si no hay project cargado, usa los defaults
+    // del Hito 34 C.
+    const f32 k_coyoteWindow     = m_project ? m_project->coyoteWindowSec     : 0.10f;
+    const f32 k_jumpBufferWindow = m_project ? m_project->jumpBufferWindowSec : 0.15f;
+    // F2H41 fix lateral: tuning del feel de caminata. Pre-F2H41
+    // walk=4 m/s daba sensacion lenta vs convencion FPS (HL2 ~5.5,
+    // CoD ~6, Doom Eternal ~7). 5.5 m/s con freq de bob mas bajo
+    // (ver mas abajo) da pasitos largos + paso rapido sin sentir
+    // que el char "trota muy chiquito".
+    constexpr f32 k_walkSpeed            = 5.5f;
+    constexpr f32 k_crouchSpeed          = 3.0f;
+    if (m_playerCharId == 0) {
+        const f32 eyeStand = k_charHalfHeightStand + k_charRadius - 0.2f;
+        const glm::vec3 camPos = m_playCamera.position();
+        m_playerCharId = m_physicsWorld->createCharacter(
+            camPos - glm::vec3(0.0f, eyeStand, 0.0f),
+            k_charHalfHeightStand, k_charRadius);
+    }
+
+    const Uint8* keys = SDL_GetKeyboardState(nullptr);
+    // F2H48: si hay dialog activo, ignorar input de movimiento + jump
+    // + crouch (el jugador esta hablando — no deberia caminar). El
+    // mouse-look queda libre para que pueda mirar al NPC con
+    // naturalidad mientras conversa.
+    const bool dialogLocked = Mood::GameState::dialogActive();
+    glm::vec3 inputDir(0.0f);
+    if (!dialogLocked) {
+        if (keys[SDL_SCANCODE_W]) inputDir.z += 1.0f;
+        if (keys[SDL_SCANCODE_S]) inputDir.z -= 1.0f;
+        if (keys[SDL_SCANCODE_D]) inputDir.x += 1.0f;
+        if (keys[SDL_SCANCODE_A]) inputDir.x -= 1.0f;
+    }
+
+    // Crouch toggle. SetShape NO mueve el centro del char — ajusta
+    // pos manual para mantener base al ras (mismo patron que en
+    // PlayerApplication).
+    const bool wantCrouch = keys[SDL_SCANCODE_LCTRL] != 0;
+    constexpr f32 k_centerDelta = k_charHalfHeightStand - k_charHalfHeightCrouch;
+    if (wantCrouch && !m_crouching) {
+        if (m_physicsWorld->setCharacterShape(m_playerCharId,
+                                                k_charHalfHeightCrouch,
+                                                k_charRadius)) {
             const glm::vec3 p = m_physicsWorld->characterPosition(m_playerCharId);
             m_physicsWorld->setCharacterPosition(m_playerCharId,
-                p + glm::vec3(0.0f, k_centerDelta, 0.0f));
-            if (m_physicsWorld->setCharacterShape(m_playerCharId,
-                                                    k_charHalfHeightStand,
-                                                    k_charRadius)) {
-                m_crouching = false;
-            } else {
-                m_physicsWorld->setCharacterPosition(m_playerCharId, p);
-            }
+                p - glm::vec3(0.0f, k_centerDelta, 0.0f));
+            m_crouching = true;
         }
-
-        const f32 speed = m_crouching ? k_crouchSpeed : k_walkSpeed;
-        glm::vec3 horizVel(0.0f);
-        if (glm::length(inputDir) > 1e-4f) {
-            const glm::vec3 fwd = m_playCamera.forward();
-            const glm::vec3 fwdFlat = glm::normalize(glm::vec3(fwd.x, 0.0f, fwd.z));
-            const glm::vec3 right = glm::normalize(glm::cross(fwdFlat, glm::vec3(0, 1, 0)));
-            glm::vec3 dir = right * inputDir.x + fwdFlat * inputDir.z;
-            if (glm::length(dir) > 1e-4f) {
-                dir = glm::normalize(dir);
-                horizVel = dir * speed;
-            }
-        }
-
-        // Hito 34 C: coyote + jump buffer.
-        // - Coyote: refresh on-ground, decae fuera. Permite saltar hasta
-        //   k_coyoteWindow ms despues de dejar el suelo (caer de un borde
-        //   sigue dejando saltar un instante).
-        // - Buffer: el flanco up->down de SPACE resetea el timer; saltar
-        //   un instante ANTES de aterrizar igual gatilla cuando el char
-        //   toque el suelo.
-        const bool spacePressed = !dialogLocked && keys[SDL_SCANCODE_SPACE] != 0;
-        const bool spaceJustPressed = spacePressed && !m_spacePrevFrame;
-        m_spacePrevFrame = spacePressed;
-        if (spaceJustPressed) m_jumpBufferTimer = k_jumpBufferWindow;
-        m_jumpBufferTimer = std::max(0.0f, m_jumpBufferTimer - dt);
-
-        if (m_physicsWorld->isCharacterOnGround(m_playerCharId)) {
-            m_coyoteTimer = k_coyoteWindow;
+    } else if (!wantCrouch && m_crouching) {
+        const glm::vec3 p = m_physicsWorld->characterPosition(m_playerCharId);
+        m_physicsWorld->setCharacterPosition(m_playerCharId,
+            p + glm::vec3(0.0f, k_centerDelta, 0.0f));
+        if (m_physicsWorld->setCharacterShape(m_playerCharId,
+                                                k_charHalfHeightStand,
+                                                k_charRadius)) {
+            m_crouching = false;
         } else {
-            m_coyoteTimer = std::max(0.0f, m_coyoteTimer - dt);
+            m_physicsWorld->setCharacterPosition(m_playerCharId, p);
         }
+    }
 
-        m_jumpCooldown = (m_jumpCooldown > dt) ? (m_jumpCooldown - dt) : 0.0f;
-        f32 jumpImpulse = 0.0f;
-        if (m_jumpBufferTimer > 0.0f
-            && m_coyoteTimer > 0.0f
-            && m_jumpCooldown <= 0.0f
-            && !m_crouching) {
-            jumpImpulse = k_jumpVel;
-            m_jumpCooldown = k_jumpCooldown;
-            m_jumpBufferTimer = 0.0f;  // consumir el buffer
-            m_coyoteTimer = 0.0f;       // consumir el coyote (no double-jump)
+    const f32 speed = m_crouching ? k_crouchSpeed : k_walkSpeed;
+    glm::vec3 horizVel(0.0f);
+    if (glm::length(inputDir) > 1e-4f) {
+        const glm::vec3 fwd = m_playCamera.forward();
+        const glm::vec3 fwdFlat = glm::normalize(glm::vec3(fwd.x, 0.0f, fwd.z));
+        const glm::vec3 right = glm::normalize(glm::cross(fwdFlat, glm::vec3(0, 1, 0)));
+        glm::vec3 dir = right * inputDir.x + fwdFlat * inputDir.z;
+        if (glm::length(dir) > 1e-4f) {
+            dir = glm::normalize(dir);
+            horizVel = dir * speed;
         }
+    }
 
-        m_physicsWorld->setCharacterMovement(m_playerCharId,
-            glm::vec3(horizVel.x, jumpImpulse, horizVel.z));
+    // Hito 34 C: coyote + jump buffer.
+    // - Coyote: refresh on-ground, decae fuera. Permite saltar hasta
+    //   k_coyoteWindow ms despues de dejar el suelo (caer de un borde
+    //   sigue dejando saltar un instante).
+    // - Buffer: el flanco up->down de SPACE resetea el timer; saltar
+    //   un instante ANTES de aterrizar igual gatilla cuando el char
+    //   toque el suelo.
+    const bool spacePressed = !dialogLocked && keys[SDL_SCANCODE_SPACE] != 0;
+    const bool spaceJustPressed = spacePressed && !m_spacePrevFrame;
+    m_spacePrevFrame = spacePressed;
+    if (spaceJustPressed) m_jumpBufferTimer = k_jumpBufferWindow;
+    m_jumpBufferTimer = std::max(0.0f, m_jumpBufferTimer - dt);
 
-        // Hito 31 D: crouch lerp visual hacia el target del shape ya
-        // aplicado en Jolt. Velocidad 5/s ~ 200 ms para llegar al 100%.
-        const f32 crouchTarget = m_crouching ? 1.0f : 0.0f;
-        const f32 lerpRate = 5.0f * dt;
-        if (m_crouchVisualT < crouchTarget) {
-            m_crouchVisualT = std::min(crouchTarget, m_crouchVisualT + lerpRate);
-        } else if (m_crouchVisualT > crouchTarget) {
-            m_crouchVisualT = std::max(crouchTarget, m_crouchVisualT - lerpRate);
-        }
+    if (m_physicsWorld->isCharacterOnGround(m_playerCharId)) {
+        m_coyoteTimer = k_coyoteWindow;
+    } else {
+        m_coyoteTimer = std::max(0.0f, m_coyoteTimer - dt);
+    }
 
-        // Headbob: avanza el tiempo solo si el player camina horizontal
-        // y esta on-ground. Cuando se detiene, el bob "se queda" hasta
-        // que vuelva a moverse — el sync de camara aplica la sin().
-        const f32 horizSpeedSq = horizVel.x * horizVel.x + horizVel.z * horizVel.z;
-        const bool walking = horizSpeedSq > 0.01f
-                          && m_physicsWorld->isCharacterOnGround(m_playerCharId);
-        if (walking) m_headbobTime += dt;
-        // Hito 34 D: velocidad horizontal normalizada [0..1] contra
-        // walkSpeed para escalar la amplitud del bob en el sync de la
-        // camara. Crouched sale ~0.5 (crouchSpeed/walkSpeed) -> bob mas
-        // sutil cuando se camina agachado.
-        const f32 horizSpeed = std::sqrt(horizSpeedSq);
-        m_horizSpeed01 = walking
-            ? std::min(1.0f, horizSpeed / k_walkSpeed)
-            : 0.0f;
+    m_jumpCooldown = (m_jumpCooldown > dt) ? (m_jumpCooldown - dt) : 0.0f;
+    f32 jumpImpulse = 0.0f;
+    if (m_jumpBufferTimer > 0.0f
+        && m_coyoteTimer > 0.0f
+        && m_jumpCooldown <= 0.0f
+        && !m_crouching) {
+        jumpImpulse = k_jumpVel;
+        m_jumpCooldown = k_jumpCooldown;
+        m_jumpBufferTimer = 0.0f;  // consumir el buffer
+        m_coyoteTimer = 0.0f;       // consumir el coyote (no double-jump)
+    }
 
-        int mx = 0;
-        int my = 0;
-        SDL_GetRelativeMouseState(&mx, &my);
-        if (mx != 0 || my != 0) {
-            m_playCamera.applyMouseMove(static_cast<float>(mx), static_cast<float>(my));
-        }
+    m_physicsWorld->setCharacterMovement(m_playerCharId,
+        glm::vec3(horizVel.x, jumpImpulse, horizVel.z));
+
+    // Hito 31 D: crouch lerp visual hacia el target del shape ya
+    // aplicado en Jolt. Velocidad 5/s ~ 200 ms para llegar al 100%.
+    const f32 crouchTarget = m_crouching ? 1.0f : 0.0f;
+    const f32 lerpRate = 5.0f * dt;
+    if (m_crouchVisualT < crouchTarget) {
+        m_crouchVisualT = std::min(crouchTarget, m_crouchVisualT + lerpRate);
+    } else if (m_crouchVisualT > crouchTarget) {
+        m_crouchVisualT = std::max(crouchTarget, m_crouchVisualT - lerpRate);
+    }
+
+    // Headbob: avanza el tiempo solo si el player camina horizontal
+    // y esta on-ground. Cuando se detiene, el bob "se queda" hasta
+    // que vuelva a moverse — el sync de camara aplica la sin().
+    const f32 horizSpeedSq = horizVel.x * horizVel.x + horizVel.z * horizVel.z;
+    const bool walking = horizSpeedSq > 0.01f
+                      && m_physicsWorld->isCharacterOnGround(m_playerCharId);
+    if (walking) m_headbobTime += dt;
+    // Hito 34 D: velocidad horizontal normalizada [0..1] contra
+    // walkSpeed para escalar la amplitud del bob en el sync de la
+    // camara. Crouched sale ~0.5 (crouchSpeed/walkSpeed) -> bob mas
+    // sutil cuando se camina agachado.
+    const f32 horizSpeed = std::sqrt(horizSpeedSq);
+    m_horizSpeed01 = walking
+        ? std::min(1.0f, horizSpeed / k_walkSpeed)
+        : 0.0f;
+
+    int mx = 0;
+    int my = 0;
+    SDL_GetRelativeMouseState(&mx, &my);
+    if (mx != 0 || my != 0) {
+        m_playCamera.applyMouseMove(static_cast<float>(mx), static_cast<float>(my));
     }
 }
 
