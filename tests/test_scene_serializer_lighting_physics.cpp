@@ -628,10 +628,13 @@ TEST_CASE("SceneSerializer: round-trip VehicleComponent (F2H67)") {
     std::filesystem::remove(path);
 }
 
-// F2H70.3 H: las wheel-entities (tags wheel_FL/FR/RL/RR) que spawnea el
-// VehicleSystem tienen MeshRenderer, pero NO deben serializarse: el
-// VehicleSystem las rematerializa al cargar. Si se persistieran, recargar
-// dejaria 4 ruedas huerfanas + 4 respawneadas = 8.
+// F2H70.3 H: las wheel-entities que spawnea el VehicleSystem tienen
+// MeshRenderer, pero NO deben serializarse: el VehicleSystem las
+// rematerializa al cargar. Si se persistieran, recargar dejaria 4 ruedas
+// huerfanas + 4 respawneadas = 8.
+// F2H82: el skip se hace por componente `VehicleWheelMarker` (no por tag),
+// asi cubre tambien autos importados con nombres de rueda no canonicos
+// (ej. `f_t_l`, `RUEDA_*`).
 TEST_CASE("SceneSerializer: wheel-entities no se serializan (F2H70.3)") {
     AssetManager assets("assets", nullFactory());
     Scene scene;
@@ -640,12 +643,19 @@ TEST_CASE("SceneSerializer: wheel-entities no se serializan (F2H70.3)") {
     VehicleComponent veh{};
     veh.configPath = "vehicles/banshee_sa.moodvehicle";
     chassis.addComponent<VehicleComponent>(veh);
+    const u32 chassisHandle = static_cast<u32>(chassis.handle());
 
     // 4 wheel-entities como las crea VehicleSystem::spawnPendingWheels:
-    // tag canonico + MeshRenderer (que normalmente las haria serializables).
-    for (const char* name : {"wheel_FL", "wheel_FR", "wheel_RL", "wheel_RR"}) {
-        Entity w = scene.createEntity(name);
+    // tag canonico + MeshRenderer + VehicleWheelMarker (marker que el
+    // serializer usa para reconocer y skipear estas entities).
+    const char* names[4] = {"wheel_FL", "wheel_FR", "wheel_RL", "wheel_RR"};
+    for (int i = 0; i < 4; ++i) {
+        Entity w = scene.createEntity(names[i]);
         w.addComponent<MeshRendererComponent>(0u, 0u);
+        VehicleWheelMarker mk{};
+        mk.chassisHandle = chassisHandle;
+        mk.wheelIndex = i;
+        w.addComponent<VehicleWheelMarker>(mk);
     }
 
     GridMap empty(1u, 1u, 1.0f);
