@@ -2,6 +2,11 @@
 // loadMaterial / loadMaterialFromTexture / createMaterialFromTexture /
 // createMaterialsForMesh / createMaterial / getMaterial / materialPathOf /
 // saveMaterial.
+//
+// break-B5: storage delegado a AssetRegistry<MaterialAsset>. Material
+// usa `addUncached` para `createMaterialFromTexture` (cada llamada
+// genera un id distinto sin cache para que cada entity tenga material
+// editable propio).
 
 #include "engine/assets/manager/AssetManager.h"
 
@@ -23,9 +28,8 @@ constexpr const char* k_defaultMaterialPath = "__default_material";
 } // namespace
 
 MaterialAssetId AssetManager::loadMaterial(std::string_view logicalPath) {
-    const std::string key(logicalPath);
-    if (auto it = m_materialCache.find(key); it != m_materialCache.end()) {
-        return it->second;
+    if (m_materials.contains(logicalPath)) {
+        return m_materials.findByPath(logicalPath);
     }
 
     const auto fs = m_vfs.resolve(logicalPath);
@@ -33,7 +37,7 @@ MaterialAssetId AssetManager::loadMaterial(std::string_view logicalPath) {
         Log::assets()->warn(
             "AssetManager: material path '{}' rechazado por VFS. Fallback al default.",
             logicalPath);
-        m_materialCache.emplace(key, missingMaterialId());
+        m_materials.cacheAsFallback(logicalPath);
         return missingMaterialId();
     }
 
@@ -42,7 +46,7 @@ MaterialAssetId AssetManager::loadMaterial(std::string_view logicalPath) {
         Log::assets()->warn(
             "AssetManager: no se pudo abrir material '{}'. Fallback al default.",
             fs.generic_string());
-        m_materialCache.emplace(key, missingMaterialId());
+        m_materials.cacheAsFallback(logicalPath);
         return missingMaterialId();
     }
 
@@ -53,10 +57,11 @@ MaterialAssetId AssetManager::loadMaterial(std::string_view logicalPath) {
         Log::assets()->warn(
             "AssetManager: material '{}' no es JSON valido: {}. Fallback al default.",
             fs.generic_string(), e.what());
-        m_materialCache.emplace(key, missingMaterialId());
+        m_materials.cacheAsFallback(logicalPath);
         return missingMaterialId();
     }
 
+    const std::string key{logicalPath};
     auto mat = std::make_unique<MaterialAsset>();
     mat->logicalPath = key;
 
@@ -115,10 +120,7 @@ MaterialAssetId AssetManager::loadMaterial(std::string_view logicalPath) {
     if (j.contains("refraction_strength"))  mat->refractionStrength = j.at("refraction_strength").get<f32>();
     if (j.contains("cast_translucent_shadow")) mat->castTranslucentShadow = j.at("cast_translucent_shadow").get<bool>();
 
-    const MaterialAssetId id = static_cast<MaterialAssetId>(m_materials.size());
-    m_materials.push_back(std::move(mat));
-    m_materialPaths.push_back(key);
-    m_materialCache.emplace(key, id);
+    const MaterialAssetId id = m_materials.add(key, std::move(mat));
     Log::assets()->info("AssetManager: cargado material {} -> id {}", logicalPath, id);
     return id;
 }
@@ -128,8 +130,8 @@ MaterialAssetId AssetManager::loadMaterialFromTexture(TextureAssetId textureId) 
     // validos en el VFS (solo permitimos paths logicos relativos), no
     // colisionan con materiales reales que cargan por path.
     const std::string key = "__tex#" + std::to_string(textureId);
-    if (auto it = m_materialCache.find(key); it != m_materialCache.end()) {
-        return it->second;
+    if (m_materials.contains(key)) {
+        return m_materials.findByPath(key);
     }
 
     auto mat = std::make_unique<MaterialAsset>();
@@ -144,11 +146,7 @@ MaterialAssetId AssetManager::loadMaterialFromTexture(TextureAssetId textureId) 
     mat->roughnessMult = 1.0f;
     mat->aoMult        = 1.0f;
 
-    const MaterialAssetId id = static_cast<MaterialAssetId>(m_materials.size());
-    m_materials.push_back(std::move(mat));
-    m_materialPaths.push_back(key);
-    m_materialCache.emplace(key, id);
-    return id;
+    return m_materials.add(key, std::move(mat));
 }
 
 MaterialAssetId AssetManager::createMaterialFromTexture(TextureAssetId textureId) {
@@ -166,13 +164,10 @@ MaterialAssetId AssetManager::createMaterialFromTexture(TextureAssetId textureId
     mat->roughnessMult = 1.0f;
     mat->aoMult        = 1.0f;
 
-    const MaterialAssetId id = static_cast<MaterialAssetId>(m_materials.size());
-    m_materials.push_back(std::move(mat));
-    // El sentinel va a m_materialPaths (NO empty) para que materialPathOf
-    // lo devuelva al serializer, que lo reconoce y persiste el path de
-    // la textura subyacente. NO se cachea (no entra a m_materialCache).
-    m_materialPaths.push_back(sentinel);
-    return id;
+    // break-B5: addUncached -> el sentinel va a m_paths pero NO al cache,
+    // preservando que dos llamadas con la misma textura produzcan ids
+    // distintos.
+    return m_materials.addUncached(sentinel, std::move(mat));
 }
 
 std::vector<MaterialAssetId> AssetManager::createMaterialsForMesh(MeshAssetId meshId) {
@@ -224,35 +219,35 @@ std::vector<MaterialAssetId> AssetManager::createMaterialsForMesh(MeshAssetId me
 
 MaterialAssetId AssetManager::createMaterial(const MaterialAsset& prototype) {
     auto mat = std::make_unique<MaterialAsset>(prototype);
-    const MaterialAssetId id = static_cast<MaterialAssetId>(m_materials.size());
-    const std::string key = "__runtime#" + std::to_string(id);
+    // Sentinel `__runtime#<id>`: el id final lo determina el registry,
+    // pero como `add` toma el path por valor primero, calculamos el id
+    // proyectado via count() (proximo slot).
+    const MaterialAssetId projectedId =
+        static_cast<MaterialAssetId>(m_materials.count());
+    const std::string key = "__runtime#" + std::to_string(projectedId);
     mat->logicalPath = key;
-    m_materials.push_back(std::move(mat));
-    m_materialPaths.push_back(key);
-    m_materialCache.emplace(key, id);
-    return id;
+    return m_materials.add(key, std::move(mat));
 }
 
 MaterialAsset* AssetManager::getMaterial(MaterialAssetId id) const {
-    if (id >= m_materials.size()) {
-        return m_materials[missingMaterialId()].get();
-    }
-    return m_materials[id].get();
+    // break-B5: misma loophole que getAnimationClip — retorno mutable
+    // desde const method via `all()[id].get()`.
+    const auto& v = m_materials.all();
+    if (v.empty()) return nullptr;
+    if (id >= v.size()) return v[0].get();
+    return v[id].get();
 }
 
 std::string AssetManager::materialPathOf(MaterialAssetId id) const {
-    if (id >= m_materialPaths.size()) {
-        return m_materialPaths[missingMaterialId()];
-    }
-    return m_materialPaths[id];
+    return m_materials.pathOf(id);
 }
 
 bool AssetManager::saveMaterial(MaterialAssetId id) {
-    if (id == 0 || id >= m_materials.size()) {
+    if (id == 0 || id >= m_materials.count()) {
         Log::assets()->warn("saveMaterial: id {} fuera de rango", id);
         return false;
     }
-    const std::string& logicalPath = m_materialPaths[id];
+    const std::string logicalPath = m_materials.pathOf(id);
     if (logicalPath.empty() ||
         logicalPath == k_defaultMaterialPath ||
         logicalPath.rfind("__tex#", 0) == 0 ||
@@ -270,7 +265,7 @@ bool AssetManager::saveMaterial(MaterialAssetId id) {
         return false;
     }
 
-    const MaterialAsset* mat = m_materials[id].get();
+    const MaterialAsset* mat = m_materials.get(id);
     if (mat == nullptr) {
         Log::assets()->warn("saveMaterial: material id {} sin instancia", id);
         return false;

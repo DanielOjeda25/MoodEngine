@@ -113,11 +113,10 @@ AssetManager::AssetManager(std::string rootDir,
             std::string("AssetManager: path logico 'textures/missing.png' rechazado por VFS"));
     }
     try {
-        m_textures.emplace_back(m_textureFactory(missingFs.generic_string()));
-        m_texturePaths.emplace_back(k_missingTexturePath);
+        m_textures.initFallback(m_textureFactory(missingFs.generic_string()),
+                                  k_missingTexturePath);
         std::error_code ec_mtime;
         m_textureMtimes.push_back(std::filesystem::last_write_time(missingFs, ec_mtime));
-        m_textureCache.emplace(k_missingTexturePath, missingTextureId());
     } catch (const std::exception& e) {
         throw std::runtime_error(
             std::string("AssetManager: no se pudo cargar missing.png ('") +
@@ -132,9 +131,10 @@ AssetManager::AssetManager(std::string rootDir,
             std::string("AssetManager: path logico 'audio/missing.wav' rechazado por VFS"));
     }
     try {
-        m_audioClips.emplace_back(m_audioFactory(k_missingAudioPath,
-                                                  missingAudioFs.generic_string()));
-        m_audioCache.emplace(k_missingAudioPath, missingAudioId());
+        m_audioClips.initFallback(
+            m_audioFactory(k_missingAudioPath,
+                            missingAudioFs.generic_string()),
+            k_missingAudioPath);
     } catch (const std::exception& e) {
         throw std::runtime_error(
             std::string("AssetManager: no se pudo cargar missing.wav ('") +
@@ -163,8 +163,7 @@ AssetManager::AssetManager(std::string rootDir,
                 "AssetManager: MeshFactory devolvio null para el cubo fallback");
         }
         missingMesh->submeshes.push_back(std::move(sm));
-        m_meshes.emplace_back(std::move(missingMesh));
-        m_meshCache.emplace(k_missingMeshPath, missingMeshId());
+        m_meshes.initFallback(std::move(missingMesh), k_missingMeshPath);
     }
     Log::assets()->info("AssetManager: fallback mesh 'cubo primitivo' generado en slot 0");
 
@@ -181,12 +180,12 @@ AssetManager::AssetManager(std::string rootDir,
         sm.mesh = m_meshFactory(sphereData.vertices, sphereData.attributes);
         if (sm.mesh != nullptr) {
             sphereMesh->submeshes.push_back(std::move(sm));
-            m_primitiveSphereId = static_cast<MeshAssetId>(m_meshes.size());
-            m_meshes.emplace_back(std::move(sphereMesh));
-            m_meshCache.emplace("__primitive_sphere", m_primitiveSphereId);
+            const u32 vc = sm.vertexCount;
+            m_primitiveSphereId = m_meshes.add("__primitive_sphere",
+                                                 std::move(sphereMesh));
             Log::assets()->info(
                 "AssetManager: esfera primitiva generada en slot {} ({} verts)",
-                m_primitiveSphereId, sm.vertexCount);
+                m_primitiveSphereId, vc);
         } else {
             Log::assets()->warn("AssetManager: MeshFactory devolvio null para la esfera (skip)");
         }
@@ -199,9 +198,7 @@ AssetManager::AssetManager(std::string rootDir,
         auto empty = std::make_unique<SavedPrefab>();
         empty->name = "(empty)";
         empty->root.tag = ""; // se completa en spawn si se usa como fallback
-        m_prefabs.emplace_back(std::move(empty));
-        m_prefabPaths.emplace_back(k_emptyPrefabPath);
-        m_prefabCache.emplace(k_emptyPrefabPath, missingPrefabId());
+        m_prefabs.initFallback(std::move(empty), k_emptyPrefabPath);
     }
     Log::assets()->info("AssetManager: prefab 'vacio' generado en slot 0");
 
@@ -220,9 +217,7 @@ AssetManager::AssetManager(std::string rootDir,
         // usa por no tener material asignado, queremos que el patron magenta
         // de missing.png salga visible (no blanco puro disfrazado de feature).
         def->useAlbedoMap = true;
-        m_materials.emplace_back(std::move(def));
-        m_materialPaths.emplace_back(k_defaultMaterialPath);
-        m_materialCache.emplace(k_defaultMaterialPath, missingMaterialId());
+        m_materials.initFallback(std::move(def), k_defaultMaterialPath);
     }
     Log::assets()->info("AssetManager: material default generado en slot 0");
 
@@ -289,8 +284,10 @@ std::unique_ptr<IMesh> AssetManager::createDynamicMesh(
 
 usize AssetManager::reloadChanged() {
     usize reloaded = 0;
-    for (TextureAssetId id = 0; id < m_textures.size(); ++id) {
-        const auto fs = m_vfs.resolve(m_texturePaths[id]);
+    const usize n = m_textures.count();
+    for (TextureAssetId id = 0; id < n; ++id) {
+        const std::string path = m_textures.pathOf(id);
+        const auto fs = m_vfs.resolve(path);
         if (fs.empty()) continue; // path logico invalido (no deberia pasar)
 
         std::error_code ec;
@@ -300,18 +297,17 @@ usize AssetManager::reloadChanged() {
             // (arruinaria referencias validas); solo logueamos una vez.
             continue;
         }
-        if (mtime == m_textureMtimes[id]) continue;
+        if (id < m_textureMtimes.size() && mtime == m_textureMtimes[id]) continue;
 
         try {
             auto fresh = m_textureFactory(fs.generic_string());
-            m_textures[id] = std::move(fresh); // dtor del viejo -> glDeleteTextures
-            m_textureMtimes[id] = mtime;
+            m_textures.replace(id, std::move(fresh)); // dtor del viejo -> glDeleteTextures
+            if (id < m_textureMtimes.size()) m_textureMtimes[id] = mtime;
             ++reloaded;
-            Log::assets()->info("AssetManager: recargada '{}' (id {})",
-                                 m_texturePaths[id], id);
+            Log::assets()->info("AssetManager: recargada '{}' (id {})", path, id);
         } catch (const std::exception& e) {
             Log::assets()->warn("AssetManager: recarga fallo para '{}': {}",
-                                m_texturePaths[id], e.what());
+                                path, e.what());
         }
     }
     return reloaded;

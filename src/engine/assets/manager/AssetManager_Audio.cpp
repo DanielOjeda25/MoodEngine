@@ -1,5 +1,9 @@
 // F2H24 Bloque C: AssetManager — operaciones sobre clips de audio.
 // loadAudio / getAudio / audioPathOf.
+//
+// break-B5: storage delegado a AssetRegistry<AudioClip>. audioPathOf
+// devuelve el path agregado al registry (en sync con AudioClip::logicalPath()
+// que el factory rellena con el mismo string).
 
 #include "engine/assets/manager/AssetManager.h"
 
@@ -11,9 +15,8 @@
 namespace Mood {
 
 AudioAssetId AssetManager::loadAudio(std::string_view logicalPath) {
-    const std::string key(logicalPath);
-    if (auto it = m_audioCache.find(key); it != m_audioCache.end()) {
-        return it->second;
+    if (m_audioClips.contains(logicalPath)) {
+        return m_audioClips.findByPath(logicalPath);
     }
 
     const auto fs = m_vfs.resolve(logicalPath);
@@ -21,23 +24,23 @@ AudioAssetId AssetManager::loadAudio(std::string_view logicalPath) {
         Log::assets()->warn(
             "AssetManager: audio path '{}' rechazado por VFS. Fallback a missing.",
             logicalPath);
-        m_audioCache.emplace(key, missingAudioId());
+        m_audioClips.cacheAsFallback(logicalPath);
         return missingAudioId();
     }
 
     try {
+        const std::string key{logicalPath};
         auto clip = m_audioFactory(key, fs.generic_string());
-        const AudioAssetId id = static_cast<AudioAssetId>(m_audioClips.size());
-        m_audioClips.push_back(std::move(clip));
-        m_audioCache.emplace(key, id);
+        AudioClip* clipPtr = clip.get();  // capture before move
+        const AudioAssetId id = m_audioClips.add(key, std::move(clip));
         Log::assets()->info("AssetManager: cargado audio {} -> id {} ({:.2f}s, {}Hz, {}ch)",
                              logicalPath, id,
-                             m_audioClips.back()->durationSeconds(),
-                             m_audioClips.back()->sampleRate(),
-                             m_audioClips.back()->channels());
+                             clipPtr->durationSeconds(),
+                             clipPtr->sampleRate(),
+                             clipPtr->channels());
         return id;
     } catch (const std::exception& e) {
-        m_audioCache.emplace(key, missingAudioId());
+        m_audioClips.cacheAsFallback(logicalPath);
         Log::assets()->warn(
             "AssetManager: fallback a missing.wav para '{}' ({})",
             logicalPath, e.what());
@@ -46,17 +49,15 @@ AudioAssetId AssetManager::loadAudio(std::string_view logicalPath) {
 }
 
 AudioClip* AssetManager::getAudio(AudioAssetId id) const {
-    if (id >= m_audioClips.size()) {
-        return m_audioClips[missingAudioId()].get();
-    }
-    return m_audioClips[id].get();
+    // break-B5: loophole para retornar mutable desde const method.
+    const auto& v = m_audioClips.all();
+    if (v.empty()) return nullptr;
+    if (id >= v.size()) return v[0].get();
+    return v[id].get();
 }
 
 std::string AssetManager::audioPathOf(AudioAssetId id) const {
-    if (id >= m_audioClips.size()) {
-        return m_audioClips[missingAudioId()]->logicalPath();
-    }
-    return m_audioClips[id]->logicalPath();
+    return m_audioClips.pathOf(id);
 }
 
 } // namespace Mood

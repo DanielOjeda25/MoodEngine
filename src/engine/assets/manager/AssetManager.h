@@ -188,7 +188,7 @@ public:
     std::filesystem::path resolvePath(std::string_view logicalPath) const;
 
     /// @brief Cantidad de texturas en cache (incluye missing).
-    usize textureCount() const { return m_textures.size(); }
+    usize textureCount() const { return m_textures.count(); }
 
     /// @brief Revisa el mtime de cada PNG cargado y re-invoca la factoria
     ///        para las texturas cuyo archivo cambio en disco. Conserva el
@@ -215,7 +215,7 @@ public:
     AudioAssetId missingAudioId() const { return 0; }
 
     /// @brief Cantidad de clips cacheados (incluye missing).
-    usize audioCount() const { return m_audioClips.size(); }
+    usize audioCount() const { return m_audioClips.count(); }
 
     /// @brief Path logico con el que se cargo un clip (para serializadores y
     ///        el AssetBrowser). Id invalido devuelve el path de missing.
@@ -248,7 +248,7 @@ public:
     std::string meshPathOf(MeshAssetId id) const;
 
     /// @brief Cantidad de meshes cacheados (incluye missing).
-    usize meshCount() const { return m_meshes.size(); }
+    usize meshCount() const { return m_meshes.count(); }
 
     /// @brief F2H11: crea un IMesh **dinamico** que NO se persiste en
     ///        el cache de meshes. Pensado para geometria runtime
@@ -278,7 +278,7 @@ public:
     std::string prefabPathOf(PrefabAssetId id) const;
 
     /// @brief Cantidad de prefabs cacheados (incluye el slot 0).
-    usize prefabCount() const { return m_prefabs.size(); }
+    usize prefabCount() const { return m_prefabs.count(); }
 
     // ---- Material (Hito 17) ----
 
@@ -348,7 +348,7 @@ public:
     bool saveMaterial(MaterialAssetId id);
 
     /// @brief Cantidad de materiales cacheados (incluye slot 0).
-    usize materialCount() const { return m_materials.size(); }
+    usize materialCount() const { return m_materials.count(); }
 
     /// @brief Hito 26: arma el vector de MaterialAssetIds para un mesh
     ///        recien spawneado/dropeado, una entrada por submesh. Si el
@@ -488,30 +488,24 @@ private:
     AudioClipFactory m_audioFactory;
     MeshFactory m_meshFactory;
 
-    // Texturas (Hito 5).
-    std::unordered_map<std::string, TextureAssetId> m_textureCache;
-    std::vector<std::unique_ptr<ITexture>> m_textures; // [0] = missing
-    std::vector<std::string> m_texturePaths;           // paralelo a m_textures
-    std::vector<std::filesystem::file_time_type> m_textureMtimes; // paralelo
+    // Texturas (Hito 5). [0] = missing. break-B5: storage via registry; las
+    // mtimes son una sidecar para hot-reload (NO viven en el registry —
+    // son metadata propia del consumer).
+    AssetRegistry<ITexture> m_textures;
+    std::vector<std::filesystem::file_time_type> m_textureMtimes; // paralelo a m_textures
 
-    // Audio (Hito 9).
-    std::unordered_map<std::string, AudioAssetId> m_audioCache;
-    std::vector<std::unique_ptr<AudioClip>> m_audioClips; // [0] = missing.wav
+    // Audio (Hito 9). [0] = missing.wav (silencio 100ms).
+    AssetRegistry<AudioClip> m_audioClips;
 
     // Mesh (Hito 10). [0] = cubo primitivo (fallback).
-    std::unordered_map<std::string, MeshAssetId> m_meshCache;
-    std::vector<std::unique_ptr<MeshAsset>> m_meshes;
+    AssetRegistry<MeshAsset> m_meshes;
     MeshAssetId m_primitiveSphereId = 0; // Hito 17, llenado en el ctor
 
     // Prefab (Hito 14). [0] = prefab vacio (root sin componentes).
-    std::unordered_map<std::string, PrefabAssetId> m_prefabCache;
-    std::vector<std::unique_ptr<SavedPrefab>> m_prefabs;
-    std::vector<std::string> m_prefabPaths; // paralelo a m_prefabs
+    AssetRegistry<SavedPrefab> m_prefabs;
 
     // Material (Hito 17). [0] = default material (albedo blanco, mate).
-    std::unordered_map<std::string, MaterialAssetId> m_materialCache;
-    std::vector<std::unique_ptr<MaterialAsset>> m_materials;
-    std::vector<std::string> m_materialPaths; // paralelo a m_materials
+    AssetRegistry<MaterialAsset> m_materials;
 
     // Dialog (F2H48). [0] = asset vacio (sin nodos / sin start_node).
     // break-B5: storage uniforme via AssetRegistry — primera familia
@@ -528,9 +522,7 @@ private:
     AssetRegistry<Quest::Asset> m_quests;
 
     // VehicleConfig (F2H67). [0] = fallback generico (makeFallbackGenericSedan).
-    std::unordered_map<std::string, VehicleConfigAssetId> m_vehicleConfigCache;
-    std::vector<std::unique_ptr<vehicle::VehicleConfig>> m_vehicleConfigs;
-    std::vector<std::string> m_vehicleConfigPaths; // paralelo a m_vehicleConfigs
+    AssetRegistry<vehicle::VehicleConfig> m_vehicleConfigs;
 };
 
 } // namespace Mood

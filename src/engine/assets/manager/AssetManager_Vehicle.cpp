@@ -13,6 +13,9 @@
 //   amigables al dev (mm, kg, HP, Nm @ RPM) con conversion interna al SI.
 //   Ver ejemplo en docs/asset_conventions.md o
 //   assets/vehicles/delorean_dmc12/delorean_dmc12.moodvehicle.
+//
+// break-B5: storage delegado a AssetRegistry<vehicle::VehicleConfig>.
+// Slot 0 sigue siendo lazy-init en la primera llamada a loadVehicleConfig.
 
 #include "engine/assets/manager/AssetManager.h"
 
@@ -142,9 +145,6 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
                 d[2].get<f32>() / 2000.0f);
         }
         cfg.chassisMass = jb.value("mass_kg", cfg.chassisMass);
-        // F2H70.3 Bloque F: mesh visual self-contained. Path logico relativo
-        // a assets/ — usado por el viewport drop para spawnear el entity con
-        // su MeshRenderer ya cableado.
         cfg.meshPath = jb.value("mesh_path", cfg.meshPath);
         if (jb.contains("mass_center_override_mm")
             && jb.at("mass_center_override_mm").is_array()
@@ -155,9 +155,6 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
                 mc[1].get<f32>() / 1000.0f,
                 mc[2].get<f32>() / 1000.0f);
         }
-        // F2H82 Bloque B: offset de la caja fisica respecto al origen del
-        // modelo. Opcional — sin este campo, la caja queda centrada en el
-        // origen (caso DeLorean: origen == centro del cuerpo).
         if (jb.contains("box_offset_mm") && jb.at("box_offset_mm").is_array()
             && jb.at("box_offset_mm").size() >= 3) {
             const auto& bo = jb.at("box_offset_mm");
@@ -166,19 +163,8 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
                 bo[1].get<f32>() / 1000.0f,
                 bo[2].get<f32>() / 1000.0f);
         }
-        // F2H70.2: damping del chassis. Opcional — si no aparece, el config
-        // mantiene los defaults (0.5 / 0.5 arcade) del struct. Bajar a
-        // 0.05-0.1 para feel sim (momentum largo, sensacion pesada);
-        // subir a 0.7-1.0 para arcade snappy (el auto se detiene rapido).
         cfg.chassisLinearDamping  = jb.value("linear_damping",  cfg.chassisLinearDamping);
         cfg.chassisAngularDamping = jb.value("angular_damping", cfg.chassisAngularDamping);
-        // F2H70.2 D5: mesh_yaw_offset_deg / mesh_forward_axis. El campo
-        // canonical es `mesh_yaw_offset_deg` (numero en grados). Como azucar
-        // para el dev, aceptamos tambien `mesh_forward_axis` con un string
-        // ("+Z" | "-Z" | "+X" | "-X") y lo convertimos al yaw equivalente.
-        // Convencion: axis "+Z" = 0° (default engine forward), "+X" = -90°,
-        // "-Z" = 180°, "-X" = +90°. Si ambos campos aparecen, gana el
-        // explicit numerico.
         if (jb.contains("mesh_yaw_offset_deg")) {
             cfg.meshYawOffsetDeg = jb.value("mesh_yaw_offset_deg",
                                               cfg.meshYawOffsetDeg);
@@ -197,7 +183,6 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
         }
     }
 
-    // axles → expand to 4 wheels
     if (j.contains("axle_front") && j.at("axle_front").is_object()) {
         applyAxleV2(j.at("axle_front"), cfg,
                      vehicle::WheelFL, vehicle::WheelFR, /*isFront*/true);
@@ -207,15 +192,6 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
                      vehicle::WheelRL, vehicle::WheelRR, /*isFront*/false);
     }
 
-    // F2H82 Bloque B: binding visual de las ruedas para el centrado en runtime.
-    // Lo escribe el importador cuando el .glb NO esta procesado (ruedas con
-    // nombres reales y sin centrar en el hub). Opcional: si no aparece, el
-    // VehicleSystem usa los sub-meshes canonicos `wheel_FL/FR/RL/RR` con pivot
-    // 0 (DeLorean y modelos procesados por tools/glb/split_wheels.py).
-    //   "mesh_wheels": {
-    //     "FL": { "submesh": "RUEDRA_DEL_IZQ", "hub_offset_mm": [x, y, z] },
-    //     "FR": { ... }, "RL": { ... }, "RR": { ... }
-    //   }
     if (j.contains("mesh_wheels") && j.at("mesh_wheels").is_object()) {
         const auto& jw = j.at("mesh_wheels");
         constexpr std::array<std::pair<const char*, vehicle::WheelIndex>, 4>
@@ -238,7 +214,6 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
         }
     }
 
-    // engine
     if (j.contains("engine") && j.at("engine").is_object()) {
         const auto& je = j.at("engine");
         cfg.engine.maxTorque       = je.value("peak_torque_nm",  cfg.engine.maxTorque);
@@ -249,7 +224,6 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
         cfg.engine.inertia         = je.value("inertia",         cfg.engine.inertia);
         cfg.engine.angularDamping  = je.value("angular_damping", cfg.engine.angularDamping);
 
-        // gear ratios: explicit override gana; sino transmission preset.
         if (je.contains("gear_ratios") && je.at("gear_ratios").is_array()) {
             cfg.engine.gearRatios.clear();
             for (const auto& r : je.at("gear_ratios"))
@@ -267,12 +241,6 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
         }
     }
 
-    // brakes: derivar brakeTorque desde deceleracion target + mass + radius.
-    // Patron Source: el dev declara "quiero frenar a X m/s^2 desde Y km/h"
-    // en lugar de Nm crudos.
-    //   torque_por_wheel = mass * deceleration * radius / n_wheels_brake
-    // Asumimos las 4 wheels frenan (cfg actual no expone brake_factor
-    // distinto entre axles; queda para Bloque F+).
     if (j.contains("brakes") && j.at("brakes").is_object()) {
         const auto& jb = j.at("brakes");
         const f32 decel_target = jb.value("deceleration_target_mps2", 7.0f);
@@ -284,19 +252,14 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
             cfg.engine.brakeTorque * (1.0f + handbrake_ratio * 2.0f);
     }
 
-    // steering
     if (j.contains("steering") && j.at("steering").is_object()) {
         const auto& js = j.at("steering");
-        // max_angle_deg_slow es el "angle a baja velocidad" en Source. v1
-        // del engine usa un solo angulo — tomamos el slow (mas tipico, ~30°).
         cfg.maxSteerAngleDeg = js.value("max_angle_deg_slow",
             js.value("max_angle_deg", cfg.maxSteerAngleDeg));
         cfg.steerLerpSpeed = js.value("throttle_steering_rest_rate_slow",
             js.value("steer_lerp_speed", cfg.steerLerpSpeed));
     }
 
-    // F2H82 polish: factor de escala visual del mesh (back-compat: si no esta
-    // en el JSON, se asume 1.0 — mesh ya viene en metros).
     cfg.meshImportScale = j.value("mesh_scale", 1.0f);
 
     return cfg;
@@ -343,8 +306,6 @@ vehicle::VehicleConfig parseVehicleConfigJsonV1(const nlohmann::json& j) {
     cfg.maxSteerAngleDeg = j.value("maxSteerAngleDeg", cfg.maxSteerAngleDeg);
     cfg.steerLerpSpeed   = j.value("steerLerpSpeed",   cfg.steerLerpSpeed);
 
-    // Wheels: array de 4. Si trae menos, los faltantes mantienen los
-    // defaults SA. Cada wheel acepta un subset de campos (todos opcionales).
     if (j.contains("wheels") && j.at("wheels").is_array()) {
         const auto& jw = j.at("wheels");
         const usize n = std::min<usize>(jw.size(), vehicle::WheelCount);
@@ -384,20 +345,18 @@ VehicleConfigAssetId AssetManager::loadVehicleConfig(
     std::string_view logicalPath) {
     // Lazy-init del slot 0 (default SA). El AssetManager constructor no
     // crea este slot por ahora porque agregaria una dependencia mas; lo
-    // generamos en la primera llamada.
-    if (m_vehicleConfigs.empty()) {
+    // generamos en la primera llamada. break-B5: initFallback es
+    // idempotente, repetidas llamadas son no-op.
+    if (m_vehicleConfigs.count() == 0) {
         auto def = std::make_unique<vehicle::VehicleConfig>(
             vehicle::makeFallbackGenericSedan());
-        m_vehicleConfigs.push_back(std::move(def));
-        m_vehicleConfigPaths.emplace_back(k_defaultVehiclePath);
+        m_vehicleConfigs.initFallback(std::move(def), k_defaultVehiclePath);
     }
 
-    const std::string key(logicalPath);
-    if (key.empty()) return missingVehicleConfigId();
+    if (logicalPath.empty()) return missingVehicleConfigId();
 
-    if (auto it = m_vehicleConfigCache.find(key);
-        it != m_vehicleConfigCache.end()) {
-        return it->second;
+    if (m_vehicleConfigs.contains(logicalPath)) {
+        return m_vehicleConfigs.findByPath(logicalPath);
     }
 
     const auto fs = m_vfs.resolve(logicalPath);
@@ -405,7 +364,7 @@ VehicleConfigAssetId AssetManager::loadVehicleConfig(
         Log::assets()->warn(
             "AssetManager: vehicle path '{}' rechazado por VFS. Fallback al default SA.",
             logicalPath);
-        m_vehicleConfigCache.emplace(key, missingVehicleConfigId());
+        m_vehicleConfigs.cacheAsFallback(logicalPath);
         return missingVehicleConfigId();
     }
     std::ifstream in(fs);
@@ -413,7 +372,7 @@ VehicleConfigAssetId AssetManager::loadVehicleConfig(
         Log::assets()->warn(
             "AssetManager: no se pudo abrir vehicle '{}'. Fallback al default SA.",
             fs.generic_string());
-        m_vehicleConfigCache.emplace(key, missingVehicleConfigId());
+        m_vehicleConfigs.cacheAsFallback(logicalPath);
         return missingVehicleConfigId();
     }
     nlohmann::json j;
@@ -423,7 +382,7 @@ VehicleConfigAssetId AssetManager::loadVehicleConfig(
         Log::assets()->warn(
             "AssetManager: vehicle '{}' no es JSON valido ({}). Fallback al default SA.",
             fs.generic_string(), e.what());
-        m_vehicleConfigCache.emplace(key, missingVehicleConfigId());
+        m_vehicleConfigs.cacheAsFallback(logicalPath);
         return missingVehicleConfigId();
     }
 
@@ -432,43 +391,41 @@ VehicleConfigAssetId AssetManager::loadVehicleConfig(
         Log::assets()->warn(
             "AssetManager: vehicle '{}' parseado pero config invalido. Fallback al default SA.",
             fs.generic_string());
-        m_vehicleConfigCache.emplace(key, missingVehicleConfigId());
+        m_vehicleConfigs.cacheAsFallback(logicalPath);
         return missingVehicleConfigId();
     }
-    const VehicleConfigAssetId id =
-        static_cast<VehicleConfigAssetId>(m_vehicleConfigs.size());
-    m_vehicleConfigs.push_back(std::move(cfg));
-    m_vehicleConfigPaths.push_back(key);
-    m_vehicleConfigCache.emplace(key, id);
+    const VehicleConfigAssetId id = m_vehicleConfigs.add(
+        std::string{logicalPath}, std::move(cfg));
     Log::assets()->info(
-        "AssetManager: vehicle '{}' cargado en slot {}.", key, id);
+        "AssetManager: vehicle '{}' cargado en slot {}.", logicalPath, id);
     return id;
 }
 
 const vehicle::VehicleConfig* AssetManager::getVehicleConfig(
     VehicleConfigAssetId id) const {
-    if (m_vehicleConfigs.empty()) return nullptr;
-    if (id >= m_vehicleConfigs.size()) {
-        return m_vehicleConfigs[0].get();  // fallback slot 0
-    }
-    return m_vehicleConfigs[id].get();
+    if (m_vehicleConfigs.count() == 0) return nullptr;
+    return m_vehicleConfigs.get(id);
 }
 
 vehicle::VehicleConfig* AssetManager::getMutableVehicleConfig(
     VehicleConfigAssetId id) {
     // F2H82: solo se permite mutar slots reales (no el 0 = fallback estatico).
-    if (id == 0 || id >= m_vehicleConfigs.size()) return nullptr;
-    return m_vehicleConfigs[id].get();
+    if (id == 0 || id >= m_vehicleConfigs.count()) return nullptr;
+    // break-B5: misma loophole que getAnimationClip — retorno mutable
+    // desde el unique_ptr via `.all()[id].get()`.
+    return m_vehicleConfigs.all()[id].get();
 }
 
 std::string AssetManager::vehicleConfigPathOf(
     VehicleConfigAssetId id) const {
-    if (id >= m_vehicleConfigPaths.size()) return std::string{};
-    return m_vehicleConfigPaths[id];
+    // break-B5: preservar el comportamiento pre-break (OOB devuelve empty
+    // string, NO el path del slot 0 como hacen otras familias).
+    if (id >= m_vehicleConfigs.count()) return std::string{};
+    return m_vehicleConfigs.pathOf(id);
 }
 
 usize AssetManager::vehicleConfigCount() const {
-    return m_vehicleConfigs.size();
+    return m_vehicleConfigs.count();
 }
 
 } // namespace Mood

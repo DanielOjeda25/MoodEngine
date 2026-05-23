@@ -61,6 +61,19 @@ public:
         return id;
     }
 
+    /// @brief Inserta sin cachear el path. Usado por la familia Material
+    ///        para `createMaterialFromTexture`: dos llamadas con la misma
+    ///        textura producen ids distintos (cada entity tiene material
+    ///        propio editable). El path va a `m_paths` para que
+    ///        `pathOf(id)` lo devuelva al serializer, pero `findByPath`
+    ///        no lo encontrara.
+    Id addUncached(std::string logicalPath, std::unique_ptr<T> asset) {
+        const Id id = static_cast<Id>(m_items.size());
+        m_items.push_back(std::move(asset));
+        m_paths.push_back(std::move(logicalPath));
+        return id;
+    }
+
     /// @brief Registra `logicalPath` como sinonimo del slot 0 (fallback).
     ///        Lo usan los loaders cuando un asset falla a cargar pero
     ///        quieren memorizar el intento para no reintentar cada frame.
@@ -96,6 +109,15 @@ public:
         if (m_items.empty()) return nullptr;
         if (id >= m_items.size()) return m_items[0].get();
         return m_items[id].get();
+    }
+
+    /// @brief Reemplaza el asset en `id` por uno nuevo. El path y el cache
+    ///        quedan intactos (caso de uso: hot-reload de textura — la
+    ///        textura cambio en disco pero el path logico es el mismo).
+    ///        No-op si `id` esta fuera de rango.
+    void replace(Id id, std::unique_ptr<T> newAsset) {
+        if (id >= m_items.size()) return;
+        m_items[id] = std::move(newAsset);
     }
 
     /// @brief Path con el que se agrego. Slot 0 devuelve el sentinela.
