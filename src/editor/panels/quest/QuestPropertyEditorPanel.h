@@ -16,6 +16,7 @@
 // ItemPropertyEditor (F2H51 Bloque G).
 
 #include "editor/panels/IPanel.h"
+#include "editor/panels/assets/AssetEditTracker.h"  // F2H84
 #include "engine/quest/QuestAsset.h"
 
 #include <filesystem>
@@ -58,6 +59,7 @@ private:
     bool drawReward(size_t idx, Quest::Reward& r);
 
     EditorUI*                  m_ui = nullptr;
+    AssetEditTracker           m_editTracker;    // F2H84
 
     std::filesystem::path      m_loadedPath;
     Quest::Asset               m_loaded;

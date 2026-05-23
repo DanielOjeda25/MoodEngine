@@ -1,6 +1,8 @@
 #include "editor/panels/quest/QuestPropertyEditorPanel.h"
 
 #include "core/Log.h"
+#include "editor/commands/HistoryStack.h"          // F2H84
+#include "editor/panels/assets/AssetEditTracker.h"  // F2H84
 #include "editor/panels/quest/QuestBrowserPanel.h"
 #include "editor/ui/EditorUI.h"
 #include "core/i18n/I18n.h"
@@ -56,6 +58,11 @@ void QuestPropertyEditorPanel::loadFromPath(const std::filesystem::path& fsPath)
     m_dirty = false;
     m_useNameKey = !m_loaded.name_key.empty();
     m_useDescKey = !m_loaded.description_key.empty();
+    // F2H84: history se ataba al quest previo. Mismo razonamiento que
+    // ItemPropertyEditor.
+    if (m_ui != nullptr) {
+        if (HistoryStack* h = m_ui->historyStack()) h->clear();
+    }
 }
 
 void QuestPropertyEditorPanel::syncWithBrowserSelection() {
@@ -127,10 +134,25 @@ void QuestPropertyEditorPanel::drawIdentitySection() {
         ImGui::SetTooltip("%s",
             I18n::T("editor.panel.quest_editor.toggle_key_tooltip").c_str());
     }
+    // F2H84: text inputs del Identity section undoable. Cada bloque agrega
+    // un `trackAssetPropertyEdit<std::string>` después del inputString para
+    // capturar before al focus-in y push EditAssetPropertyCommand al focus-out.
+    HistoryStack* hist = (m_ui != nullptr) ? m_ui->historyStack() : nullptr;
+
     if (m_useNameKey) {
         if (inputString("name_key", m_loaded.name_key)) m_dirty = true;
+        if (hist != nullptr) {
+            trackAssetPropertyEdit<std::string>(m_editTracker, m_loaded.name_key, *hist,
+                [this](const std::string& v) { m_loaded.name_key = v; m_dirty = true; },
+                "Quest: name_key");
+        }
     } else {
         if (inputString("name_literal", m_loaded.name_literal)) m_dirty = true;
+        if (hist != nullptr) {
+            trackAssetPropertyEdit<std::string>(m_editTracker, m_loaded.name_literal, *hist,
+                [this](const std::string& v) { m_loaded.name_literal = v; m_dirty = true; },
+                "Quest: name_literal");
+        }
     }
 
     ImGui::Checkbox(I18n::T("editor.panel.quest_editor.desc_use_key").c_str(),
@@ -141,13 +163,28 @@ void QuestPropertyEditorPanel::drawIdentitySection() {
     }
     if (m_useDescKey) {
         if (inputString("description_key", m_loaded.description_key)) m_dirty = true;
+        if (hist != nullptr) {
+            trackAssetPropertyEdit<std::string>(m_editTracker, m_loaded.description_key, *hist,
+                [this](const std::string& v) { m_loaded.description_key = v; m_dirty = true; },
+                "Quest: description_key");
+        }
     } else {
         if (inputStringMultiline("description_literal",
                                    m_loaded.description_literal,
                                    ImVec2(0, 60))) m_dirty = true;
+        if (hist != nullptr) {
+            trackAssetPropertyEdit<std::string>(m_editTracker, m_loaded.description_literal, *hist,
+                [this](const std::string& v) { m_loaded.description_literal = v; m_dirty = true; },
+                "Quest: description_literal");
+        }
     }
 
     if (inputString("category", m_loaded.category, 64)) m_dirty = true;
+    if (hist != nullptr) {
+        trackAssetPropertyEdit<std::string>(m_editTracker, m_loaded.category, *hist,
+            [this](const std::string& v) { m_loaded.category = v; m_dirty = true; },
+            "Quest: category");
+    }
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("%s",
             I18n::T("editor.panel.quest_editor.category_tooltip").c_str());

@@ -16,6 +16,7 @@
 // sin guardar.
 
 #include "editor/panels/IPanel.h"
+#include "editor/panels/assets/AssetEditTracker.h"  // F2H84
 #include "engine/inventory/ItemAsset.h"
 
 #include <filesystem>
@@ -64,6 +65,7 @@ private:
     bool saveToDisk();
 
     EditorUI*                  m_ui = nullptr;
+    AssetEditTracker           m_editTracker;    // F2H84
 
     std::filesystem::path      m_loadedPath;     // empty = no asset cargado
     Inventory::Asset           m_loaded;

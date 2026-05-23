@@ -1,6 +1,9 @@
 #include "editor/panels/assets/MaterialEditorPanel.h"
 
 #include "core/Log.h"
+#include "editor/commands/HistoryStack.h"          // F2H84
+#include "editor/panels/assets/AssetEditTracker.h"  // F2H84
+#include "editor/ui/EditorUI.h"                    // F2H84
 #include "engine/assets/manager/AssetManager.h"
 #include "core/i18n/I18n.h"  // F2H43
 #include "engine/render/preview/MaterialPreviewRenderer.h"
@@ -87,10 +90,16 @@ void MaterialEditorPanel::onImGuiRender() {
     }
 
     // F2H21 tracking: log al cambiar el material seleccionado.
+    // F2H84: tambien limpiamos el history — los comandos de edicion del
+    // material previo capturan punteros al MaterialAsset, que ahora apunta
+    // a otro. Patron de NodeGraphSandboxPanel/ShaderGraphEditorPanel.
     if (m_selectedMatIdx != m_lastLoggedMatIdx) {
         Log::editor()->info(
             "[material-editor] seleccionado material '{}'",
             labels[m_selectedMatIdx]);
+        if (m_ui != nullptr) {
+            if (HistoryStack* h = m_ui->historyStack()) h->clear();
+        }
         m_lastLoggedMatIdx = m_selectedMatIdx;
     }
 
@@ -154,49 +163,47 @@ void MaterialEditorPanel::onImGuiRender() {
     // ===== Controles =====
 
     // --- Sliders escalares ---
-    // Patron F2H21 tracking: capturamos el valor PRE al `IsItemActivated`
-    // (primer frame del drag) y logueamos el delta al `IsItemDeactivatedAfterEdit`
-    // (cuando el dev suelta). Sin esto el log spamearia con cada frame.
+    // F2H84: cada widget pasa por `trackAssetPropertyEdit<T>` que captura
+    // before al IsItemActivated y pushea un EditAssetPropertyCommand al
+    // IsItemDeactivatedAfterEdit (mismo patron que el Inspector). Ctrl+Z
+    // revierte. El history se limpia al cambiar de material (ver arriba).
+    HistoryStack* hist = (m_ui != nullptr) ? m_ui->historyStack() : nullptr;
+
     if (ImGui::ColorEdit3("albedo tint", &mat->albedoTint.x,
                             ImGuiColorEditFlags_NoInputs)) {
         m_editedThisFrame = true;
     }
-    if (ImGui::IsItemActivated()) m_tintPreDrag = mat->albedoTint;
-    if (ImGui::IsItemDeactivatedAfterEdit()) {
-        Log::editor()->info(
-            "[material-editor] albedo_tint: ({:.2f},{:.2f},{:.2f}) -> ({:.2f},{:.2f},{:.2f})",
-            m_tintPreDrag.x, m_tintPreDrag.y, m_tintPreDrag.z,
-            mat->albedoTint.x, mat->albedoTint.y, mat->albedoTint.z);
+    if (hist != nullptr) {
+        trackAssetPropertyEdit<glm::vec3>(m_editTracker, mat->albedoTint, *hist,
+            [mat](const glm::vec3& v) { mat->albedoTint = v; },
+            "Material: albedo tint");
     }
 
     if (ImGui::SliderFloat("metallic",  &mat->metallicMult,  0.0f, 1.0f, "%.2f")) {
         m_editedThisFrame = true;
     }
-    if (ImGui::IsItemActivated()) m_metallicPreDrag = mat->metallicMult;
-    if (ImGui::IsItemDeactivatedAfterEdit()) {
-        Log::editor()->info(
-            "[material-editor] metallic: {:.2f} -> {:.2f}",
-            m_metallicPreDrag, mat->metallicMult);
+    if (hist != nullptr) {
+        trackAssetPropertyEdit<f32>(m_editTracker, mat->metallicMult, *hist,
+            [mat](const f32& v) { mat->metallicMult = v; },
+            "Material: metallic");
     }
 
     if (ImGui::SliderFloat("roughness", &mat->roughnessMult, 0.04f, 1.0f, "%.2f")) {
         m_editedThisFrame = true;
     }
-    if (ImGui::IsItemActivated()) m_roughnessPreDrag = mat->roughnessMult;
-    if (ImGui::IsItemDeactivatedAfterEdit()) {
-        Log::editor()->info(
-            "[material-editor] roughness: {:.2f} -> {:.2f}",
-            m_roughnessPreDrag, mat->roughnessMult);
+    if (hist != nullptr) {
+        trackAssetPropertyEdit<f32>(m_editTracker, mat->roughnessMult, *hist,
+            [mat](const f32& v) { mat->roughnessMult = v; },
+            "Material: roughness");
     }
 
     if (ImGui::SliderFloat("ao",        &mat->aoMult,        0.0f, 1.0f, "%.2f")) {
         m_editedThisFrame = true;
     }
-    if (ImGui::IsItemActivated()) m_aoPreDrag = mat->aoMult;
-    if (ImGui::IsItemDeactivatedAfterEdit()) {
-        Log::editor()->info(
-            "[material-editor] ao: {:.2f} -> {:.2f}",
-            m_aoPreDrag, mat->aoMult);
+    if (hist != nullptr) {
+        trackAssetPropertyEdit<f32>(m_editTracker, mat->aoMult, *hist,
+            [mat](const f32& v) { mat->aoMult = v; },
+            "Material: ao");
     }
 
     ImGui::Separator();

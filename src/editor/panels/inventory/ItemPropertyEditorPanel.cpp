@@ -1,6 +1,8 @@
 #include "editor/panels/inventory/ItemPropertyEditorPanel.h"
 
 #include "core/Log.h"
+#include "editor/commands/HistoryStack.h"          // F2H84
+#include "editor/panels/assets/AssetEditTracker.h"  // F2H84
 #include "editor/panels/inventory/ItemBrowserPanel.h"
 #include "editor/ui/EditorUI.h"
 #include "core/i18n/I18n.h"
@@ -28,6 +30,12 @@ void ItemPropertyEditorPanel::loadFromPath(const std::filesystem::path& fsPath) 
     // si solo hay literal, mostrar literal.
     m_useNameKey = !m_loaded.name_key.empty();
     m_useDescKey = !m_loaded.description_key.empty();
+    // F2H84: history se ataba al item previo (los Setters capturan `this` +
+    // mutan m_loaded.*, que ahora pertenece a otro asset). Limpiar evita
+    // reverts cruzados entre items.
+    if (m_ui != nullptr) {
+        if (HistoryStack* h = m_ui->historyStack()) h->clear();
+    }
 }
 
 void ItemPropertyEditorPanel::syncWithBrowserSelection() {
@@ -106,6 +114,11 @@ void ItemPropertyEditorPanel::drawIdentitySection() {
             I18n::T("editor.panel.item_editor.toggle_key_tooltip").c_str());
     }
 
+    // F2H84: text inputs undoable via trackAssetPropertyEdit<std::string>.
+    // ImGui dispara `IsItemDeactivatedAfterEdit` cuando el campo pierde
+    // foco (no por cada keystroke) → un solo command por edicion.
+    HistoryStack* hist = (m_ui != nullptr) ? m_ui->historyStack() : nullptr;
+
     char buf[256];
     if (m_useNameKey) {
         std::strncpy(buf, m_loaded.name_key.c_str(), sizeof(buf) - 1);
@@ -114,12 +127,22 @@ void ItemPropertyEditorPanel::drawIdentitySection() {
             m_loaded.name_key = buf;
             m_dirty = true;
         }
+        if (hist != nullptr) {
+            trackAssetPropertyEdit<std::string>(m_editTracker, m_loaded.name_key, *hist,
+                [this](const std::string& v) { m_loaded.name_key = v; m_dirty = true; },
+                "Item: name_key");
+        }
     } else {
         std::strncpy(buf, m_loaded.name_literal.c_str(), sizeof(buf) - 1);
         buf[sizeof(buf) - 1] = '\0';
         if (ImGui::InputText("name_literal", buf, sizeof(buf))) {
             m_loaded.name_literal = buf;
             m_dirty = true;
+        }
+        if (hist != nullptr) {
+            trackAssetPropertyEdit<std::string>(m_editTracker, m_loaded.name_literal, *hist,
+                [this](const std::string& v) { m_loaded.name_literal = v; m_dirty = true; },
+                "Item: name_literal");
         }
     }
 
@@ -137,6 +160,11 @@ void ItemPropertyEditorPanel::drawIdentitySection() {
             m_loaded.description_key = descBuf;
             m_dirty = true;
         }
+        if (hist != nullptr) {
+            trackAssetPropertyEdit<std::string>(m_editTracker, m_loaded.description_key, *hist,
+                [this](const std::string& v) { m_loaded.description_key = v; m_dirty = true; },
+                "Item: description_key");
+        }
     } else {
         std::strncpy(descBuf, m_loaded.description_literal.c_str(), sizeof(descBuf) - 1);
         descBuf[sizeof(descBuf) - 1] = '\0';
@@ -144,6 +172,11 @@ void ItemPropertyEditorPanel::drawIdentitySection() {
                                          ImVec2(0, 60))) {
             m_loaded.description_literal = descBuf;
             m_dirty = true;
+        }
+        if (hist != nullptr) {
+            trackAssetPropertyEdit<std::string>(m_editTracker, m_loaded.description_literal, *hist,
+                [this](const std::string& v) { m_loaded.description_literal = v; m_dirty = true; },
+                "Item: description_literal");
         }
     }
 }
@@ -155,6 +188,8 @@ void ItemPropertyEditorPanel::drawIdentitySection() {
 void ItemPropertyEditorPanel::drawVisualSection() {
     ImGui::TextDisabled("%s", I18n::T("editor.panel.item_editor.section.visual").c_str());
 
+    HistoryStack* hist = (m_ui != nullptr) ? m_ui->historyStack() : nullptr;
+
     char buf[256];
     std::strncpy(buf, m_loaded.icon_path.c_str(), sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
@@ -162,12 +197,22 @@ void ItemPropertyEditorPanel::drawVisualSection() {
         m_loaded.icon_path = buf;
         m_dirty = true;
     }
+    if (hist != nullptr) {
+        trackAssetPropertyEdit<std::string>(m_editTracker, m_loaded.icon_path, *hist,
+            [this](const std::string& v) { m_loaded.icon_path = v; m_dirty = true; },
+            "Item: icon_path");
+    }
 
     std::strncpy(buf, m_loaded.model_path.c_str(), sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
     if (ImGui::InputText("model_path", buf, sizeof(buf))) {
         m_loaded.model_path = buf;
         m_dirty = true;
+    }
+    if (hist != nullptr) {
+        trackAssetPropertyEdit<std::string>(m_editTracker, m_loaded.model_path, *hist,
+            [this](const std::string& v) { m_loaded.model_path = v; m_dirty = true; },
+            "Item: model_path");
     }
 }
 
@@ -286,11 +331,22 @@ void ItemPropertyEditorPanel::drawStatsSection() {
 void ItemPropertyEditorPanel::drawStackSection() {
     ImGui::TextDisabled("%s", I18n::T("editor.panel.item_editor.section.stack").c_str());
 
+    HistoryStack* hist = (m_ui != nullptr) ? m_ui->historyStack() : nullptr;
+
     bool stackable = m_loaded.stack.stackable;
     if (ImGui::Checkbox("stackable", &stackable)) {
         m_loaded.stack.stackable = stackable;
         if (!stackable) m_loaded.stack.max_stack = 1;
         m_dirty = true;
+    }
+    if (hist != nullptr) {
+        trackAssetPropertyEdit<bool>(m_editTracker, m_loaded.stack.stackable, *hist,
+            [this](const bool& v) {
+                m_loaded.stack.stackable = v;
+                if (!v) m_loaded.stack.max_stack = 1;
+                m_dirty = true;
+            },
+            "Item: stackable");
     }
     ImGui::BeginDisabled(!stackable);
     int maxStack = m_loaded.stack.max_stack;
@@ -299,6 +355,11 @@ void ItemPropertyEditorPanel::drawStackSection() {
         if (maxStack > 999) maxStack = 999;
         m_loaded.stack.max_stack = maxStack;
         m_dirty = true;
+    }
+    if (hist != nullptr) {
+        trackAssetPropertyEdit<int>(m_editTracker, m_loaded.stack.max_stack, *hist,
+            [this](const int& v) { m_loaded.stack.max_stack = v; m_dirty = true; },
+            "Item: max_stack");
     }
     ImGui::EndDisabled();
 }
@@ -310,6 +371,8 @@ void ItemPropertyEditorPanel::drawStackSection() {
 void ItemPropertyEditorPanel::drawSlotSizeSection() {
     ImGui::TextDisabled("%s", I18n::T("editor.panel.item_editor.section.slot_size").c_str());
 
+    HistoryStack* hist = (m_ui != nullptr) ? m_ui->historyStack() : nullptr;
+
     int w = m_loaded.slot_size.width;
     int h = m_loaded.slot_size.height;
     if (ImGui::InputInt("width", &w)) {
@@ -318,11 +381,21 @@ void ItemPropertyEditorPanel::drawSlotSizeSection() {
         m_loaded.slot_size.width = w;
         m_dirty = true;
     }
+    if (hist != nullptr) {
+        trackAssetPropertyEdit<int>(m_editTracker, m_loaded.slot_size.width, *hist,
+            [this](const int& v) { m_loaded.slot_size.width = v; m_dirty = true; },
+            "Item: slot width");
+    }
     if (ImGui::InputInt("height", &h)) {
         if (h < 1) h = 1;
         if (h > 16) h = 16;
         m_loaded.slot_size.height = h;
         m_dirty = true;
+    }
+    if (hist != nullptr) {
+        trackAssetPropertyEdit<int>(m_editTracker, m_loaded.slot_size.height, *hist,
+            [this](const int& v) { m_loaded.slot_size.height = v; m_dirty = true; },
+            "Item: slot height");
     }
     ImGui::TextDisabled("%s",
         I18n::T("editor.panel.item_editor.slot_size_hint").c_str());

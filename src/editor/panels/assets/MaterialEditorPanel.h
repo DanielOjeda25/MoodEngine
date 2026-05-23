@@ -27,12 +27,14 @@
 
 #include "core/Types.h"
 #include "editor/panels/IPanel.h"
+#include "editor/panels/assets/AssetEditTracker.h"  // F2H84
 
 #include <glm/vec3.hpp>
 
 namespace Mood {
 
 class AssetManager;
+class EditorUI;  // F2H84
 class MaterialPreviewRenderer;
 
 class MaterialEditorPanel : public IPanel {
@@ -50,6 +52,11 @@ public:
     ///        omite la columna de preview.
     void setPreviewRenderer(MaterialPreviewRenderer* p) { m_preview = p; }
 
+    /// @brief F2H84: acceso al `HistoryStack` global para hacer los edits
+    ///        de campos del material undoable via Ctrl+Z (mismo patron que
+    ///        el Inspector). Non-owning.
+    void setEditorUi(EditorUI* ui) { m_ui = ui; }
+
     /// @brief True si el usuario edito un campo este frame. EditorApplication
     ///        lo consume para markDirty().
     bool consumeEditedFlag() {
@@ -60,7 +67,9 @@ public:
 
 private:
     AssetManager* m_assets = nullptr;
+    EditorUI* m_ui = nullptr;  // F2H84: para historyStack()
     MaterialPreviewRenderer* m_preview = nullptr;
+    AssetEditTracker m_editTracker;  // F2H84
     bool m_editedThisFrame = false;
     /// Index del combo (offset dentro de la lista de materiales del AM).
     /// -1 = sin seleccionar todavia (la primera vez que el panel se abre,
@@ -73,15 +82,9 @@ private:
     bool m_saveStatusOk = false;
 
     /// F2H21 polish: tracking del estado entre frames para emitir logs
-    /// solo en eventos discretos (cambio de material, drag soltado de
-    /// slider, drop de textura, click de boton). Sin spam por frame.
+    /// solo en eventos discretos (cambio de material). F2H84 reemplazo el
+    /// tracking manual por-slider con `AssetEditTracker`.
     int m_lastLoggedMatIdx = -1;
-    /// Valor pre-drag de cada slider/color, capturado al `IsItemActivated`
-    /// y consumido al `IsItemDeactivatedAfterEdit` para loguear el delta.
-    f32 m_metallicPreDrag = 0.0f;
-    f32 m_roughnessPreDrag = 0.0f;
-    f32 m_aoPreDrag = 0.0f;
-    glm::vec3 m_tintPreDrag{1.0f};
 };
 
 } // namespace Mood
