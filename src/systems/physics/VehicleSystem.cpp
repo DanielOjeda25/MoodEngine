@@ -77,6 +77,29 @@ constexpr std::array<const char*, vehicle::WheelCount> k_wheelSubMesh = {
     "wheel_FL", "wheel_FR", "wheel_RL", "wheel_RR",
 };
 
+// F2H82 Bloque B: por cada rueda, que sub-mesh del .glb renderear y cuanto
+// correrlo para que rote en su hub.
+struct WheelMeshBinding {
+    std::string subMesh;
+    glm::vec3   pivot{0.0f};
+};
+
+// Resuelve los bindings desde el config: si la rueda trae un `meshSubName`
+// real (auto importado SIN procesar), se usa ese nombre + su `meshHubOffset`.
+// Si esta vacio, cae al canonico `wheel_FL/FR/RL/RR` con pivot 0 (DeLorean y
+// cualquier modelo ya centrado por tools/glb/split_wheels.py).
+std::array<WheelMeshBinding, vehicle::WheelCount>
+wheelMeshBindings(const vehicle::VehicleConfig& cfg) {
+    std::array<WheelMeshBinding, vehicle::WheelCount> out;
+    for (int i = 0; i < vehicle::WheelCount; ++i) {
+        const vehicle::WheelConfig& w = cfg.wheels[i];
+        out[i].subMesh = w.meshSubName.empty() ? std::string(k_wheelSubMesh[i])
+                                               : w.meshSubName;
+        out[i].pivot   = w.meshHubOffset;
+    }
+    return out;
+}
+
 // Resuelve la VehicleConfig que la entity quiere usar. Si el path esta
 // vacio -> default SA. Si no, delega a `assets.loadVehicleConfig` que
 // cachea + parsea el JSON; si falla, el AssetManager ya cae al slot 0
@@ -203,7 +226,7 @@ bool wheelsNeedSpawn(const VehicleComponent& veh, Scene& scene) {
 // (centrado en el hub). Se llama DESPUES del forEach de la view para no crear
 // entities (con Transform) mientras iteramos. Lo usan tick() (Play) y
 // previewRest() (Editor).
-void spawnPendingWheels(Scene& scene,
+void spawnPendingWheels(Scene& scene, AssetManager& assets,
                         const std::vector<entt::entity>& pending) {
     for (entt::entity chassisHandle : pending) {
         Entity chassis = scene.entityFromHandle(chassisHandle);
@@ -212,14 +235,43 @@ void spawnPendingWheels(Scene& scene,
             continue;
         }
         auto& veh = chassis.getComponent<VehicleComponent>();
-        const auto& chassisMr = chassis.getComponent<MeshRendererComponent>();
+
+        // Leemos TODO del chassisMr antes de crear entities: addComponent en
+        // otra entity puede reallocar el pool de MeshRendererComponent e
+        // invalidar esta referencia.
+        const vehicle::VehicleConfig cfg = resolveConfig(veh, assets);
+        const auto bind = wheelMeshBindings(cfg);
+        const bool imported = !cfg.wheels[0].meshSubName.empty();
+
+        auto& chassisMr = chassis.getComponent<MeshRendererComponent>();
         const MeshAssetId meshId = chassisMr.mesh;
         const std::vector<MaterialAssetId> mats = chassisMr.materials;
+        // El chassis no dibuja sus ruedas: por prefijo `wheel_` (modelo
+        // procesado/canonico) o por la lista exacta de nombres reales (auto
+        // importado sin procesar).
+        if (imported) {
+            chassisMr.hideSubMeshPrefix.clear();
+            chassisMr.hideSubMeshNames.clear();
+            for (int i = 0; i < vehicle::WheelCount; ++i) {
+                chassisMr.hideSubMeshNames.push_back(bind[i].subMesh);
+            }
+        } else {
+            chassisMr.hideSubMeshPrefix = "wheel_";
+        }
 
+        // A partir de aca NO tocar chassisMr (ref potencialmente invalidada).
+        const u32 chassisHandleU32 = static_cast<u32>(chassisHandle);
         for (int i = 0; i < vehicle::WheelCount; ++i) {
-            Entity w = scene.createEntity(k_wheelSubMesh[i]);
+            Entity w = scene.createEntity(bind[i].subMesh.c_str());
             auto& wmr = w.addComponent<MeshRendererComponent>(meshId, mats);
-            wmr.subMeshName = k_wheelSubMesh[i];
+            wmr.subMeshName = bind[i].subMesh;
+            wmr.subMeshPivotOffset = bind[i].pivot;
+            // F2H82: marker para que el editor (picking / jerarquia / serial)
+            // trate a la rueda como entity interna del motor, NO seleccionable
+            // ni listada. Reemplaza el check legacy por nombre canonico que
+            // dejaba escapar las ruedas con nombres reales (ej. `f_t_l`).
+            w.addComponent<VehicleWheelMarker>(
+                VehicleWheelMarker{chassisHandleU32, i});
             veh.wheelEntities[i] = static_cast<u32>(w.handle());
         }
     }
@@ -288,12 +340,11 @@ void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets) {
                 // F2H70.3 H: las 4 wheel-entities se auto-spawnean DESPUES
                 // del forEach (crear entities con TransformComponent aca
                 // invalidaria el iterador de la view). Si el chassis tiene
-                // mesh, marcamos exclude de los sub-meshes wheel_* (los
-                // renderean las wheel-entities) + lo encolamos para spawn.
+                // mesh, lo encolamos para spawn. El exclude de los sub-meshes
+                // de rueda lo setea `spawnPendingWheels` (sabe si el modelo es
+                // canonico `wheel_*` o un import con nombres reales).
                 if (e.hasComponent<MeshRendererComponent>()
                     && wheelsNeedSpawn(veh, scene)) {
-                    e.getComponent<MeshRendererComponent>().hideSubMeshPrefix =
-                        "wheel_";
                     pendingWheelSpawn.push_back(e.handle());
                 }
                 veh.dirty = false;
@@ -387,7 +438,7 @@ void tick(Scene& scene, PhysicsWorld& physicsWorld, AssetManager& assets) {
             }
         });
 
-    spawnPendingWheels(scene, pendingWheelSpawn);
+    spawnPendingWheels(scene, assets, pendingWheelSpawn);
 }
 
 // F2H70.3 H: preview de las ruedas en Editor mode (sin Play). El tick de
@@ -407,10 +458,8 @@ void previewRest(Scene& scene, AssetManager& assets) {
             if (!e.hasComponent<MeshRendererComponent>()) return;
 
             // Spawn diferido (crear entities con Transform aca invalidaria
-            // la view). Este frame solo marca exclude + encola.
+            // la view). El exclude lo setea `spawnPendingWheels`.
             if (wheelsNeedSpawn(veh, scene)) {
-                e.getComponent<MeshRendererComponent>().hideSubMeshPrefix =
-                    "wheel_";
                 pendingWheelSpawn.push_back(e.handle());
                 return;
             }
@@ -456,7 +505,7 @@ void previewRest(Scene& scene, AssetManager& assets) {
             }
         });
 
-    spawnPendingWheels(scene, pendingWheelSpawn);
+    spawnPendingWheels(scene, assets, pendingWheelSpawn);
 }
 
 } // namespace Mood::VehicleSystem

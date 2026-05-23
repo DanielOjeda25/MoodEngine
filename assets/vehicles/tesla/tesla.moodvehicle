@@ -1,0 +1,121 @@
+{
+  "axle_front": {
+    "attach_y_mm": 682.9873657226563,
+    "handbraked": false,
+    "offset_z_mm": 2232.266357421875,
+    "steered": true,
+    "suspension": {
+      "damping": 0.6000000238418579,
+      "frequency_hz": 2.200000047683716,
+      "max_length_mm": 220.0,
+      "min_length_mm": 80.0
+    },
+    "torque_factor": 0.0,
+    "track_mm": 2001.84912109375,
+    "wheel": {
+      "friction_lat": 1.600000023841858,
+      "friction_long": 1.7999999523162842,
+      "radius_mm": 518.590576171875,
+      "width_mm": 486.6298522949219
+    }
+  },
+  "axle_rear": {
+    "attach_y_mm": 682.98583984375,
+    "handbraked": true,
+    "offset_z_mm": -2047.5731201171875,
+    "steered": false,
+    "suspension": {
+      "damping": 0.6000000238418579,
+      "frequency_hz": 2.200000047683716,
+      "max_length_mm": 220.0,
+      "min_length_mm": 80.0
+    },
+    "torque_factor": 1.0,
+    "track_mm": 2059.62939453125,
+    "wheel": {
+      "friction_lat": 1.600000023841858,
+      "friction_long": 1.7999999523162842,
+      "radius_mm": 518.590576171875,
+      "width_mm": 486.6298522949219
+    }
+  },
+  "body": {
+    "angular_damping": 0.30000001192092896,
+    "box_offset_mm": [
+      0.0,
+      1224.0830078125,
+      -13.642311096191406
+    ],
+    "dimensions_mm": [
+      2448.60107421875,
+      1753.914794921875,
+      6529.77880859375
+    ],
+    "linear_damping": 0.20000000298023224,
+    "mass_center_override_mm": [
+      0.0,
+      514.3275756835938,
+      -13.642311096191406
+    ],
+    "mass_kg": 1300.0,
+    "mesh_path": "vehicles/tesla/tesla.glb",
+    "mesh_yaw_offset_deg": 0.0
+  },
+  "brakes": {
+    "deceleration_target_mps2": 9.5,
+    "handbrake_ratio": 0.6000000238418579
+  },
+  "engine": {
+    "angular_damping": 0.20000000298023224,
+    "final_drive_ratio": 3.700000047683716,
+    "idle_rpm": 1000.0,
+    "inertia": 0.5,
+    "peak_torque_nm": 420.0,
+    "peak_torque_rpm": 4500.0,
+    "redline_rpm": 7000.0,
+    "transmission": "6-speed-manual"
+  },
+  "mesh_wheels": {
+    "FL": {
+      "hub_offset_mm": [
+        1000.924560546875,
+        514.328369140625,
+        2232.266357421875
+      ],
+      "submesh": "RUEDRA_DELANTERA_IZQUIERDA"
+    },
+    "FR": {
+      "hub_offset_mm": [
+        -1000.924560546875,
+        514.328369140625,
+        2232.266357421875
+      ],
+      "submesh": "RUEDRA_DELANTERA_DERECHA"
+    },
+    "RL": {
+      "hub_offset_mm": [
+        1029.814697265625,
+        514.3267822265625,
+        -2047.5731201171875
+      ],
+      "submesh": "RUEDRA_TRASERA_IZQUIERDA"
+    },
+    "RR": {
+      "hub_offset_mm": [
+        -1029.8145751953125,
+        514.3267822265625,
+        -2047.5731201171875
+      ],
+      "submesh": "RUEDRA_TRASERA_DERECHA"
+    }
+  },
+  "metadata": {
+    "generated_by": "MoodEngine vehicle importer (F2H82)",
+    "name": "Tesla"
+  },
+  "schemaVersion": 2,
+  "steering": {
+    "max_angle_deg": 38.0,
+    "steer_lerp_speed": 5.0
+  }
+}

@@ -26,6 +26,7 @@
 #include <Jolt/Physics/Body/MotionType.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Vehicle/VehicleConstraint.h>
 #include <Jolt/Physics/Vehicle/WheeledVehicleController.h>
 
@@ -85,9 +86,19 @@ u32 PhysicsWorld::createVehicle(const vehicle::VehicleConfig& cfg,
     JPH::Ref<JPH::Shape> boxShape = new JPH::BoxShape(
         vec3ToJph(cfg.chassisHalfExtents));
     JPH::Ref<JPH::Shape> chassisShape = boxShape;
+    // F2H82 Bloque B: si el origen del modelo NO coincide con el centro del
+    // cuerpo (auto importado, ej. armor-car con origen abajo y atras),
+    // envolvemos la caja en un RotatedTranslatedShape que la corre al
+    // chassisBoxOffset. Asi la colision se alinea con el cuerpo visible,
+    // en vez de quedarse al ras del piso. Para el DeLorean (offset=0) el
+    // wrapping no se aplica.
+    if (glm::length(cfg.chassisBoxOffset) > 1e-4f) {
+        chassisShape = new JPH::RotatedTranslatedShape(
+            vec3ToJph(cfg.chassisBoxOffset), JPH::Quat::sIdentity(), boxShape);
+    }
     if (glm::length(cfg.centerOfMassLocal) > 1e-4f) {
         chassisShape = new JPH::OffsetCenterOfMassShape(
-            boxShape, vec3ToJph(cfg.centerOfMassLocal));
+            chassisShape, vec3ToJph(cfg.centerOfMassLocal));
     }
 
     const glm::vec3 initialPos(initialWorldTransform[3]);

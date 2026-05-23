@@ -51,6 +51,8 @@ add_executable(mood_tests
     test_physics_ragdoll.cpp  # F2H66 Bloque H
     test_vehicle_config.cpp  # F2H67 Bloque A
     test_physics_vehicle.cpp  # F2H67 Bloque C/J
+    test_vehicle_analyzer.cpp  # F2H82 Bloque A
+    test_vehicle_writer.cpp  # F2H82 Bloque C
     test_physics_ragdoll_impact.cpp  # F2H68 Bloque D
     test_raycast.cpp
     test_trigger_system.cpp
@@ -187,6 +189,9 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/physics/cloth/ClothLayout.cpp  # F2H75 Bloque A
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_SoftBody.cpp  # F2H75 Bloque B
     ${CMAKE_SOURCE_DIR}/src/engine/physics/vehicle/VehicleConfig.cpp  # F2H67 Bloque A
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/vehicle/VehicleMeshAnalyzer.cpp  # F2H82 Bloque A
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/vehicle/VehiclePresets.cpp  # F2H82 Bloque C
+    ${CMAKE_SOURCE_DIR}/src/engine/physics/vehicle/VehicleConfigWriter.cpp  # F2H82 Bloque C
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Vehicle.cpp  # F2H67 Bloque C
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Impact.cpp  # F2H68 Bloque A
     ${CMAKE_SOURCE_DIR}/src/core/i18n/I18n.cpp  # F2H43 (movido a core en AUDIT-3)

@@ -19,9 +19,21 @@ Entity Scene::createEntity(std::string_view name) {
 
 void Scene::destroyEntity(Entity entity) {
     if (!entity) return;
-    if (m_registry.valid(entity.handle())) {
-        m_registry.destroy(entity.handle());
+    if (!m_registry.valid(entity.handle())) return;
+    // F2H82: si es chasis de un vehiculo, llevarse tambien las 4 wheel-entities
+    // que VehicleSystem auto-spawnea (no estan en el undo stack como entidades
+    // independientes; Ctrl+Z borraba el chasis y las ruedas quedaban huerfanas
+    // en la escena, sin chasis al cual referir). Hacemos el cleanup acá para
+    // que sea invariante: cualquier delete del chasis = delete del set.
+    if (m_registry.all_of<VehicleComponent>(entity.handle())) {
+        const auto& veh = m_registry.get<VehicleComponent>(entity.handle());
+        for (u32 wh : veh.wheelEntities) {
+            if (wh == 0) continue;
+            const auto we = static_cast<entt::entity>(wh);
+            if (m_registry.valid(we)) m_registry.destroy(we);
+        }
     }
+    m_registry.destroy(entity.handle());
 }
 
 Entity Scene::makeEntity(entt::entity handle) {

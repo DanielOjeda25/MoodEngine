@@ -153,9 +153,10 @@ ScenePickResult pickEntityFromRay(Scene& scene,
 
         // F2H70.4 follow-up: las wheel-entities son internas del
         // VehicleSystem — no son seleccionables con el click (igual que no
-        // se listan en la jerarquia ni se serializan).
-        if (e.hasComponent<TagComponent>()
-            && isWheelEntityTag(e.getComponent<TagComponent>().name)) return;
+        // se listan en la jerarquia ni se serializan). F2H82: check por
+        // marker en vez de por nombre — los autos importados tienen ruedas
+        // con nombres arbitrarios (`f_t_l`, `RUEDRA_*`).
+        if (e.hasComponent<VehicleWheelMarker>()) return;
 
         // Targets posibles, en orden de preferencia (mesh gana):
         //   a) MeshRenderer: AABB del mesh.

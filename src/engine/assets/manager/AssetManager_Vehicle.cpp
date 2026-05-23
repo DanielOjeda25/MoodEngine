@@ -17,11 +17,14 @@
 #include "engine/assets/manager/AssetManager.h"
 
 #include "core/Log.h"
+#include "engine/assets/manager/VehicleConfigParse.h"
 #include "engine/physics/vehicle/VehicleConfig.h"
 
 #include <nlohmann/json.hpp>
 
+#include <array>
 #include <fstream>
+#include <utility>
 
 namespace Mood {
 
@@ -152,6 +155,17 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
                 mc[1].get<f32>() / 1000.0f,
                 mc[2].get<f32>() / 1000.0f);
         }
+        // F2H82 Bloque B: offset de la caja fisica respecto al origen del
+        // modelo. Opcional — sin este campo, la caja queda centrada en el
+        // origen (caso DeLorean: origen == centro del cuerpo).
+        if (jb.contains("box_offset_mm") && jb.at("box_offset_mm").is_array()
+            && jb.at("box_offset_mm").size() >= 3) {
+            const auto& bo = jb.at("box_offset_mm");
+            cfg.chassisBoxOffset = glm::vec3(
+                bo[0].get<f32>() / 1000.0f,
+                bo[1].get<f32>() / 1000.0f,
+                bo[2].get<f32>() / 1000.0f);
+        }
         // F2H70.2: damping del chassis. Opcional — si no aparece, el config
         // mantiene los defaults (0.5 / 0.5 arcade) del struct. Bajar a
         // 0.05-0.1 para feel sim (momentum largo, sensacion pesada);
@@ -191,6 +205,37 @@ vehicle::VehicleConfig parseVehicleConfigJsonV2(const nlohmann::json& j) {
     if (j.contains("axle_rear") && j.at("axle_rear").is_object()) {
         applyAxleV2(j.at("axle_rear"), cfg,
                      vehicle::WheelRL, vehicle::WheelRR, /*isFront*/false);
+    }
+
+    // F2H82 Bloque B: binding visual de las ruedas para el centrado en runtime.
+    // Lo escribe el importador cuando el .glb NO esta procesado (ruedas con
+    // nombres reales y sin centrar en el hub). Opcional: si no aparece, el
+    // VehicleSystem usa los sub-meshes canonicos `wheel_FL/FR/RL/RR` con pivot
+    // 0 (DeLorean y modelos procesados por tools/glb/split_wheels.py).
+    //   "mesh_wheels": {
+    //     "FL": { "submesh": "RUEDRA_DEL_IZQ", "hub_offset_mm": [x, y, z] },
+    //     "FR": { ... }, "RL": { ... }, "RR": { ... }
+    //   }
+    if (j.contains("mesh_wheels") && j.at("mesh_wheels").is_object()) {
+        const auto& jw = j.at("mesh_wheels");
+        constexpr std::array<std::pair<const char*, vehicle::WheelIndex>, 4>
+            kRoles = {{{"FL", vehicle::WheelFL}, {"FR", vehicle::WheelFR},
+                       {"RL", vehicle::WheelRL}, {"RR", vehicle::WheelRR}}};
+        for (const auto& [key, idx] : kRoles) {
+            if (!jw.contains(key) || !jw.at(key).is_object()) continue;
+            const auto& jr = jw.at(key);
+            vehicle::WheelConfig& w = cfg.wheels[idx];
+            if (jr.contains("submesh") && jr.at("submesh").is_string()) {
+                w.meshSubName = jr.at("submesh").get<std::string>();
+            }
+            if (jr.contains("hub_offset_mm") && jr.at("hub_offset_mm").is_array()
+                && jr.at("hub_offset_mm").size() >= 3) {
+                const auto& o = jr.at("hub_offset_mm");
+                w.meshHubOffset = glm::vec3(o[0].get<f32>() / 1000.0f,
+                                            o[1].get<f32>() / 1000.0f,
+                                            o[2].get<f32>() / 1000.0f);
+            }
+        }
     }
 
     // engine
@@ -319,15 +364,17 @@ vehicle::VehicleConfig parseVehicleConfigJsonV1(const nlohmann::json& j) {
     return cfg;
 }
 
+} // anonymous
+
 // Dispatcher: lee `schemaVersion` y delega al parser correspondiente.
 // Default v1 cuando el campo falta (back-compat con assets pre-F2H70).
+// Expuesto (fuera del namespace anónimo, declarado en VehicleConfigParse.h)
+// para round-trip tests del writer del importador (F2H82 Bloque C).
 vehicle::VehicleConfig parseVehicleConfigJson(const nlohmann::json& j) {
     const int version = j.value("schemaVersion", 1);
     if (version >= 2) return parseVehicleConfigJsonV2(j);
     return parseVehicleConfigJsonV1(j);
 }
-
-} // anonymous
 
 VehicleConfigAssetId AssetManager::loadVehicleConfig(
     std::string_view logicalPath) {

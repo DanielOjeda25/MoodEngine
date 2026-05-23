@@ -151,6 +151,21 @@ struct MeshRendererComponent {
     ///        materializar); no se serializa.
     std::string hideSubMeshPrefix;
 
+    /// @brief F2H82 Bloque B: como `hideSubMeshPrefix` pero por nombre EXACTO.
+    ///        Lo usa el chassis de un auto importado cuyas ruedas NO siguen la
+    ///        convencion `wheel_*` (ej. `RUEDRA_DEL_IZQ`, `f_t_l`): se listan
+    ///        los 4 nombres reales de los sub-meshes de rueda para excluirlos
+    ///        del render del chassis. Runtime-only; no se serializa.
+    std::vector<std::string> hideSubMeshNames;
+
+    /// @brief F2H82 Bloque B (centrado en runtime): offset que se RESTA a los
+    ///        vertices del sub-mesh seleccionado antes de aplicar el world
+    ///        matrix, de modo que la rueda rote en su hub aunque el .glb no
+    ///        este centrado. Es el centroide del sub-mesh en MODEL space
+    ///        (`WheelConfig::meshHubOffset`). (0,0,0) = sin offset (rueda ya
+    ///        centrada, p.ej. DeLorean). Runtime-only; no se serializa.
+    glm::vec3 subMeshPivotOffset{0.0f};
+
     MeshRendererComponent() = default;
     MeshRendererComponent(MeshAssetId m, MaterialAssetId mat)
         : mesh(m), materials{mat} {}

@@ -372,6 +372,18 @@ void SceneRenderer::renderScene(Scene& scene,
                                  const glm::mat4& model) {
         MeshAsset* asset = assets.getMesh(mr.mesh);
         if (asset == nullptr) return;
+        // F2H82 Bloque B: centrado en runtime. Si la entity es una rueda con un
+        // hub offset (sub-mesh NO centrado en el .glb), restamos ese centroide
+        // antes del world matrix para que rote en su hub. (0,0,0) = sin offset
+        // (el caso comun: props, chassis, y ruedas ya centradas como el
+        // DeLorean) => effectiveModel == model, sin costo extra.
+        const bool hasPivot = (mr.subMeshPivotOffset.x != 0.0f
+                               || mr.subMeshPivotOffset.y != 0.0f
+                               || mr.subMeshPivotOffset.z != 0.0f);
+        const glm::mat4 effectiveModel =
+            hasPivot ? model * glm::translate(glm::mat4(1.0f),
+                                              -mr.subMeshPivotOffset)
+                     : model;
         for (usize i = 0; i < asset->submeshes.size(); ++i) {
             const auto& sub = asset->submeshes[i];
             if (sub.mesh == nullptr) continue;
@@ -384,6 +396,15 @@ void SceneRenderer::renderScene(Scene& scene,
             // ruedas (`wheel_*`) — las renderean 4 wheel-entities aparte.
             if (!mr.hideSubMeshPrefix.empty()
                 && sub.name.rfind(mr.hideSubMeshPrefix, 0) == 0) {
+                continue;
+            }
+            // F2H82 Bloque B: exclude por nombre exacto. El chassis de un auto
+            // importado (ruedas sin convencion `wheel_*`) lista los 4 nombres
+            // reales aca. Lista chica (4) => busqueda lineal trivial.
+            if (!mr.hideSubMeshNames.empty()
+                && std::find(mr.hideSubMeshNames.begin(),
+                             mr.hideSubMeshNames.end(), sub.name)
+                       != mr.hideSubMeshNames.end()) {
                 continue;
             }
             // F2H68: el pivot-offset auto-center se evaluó y descartó —
@@ -415,7 +436,7 @@ void SceneRenderer::renderScene(Scene& scene,
                     usingGraph = true;
                     // Rebind program + uniforms (estabamos en defaultSh).
                     applyShaderUniforms(*sh);
-                    sh->setMat4("uModel", model);
+                    sh->setMat4("uModel", effectiveModel);
                     sh->setFloat("uTime", m_currentTime);
                 }
             }
@@ -471,6 +492,12 @@ void SceneRenderer::renderScene(Scene& scene,
                 sh->setFloat("uRefractionStrength", 0.0f);
             }
 
+            // F2H82 Bloque B: el caller setea uModel=model en `sh` antes de la
+            // lambda; si hay hub offset hay que reescribirlo con effectiveModel
+            // (el graph-path ya lo hizo arriba con su propio shader).
+            if (hasPivot && !usingGraph) {
+                sh->setMat4("uModel", effectiveModel);
+            }
             glActiveTexture(GL_TEXTURE0);
             m_renderer->drawMesh(*sub.mesh, *sh);
 

@@ -107,6 +107,9 @@ bool isValid(const VehicleConfig& cfg) {
     if (!std::isfinite(cfg.centerOfMassLocal.x) ||
         !std::isfinite(cfg.centerOfMassLocal.y) ||
         !std::isfinite(cfg.centerOfMassLocal.z)) return false;
+    if (!std::isfinite(cfg.chassisBoxOffset.x) ||
+        !std::isfinite(cfg.chassisBoxOffset.y) ||
+        !std::isfinite(cfg.chassisBoxOffset.z)) return false;
     if (cfg.wheels.size() != WheelCount) return false;
     for (const WheelConfig& w : cfg.wheels) {
         if (!isFinitePositive(w.radius)) return false;

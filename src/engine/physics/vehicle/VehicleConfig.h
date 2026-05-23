@@ -72,6 +72,21 @@ struct WheelConfig {
     bool steered = false;
     /// Si el handbrake aplica torque de frenado a esta rueda (traseras tipico).
     bool handbraked = false;
+
+    /// F2H82 Bloque B (centrado en runtime): nombre del sub-mesh de esta rueda
+    /// dentro del .glb del vehiculo. VACIO = el VehicleSystem usa el nombre
+    /// canonico `wheel_FL/FR/RL/RR` (ruedas ya centradas por
+    /// tools/glb/split_wheels.py, p.ej. el DeLorean). Cuando el importador
+    /// detecta un auto SIN procesar, guarda aca el nombre real del nodo
+    /// (`RUEDRA_DEL_IZQ`, `f_t_l`, ...) tal cual viene en el modelo.
+    std::string meshSubName;
+
+    /// F2H82 Bloque B: centroide del sub-mesh de la rueda en MODEL space (el
+    /// mismo frame que los vertices del MeshAsset cargado). El render path
+    /// dibuja la rueda con `worldMatrix * translate(-meshHubOffset)` para que
+    /// rote en su hub sin tener que re-exportar/centrar el .glb. (0,0,0) = la
+    /// malla ya esta centrada en el hub (caso DeLorean).
+    glm::vec3 meshHubOffset{0.0f};
 };
 
 /// @brief Config del motor + transmision + frenos.
@@ -128,10 +143,22 @@ struct VehicleConfig {
     /// 2.0 m largo x 0.5 m alto x 0.9 m ancho => half = (0.9, 0.5, 2.0)
     /// (axis convencion: +Z forward, +Y up, +X right).
     glm::vec3 chassisHalfExtents{0.9f, 0.5f, 2.0f};
+    /// F2H82 Bloque B (caja al centro del cuerpo): offset del CENTRO de la caja
+    /// fisica respecto al ORIGEN del entity/modelo. (0,0,0) = caja centrada en
+    /// el origen (caso DeLorean: origen del modelo == centro del cuerpo).
+    /// Para autos importados cuyo origen NO esta en el centro del cuerpo
+    /// (ej. origen en la base/atras), el importador guarda aca el centroide
+    /// del chasis en MODEL space. Sin esto, la caja queda en el piso y el
+    /// cuerpo flota encima. La interpreta `PhysicsWorld::createVehicle`
+    /// envolviendo el `BoxShape` en un `RotatedTranslatedShape`.
+    glm::vec3 chassisBoxOffset{0.0f, 0.0f, 0.0f};
     /// Masa total del chasis en kg. SA sedan: 1500 kg.
     f32 chassisMass = 1500.0f;
-    /// Offset del centro de masa respecto al centro geometrico del chasis
+    /// Offset del centro de masa respecto al ORIGEN del entity/modelo
     /// (LOCAL space). Y negativo = bajo el centro => mas estable, no flips.
+    /// Para autos cuyo origen NO esta en el centro del cuerpo, el importador
+    /// emite aca `chassisBoxOffset + (0, -0.2*halfY, 0)` para que el CoM
+    /// quede un poquito debajo del centro del cuerpo (no debajo del piso).
     glm::vec3 centerOfMassLocal{0.0f, -0.20f, 0.0f};
 
     /// F2H70.2: damping lineal del chasis (resistencia al movimiento sin

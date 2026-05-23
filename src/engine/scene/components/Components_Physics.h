@@ -216,6 +216,18 @@ struct VehicleComponent {
     bool dirty = true;
 };
 
+/// @brief F2H82 Bloque B: marca una entity como rueda auto-spawneada por el
+///        VehicleSystem. Funciona como flag de "entity interna del motor":
+///        NO seleccionable por click, NO listada en la jerarquia, NO
+///        serializada — la materializa el chasis dueño en cada load.
+///        Reemplaza el check legacy `isWheelEntityTag(name)` que solo cubria
+///        los 4 nombres canonicos `wheel_FL/FR/RL/RR` y dejaba escapar autos
+///        importados con nombres reales (ej. `f_t_l`, `RUEDRA_*`).
+struct VehicleWheelMarker {
+    u32 chassisHandle = 0;  ///< handle entt del chasis dueño
+    int wheelIndex = -1;    ///< 0=FL, 1=FR, 2=RL, 3=RR
+};
+
 /// @brief F2H67: marca el offset del asiento del conductor sobre el chassis
 ///        (local space). El sistema de mount/dismount del player teleporta
 ///        al player a `chassis.worldMatrix * seatOffset` al subirse y a

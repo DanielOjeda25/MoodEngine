@@ -15,6 +15,7 @@
 #include "core/math/Ray.h"  // AUDIT-3: pickRayFromNdc
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/physics/ragdoll/RagdollLayout.h"   // F2H66 F: overlay ragdolls
+#include "engine/physics/vehicle/VehicleConfig.h"   // F2H82 B: read halfExtents/boxOffset
 #include "engine/physics/world/PhysicsWorld.h"      // F2H66 F: readRagdollPose
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
@@ -406,18 +407,37 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                                 veh.vehicleId, st)) return;
 
                         const glm::vec3 chassisCenter(st.chassisWorld[3]);
-                        // OBB chassis: usamos halfExtents tipicas del SA
-                        // default (0.9, 0.5, 2.0) -- no hay forma de leer
-                        // el cfg actual sin re-cachear, asi que dibujamos
-                        // un proxy razonable. Si emerge demanda, agendar
-                        // leer halfExtents reales del VehicleConstraint.
-                        const glm::vec3 he(0.9f, 0.5f, 2.0f);
-                        // 8 corners del OBB en local space, transformados.
+                        // F2H82 Bloque B: leemos los halfExtents reales del
+                        // .moodvehicle desde el AssetManager (ya cacheado por
+                        // VehicleSystem) y el `chassisBoxOffset` para que la
+                        // caja del gizmo coincida visualmente con la caja
+                        // fisica (RotatedTranslatedShape). Sin esto, el gizmo
+                        // queda al ras del piso y con tamaño SA por defecto.
+                        glm::vec3 he(0.9f, 0.5f, 2.0f);
+                        glm::vec3 boxOffset(0.0f);
+                        if (m_assetManager != nullptr
+                            && !veh.configPath.empty()) {
+                            const VehicleConfigAssetId cid =
+                                m_assetManager->loadVehicleConfig(veh.configPath);
+                            if (const vehicle::VehicleConfig* cfg =
+                                    m_assetManager->getVehicleConfig(cid)) {
+                                he = cfg->chassisHalfExtents;
+                                boxOffset = cfg->chassisBoxOffset;
+                            }
+                        }
+                        // 8 corners del OBB en local space (relativo al CENTRO
+                        // de la caja), transformados al world via chassisWorld
+                        // que ya incluye el offset (el shape Jolt esta corrido
+                        // por RotatedTranslatedShape).
                         const glm::vec3 corners[8] = {
-                            {-he.x, -he.y, -he.z}, { he.x, -he.y, -he.z},
-                            { he.x,  he.y, -he.z}, {-he.x,  he.y, -he.z},
-                            {-he.x, -he.y,  he.z}, { he.x, -he.y,  he.z},
-                            { he.x,  he.y,  he.z}, {-he.x,  he.y,  he.z},
+                            {boxOffset.x-he.x, boxOffset.y-he.y, boxOffset.z-he.z},
+                            {boxOffset.x+he.x, boxOffset.y-he.y, boxOffset.z-he.z},
+                            {boxOffset.x+he.x, boxOffset.y+he.y, boxOffset.z-he.z},
+                            {boxOffset.x-he.x, boxOffset.y+he.y, boxOffset.z-he.z},
+                            {boxOffset.x-he.x, boxOffset.y-he.y, boxOffset.z+he.z},
+                            {boxOffset.x+he.x, boxOffset.y-he.y, boxOffset.z+he.z},
+                            {boxOffset.x+he.x, boxOffset.y+he.y, boxOffset.z+he.z},
+                            {boxOffset.x-he.x, boxOffset.y+he.y, boxOffset.z+he.z},
                         };
                         glm::vec3 worldC[8];
                         for (int i = 0; i < 8; ++i) {

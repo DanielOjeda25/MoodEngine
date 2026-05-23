@@ -233,13 +233,12 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             // F2H73: un trigger zone (kill volume, checkpoint) tambien es
             // standalone — sin esto un trigger sin mesh no se persistia.
             const bool hasTrig = e.hasComponent<TriggerComponent>();
-            // F2H70.3 H: las wheel-entities (tags wheel_FL/FR/RL/RR) las
-            // spawnea y rematerializa el VehicleSystem en cada load a partir
-            // del VehicleComponent del chassis. NO se serializan: tienen
-            // MeshRenderer (entrarian por hasMr) pero persistirlas duplica
-            // las ruedas al recargar (4 guardadas huerfanas + 4 respawneadas
-            // = 8). Skip explicito antes del resto de checks.
-            if (isWheelEntityTag(tag.name)) return;
+            // F2H70.3 H: las wheel-entities las spawnea y rematerializa el
+            // VehicleSystem en cada load a partir del VehicleComponent del
+            // chassis. NO se serializan: persistirlas duplica las ruedas al
+            // recargar. Skip explicito antes del resto de checks. F2H82:
+            // check por marker en vez de por nombre canonico.
+            if (e.hasComponent<VehicleWheelMarker>()) return;
             // F2H67: VehicleComponent puede aparecer en una entity con
             // MeshRenderer (caso normal) o standalone si el visual va a
             // child-entities.

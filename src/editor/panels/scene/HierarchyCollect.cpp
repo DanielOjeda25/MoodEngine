@@ -17,7 +17,9 @@ void collectHierarchyEntries(Scene& scene,
     scene.forEach<TagComponent>([&](Entity e, TagComponent& tag) {
         // F2H70.4 follow-up: las wheel-entities las maneja el VehicleSystem
         // (spawn/rematerializa desde el chassis); son internas, no se listan.
-        if (isWheelEntityTag(tag.name)) return;
+        // F2H82: marker en vez de check por nombre (autos importados tienen
+        // ruedas con nombres arbitrarios).
+        if (e.hasComponent<VehicleWheelMarker>()) return;
         out.push_back(HierarchyEntry{e.handle(), &tag});
     });
 }
