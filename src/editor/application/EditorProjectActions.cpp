@@ -65,7 +65,14 @@ void EditorApplication::loadEditorState() {
     if (!in.is_open()) return;
 
     nlohmann::json j;
-    try { in >> j; } catch (...) { return; }
+    // break-A8: surfacear error de parse en vez de tragarlo silencioso.
+    try {
+        in >> j;
+    } catch (const std::exception& e) {
+        Log::editor()->warn("loadEditorState: '{}' no parsea como JSON ({})",
+                              path.generic_string(), e.what());
+        return;
+    }
 
     // Preferencias globales.
     m_debugDraw = j.value("debugDraw", false);

@@ -92,7 +92,17 @@ void collectMaterialRefs(const std::filesystem::path& engineAssetsDir,
     std::ifstream f(matFs);
     if (!f.is_open()) return;
     nlohmann::json j;
-    try { j = nlohmann::json::parse(f); } catch (...) { return; }
+    // break-A8: surfacear error de parse del .material en vez de
+    // tragarlo. Si el archivo se corrompe, el dev nota que las
+    // texturas no entran en el paquete por una razon explicita.
+    try {
+        j = nlohmann::json::parse(f);
+    } catch (const std::exception& e) {
+        Log::engine()->warn(
+            "PackageBuilder: '.material' '{}' no parsea como JSON ({}) — texturas no agregadas al paquete",
+            matFs.generic_string(), e.what());
+        return;
+    }
     static const char* kTexFields[] = {
         "albedo", "metallic_roughness", "normal", "ao"
     };
