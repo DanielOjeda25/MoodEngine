@@ -30,7 +30,28 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H82 (2026-05-23) — **Sub-fase 2.7**
+## 0.1. Último hito de feature — F2H83 (2026-05-23) — **Sub-fase 2.7**
+
+**Refactor de archivos grandes del editor (hot path render).** Tag `v1.74.0-fase2-hito83`. Detalle completo en [`hitos/F2H83.md`](hitos/F2H83.md). Octavo hito de Sub-fase 2.7.
+
+Ataca los 3 archivos >800 LOC anotados en [BACKLOG.md §4](BACKLOG.md) que la auditoría de F2H81 había diferido por riesgo render. **2/3 partidos limpio, 1 documentado como deuda intencional**.
+
+**Lo que entregó**:
+- **`EditorApplication.h` 835→673 LOC (-19%)**: las 9 structs de sesión/state (`OrthoDragSession`, `OrthoBlockToolSession`, `OrthoMarqueeSession`, `ClipToolSession`, `OrthoVertexEditSession`, `PolygonDrawSession`, `ModalShortcutEntry`/`ModalShortcutState`, `GizmoKeyTapState`, `GizmoMode`+`GizmoDragState`) movidas a `EditorApplication_Sessions.inl`, incluido desde la sección `private:` de la clase. El preprocesador las inserta como nested types — cero cambio en `.cpp` call-sites.
+- **`EditorRenderPass_Overlay.cpp` 859→490 LOC (-43%)**: 5 overlays F1-debug independientes (Triggers / Joints / ForceFields / Ragdolls / Vehicles) extraídos a métodos privados `drawXxxDebugOverlay(OpenGLDebugRenderer&)` en sibling `EditorRenderPass_Overlay_Debug.cpp`. Cero captures locales en los bloques originales → extracción mecánica. Forward-decl `class OpenGLDebugRenderer;` en el header.
+- **`SceneRenderer_Render.cpp` 978 LOC sin tocar — deuda documentada**: las 2 lambdas centrales (`applyShaderUniforms`, `drawMeshRenderer`) capturan 9+ locales compartidos usados por todos los passes; split limpio requiere un `FrameRenderContext` invasivo + promover lambdas a métodos + extraer cada pass. Sin tests visuales, el riesgo es alto. Diferido hasta (a) demanda concreta, (b) cobertura golden-pixel, o (c) refactor del renderer (Vulkan/D3D12). Anotado en BACKLOG con criterios de revisión.
+
+**Suite 1074/11103 verde**. Validación visual en vivo: F1 en escena con triggers/joints/force-fields/vehículos → overlays idénticos, *"TODO OK"*.
+
+**Pendientes de 2.7 (en orden acordado con el dev)**:
+- **F2H84 — unificar Undo en Material/Item/Quest editors**: extender el patrón Command + tracker del Inspector a los 3 editors via helper compartido `AssetEditTracker<T>`.
+- **Atajos de teclado configurables** (era F2H42 del plan original, nunca hecho — hoy hardcodeados): keybindings + UI + persistencia + presets.
+- **Cierre Fase 2 + `v2.0.0`**: suite verde, docs al día, release notes, recap, planning Fase 3.
+- Menores: Ctrl+S "guardar como". **Tutorial in-app**: diferido por el dev a post-Fase 2.
+
+---
+
+## 0.1ante5. Hito previo — F2H82 (2026-05-23) — **Sub-fase 2.7**
 
 **Modal Importar vehículo + Live tuning + bake GLB + anti-roll + polish.** Tag `v1.73.0-fase2-hito82`. Detalle completo en [`hitos/F2H82.md`](hitos/F2H82.md). Séptimo hito de Sub-fase 2.7.
 
@@ -51,13 +72,13 @@ Convierte el pipeline de vehículos de "editar JSON a mano" a "drop-in del `.glb
 
 Cerrado por el dev: *"lo logrado hasta ahora esta bien, cerremos aca para terminar con esto y luego en la fase 3 veremos como mejorar esto"*.
 
-**Diferidos a F2H83 / Fase 3**:
-- **Extracción de texturas embebidas a disco** al importar (estándar Unity gLTFast / Unreal glTF Importer): hoy modelos Sketchfab tipo BTTF DeLorean entran con materiales rosa-grid porque el loader cae a `missingMaterial`. F2H83 dedicado.
+**Diferidos a Fase 3 (pipeline industrial de imports)**:
+- **Extracción de texturas embebidas a disco** al importar: el dev decidió no atacar como hito propio — *"a futuro deberemos si o si importar modelos de manera industrial, con sus texturas aparte"*. Cuando llegue ese hito, ataca también el resto del pipeline (materiales, lods, colliders).
 - **Limitación conocida**: re-importar un `.glb` mientras el editor tiene esa entity cargada → Windows file lock. Workaround: borrar la entity antes, o usar otro nombre.
 
 **Pendientes de 2.7 (en orden acordado con el dev)**:
-- **F2H83 — extracción de texturas embebidas + asset extraction pipeline**.
-- **Refactor diferido (riesgo render)**: los 3 archivos grandes del hot path (renderScene / overlay 3D / EditorApplication.h god-class) — hito dedicado con validación visual. Anotado en [BACKLOG.md § 4](BACKLOG.md).
+- **F2H83 — refactor de los 3 archivos grandes del hot path de render** (renderScene 978 / overlay 3D 859 / EditorApplication.h 835 god-class): split mecánico al patrón `_Internal.h` privado, sin cambios de comportamiento, validación visual obligatoria. Anotado en [BACKLOG.md § 4](BACKLOG.md).
+- **F2H84 — unificar Undo en Material/Item/Quest editors**: extender el patrón Command + tracker del Inspector a los 3 editors via helper compartido `AssetEditTracker<T>`.
 - **Atajos de teclado configurables** (era F2H42 del plan original, nunca hecho — hoy hardcodeados): keybindings + UI + persistencia + presets.
 - **Cierre Fase 2 + `v2.0.0`**: suite verde, docs al día, release notes, recap, planning Fase 3.
 - Menores: Ctrl+S "guardar como", unificar Undo en Material/Item/Quest. **Tutorial in-app**: diferido por el dev a post-Fase 2.

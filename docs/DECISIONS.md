@@ -11,6 +11,58 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-23: F2H83 — Refactor de archivos grandes del editor (hot path render)
+
+### Decisión 1 — `.inl` partial dentro de la clase, no header con structs top-level
+
+**Contexto:** `EditorApplication.h` tenía 9 structs `private:` nested (sessions / gizmo state). Para sacarlas del header (835→673 LOC), tres opciones:
+- (a) Header con structs en namespace top-level.
+- (b) Header forward-declarado + definiciones en `.cpp`.
+- (c) `.inl` partial incluido desde la sección `private:` del header.
+
+**Decisión:** (c). El preprocesador inserta las structs como nested types de `EditorApplication`, sin cambiar nada externamente.
+
+**Razones:**
+- Cero superficie de cambio externa = cero riesgo de break en los `.cpp` siblings que ya referencian las structs por su nombre bare (`OrthoDragSession`, no `Mood::OrthoDragSession`).
+- Preserva la encapsulación: las structs siguen siendo `private:` de la clase, no expuestas al namespace `Mood`.
+
+**Alternativas descartadas:**
+- (a) Promover a top-level: expone visibilidad innecesariamente y requiere actualizar todos los call-sites con el qualifier.
+- (b) Forward-decl + def en `.cpp`: las structs son values (no pointers) en miembros del header → necesitan ser completas en el header.
+
+### Decisión 2 — Métodos miembro vs helpers estáticos para los overlays F1
+
+**Contexto:** 5 overlays F1-debug extraídos de `drawEditorScene3DOverlay`. Dos formas: (a) helpers estáticos en anonymous namespace tomando `(OpenGLDebugRenderer&, Scene&, AssetManager*, PhysicsWorld*)`, o (b) métodos privados de `EditorApplication` tomando solo `(OpenGLDebugRenderer&)` y accediendo a `m_scene` etc. via miembros.
+
+**Decisión:** (b) métodos miembro.
+
+**Razones:**
+- Firma del caller queda 4x más corta. El overlay no se reusa fuera del editor — encapsular como métodos privados es lo correcto.
+- Sigue el patrón del archivo original (`drawEditorScene3DOverlay` ya es método miembro).
+
+### Decisión 3 — Diferir el refactor de `SceneRenderer_Render.cpp` con criterios explícitos de revisión
+
+**Contexto:** El archivo está en 978 LOC, sobre el cap de 800. El comentario del propio archivo (heredado de F2H62) ya advertía: *"El frame loop es una unidad cohesiva con muchas variables locales compartidas entre pases — partir más fino requeriría extraer métodos privados con todas las dependencias como parámetros, lo cual no aporta legibilidad"*. F2H83 confirma con análisis detallado: las 2 lambdas centrales capturan 9+ locales (`view`, `projection`, `cameraPos`, `fbW`, `fbH`, `lights`, `iblOk`, `prefilterMaxLod`, `shadowEnabled`) usados transversalmente por todos los passes (instanced / static / skinned / brush / compiled-mesh / OIT).
+
+**Decisión:** Diferir. Documentar como deuda activa en `BACKLOG.md §4` con criterios explícitos de cuándo atacarla.
+
+**Razones:**
+- Sin tests visuales (golden-pixel comparison) el riesgo de regresión silenciosa al tocar uniform bindings o GL state es alto.
+- El refactor responsable es ~2h: definir `FrameRenderContext` struct, promover las 2 lambdas a métodos privados con el contexto como param, extraer pass-por-pass con verificación visual entre cada uno.
+- Hoy no hay infra para validar visualmente cambios de render por código. El refactor es mejor aplazarlo a un momento donde haya esa cobertura, o donde el rediseño del backend (Vulkan/D3D12) lo fuerce naturalmente.
+
+**Criterios de revisión** (cuando volver a evaluar):
+- El archivo crece más allá de 1100 LOC.
+- Emerge un bug gráfico que requiere modificar 3+ passes (señal de que el código es difícil de mantener).
+- Se agrega cobertura de tests visuales al pipeline.
+- Comienza un rediseño del renderer.
+
+**Alternativas descartadas:**
+- Hacer el split parcial sólo de OIT pass: ahorraría ~100 LOC pero deja el resto igual + introduce inconsistencia (1 pass extraído, 5 inline).
+- Bajar el cap de LOC para que el archivo deje de violarlo: deshonesto.
+
+---
+
 ## 2026-05-23: F2H82 — Modal Importar vehículo + bake GLB + anti-roll
 
 ### Decisión 1 — Anti-roll bars: Jolt built-in, no inventar nada
@@ -93,17 +145,15 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 **Trade-off aceptado:** si se spawnean dos autos del mismo modelo, tunear uno cambia el otro. Razonable para esta etapa — el dev valida un auto a la vez. Si emerge dolor real, F3 mete copy-on-write per-entity.
 
-### Decisión 7 — Diferir extracción de texturas embebidas a F2H83 (no atacar acá)
+### Decisión 7 — Diferir extracción de texturas embebidas a Fase 3 (no como hito propio)
 
 **Contexto:** El BTTF DeLorean importado entró bien geométricamente pero las texturas se ven rosa-grid (fallback de material faltante). Causa: las texturas vienen embebidas en el GLB y el loader las nombra `__runtime_tex#N` en memoria; al fallar la asociación material→texture cae a `missingMaterialId()`. Estándar industrial (Unity gLTFast, Unreal glTF Importer) extrae las texturas a disco en `assets/<asset>/textures/` al importar.
 
-**Decisión:** Diferir a F2H83 dedicado. F2H82 cierra con la limitación documentada y validada por el dev.
+**Decisión:** No atacarlo como hito propio (F2H83). Entra a Fase 3 dentro del **pipeline industrial de imports** completo (extracción de texturas + materiales + LODs + colliders, todo en un solo paso).
 
-**Razones:**
-- Es feature ortogonal al pipeline de vehículos: aplica a cualquier import (props, character, env).
-- Tocaría: loader, materials, asset extraction layer, AssetManager. Scope que no se justifica meter al final de F2H82.
+**Razones (cita verbatim del dev al cerrar F2H82):** *"ese de extraccion de texturas eliminalo, porque a futuro deberemos si o si importar modelos de manera industrial, con sus texturas aparte, etc"*. Hacerlo como hito puntual ahora deja la mitad del trabajo + bloquea naturalmente al pipeline grande de Fase 3.
 
-**Cita verbatim del dev:** *"lo logrado hasta ahora esta bien, cerremos aca para terminar con esto y luego en la fase 3 veremos como mejorar esto"*.
+**Cita verbatim previa al cerrar F2H82:** *"lo logrado hasta ahora esta bien, cerremos aca para terminar con esto y luego en la fase 3 veremos como mejorar esto"*.
 
 ---
 
