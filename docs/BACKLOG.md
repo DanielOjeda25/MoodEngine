@@ -35,13 +35,9 @@ Infra completa (`JPH::ContactListener` + body↔entity map + cola deferred + dra
 
 ---
 
-### 1.-3. Shift+D duplicate (F2H64 tour, 2026-05-18)
+### 1.-3. ~~Shift+D duplicate~~ — ✅ Cerrado en F2H85 (2026-05-23)
 
-**Contexto**: al validar F2H64 el dev pidió un atajo Blender-style para duplicar la entidad seleccionada. Cita: *"no tengo la capacidad aun de duplicar un boton podemos hacer como en blender shift + D de un elemento seleccionado y crea una copia"*.
-
-**Scope estimado**: ~30 min. Keyboard handler para Shift+D en `EditorUI` + comando `SpawnEntity` con snapshot de la seleccionada + offset chico (ej. +0.5 en X). Ya hay infra de spawn undoable desde F2H27+.
-
-**Por qué NO atacamos ahora**: el dev pidió cerrar Sub-fase 2.4 del plan original (física) antes de seguir con quality-of-life. Volver cuando emerja friction concreta en la edición de niveles.
+Implementado en F2H85 (`v1.76.0-fase2-hito85`). Handler en `EditorApplication::processEvents` con gate Editor Mode + `!Ctrl` + `!Alt` + `!WantTextInput`; clonado via `serializeEntityToJson` + `parseEntityFromJson` + `SceneLoader::applyOneEntity`; offset fijo +0.5 m en X; wrap en `CreateEntityCommand` (undoable); skip silencioso de tiles del GridMap. Detalle en [`hitos/F2H85.md`](hitos/F2H85.md). Mouse-tracked modal (Blender's drag) diferido a F2 si emerge fricción.
 
 ---
 

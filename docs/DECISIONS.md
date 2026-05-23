@@ -11,6 +11,54 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-23: F2H85 — Save As contextual + Shift+D duplicate
+
+### Decisión 1 — Save As con el mismo patrón de F2H78 (cada panel en su render)
+
+**Contexto:** Una alternativa era centralizar Save As en `EditorApplication` con un dispatcher (`saveAsFromShortcut()`) que pregunte a cada panel.
+
+**Decisión:** Mantener el patrón de F2H78 — cada editor maneja su Ctrl+Shift+S en su render (`drawSaveBar` detecta `KeyCtrl && KeyShift && IsKeyPressed(S)`); el handler global solo gatea el project-saveAs vía `IPanel::consumesSaveAsShortcut()`.
+
+**Razones:**
+- Idiomático ImGui: el foco se consulta donde ImGui lo expone (dentro del render del panel).
+- Menos invasivo: no hay que reescribir lo que ya funciona.
+- Consistencia con Ctrl+S existente.
+
+### Decisión 2 — Diferir Material / Script / Shader Save As
+
+**Contexto:** El hito original quería los 5 editors guardables.
+
+**Decisión:** Solo Item + Quest. Documentar el resto en BACKLOG.
+
+**Razones:**
+- Material: el path lo administra el AssetManager (`saveMaterial(id)` usa el path interno cacheado). Necesita `saveMaterialAs(id, newPath)` — scope del AssetManager.
+- Script + Shader: afectan `ScriptComponent.path` de una entity (side-effect en el componente). Save As cambia el path del componente, lo cual a su vez debe pasar por undo/serialización.
+- Item + Quest tienen `saveToFile(path)` que toma cualquier ruta — drop-in inmediato.
+
+### Decisión 3 — Offset Shift+D fijo en +X vs cursor-relative
+
+**Contexto:** Blender usa modal mouse-tracked: la copia "sigue" al cursor hasta confirmar con click. Implementar eso en Mood requiere modal state + Enter/Esc handlers.
+
+**Decisión:** Offset fijo `(+0.5 m, 0, 0)`. El usuario mueve la copia con el gizmo / G shortcut después.
+
+**Razones:**
+- El backlog (1.-3 desde F2H64) pedía "Shift+D duplicate", no modal mouse-tracked.
+- 0.5 m es suficiente para distinguir visualmente la copia del original.
+- Mouse-tracked es un upgrade futuro si emerge fricción concreta.
+
+### Decisión 4 — Skip tiles del GridMap silenciosamente
+
+**Contexto:** Una entity con tag `Tile_X_Y` es el render de una celda de `m_map` (GridMap). Duplicarla crea una entity huérfana fuera del grid; al rebuild de `m_scene` desde `m_map`, desaparece.
+
+**Decisión:** Skip silencioso. Si la selección era 100% tiles, `duplicateSelectedEntities` es no-op.
+
+**Razones:**
+- Tile_X_Y no es un asset; es la representación visual de un dato en `m_map`. Duplicar es semánticamente nada.
+- Mismo trato que `deleteSelectedEntity` (que trata tiles como caso especial → `SetTileCommand "Vaciar tile"`).
+- Log no-op evita ruido en console; el usuario probablemente seleccionó un tile sin querer duplicarlo.
+
+---
+
 ## 2026-05-23: F2H84 — Undo unificado en Material / Item / Quest editors
 
 ### Decisión 1 — Setter sin entity, captura el path al campo via lambda

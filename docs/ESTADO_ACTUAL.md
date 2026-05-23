@@ -30,7 +30,28 @@ Pure helpers extracted: 0         0         1 + 7 tests
 
 ---
 
-## 0.1. Último hito de feature — F2H84 (2026-05-23) — **Sub-fase 2.7**
+## 0.1. Último hito de feature — F2H85 (2026-05-23) — **Sub-fase 2.7**
+
+**Save As contextual + Shift+D duplicate.** Tag `v1.76.0-fase2-hito85`. Detalle completo en [`hitos/F2H85.md`](hitos/F2H85.md). Décimo hito de Sub-fase 2.7.
+
+Dos quality-of-life chicos que cierran items históricos del BACKLOG.
+
+**Lo que entregó**:
+- **`IPanel::consumesSaveAsShortcut()` virtual** + handler global Ctrl+Shift+S en `EditorApplication::processEvents` (gemelo del Ctrl+S de F2H78). Si un editor enfocado lo consume → guarda en ruta nueva con su extensión; si no → cae a `ProjectAction::SaveAs` (proyecto entero, ya existía).
+- **`saveAsToDisk()` en Item + Quest editors**: `pfd::save_file` con default `<stem>_copy.<ext>`, forzar extensión nativa, switch del panel al path nuevo, `historyStack->clear()` (los lambdas de F2H84 capturan `this->m_loaded`; cambio de path los invalida).
+- **`duplicateSelectedEntities()`** (Shift+D Blender-style): `serializeEntityToJson` + `parseEntityFromJson` + `applyOneEntity` (infra de Hito 27, no es nueva) → offset +0.5 m en X + tag `<original>_copy`. Wrap en `CreateEntityCommand` (undoable). Skip silencioso de `Tile_X_Y` (vienen del GridMap).
+- **Diferidos** (documentados): Save As de Material/Script/Shader (requieren refactor del AssetManager o de ScriptComponent — scope distinto). Shift+D mouse-tracked (Blender's drag modal) — F2 si emerge fricción.
+
+**Suite 1074/11103 verde**. Validación visual pendiente (sesión dejada para futuro).
+
+**Pendientes de 2.7 (en orden acordado con el dev)**:
+- **F2H86 — atajos de teclado configurables** (era F2H42 del plan original; el dev lo dejó "para futuro" porque va a seguir agregando/arreglando cosas).
+- **Cierre Fase 2 + `v2.0.0`**: suite verde, docs al día, release notes, recap, planning Fase 3.
+- Menores: Save As de Material/Script/Shader (cuando emerja fricción). **Tutorial in-app**: diferido por el dev a post-Fase 2.
+
+---
+
+## 0.1ante7. Hito previo — F2H84 (2026-05-23) — **Sub-fase 2.7**
 
 **Undo unificado en Material / Item / Quest editors.** Tag `v1.75.0-fase2-hito84`. Detalle completo en [`hitos/F2H84.md`](hitos/F2H84.md). Noveno hito de Sub-fase 2.7.
 
