@@ -484,6 +484,9 @@ add_library(mood_engine_lib STATIC
     src/engine/render/scene_renderer/RenderBatching.cpp
     src/engine/render/scene_renderer/SceneRenderer.cpp
     src/engine/render/scene_renderer/SceneRenderer_Render.cpp
+    src/engine/render/scene_renderer/SceneRenderer_Render_Shadow.cpp     # break-B2
+    src/engine/render/scene_renderer/SceneRenderer_Render_Lighting.cpp   # break-B2
+    src/engine/render/scene_renderer/SceneRenderer_Render_Materials.cpp  # break-B2
     src/engine/render/scene_renderer/SceneRenderer_Ortho.cpp  # F2H28
 
     src/engine/assets/cache/LodCache.cpp

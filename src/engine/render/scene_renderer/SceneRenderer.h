@@ -58,7 +58,10 @@ class Scene;
 class ShaderGraphCache;  // F2H62 Bloque E
 class ShadowPass;
 class SkyboxRenderer;
+struct BatchingResult;     // break-B2: forward decl para renderOitPass
 struct FrameStats;
+struct LightFrameData;     // break-B2: para FrameContext
+struct MeshRendererComponent;  // break-B2: para drawSceneMeshRenderer
 enum class TonemapMode : i32;
 
 class SceneRenderer {
@@ -342,6 +345,56 @@ private:
     ///        Devuelve `true` si el blit se ejecuto, `false` si los FBOs
     ///        no estan listos.
     bool blitSceneToBackbufferCopy();
+
+    // break-B2: estado por-frame compartido entre los sub-pases extraidos.
+    // Antes vivia como capturas en lambdas locales de renderScene; ahora
+    // se construye una vez al principio del frame y se pasa por const-ref
+    // a los helpers en sibling files (_Shadow / _Lighting / _Materials).
+    struct FrameContext {
+        glm::mat4 view{1.0f};
+        glm::mat4 projection{1.0f};
+        u32 fbW = 0;
+        u32 fbH = 0;
+        glm::vec3 cameraPos{0.0f};
+        const LightFrameData* lights = nullptr;
+        bool iblOk = false;
+        f32  prefilterMaxLod = 0.0f;
+        bool shadowEnabled = false;
+        ITexture* dummyTex = nullptr;
+    };
+
+    /// @brief break-B2 / Hito 16: detecta directional con `castShadows` y
+    ///        graba el CSM al shadow map array. Recibido de la extraccion
+    ///        del bloque shadow de renderScene. Loguea on-edge cuando el
+    ///        flag cambia de frame a frame.
+    void recordShadowPass(Scene& scene, AssetManager& assets,
+                          const glm::mat4& view, const glm::mat4& projection,
+                          bool& outEnabled, glm::vec3& outLightDir);
+
+    /// @brief break-B2 / Hito 18: compute del Forward+ light grid + upload
+    ///        de los 3 SSBO (point lights, tile data, light indices) +
+    ///        bind en sus slots (2/3/4). Loguea on-edge si cambia el
+    ///        conteo de point lights.
+    void uploadLightGridSsbos(const LightFrameData& lights,
+                               const glm::mat4& view, const glm::mat4& projection,
+                               u32 fbW, u32 fbH);
+
+    /// @brief break-B2: aplica todos los uniforms del shader de escena
+    ///        (mats, samplers, light system, CSM, fog). Era la lambda
+    ///        `applyShaderUniforms` de renderScene; ahora es metodo para
+    ///        que los pases extraidos a sibling .cpp puedan llamarla.
+    void applySceneShaderUniforms(IShader& sh, const FrameContext& frame);
+
+    /// @brief break-B2: dibuja una entity MeshRenderer con material +
+    ///        shader-graph resolution per-submesh. Era la lambda
+    ///        `drawMeshRenderer` de renderScene. Si `mat->shaderGraphPath`
+    ///        no esta vacio y el cache lo da, swap al graph shader para
+    ///        ese submesh y volver a `defaultSh` despues.
+    void drawSceneMeshRenderer(IShader& defaultSh,
+                                MeshRendererComponent& mr,
+                                const glm::mat4& model,
+                                AssetManager& assets,
+                                const FrameContext& frame);
 
     // Diagnostico one-shot.
     bool m_shadowEnabledLastFrame = false;

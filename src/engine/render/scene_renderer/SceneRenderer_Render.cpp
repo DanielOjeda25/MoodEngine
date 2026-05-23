@@ -5,11 +5,17 @@
 // puede acumular geometria de debug despues de esta llamada y antes
 // de endFrame (en SceneRenderer.cpp).
 //
-// Notas: archivo grande (~580 LOC). El frame loop es una unidad
-// cohesiva con muchas variables locales compartidas entre pases —
-// partir mas fino requeriria extraer metodos privados con todas las
-// dependencias como parametros, lo cual no aporta legibilidad. Se
-// acepta como deuda chica que sigue bajo el hard cap 800 LOC.
+// break-B2: archivo divido por responsabilidad de pass (estilo
+// `_Ortho`). Cada sub-pase vive en su sibling .cpp como metodo privado
+// de SceneRenderer:
+//   - `_Shadow.cpp`    -> recordShadowPass     (CSM grabacion)
+//   - `_Lighting.cpp`  -> uploadLightGridSsbos (Forward+ grid + SSBOs)
+//                          + applySceneShaderUniforms (uniforms estandar)
+//   - `_Materials.cpp` -> drawSceneMeshRenderer (material + shader-graph
+//                          resolution per-submesh + draw call)
+// Aca queda el orquestador + los pases que iteran sobre la `BatchingResult`
+// (instanced, non-batchable, skinned, brushes, compiled, OIT translucent,
+// particulas, cloth). FrameContext local viaja por const-ref a los helpers.
 
 #include "engine/render/scene_renderer/SceneRenderer.h"
 
@@ -104,45 +110,11 @@ void SceneRenderer::renderScene(Scene& scene,
     applyEnvironmentFromScene(scene);
 
     // Hito 16: Shadow pass ANTES de bindear el scene FB.
+    // break-B2: body movido a SceneRenderer_Render_Shadow.cpp.
     bool shadowEnabled = false;
     glm::vec3 shadowLightDir(0.0f, -1.0f, 0.0f);
-    if (m_shadowPass) {
-        scene.forEach<LightComponent>(
-            [&](Entity, LightComponent& lc) {
-                if (shadowEnabled) return;
-                if (!lc.enabled) return;
-                if (lc.type != LightComponent::Type::Directional) return;
-                if (!lc.castShadows) return;
-                shadowEnabled = true;
-                shadowLightDir = lc.direction;
-            });
-    }
-    if (shadowEnabled) {
-        // F2H60: Cascade Shadow Maps. Cache F2H42 eliminado: CSM depende
-        // de la matriz de camara que cambia casi siempre. El gate global
-        // m_csmEnabled fue eliminado en F2H60 polish iter2 -- las sombras
-        // se controlan solo via LightComponent::castShadows.
-        // Recreate del array si cambio cascadeCount via Inspector.
-        if (m_shadowPass->cascadeCount() != m_csmCascadeCount) {
-            m_shadowPass->recreate(m_shadowPass->shadowMapSize(),
-                                     m_csmCascadeCount);
-        }
-        MOOD_PROFILE_SCOPE("ShadowPass::recordCsm");
-        m_shadowPass->recordCsm(scene, assets, *m_renderer,
-                                  shadowLightDir, view, projection,
-                                  m_csmCascadeCount, m_csmSplitLambda);
-    }
-    if (shadowEnabled != m_shadowEnabledLastFrame) {
-        if (shadowEnabled) {
-            Log::render()->info(
-                "ShadowPass ACTIVO (directional con castShadows detectada, "
-                "dir=({:.2f},{:.2f},{:.2f}))",
-                shadowLightDir.x, shadowLightDir.y, shadowLightDir.z);
-        } else {
-            Log::render()->info("ShadowPass inactivo (sin directional con castShadows)");
-        }
-        m_shadowEnabledLastFrame = shadowEnabled;
-    }
+    recordShadowPass(scene, assets, view, projection,
+                       shadowEnabled, shadowLightDir);
 
     // El render de la escena (sky + lit + fog + debug) escribe al HDR.
     m_sceneFb->bind();
@@ -204,75 +176,10 @@ void SceneRenderer::renderScene(Scene& scene,
     }
 
     // Hito 18: Forward+ light grid.
+    // break-B2: body movido a SceneRenderer_Render_Lighting.cpp.
     const u32 fbW = m_sceneFb->width();
     const u32 fbH = m_sceneFb->height();
-    {
-        MOOD_PROFILE_SCOPE("LightGrid::compute");
-        m_lightGrid->compute(lights, view, projection, fbW, fbH);
-    }
-
-    // Log diagnostico one-shot al cambiar la cantidad de luces.
-    const u32 pcount = static_cast<u32>(lights.pointLights.size());
-    if (pcount != m_lastLoggedPointLightCount) {
-        const u32 totalAssign = m_lightGrid->totalAssignments();
-        u32 nonEmpty = 0;
-        for (const auto& t : m_lightGrid->tileData()) if (t.count > 0) ++nonEmpty;
-        const f32 avgPerNonEmpty = nonEmpty > 0
-            ? static_cast<f32>(totalAssign) / static_cast<f32>(nonEmpty)
-            : 0.0f;
-        Log::render()->info(
-            "LightGrid: {} point lights -> {} tiles ({}x{}), {} no-vacios, "
-            "{} asignaciones (avg {:.2f}/tile)",
-            pcount, m_lightGrid->tileCount(),
-            m_lightGrid->tilesX(), m_lightGrid->tilesY(),
-            nonEmpty, totalAssign, avgPerNonEmpty);
-        m_lastLoggedPointLightCount = pcount;
-    }
-
-    // SSBO 2: point light data std430.
-    struct PointLightStd430 {
-        f32 posX, posY, posZ; f32 _pad0;
-        f32 colR, colG, colB; f32 intensity;
-        f32 radius; f32 _pad1, _pad2, _pad3;
-    };
-    static_assert(sizeof(PointLightStd430) == 48,
-                  "PointLight std430 layout mismatch con el shader");
-    std::vector<PointLightStd430> packed;
-    packed.reserve(lights.pointLights.size());
-    for (const auto& p : lights.pointLights) {
-        PointLightStd430 e{};
-        e.posX = p.position.x; e.posY = p.position.y; e.posZ = p.position.z;
-        e.colR = p.color.x;    e.colG = p.color.y;    e.colB = p.color.z;
-        e.intensity = p.intensity;
-        e.radius    = p.radius;
-        packed.push_back(e);
-    }
-    if (packed.empty()) packed.push_back(PointLightStd430{});
-    m_pointLightsSsbo->upload(packed.data(),
-        static_cast<GLsizeiptr>(packed.size() * sizeof(PointLightStd430)));
-    m_pointLightsSsbo->bind(2);
-
-    // SSBO 3: tile data.
-    const auto& tileData = m_lightGrid->tileData();
-    if (tileData.empty()) {
-        LightTileData zero{0u, 0u};
-        m_lightTilesSsbo->upload(&zero, sizeof(LightTileData));
-    } else {
-        m_lightTilesSsbo->upload(tileData.data(),
-            static_cast<GLsizeiptr>(tileData.size() * sizeof(LightTileData)));
-    }
-    m_lightTilesSsbo->bind(3);
-
-    // SSBO 4: light indices.
-    const auto& indices = m_lightGrid->lightIndices();
-    if (indices.empty()) {
-        const u32 zero = 0u;
-        m_lightIndicesSsbo->upload(&zero, sizeof(u32));
-    } else {
-        m_lightIndicesSsbo->upload(indices.data(),
-            static_cast<GLsizeiptr>(indices.size() * sizeof(u32)));
-    }
-    m_lightIndicesSsbo->bind(4);
+    uploadLightGridSsbos(lights, view, projection, fbW, fbH);
 
     // IBL + shadow map: bindeos UNA VEZ (global GL state).
     const bool iblOk = (m_iblIrradiance && m_iblPrefilter && m_iblBrdfLut);
@@ -296,218 +203,36 @@ void SceneRenderer::renderScene(Scene& scene,
         m_shadowPass->bindShadowColorMap(8);  // F2H64: sombras tintadas
     }
 
-    // Lambda con TODOS los uniforms del shader de escena.
-    auto applyShaderUniforms = [&](IShader& sh) {
-        sh.bind();
-        sh.setMat4("uView", view);
-        sh.setMat4("uProjection", projection);
-        sh.setInt("uAlbedoMap",         0);
-        sh.setInt("uShadowMap",         1);
-        sh.setInt("uMetallicRoughness", 2);
-        sh.setInt("uAoMap",             3);
-        sh.setInt("uIrradianceMap",     4);
-        sh.setInt("uPrefilterMap",      5);
-        sh.setInt("uBrdfLut",           6);
-        // F2H63: el translucent pass bindea el backbuffer copy a unit 7
-        // y setea uScreenSize. Para el pase opaco normal uBlendMode=0 y
-        // estos uniforms no se leen — pero igual seteamos defaults para
-        // que la sampler unit no quede sin asignar (UB del driver).
-        sh.setInt  ("uBackbufferCopy",  7);
-        sh.setInt  ("uShadowColorMap",  8);  // F2H64: sombras tintadas
-        sh.setVec2 ("uScreenSize",
-                    glm::vec2(static_cast<f32>(fbW), static_cast<f32>(fbH)));
-        m_lightSystem->bindUniforms(sh, lights, cameraPos);
-
-        sh.setInt("uTileSize", static_cast<int>(k_LightGridTileSize));
-        sh.setInt("uTilesX",   static_cast<int>(m_lightGrid->tilesX()));
-        sh.setInt("uTilesY",   static_cast<int>(m_lightGrid->tilesY()));
-
-        sh.setInt  ("uIblEnabled",      iblOk ? 1 : 0);
-        sh.setFloat("uPrefilterMaxLod", prefilterMaxLod);
-        sh.setFloat("uIblIntensity",    m_iblIntensity);
-
-        // F2H60: CSM. uShadowMap pasa de sampler2DShadow a sampler2DArray
-        // Shadow. El array de matrices `uLightSpaces[kMaxCsmCascades]` +
-        // splits view-space `uCascadeSplits` permiten al shader elegir
-        // cascada por fragment.
-        sh.setInt  ("uShadowEnabled",  shadowEnabled ? 1 : 0);
-        // F2H60 polish iter4: bias bajado de 0.005 a 0.0015. El bias
-        // antiguo era ~0.25m de "lift" en NDC depth -- visible peter-
-        // panning al apoyar un brush sobre el piso (la sombra
-        // "desaparecia" porque el bias hacia que el receiver pareciera
-        // estar mas cerca de la luz que el caster). 0.0015 + el
-        // biasScale por cascada del shader (x1, x2, x3, x4) es
-        // suficiente para evitar acne sin despegar sombras cercanas.
-        sh.setFloat("uShadowBias",     0.0015f);
-        const u32 csmCount = (shadowEnabled && m_shadowPass)
-            ? m_shadowPass->cascadeCount() : 1;
-        sh.setInt("uCascadeCount", static_cast<int>(csmCount));
-        for (u32 i = 0; i < kMaxCsmCascades; ++i) {
-            const std::string lsKey = "uLightSpaces[" + std::to_string(i) + "]";
-            sh.setMat4(lsKey.c_str(),
-                shadowEnabled && m_shadowPass
-                    ? m_shadowPass->lightSpaceMatrix(i)
-                    : glm::mat4(1.0f));
-        }
-        for (u32 i = 0; i <= kMaxCsmCascades; ++i) {
-            const std::string spKey = "uCascadeSplits[" + std::to_string(i) + "]";
-            sh.setFloat(spKey.c_str(),
-                shadowEnabled && m_shadowPass
-                    ? m_shadowPass->cascadeSplit(i)
-                    : 0.0f);
-        }
-
-        sh.setInt  ("uFogMode",    static_cast<int>(m_fog.mode));
-        sh.setVec3 ("uFogColor",   m_fog.color);
-        sh.setFloat("uFogDensity", m_fog.density);
-        sh.setFloat("uFogStart",   m_fog.linearStart);
-        sh.setFloat("uFogEnd",     m_fog.linearEnd);
-    };
-
     // Texturas dummy para los slots no usados.
     ITexture* dummyTex = assets.getTexture(assets.missingTextureId());
 
+    // break-B2: estado por-frame que comparten todos los pases. Antes
+    // vivia como capturas en lambdas locales; ahora se construye una
+    // vez aca y se pasa por const-ref a los helpers en sibling .cpp.
+    FrameContext frame{};
+    frame.view            = view;
+    frame.projection      = projection;
+    frame.fbW             = fbW;
+    frame.fbH             = fbH;
+    frame.cameraPos       = cameraPos;
+    frame.lights          = &lights;
+    frame.iblOk           = iblOk;
+    frame.prefilterMaxLod = prefilterMaxLod;
+    frame.shadowEnabled   = shadowEnabled;
+    frame.dummyTex        = dummyTex;
+
+    // break-B2: lambdas wrapper para mantener call-sites compactos en
+    // los pases que siguen abajo. El body real vive en _Lighting.cpp
+    // (applySceneShaderUniforms) y _Materials.cpp (drawSceneMeshRenderer).
+    auto applyShaderUniforms = [&](IShader& sh) {
+        applySceneShaderUniforms(sh, frame);
+    };
+
+    // break-B2: body movido a SceneRenderer_Render_Materials.cpp.
     auto drawMeshRenderer = [&](IShader& defaultSh,
                                  MeshRendererComponent& mr,
                                  const glm::mat4& model) {
-        MeshAsset* asset = assets.getMesh(mr.mesh);
-        if (asset == nullptr) return;
-        // F2H82 Bloque B: centrado en runtime. Si la entity es una rueda con un
-        // hub offset (sub-mesh NO centrado en el .glb), restamos ese centroide
-        // antes del world matrix para que rote en su hub. (0,0,0) = sin offset
-        // (el caso comun: props, chassis, y ruedas ya centradas como el
-        // DeLorean) => effectiveModel == model, sin costo extra.
-        const bool hasPivot = (mr.subMeshPivotOffset.x != 0.0f
-                               || mr.subMeshPivotOffset.y != 0.0f
-                               || mr.subMeshPivotOffset.z != 0.0f);
-        const glm::mat4 effectiveModel =
-            hasPivot ? model * glm::translate(glm::mat4(1.0f),
-                                              -mr.subMeshPivotOffset)
-                     : model;
-        for (usize i = 0; i < asset->submeshes.size(); ++i) {
-            const auto& sub = asset->submeshes[i];
-            if (sub.mesh == nullptr) continue;
-            // F2H67: sub-mesh selector. Si la entity pidio uno especifico,
-            // skipear el resto (case-sensitive exact match).
-            if (!mr.subMeshName.empty() && sub.name != mr.subMeshName) {
-                continue;
-            }
-            // F2H70.3 H: exclude-prefix. El chassis de un vehiculo skipea las
-            // ruedas (`wheel_*`) — las renderean 4 wheel-entities aparte.
-            if (!mr.hideSubMeshPrefix.empty()
-                && sub.name.rfind(mr.hideSubMeshPrefix, 0) == 0) {
-                continue;
-            }
-            // F2H82 Bloque B: exclude por nombre exacto. El chassis de un auto
-            // importado (ruedas sin convencion `wheel_*`) lista los 4 nombres
-            // reales aca. Lista chica (4) => busqueda lineal trivial.
-            if (!mr.hideSubMeshNames.empty()
-                && std::find(mr.hideSubMeshNames.begin(),
-                             mr.hideSubMeshNames.end(), sub.name)
-                       != mr.hideSubMeshNames.end()) {
-                continue;
-            }
-            // F2H68: el pivot-offset auto-center se evaluó y descartó —
-            // funcionaba para wheels pero desfasaba el chassis "body" porque
-            // restarle el centro del AABB lo movía 60cm hacia abajo del TF.
-            // Decisión: para vehículos, 1 entity por vehículo con UN mesh
-            // (sin sub-mesh selector por wheel). Las wheels físicas del
-            // VehicleConstraint siguen funcionando, solo se pierde animación
-            // visual de wheels rotando — aceptable hasta que tengamos un
-            // model authoring pipeline propio.
-
-            const MaterialAssetId matId =
-                mr.materialOrMissing(sub.materialIndex);
-            const MaterialAsset* mat = assets.getMaterial(matId);
-
-            // F2H62 Bloque E: si el material tiene shaderGraphPath, pedimos
-            // al cache un IShader compilado. Si lo da, lo usamos en lugar
-            // del defaultSh para este submesh; sino, fallback transparente.
-            // El cache reusa el program compilado entre frames; solo
-            // recompila si el hash del GLSL cambia (dev edito el grafo).
-            IShader* sh = &defaultSh;
-            bool usingGraph = false;
-            if (mat != nullptr && !mat->shaderGraphPath.empty() &&
-                m_shaderGraphCache != nullptr) {
-                IShader* gSh = m_shaderGraphCache->getOrCompile(
-                    mat->shaderGraphPath, assets);
-                if (gSh != nullptr) {
-                    sh = gSh;
-                    usingGraph = true;
-                    // Rebind program + uniforms (estabamos en defaultSh).
-                    applyShaderUniforms(*sh);
-                    sh->setMat4("uModel", effectiveModel);
-                    sh->setFloat("uTime", m_currentTime);
-                }
-            }
-
-            // useAlbedoMap distingue "tint puro" (gold/plastic, false) de
-            // "samplear textura" (true). El default material tiene
-            // useAlbedoMap=true con albedo=0 => muestra missing.png como
-            // warning visible.
-            const bool hasAlbedo = (mat != nullptr && mat->useAlbedoMap);
-            glActiveTexture(GL_TEXTURE0);
-            assets.getTexture(hasAlbedo ? mat->albedo : 0)->bind(0);
-            sh->setInt("uHasAlbedoMap", hasAlbedo ? 1 : 0);
-
-            const bool hasMR =
-                (mat != nullptr && mat->metallicRoughness != 0);
-            glActiveTexture(GL_TEXTURE2);
-            if (hasMR) {
-                assets.getTexture(mat->metallicRoughness)->bind(2);
-            } else {
-                dummyTex->bind(2);
-            }
-            sh->setInt("uHasMetallicRoughness", hasMR ? 1 : 0);
-
-            const bool hasAo = (mat != nullptr && mat->ao != 0);
-            glActiveTexture(GL_TEXTURE3);
-            if (hasAo) {
-                assets.getTexture(mat->ao)->bind(3);
-            } else {
-                dummyTex->bind(3);
-            }
-            sh->setInt("uHasAoMap", hasAo ? 1 : 0);
-
-            if (mat != nullptr) {
-                sh->setVec3 ("uAlbedoTint",   mat->albedoTint);
-                sh->setFloat("uMetallicMult", mat->metallicMult);
-                sh->setFloat("uRoughnessMult",mat->roughnessMult);
-                sh->setFloat("uAoMult",       mat->aoMult);
-                // F2H63: blending per-material. uBlendMode=0 (Opaque) hace
-                // que el shader use el path tradicional — los otros tres
-                // uniforms quedan sin efecto.
-                sh->setInt  ("uBlendMode",          static_cast<int>(mat->blendMode));
-                sh->setFloat("uOpacity",            mat->opacity);
-                sh->setFloat("uIor",                mat->ior);
-                sh->setFloat("uRefractionStrength", mat->refractionStrength);
-            } else {
-                sh->setVec3 ("uAlbedoTint",   glm::vec3(1.0f));
-                sh->setFloat("uMetallicMult", 0.0f);
-                sh->setFloat("uRoughnessMult",0.5f);
-                sh->setFloat("uAoMult",       1.0f);
-                sh->setInt  ("uBlendMode",          0);   // Opaque default
-                sh->setFloat("uOpacity",            1.0f);
-                sh->setFloat("uIor",                1.0f);
-                sh->setFloat("uRefractionStrength", 0.0f);
-            }
-
-            // F2H82 Bloque B: el caller setea uModel=model en `sh` antes de la
-            // lambda; si hay hub offset hay que reescribirlo con effectiveModel
-            // (el graph-path ya lo hizo arriba con su propio shader).
-            if (hasPivot && !usingGraph) {
-                sh->setMat4("uModel", effectiveModel);
-            }
-            glActiveTexture(GL_TEXTURE0);
-            m_renderer->drawMesh(*sub.mesh, *sh);
-
-            // Si swappeamos al graph shader, volvemos a bindear el
-            // defaultSh para no afectar el siguiente submesh o entity
-            // del loop externo (que asume defaultSh activo).
-            if (usingGraph) {
-                applyShaderUniforms(defaultSh);
-            }
-        }
+        drawSceneMeshRenderer(defaultSh, mr, model, assets, frame);
     };
 
     // F2H3 + F2H4: agrupamos las entidades estaticas por (mesh, material)
