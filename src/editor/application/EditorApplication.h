@@ -281,21 +281,19 @@ private:
     ///        puede proceder, `false` si hay que abortarla.
     bool confirmDiscardChanges();
 
-    // Handlers de spawn (features reales) y drops del viewport.
-    // Implementaciones en `DemoSpawners_*.cpp`. Cada uno hace su propio
-    // `consume*Request` y, si hay request pendiente, crea la entidad
-    // correspondiente. No-op si la condicion no se cumple (sin scene, etc.).
-    // post-v2.0.2 (cleanup): los handlers demo (Rotator, HudDemo, EnemyDemo,
-    // ShadowDemo, PbrSpheres, AnimatedCharacter, FireParticles, DialogDemo,
-    // NarrativeDemoMap, FullStressScene) fueron borrados — muletas de
-    // desarrollo de Fase 1-2 sin entry point UI desde F2H57.
-    void processSpawnAudioSourceRequest();
-    void processSpawnPointLightRequest();
-    void processSpawnPhysicsBoxRequest();
-    void processSpawnEnvironmentRequest();
-    void processSpawnLightStressRequest();       // stress test (menu Debug)
-    void processSpawnTriggerRequest();           // Hito 33
-    void processSpawnStressTrisRequest();        // F2H2 (menu Debug)
+    // Handlers de spawn (stress tests del menu Debug) + drops del viewport.
+    // Implementaciones en `DemoSpawners_Stress.cpp` y `_Drop.cpp`. Cada uno
+    // hace su propio `consume*Request` y, si hay request pendiente, crea la
+    // entidad correspondiente. No-op si la condicion no se cumple.
+    //
+    // post-v2.0.2 cleanup: borrados 10 demos historicos (Rotator, HudDemo,
+    // EnemyDemo, ShadowDemo, PbrSpheres, AnimatedCharacter, FireParticles,
+    // DialogDemo, NarrativeDemoMap, FullStressScene) y 5 spawners legacy
+    // huérfanos (PointLight, Environment, PhysicsBox, AudioSource, Trigger
+    // — todos reemplazados por el flow "+ Crear Entidad" del HierarchyPanel
+    // + Add Component en Inspector).
+    void processSpawnLightStressRequest();       // menu Debug
+    void processSpawnStressTrisRequest();        // menu Debug (10K/100K/500K/1M)
 
     /// @brief Hito 28: empaqueta una creacion (spawn / drop) como
     ///        `CreateEntityCommand` y la empuja al `m_history`. El

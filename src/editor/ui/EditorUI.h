@@ -241,36 +241,20 @@ public:
     bool consumeDeleteSelectedRequest();
 
     // ============================================================
-    // Spawn requests (features reales + stress tests). Bodies en
-    // EditorUI_Spawn.inl. post-v2.0.2 cleanup: borrados 12 demos historicos
-    // (Rotator, HudDemo, EnemyDemo, ShadowDemo, PbrSpheres, AnimatedChar,
-    // FireParticles, DialogDemo, NarrativeDemoMap, FullStressScene,
-    // OpenDemoMap, OpenNarrativeDemo) sin entry point UI desde F2H57.
+    // Spawn requests (stress tests del menu Debug). Bodies en
+    // EditorUI_Spawn.inl.
+    //
+    // post-v2.0.2 cleanup: borrados 12 demos historicos (Rotator, HudDemo,
+    // EnemyDemo, ShadowDemo, PbrSpheres, AnimatedChar, FireParticles,
+    // DialogDemo, NarrativeDemoMap, FullStressScene, OpenDemoMap,
+    // OpenNarrativeDemo) y 5 spawners legacy huérfanos (PointLight,
+    // Environment, PhysicsBox, AudioSource, Trigger) reemplazados por
+    // "+ Crear Entidad" + Add Component en Inspector.
     // ============================================================
-
-    /// @brief Hito 9 — AudioSource (beep.wav loop + 3D).
-    void requestSpawnAudioSource();
-    bool consumeSpawnAudioSourceRequest();
-
-    /// @brief Hito 11 — Point light (blanca, radius 12).
-    void requestSpawnPointLight();
-    bool consumeSpawnPointLightRequest();
-
-    /// @brief Hito 12 — caja fisica Dynamic 1x1x1 5kg desde 6m.
-    void requestSpawnPhysicsBox();
-    bool consumeSpawnPhysicsBoxRequest();
-
-    /// @brief Hito 15 — entidad "Environment" con sky/fog/post-process default.
-    void requestSpawnEnvironment();
-    bool consumeSpawnEnvironmentRequest();
 
     /// @brief Hito 18 — 64 point lights en grid 8x8 (stress Forward+, menu Debug).
     void requestSpawnLightStress();
     bool consumeSpawnLightStressRequest();
-
-    /// @brief Hito 33 Bloque 4 — TriggerComponent (AABB 2x2x2) + script demo.
-    void requestSpawnTrigger();
-    bool consumeSpawnTriggerRequest();
 
     /// @brief F2H2 — grid de cubos hasta el target (menu Debug, 10k/100k/500k/1M tris).
     void requestSpawnStressTris(int targetTris);
@@ -364,9 +348,6 @@ private:
 
     ProjectAction m_projectAction = ProjectAction::None;
     bool m_hasProject = false;
-    bool m_spawnAudioSourceRequested = false;
-    bool m_spawnPointLightRequested = false;
-    bool m_spawnPhysicsBoxRequested = false;
     bool m_savePrefabRequested = false;
     bool m_createEntityFromModelRequested = false;   // F2H57
     bool m_createEntityPlaceholderRequested = false; // F2H57 followup
@@ -374,9 +355,7 @@ private:
     bool m_convertModalRequested = false;            // F2H57 Bloque C
     entt::entity m_convertModalTarget{entt::null};   // F2H57 Bloque C
     bool m_deleteSelectedRequested = false;          // F2H57 Bloque C
-    bool m_spawnEnvironmentRequested = false;
     bool m_spawnLightStressRequested = false;       // Hito 18 (menu Debug)
-    bool m_spawnTriggerRequested = false;           // Hito 33
     int  m_spawnStressTrisRequested = 0;            // F2H2 (target tris, menu Debug)
     bool m_recentsDirty = false;
     std::vector<std::filesystem::path> m_recentProjects;

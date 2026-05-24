@@ -4,7 +4,7 @@
 //   - self.tag          (string, read-only)
 //   - self.transform    -> TransformComponent (mutable)
 //   - log.info(str) / log.warn(str)
-//   - hud.setHp/setAmmo/setPaused + getters
+//   - hud.setHp/setMag/setReserve/setPaused + getters (HUD framework F2H39+)
 //   - engine.exposed(name, default)  (Hito 24)
 //   - physics.raycast(origin, dir, maxDist) -> {hit, point, normal, distance, bodyId}  (Hito 33)
 

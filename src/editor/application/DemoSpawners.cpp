@@ -1,8 +1,6 @@
 // Nucleo del modulo (post-v2.0.2 cleanup). Cada handler vive en archivos
 // parciales por dominio:
-//   _Basic.cpp   — spawners de features reales (Audio, PointLight,
-//                  PhysicsBox, Environment, Trigger)
-//   _Stress.cpp  — stress tests (LightStress, StressTris) en menu Debug
+//   _Stress.cpp  — stress tests del menu Debug (LightStress, StressTris)
 //   _Prefab.cpp  — guardar/instanciar prefab
 //   _Drop.cpp    — drops del viewport (textura, mesh, material, script,
 //                  item, vehicle)
@@ -11,9 +9,10 @@
 // CreateEntityCommand al HistoryStack.
 //
 // Nota historica: nombre del modulo se mantiene "DemoSpawners" por costo
-// de rename (cross-CMakeLists + git mv). Tras el cleanup de demos, el
-// nombre es algo enganoso pero no bloqueante; rename queda como
-// polish opcional.
+// de rename (cross-CMakeLists + git mv). Tras el cleanup de demos +
+// spawners legacy, el nombre es algo enganoso (los archivos vivos hacen
+// stress tests + drops + prefabs, no demos) pero no bloqueante. Rename
+// queda como polish opcional.
 
 #include "editor/application/EditorApplication.h"
 

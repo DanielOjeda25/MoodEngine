@@ -328,7 +328,7 @@ void EditorApplication::handleNewScript() {
     // del cuerpo da una pista de los bindings disponibles sin abrumar.
     f << "-- Auto-generado por MoodEngine.\n"
       << "-- Bindings disponibles: self.tag, self.transform.position/.rotationEuler/.scale,\n"
-      << "-- log.info(msg), log.warn(msg), hud.setHp(v)/setAmmo(v)/setPaused(b).\n"
+      << "-- log.info(msg), log.warn(msg), hud.setHp(v)/setMag(v)/setReserve(v)/setPaused(b).\n"
       << "\n"
       << "function onUpdate(self, dt)\n"
       << "    -- self.transform.position.x = self.transform.position.x + dt\n"

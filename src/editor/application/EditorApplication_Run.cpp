@@ -372,20 +372,14 @@ void EditorApplication::pumpUiRequests() {
 // drops desde AssetBrowser) + delete + convert modal + interacciones
 // de viewport. Es el bloque mas grande de run() pre-split.
 void EditorApplication::pumpSpawnAndDropRequests() {
-    // Handlers de spawn (features reales en menu/Welcome) + drops del
-    // viewport. Cada process*Request consume su flag y, si lo encontro
-    // seteado, materializa la entidad. post-v2.0.2: los 10 handlers demo
-    // historicos (Rotator, HudDemo, EnemyDemo, ShadowDemo, PbrSpheres,
-    // AnimatedCharacter, FireParticles, DialogDemo, NarrativeDemoMap,
-    // FullStressScene) fueron borrados — muletas de desarrollo de Fase 1-2
-    // sin entry point UI desde F2H57.
-    processSpawnPhysicsBoxRequest();
-    processSpawnEnvironmentRequest();
-    processSpawnLightStressRequest();      // stress test (menu Debug)
-    processSpawnTriggerRequest();
-    processSpawnStressTrisRequest();       // stress test (menu Debug)
-    processSpawnPointLightRequest();
-    processSpawnAudioSourceRequest();
+    // Stress tests del menu Debug + drops del viewport + prefab. Cada
+    // process*Request consume su flag y, si lo encontro seteado,
+    // materializa la entidad. post-v2.0.2: borrados 10 demos historicos
+    // (Rotator, HudDemo, etc.) + 5 spawners legacy (PointLight,
+    // Environment, PhysicsBox, AudioSource, Trigger) reemplazados por el
+    // flow "+ Crear Entidad" + Add Component.
+    processSpawnLightStressRequest();
+    processSpawnStressTrisRequest();
     processSavePrefabRequest();
     processCreateEntityFromModelRequest();  // F2H57
     processCreateEntityPlaceholderRequest();  // F2H57 followup

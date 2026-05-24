@@ -70,9 +70,14 @@ void LuaApiPanel::onImGuiRender() {
             drawApiEntry("hud.setHp(int)",
                 "Setea el HP visible en el bloque izquierdo del HUD.",
                 "hud.setHp(75)");
-            drawApiEntry("hud.setAmmo(int)",
-                "Setea el AMMO visible en el bloque derecho del HUD.",
-                "hud.setAmmo(12)");
+            drawApiEntry("hud.setMag(int)",
+                "Setea la munición de la magazine actual (parte grande "
+                "del bloque derecho del HUD).",
+                "hud.setMag(12)");
+            drawApiEntry("hud.setReserve(int)",
+                "Setea la munición de reserva (mostrada como '/N' debajo "
+                "de la magazine).",
+                "hud.setReserve(60)");
             drawApiEntry("hud.setPaused(bool)",
                 "Togglea el estado de pausa. Si pasa a true, el menu modal "
                 "aparece y el cursor se libera. Sirve para forzar pausa "
@@ -81,9 +86,12 @@ void LuaApiPanel::onImGuiRender() {
             drawApiEntry("hud.getHp() : int",
                 "Lee el HP actual.",
                 "local hp = hud.getHp()");
-            drawApiEntry("hud.getAmmo() : int",
-                "Lee el AMMO actual.",
-                "local ammo = hud.getAmmo()");
+            drawApiEntry("hud.getMag() : int",
+                "Lee la munición de la magazine actual.",
+                "local mag = hud.getMag()");
+            drawApiEntry("hud.getReserve() : int",
+                "Lee la munición de reserva.",
+                "local reserve = hud.getReserve()");
             drawApiEntry("hud.getPaused() : bool",
                 "Devuelve true si el juego esta pausado.",
                 "if not hud.getPaused() then ... end");
