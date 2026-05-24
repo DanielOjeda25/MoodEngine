@@ -11,6 +11,50 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-24: F3H3 cierre — auditoría hardcoded values + 2 fixes reactivos
+
+### Decisión 1 — Audit-only NO: fix reactivo de bugs durante el sweep
+
+**Contexto:** F3H3 estaba planeado como audit puro (sin código nuevo, solo `HARDCODED_AUDIT.md`). Durante los 3 sweeps paralelos se detectaron 2 bugs reales: (a) walk/crouch speeds Player↔Editor desincronizados (4.0/2.0 vs 5.5/3.0 — el tuning de F2H41 nunca llegó al Player); (b) gravity con 3 sources of truth (PhysicsWorld + VehicleConfig + VehicleConfigWriter, los 3 con literal `9.81f`). El dev preguntó: *"antes de hacer todo eso, porque no lo arreglamos? en lugar de hacer otro HITO aparte"*.
+
+**Decisión:** fix reactivo durante el cierre F3H3. No esperar a F3H4 para cerrar bugs que ya están identificados y son triviales de arreglar.
+
+**Razones:**
+- Regla `feedback_plan_discipline`: "solo cambios reactivos a bugs". Los 2 hallazgos son bugs (no "el user no puede tunear" — sino "el sistema se comporta inconsistente").
+- Walk/crouch: 4 líneas de cambio + un comentario. Fix trivial. Esperar a F3H4 = el usuario sigue sintiendo Player más lento que Editor por días/semanas innecesariamente.
+- Gravity: refactor de literal a constante con `Mood::physics::kEarthGravityMagnitude`. Sin cambio de API pública, sin riesgo de regresión. El bug latente (suspensión mal calibrada si gravity cambia) sigue ahí pero ahora hay un solo lugar para cambiar.
+- El audit doc sigue siendo el output principal del hito (~22 candidatos catalogados para F3H4-F3H7). Los 2 fixes son side-effect del proceso, no reemplazan el catálogo.
+
+**Alternativas descartadas:**
+- Audit-only puro (plan original): mantiene "scope chico" pero deja bugs detectados sin arreglar por dogma. Peor outcome para el usuario.
+- Mergear F3H3+F3H4: el dev también propuso esta opción ("hacer la migración real ahora"). Descartada porque migrar walk/crouch a `.moodproj` requiere: agregar fields a `ProjectSettings`, JSON serialization, sección "Gameplay" en el panel con UI, reads en ambos call-sites, test roundtrip, validación visual. Eso es un hito real (F3H4), no un fix. Fix + migración separados mantiene scope chico per hito.
+
+### Decisión 2 — `Mood::physics::kEarthGravityMagnitude` en PhysicsWorld.h (owner natural)
+
+**Contexto:** los 3 sites con `9.81f` literal necesitaban una única constante. Opciones: (a) nuevo header `engine/physics/Gravity.h` solo para la constante; (b) constante en `core/Constants.h` (no existe); (c) constante en `PhysicsWorld.h` como member del namespace `Mood::physics`.
+
+**Decisión:** opción (c). `constexpr float kEarthGravityMagnitude = 9.81f;` en namespace `Mood::physics` dentro de PhysicsWorld.h.
+
+**Razones:**
+- PhysicsWorld es el owner natural — el que llama `physicsSystem->SetGravity(...)` en init. La constante vive donde se usa primero.
+- PhysicsWorld.h NO incluye Jolt (forward-decls). Incluirlo desde VehicleConfig.cpp + VehicleConfigWriter.cpp es lightweight (~5 forward decls).
+- Crear nuevo header `engine/physics/Gravity.h` para una sola constante es overkill (regla CLAUDE.md: "prefer editing existing files").
+- Cuando F3H4 migre gravity a `.moodproj > Physics`, este valor pasa a ser el default expuesto en la UI. Las fórmulas de suspensión necesitarán recibir el live value (no la constante) para calibrar bien — pero eso ya es trabajo de F3H4, no F3H3.
+
+### Decisión 3 — Walk/crouch fix sin migrar (paridad inmediata)
+
+**Contexto:** alternativa al fix simple (4 → 5.5, 2 → 3 en Player) era migrar walk/crouch directamente a `.moodproj > Gameplay` ahora, cerrando el bug y la migración en un solo paso.
+
+**Decisión:** fix simple ahora. Migración real va en F3H4.
+
+**Razones:**
+- Migrar requiere agregar fields a ProjectSettings, sección "Gameplay" en el panel UI, JSON keys nuevas, lecturas en ambos call-sites, test, validación visual. Eso es F3H4 (un hito chico-mediano).
+- F3H3 cierra el bug en 4 líneas. El usuario que corra el Player runtime mañana siente la paridad. F3H4 después le da la capacidad de tunear.
+- Mantiene "scope chico per hito" — F3H3 = audit + 2 fixes reactivos triviales, F3H4 = migración completa de bucket.
+- Los nuevos literales (5.5/3.0) van a desaparecer en F3H4 cuando lean de `.moodproj`. Hardcodeo intermedio aceptable.
+
+---
+
 ## 2026-05-24: F3H2 cierre — User Preferences panel + popup viejo eliminado
 
 ### Decisión 1 — Mirror exacto de F3H1 (no innovar en patrón)
