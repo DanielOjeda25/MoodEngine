@@ -1,5 +1,12 @@
 // F2H24: Inspector — BrushComponent (CSG) + UV editor (F2H15/F2H17).
 // F2H33: + texture alignment (Align/Fit/Justify L/R/T/B + Treat as one face).
+//
+// break-B6c (auditoria): split de la función gigante. El cuerpo era una
+// secuencia de header info + UV editor + alignment buttons. Extraemos el
+// header info (read-only) y el bloque de alignment (170 LOC) a helpers
+// file-local. El UV editor queda inline porque sus lambdas (applyToScope +
+// captureSnapshot + pushCommandIfChanged) están muy acopladas con state
+// local; sacarlo agregaria mas param-passing que la mejora justifica.
 
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/scene/InspectorPanel_Internal.h"
@@ -23,14 +30,11 @@
 
 namespace Mood {
 
-// BrushComponent (F2H11)
-// Read-only en F2H11. F2H13 agrega edicion de primitivas (cilindro,
-// esfera, etc.); F2H14 agrega editor de UV per-cara con drag &
-// drop de materiales; F2H15 agrega seleccion de cara individual.
-void InspectorPanel::renderBrushSection(Entity e) {
-    auto& bc = e.getComponent<BrushComponent>();
-    if (!beginComponentSection<BrushComponent>(e, ICON_FA_CUBES_STACKED " Brush (CSG)")) return;
+namespace {
 
+// Bloque de info read-only del brush: número de caras, AABB local, slots
+// de material, estado del cache, dirty flag.
+void drawBrushHeaderInfo(BrushComponent& bc, AssetManager* assets) {
     ImGui::Text("%s",
         I18n::T("editor.panel.inspector.brush.faces",
                 static_cast<u32>(bc.brush.faces.size())).c_str());
@@ -42,7 +46,7 @@ void InspectorPanel::renderBrushSection(Entity e) {
                 static_cast<double>(size.y),
                 static_cast<double>(size.z)).c_str());
 
-    if (m_assets != nullptr) {
+    if (assets != nullptr) {
         // F2H17: el brush tiene N slots de material (uno por
         // material distinto entre las caras). Mostrar todos.
         ImGui::Text("%s",
@@ -52,7 +56,7 @@ void InspectorPanel::renderBrushSection(Entity e) {
             const MaterialAssetId mid = bc.materials[i];
             const std::string matPath = (mid == 0)
                 ? I18n::T("editor.panel.inspector.brush.blank_look")
-                : m_assets->materialPathOf(mid);
+                : assets->materialPathOf(mid);
             ImGui::TextDisabled("  [%u] %s (id %u)", i,
                                    matPath.c_str(),
                                    static_cast<unsigned>(mid));
@@ -65,6 +69,189 @@ void InspectorPanel::renderBrushSection(Entity e) {
     ImGui::TextDisabled("%s",
         I18n::T(bc.dirty ? "editor.panel.inspector.brush.dirty_yes"
                           : "editor.panel.inspector.brush.dirty_no").c_str());
+}
+
+// F2H33 Bloque D: texture alignment. Solo aplica en Face Mode. Botones operan
+// sobre la cara active (single) o todas las seleccionadas (multi). El checkbox
+// "Treat as one face" solo es visible cuando hay >1 caras y computa el bounding
+// rect UV COMPARTIDO usando los axisU/V de la primary — para que las N caras
+// compartan un solo wrap de textura coherente en lugar de fitear cada una por
+// separado.
+void drawBrushTextureAlignment(BrushComponent& bc, Entity e, i32 faceIdx,
+                                 bool multiFace, const SelectionSet* selSet,
+                                 const std::string& entityTag,
+                                 EditorUI* ui, bool& treatAsOneFlag,
+                                 bool& editedFlag) {
+    if (!e.hasComponent<TransformComponent>()) return;
+    ImGui::Separator();
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.inspector.brush.alignment").c_str());
+
+    const auto& tf = e.getComponent<TransformComponent>();
+    const glm::mat4 worldMat = tf.worldMatrix();
+
+    if (multiFace) {
+        const std::string treatLabel = I18n::T("editor.panel.inspector.brush.treat_as_one") + "##align";
+        ImGui::Checkbox(treatLabel.c_str(), &treatAsOneFlag);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s",
+                I18n::T("editor.panel.inspector.brush.treat_as_one_tooltip").c_str());
+        }
+    } else {
+        treatAsOneFlag = false;  // reset si bajamos a single
+    }
+    const bool treatAsOne = multiFace && treatAsOneFlag;
+
+    // Helper local: aplica `op(face, rect)` a las caras del scope
+    // segun multiFace + treatAsOne, snapshotea y pushea command.
+    auto runAlignmentOp = [&](const char* commandLabel, auto&& op) {
+        if (ui == nullptr || ui->scene() == nullptr) return;
+        BrushUVSnapshot pre = captureBrushUV(bc.brush);
+
+        if (treatAsOne) {
+            // Rect compartido en sistema de la primary.
+            const u32 primaryIdx = static_cast<u32>(faceIdx);
+            const Csg::FaceUvRect sharedRect =
+                Csg::computeFaceUvRect(bc.brush, primaryIdx, worldMat);
+            if (!sharedRect.isValid()) {
+                Log::editor()->warn(
+                    "Alignment: rect de la cara primary "
+                    "degenerado, skipeando op");
+                return;
+            }
+            // Heuristica: si las caras secundarias tienen axis muy distintos
+            // a la primary, log warn (el resultado visual puede salir raro).
+            const auto& primary = bc.brush.faces[primaryIdx];
+            bool axisMismatch = false;
+            for (i32 idxSigned : selSet->selectedFaceIndices) {
+                if (idxSigned < 0) continue;
+                const u32 idx = static_cast<u32>(idxSigned);
+                if (idx >= bc.brush.faces.size()) continue;
+                if (idx == primaryIdx) continue;
+                const auto& f = bc.brush.faces[idx];
+                const f32 dotU = std::fabs(glm::dot(f.uAxis, primary.uAxis));
+                const f32 dotV = std::fabs(glm::dot(f.vAxis, primary.vAxis));
+                if (dotU < 0.99f || dotV < 0.99f) {
+                    axisMismatch = true;
+                    break;
+                }
+            }
+            if (axisMismatch) {
+                Log::editor()->warn(
+                    "Alignment 'Treat as one': caras con axisU/V "
+                    "distintos a la primary — resultado visual "
+                    "puede ser raro");
+            }
+            for (i32 idxSigned : selSet->selectedFaceIndices) {
+                if (idxSigned < 0) continue;
+                const u32 idx = static_cast<u32>(idxSigned);
+                if (idx < bc.brush.faces.size()) {
+                    op(bc.brush.faces[idx], sharedRect);
+                }
+            }
+        } else if (multiFace) {
+            // Cada cara con su propio rect.
+            for (i32 idxSigned : selSet->selectedFaceIndices) {
+                if (idxSigned < 0) continue;
+                const u32 idx = static_cast<u32>(idxSigned);
+                if (idx >= bc.brush.faces.size()) continue;
+                const Csg::FaceUvRect rect =
+                    Csg::computeFaceUvRect(bc.brush, idx, worldMat);
+                op(bc.brush.faces[idx], rect);
+            }
+        } else {
+            // Single face.
+            const u32 idx = static_cast<u32>(faceIdx);
+            const Csg::FaceUvRect rect =
+                Csg::computeFaceUvRect(bc.brush, idx, worldMat);
+            op(bc.brush.faces[idx], rect);
+        }
+
+        bc.dirty = true;
+        editedFlag = true;
+        BrushUVSnapshot post = captureBrushUV(bc.brush);
+        if (snapshotsEqual(pre, post)) return;
+        if (HistoryStack* h = ui->historyStack()) {
+            h->push(std::make_unique<EditBrushUVCommand>(
+                ui->scene(), entityTag,
+                std::move(pre), std::move(post),
+                std::string{commandLabel}));
+        }
+    };
+
+    // Layout: Align (full width) + grid 2x2 Fit/Justify.
+    const f32 buttonW = (ImGui::GetContentRegionAvail().x - 8.0f) * 0.5f;
+    const ImVec2 buttonSize(buttonW, 0.0f);
+
+    const std::string alignBtn = I18n::T("editor.panel.inspector.brush.align_to_face") + "##align";
+    if (ImGui::Button(alignBtn.c_str(), ImVec2(-1, 0))) {
+        // Align ignora el rect — resetea el axis sin medir el poligono.
+        // Lo wrappeamos en una op compatible con runAlignmentOp pasando un
+        // rect dummy.
+        runAlignmentOp("Align to face",
+            [](Csg::BrushFace& f, const Csg::FaceUvRect&) {
+                Csg::alignFaceToFace(f);
+            });
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.panel.inspector.brush.align_tooltip").c_str());
+    }
+
+    const std::string fitBtn = I18n::T("editor.panel.inspector.brush.fit") + "##align";
+    if (ImGui::Button(fitBtn.c_str(), buttonSize)) {
+        runAlignmentOp("Fit",
+            [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
+                Csg::fitFaceToRect(f, r);
+            });
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.panel.inspector.brush.fit_tooltip").c_str());
+    }
+    ImGui::SameLine();
+    const std::string justLBtn = I18n::T("editor.panel.inspector.brush.justify_l") + "##align";
+    if (ImGui::Button(justLBtn.c_str(), buttonSize)) {
+        runAlignmentOp("Justify L",
+            [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
+                Csg::justifyFaceToRect(f, r, Csg::JustifySide::Left);
+            });
+    }
+    const std::string justRBtn = I18n::T("editor.panel.inspector.brush.justify_r") + "##align";
+    if (ImGui::Button(justRBtn.c_str(), buttonSize)) {
+        runAlignmentOp("Justify R",
+            [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
+                Csg::justifyFaceToRect(f, r, Csg::JustifySide::Right);
+            });
+    }
+    ImGui::SameLine();
+    const std::string justTBtn = I18n::T("editor.panel.inspector.brush.justify_t") + "##align";
+    if (ImGui::Button(justTBtn.c_str(), buttonSize)) {
+        runAlignmentOp("Justify T",
+            [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
+                Csg::justifyFaceToRect(f, r, Csg::JustifySide::Top);
+            });
+    }
+    const std::string justBBtn = I18n::T("editor.panel.inspector.brush.justify_b") + "##align";
+    if (ImGui::Button(justBBtn.c_str(), buttonSize)) {
+        runAlignmentOp("Justify B",
+            [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
+                Csg::justifyFaceToRect(f, r, Csg::JustifySide::Bottom);
+            });
+    }
+}
+
+} // namespace
+
+// BrushComponent (F2H11)
+// Read-only en F2H11. F2H13 agrega edicion de primitivas (cilindro,
+// esfera, etc.); F2H14 agrega editor de UV per-cara con drag &
+// drop de materiales; F2H15 agrega seleccion de cara individual.
+void InspectorPanel::renderBrushSection(Entity e) {
+    auto& bc = e.getComponent<BrushComponent>();
+    if (!beginComponentSection<BrushComponent>(e, ICON_FA_CUBES_STACKED " Brush (CSG)")) return;
+
+    drawBrushHeaderInfo(bc, m_assets);
 
     ImGui::Separator();
 
@@ -242,173 +429,10 @@ void InspectorPanel::renderBrushSection(Entity e) {
                     static_cast<u32>(bc.brush.faces.size())).c_str());
 
         // --- F2H33 Bloque D: texture alignment ---
-        // Solo aplica en Face Mode. Botones operan sobre la cara active
-        // (single) o todas las seleccionadas (multi). El checkbox
-        // "Treat as one face" solo es visible cuando hay >1 caras y
-        // computa el bounding rect UV COMPARTIDO usando los axisU/V
-        // de la primary — para que las N caras compartan un solo wrap
-        // de textura coherente en lugar de fitear cada una por separado.
-        if (faceMode && e.hasComponent<TransformComponent>()) {
-            ImGui::Separator();
-            ImGui::TextDisabled("%s",
-                I18n::T("editor.panel.inspector.brush.alignment").c_str());
-
-            const auto& tf = e.getComponent<TransformComponent>();
-            const glm::mat4 worldMat = tf.worldMatrix();
-
-            if (multiFace) {
-                const std::string treatLabel = I18n::T("editor.panel.inspector.brush.treat_as_one") + "##align";
-                ImGui::Checkbox(treatLabel.c_str(),
-                                 &m_treatAsOneFace);
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("%s",
-                        I18n::T("editor.panel.inspector.brush.treat_as_one_tooltip").c_str());
-                }
-            } else {
-                m_treatAsOneFace = false;  // reset si bajamos a single
-            }
-            const bool treatAsOne = multiFace && m_treatAsOneFace;
-
-            // Helper local: aplica `op(face, rect)` a las caras del scope
-            // segun multiFace + treatAsOne, snapshotea y pushea command.
-            auto runAlignmentOp = [&](const char* commandLabel,
-                                       auto&& op) {
-                if (m_ui == nullptr || m_ui->scene() == nullptr) return;
-                BrushUVSnapshot pre = captureBrushUV(bc.brush);
-
-                if (treatAsOne) {
-                    // Rect compartido en sistema de la primary.
-                    const u32 primaryIdx = static_cast<u32>(faceIdx);
-                    const Csg::FaceUvRect sharedRect =
-                        Csg::computeFaceUvRect(bc.brush, primaryIdx,
-                                                worldMat);
-                    if (!sharedRect.isValid()) {
-                        Log::editor()->warn(
-                            "Alignment: rect de la cara primary "
-                            "degenerado, skipeando op");
-                        return;
-                    }
-                    // Heuristica: si las caras secundarias tienen axis
-                    // muy distintos a la primary, log warn (el resultado
-                    // visual puede salir raro).
-                    const auto& primary = bc.brush.faces[primaryIdx];
-                    bool axisMismatch = false;
-                    for (i32 idxSigned : selSet->selectedFaceIndices) {
-                        if (idxSigned < 0) continue;
-                        const u32 idx = static_cast<u32>(idxSigned);
-                        if (idx >= bc.brush.faces.size()) continue;
-                        if (idx == primaryIdx) continue;
-                        const auto& f = bc.brush.faces[idx];
-                        const f32 dotU = std::fabs(glm::dot(f.uAxis, primary.uAxis));
-                        const f32 dotV = std::fabs(glm::dot(f.vAxis, primary.vAxis));
-                        if (dotU < 0.99f || dotV < 0.99f) {
-                            axisMismatch = true;
-                            break;
-                        }
-                    }
-                    if (axisMismatch) {
-                        Log::editor()->warn(
-                            "Alignment 'Treat as one': caras con axisU/V "
-                            "distintos a la primary — resultado visual "
-                            "puede ser raro");
-                    }
-                    for (i32 idxSigned : selSet->selectedFaceIndices) {
-                        if (idxSigned < 0) continue;
-                        const u32 idx = static_cast<u32>(idxSigned);
-                        if (idx < bc.brush.faces.size()) {
-                            op(bc.brush.faces[idx], sharedRect);
-                        }
-                    }
-                } else if (multiFace) {
-                    // Cada cara con su propio rect.
-                    for (i32 idxSigned : selSet->selectedFaceIndices) {
-                        if (idxSigned < 0) continue;
-                        const u32 idx = static_cast<u32>(idxSigned);
-                        if (idx >= bc.brush.faces.size()) continue;
-                        const Csg::FaceUvRect rect =
-                            Csg::computeFaceUvRect(bc.brush, idx, worldMat);
-                        op(bc.brush.faces[idx], rect);
-                    }
-                } else {
-                    // Single face.
-                    const u32 idx = static_cast<u32>(faceIdx);
-                    const Csg::FaceUvRect rect =
-                        Csg::computeFaceUvRect(bc.brush, idx, worldMat);
-                    op(bc.brush.faces[idx], rect);
-                }
-
-                bc.dirty = true;
-                m_editedThisFrame = true;
-                BrushUVSnapshot post = captureBrushUV(bc.brush);
-                if (snapshotsEqual(pre, post)) return;
-                if (HistoryStack* h = m_ui->historyStack()) {
-                    h->push(std::make_unique<EditBrushUVCommand>(
-                        m_ui->scene(), entityTag,
-                        std::move(pre), std::move(post),
-                        std::string{commandLabel}));
-                }
-            };
-
-            // Layout: Align (full width) + grid 2x2 Fit/Justify.
-            const f32 buttonW = (ImGui::GetContentRegionAvail().x - 8.0f) * 0.5f;
-            const ImVec2 buttonSize(buttonW, 0.0f);
-
-            const std::string alignBtn = I18n::T("editor.panel.inspector.brush.align_to_face") + "##align";
-            if (ImGui::Button(alignBtn.c_str(), ImVec2(-1, 0))) {
-                // Align ignora el rect — resetea el axis sin medir el
-                // poligono. Lo wrappeamos en una op compatible con
-                // runAlignmentOp pasando un rect dummy.
-                runAlignmentOp("Align to face",
-                    [](Csg::BrushFace& f, const Csg::FaceUvRect&) {
-                        Csg::alignFaceToFace(f);
-                    });
-            }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s",
-                    I18n::T("editor.panel.inspector.brush.align_tooltip").c_str());
-            }
-
-            const std::string fitBtn = I18n::T("editor.panel.inspector.brush.fit") + "##align";
-            if (ImGui::Button(fitBtn.c_str(), buttonSize)) {
-                runAlignmentOp("Fit",
-                    [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
-                        Csg::fitFaceToRect(f, r);
-                    });
-            }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s",
-                    I18n::T("editor.panel.inspector.brush.fit_tooltip").c_str());
-            }
-            ImGui::SameLine();
-            const std::string justLBtn = I18n::T("editor.panel.inspector.brush.justify_l") + "##align";
-            if (ImGui::Button(justLBtn.c_str(), buttonSize)) {
-                runAlignmentOp("Justify L",
-                    [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
-                        Csg::justifyFaceToRect(f, r, Csg::JustifySide::Left);
-                    });
-            }
-            const std::string justRBtn = I18n::T("editor.panel.inspector.brush.justify_r") + "##align";
-            if (ImGui::Button(justRBtn.c_str(), buttonSize)) {
-                runAlignmentOp("Justify R",
-                    [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
-                        Csg::justifyFaceToRect(f, r, Csg::JustifySide::Right);
-                    });
-            }
-            ImGui::SameLine();
-            const std::string justTBtn = I18n::T("editor.panel.inspector.brush.justify_t") + "##align";
-            if (ImGui::Button(justTBtn.c_str(), buttonSize)) {
-                runAlignmentOp("Justify T",
-                    [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
-                        Csg::justifyFaceToRect(f, r, Csg::JustifySide::Top);
-                    });
-            }
-            const std::string justBBtn = I18n::T("editor.panel.inspector.brush.justify_b") + "##align";
-            if (ImGui::Button(justBBtn.c_str(), buttonSize)) {
-                runAlignmentOp("Justify B",
-                    [](Csg::BrushFace& f, const Csg::FaceUvRect& r) {
-                        Csg::justifyFaceToRect(f, r, Csg::JustifySide::Bottom);
-                    });
-            }
+        if (faceMode) {
+            drawBrushTextureAlignment(bc, e, faceIdx, multiFace, selSet,
+                                         entityTag, m_ui, m_treatAsOneFace,
+                                         m_editedThisFrame);
         }
     }
 
