@@ -11,6 +11,54 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-24: F3H5 cierre — Character (capsule + eye + headbob) + bug latente cerrado
+
+### Decisión 1 — Defaults del struct = valores Editor F2H41 (no los del Player)
+
+**Contexto:** el plan F3H5 sugería defaults `headbobFrequency=5.0` y `headbobAmplitude=0.04`, basado en el sweep A del audit F3H3 que reportó esos valores. PERO durante la implementación, la lectura del Editor (`EditorScene.cpp:379-381`) reveló que el Editor usaba **3.5 Hz / 0.05 m** desde F2H41, con un comentario explícito: *"a walkSpeed 5.5 m/s, 3.5 Hz da ~1.6 m por paso — stride humana realista. Amplitud subida a 5 cm para compensar la menor frecuencia y mantener visibilidad"*. El Player quedó en los valores legacy 5.0/0.04 (igual que el walk speed que cerró F3H3 — mismo bug latente).
+
+**Decisión:** defaults del struct = **3.5 / 0.05** (valores Editor F2H41), NO 5.0 / 0.04 (valores Player legacy).
+
+**Razones:**
+- F2H41 documentó explícitamente el tuning como intencional, con razón mecánica (stride humana realista). Los valores Player son "lo que quedó", no una decisión.
+- Mismo patrón que F3H3 fix de walk speed: cuando hay 2 sources of truth desincronizadas, gana la que tuvo tuning intencional.
+- Al ser defaults del struct, ambos call-sites (Editor + Player) heredan los valores correctos cuando el dev no edita.
+- Cualquier proyecto pre-F3H5 (sin `character` subkey) carga con los defaults F2H41 — `mood_player.exe` empieza a sentir el bob igual que PlayInEditor sin que el dev tenga que hacer nada.
+
+**Alternativas descartadas:**
+- Defaults Player (5.0/0.04): perpetúa el bug, requiere que cada dev edite manualmente para corregir.
+- Promediar (4.25 / 0.045): inventar un valor que nadie eligió.
+
+### Decisión 2 — Eye height como fields independientes (vs derivar de capsule)
+
+**Contexto:** el código pre-F3H5 calculaba eye height como `halfHeight + radius - 0.2f` (en Player y Editor). Opciones para F3H5: (a) exponer `eyeHeight` como fields absolutos (default 0.7/0.3), independientes del capsule; (b) exponer `eyeOffsetFromTop` (default 0.2, el `-0.2` del cálculo) y derivar eye height de capsule + offset.
+
+**Decisión:** opción (a) — `eyeHeightStand`/`eyeHeightCrouch` como fields absolutos independientes.
+
+**Razones:**
+- El "feel" del eye height puede ser intencionalmente desacoplado del shape físico. Ejemplos: capsule alto + ojos en el centro para POV bajo arcade-style; capsule chico + ojos arriba para sensación de "personaje alto" en POV.
+- El dev arma su propio "preset" coherente — si quiere paridad eye-capsule, pone los valores manualmente.
+- Más simple en el panel UI: cada slider es independiente.
+- Dual-source-of-truth aceptable porque cambiar `radius` no afecta `eyeHeight` automáticamente (el dev tiene que actualizarlo si quiere consistencia — explícito > implícito).
+
+**Trade-off:** si el dev cambia `radius` o `halfHeight` sin actualizar `eyeHeight`, los ojos pueden quedar "flotando" o "enterrados" en el capsule. Aceptable — es una decisión artística que el dev controla.
+
+### Decisión 3 — Duplicar el helper `drawSlider` lambda vs promoverlo a helper compartido
+
+**Contexto:** F3H4 introdujo un lambda `drawSlider` dentro de `drawGameplaySection`. F3H5 lo necesita para `drawCharacterSection`. Opciones: (a) duplicar el lambda en cada sección (idéntico, ~20 LOC repetidos); (b) promover a método privado de clase o helper en anonymous namespace; (c) método free en `editor/panels/project/SectionHelpers.h`.
+
+**Decisión:** opción (a) — duplicar por ahora. F3H4 hace lo mismo, F3H5 confirma el patrón.
+
+**Razones:**
+- 2 secciones × 20 LOC = 40 LOC, manageable. Premature refactoring sería overkill.
+- Cada lambda local captura `m_ui` por referencia y vive en el scope de su función — extraer a método requiere agregar member function + cambiar header.
+- Regla "scope chico per hito" — F3H5 no es el momento de refactorear infra del panel.
+- Cuando F3H6/F3H7 sumen más secciones (3+ tabs), el dolor del copy-paste justifica el refactor. Hasta entonces, claridad local > DRY.
+
+**Condiciones de revisión:** si F3H7 cierra con 4 secciones que duplican el lambda, refactorear a helper de clase o `SectionHelpers.h`.
+
+---
+
 ## 2026-05-24: F3H4 cierre — Gameplay tier 1 + polish reactivo (reset buttons, dock revert)
 
 ### Decisión 1 — Reset buttons (↺) per-field en Project Settings
