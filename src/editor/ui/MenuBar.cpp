@@ -1,9 +1,7 @@
 #include "editor/ui/MenuBar.h"
 
 #include "core/Log.h"
-#include "core/UserSettings.h"  // F2H43
 #include "editor/ui/EditorUI.h"
-#include "editor/ui/EditorThemes.h"  // F2H76
 #include "core/i18n/I18n.h"  // F2H43
 #include "editor/ui/IconsFontAwesome6.h"
 #include "editor/panels/IPanel.h"
@@ -161,10 +159,12 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
                 h->redo();
             }
             ImGui::Separator();
-            // F2H76: Preferencias (tema + idioma). Casa de los ajustes del
-            // editor; futuros hitos de 2.7 suman atajos / escala de UI.
+            // F3H2: Preferencias (tema + idioma) — abre panel flotante
+            // (estilo Unity Preferences). Mismo patron que Project Settings
+            // (F3H1): el panel vive en EditorUI, mutamos su flag visible
+            // sin pasar por request/consume.
             if (ImGui::MenuItem(I18n::T("editor.menu.edit.preferences").c_str())) {
-                m_showPreferencesPopup = true;
+                ui.requestShowUserPreferences();
             }
             // F3H1: Project Settings — togglea la visibilidad del panel
             // dockeable. Disabled si no hay proyecto activo (el panel
@@ -327,14 +327,6 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
         ImGui::OpenPopup("##about_modal");
         m_showAboutPopup = false;
     }
-    if (m_showPreferencesPopup) {
-        // F2H79: usamos "###preferences_modal" → el ID de ImGui es estable
-        // ("preferences_modal") aunque el titulo visible (i18n) cambie de
-        // idioma. m_prefsOpen habilita el boton X del titlebar.
-        m_prefsOpen = true;
-        ImGui::OpenPopup("###preferences_modal");
-        m_showPreferencesPopup = false;
-    }
 
     if (ImGui::BeginPopupModal("##about_modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("%s", I18n::T("editor.modal.about.title").c_str());
@@ -344,74 +336,6 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
         ImGui::Text("%s", I18n::T("editor.modal.about.repo").c_str());
         ImGui::Separator();
         if (ImGui::Button(I18n::T("editor.modal.common.close").c_str(), ImVec2(120, 0))) {
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-
-    // F2H76: modal de Preferencias (Tema + Idioma). Aplica/persiste live al
-    // cambiar cada combo — settings.json es chico, sin boton OK/Cancel.
-    // F2H79: titulo en el titlebar (no en el body) + boton X de cerrar (via
-    // p_open). "###preferences_modal" mantiene el ID estable entre idiomas.
-    const std::string prefsTitle =
-        I18n::T("editor.modal.preferences.title") + "###preferences_modal";
-    if (ImGui::BeginPopupModal(prefsTitle.c_str(), &m_prefsOpen,
-                                ImGuiWindowFlags_AlwaysAutoResize)) {
-        // --- Tema ---
-        const auto& themes = EditorThemes::available();
-        const std::string& curTheme = UserSettings::theme();
-        int curThemeIdx = 0;
-        for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
-            if (themes[i].id == curTheme) { curThemeIdx = i; break; }
-        }
-        // Nombre legible (i18n) del tema actual para el preview del combo.
-        const std::string curThemeLabel = I18n::T(themes[curThemeIdx].i18nKey);
-        const std::string themeLabel =
-            I18n::T("editor.preferences.theme") + "##pref_theme";
-        if (ImGui::BeginCombo(themeLabel.c_str(), curThemeLabel.c_str())) {
-            for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
-                const bool sel = (i == curThemeIdx);
-                if (ImGui::Selectable(I18n::T(themes[i].i18nKey).c_str(), sel)) {
-                    UserSettings::setTheme(themes[i].id);
-                    EditorThemes::apply(themes[i].id);  // preview live
-                    UserSettings::save();
-                }
-                if (sel) ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
-
-        // --- Idioma (centralizado aca desde View -> Language) ---
-        const auto curLang = I18n::currentLanguage();
-        const std::string curLangLabel = I18n::T(
-            curLang == I18n::Language::English
-                ? "editor.menu.view.language.english"
-                : "editor.menu.view.language.spanish");
-        const std::string langLabel =
-            I18n::T("editor.menu.view.language") + "##pref_lang";
-        if (ImGui::BeginCombo(langLabel.c_str(), curLangLabel.c_str())) {
-            const bool isEn = (curLang == I18n::Language::English);
-            if (ImGui::Selectable(
-                    I18n::T("editor.menu.view.language.english").c_str(), isEn)) {
-                if (I18n::setLanguage(I18n::Language::English)) {
-                    UserSettings::setLanguage(I18n::Language::English);
-                    UserSettings::save();
-                }
-            }
-            const bool isEs = (curLang == I18n::Language::Spanish);
-            if (ImGui::Selectable(
-                    I18n::T("editor.menu.view.language.spanish").c_str(), isEs)) {
-                if (I18n::setLanguage(I18n::Language::Spanish)) {
-                    UserSettings::setLanguage(I18n::Language::Spanish);
-                    UserSettings::save();
-                }
-            }
-            ImGui::EndCombo();
-        }
-
-        ImGui::Separator();
-        if (ImGui::Button(I18n::T("editor.modal.common.close").c_str(),
-                           ImVec2(120, 0))) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();

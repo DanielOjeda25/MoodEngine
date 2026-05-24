@@ -28,6 +28,7 @@
 #include "editor/panels/inventory/ItemBrowserPanel.h"          // F2H51
 #include "editor/panels/inventory/ItemPropertyEditorPanel.h"   // F2H51
 #include "editor/panels/project/ProjectSettingsPanel.h"        // F3H1
+#include "editor/panels/project/UserPreferencesPanel.h"        // F3H2
 #include "editor/panels/quest/QuestBrowserPanel.h"             // F2H53
 #include "editor/panels/quest/QuestPropertyEditorPanel.h"      // F2H53
 #include "editor/panels/scene/InspectorPanel.h"
@@ -306,6 +307,10 @@ public:
     ///        aca, no en EditorApplication).
     void requestShowProjectSettings() { m_projectSettings.visible = true; }
 
+    /// @brief F3H2: abre el panel User Preferences (lo dispara MenuBar
+    ///        desde `Edit > Preferences...`). Mismo patron que F3H1.
+    void requestShowUserPreferences() { m_userPreferences.visible = true; }
+
     /// @brief Lista de proyectos recientes (mostrada en Welcome modal).
     void setRecentProjects(std::vector<std::filesystem::path> paths);
     void eraseRecent(const std::filesystem::path& path);
@@ -356,6 +361,7 @@ private:
     MaterialEditorPanel m_materialEditor;  // Hito 42
     ShaderGraphEditorPanel m_shaderGraphEditor;  // F2H62 Bloque C
     ProjectSettingsPanel m_projectSettings;  // F3H1
+    UserPreferencesPanel m_userPreferences;  // F3H2
     Toolbar m_toolbar;  // F2H22
     MapEditorTopBar m_mapEditorTopBar;  // F2H30
     VisGroupsPanel m_visGroupsPanel;  // F2H33

@@ -498,6 +498,7 @@ add_library(mood_engine_lib STATIC
 
     src/engine/project/ProjectSettings.cpp  # F3H1
     src/editor/panels/project/ProjectSettingsPanel.cpp  # F3H1
+    src/editor/panels/project/UserPreferencesPanel.cpp  # F3H2
 )
 
 target_include_directories(mood_engine_lib PUBLIC
