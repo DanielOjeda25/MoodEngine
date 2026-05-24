@@ -303,6 +303,7 @@ void EditorApplication::handleBooleanOp(EditorUI::BooleanOpRequestKind kind) {
             }
             bc.dirty = true;
             e.addComponent<BrushComponent>(std::move(bc));
+            e.getComponent<TagComponent>().entityType = EntityType::Brush;  // F3H9
         }
 
         // Push command — uno por par (A, B). N Ctrl+Z para revertir

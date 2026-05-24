@@ -11,6 +11,79 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-24: F3H9 cierre — EntityType model + popup remake + Material Inspector Blender-style
+
+### Decisión 1 — `EntityType` como campo de `TagComponent` (no componente separado)
+
+**Contexto:** F3H9 introduce el modelo "tipo de entidad" (Blender Object Type / Hammer entity class / Unreal Actor class) que define qué componente base no se puede quitar + qué extensions se pueden agregar. Pregunta: storage como (a) campo en `TagComponent`, (b) componente nuevo `EntityTypeComponent`, (c) registry global externo al ECS.
+
+**Decisión:** **Campo `entityType` en `TagComponent`** (junto al `name`).
+
+**Razones:**
+- **Co-localización semántica**: name + type son ambos metadata de identidad de la entidad — el dev piensa "esta luz se llama PointLight_A" como una cosa, no dos. Co-localizar matchea cómo se piensa.
+- **Cero proliferación de componentes** en el ECS — `TagComponent` ya existe en TODAS las entidades del proyecto, agregar un campo es trivial y no cambia la arquitectura.
+- **Serialización trivial**: `TagComponent` ya es persistido por `EntitySerializer`, agregar `"entity_type"` al sub-object es one-liner sin nuevos handlers.
+- Schema sin bump (mismo patrón que F3H4/F3H5/F3H6): el campo solo se escribe si != Generic (default), `.moodmap` pre-F3H9 cargan limpios.
+
+**Alternativas descartadas:**
+- **`EntityTypeComponent` separado**: agregar un componente que va en todas las entidades duplica el footprint del `TagComponent` (también en todas). El ECS premia escasez de componentes.
+- **Registry global `unordered_map<EntityHandle, EntityType>`**: rompe el modelo "todo en el ECS" del resto del editor. Lookups extra y sincronización manual al destruir entities.
+
+### Decisión 2 — Inferencia para back-compat pre-F3H9 (no migración forzada)
+
+**Contexto:** los `.moodmap` guardados pre-F3H9 no tienen la key `entity_type`. ¿Migrar al cargar (escribir el campo derivado de los componentes presentes y forzar el save al siguiente cierre) o inferir on-the-fly cada vez sin tocar el JSON?
+
+**Decisión:** **inferir on-the-fly al `SceneLoader::applyOneEntity`** vía `EntityTypeTable::inferFromEntityWithTag`. No se fuerza save. Al próximo Save manual del dev, el campo se persiste con su valor inferido.
+
+**Razones:**
+- **Cero cambio destructivo**: el dev abre un proyecto viejo, NO se le modifica el `.moodmap` sin haber decidido guardar. La modificación llega cuando el dev guarda activamente.
+- **Recuperable**: si la inferencia es errónea (ej. una entity "Foo" con MeshRenderer+VehicleComponent que el dev pensó como Mesh pero quedó como Vehicle por orden de chequeo), el dev cambia el type via convert_modal y guarda — la inferencia se desactiva en la siguiente carga.
+- **Mismo patrón que F3H4** (gameplay tier 1): default values en el struct, JSON solo escribe lo no-default, back-compat trivial.
+
+**Cómo aplica:** orden de inferencia (de más específico a más genérico) en `inferFromEntity`: Brush > NPC (Trigger+Dialog) > Pickable (Trigger+ItemPickup) > Environment > Light > Camera > ParticleEmitter > ForceField > Audio > Trigger solo > Vehicle > Mesh > Generic. Tile se detecta por tag (Floor / Tile_X_Y).
+
+### Decisión 3 — Vehicle ANTES de Mesh en orden de inferencia
+
+**Contexto:** un vehicle típicamente tiene `MeshRendererComponent` (visual del chasis) además del `VehicleComponent` (mecánica). Si chequeamos Mesh antes que Vehicle, todos los vehicles quedan inferidos como Mesh — incorrecto.
+
+**Decisión:** chequear `VehicleComponent` ANTES de `MeshRendererComponent` en `inferFromEntity`.
+
+**Razones:**
+- VehicleComponent es la mecánica **definitoria** — sin él, un vehicle no es vehicle. Mesh es secundario (visual).
+- Mismo principio que NPC (Trigger+Dialog) y Pickable (Trigger+ItemPickup) chequeados ANTES que Trigger solo — el "definitorio" gana.
+
+**Cómo aplica:** se mantiene el principio "specific-first" para tipos compuestos: si emergen futuros types que combinen componentes existentes (ej. AnimatedNPC = NPC + Animator), agregar también primero del orden.
+
+### Decisión 4 — Material Inspector Blender-style: sticky-slot con clamp anti-overflow
+
+**Contexto:** Stage 9 (bundle agregado tarde al hito por pedido del dev al ver la "lista infinita" de slots en un mesh complejo). Reemplaza el loop vertical de N paneles por una lista compacta arriba + panel del slot seleccionado debajo. ¿Mantener la selección entre frames (sticky) o resetear a 0 cada vez?
+
+**Decisión:** **sticky** entre frames vía `int m_selectedMaterialSlot` en `InspectorPanel`, **clampeado** contra `mr.materials.size()` cada frame para sobrevivir cambios de entity o reducción de slots.
+
+**Razones:**
+- **UX matching Blender**: al cambiar de slot el panel cambia pero el dev espera que al volver a la entity siga en el slot que estaba editando. Reset a 0 es frustrante en un workflow de tunear varios materiales.
+- Cambiar de entity con menos slots se manejaría con un crash o panel vacío sin el clamp.
+- Trade-off aceptable: el dev cambia entity a entity y "pierde" el slot — pero **no es realmente perdida**: si la entity nueva tiene 5 slots y estabas en 3, sigues en 3 (overlap). Solo se resetea si la nueva tiene < 4 slots y el clamp lo arrastra a 0.
+
+**Alternativas descartadas:**
+- **Per-entity state** (map<Entity, int>): overhead innecesario, el dev rara vez vuelve exactamente al mismo slot+entity en el mismo session.
+- **Reset a 0 siempre**: rompe el sticky workflow.
+
+### Decisión 5 — Hierarchy "Copiar valores" grisado vs ocultar para types no soportados
+
+**Contexto:** Stage 8 agrega "Copiar valores de <Tipo>" en el click derecho del Hierarchy. `ComponentClipboard` soporta Tier 1 (Light/Trigger/ForceField/ParticleEmitter); el resto (Mesh/Vehicle/Brush/Audio/Camera/Environment/NPC=Dialog/Pickable=ItemPickup) está pendiente F3H10+. ¿El menu item para esos types (a) se oculta (no aparece), (b) se muestra grisado con tooltip explicando, (c) hace no-op silencioso?
+
+**Decisión:** **(b) grisado con tooltip honesto** — "Copiar/pegar de {Tipo} aun no implementado (pendiente F3H10+)".
+
+**Razones:**
+- **Transparencia de capacidades**: el dev sabe qué está implementado vs lo que viene. Esconder el menu sugiere "no existe esta operación", grisar dice "existe pero todavía no".
+- **Trail visible para el roadmap**: el dev ve al pasar el mouse que ese type está en lista. Genera presión productiva para cerrar el backlog.
+- No-op silencioso es peor: el dev clickea, nada pasa, no entiende si funcionó o no.
+
+**Cómo aplica:** cuando `ComponentClipboard::isSupported(baseKey)` empiece a devolver true para más types (F3H10+ trabaja en [[component-clipboard-expand]]), la UI se actualiza automáticamente sin tocar `HierarchyPanel.cpp` — la condición que grisa consulta el clipboard.
+
+---
+
 ## 2026-05-24: F3H8 cierre — Multi-edit del Inspector (Light) + arranque Sub-fase 3.2
 
 ### Decisión 1 — Snapshot semantics vs delta semantics para multi-edit

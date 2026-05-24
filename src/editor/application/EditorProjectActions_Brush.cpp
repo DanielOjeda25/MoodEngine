@@ -54,6 +54,7 @@ Entity spawnBrushEntity(Scene& scene,
     bc.materials = {0};  // F2H17: 1 slot con material default
     bc.dirty = true;
     e.addComponent<BrushComponent>(std::move(bc));
+    e.getComponent<TagComponent>().entityType = EntityType::Brush;  // F3H9
 
     Log::editor()->info("{} '{}' en (0, 1, 0)", opLabel, tagName);
     return e;

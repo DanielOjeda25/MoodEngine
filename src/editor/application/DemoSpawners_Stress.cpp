@@ -18,6 +18,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
+#include "engine/scene/entity_type/EntityType.h"  // F3H9
 
 #include <cmath>
 #include <cstdio>
@@ -83,6 +84,7 @@ void EditorApplication::processSpawnLightStressRequest() {
             lc.radius    = kRadius;
             lc.enabled   = true;
             light.addComponent<LightComponent>(lc);
+            light.getComponent<TagComponent>().entityType = EntityType::Light;  // F3H9
             created.push_back(light);
         }
     }
@@ -131,6 +133,7 @@ void EditorApplication::processSpawnStressTrisRequest() {
                     static_cast<f32>(zi) * spacing - half);
                 t.scale = glm::vec3(1.0f);
                 cube.addComponent<MeshRendererComponent>(cubeMesh, mat);
+                cube.getComponent<TagComponent>().entityType = EntityType::Mesh;  // F3H9
                 created.push_back(cube);
                 ++idx;
             }

@@ -36,6 +36,9 @@ std::optional<ExposedValue> jsonToExposedValue(const json& jv) {
 SavedEntity parseEntityFromJson(const json& j) {
     SavedEntity se;
     se.tag = j.value("tag", std::string{});
+    // F3H9: entity_type opcional. Vacio = pre-F3H9 (back-compat); el
+    // SceneLoader inferira de los componentes presentes.
+    se.entityType = j.value("entity_type", std::string{});
     if (j.contains("transform")) {
         const auto& jt = j.at("transform");
         se.position      = jt.value("position",      glm::vec3{0.0f});

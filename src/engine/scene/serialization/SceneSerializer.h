@@ -379,6 +379,10 @@ struct SavedEntity {
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.
     u64 visgroupId = 0;
+    /// @brief F3H9: tipo fijo (Blender Object Type / Hammer entity class).
+    ///        Vacio = pre-F3H9 (back-compat): el SceneLoader infiere de
+    ///        los componentes presentes. F3H9+ siempre lo persiste.
+    std::string entityType;
 };
 
 /// @brief F2H11+F2H15: copia persistida de una BrushFace. Guarda el

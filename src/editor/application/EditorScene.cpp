@@ -9,6 +9,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
+#include "engine/scene/entity_type/EntityType.h"  // F3H9
 #include "engine/scene/serialization/EntitySerializer.h"  // F2H85: duplicate
 #include "engine/scene/serialization/SceneLoader.h"       // F2H85: applyOneEntity
 #include "engine/world/grid/GridMap.h"
@@ -112,6 +113,7 @@ void EditorApplication::rebuildSceneFromMap() {
             RigidBodyComponent::Shape::Box,
             glm::vec3(mapW * 0.5f, 0.05f, mapH * 0.5f),
             0.0f);
+        floor.getComponent<TagComponent>().entityType = EntityType::Tile;  // F3H9
     }
 
     for (u32 y = 0; y < m_map.height(); ++y) {
@@ -152,6 +154,7 @@ void EditorApplication::rebuildSceneFromMap() {
                 RigidBodyComponent::Shape::Box,
                 glm::vec3(tileSize * 0.5f),
                 0.0f);
+            e.getComponent<TagComponent>().entityType = EntityType::Tile;  // F3H9
         }
     }
 }
@@ -593,6 +596,7 @@ void EditorApplication::updateTileEntity(u32 tileX, u32 tileY, TextureAssetId te
     t.scale = glm::vec3(tileSize);
     e.addComponent<MeshRendererComponent>(
         m_assetManager->missingMeshId(), matId);
+    e.getComponent<TagComponent>().entityType = EntityType::Tile;  // F3H9
 }
 
 } // namespace Mood

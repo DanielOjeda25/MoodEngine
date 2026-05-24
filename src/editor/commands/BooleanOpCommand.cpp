@@ -41,6 +41,7 @@ Entity recreateBrushEntity(Scene& scene, AssetManager* assets,
         ? 0u : assets->loadMaterial(sb.materialPath);
     bc.dirty = true;
     e.addComponent<BrushComponent>(std::move(bc));
+    e.getComponent<TagComponent>().entityType = EntityType::Brush;  // F3H9
     return e;
 }
 

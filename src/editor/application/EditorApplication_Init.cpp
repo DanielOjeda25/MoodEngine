@@ -336,6 +336,7 @@ EditorApplication::EditorApplication() {
     m_ui.setScene(m_scene.get());  // F2H12: necesario para drawBooleanOpMenu
     m_ui.hierarchy().setScene(m_scene.get());
     m_ui.hierarchy().setEditorUi(&m_ui);
+    m_ui.hierarchy().setAssetManager(m_assetManager.get());  // F3H9: paste de componentes
     m_ui.inspector().setEditorUi(&m_ui);
     m_ui.inspector().setAssetManager(m_assetManager.get());
     m_ui.materialEditor().setAssetManager(m_assetManager.get());  // Hito 42

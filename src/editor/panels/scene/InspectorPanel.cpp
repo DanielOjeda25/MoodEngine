@@ -2,8 +2,12 @@
 
 #include "editor/commands/AddComponentCommand.h"      // F2H45 Bloque A
 #include "editor/commands/HistoryStack.h"             // F2H45 Bloque A
+#include "editor/commands/PasteComponentCommand.h"   // F3H9
+#include "editor/components/ComponentClipboard.h"    // F3H9
 #include "editor/selection/SelectionSet.h"           // F2H13
 #include "editor/ui/EditorUI.h"
+#include "editor/ui/IconsFontAwesome6.h"              // F3H9: ICON_FA_PASTE
+#include "engine/scene/entity_type/EntityTypeTable.h"  // F3H9: type label
 #include "core/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/BrushComponent.h"  // F2H11
 #include "engine/scene/components/Components.h"
@@ -65,6 +69,18 @@ void InspectorPanel::onImGuiRender() {
         ImGui::TextDisabled("%s", I18n::T("editor.panel.inspector.no_selection_hint").c_str());
         ImGui::End();
         return;
+    }
+
+    // F3H9: type label (Blender Object Type / Hammer entity class) en
+    // el header del Inspector. Muestra "Tipo: Luz" / "Type: Light" para
+    // que el dev sepa de un vistazo que es la entity seleccionada.
+    if (e.hasComponent<TagComponent>()) {
+        const auto& tag = e.getComponent<TagComponent>();
+        const std::string typeLabel = I18n::T(
+            EntityTypeTable::i18nKey(tag.entityType));
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.entity_type_label",
+                    typeLabel).c_str());
     }
 
     // F2H13: header "+N adicionales" cuando hay multi-seleccion.
@@ -162,6 +178,44 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
     ImGui::TextDisabled("%s",
         I18n::T("editor.panel.inspector.add.popup_title").c_str());
     ImGui::Separator();
+
+    // F3H9: top item "Pegar <Tipo> como nuevo componente" — visible solo
+    // cuando el clipboard tiene contenido Y la entidad NO tiene ese
+    // componente. Reusa el clipboard de EditorUI poblado por el menu
+    // contextual de beginComponentSection ("Copiar valores").
+    if (m_ui != nullptr && m_assets != nullptr) {
+        const auto& clip = m_ui->clipboardComponent();
+        if (clip.has_value() &&
+            !ComponentClipboard::entityHasComponent(clip->componentKey, e) &&
+            ComponentClipboard::isSupported(clip->componentKey)) {
+            const std::string typeNameKey =
+                ComponentClipboard::componentNameKey(clip->componentKey);
+            const std::string typeName = I18n::T(typeNameKey);
+            const std::string pasteAsNewLabel =
+                std::string(ICON_FA_PASTE " ") +
+                I18n::T("editor.panel.inspector.add.paste_as_new", typeName);
+            if (ImGui::Selectable(pasteAsNewLabel.c_str())) {
+                auto cmd = std::make_unique<PasteComponentCommand>(
+                    e, clip->componentKey,
+                    nlohmann::json{},          // before vacio (no habia componente)
+                    clip->payload,              // copy del payload
+                    /*hadComponentBefore=*/false,
+                    m_assets,
+                    I18n::T("editor.panel.inspector.context.cmd_paste_as_new", typeName));
+                HistoryStack* h = m_ui->historyStack();
+                if (h != nullptr) {
+                    h->push(std::move(cmd));
+                } else {
+                    cmd->execute();
+                }
+                m_editedThisFrame = true;
+                ImGui::CloseCurrentPopup();
+                ImGui::EndPopup();
+                return;
+            }
+            ImGui::Separator();
+        }
+    }
 
     // Search input. Auto-focus al primer frame del popup para typing
     // inmediato sin click extra.
@@ -316,51 +370,138 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
             return makeAddComponentCommand<BrushComponent>(en, std::move(lbl));
         });
 
-    // Filtro: solo los que la entidad NO tiene + matchean el search.
-    // Agrupados por categoria, en el orden original del registro.
-    const char* lastCat = nullptr;
-    bool any = false;
+    // F3H9: componentKey derivado del nameKey (`component.name.light`
+    // -> `light`). Usado para filtrar por EntityType (canAddComponent
+    // descarta componentes que no tienen sentido para el type, ej.
+    // BrushComponent en una Light).
+    constexpr const char* kNamePrefix = "component.name.";
+    constexpr size_t kNamePrefixLen = 15;  // strlen("component.name.")
+    auto componentKeyFromNameKey = [&](const char* nameKey) -> std::string {
+        const std::string s(nameKey);
+        if (s.compare(0, kNamePrefixLen, kNamePrefix) == 0) {
+            return s.substr(kNamePrefixLen);
+        }
+        return {};
+    };
+
+    // F3H9: leer el EntityType de la entity activa para filtrar.
+    const EntityType entType = e.hasComponent<TagComponent>()
+        ? e.getComponent<TagComponent>().entityType
+        : EntityType::Generic;
+
+    // F3H9: helper para disparar el AddComponentCommand desde un item del
+    // popup. Centralizado porque la rama "submenus" y la rama "flat
+    // search" lo llaman ambas.
+    auto runAdd = [&](const Item& it) {
+        const std::string nameTr = I18n::T(it.nameKey);
+        std::string label = I18n::T("editor.cmd.add_component", nameTr);
+        auto cmd = it.makeCmdFn(e, std::move(label));
+        HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
+        if (h != nullptr) {
+            h->push(std::move(cmd));
+        } else {
+            cmd->execute();  // fallback defensivo sin history
+        }
+        m_editedThisFrame = true;
+    };
+
+    // F3H9 Stage 7: dos modos de render del popup.
+    //
+    //  (a) search vacio  → submenus Unity-style (Component > Rendering
+    //      > Light). Mas claro cuando el type acepta muchas extensions
+    //      (ej. Mesh tiene 15) — cada categoria se expande on-hover.
+    //
+    //  (b) search activo → lista flat con headers de categoria. Filtrar
+    //      por nombre + ocultar la lista en submenus juntos serian
+    //      contraintuitivos: el dev quiere ver coincidencias rapido.
+    //
+    // Filtro comun: solo items que la entity NO tiene Y son validos para
+    // el EntityType (canAddComponent).
+    std::vector<const Item*> filtered;
+    filtered.reserve(items.size());
     for (auto& it : items) {
         if (it.alreadyHas) continue;
-        const std::string nameTr = I18n::T(it.nameKey);
-        if (!fuzzyMatch(nameTr, m_addComponentSearch)) continue;
-        any = true;
-        // Header del grupo si cambio de categoria.
-        if (lastCat == nullptr ||
-            std::strcmp(lastCat, it.catKey) != 0) {
-            ImGui::Spacing();
-            ImGui::TextDisabled("%s",
-                I18n::T(it.catKey).c_str());
-            lastCat = it.catKey;
+        const std::string componentKey = componentKeyFromNameKey(it.nameKey);
+        if (!componentKey.empty() &&
+            !EntityTypeTable::canAddComponent(entType, componentKey)) {
+            continue;
         }
-        // Selectable con descripcion abajo.
-        if (ImGui::Selectable(nameTr.c_str(), false,
-                                ImGuiSelectableFlags_None,
-                                ImVec2(360.0f, 0.0f))) {
-            // F2H45 Bloque A: undoable. `HistoryStack::push` invoca
-            // `execute()` internamente (no duplicar). El label se arma
-            // con la traduccion del componente ya resuelta — la entry
-            // del menu Editar > Deshacer lee `cmd->name()`.
-            std::string label = I18n::T("editor.cmd.add_component", nameTr);
-            auto cmd = it.makeCmdFn(e, std::move(label));
-            HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
-            if (h != nullptr) {
-                h->push(std::move(cmd));
-            } else {
-                cmd->execute();  // fallback defensivo sin history
+        filtered.push_back(&it);
+    }
+
+    const bool searching = m_addComponentSearch[0] != '\0';
+    bool any = false;
+
+    if (searching) {
+        // Modo (b): flat con headers de categoria.
+        const char* lastCat = nullptr;
+        for (const auto* it : filtered) {
+            const std::string nameTr = I18n::T(it->nameKey);
+            if (!fuzzyMatch(nameTr, m_addComponentSearch)) continue;
+            any = true;
+            if (lastCat == nullptr ||
+                std::strcmp(lastCat, it->catKey) != 0) {
+                ImGui::Spacing();
+                ImGui::TextDisabled("%s", I18n::T(it->catKey).c_str());
+                lastCat = it->catKey;
             }
-            m_editedThisFrame = true;
-            ImGui::CloseCurrentPopup();
+            if (ImGui::Selectable(nameTr.c_str(), false,
+                                    ImGuiSelectableFlags_None,
+                                    ImVec2(360.0f, 0.0f))) {
+                runAdd(*it);
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::Indent(16.0f);
+            ImGui::TextDisabled("%s", I18n::T(it->descKey).c_str());
+            ImGui::Unindent(16.0f);
         }
-        // Descripcion en gris debajo del nombre, indentada.
-        ImGui::Indent(16.0f);
-        ImGui::TextDisabled("%s", I18n::T(it.descKey).c_str());
-        ImGui::Unindent(16.0f);
+    } else {
+        // Modo (a): submenus por categoria. Agrupamos sin reordenar para
+        // preservar el orden de declaracion (Render > Physics > Audio >
+        // Logic > World — orden semantico armado en `items` mas arriba).
+        // `seenCats` evita renderizar 2 veces la misma categoria si los
+        // items quedaron entrelazados.
+        std::vector<const char*> seenCats;
+        seenCats.reserve(8);
+        for (const auto* it : filtered) {
+            // Skip si ya rendereamos esta categoria en una iteracion
+            // anterior (orden de declaracion ya la agrupo).
+            bool already = false;
+            for (const char* c : seenCats) {
+                if (std::strcmp(c, it->catKey) == 0) { already = true; break; }
+            }
+            if (already) continue;
+            seenCats.push_back(it->catKey);
+
+            const std::string catTr = I18n::T(it->catKey);
+            if (ImGui::BeginMenu(catTr.c_str())) {
+                // Segundo loop sobre filtered: render todos los items de
+                // ESTA categoria. Mantiene Selectable + descripcion gris.
+                for (const auto* it2 : filtered) {
+                    if (std::strcmp(it2->catKey, it->catKey) != 0) continue;
+                    any = true;
+                    const std::string nameTr = I18n::T(it2->nameKey);
+                    if (ImGui::Selectable(nameTr.c_str(), false,
+                                            ImGuiSelectableFlags_None,
+                                            ImVec2(320.0f, 0.0f))) {
+                        runAdd(*it2);
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::Indent(16.0f);
+                    ImGui::TextDisabled("%s", I18n::T(it2->descKey).c_str());
+                    ImGui::Unindent(16.0f);
+                }
+                ImGui::EndMenu();
+            }
+        }
+        // `any` se setea adentro del BeginMenu — si no se abrio ninguno,
+        // significa que el set de items quedo vacio.
+        if (!filtered.empty()) any = true;
     }
 
     if (!any) {
         ImGui::Spacing();
-        if (m_addComponentSearch[0] != '\0') {
+        if (searching) {
             ImGui::TextDisabled("%s",
                 I18n::T("editor.panel.inspector.add.no_match",
                         std::string(m_addComponentSearch)).c_str());

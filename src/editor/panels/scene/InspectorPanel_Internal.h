@@ -8,13 +8,19 @@
 #include "editor/commands/AddComponentCommand.h"  // F2H81: makeRemoveComponentCommand
 #include "editor/commands/EditPropertyCommand.h"
 #include "editor/commands/MultiEditPropertyCommand.h"  // F3H8
+#include "editor/commands/PasteComponentCommand.h"  // F3H9
+#include "editor/components/ComponentClipboard.h"  // F3H9
 #include "editor/panels/scene/InspectorEditTracker.h"
 #include "editor/panels/scene/InspectorPanel.h"  // F2H81: def. de beginComponentSection
 #include "editor/panels/scene/MultiEditTracker.h"  // F3H8
 #include "editor/selection/SelectionSet.h"  // F3H8: itera N entidades
 #include "editor/ui/EditorUI.h"
 #include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons en headers de seccion
+#include "engine/assets/manager/AssetManager.h"  // F3H9: serializeComponent
+#include "engine/scene/components/BrushComponent.h"  // F3H9: dispatch type-check (no esta en Components.h)
+#include "engine/scene/components/Components.h"  // F3H9: type check para componentKey
 #include "engine/scene/core/Entity.h"
+#include "engine/scene/entity_type/EntityTypeTable.h"  // F3H9: isBaseComponent
 
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -344,6 +350,38 @@ namespace Mood {
 // Templado en T para que el menu "Quitar componente" arme un
 // makeRemoveComponentCommand<T> tipado. Reemplaza el SeparatorText
 // siempre-abierto: ahora cada componente es una tarjeta que se pliega.
+//
+// F3H9: dispatch T -> componentKey string (vocabulario de
+// EntitySerializer). Cubre todos los componentes que el Inspector
+// renderea — usado para (a) base-component lock del modelo EntityType,
+// (b) copy/paste del clipboard Tier 1. `null` = T no tiene componentKey
+// conocido (no se dibuja menu de paste ni lock-check).
+namespace detail {
+template <typename T>
+inline const char* componentKeyForT() {
+    if      constexpr (std::is_same_v<T, LightComponent>)           return "light";
+    else if constexpr (std::is_same_v<T, MeshRendererComponent>)    return "mesh_renderer";
+    else if constexpr (std::is_same_v<T, CameraComponent>)          return "camera";
+    else if constexpr (std::is_same_v<T, AudioSourceComponent>)     return "audio_source";
+    else if constexpr (std::is_same_v<T, TriggerComponent>)         return "trigger";
+    else if constexpr (std::is_same_v<T, ForceFieldComponent>)      return "force_field";
+    else if constexpr (std::is_same_v<T, ParticleEmitterComponent>) return "particle_emitter";
+    else if constexpr (std::is_same_v<T, EnvironmentComponent>)     return "environment";
+    else if constexpr (std::is_same_v<T, DialogComponent>)          return "dialog";
+    else if constexpr (std::is_same_v<T, ItemPickupComponent>)      return "item_pickup";
+    else if constexpr (std::is_same_v<T, BrushComponent>)           return "brush";
+    else if constexpr (std::is_same_v<T, RigidBodyComponent>)       return "rigid_body";
+    else if constexpr (std::is_same_v<T, ScriptComponent>)          return "script";
+    else if constexpr (std::is_same_v<T, AnimatorComponent>)        return "animator";
+    else if constexpr (std::is_same_v<T, InventoryComponent>)       return "inventory";
+    else if constexpr (std::is_same_v<T, JointComponent>)           return "joint";
+    else if constexpr (std::is_same_v<T, RagdollComponent>)         return "ragdoll";
+    else if constexpr (std::is_same_v<T, VehicleComponent>)         return "vehicle";
+    else if constexpr (std::is_same_v<T, ClothComponent>)           return "cloth";
+    else                                                              return nullptr;
+}
+} // namespace detail
+
 template<typename T>
 bool InspectorPanel::beginComponentSection(Entity e, const char* label,
                                             bool removable) {
@@ -356,11 +394,105 @@ bool InspectorPanel::beginComponentSection(Entity e, const char* label,
 
     const bool open = ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen);
 
-    // Menu contextual (clic derecho sobre el header): quitar componente.
+    // Menu contextual (clic derecho sobre el header): quitar componente
+    // + F3H9 copy/paste de valores + lock de base-component segun
+    // EntityType del owner.
     if (removable && ImGui::BeginPopupContextItem()) {
+        // F3H9: dispatch T -> componentKey string (vocabulario de
+        // EntitySerializer + EntityTypeTable). null = T no soportado
+        // (no se dibuja copy/paste ni lock-check — solo Remove generic).
+        const char* componentKey = detail::componentKeyForT<T>();
+
+        // F3H9: chequear si este componente es BASE del type de la
+        // entity. Si lo es, "Remove component" queda gris — la entity
+        // ES de ese type (Light entity tiene LightComponent como nucleo
+        // de identidad), borrarlo se hace borrando la entity.
+        const EntityType entType = e.hasComponent<TagComponent>()
+            ? e.getComponent<TagComponent>().entityType
+            : EntityType::Generic;
+        const bool isBase = (componentKey != nullptr) &&
+            EntityTypeTable::isBaseComponent(entType, componentKey);
+
+        // Tile entities son auto-gen — disabled todo el menu de
+        // edicion (read-only del Inspector).
+        const bool isAutoGen = (entType == EntityType::Tile);
+
+        // Copy/Paste items — solo para los Tier 1 supported keys
+        // (light/trigger/force_field/particle_emitter), por ahora.
+        const bool tier1Paste = (componentKey != nullptr) &&
+            ComponentClipboard::isSupported(componentKey);
+
+        if (tier1Paste && !isAutoGen && m_ui != nullptr && m_assets != nullptr) {
+            // Copiar valores: serializa el componente al clipboard de EditorUI.
+            const std::string copyLabel =
+                std::string(ICON_FA_COPY " ") +
+                I18n::T("editor.panel.inspector.context.copy_values");
+            if (ImGui::Selectable(copyLabel.c_str())) {
+                auto payload = ComponentClipboard::serializeComponent(
+                    componentKey, e, *m_assets);
+                if (!payload.is_null()) {
+                    m_ui->setClipboardComponent(
+                        std::string(componentKey), std::move(payload));
+                }
+                ImGui::EndPopup();
+                return open;
+            }
+
+            // Pegar valores: gris si el clipboard esta vacio o el componentKey
+            // del clipboard no coincide con T.
+            const auto& clip = m_ui->clipboardComponent();
+            const bool canPaste = clip.has_value() &&
+                                    clip->componentKey == componentKey;
+            const std::string pasteLabel =
+                std::string(ICON_FA_PASTE " ") +
+                I18n::T("editor.panel.inspector.context.paste_values");
+            if (!canPaste) ImGui::BeginDisabled();
+            if (ImGui::Selectable(pasteLabel.c_str()) && canPaste) {
+                // Build PasteComponentCommand: snapshot before, after = clipboard.
+                auto before = ComponentClipboard::serializeComponent(
+                    componentKey, e, *m_assets);
+                auto cmd = std::make_unique<PasteComponentCommand>(
+                    e, std::string(componentKey),
+                    std::move(before),
+                    clip->payload,  // copy del payload
+                    /*hadComponentBefore=*/true,
+                    m_assets,
+                    I18n::T("editor.panel.inspector.context.cmd_paste_values"));
+                if (!cmd->isNoOp()) {
+                    HistoryStack* h = m_ui->historyStack();
+                    if (h != nullptr) {
+                        h->push(std::move(cmd));
+                    } else {
+                        cmd->execute();
+                    }
+                    m_editedThisFrame = true;
+                }
+                ImGui::EndPopup();
+                return open;
+            }
+            if (!canPaste) ImGui::EndDisabled();
+
+            ImGui::Separator();
+        }
+
+        // F3H9: "Remove component" disabled si es base del type
+        // (no podes quitar el LightComponent de una entity Light;
+        // borrala entera). isAutoGen tambien lo deshabilita
+        // (entities Tile son read-only). Tooltip explica al hover.
         const std::string item =
             ICON_FA_TRASH_CAN " " + I18n::T("editor.panel.inspector.remove_component");
-        if (ImGui::Selectable(item.c_str())) {
+        const bool removeDisabled = isBase || isAutoGen;
+        if (removeDisabled) ImGui::BeginDisabled();
+        const bool removeClicked = ImGui::Selectable(item.c_str());
+        if (removeDisabled) ImGui::EndDisabled();
+        if (removeDisabled && ImGui::IsItemHovered(
+                ImGuiHoveredFlags_AllowWhenDisabled)) {
+            const char* reasonKey = isAutoGen
+                ? "editor.panel.inspector.remove_disabled_autogen"
+                : "editor.panel.inspector.remove_disabled_base";
+            ImGui::SetTooltip("%s", I18n::T(reasonKey).c_str());
+        }
+        if (removeClicked && !removeDisabled) {
             HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
             auto cmd = makeRemoveComponentCommand<T>(
                 e, I18n::T("editor.panel.inspector.remove_component"));

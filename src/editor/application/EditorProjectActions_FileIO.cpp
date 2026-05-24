@@ -105,6 +105,9 @@ void EditorApplication::handleNewProject() {
             m_hammerSnapStep = static_cast<u32>(snap.stepsAvailable[snap.defaultStepIndex]);
         }
     }
+    // F3H9: clear clipboard al crear proyecto nuevo (mismo motivo que en
+    // tryOpenProjectPath — asset refs del payload pueden quedar stale).
+    m_ui.clearClipboardComponent();
     addToRecentProjects(m_project->root / (m_project->name + ".moodproj"));
     updateWindowTitle();
     syncMapsSnapshot();
@@ -178,6 +181,10 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
             m_hammerSnapStep = static_cast<u32>(snap.stepsAvailable[snap.defaultStepIndex]);
         }
     }
+    // F3H9: clear del clipboard de componentes — el JSON puede referenciar
+    // assets (texture paths del ParticleEmitter) que no existen en el
+    // proyecto nuevo, dejar contenido stale confunde al dev.
+    m_ui.clearClipboardComponent();
     addToRecentProjects(std::filesystem::absolute(moodproj));
     updateWindowTitle();
 

@@ -360,6 +360,7 @@ void EditorApplication::processViewportMeshDrop() {
     // instance unicos para no contagiar edits.
     auto mats = m_assetManager->createMaterialsForMesh(meshId);
     e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
+    e.getComponent<TagComponent>().entityType = EntityType::Mesh;  // F3H9
 
     // Hito 19: si el mesh tiene esqueleto, auto-agregar Animator +
     // Skeleton para que se anime al instante (sin esto el mesh queda
@@ -628,6 +629,7 @@ void EditorApplication::processViewportItemDrop() {
     ItemPickupComponent ip;
     ip.itemPath = drop.itemPath;
     e.addComponent<ItemPickupComponent>(ip);
+    e.getComponent<TagComponent>().entityType = EntityType::Pickable;  // F3H9
 
     Log::editor()->info(
         "Drop item '{}' -> tile ({}, {}) [mesh={}, displayName='{}', "
@@ -712,6 +714,7 @@ void EditorApplication::processViewportVehicleDrop() {
     vc.configPath = drop.vehiclePath;
     vc.dirty = true;
     e.addComponent<VehicleComponent>(std::move(vc));
+    e.getComponent<TagComponent>().entityType = EntityType::Vehicle;  // F3H9
 
     // Mismo tratamiento que SceneLoader: elevar el mesh por encima del
     // origin logico (chassis half-height + spring rest compression) y

@@ -220,6 +220,7 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
 
             auto mats = m_assetManager->createMaterialsForMesh(selectedToSpawn);
             e.addComponent<MeshRendererComponent>(selectedToSpawn, std::move(mats));
+            e.getComponent<TagComponent>().entityType = EntityType::Mesh;  // F3H9
 
             if (asset != nullptr && asset->hasSkeleton()) {
                 AnimatorComponent anim{};

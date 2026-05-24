@@ -23,6 +23,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
+#include "engine/scene/entity_type/EntityType.h"  // F3H9
 
 #include <imgui.h>
 #include <portable-file-dialogs.h>
@@ -152,6 +153,7 @@ void EditorApplication::processCreateEntityFromModelRequest() {
     // MeshRenderer con materiales generados.
     auto mats = m_assetManager->createMaterialsForMesh(meshId);
     e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
+    e.getComponent<TagComponent>().entityType = EntityType::Mesh;  // F3H9
 
     // F2H50: si tiene esqueleto, auto-agregar Animator + Skeleton.
     if (asset != nullptr && asset->hasSkeleton()) {
@@ -219,6 +221,7 @@ void EditorApplication::processCreateEntityPlaceholderRequest() {
     const MeshAssetId placeholderId = m_assetManager->missingMeshId();
     auto mats = m_assetManager->createMaterialsForMesh(placeholderId);
     e.addComponent<MeshRendererComponent>(placeholderId, std::move(mats));
+    e.getComponent<TagComponent>().entityType = EntityType::Mesh;  // F3H9
 
     Log::editor()->info(
         "[create_entity_placeholder] Spawned '{}' con placeholder cube",
@@ -333,6 +336,7 @@ void EditorApplication::renderConvertEntityModal() {
         dlg.dialogPath = "dialogs/example.mooddialog";
         dlg.autoStartOnInteract = true;
         target.addComponent<DialogComponent>(dlg);
+        target.getComponent<TagComponent>().entityType = EntityType::Npc;  // F3H9
         Log::editor()->info("[convert] '{}' -> NPC con dialogo (path placeholder)",
                               tagName);
         applied = true;
@@ -351,6 +355,7 @@ void EditorApplication::renderConvertEntityModal() {
         pickup.quantity = 1;
         pickup.destroyOnPickup = true;
         target.addComponent<ItemPickupComponent>(pickup);
+        target.getComponent<TagComponent>().entityType = EntityType::Pickable;  // F3H9
         Log::editor()->info("[convert] '{}' -> Item pickeable (path placeholder)",
                               tagName);
         applied = true;
@@ -368,6 +373,7 @@ void EditorApplication::renderConvertEntityModal() {
         light.radius = 10.0f;
         light.enabled = true;
         target.addComponent<LightComponent>(light);
+        target.getComponent<TagComponent>().entityType = EntityType::Light;  // F3H9
         Log::editor()->info("[convert] '{}' -> Luz puntual", tagName);
         applied = true;
     }
@@ -384,6 +390,7 @@ void EditorApplication::renderConvertEntityModal() {
         light.castShadows = true;
         light.enabled = true;
         target.addComponent<LightComponent>(light);
+        target.getComponent<TagComponent>().entityType = EntityType::Light;  // F3H9
         Log::editor()->info("[convert] '{}' -> Luz direccional", tagName);
         applied = true;
     }
@@ -458,6 +465,7 @@ void EditorApplication::handleAddDirectionalLight() {
     light.castShadows = true; // engine-grade default -- pedido del dev.
     light.enabled     = true;
     e.addComponent<LightComponent>(light);
+    e.getComponent<TagComponent>().entityType = EntityType::Light;  // F3H9
 
     Log::editor()->info("[create_light] Spawned '{}' (Directional, castShadows=ON)", name);
 
@@ -480,6 +488,7 @@ void EditorApplication::handleAddPointLight() {
     light.radius    = 10.0f;
     light.enabled   = true;
     e.addComponent<LightComponent>(light);
+    e.getComponent<TagComponent>().entityType = EntityType::Light;  // F3H9
 
     Log::editor()->info("[create_light] Spawned '{}' (Point, radius=10m)", name);
 
@@ -530,6 +539,7 @@ void EditorApplication::handleAddEnvironment() {
 
     EnvironmentComponent env{}; // defaults del struct: kloofendal + fog Off + tonemap ACES, etc.
     e.addComponent<EnvironmentComponent>(env);
+    e.getComponent<TagComponent>().entityType = EntityType::Environment;  // F3H9
 
     Log::editor()->info("[create_environment] Spawned '{}' (Environment global)", name);
 

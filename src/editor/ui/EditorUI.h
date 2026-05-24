@@ -43,6 +43,8 @@
 #include "editor/workspace/WorkspaceManager.h"
 #include "engine/scene/core/Entity.h"
 
+#include <nlohmann/json.hpp>  // F3H9: clipboard component payload
+
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -439,6 +441,30 @@ private:
     // F2H35 Bloque E: labels point entities.
     bool m_toggleEntityLabelsRequested = false;
     bool m_showEntityLabels = true;
+
+    // F3H9: clipboard interno para copy/paste de componentes entre
+    // entidades del mismo proyecto. Se invalida al cerrar proyecto
+    // (clearClipboardComponent() llamado por EditorProjectActions).
+    // Forward decl en EditorUI_Clipboard.inl.
+    struct CopiedComponent {
+        std::string    componentKey;  // "light", "trigger", "force_field", "particle_emitter"
+        nlohmann::json payload;
+    };
+    std::optional<CopiedComponent> m_clipboardComponent;
+
+public:
+    /// F3H9: clipboard interno de componentes para copy/paste cross-entity.
+    /// Solo accedido por InspectorPanel (Copiar/Pegar) + EditorProjectActions
+    /// (clear al cerrar proyecto).
+    const std::optional<CopiedComponent>& clipboardComponent() const {
+        return m_clipboardComponent;
+    }
+    void setClipboardComponent(std::string componentKey,
+                                nlohmann::json payload) {
+        m_clipboardComponent = CopiedComponent{
+            std::move(componentKey), std::move(payload)};
+    }
+    void clearClipboardComponent() { m_clipboardComponent.reset(); }
 };
 
 } // namespace Mood

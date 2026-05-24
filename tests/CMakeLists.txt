@@ -47,6 +47,8 @@ add_executable(mood_tests
     test_create_entity_command.cpp
     test_edit_property_command.cpp
     test_multi_edit_property_command.cpp  # F3H8
+    test_component_clipboard.cpp           # F3H9
+    test_entity_type.cpp                   # F3H9 Stage 2
     test_add_component_command.cpp  # F2H45 Bloque A
     test_particle_system.cpp
     test_character_controller.cpp
@@ -119,6 +121,8 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/editor/commands/SetTileCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/EditMeshRendererMaterialCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/EditScriptComponentCommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/commands/PasteComponentCommand.cpp  # F3H9
+    ${CMAKE_SOURCE_DIR}/src/editor/components/ComponentClipboard.cpp   # F3H9
 
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/TilePersistence.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/MapsManager.cpp
@@ -150,6 +154,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/packaging/PackageBuilder.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/saving/SaveLoad.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/SceneLoader.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/scene/entity_type/EntityTypeTable.cpp  # F3H9
     ${CMAKE_SOURCE_DIR}/src/platform/VFS.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Audio.cpp

@@ -20,6 +20,7 @@ namespace Mood {
 
 class Scene;
 class EditorUI;
+class AssetManager;  // F3H9: serializeComponent en click-derecho paste
 struct TagComponent;
 
 /// @brief Una fila del Hierarchy: entidad + puntero al tag para evitar
@@ -51,9 +52,15 @@ public:
     ///        la lea sin acoplamiento panel-panel. Referencia no-owning.
     void setEditorUi(EditorUI* ui) { m_ui = ui; }
 
+    /// @brief F3H9: inyectado para el paste de componentes en click-
+    ///        derecho (serializeComponent + applyPayload necesitan
+    ///        resolver texture refs del ParticleEmitter).
+    void setAssetManager(AssetManager* am) { m_assets = am; }
+
 private:
     Scene* m_scene = nullptr;
     EditorUI* m_ui = nullptr;
+    AssetManager* m_assets = nullptr;
     /// Cache de la lista de entries. Se rellena al inicio de cada
     /// `onImGuiRender` y se reusa el storage entre frames.
     std::vector<HierarchyEntry> m_entries;

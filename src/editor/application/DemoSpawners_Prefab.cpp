@@ -8,6 +8,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
+#include "engine/scene/entity_type/EntityTypeTable.h"  // F3H9
 #include "engine/scene/queries/ScenePick.h"
 #include "engine/scene/queries/ViewportPick.h"
 #include "engine/scene/serialization/PrefabSerializer.h"
@@ -204,6 +205,13 @@ void EditorApplication::processViewportPrefabDrop() {
     // Link al prefab — clave para futuro "revert/apply" (no implementado
     // en Hito 14 pero el breadcrumb queda).
     e.addComponent<PrefabLinkComponent>(prefabPath);
+
+    // F3H9: un prefab puede combinar mesh + light + rigidbody segun el
+    // .moodprefab. Tomamos el type que matchea el orden de inferencia
+    // de EntityTypeTable (Brush > NPC > Pickable > Environment > Light >
+    // ... > Vehicle > Mesh > Generic).
+    e.getComponent<TagComponent>().entityType =
+        EntityTypeTable::inferFromEntity(e);
 
     m_ui.setSelectedEntity(e);
     Log::editor()->info("Drop prefab '{}' -> tile ({}, {})",

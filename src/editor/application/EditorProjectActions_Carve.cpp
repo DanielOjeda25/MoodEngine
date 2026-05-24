@@ -255,6 +255,7 @@ void EditorApplication::handleCarve() {
             ? 0u : m_assetManager->loadMaterial(sb.materialPath);
         bc.dirty = true;
         e.addComponent<BrushComponent>(std::move(bc));
+        e.getComponent<TagComponent>().entityType = EntityType::Brush;  // F3H9
     }
 
     // Push command. Reusa BooleanOpCommand con kind=Subtract pero

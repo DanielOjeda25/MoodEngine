@@ -418,6 +418,7 @@ add_library(mood_engine_lib STATIC
     src/engine/scene/serialization/EntitySerializer.cpp
     src/engine/scene/serialization/EntitySerializer_Parse.cpp   # F2H81 auditoría (split)
     src/engine/scene/serialization/SceneLoader.cpp
+    src/engine/scene/entity_type/EntityTypeTable.cpp  # F3H9
     src/engine/scene/serialization/SceneSerializer.cpp
     src/engine/scene/serialization/ProjectSerializer.cpp
     src/engine/scene/serialization/PrefabSerializer.cpp
@@ -594,6 +595,8 @@ add_executable(MoodEditor
     src/editor/commands/EditScriptComponentCommand.cpp
     src/editor/commands/VisGroupCommands.cpp  # F2H33
     src/editor/commands/NodeGraphCommand.cpp  # F2H46
+    src/editor/commands/PasteComponentCommand.cpp  # F3H9
+    src/editor/components/ComponentClipboard.cpp   # F3H9
     src/editor/panels/scene/ViewportPanel.cpp
     src/editor/panels/scene/OrthoViewportPanel.cpp  # F2H28
     src/editor/panels/scene/InspectorPanel.cpp

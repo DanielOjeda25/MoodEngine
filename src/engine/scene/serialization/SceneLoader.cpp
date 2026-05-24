@@ -9,6 +9,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
+#include "engine/scene/entity_type/EntityTypeTable.h"  // F3H9
 #include "engine/scene/serialization/SceneSerializer.h"
 #include "engine/scene/serialization/TilePersistence.h"
 #include "engine/physics/vehicle/VehicleConfig.h"  // F2H70.2 D5: meshYawOffsetDeg
@@ -505,6 +506,19 @@ Entity applyOneEntity(const SavedEntity& se,
         // — convencion Hammer: VisGroups son solo del editor.
         if (applyVisGroupMembership && se.visgroupId != 0) {
             e.addComponent<VisGroupMembershipComponent>(se.visgroupId);
+        }
+    }
+
+    // F3H9: setear el entityType del TagComponent. Si el JSON traia
+    // la key explicita (post-F3H9) usamos eso; si no (back-compat con
+    // mapas pre-F3H9), inferimos de los componentes ya materializados.
+    {
+        auto& tagComp = e.getComponent<TagComponent>();
+        if (!se.entityType.empty()) {
+            tagComp.entityType = EntityTypeTable::fromString(se.entityType);
+        } else {
+            tagComp.entityType =
+                EntityTypeTable::inferFromEntityWithTag(e, se.tag);
         }
     }
     return e;

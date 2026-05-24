@@ -124,6 +124,12 @@ private:
     /// `renderSectionToolbar` y lo consume cada `beginComponentSection`
     /// (via `SetNextItemOpen`); se resetea al final de `onImGuiRender`.
     int m_forceSectionState = 0;
+
+    /// F3H9 Stage 9: slot de material seleccionado en el inspector
+    /// MeshRenderer (UI Blender-style: lista compacta arriba + panel del
+    /// seleccionado debajo). Sticky entre frames; se clampea contra
+    /// `mr.materials.size()` cada frame.
+    int m_selectedMaterialSlot = 0;
 };
 
 } // namespace Mood

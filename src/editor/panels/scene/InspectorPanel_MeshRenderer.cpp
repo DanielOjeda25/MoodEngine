@@ -21,6 +21,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <cfloat>   // F3H9 Stage 9: FLT_MIN para BeginListBox width=fill
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -488,18 +489,72 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
     ImGui::Text("%s",
         I18n::T("editor.panel.inspector.mesh.materials",
                 static_cast<u32>(mr.materials.size())).c_str());
-    for (usize i = 0; i < mr.materials.size(); ++i) {
+
+    // F3H9 Stage 9: UI Blender-style. Antes era un loop vertical que
+    // dibujaba TODOS los slots uno debajo del otro — con N >= 3 el
+    // Inspector se hacia kilometrico. Ahora:
+    //   1) lista compacta arriba (ListBox de alto fijo) con un item
+    //      por slot — el dev selecciona cual editar;
+    //   2) abajo, SOLO el slot seleccionado se renderiza completo
+    //      (drop target + PBR + Shader + Blending).
+    //
+    // Clampear el index sticky contra el size actual (la entidad pudo
+    // cambiar, o el dev movio submeshes en el mesh asset).
+    const int slotCount = static_cast<int>(mr.materials.size());
+    if (m_selectedMaterialSlot >= slotCount) m_selectedMaterialSlot = 0;
+    if (m_selectedMaterialSlot < 0)          m_selectedMaterialSlot = 0;
+
+    if (slotCount == 0) {
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.mesh.no_materials").c_str());
+        ImGui::Separator();
+        return;
+    }
+
+    // (1) Lista compacta. Alto: max 4 lineas visibles (igual que Blender
+    // — cualquier cantidad mayor scrollea). Single-line por slot:
+    // "[i] <path>"
+    {
+        const float lineH = ImGui::GetTextLineHeightWithSpacing();
+        const int   visibleRows = (slotCount < 4) ? slotCount : 4;
+        const float listH = lineH * static_cast<float>(visibleRows)
+                          + ImGui::GetStyle().FramePadding.y * 2.0f;
+        if (ImGui::BeginListBox("##mat_slot_list",
+                                 ImVec2(-FLT_MIN, listH))) {
+            for (int i = 0; i < slotCount; ++i) {
+                const MaterialAssetId matId = mr.materials[i];
+                const std::string matPath = m_assets
+                    ? m_assets->materialPathOf(matId)
+                    : std::string{};
+                const bool selected = (i == m_selectedMaterialSlot);
+                ImGui::PushID(i);
+                char label[256];
+                std::snprintf(label, sizeof(label), "%d  %s", i,
+                              matPath.empty() ? "(no material)" : matPath.c_str());
+                if (ImGui::Selectable(label, selected)) {
+                    m_selectedMaterialSlot = i;
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndListBox();
+        }
+    }
+
+    // (2) Panel del slot seleccionado.
+    {
+        const usize i = static_cast<usize>(m_selectedMaterialSlot);
         const MaterialAssetId matId = mr.materials[i];
-        const std::string matPath = m_assets->materialPathOf(matId);
+        const std::string matPath = m_assets
+            ? m_assets->materialPathOf(matId)
+            : std::string{};
         ImGui::PushID(static_cast<int>(i));
-        // Header del slot: path del material (read-only).
         ImGui::SeparatorText(
             (I18n::T("editor.panel.inspector.mesh.material_slot") + " " +
              std::to_string(i)).c_str());
         ImGui::TextDisabled("%s (id %u)", matPath.c_str(),
                               static_cast<unsigned>(matId));
 
-        MaterialAsset* mat = m_assets->getMaterial(matId);
+        MaterialAsset* mat = m_assets ? m_assets->getMaterial(matId) : nullptr;
         if (mat != nullptr) {
             drawMaterialPbrMultipliers(mat, m_assets, matId,
                                           m_editTracker, m_ui, e, m_editedThisFrame);

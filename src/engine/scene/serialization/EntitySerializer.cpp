@@ -7,6 +7,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"  // F2H65: lookup target via entityFromHandle
+#include "engine/scene/entity_type/EntityTypeTable.h"  // F3H9
 #include "engine/scene/serialization/JsonHelpers.h" // adapters glm::vec3 <-> json
 
 #include <variant>
@@ -472,7 +473,13 @@ void writePrefabLink(json& je, const PrefabLinkComponent& link) {
 
 json serializeEntityToJson(Entity entity, const AssetManager& assets) {
     json je;
-    je["tag"] = entity.getComponent<TagComponent>().name;
+    const auto& tag = entity.getComponent<TagComponent>();
+    je["tag"] = tag.name;
+    // F3H9: persistir el entityType si != Generic (defaults se skipean
+    // para mantener .moodmap limpio, mismo patron que F3H4-F3H7).
+    if (tag.entityType != EntityType::Generic) {
+        je["entity_type"] = EntityTypeTable::toString(tag.entityType);
+    }
 
     const auto& t = entity.getComponent<TransformComponent>();
     json jt;

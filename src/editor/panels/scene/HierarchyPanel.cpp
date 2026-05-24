@@ -1,14 +1,20 @@
 #include "editor/panels/scene/HierarchyPanel.h"
 
 #include "core/Log.h"  // F2H23: log de selection
+#include "editor/commands/HistoryStack.h"  // F3H9: push del PasteComponentCommand
+#include "editor/commands/PasteComponentCommand.h"  // F3H9
+#include "editor/components/ComponentClipboard.h"   // F3H9
 #include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/ui/EditorUI.h"
 #include "editor/ui/IconHelpers.h"  // F2H37: iconForEntity compartido
 #include "editor/ui/IconsFontAwesome6.h"
 #include "core/i18n/I18n.h"  // F2H43
+#include "engine/assets/manager/AssetManager.h"  // F3H9: serializeComponent
 #include "engine/scene/VisGroup.h"  // F2H33: gray-out hidden entities
+#include "engine/scene/components/Components.h"  // F3H9 Stage 8: TagComponent
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
+#include "engine/scene/entity_type/EntityTypeTable.h"  // F3H9 Stage 8: base por type
 
 #include <imgui.h>
 
@@ -171,6 +177,9 @@ void HierarchyPanel::onImGuiRender() {
             // F2H57 Bloque C: menu contextual con click derecho sobre
             // la entidad. Convencion Hammer Editor: Cambiar tipo /
             // Eliminar (Rename + Duplicar quedan como follow-up).
+            // F3H9: agregado paste de componentes del clipboard (mirror
+            // del Inspector). El item es dinamico — solo aparece cuando
+            // el clipboard tiene contenido aplicable a esta entidad.
             if (ImGui::BeginPopupContextItem("##entity_ctx")) {
                 // Si el right-click cae sobre una entidad fuera de la
                 // seleccion, hacer que esa entidad sea la activa
@@ -181,6 +190,111 @@ void HierarchyPanel::onImGuiRender() {
                 if (ImGui::MenuItem(
                         I18n::T("editor.panel.hierarchy.ctx.change_type").c_str())) {
                     m_ui->requestEntityConvertModal(entry.handle);
+                }
+                // F3H9 Stage 8: "Copiar valores" — toma el base component
+                // de la entity segun su EntityType (Light -> light,
+                // Trigger -> trigger, NPC -> dialog, Pickable ->
+                // item_pickup, etc) y lo pone en el clipboard. Generic /
+                // Tile no aparecen (no hay base unico que copiar).
+                // El item se muestra siempre — disabled con tooltip
+                // explicando si el base aun no soporta clipboard (los
+                // types cubiertos por Tier 1 son Light/Trigger/
+                // ForceField/ParticleEmitter; resto pendiente F3H10+).
+                if (m_assets != nullptr && entry.tag != nullptr) {
+                    const EntityType entType = entry.tag->entityType;
+                    if (entType != EntityType::Generic &&
+                        entType != EntityType::Tile) {
+                        const auto bases = EntityTypeTable::baseComponentKeys(entType);
+                        // Tipos compuestos (NPC, Pickable) tienen 2 bases —
+                        // copiamos el ULTIMO (el "definitorio": Dialog /
+                        // ItemPickup). Trigger solo se copia desde un
+                        // Trigger entity (1 base).
+                        const std::string baseKey = bases.empty()
+                            ? std::string{}
+                            : bases.back();
+                        if (!baseKey.empty()) {
+                            ImGui::Separator();
+                            // Display name: priorizamos el nameKey del
+                            // clipboard si lo conoce; si no, caemos a la
+                            // convencion "component.name.{key}" del popup
+                            // Add Component (i18n ya tiene esas keys).
+                            std::string typeNameKey =
+                                ComponentClipboard::componentNameKey(baseKey);
+                            if (typeNameKey.empty()) {
+                                typeNameKey = "component.name." + baseKey;
+                            }
+                            const std::string typeName = I18n::T(typeNameKey);
+                            const bool supported =
+                                ComponentClipboard::isSupported(baseKey);
+                            const std::string copyLabel =
+                                std::string(ICON_FA_COPY " ") +
+                                I18n::T("editor.panel.hierarchy.ctx.copy_values",
+                                         typeName);
+                            if (!supported) ImGui::BeginDisabled();
+                            if (ImGui::MenuItem(copyLabel.c_str())) {
+                                auto payload = ComponentClipboard::serializeComponent(
+                                    baseKey, e, *m_assets);
+                                if (!payload.is_null()) {
+                                    m_ui->setClipboardComponent(baseKey,
+                                                                  std::move(payload));
+                                }
+                            }
+                            if (!supported) {
+                                ImGui::EndDisabled();
+                                if (ImGui::IsItemHovered(
+                                        ImGuiHoveredFlags_AllowWhenDisabled)) {
+                                    ImGui::SetTooltip("%s",
+                                        I18n::T(
+                                            "editor.panel.hierarchy.ctx.copy_unsupported",
+                                            typeName).c_str());
+                                }
+                            }
+                        }
+                    }
+                }
+                // F3H9: paste de clipboard. Solo si hay contenido +
+                // assets inyectado. Dispatch a "Pegar valores" (componente
+                // ya existe) o "Pegar como nuevo" segun corresponda.
+                if (m_assets != nullptr) {
+                    const auto& clip = m_ui->clipboardComponent();
+                    if (clip.has_value() &&
+                        ComponentClipboard::isSupported(clip->componentKey)) {
+                        const std::string typeNameKey =
+                            ComponentClipboard::componentNameKey(clip->componentKey);
+                        const std::string typeName = I18n::T(typeNameKey);
+                        const bool hasComp =
+                            ComponentClipboard::entityHasComponent(
+                                clip->componentKey, e);
+                        ImGui::Separator();
+                        const std::string label = hasComp
+                            ? std::string(ICON_FA_PASTE " ") +
+                              I18n::T("editor.panel.hierarchy.ctx.paste_values",
+                                       typeName)
+                            : std::string(ICON_FA_PASTE " ") +
+                              I18n::T("editor.panel.hierarchy.ctx.paste_as_new",
+                                       typeName);
+                        if (ImGui::MenuItem(label.c_str())) {
+                            auto before = hasComp
+                                ? ComponentClipboard::serializeComponent(
+                                      clip->componentKey, e, *m_assets)
+                                : nlohmann::json{};
+                            auto cmd = std::make_unique<PasteComponentCommand>(
+                                e, clip->componentKey,
+                                std::move(before),
+                                clip->payload,
+                                /*hadComponentBefore=*/hasComp,
+                                m_assets,
+                                hasComp
+                                    ? I18n::T("editor.panel.inspector.context.cmd_paste_values")
+                                    : I18n::T("editor.panel.inspector.context.cmd_paste_as_new",
+                                               typeName));
+                            if (!cmd->isNoOp()) {
+                                HistoryStack* h = m_ui->historyStack();
+                                if (h != nullptr) h->push(std::move(cmd));
+                                else cmd->execute();
+                            }
+                        }
+                    }
                 }
                 ImGui::Separator();
                 if (ImGui::MenuItem(

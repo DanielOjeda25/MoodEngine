@@ -7,6 +7,7 @@
 
 #include "core/Types.h"
 #include "engine/assets/manager/AssetManager.h" // TextureAssetId, AudioAssetId, MeshAssetId
+#include "engine/scene/entity_type/EntityType.h"  // F3H9
 
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp> // F2H70: glm::quat para sync sin gimbal
@@ -20,12 +21,20 @@
 
 namespace Mood {
 
-/// @brief Nombre legible de la entidad (para Hierarchy, logs, debug).
+/// @brief Nombre legible + tipo de entidad. Co-localiza identidad
+///        (nombre + type) en un solo componente. F3H9: agregado el
+///        campo `entityType` para el modelo Blender/Hammer-style donde
+///        cada entity tiene un tipo fijo que define su componente base.
 struct TagComponent {
     std::string name;
+    /// F3H9: tipo fijo de la entidad (Blender Object Type / Hammer
+    /// entity class). Default Generic — entities pre-F3H9 se infieren
+    /// al cargar (ver EntityTypeTable::inferFromComponents).
+    EntityType  entityType = EntityType::Generic;
 
     TagComponent() = default;
     TagComponent(std::string n) : name(std::move(n)) {}
+    TagComponent(std::string n, EntityType t) : name(std::move(n)), entityType(t) {}
 };
 
 /// @brief ¿Es una wheel-entity interna del VehicleSystem? (tags canonicos
