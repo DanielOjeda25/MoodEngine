@@ -16,7 +16,23 @@
 
 ---
 
-## 0. Último cierre — break de auditoría `v2.0.1-break-auditoria` (2026-05-23)
+## 0. Último cierre — deferreds del break `v2.0.2-break-deferreds` (2026-05-23)
+
+**Cierre de los 2 follow-ups dejados pendientes en el break-auditoria** (`v2.0.1`). Ahora no quedan items abiertos previos a Fase 3. Suite `1087/11182` verde (+2 asserts del roundtrip de SaveLoad).
+
+```
+Item                        commit                                 estado
+DemoSpawners cleanup        e462aff (refactor(deferred-1/break))  ✅ -709 LOC
+HudState.ammo legacy        d47121b (refactor(deferred-2/break))  ✅ -10 LOC
+```
+
+**deferred-1**: borrados 10 demos (`Rotator`, `HudDemo`, `EnemyDemo`, `ShadowDemo`, `PbrSpheres`, `AnimatedCharacter`, `FireParticles`, `DialogDemo`, `NarrativeDemoMap`, `FullStressScene`) + 2 entry points del Welcome modal (`OpenDemoMap` F2H44, `OpenNarrativeDemo` F2H50C) — ya estaban huérfanos en UI desde F2H57 cuando el submenú "Demos" del menu Ayuda se eliminó. Conservado en feature spawners: `PhysicsBox`, `Environment`, `PointLight`, `AudioSource`, `Trigger`. Stress tests (`LightStress`, `StressTris`) reubicados en **nuevo menu Debug** (`ICON_FA_BUG` entre View y Help). 19 keys i18n huérfanas borradas; 6 nuevas para Debug. Assets demo (`.lua`/`.moodmap`/`.mooddialog`) NO borrados — inertes ahora sin código que los cargue; barrer con el validador de Sub-fase 3.2.
+
+**deferred-2**: borrado `int ammo = 30` legacy de `HudState` (no se usa desde F2H39 que introdujo `mag` + `reserve`). Sin bump de schema — removing un campo es backward+forward compatible (saves v4 con `ammo` cargan ignorando la key; saves nuevos cargan en binarios viejos con `ammo` defaulteando a 30). Lua bindings `hud.setAmmo`/`hud.getAmmo` removidos — scripts deben usar `hud.setMag`/`hud.getMag`.
+
+---
+
+## 0bis. Cierre previo — break de auditoría `v2.0.1-break-auditoria` (2026-05-23)
 
 **Cierre del break de consolidación pre-Fase 3** ejecutado desde `docs/BREAK_AUDITORIA.md`. Suite verde durante todo el break (`1087/11180`). Doc del audit en [`audits/AUDIT_PLACEBO.md`](audits/AUDIT_PLACEBO.md) + `BREAK_AUDITORIA.md` (queda en root como manifiesto histórico).
 
@@ -32,7 +48,7 @@ Parte A (integridad)        items   commits   estado
   A8 catch (...)              1      1        ✅
   A9 dead code                3      1        ✅ (notimpl modal eliminado;
                                                    DemoSpawners cleanup
-                                                   diferido como follow-up)
+                                                   se cerró en v2.0.2)
 
 Parte B (salud)             items   commits   estado
   B1 passes → engine/render/  1      1        ✅ 0 inversiones de capa
@@ -47,13 +63,9 @@ Parte B (salud)             items   commits   estado
   B8 unique_ptr               1      1        ✅
 ```
 
-**Deferred (follow-up dedicado antes de Fase 3):**
-- DemoSpawners cleanup (3 `.cpp` + 17 `process*Request` + 17 flags en `EditorUI`) — cross-file refactor 4-deep, excede el scope cosmético de A9.
-- `HudState.ammo` — opcional, quitar en el próximo bump de schema.
-
 ---
 
-## 0bis. Cierre previo — AUDIT-3 (2026-05-17)
+## 0ter. Cierre previo — AUDIT-3 (2026-05-17)
 
 **Cierre de la tanda inicial de audits.** Tag `v1.49.3-audit-3`. Reporte completo en [`audits/AUDIT_3.md`](audits/AUDIT_3.md).
 
