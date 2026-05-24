@@ -1,7 +1,8 @@
 #pragma once
 
-// Barra de menu superior del editor. En Hito 1 casi todos los items son
-// placeholders: muestran un popup "No implementado" o registran un log.
+// Barra de menu superior del editor. Todos los items estan cableados a su
+// accion real; el modal "No implementado" historico de Hito 1 fue removido
+// en break-A9 (auditoria pre-Fase 3) junto con su flag.
 
 namespace Mood {
 
@@ -17,7 +18,6 @@ public:
 
 private:
     bool m_showAboutPopup = false;
-    bool m_showNotImplementedPopup = false;
     bool m_showPreferencesPopup = false;  // F2H76: request de abrir
     bool m_prefsOpen = false;             // F2H79: estado abierto (boton X del titlebar)
 };

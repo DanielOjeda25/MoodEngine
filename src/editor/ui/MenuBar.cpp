@@ -218,10 +218,11 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             // right-click "Cambiar tipo" (estilo Hammer Editor). Los
             // handlers process*Request de DemoSpawners_*.cpp quedan
             // como dead code linkeado, pero sin trigger desde UI.
-            // Cleanup completo (eliminar .cpp + helpers compartidos)
-            // se difiere a un follow-up del hito para evitar romper
-            // dependencias laterales (ej. ensureDemoIntroDialogExists
-            // que F2H47 podria estar reusando).
+            // break-A9 (auditoria): cleanup completo (DemoSpawners_Basic/
+            // Prefab/Stress.cpp ~1000 LOC + 17 process*Request methods +
+            // 17 request flags en EditorUI) se difiere — es un cross-file
+            // refactor de 4 capas que excede el scope cosmetico de A9.
+            // Item a abordar en su propio commit antes de Fase 3.
             ImGui::EndMenu();
         }
 
@@ -300,10 +301,6 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
         ImGui::OpenPopup("##about_modal");
         m_showAboutPopup = false;
     }
-    if (m_showNotImplementedPopup) {
-        ImGui::OpenPopup("##notimpl_modal");
-        m_showNotImplementedPopup = false;
-    }
     if (m_showPreferencesPopup) {
         // F2H79: usamos "###preferences_modal" → el ID de ImGui es estable
         // ("preferences_modal") aunque el titulo visible (i18n) cambie de
@@ -321,14 +318,6 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
         ImGui::Text("%s", I18n::T("editor.modal.about.repo").c_str());
         ImGui::Separator();
         if (ImGui::Button(I18n::T("editor.modal.common.close").c_str(), ImVec2(120, 0))) {
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-
-    if (ImGui::BeginPopupModal("##notimpl_modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("%s", I18n::T("editor.modal.notimpl.body").c_str());
-        if (ImGui::Button(I18n::T("editor.modal.common.ok").c_str(), ImVec2(120, 0))) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
