@@ -8,11 +8,25 @@
 
 ## 🏁 Fase 2 CERRADA — `v2.0.0` (2026-05-23)
 
-**88 hitos** completados (F2H1 → F2H86 + 3 audits + breaks). **Suite 1087/11180 verde**. Recap completo de la fase en [`RELEASE_v2.0.0.md`](RELEASE_v2.0.0.md).
+**88 hitos** completados (F2H1 → F2H86 + 3 audits + breaks). **Suite 1087/11182 verde** post break-deferreds. Recap completo de la fase en [`RELEASE_v2.0.0.md`](RELEASE_v2.0.0.md).
 
 **BACKLOG vaciado** por decisión del dev: *"elimina todo lo que quedó del backlog o pendientes así luego comenzamos de 0 con la fase 3"*. Items históricos viven en el git history. `docs/BACKLOG.md` queda como stub explícito.
 
-**Sin plan de Fase 3 acá** — el dev pidió arrancar de cero cuando vuelva.
+---
+
+## 🚀 Fase 3 ARRANCANDO — pulido + UX + nada hardcodeado
+
+**Norte:** *pulido, no features*. Sub-fases 3.1-3.4. Plan maestro en [`PLAN_FASE3.md`](PLAN_FASE3.md). Espina dorsal de la fase: **regla "nada hardcodeado"** — todo valor de comportamiento debe ser editable sin recompilar (`.moodproj`, `UserSettings`, Inspector). Ver `PLAN_FASE3.md` sección 2.
+
+**Próximo hito: F3H1** — Project Settings panel + persistencia `.moodproj`. Construye el chasis sobre el cual los siguientes hitos colgaran fields configurables. Detalle en [`PLAN_HITO_F3H1.md`](PLAN_HITO_F3H1.md).
+
+**Roadmap (~27 hitos):**
+```
+Sub-fase 3.1 — El editor te respeta              F3H1  – F3H7    (ahora)
+Sub-fase 3.2 — Inspector + Hierarchy pulidos     F3H8  – F3H13
+Sub-fase 3.3 — Asset Browser de verdad           F3H14 – F3H19
+Sub-fase 3.4 — Viewport pro + Performance        F3H20 – F3H27
+```
 
 ---
 

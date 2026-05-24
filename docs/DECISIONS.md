@@ -11,6 +11,78 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-23: Arranque Fase 3 — pulido, UX, nada hardcodeado
+
+### Decisión 1 — Fase 3 = pulido, no features
+
+**Contexto:** tras cerrar `v2.0.0` (88 hitos) + `v2.0.1-break-auditoria` + `v2.0.2-break-deferreds`, el dev me pidió analizar Fase 3 con el lente "ingeniero gráfico + UX". Su feedback explícito: *"realmente hay que pulir muchas de las herramientas que tenemos actualmente, desde lo mas basico, hasta lo mas avanzado"*.
+
+**Decisión:** Fase 3 es *fase de pulido*. **Regla dura**: si un hito agrega un sistema nuevo, no es Fase 3 (defer a Fase 4). Si mejora algo que ya existe (UX, performance, configurabilidad, consistencia), es Fase 3.
+
+**Razones:**
+- Acumulamos 88 features en Fase 2 — el dev tiene fricción real con lo existente, no falta de features.
+- Apilar más sobre un editor con UX inconsistente solo aumenta la deuda.
+- Establecer disciplina ahora evita scope creep a lo largo de los ~27 hitos planificados.
+
+**Alternativas descartadas:**
+- "Mix de pulido + features sueltas" — diluye el norte; el dev rechazaría hitos pero perderíamos tiempo en debate por cada uno.
+- Saltar a Fase 4 con features nuevas — ignora la fricción documentada en validaciones de F2H81/82/86.
+
+**Condiciones de revisión:** si después de Sub-fase 3.1 emerge necesidad de feature crítica (ej. un sistema de combate para validar la sub-fase 3.4 de profiling), evaluar agendar como hito separado fuera de Fase 3.
+
+### Decisión 2 — "Nada hardcodeado" como espina dorsal
+
+**Contexto:** el dev fue explícito: *"algo que realmente no deseo en este futuro programa es tener valores hardcodeados, osea entiendes que este programa debera darle la libertad al usuario de editar lo que le plazca"*. Filosofía de producto: MoodEngine es un motor que terceros van a usar para hacer juegos diversos; hardcodear defaults a gusto personal restringe usabilidad.
+
+**Decisión:** principio cross-cutting de toda Fase 3. Cuando aparezca un magic number / default / límite / color en código, evaluar dónde debería vivir (Project Settings / UserSettings / Inspector field / dejar en código solo si es matemática, magic number de algoritmo justificado, o límite duro del runtime).
+
+**Razones:**
+- Permite que el motor crezca como herramienta de terceros sin recompilación.
+- Forza el diseño "data-first" — toda config es data editable, el código es sólo dispatch.
+- Reduce deuda nueva durante Fase 3 (vs. arreglar settings hardcoded post-hoc en Fase 4).
+
+**Alternativas descartadas:**
+- "Solo configurable lo que el dev pida explícitamente" — no escala; cada vez que un usuario externo pida un setting, hay deuda nueva.
+- "Refactor masivo de hardcodes en un solo hito" — bloque demasiado grande, alto riesgo de regresión. Por eso F3H3 audita + cataloga, y F3H4+ migra incremental.
+
+**Memoria asociada:** `feedback_no_hardcoded_values.md` (indexada en `MEMORY.md`).
+
+**Condiciones de revisión:** la regla NO aplica a (1) constantes matemáticas (PI, conversiones grados↔rad), (2) magic numbers de algoritmos con justificación documentada (epsilon GGX 0.05 para evitar NaN, threshold de Forward+ tile), (3) límites duros del runtime (max bodies de Jolt, max lights por tile).
+
+### Decisión 3 — Orden de sub-fases: 3.1 PRIMERO (infra de configuración), 3.2-3.4 después
+
+**Contexto:** mi propuesta inicial al dev fue 4 sub-fases ordenadas por "frecuencia de uso diario" (3.1 = Inspector daily, 3.2 = Asset workflow, 3.3 = Viewport pro, 3.4 = Performance). Tras incorporar el principio "nada hardcodeado", la 3.1 se convirtió en "El editor te respeta" (defaults configurables) y se promovió al inicio.
+
+**Decisión:** Sub-fase 3.1 construye Project Settings + User Preferences. Las sub-fases 3.2-3.4 *consumen* esa infraestructura. Sin 3.1 primero, las siguientes acumularían deuda nueva (más hardcodes a la pasada).
+
+**Razones:**
+- Quality-of-life features en Inspector / Asset Browser / Viewport van a *querer* exponer sus defaults al dev — si no existen los paneles de Settings, esos defaults nacen hardcoded.
+- "Spawn inteligente" (F3H5: posicionar entidades nuevas en cursor 3D vs (0,4,0) hardcoded) requiere que la posición default sea editable per-proyecto.
+- Profiler (F3H23) y stats overlay (F3H24) tienen N decisiones de "qué mostrar por default" que deberían ser preferences.
+
+**Alternativas descartadas:**
+- "3.2 (Inspector polish) primero porque es lo que el dev usa todo el día" — tentador, pero deja la deuda de hardcode-creep durante 6+ hitos.
+- "Sub-fase 3.0 dedicada solo a la infra de settings sin migrar nada" — overlap conceptual; preferimos que 3.1 migre 2 fields prueba para validar la infra end-to-end.
+
+### Decisión 4 — Schema `.moodproj`: sin bumps explícitos, back-compat por defaults
+
+**Contexto:** F3H1 introduce sección `"settings": {...}` en `.moodproj`. Decisión técnica: ¿bumpear schema version cada vez que agreguemos un setting, o forward+backward compatible por defaults?
+
+**Decisión:** sin bumps. Aplicar el patrón validado en el cleanup de `HudState.ammo` post-v2.0.2: si una key no existe en disco, usar default; si una key existe en disco pero el código no la lee, ignorar.
+
+**Razones:**
+- Fase 3 va a agregar fields incrementalmente en cada hito (3.1 → 3.4). Bumpear cada vez es verboso e innecesario.
+- Patrón ya validado: el cleanup de `ammo` no rompió saves v4 (json silenciosamente ignora keys extra; defaults cubren keys faltantes).
+- Reduce burden de migration code que nadie revisa.
+
+**Alternativas descartadas:**
+- (a) Bump explícito cada vez (`v1` → `v2` → ...) — verboso, no protege contra nada que los defaults no cubran ya.
+- (c) Versión por-sección (`settings.general.v=2`) — agrega complejidad sin caso de uso que justifique.
+
+**Condiciones de revisión:** si emerge un cambio *incompatible* (renombrar key, cambiar tipo de value), ahí sí se bumpea + se escribe upgrader. La regla es solo para *additive* changes.
+
+---
+
 ## 2026-05-23: F2H86 — Environment como entidad de primera clase + HDRI swap
 
 ### Decisión 1 — Cerrar 1.0 + 1.-1 en un mismo hito en vez de dos chicos

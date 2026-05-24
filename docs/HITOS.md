@@ -132,6 +132,16 @@ Ver `MOODENGINE_CONTEXTO_TECNICO.md` sección 10 para la lista completa con deta
 
 **🏁 Sub-fase 2.5 (Diálogos / Inventario / Quests) cerrada con `v1.41.0-fase2-hito53`.**
 
+## Fase 3 — Pulido + UX + nada hardcodeado (en curso)
+
+**🚀 Fase 3 ARRANCANDO** (2026-05-23). Norte: *pulido, no features*. Espina dorsal: regla "nada hardcodeado" — todo valor de comportamiento debe ser editable sin recompilar. Plan maestro en [`PLAN_FASE3.md`](PLAN_FASE3.md). Roadmap ~27 hitos divididos en 4 sub-fases (3.1 El editor te respeta / 3.2 Inspector + Hierarchy / 3.3 Asset Browser / 3.4 Viewport + Performance).
+
+- [ ] **F3H1** — Project Settings panel + persistencia `.moodproj`. Primer hito de Sub-fase 3.1 "El editor te respeta". Construye el chasis sobre el cual los siguientes hitos van a colgar fields configurables: modelo `ProjectSettings` C++ + serialización JSON sin bump de schema (back-compat por defaults, mismo patrón que el cleanup de `HudState.ammo`) + panel UI dockeable accesible desde `Edit > Project Settings...` + 2 fields prueba (`projectName`, `targetFps`). NO migra hardcodes existentes (eso es F3H4). Plan en [`PLAN_HITO_F3H1.md`](PLAN_HITO_F3H1.md).
+
+**Pre-Fase 3** — break `v2.0.2-break-deferreds` (2026-05-23): cierre de los 2 follow-ups del break-auditoria. Borrados 10 demos historicos sin UI caller desde F2H57 + 5 spawners legacy huérfanos (PointLight/Environment/PhysicsBox/AudioSource/Trigger reemplazados por "+ Crear Entidad" + Add Component) + `HudState.ammo` legacy + dead docs en LuaApiPanel/scaffold/headers. Stress tests reubicados en nuevo menu Debug (LightStress + StressTris 10K/100K/500K/1M). ~-920 LOC neto, suite **1087/11182 verde**. Sin items abiertos previos a Fase 3.
+
+---
+
 ### Sub-fase 2.7 — UI/UX final + cierre Fase 2
 
 **🏁 Fase 2 CERRADA con `v2.0.0`** (2026-05-23). 88 hitos completados (F2H1 → F2H86 + 3 audits + breaks). Suite final **1078/11119 verde**. Recap consolidado en [`RELEASE_v2.0.0.md`](RELEASE_v2.0.0.md). BACKLOG vaciado por decisión del dev para arrancar Fase 3 de cero.
