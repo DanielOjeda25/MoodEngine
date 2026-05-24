@@ -61,6 +61,7 @@
   "editor.project_settings.gameplay.jump_velocity_hint": "Velocidad vertical instantánea al saltar. 5.5 m/s = ~1.5 m de altura con g=9.81.",
   "editor.project_settings.gameplay.jump_cooldown": "Cooldown salto",
   "editor.project_settings.gameplay.jump_cooldown_hint": "Tiempo mínimo entre saltos. Evita doble-salto por mantener la tecla apretada.",
+  "editor.project_settings.reset_default": "Restablecer al valor por defecto",
   "editor.user_preferences.section.general": "General",
   "editor.user_preferences.theme": "Tema",
   "editor.user_preferences.language": "Idioma",

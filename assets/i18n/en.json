@@ -61,6 +61,7 @@
   "editor.project_settings.gameplay.jump_velocity_hint": "Instantaneous vertical velocity on jump. 5.5 m/s = ~1.5 m height with g=9.81.",
   "editor.project_settings.gameplay.jump_cooldown": "Jump cooldown",
   "editor.project_settings.gameplay.jump_cooldown_hint": "Minimum time between jumps. Prevents double-jump from holding the key.",
+  "editor.project_settings.reset_default": "Reset to default value",
   "editor.user_preferences.section.general": "General",
   "editor.user_preferences.theme": "Theme",
   "editor.user_preferences.language": "Language",

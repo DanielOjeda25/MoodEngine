@@ -2,6 +2,7 @@
 
 #include "core/i18n/I18n.h"
 #include "editor/ui/EditorUI.h"
+#include "editor/ui/IconsFontAwesome6.h"  // F3H4 polish: ICON_FA_ROTATE_LEFT
 #include "engine/project/ProjectSettings.h"
 #include "engine/scene/serialization/ProjectSerializer.h"  // Project struct
 
@@ -34,13 +35,46 @@ int findPresetIndex(int targetFps) {
 constexpr float kLabelColumnWidth = 160.0f;
 constexpr float kControlWidth     = 200.0f;
 
+// F3H4 polish: boton ↺ chiquito a la derecha del control que solo
+// aparece si el valor difiere del default. Click → resetea + dirty.
+// Pattern Unity/Unreal: no agregar visual noise para fields default,
+// surfacear cuando hay un override del usuario para que sea facil
+// volver a la "receta original".
+template <typename T>
+bool resetButton(const char* widgetIdSuffix, T& value, T defaultValue) {
+    if (value == defaultValue) return false;  // no visual noise
+
+    ImGui::SameLine();
+    const std::string btnLabel =
+        std::string(ICON_FA_ROTATE_LEFT) + "##reset_" + widgetIdSuffix;
+    bool clicked = false;
+    if (ImGui::SmallButton(btnLabel.c_str())) {
+        value = defaultValue;
+        clicked = true;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.project_settings.reset_default").c_str());
+    }
+    return clicked;
+}
+
 } // namespace
 
 void ProjectSettingsPanel::onImGuiRender() {
     if (!visible) return;
 
     // Ventana flotante centrada + tamano fijo, no dockeable, sin
-    // resize/collapse — estilo Unity Project Settings.
+    // resize/collapse — estilo Unity/Unreal Project Settings. Convencion
+    // de engines reales: Project Settings es para SET-AND-FORGET (defaults
+    // de gameplay/quality/rendering), NO para tunear en vivo durante
+    // Play. El use case de live tuning lo resuelve otra superficie en
+    // hitos futuros (componente PlayerController editable en Inspector
+    // durante Play, o un HUD "Quick Tuning" overlay).
+    //
+    // F3H4 intento dockable + resize libre para soportar live tuning
+    // pero fue revertido — contradecia la convencion y el dev pidio
+    // volver a la separacion clara de paradigmas. Ver DECISIONS.md.
     const ImGuiIO& io = ImGui::GetIO();
     ImGui::SetNextWindowPos(
         ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
@@ -138,6 +172,12 @@ void ProjectSettingsPanel::drawPerformanceSection(ProjectSettings& settings) {
         }
     }
 
+    // F3H4 polish: reset a default (60) si el dev lo cambio.
+    if (resetButton("target_fps", settings.targetFps,
+                    ProjectSettings{}.targetFps)) {
+        if (m_ui != nullptr) m_ui->requestProjectDirty();
+    }
+
     ImGui::Spacing();
     ImGui::TextDisabled("%s",
         I18n::T("editor.project_settings.target_fps_hint").c_str());
@@ -154,10 +194,17 @@ void ProjectSettingsPanel::drawPerformanceSection(ProjectSettings& settings) {
 void ProjectSettingsPanel::drawGameplaySection(ProjectSettings& settings) {
     ImGui::Indent();
 
+    // F3H4 polish: cada slider tiene su boton ↺ reset a default,
+    // visible solo si el valor difiere. Pasamos `defaultValue` para
+    // que el helper sepa cuando emitir el boton.
+    const GameplaySettings defaults;
+
     auto drawSlider = [&](const char* keyLabel,
                           const char* keyHint,
                           const char* widgetId,
+                          const char* resetIdSuffix,
                           f32& value,
+                          f32 defaultValue,
                           f32 minVal,
                           f32 maxVal,
                           const char* fmt) {
@@ -170,27 +217,34 @@ void ProjectSettingsPanel::drawGameplaySection(ProjectSettings& settings) {
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", I18n::T(keyHint).c_str());
         }
+        if (resetButton(resetIdSuffix, value, defaultValue)) {
+            if (m_ui != nullptr) m_ui->requestProjectDirty();
+        }
     };
 
     drawSlider("editor.project_settings.gameplay.walk_speed",
                "editor.project_settings.gameplay.walk_speed_hint",
-               "##walk_speed",
-               settings.gameplay.walkSpeed, 1.0f, 12.0f, "%.1f m/s");
+               "##walk_speed", "walk_speed",
+               settings.gameplay.walkSpeed, defaults.walkSpeed,
+               1.0f, 12.0f, "%.1f m/s");
 
     drawSlider("editor.project_settings.gameplay.crouch_speed",
                "editor.project_settings.gameplay.crouch_speed_hint",
-               "##crouch_speed",
-               settings.gameplay.crouchSpeed, 0.5f, 6.0f, "%.1f m/s");
+               "##crouch_speed", "crouch_speed",
+               settings.gameplay.crouchSpeed, defaults.crouchSpeed,
+               0.5f, 6.0f, "%.1f m/s");
 
     drawSlider("editor.project_settings.gameplay.jump_velocity",
                "editor.project_settings.gameplay.jump_velocity_hint",
-               "##jump_velocity",
-               settings.gameplay.jumpVelocity, 1.0f, 15.0f, "%.1f m/s");
+               "##jump_velocity", "jump_velocity",
+               settings.gameplay.jumpVelocity, defaults.jumpVelocity,
+               1.0f, 15.0f, "%.1f m/s");
 
     drawSlider("editor.project_settings.gameplay.jump_cooldown",
                "editor.project_settings.gameplay.jump_cooldown_hint",
-               "##jump_cooldown",
-               settings.gameplay.jumpCooldownSec, 0.0f, 1.0f, "%.2f s");
+               "##jump_cooldown", "jump_cooldown",
+               settings.gameplay.jumpCooldownSec, defaults.jumpCooldownSec,
+               0.0f, 1.0f, "%.2f s");
 
     ImGui::Unindent();
 }

@@ -29,6 +29,7 @@ inline constexpr unsigned short k_FontAwesomeRange[] = { 0xE005, 0xF8FF, 0 };
 // --- Gizmo modes (Toolbar) ---
 #define ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT          "\xef\x82\xb2" // 0xF0B2 translate
 #define ICON_FA_ROTATE                              "\xef\x8b\xb1" // 0xF2F1 rotate
+#define ICON_FA_ROTATE_LEFT                         "\xef\x8b\xaa" // 0xF2EA undo/reset (F3H4 polish)
 #define ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER  "\xef\x90\xa4" // 0xF424 scale/expand
 
 // --- Brushes / shapes ---
