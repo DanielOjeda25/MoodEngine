@@ -134,9 +134,29 @@ void drawMaterialPbrMultipliers(MaterialAsset* mat,
 // F2H62 Bloque D + polish: shader (PBR estandar vs Shader Graph).
 // UX estilo Blender Principled BSDF: dropdown listando los .moodshader
 // del proyecto en vez de InputText manual.
+//
+// break-A6 (auditoria): si el material tiene un shaderGraphPath asignado
+// pero el mesh es skinned o instanced (caminos de render fallback al PBR
+// estandar — el cache solo conoce `pbr.vert`), mostramos un warning visible
+// para que el dev no piense que el grafo esta activo cuando no lo esta.
 void drawMaterialShaderGraph(MaterialAsset* mat, AssetManager* assets,
-                              EditorUI* ui, bool& editedFlag) {
+                              EditorUI* ui, bool isSkinned, bool isInstanced,
+                              bool& editedFlag) {
     if (!ImGui::CollapsingHeader("Shader")) return;
+
+    // Warning de mesh no soportado. Visible solo cuando hay un graph
+    // asignado y el mesh cae al fallback PBR (skinned/instanced). Sin
+    // path asignado no hay nada que avisar.
+    if (!mat->shaderGraphPath.empty() && (isSkinned || isInstanced)) {
+        const std::string kind = I18n::T(isSkinned
+            ? "editor.panel.inspector.mesh.shader_graph_unsupported_skinned"
+            : "editor.panel.inspector.mesh.shader_graph_unsupported_instanced");
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.75f, 0.20f, 1.0f));
+        ImGui::TextWrapped("%s",
+            I18n::T("editor.panel.inspector.mesh.shader_graph_unsupported",
+                    kind).c_str());
+        ImGui::PopStyleColor();
+    }
 
     // 1) Escanear `assets/shaders/graphs/` para los .moodshader
     // disponibles. Resolvemos la primera vez por frame; baratisimo
@@ -441,11 +461,26 @@ void drawMaterialDropTarget(Entity e, MeshRendererComponent& mr, usize i,
 void InspectorPanel::renderMeshRendererSection(Entity e) {
     auto& mr = e.getComponent<MeshRendererComponent>();
     if (!beginComponentSection<MeshRendererComponent>(e, ICON_FA_CUBE " MeshRenderer")) return;
+    // break-A6: detectar si la malla cae al fallback PBR (skinned o
+    // batcheable como instanced) — el shader graph queda silenciado en
+    // esos casos y queremos avisar al dev.
+    bool isSkinned = false;
+    bool isInstanced = false;
     if (m_assets != nullptr) {
         ImGui::Text("%s",
             I18n::T("editor.panel.inspector.mesh.mesh_id_path",
                     m_assets->meshPathOf(mr.mesh), mr.mesh).c_str());
-        drawMeshTechDetails(m_assets->getMesh(mr.mesh));
+        MeshAsset* asset = m_assets->getMesh(mr.mesh);
+        drawMeshTechDetails(asset);
+        if (asset != nullptr) {
+            isSkinned = asset->hasSkeleton();
+            // Misma logica que RenderBatching: 1 submesh, <=1 material,
+            // sin filtro de subMeshName => entra al instanced path con
+            // el shader pbr_instanced.vert (que ignora el graph).
+            isInstanced = (asset->submeshes.size() == 1u)
+                          && (mr.materials.size() <= 1u)
+                          && mr.subMeshName.empty();
+        }
     } else {
         ImGui::Text("%s",
             I18n::T("editor.panel.inspector.mesh.mesh_id", mr.mesh).c_str());
@@ -468,7 +503,8 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
         if (mat != nullptr) {
             drawMaterialPbrMultipliers(mat, m_assets, matId,
                                           m_editTracker, m_ui, e, m_editedThisFrame);
-            drawMaterialShaderGraph(mat, m_assets, m_ui, m_editedThisFrame);
+            drawMaterialShaderGraph(mat, m_assets, m_ui, isSkinned, isInstanced,
+                                       m_editedThisFrame);
             drawMaterialBlending(mat, m_assets, matId,
                                    m_editTracker, m_ui, e, m_editedThisFrame);
         }

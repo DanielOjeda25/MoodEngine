@@ -364,6 +364,9 @@
   "editor.panel.inspector.environment.color_grading_preset_custom": "Custom...",
   "editor.panel.inspector.environment.color_grading_preset_custom_active": "Custom: {}",
 
+  "editor.panel.inspector.mesh.shader_graph_unsupported": "Warning: shader graph not supported on this mesh type ({}), using PBR.",
+  "editor.panel.inspector.mesh.shader_graph_unsupported_skinned": "skinned",
+  "editor.panel.inspector.mesh.shader_graph_unsupported_instanced": "instanced",
   "editor.panel.inspector.mesh.mesh_id_path": "mesh: {} (id {})",
   "editor.panel.inspector.mesh.mesh_id": "mesh id: {}",
   "editor.panel.inspector.mesh.tech_details": "Technical details",

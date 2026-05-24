@@ -364,6 +364,9 @@
   "editor.panel.inspector.environment.color_grading_preset_custom": "Personalizado...",
   "editor.panel.inspector.environment.color_grading_preset_custom_active": "Personalizado: {}",
 
+  "editor.panel.inspector.mesh.shader_graph_unsupported": "Aviso: shader graph no soportado en este tipo de malla ({}), usando PBR.",
+  "editor.panel.inspector.mesh.shader_graph_unsupported_skinned": "skinned",
+  "editor.panel.inspector.mesh.shader_graph_unsupported_instanced": "instanced",
   "editor.panel.inspector.mesh.mesh_id_path": "mesh: {} (id {})",
   "editor.panel.inspector.mesh.mesh_id": "mesh id: {}",
   "editor.panel.inspector.mesh.tech_details": "Detalles técnicos",
