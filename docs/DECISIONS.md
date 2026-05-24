@@ -11,6 +11,80 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-24: F3H7 cierre — UserSettings > Editor (zoom orto + gizmo + click/drag), cierre de Sub-fase 3.1
+
+### Decisión 1 — Tests aislando `editorSettingsToJson/fromJson` del filesystem (opción C del plan)
+
+**Contexto:** F3H2 explícitamente NO agregó tests porque `UserSettings::init/save` escriben a `%APPDATA%\MoodEngine\settings.json` real y contaminarían el state del dev. F3H7 introduce `EditorSettings` con sanitize logic (clamp zoom factor, threshold, etc) que merece tests. La decisión registrada en F3H2: *"si el módulo crece (F3H6 shortcuts, F3H7 autosave/font/density), refactorear ahí con tests aislados"*.
+
+**Opciones:** (a) sin tests, validación visual; (b) refactor `UserSettings` para aceptar path inyectable (default APPDATA, override en tests); (c) split de responsabilidad — `init/save` siguen tocando APPDATA, pero `editorSettingsToJson/fromJson` son funciones libres que operan sobre `nlohmann::json` puro y se testean sin filesystem.
+
+**Decisión:** opción **(c)**. Las funciones libres viven en el namespace `UserSettings` (no en una clase nueva) y se testean en `tests/test_user_settings_editor.cpp` (10 cases: defaults, non-default, roundtrip, empty/non-object, clamps, valores negativos, back-compat partial, forward-compat).
+
+**Razones:**
+- Mismo patrón que `ProjectSettings::toJson/projectSettingsFromJson` — funciones libres sobre `nlohmann::json`, testeadas en `test_project_settings.cpp`. F3H4/F3H5/F3H6 lo usan con éxito.
+- El sanitize logic (clamp factor `>= 1.05`, sizes `> 0`, threshold `>= 1`) es donde más errores pueden colarse — testearlo aislado da confianza sin tocar disco.
+- Refactor de `init/save` con path inyectable requiere cambiar firma + propagar a `MoodEditor` y `MoodPlayer` bootstrap — out of scope F3H7. Si en algún futuro hito (F3H8+) `UserSettings` crece a 4-5 sub-structs, vale la pena.
+
+**Alternativas descartadas:**
+- **(a)** sin tests: el sanitize de `orthoZoomFactor <= 1.0` es lo que distingue "settings.json válido" de "settings.json roto que rompe la cámara" — no testearlo es regresión esperando suceder.
+- **(b)** path inyectable: invasivo, cambia firma de `init()/save()/settingsPath()` que ya están en producción desde F2H43. Costo-beneficio malo para F3H7.
+
+**Condiciones de revisión:** si `UserSettings` suma 2+ structs (ej. `ShortcutsSettings`, `AutosaveSettings`) en hitos futuros, considerar opción (b) — el `s_editor` global empieza a oler a singleton mutable cross-test.
+
+### Decisión 2 — Reads LIVE en los 5 call-sites (no snapshot al startup)
+
+**Contexto:** `UserSettings` históricamente tiene un patrón de "snapshot al startup": `language()` y `theme()` se leen en `init()` y los listeners notifican via callbacks (F2H43, F2H76). El dev cambia el idioma desde el menu → `setLanguage` + `save()` + `I18n::setLanguage` aplica live. Decisión a tomar para F3H7: ¿seguir snapshot o leer cada frame?
+
+**Decisión:** **LIVE** — los 5 call-sites llaman `UserSettings::editor().*Field*` cada vez que lo necesitan (zoom factor en el wheel handler, gizmo size en el draw del overlay, threshold en el click-vs-drag check).
+
+**Razones:**
+- **Feel coherente con F3H4/F3H5/F3H6**: en Project Settings el dev mueve un slider y siente el cambio al próximo tick (capsule capsule cambia, walk speed cambia, snap step cambia). Spec UX: F3H7 hace lo mismo.
+- **Costo negligible**: `UserSettings::editor()` retorna `const EditorSettings&` a un global statico — un lookup por field. Inferior a 1 µs por frame total.
+- **Sin invalidación de listeners**: el patrón snapshot+callback funciona para idioma/tema porque son cambios discretos. Para sliders continuos requeriría callbacks per-field y la complejidad no compensa.
+
+**Alternativas descartadas:**
+- **Snapshot al ctor del editor**: el dev cambia el slider y NO ve el cambio sin reabrir el editor. UX pobre — esperamos que F3H4/F3H5/F3H6 enseñaron al dev a esperar live previews.
+- **Cache local en cada call-site**: complejidad extra para ningún beneficio medible.
+
+**Cómo aplica:** futuros campos de `UserSettings::editor()` (shortcuts, autosave interval, font size) siguen el mismo patrón — read live, sin callbacks. Si emerge un caso donde el cambio requiere rebuild de algo costoso (ej. recreate font atlas al cambiar font size), ese campo específico justifica un listener.
+
+### Decisión 3 — TabBar en `UserPreferencesPanel` (no SeparatorText apilado)
+
+**Contexto:** F3H2 dejó el `UserPreferencesPanel` con UNA sola sección "General" (tema + idioma) sin TabBar. F3H7 agrega la segunda sección "Editor" con 5 sliders. Opciones: (a) seguir con `SeparatorText("General")` + `SeparatorText("Editor")` apilados vertical; (b) introducir TabBar con 2 tabs.
+
+**Decisión:** **TabBar** (opción b), consistente con `ProjectSettingsPanel` (Performance + Gameplay + Character).
+
+**Razones:**
+- **Convención de engines reales**: Unity Preferences, Unreal Editor Preferences, Godot Editor Settings — todos usan tree/tabs lateral o pestañas superior, NO scroll vertical infinito. La sub-fase 3.1 quiere replicar el UX que el dev espera de un editor "serio".
+- **Escala**: si Sub-fase 3.2+ agrega Shortcuts (potencial gran sección con N keybindings), Autosave, Font size — cada uno tiene su tab. Sin TabBar la ventana se vuelve un menú de scroll en pocas adiciones.
+- **Simetría con ProjectSettingsPanel**: ambos paneles tienen TabBar = mismo lenguaje visual = menos cognitive load para el dev.
+
+**Alternativas descartadas:**
+- **SeparatorText apilado**: 2 secciones se ven bien hoy, 4+ se vuelven scrollables y feas. Decisión proactiva mientras es barata.
+- **Tree lateral estilo Unity**: más espacio horizontal requerido (la ventana hoy es 540×360 fija). Para 7 categorías futuras sí compensa, para 2-3 no.
+
+**Cómo aplica:** las próximas secciones (Shortcuts F3H8+, Autosave, Font size) cada una agrega su tab. Si llegamos a 5+ tabs, considerar tree lateral. Por ahora 2-4 tabs en tabbar horizontal es estándar y suficiente.
+
+### Decisión 4 — Unificar `clickDragThresholdPx` para ortho + perspectiva (no 2 settings separados)
+
+**Contexto:** el audit F3H3 bucket 8 reportaba **dos** thresholds distintos: `OrthoViewportPanel.cpp:217 → 16.0f` y `ViewportPanel.h:200 → 4 px`. Al implementar F3H7 descubrí que ambos viewports usan la misma fórmula `dx*dx + dy*dy >= 16.0f` (comparación al cuadrado para evitar sqrt). El "16" del audit ortho era el cuadrado de 4; lineal eran ambos 4 px. **El audit confundió valor comparado con valor lineal**.
+
+**Decisión:** **una sola setting `clickDragThresholdPx = 4`** que ambos viewports leen y comparan como `dx*dx + dy*dy >= threshold*threshold`.
+
+**Razones:**
+- En la práctica ambos son 4 px. No hay user need legítimo para que ortho y perspectiva tengan thresholds distintos — son la misma decisión UX ("cuánto puede moverse el mouse antes de que cuente como drag").
+- Una setting es menos cognitive load para el dev. "Quiero clicks tolerantes con trackpad" → sube un slider, no dos.
+- Si en el futuro emerge una diferencia real (ej. ortho tiene snap-to-vertex visual que justifica un threshold mayor), partir en 2 settings es trivial.
+
+**Alternativas descartadas:**
+- **Mantener 2 settings**: respeta el audit literal pero no hay use case real distinto. La decisión "limpiar el audit" gana.
+- **Threshold derivado por viewport**: complejidad sin beneficio.
+
+**Cómo aplica:** corrección retroactiva al `HARDCODED_AUDIT.md` (bucket 8): los 2 sites se fusionan en uno. Sirve de aprendizaje para futuros audits: distinguir valores lineales de cuadrados al catalogar.
+
+---
+
 ## 2026-05-24: F3H6 cierre — Snap UI movida a popover MapEditorTopBar + atajo Shift+Wheel
 
 ### Decisión 1 — Snap UI vive en popover de MapEditorTopBar, no en Project Settings
