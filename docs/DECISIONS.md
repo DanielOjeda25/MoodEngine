@@ -11,6 +11,52 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-24: F3H6 cierre — Snap UI movida a popover MapEditorTopBar + atajo Shift+Wheel
+
+### Decisión 1 — Snap UI vive en popover de MapEditorTopBar, no en Project Settings
+
+**Contexto:** F3H6 inicialmente migró Snap a `.moodproj > Snap` y agregó una tab "Snap" al `ProjectSettingsPanel` siguiendo el patrón de F3H4 (Gameplay) y F3H5 (Character). En la validación visual el dev objetó: *"habria que mejorar un poco mas la UI y no se si esto deberia estar como un settings pero para la parte de mapas no en proyecto"*. Pregunta válida: ¿Snap es un setting "del proyecto" como Gameplay/Character, o una herramienta del map editor?
+
+**Decisión:** mover la UI de Snap del Project Settings al **popover de MapEditorTopBar** (botón "Settings" en la sección Snap). Storage sigue en `.moodproj > settings.snap` (per-project es conceptualmente correcto — distintos proyectos pueden tener distintos steps según escala del mundo). Solo cambia la UI.
+
+**Razones:**
+- Research de engines reales: Unity tiene Snap Settings como **ventana dedicada** (`Edit > Snap Settings...`, no Project Settings); Unreal pone snap en `Editor Preferences > Viewports`; **Hammer (Source)** lo tiene como dropdown en la **toolbar del editor de mapas**. Ninguno lo trata como setting genérico del proyecto.
+- Principio "la herramienta está donde se usa": Gameplay (walk/jump speed) afecta el feel del juego cuando le das Play — pertenece a un panel de "configurá el juego". Snap step afecta lo que estás modelando ahora mismo — pertenece al editor de mapas. Tener que abrir `Edit > Project Settings > Snap` interrumpe el flow de modelado.
+- El patrón Hammer/Source es el más cercano a lo que estamos construyendo (CSG-based map editor), entonces es razonable copiarlo.
+
+**Alternativas descartadas:**
+- **Mantener tab en Project Settings:** consistencia con F3H4/F3H5 pero contradice la convención de los engines y crea fricción UX.
+- **Ventana dedicada estilo Unity:** más espacio pero requiere otro panel registrado, otro item de menú. El popover es más liviano y vive justo arriba del viewport donde el dev ya tiene el cursor.
+- **Tab en User Preferences (per-instalación):** Snap es **per-proyecto** (Foo Cyberpunk usa steps grandes, Bar Sokoban usa steps chicos); poner en UserSettings rompería esa granularidad.
+
+**Cómo aplica:** futuras herramientas del map editor (vertex weld threshold, edge bevel default, etc) viven en este mismo popover de MapEditorTopBar, no en Project Settings. Si el popover crece demasiado, partir en sub-popovers o promover a ventana dedicada. Project Settings queda reservado para configs que afectan el **runtime del juego** (Gameplay/Character/Performance/Physics/Quality) o decisiones globales del proyecto.
+
+**Condiciones de revisión:** si emerge un setting que es claramente "del proyecto" pero también del editor (ej. unidades de medida default), reconsiderar. Por ahora la regla "afecta runtime → Project Settings, afecta editor → toolbar/menú dedicado" es clara.
+
+### Decisión 2 — Atajo Ctrl+Wheel → Shift+Wheel para ciclar snap step (compatibilidad con trackpads)
+
+**Contexto:** desde F2H44, el atajo para ciclar snap step en los orto viewports era `Ctrl+Wheel`. F3H6 lo mantenía. Durante validación, el dev (usando un trackpad de notebook) reportó: *"el scroll aumenta el grid size, y si yo alejo para crear un elemento grande, al mismo tiempo muevo el zoom del ortoview y eso me confunde"*. Wheel solo + Ctrl+Wheel ambos cambiaban el grid. Los logs del editor confirmaron que **cada wheel del trackpad llegaba como `Ctrl+wheel`** — el driver estaba inyectando `KMOD_CTRL` para todos los scrolls.
+
+**Decisión:** cambiar el atajo de `Ctrl+Wheel` a **`Shift+Wheel`**. Ctrl+= / Ctrl+- por teclado siguen igual. Zoom del orto gateado con `!io.KeyShift` en `OrthoViewportPanel` para desacoplar (cambiar el grid no zoomea la cámara al mismo tiempo).
+
+**Razones:**
+- **Causa raíz (driver, no nuestro código):** los trackpads modernos (Windows Precision Touchpad, Synaptics, Elan) mapean el gesto de **pinch-zoom a `Ctrl+Wheel`** automáticamente. Lo hacen para que navegadores (Chrome/Edge/Firefox) y apps tipo VS Code/Word zoomeen con pinch sin que las apps necesiten soporte explícito de gestos. Es convención del sistema operativo.
+- Con esa convención, `Ctrl+Wheel` como atajo de aplicación es **inutilizable en notebook**: cualquier scroll de dos dedos llega como Ctrl+Wheel sin que el usuario presione Ctrl físico.
+- `Shift+Wheel` es el siguiente candidato natural: ningún gesto estándar de trackpad lo simula. En algunas apps Shift+Wheel hace scroll horizontal, pero en un orto viewport no hay scroll horizontal nativo, así que no hay conflicto.
+- Es preferible cambiar **una sola tecla del atajo** vs eliminar el gesto wheel (que sería pérdida de UX para usuarios de mouse físico) o intentar distinguir Ctrl físico vs Ctrl simulado (no hay API confiable para esto).
+
+**Alternativas descartadas:**
+- **Alt+Wheel:** similar a Shift pero Alt suele estar reservado en otros editores para snap-to-vertex live (Maya/Blender). Reservamos Alt para un atajo paralelo si emerge.
+- **Solo teclado (sin wheel):** pierde el gesto natural sobre el viewport. Ctrl+= en español requiere Shift+0 que es awkward en teclados 80% sin numérico; ya teníamos workarounds (Ctrl++, Ctrl+KP_PLUS) en F2H33.
+- **Detectar trackpad vs mouse:** SDL2 puede distinguir `SDL_TOUCH_MOUSEID` pero la mayoría de los trackpads modernos reportan como ratón normal con KMOD_CTRL inyectado. No es confiable.
+- **No hacer nada y documentar:** el dev no puede usar la feature en su flow actual. Inaceptable.
+
+**Cómo aplica:** futuros atajos sobre wheel en el editor deben evitar Ctrl como modifier obligatorio. Si necesitamos un segundo atajo de modifier+wheel (ej. ciclar entre tools), usar Shift, Alt o tap-toggle de tecla. La convención queda: **Ctrl+Wheel está reservado al pinch-zoom del SO; no es usable como atajo de aplicación en este editor**.
+
+**Condiciones de revisión:** si SDL2/Windows agrega una API confiable para distinguir Ctrl físico vs Ctrl simulado por gesto, reconsiderar. Mientras tanto, esta es la convención.
+
+---
+
 ## 2026-05-24: F3H5 cierre — Character (capsule + eye + headbob) + bug latente cerrado
 
 ### Decisión 1 — Defaults del struct = valores Editor F2H41 (no los del Player)
