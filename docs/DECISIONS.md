@@ -11,6 +11,67 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-24: F3H1 cierre — polish reactivo del panel + regla "no internal refs en UI"
+
+### Decisión 1 — Panel "dockeable" → "floating modal-like" (revisión de D3 del plan)
+
+**Contexto:** el plan F3H1 (sección 6.2 / Bloque D) eligió panel dockeable estilo Inspector. Tras validar el panel en vivo con el dev, el feedback fue: *"que aparezca mas en el centro, no permitas el resize"*. La intuición del dev coincide con el patrón Unity/Unreal: Project Settings es un dialog de configuración, no un panel del workspace.
+
+**Decisión:** cambiar a ventana flotante centrada + `ImGuiWindowFlags_NoResize | NoCollapse | NoDocking`, tamaño fijo 540×360, `SetNextWindowPos` con `ImGuiCond_Appearing` + pivot 0.5,0.5.
+
+**Razones:**
+- Project Settings se abre, se edita, se cierra — no se "vive" en él como en el Inspector.
+- Unity Project Settings y Unreal Project Settings ambos son ventanas no-dockeables.
+- Sin resize, el layout del panel es predecible (mejor UX para diseñar fields).
+- Centrar en cada `Appearing` (no `Once`) — si el dev cierra y reabre, vuelve al centro (no donde lo dejó la última vez).
+
+**Alternativas descartadas:**
+- Mantener dockeable + sin resize — choca: docks gobiernan el tamaño, NoResize en un dock se ignora silenciosamente.
+- Modal estilo `pfd::open_file` — bloquea el editor entero; UX peor (el dev no puede ver el efecto del cambio en el viewport).
+
+### Decisión 2 — Target FPS como Combo de presets en vez de DragInt
+
+**Contexto:** el plan original usaba `ImGui::DragInt` con clamp [10, 240]. El dev pidió *"da unos valores por defecto, sea 30 o 60fps"* — quería opciones rápidas de seleccionar, no libertad numérica completa.
+
+**Decisión:** Combo con presets fijos (30/60/120/144 FPS). Si el `.moodproj` trae un valor non-preset (caso edge: edición manual del JSON), aparece una entry extra al tope "Personalizado (N FPS)" que preserva el valor.
+
+**Razones:**
+- Patrón Unity Quality > Target Frame Rate (presets).
+- Reduce decisiones del dev (lo más común es 60 → preset elegido en 1 click).
+- El fallback "Personalizado" evita destruir datos cuando se carga un .moodproj editado a mano.
+
+**Alternativas descartadas:**
+- DragInt + Combo — duplica UI para el mismo field.
+- Solo presets sin fallback "Personalizado" — silenciosamente snapearíamos valores legítimos al cargar (perdida de datos).
+
+### Decisión 3 — Regla durable: "no internal milestone refs en UI"
+
+**Contexto:** el dev observó al validar F3H1 que el panel mostraba *"Próximamente en F3H4+"* y el hint del Target FPS decía *"F3H1 only stores the value; the real cap lands in F3H4+"*. Feedback explícito: *"no nombres textos como F3H4, etc luego nos olvidamos de eliminar"*.
+
+**Decisión:** regla durable — strings user-facing (i18n.json, tooltips, hint text, scaffold templates, dialog boxes) NUNCA referencian hitos internos (F2H1, F3H4, etc). Referencias a hitos viven solo en código (comments), `docs/`, y mensajes de commit.
+
+**Razones:**
+- Cuando un hito futuro cierra, las referencias en i18n quedan podridas (deuda de doc-cleanup acumulada en cada hito).
+- End users (devs externos) no conocen nuestra nomenclatura interna.
+- Las strings deben hablar del **feature en sí**, no de su origen.
+
+**Memoria asociada:** `feedback_no_internal_milestone_refs_in_ui.md` (indexada en `MEMORY.md`).
+
+**Aplicación retroactiva:** los placeholders eliminados de F3H1 + el hint reescrito. **Sin sweep histórico** (no entran a Fase 3 más cleanups proactivos del i18n existente sin demanda del dev) — la regla aplica de aquí en adelante.
+
+### Decisión 4 — Eliminar campo "description" de ProjectSettings
+
+**Contexto:** el plan F3H1 incluía `description: string` como segundo field prueba (junto a `targetFps`). Tras ver el panel, el dev: *"la descripcion del proyecto lo veo innecesaria, eliminala"*.
+
+**Decisión:** borrado entero — struct + JSON + tests + UI + 2 keys i18n.
+
+**Razones:**
+- Metadata del proyecto (autor, notas) puede vivir en un `README.md` dentro del proyecto si emerge la necesidad — no requiere un field schema.
+- Reducir scope = reducir mantenimiento.
+- F3H1 queda con un único field (`targetFps`) — más limpio como chasis (un solo example pattern para que los hitos siguientes lo copien).
+
+---
+
 ## 2026-05-23: Arranque Fase 3 — pulido, UX, nada hardcodeado
 
 ### Decisión 1 — Fase 3 = pulido, no features
