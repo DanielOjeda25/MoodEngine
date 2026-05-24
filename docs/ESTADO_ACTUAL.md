@@ -8,7 +8,7 @@
 
 ## 🏁 Fase 2 CERRADA — `v2.0.0` (2026-05-23)
 
-**88 hitos** completados (F2H1 → F2H86 + 3 audits + breaks). **Suite 1078/11119 verde**. Recap completo de la fase en [`RELEASE_v2.0.0.md`](RELEASE_v2.0.0.md).
+**88 hitos** completados (F2H1 → F2H86 + 3 audits + breaks). **Suite 1087/11180 verde**. Recap completo de la fase en [`RELEASE_v2.0.0.md`](RELEASE_v2.0.0.md).
 
 **BACKLOG vaciado** por decisión del dev: *"elimina todo lo que quedó del backlog o pendientes así luego comenzamos de 0 con la fase 3"*. Items históricos viven en el git history. `docs/BACKLOG.md` queda como stub explícito.
 
@@ -16,7 +16,44 @@
 
 ---
 
-## 0. Último cierre — AUDIT-3 (2026-05-17)
+## 0. Último cierre — break de auditoría `v2.0.1-break-auditoria` (2026-05-23)
+
+**Cierre del break de consolidación pre-Fase 3** ejecutado desde `docs/BREAK_AUDITORIA.md`. Suite verde durante todo el break (`1087/11180`). Doc del audit en [`audits/AUDIT_PLACEBO.md`](audits/AUDIT_PLACEBO.md) + `BREAK_AUDITORIA.md` (queda en root como manifiesto histórico).
+
+**Resumen consolidado del break:**
+
+```
+Parte A (integridad)        items   commits   estado
+  A1+A2 inventario/dialog     2      1        ✅ schema bump v3→v4 + upgrader
+  A3 quest no-script entity   1      1        ✅ QuestScriptHost independiente
+  A4+A5 ragdoll/sensor UI     2      1        ✅
+  A6 shader graph warning     1      1        ✅
+  A7 camera stub disable      1      1        ✅
+  A8 catch (...)              1      1        ✅
+  A9 dead code                3      1        ✅ (notimpl modal eliminado;
+                                                   DemoSpawners cleanup
+                                                   diferido como follow-up)
+
+Parte B (salud)             items   commits   estado
+  B1 passes → engine/render/  1      1        ✅ 0 inversiones de capa
+  B2 SceneRenderer split      1      1        ✅ 978 → 703 LOC
+  B3 funciones gigantes       5      5        ✅ B3a-e (updateCameras,
+                                                   processOrthoToolModes,
+                                                   processViewportInteractions,
+                                                   run(), serializeEntityToJson)
+  B5 AssetRegistry<T>         8      5        ✅ 8 familias migradas
+  B6 Inspector sections       3      3        ✅ Environment / MeshRenderer / Brush
+  B7 ARCHITECTURE.md (glad)   1      1        ✅ regla relajada con realidad
+  B8 unique_ptr               1      1        ✅
+```
+
+**Deferred (follow-up dedicado antes de Fase 3):**
+- DemoSpawners cleanup (3 `.cpp` + 17 `process*Request` + 17 flags en `EditorUI`) — cross-file refactor 4-deep, excede el scope cosmético de A9.
+- `HudState.ammo` — opcional, quitar en el próximo bump de schema.
+
+---
+
+## 0bis. Cierre previo — AUDIT-3 (2026-05-17)
 
 **Cierre de la tanda inicial de audits.** Tag `v1.49.3-audit-3`. Reporte completo en [`audits/AUDIT_3.md`](audits/AUDIT_3.md).
 
