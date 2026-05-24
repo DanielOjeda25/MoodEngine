@@ -46,6 +46,7 @@ add_executable(mood_tests
     test_delete_entity_command.cpp
     test_create_entity_command.cpp
     test_edit_property_command.cpp
+    test_multi_edit_property_command.cpp  # F3H8
     test_add_component_command.cpp  # F2H45 Bloque A
     test_particle_system.cpp
     test_character_controller.cpp

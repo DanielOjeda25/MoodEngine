@@ -229,7 +229,8 @@
   "editor.panel.inspector.ui_not_injected": "Editor UI no inyectado",
   "editor.panel.inspector.no_selection": "No hay entidad seleccionada",
   "editor.panel.inspector.no_selection_hint": "Click en el panel Hierarchy para elegir una.",
-  "editor.panel.inspector.multi_extra": "+{} entidad(es) adicional(es) seleccionada(s) — solo se edita la activa",
+  "editor.panel.inspector.multi_extra": "+{} entidad(es) adicional(es) seleccionada(s) — algunos campos editan en bloque",
+  "editor.inspector.multi_edit.mixed_tooltip": "Valores mixtos en {} entidades. Editar reemplaza a todas con el nuevo valor.",
 
   "editor.panel.inspector.collapse_all": "Plegar todo",
   "editor.panel.inspector.expand_all": "Expandir todo",

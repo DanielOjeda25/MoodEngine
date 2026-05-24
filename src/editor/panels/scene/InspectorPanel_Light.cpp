@@ -49,17 +49,36 @@ void InspectorPanel::renderLightSection(Entity e) {
             m_editedThisFrame = true;
         }
     }
-    if (detail::fieldColorEdit3(m_editTracker, m_ui, e,
+    // F3H8: multi-edit awareness. Si hay multi-seleccion con N luces,
+    // el helper muestra "—" si los valores difieren, hace live preview
+    // en peers, y pushea MultiEditPropertyCommand al soltar. Si hay 1
+    // sola entidad, cae a fieldColorEdit3/fieldDragFloat (back-compat).
+    // Los lambdas guardan contra entidades sin LightComponent (selecciones
+    // mixtas tipo light+box): getter devuelve active value (mantiene
+    // allMatch happy), setter no-opea.
+    const glm::vec3 activeColor = lt.color;
+    const f32 activeIntensity = lt.intensity;
+    if (detail::multiEditColor3(m_multiEditTracker, m_editTracker, m_ui, e,
             "editor.panel.inspector.light.color", "##lt", lt.color,
+            [activeColor](Entity en) -> glm::vec3 {
+                if (!en.hasComponent<LightComponent>()) return activeColor;
+                return en.getComponent<LightComponent>().color;
+            },
             [](Entity& en, const glm::vec3& v) {
+                if (!en.hasComponent<LightComponent>()) return;
                 en.getComponent<LightComponent>().color = v;
             },
             "Editar light color")) {
         m_editedThisFrame = true;
     }
-    if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+    if (detail::multiEditDragFloat(m_multiEditTracker, m_editTracker, m_ui, e,
             "editor.panel.inspector.light.intensity", "##lt", lt.intensity,
+            [activeIntensity](Entity en) -> f32 {
+                if (!en.hasComponent<LightComponent>()) return activeIntensity;
+                return en.getComponent<LightComponent>().intensity;
+            },
             [](Entity& en, const f32& v) {
+                if (!en.hasComponent<LightComponent>()) return;
                 en.getComponent<LightComponent>().intensity = v;
             },
             "Editar light intensity", 0.01f, 0.0f, 100.0f)) {
@@ -67,9 +86,15 @@ void InspectorPanel::renderLightSection(Entity e) {
     }
 
     if (lt.type == LightComponent::Type::Point) {
-        if (detail::fieldDragFloat(m_editTracker, m_ui, e,
+        const f32 activeRadius = lt.radius;
+        if (detail::multiEditDragFloat(m_multiEditTracker, m_editTracker, m_ui, e,
                 "editor.panel.inspector.light.radius", "##lt", lt.radius,
+                [activeRadius](Entity en) -> f32 {
+                    if (!en.hasComponent<LightComponent>()) return activeRadius;
+                    return en.getComponent<LightComponent>().radius;
+                },
                 [](Entity& en, const f32& v) {
+                    if (!en.hasComponent<LightComponent>()) return;
                     en.getComponent<LightComponent>().radius = v;
                 },
                 "Editar light radius", 0.1f, 0.1f, 1000.0f)) {

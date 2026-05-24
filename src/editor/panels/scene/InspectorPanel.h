@@ -3,6 +3,7 @@
 #include "editor/commands/EditBrushUVCommand.h"  // F2H16: BrushUVSnapshot
 #include "editor/panels/IPanel.h"
 #include "editor/panels/scene/InspectorEditTracker.h"
+#include "editor/panels/scene/MultiEditTracker.h"  // F3H8
 #include "engine/scene/core/Entity.h"  // F2H24: secciones de render reciben Entity
 
 namespace Mood {
@@ -93,6 +94,11 @@ private:
     /// Hito 32: tracker de edits del Inspector para Undo/Redo. Solo un
     /// widget puede estar activo a la vez — un solo buffer alcanza.
     InspectorEditTracker m_editTracker;
+
+    /// F3H8: tracker hermano para multi-edit (N entidades a la vez).
+    /// Solo poblado cuando selectionSet.size() > 1; cuando hay 1 sola
+    /// entidad seleccionada los helpers caen al `m_editTracker` single.
+    MultiEditTracker m_multiEditTracker;
 
     /// F2H16: snapshot pre-edicion del UV editor del brush. Capturado
     /// al ImGui::IsItemActivated() de cualquier slider de UV; usado

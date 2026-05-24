@@ -229,7 +229,8 @@
   "editor.panel.inspector.ui_not_injected": "Editor UI not injected",
   "editor.panel.inspector.no_selection": "No entity selected",
   "editor.panel.inspector.no_selection_hint": "Click on the Hierarchy panel to pick one.",
-  "editor.panel.inspector.multi_extra": "+{} additional entity(ies) selected — only the active one is edited",
+  "editor.panel.inspector.multi_extra": "+{} additional entity(ies) selected — some fields edit in bulk",
+  "editor.inspector.multi_edit.mixed_tooltip": "Mixed values across {} entities. Editing replaces them all with the new value.",
 
   "editor.panel.inspector.collapse_all": "Collapse all",
   "editor.panel.inspector.expand_all": "Expand all",

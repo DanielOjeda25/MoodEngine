@@ -7,8 +7,11 @@
 #include "core/i18n/I18n.h"  // F2H74: field-helpers arman el label traducido
 #include "editor/commands/AddComponentCommand.h"  // F2H81: makeRemoveComponentCommand
 #include "editor/commands/EditPropertyCommand.h"
+#include "editor/commands/MultiEditPropertyCommand.h"  // F3H8
 #include "editor/panels/scene/InspectorEditTracker.h"
 #include "editor/panels/scene/InspectorPanel.h"  // F2H81: def. de beginComponentSection
+#include "editor/panels/scene/MultiEditTracker.h"  // F3H8
+#include "editor/selection/SelectionSet.h"  // F3H8: itera N entidades
 #include "editor/ui/EditorUI.h"
 #include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons en headers de seccion
 #include "engine/scene/core/Entity.h"
@@ -17,7 +20,12 @@
 #include <glm/vec4.hpp>
 #include <imgui.h>
 
+#include <cmath>
+#include <functional>
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace Mood::detail {
 
@@ -96,6 +104,235 @@ inline bool fieldColorEdit3(InspectorEditTracker& tracker, EditorUI* ui,
     const std::string label = I18n::T(labelKey) + idSuffix;
     const bool edited = ImGui::ColorEdit3(label.c_str(), &value.x);
     pushEditIfDone<glm::vec3>(tracker, ui, e, value, std::move(setter), cmdLabel);
+    return edited;
+}
+
+// === F3H8: multi-edit helpers =====================================
+// Variantes selection-aware de los field-helpers. Detectan tamano del
+// SelectionSet:
+//   - size <= 1 -> fall through al field*Single() (back-compat).
+//   - size  > 1 -> path multi-edit con detector valor comun + mixed
+//                  marker + live preview + MultiEditPropertyCommand al
+//                  soltar el widget.
+//
+// Snapshot semantics (D3 del plan F3H8): cada entity guarda su before
+// individual, TODAS se homogenizan al active's after al commit. Delta
+// semantics (cada entity gets before+delta) la usa Transform en F2H23
+// iter 5 — no la replicamos aca.
+
+inline bool nearlyEqualVec3(const glm::vec3& a, const glm::vec3& b,
+                              f32 eps = 1.0f / 255.0f) {
+    // Epsilon = 1 LSB en 8-bit color por defecto. Para positions /
+    // intensities el caller puede pasar otro eps.
+    return std::abs(a.x - b.x) < eps
+        && std::abs(a.y - b.y) < eps
+        && std::abs(a.z - b.z) < eps;
+}
+
+inline bool nearlyEqualF32(f32 a, f32 b, f32 eps = 1e-4f) {
+    return std::abs(a - b) < eps;
+}
+
+// Detecta si las N entidades del set tienen el mismo valor para el field
+// (via getter). Devuelve `true` si TODAS coinciden con `activeValue`
+// dentro del eps. Skipea entidades invalidas (defensivo ante destruccion
+// entre frames).
+template <typename T, typename Getter, typename Eq>
+bool allMatch(const std::vector<Entity>& set, const T& activeValue,
+              Getter getter, Eq eq) {
+    for (const Entity& en : set) {
+        if (!static_cast<bool>(en)) continue;
+        if (!eq(getter(en), activeValue)) return false;
+    }
+    return true;
+}
+
+// Multi-edit de glm::vec3 con ColorEdit3. Si selection.size() <= 1 cae
+// al path single-entity (fieldColorEdit3). Si > 1 detecta mixed, hace
+// live preview en peers, y pushea MultiEditPropertyCommand<glm::vec3>
+// al soltar.
+inline bool multiEditColor3(MultiEditTracker& mTracker,
+        InspectorEditTracker& sTracker, EditorUI* ui,
+        Entity activeEntity,
+        const std::string& labelKey, const char* idSuffix,
+        glm::vec3& currentValue,
+        std::function<glm::vec3(Entity)> getter,
+        typename EditPropertyCommand<glm::vec3>::Setter setter,
+        const std::string& cmdLabel) {
+    if (ui == nullptr) return false;
+    const SelectionSet& sel = ui->selectionSet();
+
+    // Fallback single-entity path (back-compat con todos los call-sites
+    // que tienen 1 sola entidad seleccionada).
+    if (sel.selected.size() <= 1u) {
+        return fieldColorEdit3(sTracker, ui, activeEntity, labelKey,
+                                idSuffix, currentValue, setter, cmdLabel);
+    }
+
+    // Multi-edit path.
+    // Detectar mixed comparando active vs peers.
+    const bool mixed = !allMatch<glm::vec3>(sel.selected, currentValue,
+        getter,
+        [](const glm::vec3& a, const glm::vec3& b) {
+            return nearlyEqualVec3(a, b);
+        });
+
+    // Render widget. Prefix em-dash si mixed para feedback visual.
+    std::string label = mixed
+        ? std::string("\xE2\x80\x94 ") + I18n::T(labelKey)
+        : I18n::T(labelKey);
+    label += idSuffix;
+    const bool edited = ImGui::ColorEdit3(label.c_str(), &currentValue.x);
+    if (mixed && ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.inspector.multi_edit.mixed_tooltip",
+                    static_cast<int>(sel.selected.size())).c_str());
+    }
+
+    // Live preview: mientras el widget esta activo, propaga el valor del
+    // active a los peers cada frame. Mismo "feel" que el gizmo multi-edit
+    // de F2H23 iter 5 — el dev ve las N entidades cambiar en vivo.
+    if (ImGui::IsItemActive() && setter) {
+        for (const Entity& other : sel.selected) {
+            if (!static_cast<bool>(other)) continue;
+            if (other.handle() == activeEntity.handle()) continue;
+            Entity mut = other;
+            setter(mut, currentValue);
+        }
+    }
+
+    // Tracking: snapshot al activate, push command al deactivate-after-edit.
+    const ImGuiID itemId = ImGui::GetItemID();
+    if (ImGui::IsItemActivated()) {
+        mTracker.activeId = itemId;
+        mTracker.entities = sel.selected;
+        std::vector<glm::vec3> before;
+        before.reserve(sel.selected.size());
+        for (const Entity& en : sel.selected) {
+            before.push_back(static_cast<bool>(en)
+                ? getter(en) : glm::vec3{0.0f});
+        }
+        mTracker.before = std::move(before);
+    }
+
+    if (ImGui::IsItemDeactivatedAfterEdit() && mTracker.activeId == itemId) {
+        const glm::vec3 after = currentValue;
+        const auto* beforePtr =
+            std::get_if<std::vector<glm::vec3>>(&mTracker.before);
+        if (beforePtr != nullptr && setter) {
+            // Construir entries (entity + before individual).
+            std::vector<typename MultiEditPropertyCommand<glm::vec3>::Entry> entries;
+            entries.reserve(mTracker.entities.size());
+            for (usize i = 0; i < mTracker.entities.size()
+                              && i < beforePtr->size(); ++i) {
+                entries.push_back({mTracker.entities[i], (*beforePtr)[i]});
+            }
+            // Revertir cada entidad a su before — push.execute() re-aplica
+            // el after homogeneo (mismo patron que el single-entity tracker).
+            for (auto& en : entries) {
+                if (!static_cast<bool>(en.entity)) continue;
+                setter(en.entity, en.before);
+            }
+            auto cmd = std::make_unique<
+                MultiEditPropertyCommand<glm::vec3>>(
+                std::move(entries), after, setter,
+                cmdLabel + " (" +
+                std::to_string(mTracker.entities.size()) + ")");
+            if (!cmd->isNoOp()) {
+                HistoryStack* h = ui->historyStack();
+                if (h != nullptr) h->push(std::move(cmd));
+            }
+        }
+        mTracker.reset();
+    }
+
+    return edited;
+}
+
+// Multi-edit de f32 con DragFloat. Mismo patron que multiEditColor3 —
+// duplicado intencional vs templatizar para mantener call-sites legibles
+// (cada tipo tiene su widget ImGui especifico).
+inline bool multiEditDragFloat(MultiEditTracker& mTracker,
+        InspectorEditTracker& sTracker, EditorUI* ui,
+        Entity activeEntity,
+        const std::string& labelKey, const char* idSuffix,
+        f32& currentValue,
+        std::function<f32(Entity)> getter,
+        typename EditPropertyCommand<f32>::Setter setter,
+        const std::string& cmdLabel,
+        f32 speed = 0.1f, f32 vmin = 0.0f, f32 vmax = 0.0f) {
+    if (ui == nullptr) return false;
+    const SelectionSet& sel = ui->selectionSet();
+
+    if (sel.selected.size() <= 1u) {
+        return fieldDragFloat(sTracker, ui, activeEntity, labelKey,
+                                idSuffix, currentValue, setter, cmdLabel,
+                                speed, vmin, vmax);
+    }
+
+    const bool mixed = !allMatch<f32>(sel.selected, currentValue,
+        getter,
+        [](f32 a, f32 b) { return nearlyEqualF32(a, b); });
+
+    std::string label = mixed
+        ? std::string("\xE2\x80\x94 ") + I18n::T(labelKey)
+        : I18n::T(labelKey);
+    label += idSuffix;
+    const bool edited = ImGui::DragFloat(label.c_str(), &currentValue,
+                                            speed, vmin, vmax);
+    if (mixed && ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.inspector.multi_edit.mixed_tooltip",
+                    static_cast<int>(sel.selected.size())).c_str());
+    }
+
+    if (ImGui::IsItemActive() && setter) {
+        for (const Entity& other : sel.selected) {
+            if (!static_cast<bool>(other)) continue;
+            if (other.handle() == activeEntity.handle()) continue;
+            Entity mut = other;
+            setter(mut, currentValue);
+        }
+    }
+
+    const ImGuiID itemId = ImGui::GetItemID();
+    if (ImGui::IsItemActivated()) {
+        mTracker.activeId = itemId;
+        mTracker.entities = sel.selected;
+        std::vector<f32> before;
+        before.reserve(sel.selected.size());
+        for (const Entity& en : sel.selected) {
+            before.push_back(static_cast<bool>(en) ? getter(en) : 0.0f);
+        }
+        mTracker.before = std::move(before);
+    }
+
+    if (ImGui::IsItemDeactivatedAfterEdit() && mTracker.activeId == itemId) {
+        const f32 after = currentValue;
+        const auto* beforePtr = std::get_if<std::vector<f32>>(&mTracker.before);
+        if (beforePtr != nullptr && setter) {
+            std::vector<typename MultiEditPropertyCommand<f32>::Entry> entries;
+            entries.reserve(mTracker.entities.size());
+            for (usize i = 0; i < mTracker.entities.size()
+                              && i < beforePtr->size(); ++i) {
+                entries.push_back({mTracker.entities[i], (*beforePtr)[i]});
+            }
+            for (auto& en : entries) {
+                if (!static_cast<bool>(en.entity)) continue;
+                setter(en.entity, en.before);
+            }
+            auto cmd = std::make_unique<MultiEditPropertyCommand<f32>>(
+                std::move(entries), after, setter,
+                cmdLabel + " (" +
+                std::to_string(mTracker.entities.size()) + ")");
+            if (!cmd->isNoOp()) {
+                HistoryStack* h = ui->historyStack();
+                if (h != nullptr) h->push(std::move(cmd));
+            }
+        }
+        mTracker.reset();
+    }
+
     return edited;
 }
 
