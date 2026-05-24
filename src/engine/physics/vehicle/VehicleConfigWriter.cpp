@@ -3,6 +3,7 @@
 #include "engine/physics/vehicle/VehicleConfigWriter.h"
 
 #include "core/Log.h"
+#include "engine/physics/world/PhysicsWorld.h"  // F3H3: kEarthGravityMagnitude
 
 #include <nlohmann/json.hpp>
 
@@ -18,12 +19,13 @@ namespace {
 // Compresión de la suspensión en reposo: x = g / (2π·f)². Para precargar
 // `attach_y` de modo que el centro de la rueda en reposo caiga a la altura
 // real del modelo. Mismo cálculo que vehicle::wheelRestCompression.
+// F3H3: g desde la constante canonica de physics/ (compartida con el
+// mundo Jolt + la implementacion de wheelRestCompression).
 f32 restCompression(f32 freqHz) {
-    constexpr f32 kG = 9.81f;
     constexpr f32 kTwoPi = 2.0f * 3.14159265358979323846f;
     const f32 omega = kTwoPi * freqHz;
     if (omega <= 1e-6f) return 0.0f;
-    return kG / (omega * omega);
+    return physics::kEarthGravityMagnitude / (omega * omega);
 }
 
 // Promedio de un campo de las 2 ruedas de un eje, usando solo las detectadas.

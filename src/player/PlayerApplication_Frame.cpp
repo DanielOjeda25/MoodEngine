@@ -177,8 +177,13 @@ void PlayerApplication::updateCamera(f32 dt) {
     // Hito 40 G: per-proyecto via .moodproj — capturados al cargar.
     const f32 k_coyoteWindow     = m_coyoteWindowSec;
     const f32 k_jumpBufferWindow = m_jumpBufferWindowSec;
-    constexpr f32 k_walkSpeed              = 4.0f;
-    constexpr f32 k_crouchSpeed            = 2.0f;
+    // F3H3 fix: paridad con EditorPlayMode. El tuning de F2H41 (4.0→5.5
+    // m/s walk + 2.0→3.0 m/s crouch, convencion FPS HL2/CoD/Doom) solo
+    // se habia aplicado al editor; el Player runtime quedo en los valores
+    // viejos, sintiendose mas lento que PlayInEditor. F3H4 migra ambos
+    // a .moodproj > Gameplay para que el dev edite un solo lugar.
+    constexpr f32 k_walkSpeed              = 5.5f;
+    constexpr f32 k_crouchSpeed            = 3.0f;
 
     // Lazy create del character en la pos actual de la camara.
     if (m_playerCharId == 0) {

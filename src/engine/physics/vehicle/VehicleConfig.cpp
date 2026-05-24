@@ -1,5 +1,7 @@
 #include "engine/physics/vehicle/VehicleConfig.h"
 
+#include "engine/physics/world/PhysicsWorld.h"  // F3H3: kEarthGravityMagnitude
+
 #include <cmath>
 
 namespace Mood::vehicle {
@@ -80,11 +82,13 @@ VehicleConfig makeFallbackGenericSedan() {
 f32 wheelRestCompression(const WheelConfig& w) {
     // x = g / (2π·f)² — independiente de masa. Default f=1.5 Hz → ~11 cm;
     // f=1.8 Hz (DeLorean) → ~7.7 cm; f=2.5 Hz (sport stiff) → ~4 cm.
-    constexpr f32 k_g = 9.81f;
+    // F3H3: g desde la constante canonica de physics/ (single source of
+    // truth con el mundo Jolt). F3H4 cableara el valor live de
+    // .moodproj > Physics si el dev cambia gravity.
     constexpr f32 k_twoPi = 2.0f * 3.14159265358979323846f;
     const f32 omega = k_twoPi * w.suspensionFrequency;
     if (omega <= 1e-6f) return 0.0f;  // freq invalida → no offset.
-    return k_g / (omega * omega);
+    return physics::kEarthGravityMagnitude / (omega * omega);
 }
 
 namespace {

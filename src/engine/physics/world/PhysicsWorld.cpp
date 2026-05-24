@@ -101,8 +101,10 @@ PhysicsWorld::PhysicsWorld() : m_impl(std::make_unique<Impl>()) {
         m_impl->objectVsBpFilter,
         m_impl->objectLayerPairFilter);
 
-    // Gravedad default SI: 9.81 m/s^2 hacia -Y.
-    m_impl->physicsSystem->SetGravity(JPH::Vec3(0.0f, -9.81f, 0.0f));
+    // Gravedad default SI: 9.81 m/s^2 hacia -Y. F3H3: usa la constante
+    // canonica `physics::kEarthGravityMagnitude` — single source of truth
+    // compartido con las formulas de suspension de vehicle/.
+    m_impl->physicsSystem->SetGravity(JPH::Vec3(0.0f, -physics::kEarthGravityMagnitude, 0.0f));
 
     // F2H68: registrar ContactListener para auto-ragdoll por impacto. El
     // listener guarda un raw pointer al Impl para acceder al bodyToEntity

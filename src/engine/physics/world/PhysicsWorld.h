@@ -35,6 +35,17 @@ class BodyID;
 
 namespace Mood {
 
+// F3H3: magnitud canonica de la gravedad terrestre (m/s^2). Single source
+// of truth para los 3 sites que la usaban como literal: el mundo Jolt
+// (PhysicsWorld init) + la formula de compresion de suspension (vehicle/
+// VehicleConfig + VehicleConfigWriter). Cuando F3H4 migre la gravedad a
+// .moodproj > Physics, este valor pasa a ser el default y el live value
+// fluye via PhysicsWorld::setGravity (las formulas de suspension siguen
+// usando esta constante hasta que F3H4 las cablee al valor live).
+namespace physics {
+constexpr float kEarthGravityMagnitude = 9.81f;
+}
+
 // F2H66: forward decl del layout puro (sin acoplar PhysicsWorld al header
 // concreto de la ragdoll layout — el .cpp lo incluye).
 namespace ragdoll { struct RagdollLayout; }
