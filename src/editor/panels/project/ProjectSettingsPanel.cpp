@@ -123,6 +123,12 @@ void ProjectSettingsPanel::onImGuiRender() {
             drawCharacterSection(project->settings);
             ImGui::EndTabItem();
         }
+        if (ImGui::BeginTabItem(
+                I18n::T("editor.project_settings.section.snap").c_str())) {
+            ImGui::Spacing();
+            drawSnapSection(project->settings);
+            ImGui::EndTabItem();
+        }
         ImGui::EndTabBar();
     }
 
@@ -328,6 +334,152 @@ void ProjectSettingsPanel::drawCharacterSection(ProjectSettings& settings) {
                "##headbob_amp", "headbob_amp",
                settings.character.headbobAmplitude, defaults.headbobAmplitude,
                0.0f, 0.2f, "%.3f m");
+
+    ImGui::Unindent();
+}
+
+// F3H6: seccion Snap (steps + thresholds). Custom UI para el array
+// editable (InputInt por row + "X" para quitar + "+" para agregar).
+// Sliders para los 2 thresholds + reset buttons. Sanitiza el array
+// solo al final de la edicion (no mid-keystroke) para evitar dropear
+// rows mientras el dev tipea.
+void ProjectSettingsPanel::drawSnapSection(ProjectSettings& settings) {
+    ImGui::Indent();
+    SnapSettings& s = settings.snap;
+    const SnapSettings defaults;
+
+    // === Array de pasos disponibles ===
+    ImGui::TextUnformatted(I18n::T("editor.project_settings.snap.steps_available").c_str());
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", I18n::T("editor.project_settings.snap.steps_available_hint").c_str());
+    }
+
+    // Lista editable: cada row = InputInt + boton "X" para borrar.
+    int indexToDelete = -1;
+    for (size_t i = 0; i < s.stepsAvailable.size(); ++i) {
+        ImGui::PushID(static_cast<int>(i));
+        ImGui::SetNextItemWidth(120.0f);
+        int value = s.stepsAvailable[i];
+        if (ImGui::InputInt("##step_value", &value, 0, 0,
+                             ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (value > 0) {
+                s.stepsAvailable[i] = value;
+                if (m_ui != nullptr) m_ui->requestProjectDirty();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("X##remove_step")) {
+            if (s.stepsAvailable.size() > 1) {  // no permitir vaciar el array
+                indexToDelete = static_cast<int>(i);
+            }
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", I18n::T("editor.project_settings.snap.remove_step").c_str());
+        }
+        ImGui::PopID();
+    }
+
+    if (indexToDelete >= 0) {
+        s.stepsAvailable.erase(s.stepsAvailable.begin() + indexToDelete);
+        // Reclampear defaultStepIndex si quedo fuera de rango.
+        if (s.defaultStepIndex >= static_cast<int>(s.stepsAvailable.size())) {
+            s.defaultStepIndex = static_cast<int>(s.stepsAvailable.size()) - 1;
+        }
+        if (m_ui != nullptr) m_ui->requestProjectDirty();
+    }
+
+    // Boton "+" agrega un step nuevo al final (default = ultimo * 2).
+    if (ImGui::SmallButton("+ ##add_step")) {
+        const int newStep = s.stepsAvailable.empty()
+            ? 1 : s.stepsAvailable.back() * 2;
+        s.stepsAvailable.push_back(newStep);
+        if (m_ui != nullptr) m_ui->requestProjectDirty();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", I18n::T("editor.project_settings.snap.add_step").c_str());
+    }
+
+    // Reset del array completo a defaults si difiere.
+    if (s.stepsAvailable != defaults.stepsAvailable) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton((std::string(ICON_FA_ROTATE_LEFT)
+                                + " ##reset_steps").c_str())) {
+            s.stepsAvailable = defaults.stepsAvailable;
+            if (s.defaultStepIndex >= static_cast<int>(s.stepsAvailable.size())) {
+                s.defaultStepIndex = defaults.defaultStepIndex;
+            }
+            if (m_ui != nullptr) m_ui->requestProjectDirty();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s",
+                I18n::T("editor.project_settings.reset_default").c_str());
+        }
+    }
+
+    ImGui::Spacing();
+
+    // === Default step index (combo que muestra los valores) ===
+    ImGui::TextUnformatted(I18n::T("editor.project_settings.snap.default_step").c_str());
+    ImGui::SameLine(kLabelColumnWidth);
+    ImGui::SetNextItemWidth(kControlWidth);
+
+    std::vector<std::string> labels;
+    labels.reserve(s.stepsAvailable.size());
+    for (int v : s.stepsAvailable) labels.push_back(std::to_string(v));
+    std::vector<const char*> labelPtrs;
+    labelPtrs.reserve(labels.size());
+    for (const auto& l : labels) labelPtrs.push_back(l.c_str());
+
+    int comboIdx = s.defaultStepIndex;
+    if (comboIdx < 0 || comboIdx >= static_cast<int>(labelPtrs.size())) {
+        comboIdx = 0;
+    }
+    if (!labelPtrs.empty()
+        && ImGui::Combo("##default_step", &comboIdx,
+                         labelPtrs.data(), static_cast<int>(labelPtrs.size()))) {
+        s.defaultStepIndex = comboIdx;
+        if (m_ui != nullptr) m_ui->requestProjectDirty();
+    }
+    if (resetButton("default_step", s.defaultStepIndex, defaults.defaultStepIndex)) {
+        if (m_ui != nullptr) m_ui->requestProjectDirty();
+    }
+
+    ImGui::Spacing();
+
+    // === Thresholds (2 sliders) ===
+    ImGui::TextUnformatted(I18n::T("editor.project_settings.snap.vertex_threshold").c_str());
+    ImGui::SameLine(kLabelColumnWidth);
+    ImGui::SetNextItemWidth(kControlWidth);
+    if (ImGui::SliderFloat("##vertex_threshold",
+                            &s.snapToVertexThresholdNdc,
+                            0.005f, 0.10f, "%.3f")) {
+        if (m_ui != nullptr) m_ui->requestProjectDirty();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.project_settings.snap.vertex_threshold_hint").c_str());
+    }
+    if (resetButton("vertex_threshold",
+                    s.snapToVertexThresholdNdc, defaults.snapToVertexThresholdNdc)) {
+        if (m_ui != nullptr) m_ui->requestProjectDirty();
+    }
+
+    ImGui::TextUnformatted(I18n::T("editor.project_settings.snap.broadphase").c_str());
+    ImGui::SameLine(kLabelColumnWidth);
+    ImGui::SetNextItemWidth(kControlWidth);
+    if (ImGui::SliderFloat("##broadphase",
+                            &s.snapBroadphaseMinWorld,
+                            4.0f, 128.0f, "%.1f u")) {
+        if (m_ui != nullptr) m_ui->requestProjectDirty();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.project_settings.snap.broadphase_hint").c_str());
+    }
+    if (resetButton("broadphase",
+                    s.snapBroadphaseMinWorld, defaults.snapBroadphaseMinWorld)) {
+        if (m_ui != nullptr) m_ui->requestProjectDirty();
+    }
 
     ImGui::Unindent();
 }

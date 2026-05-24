@@ -187,3 +187,83 @@ TEST_CASE("Character malformed: subkey no-object devuelve defaults silencioso") 
     const auto s = projectSettingsFromJson(j);
     CHECK(s.character.radius == doctest::Approx(0.4f));  // default
 }
+
+// ============================================================
+// F3H6: SnapSettings (nested struct con std::vector<int>).
+// ============================================================
+
+TEST_CASE("Snap defaults: toJson no incluye subobjeto si todo default") {
+    ProjectSettings s;
+    const auto j = toJson(s);
+    CHECK(!j.contains("snap"));
+}
+
+TEST_CASE("Snap non-default: subobjeto incluido con steps custom") {
+    ProjectSettings s;
+    s.snap.stepsAvailable = {1, 5, 10, 25, 50, 100};
+    s.snap.defaultStepIndex = 2;  // 10
+    const auto j = toJson(s);
+    REQUIRE(j.contains("snap"));
+    CHECK(j.at("snap").contains("steps_available"));
+    CHECK(j.at("snap").contains("default_step_index"));
+    CHECK(j.at("snap").at("default_step_index").get<int>() == 2);
+}
+
+TEST_CASE("Snap roundtrip preserva los 4 fields") {
+    ProjectSettings before;
+    before.snap.stepsAvailable = {2, 4, 8, 16};
+    before.snap.defaultStepIndex = 1;
+    before.snap.snapToVertexThresholdNdc = 0.05f;
+    before.snap.snapBroadphaseMinWorld = 32.0f;
+
+    const auto j = toJson(before);
+    const auto after = projectSettingsFromJson(j);
+
+    CHECK(after.snap.stepsAvailable == std::vector<int>{2, 4, 8, 16});
+    CHECK(after.snap.defaultStepIndex == 1);
+    CHECK(after.snap.snapToVertexThresholdNdc == doctest::Approx(0.05f));
+    CHECK(after.snap.snapBroadphaseMinWorld == doctest::Approx(32.0f));
+}
+
+TEST_CASE("Snap fromJson sanitize: array con mezcla de tipos/valores invalidos") {
+    nlohmann::json j;
+    nlohmann::json snap;
+    // Mezcla: ints validos, negativo, cero, string, duplicado, fuera de orden.
+    snap["steps_available"] = nlohmann::json::array({8, -3, 0, "garbage", 4, 4, 2, 8});
+    j["snap"] = snap;
+    const auto s = projectSettingsFromJson(j);
+    // Esperamos: filtrado (>0 ints), dedupe, sort ascendente.
+    CHECK(s.snap.stepsAvailable == std::vector<int>{2, 4, 8});
+}
+
+TEST_CASE("Snap fromJson: array completamente invalido cae a defaults") {
+    nlohmann::json j;
+    nlohmann::json snap;
+    snap["steps_available"] = nlohmann::json::array({-1, "x", 0});
+    j["snap"] = snap;
+    const auto s = projectSettingsFromJson(j);
+    // Sanitize quedo vacio → defaults completos.
+    CHECK(s.snap.stepsAvailable == std::vector<int>{1, 2, 4, 8, 16, 32, 64, 128});
+    CHECK(s.snap.defaultStepIndex == 4);
+}
+
+TEST_CASE("Snap fromJson: default_step_index fuera de rango clampea a 0") {
+    nlohmann::json j;
+    nlohmann::json snap;
+    snap["steps_available"]    = nlohmann::json::array({1, 2, 4});
+    snap["default_step_index"] = 99;  // fuera de rango
+    j["snap"] = snap;
+    const auto s = projectSettingsFromJson(j);
+    CHECK(s.snap.stepsAvailable == std::vector<int>{1, 2, 4});
+    CHECK(s.snap.defaultStepIndex == 0);  // clamped
+}
+
+TEST_CASE("Snap back-compat: .moodproj pre-F3H6 (sin snap) carga con defaults") {
+    nlohmann::json j;
+    j["target_fps"] = 120;  // solo field viejo, sin "snap"
+    const auto s = projectSettingsFromJson(j);
+    CHECK(s.snap.stepsAvailable == std::vector<int>{1, 2, 4, 8, 16, 32, 64, 128});
+    CHECK(s.snap.defaultStepIndex == 4);
+    CHECK(s.snap.snapToVertexThresholdNdc == doctest::Approx(0.02f));
+    CHECK(s.snap.snapBroadphaseMinWorld == doctest::Approx(16.0f));
+}

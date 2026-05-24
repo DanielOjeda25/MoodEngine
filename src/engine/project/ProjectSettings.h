@@ -18,6 +18,8 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#include <vector>
+
 namespace Mood {
 
 /// F3H5: configuracion del character controller per-proyecto. Capsule
@@ -62,6 +64,33 @@ struct CharacterSettings {
     f32 headbobAmplitude = 0.05f;
 };
 
+/// F3H6: configuracion del snap del editor per-proyecto. El dev escoge
+/// la escala segun el tipo de proyecto: mundo abierto pide pasos grandes
+/// (16/32/64/128/256/512), interior detallado pide pasos chicos
+/// (0.25/0.5/1/2). Hoy son int — si emerge demanda de fraccionarios,
+/// migrar a f32 en sub-hito.
+struct SnapSettings {
+    /// Pasos disponibles en el snap step picker (Ctrl+= / Ctrl+- /
+    /// Ctrl+ScrollWheel). Default Hammer-style {1,2,4,8,16,32,64,128}.
+    /// Se serializa ordenado ascendente + dedupe + filter > 0.
+    std::vector<int> stepsAvailable = {1, 2, 4, 8, 16, 32, 64, 128};
+
+    /// Indice (en stepsAvailable) del paso inicial al cargar el editor.
+    /// Default 4 → 16 unidades (Hammer-style). Clamped al cargar si
+    /// el indice queda fuera de rango.
+    int defaultStepIndex = 4;
+
+    /// Threshold del snap-to-vertex en coords NDC. 0.02 ~ 8px / 800px
+    /// aspect-typical: generoso para que el snap "se pegue" temprano
+    /// sin precision al pixel.
+    f32 snapToVertexThresholdNdc = 0.02f;
+
+    /// Threshold minimo de broadphase en unidades de mundo. El
+    /// broadphase real es `max(snap*2, broadphaseMinWorld)` para que
+    /// snaps chicos no enumeren miles de vertices.
+    f32 snapBroadphaseMinWorld = 16.0f;
+};
+
 /// F3H4: configuracion de gameplay per-proyecto. Defaults coinciden con
 /// el tuning de F2H41 (walk 5.5 m/s estilo HL2/CoD/Doom). Tras F3H3 fix,
 /// Player y Editor leen ambos de aqui (paridad garantizada por un solo
@@ -97,6 +126,9 @@ struct ProjectSettings {
 
     /// F3H5: character controller (capsule + eye + headbob).
     CharacterSettings character;
+
+    /// F3H6: snap del editor (steps + thresholds).
+    SnapSettings snap;
 
     // Sub-secciones futuras (SpawnDefaults / Rendering / Physics) se
     // agregan como structs anidadas cuando entren hitos que las llenen.

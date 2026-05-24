@@ -208,20 +208,22 @@ void EditorApplication::processEvents() {
             //   Ctrl+- y Ctrl+ KP_MINUS para reducir.
             // Ignora shift en la modifier mask para que Ctrl++ y Ctrl+=
             // entren por el mismo branch.
-            static constexpr u32 k_steps[] = {1u, 2u, 4u, 8u, 16u,
-                                                32u, 64u, 128u};
-            constexpr int k_stepsCount =
-                static_cast<int>(sizeof(k_steps) / sizeof(k_steps[0]));
-            int idx = 4; // default 16
+            // F3H6: array de steps leido live de settings.snap.stepsAvailable
+            // (fallback a defaults del struct si no hay proyecto).
+            const SnapSettings k_snapCfg = m_project
+                ? m_project->settings.snap : SnapSettings{};
+            const auto& k_steps = k_snapCfg.stepsAvailable;
+            const int k_stepsCount = static_cast<int>(k_steps.size());
+            int idx = k_snapCfg.defaultStepIndex;  // fallback al default del proyecto
             for (int i = 0; i < k_stepsCount; ++i) {
-                if (k_steps[i] == m_hammerSnapStep) { idx = i; break; }
+                if (static_cast<u32>(k_steps[i]) == m_hammerSnapStep) { idx = i; break; }
             }
             const bool up = (ev.key.keysym.sym == SDLK_EQUALS ||
                               ev.key.keysym.sym == SDLK_PLUS  ||
                               ev.key.keysym.sym == SDLK_KP_PLUS);
             if (up && idx + 1 < k_stepsCount) ++idx;
             if (!up && idx - 1 >= 0) --idx;
-            m_hammerSnapStep = k_steps[idx];
+            if (k_stepsCount > 0) m_hammerSnapStep = static_cast<u32>(k_steps[idx]);
             Log::editor()->info("[hammer] snap step -> {}", m_hammerSnapStep);
         }
         // F2H44: Ctrl+ScrollWheel sobre cualquiera de los 3 ortho
@@ -237,18 +239,19 @@ void EditorApplication::processEvents() {
                   (m_ui.orthoTop().liveCursor().hovered ||
                    m_ui.orthoFront().liveCursor().hovered ||
                    m_ui.orthoSide().liveCursor().hovered)) {
-            static constexpr u32 k_wheelSteps[] = {1u, 2u, 4u, 8u, 16u,
-                                                     32u, 64u, 128u};
-            constexpr int k_wheelStepsCount =
-                static_cast<int>(sizeof(k_wheelSteps) / sizeof(k_wheelSteps[0]));
-            int idx = 4;
+            // F3H6: mismo array que el branch de teclado — leido del proyecto.
+            const SnapSettings k_snapCfg = m_project
+                ? m_project->settings.snap : SnapSettings{};
+            const auto& k_wheelSteps = k_snapCfg.stepsAvailable;
+            const int k_wheelStepsCount = static_cast<int>(k_wheelSteps.size());
+            int idx = k_snapCfg.defaultStepIndex;
             for (int i = 0; i < k_wheelStepsCount; ++i) {
-                if (k_wheelSteps[i] == m_hammerSnapStep) { idx = i; break; }
+                if (static_cast<u32>(k_wheelSteps[i]) == m_hammerSnapStep) { idx = i; break; }
             }
             const bool up = ev.wheel.y > 0;
             if (up && idx + 1 < k_wheelStepsCount) ++idx;
             if (!up && idx - 1 >= 0) --idx;
-            m_hammerSnapStep = k_wheelSteps[idx];
+            if (k_wheelStepsCount > 0) m_hammerSnapStep = static_cast<u32>(k_wheelSteps[idx]);
             Log::editor()->info("[hammer] snap step -> {} (Ctrl+wheel)",
                                   m_hammerSnapStep);
         }

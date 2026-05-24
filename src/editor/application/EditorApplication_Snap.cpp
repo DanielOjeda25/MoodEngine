@@ -40,13 +40,16 @@ glm::vec3 EditorApplication::snapToVertexOrGrid(const glm::vec3& worldPt,
         return gridSnap(worldPt);
     }
 
-    // Threshold ndc ~ 8 px / 800 px aspect-typical = 0.02. Generoso para
-    // que el snap se "pegue" temprano sin requerir precision al pixel.
-    constexpr f32 kThresholdNdc = 0.02f;
+    // Threshold ndc ~ 8 px / 800 px aspect-typical = 0.02 default.
+    // F3H6: leido live del proyecto (settings.snap.snapToVertexThresholdNdc).
+    const SnapSettings k_snapCfg = m_project
+        ? m_project->settings.snap : SnapSettings{};
+    const f32 kThresholdNdc = k_snapCfg.snapToVertexThresholdNdc;
     // Broadphase world: solo brushes cuyo AABB world expandido por
     // threshold contiene worldPt. Sin esto, en escenas con cientos de
     // brushes enumerariamos vertices de todos cada frame del drag.
-    const f32 thresholdWorld = std::max(snap * 2.0f, 16.0f);
+    // F3H6: 16.0f default + leido del proyecto (snapBroadphaseMinWorld).
+    const f32 thresholdWorld = std::max(snap * 2.0f, k_snapCfg.snapBroadphaseMinWorld);
 
     const glm::mat4 mView = cam.viewMatrix();
     const glm::mat4 mProj = cam.projMatrix(oAspect);

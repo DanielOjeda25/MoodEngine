@@ -96,6 +96,15 @@ void EditorApplication::handleNewProject() {
     m_project = std::move(created);
     m_currentMapPath = m_project->defaultMap;
     m_projectDirty = false;
+    // F3H6: snap step inicial del proyecto (settings.snap).
+    {
+        const auto& snap = m_project->settings.snap;
+        if (!snap.stepsAvailable.empty()
+            && snap.defaultStepIndex >= 0
+            && snap.defaultStepIndex < static_cast<int>(snap.stepsAvailable.size())) {
+            m_hammerSnapStep = static_cast<u32>(snap.stepsAvailable[snap.defaultStepIndex]);
+        }
+    }
     addToRecentProjects(m_project->root / (m_project->name + ".moodproj"));
     updateWindowTitle();
     syncMapsSnapshot();
@@ -160,6 +169,15 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
     m_project = std::move(loaded);
     m_currentMapPath = m_project->defaultMap;
     m_projectDirty = false;
+    // F3H6: snap step inicial del proyecto cargado.
+    {
+        const auto& snap = m_project->settings.snap;
+        if (!snap.stepsAvailable.empty()
+            && snap.defaultStepIndex >= 0
+            && snap.defaultStepIndex < static_cast<int>(snap.stepsAvailable.size())) {
+            m_hammerSnapStep = static_cast<u32>(snap.stepsAvailable[snap.defaultStepIndex]);
+        }
+    }
     addToRecentProjects(std::filesystem::absolute(moodproj));
     updateWindowTitle();
 

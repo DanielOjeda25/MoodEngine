@@ -2,6 +2,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <set>
+
 namespace Mood {
 
 namespace {
@@ -57,6 +60,58 @@ CharacterSettings characterFromJson(const nlohmann::json& j) {
     return c;
 }
 
+// F3H6: helpers para SnapSettings con validacion estricta del array de
+// steps (positivos, unicos, ordenados ascendente).
+nlohmann::json snapToJson(const SnapSettings& s) {
+    nlohmann::json j = nlohmann::json::object();
+    const SnapSettings defaults;
+    if (s.stepsAvailable != defaults.stepsAvailable) j["steps_available"] = s.stepsAvailable;
+    if (s.defaultStepIndex != defaults.defaultStepIndex) j["default_step_index"] = s.defaultStepIndex;
+    if (s.snapToVertexThresholdNdc != defaults.snapToVertexThresholdNdc) j["vertex_threshold_ndc"] = s.snapToVertexThresholdNdc;
+    if (s.snapBroadphaseMinWorld != defaults.snapBroadphaseMinWorld) j["broadphase_min_world"] = s.snapBroadphaseMinWorld;
+    return j;
+}
+
+SnapSettings snapFromJson(const nlohmann::json& j) {
+    SnapSettings s;
+    if (!j.is_object()) return s;
+
+    // Array de steps: solo aceptamos si es array de ints positivos.
+    // Sanitize: filtrar non-int + < 1, sort ascendente + dedupe. Si el
+    // resultado es vacio, usar defaults (no dejar al dev sin steps).
+    if (j.contains("steps_available") && j.at("steps_available").is_array()) {
+        std::set<int> uniqueSteps;
+        for (const auto& elem : j.at("steps_available")) {
+            if (elem.is_number_integer()) {
+                const int v = elem.get<int>();
+                if (v > 0) uniqueSteps.insert(v);
+            }
+        }
+        if (!uniqueSteps.empty()) {
+            s.stepsAvailable.assign(uniqueSteps.begin(), uniqueSteps.end());
+        }
+        // else: array sanitizado quedo vacio → mantener defaults.
+    }
+
+    if (j.contains("default_step_index") && j.at("default_step_index").is_number_integer()) {
+        s.defaultStepIndex = j.at("default_step_index").get<int>();
+    }
+    // Clamp del index al rango valido del array final.
+    if (s.defaultStepIndex < 0
+        || s.defaultStepIndex >= static_cast<int>(s.stepsAvailable.size())) {
+        s.defaultStepIndex = 0;
+    }
+
+    if (j.contains("vertex_threshold_ndc") && j.at("vertex_threshold_ndc").is_number()) {
+        s.snapToVertexThresholdNdc = j.at("vertex_threshold_ndc").get<f32>();
+    }
+    if (j.contains("broadphase_min_world") && j.at("broadphase_min_world").is_number()) {
+        s.snapBroadphaseMinWorld = j.at("broadphase_min_world").get<f32>();
+    }
+
+    return s;
+}
+
 } // namespace
 
 nlohmann::json toJson(const ProjectSettings& s) {
@@ -80,6 +135,12 @@ nlohmann::json toJson(const ProjectSettings& s) {
         j["character"] = std::move(characterJson);
     }
 
+    // F3H6: subobjeto "snap" solo si difiere del default.
+    nlohmann::json snapJson = snapToJson(s.snap);
+    if (!snapJson.empty()) {
+        j["snap"] = std::move(snapJson);
+    }
+
     return j;
 }
 
@@ -101,6 +162,11 @@ ProjectSettings projectSettingsFromJson(const nlohmann::json& j) {
     // F3H5: subobjeto "character" — mismo patron.
     if (j.contains("character")) {
         s.character = characterFromJson(j.at("character"));
+    }
+
+    // F3H6: subobjeto "snap" — mismo patron.
+    if (j.contains("snap")) {
+        s.snap = snapFromJson(j.at("snap"));
     }
 
     return s;
