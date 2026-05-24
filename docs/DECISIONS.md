@@ -11,6 +11,62 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-24: F3H8 cierre — Multi-edit del Inspector (Light) + arranque Sub-fase 3.2
+
+### Decisión 1 — Snapshot semantics vs delta semantics para multi-edit
+
+**Contexto:** F2H23 iter 5 introdujo multi-edit del Transform via gizmo usando **delta semantics**: cada entidad se mueve por `delta = active.after - active.before` (mantiene offsets relativos entre entidades del set). F3H8 amplía multi-edit al Inspector para Light (color + intensity + radius). Pregunta: ¿usar delta (cada luz se desplaza su propio offset desde sus betters) o snapshot (todas las luces se homogenizan al valor del active)?
+
+**Decisión:** **Snapshot semantics** para F3H8 — todas las entidades del set reciben el mismo `after` value al commit. Undo restaura cada una a su `before` individual.
+
+**Razones:**
+- Para propiedades **semánticas** (color, intensity, range) la operación natural es "homogenizar al active" — el dev tiene 3 luces de colores distintos, mueve el slider a rojo, las 3 quedan rojas. "Mantener offsets" no tiene sentido (¿el offset de qué? los colores no son aditivos).
+- Para Transform (vec3 position/rotation/scale) **sí** tiene sentido delta — el dev tiene 3 cajas en grid 1m, las mueve 2m a la derecha, todas mantienen el grid (no se colapsan a una sola posición). F2H23 iter 5 ya lo resolvió bien.
+- Implementación más simple: `MultiEditPropertyCommand<T>` guarda 1 solo `after` compartido + N `before` individuales. Delta requeriría guardar el delta y aplicarlo per-entity con su before — más memoria + más cómputo per execute.
+
+**Alternativas descartadas:**
+- **Solo delta**: rompe la semántica de "homogenizar" para casos donde es lo correcto (color, etc).
+- **Switch user-elegible**: complejidad extra sin valor — los call-sites saben qué semántica aplica al field.
+
+**Cómo aplica:** Transform en Inspector futuro (si emerge el caso de editar DragFloat3 multi-entity con offsets) sigue usando delta vía `MultiEditTransformCommand` de F2H23. Los demás campos (color/intensity/audio volume/particle rate/etc) usan snapshot via `MultiEditPropertyCommand<T>` de F3H8.
+
+### Decisión 2 — Fallback automático a single-entity cuando `selectionSet.size() <= 1`
+
+**Contexto:** los helpers existentes en `InspectorPanel_Internal.h` (`fieldColorEdit3`, `fieldDragFloat` de F2H74) están en uso en ~30 call-sites a lo largo de los 10 partials del Inspector. Cualquier refactor que rompa su firma afecta a todos. F3H8 introduce versions multi-edit-aware (`multiEditColor3`, `multiEditDragFloat`). Pregunta: ¿reemplazar los single-entity (migrar TODOS los call-sites) o agregar las multi-versions y mantener los single-entity intactos?
+
+**Decisión:** **Agregar las multi-edit-aware como nuevas funciones** que delegan al single-entity cuando `selectionSet.size() <= 1`. Los call-sites single-entity siguen funcionando sin cambios. Sólo migrar a multiEdit los call-sites que el dev decida ampliar a multi-edit (F3H8 = Light; futuros hitos = Audio/Particles/Trigger).
+
+**Razones:**
+- **Zero-cost back-compat**: los ~30 call-sites existentes no se tocan. Tests existentes siguen pasando sin actualización.
+- **Migración granular per-componente**: F3H8 ataca Light. Tier 2 (Audio/Particles/Trigger) se migra cuando emerja necesidad — no hay big-bang refactor.
+- **Comportamiento idéntico para single-select**: el dev no nota diferencia. UX preservado.
+
+**Alternativas descartadas:**
+- **Reemplazar in-place**: forzar refactor cascada de 30 call-sites. Innecesario por la mayoría que se quedará single-entity (algunos componentes nunca tendrán multi-edit semántico — ej. ScriptComponent con path único).
+- **Templatizar más fuerte**: complicaría las firmas. La duplicación de la lógica de detect/track/push es ~80 LOC, aceptable.
+
+**Cómo aplica:** los nuevos call-sites multi-edit usan `multiEdit*`; los antiguos siguen con `field*`. Si en el futuro emerge un patrón "multi-edit por default" se puede consolidar; por ahora la separación es clara.
+
+### Decisión 3 — Lambdas con `hasComponent<T>` guard per call-site (vs predicate parameter en el helper)
+
+**Contexto:** los helpers multi-edit iteran sobre `selectionSet.selected` para detect "valor común" + propagar live preview + snapshot before. Si la selección mezcla tipos (ej. light + box), las entidades sin el componente harían crash en `getComponent<LightComponent>()`. Hay 2 formas de prevenirlo: (a) lambdas en el call-site guardan con `hasComponent<T>()` inline; (b) helper acepta predicate `hasComponent` como parámetro adicional.
+
+**Decisión:** **opción (a)** — lambdas del call-site guardan. Más verbose por call-site pero localiza el conocimiento del tipo en un solo lugar.
+
+**Razones:**
+- **Localización**: el call-site ya sabe qué componente edita (es Inspector_Light, Inspector_Audio, etc). Agregar el guard inline es trivial (1 línea por lambda).
+- **Sin templates extra**: el helper queda no-templatizado sobre `ComponentType` — más simple de mantener, menor cost de compilación.
+- **No cambia la firma del helper**: si futuros componentes requieren guards distintos (ej. tener Light + check específico), no hay que tocar el helper.
+- **Getter con fallback al active value** mantiene `allMatch` consistente — un peer sin el componente no rompe la detección de "valor común" (se "ve" idéntico al active).
+
+**Alternativas descartadas:**
+- **Predicate parameter**: 3 lambdas por callsite ya es mucho. Una 4ta empeora la legibilidad sin beneficio claro. Cuando se generalice a 5+ tipos vale la pena reconsiderar; hoy son 3 (color, intensity, radius).
+- **Templatizar sobre ComponentType**: forzaría tener una version por componente, multiplicaría headers. F3H8 está en Internal.h ya cerca del cap.
+
+**Cómo aplica:** futuros call-sites multi-edit (Audio volume, Particles rate, Trigger enabled) copian el patrón de Light — lambdas guardan con `hasComponent<AudioSourceComponent/ParticleEmitterComponent/TriggerComponent>()`. Si emerge un caso donde el guard es complejo (ej. requiere Light + ciertos flags), el call-site lo expresa inline.
+
+---
+
 ## 2026-05-24: F3H7 cierre — UserSettings > Editor (zoom orto + gizmo + click/drag), cierre de Sub-fase 3.1
 
 ### Decisión 1 — Tests aislando `editorSettingsToJson/fromJson` del filesystem (opción C del plan)
