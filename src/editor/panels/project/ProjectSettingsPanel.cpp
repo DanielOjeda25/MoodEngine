@@ -67,14 +67,30 @@ void ProjectSettingsPanel::onImGuiRender() {
     }
 
     ImGui::Spacing();
-    drawPerformanceSection(project->settings);
+
+    // F3H4: TabBar reintroducido (F3H1 polish lo elimino por scope chico
+    // con 1 sola seccion; ahora hay 2 con contenido real).
+    if (ImGui::BeginTabBar("##project_settings_tabs")) {
+        if (ImGui::BeginTabItem(
+                I18n::T("editor.project_settings.section.performance").c_str())) {
+            ImGui::Spacing();
+            drawPerformanceSection(project->settings);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem(
+                I18n::T("editor.project_settings.section.gameplay").c_str())) {
+            ImGui::Spacing();
+            drawGameplaySection(project->settings);
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
 
     ImGui::End();
 }
 
 void ProjectSettingsPanel::drawPerformanceSection(ProjectSettings& settings) {
-    ImGui::SeparatorText(I18n::T("editor.project_settings.section.performance").c_str());
-    ImGui::Spacing();
+    // F3H4: SeparatorText eliminado — el TabBar ya rotula la seccion.
     ImGui::Indent();
 
     // === Target FPS (Combo de presets) ===
@@ -125,6 +141,56 @@ void ProjectSettingsPanel::drawPerformanceSection(ProjectSettings& settings) {
     ImGui::Spacing();
     ImGui::TextDisabled("%s",
         I18n::T("editor.project_settings.target_fps_hint").c_str());
+
+    ImGui::Unindent();
+}
+
+// F3H4: seccion Gameplay (walk/crouch/jump). 4 SliderFloat con tooltip
+// hint para cada uno. Cada cambio dispara dirty -> EditorApplication
+// llama markDirty() en pumpUiRequests. Las lecturas en PlayerApplication
+// y EditorPlayMode leen settings.gameplay live cada frame (no se cachea
+// al cargar el proyecto — el dev puede editar y sentir el cambio sin
+// reiniciar Play).
+void ProjectSettingsPanel::drawGameplaySection(ProjectSettings& settings) {
+    ImGui::Indent();
+
+    auto drawSlider = [&](const char* keyLabel,
+                          const char* keyHint,
+                          const char* widgetId,
+                          f32& value,
+                          f32 minVal,
+                          f32 maxVal,
+                          const char* fmt) {
+        ImGui::TextUnformatted(I18n::T(keyLabel).c_str());
+        ImGui::SameLine(kLabelColumnWidth);
+        ImGui::SetNextItemWidth(kControlWidth);
+        if (ImGui::SliderFloat(widgetId, &value, minVal, maxVal, fmt)) {
+            if (m_ui != nullptr) m_ui->requestProjectDirty();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", I18n::T(keyHint).c_str());
+        }
+    };
+
+    drawSlider("editor.project_settings.gameplay.walk_speed",
+               "editor.project_settings.gameplay.walk_speed_hint",
+               "##walk_speed",
+               settings.gameplay.walkSpeed, 1.0f, 12.0f, "%.1f m/s");
+
+    drawSlider("editor.project_settings.gameplay.crouch_speed",
+               "editor.project_settings.gameplay.crouch_speed_hint",
+               "##crouch_speed",
+               settings.gameplay.crouchSpeed, 0.5f, 6.0f, "%.1f m/s");
+
+    drawSlider("editor.project_settings.gameplay.jump_velocity",
+               "editor.project_settings.gameplay.jump_velocity_hint",
+               "##jump_velocity",
+               settings.gameplay.jumpVelocity, 1.0f, 15.0f, "%.1f m/s");
+
+    drawSlider("editor.project_settings.gameplay.jump_cooldown",
+               "editor.project_settings.gameplay.jump_cooldown_hint",
+               "##jump_cooldown",
+               settings.gameplay.jumpCooldownSec, 0.0f, 1.0f, "%.2f s");
 
     ImGui::Unindent();
 }

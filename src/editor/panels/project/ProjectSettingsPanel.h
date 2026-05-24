@@ -37,6 +37,7 @@ public:
 
 private:
     void drawPerformanceSection(ProjectSettings& settings);
+    void drawGameplaySection(ProjectSettings& settings);  // F3H4
 
     EditorUI* m_ui = nullptr;
 };

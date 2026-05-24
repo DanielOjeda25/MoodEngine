@@ -20,6 +20,28 @@
 
 namespace Mood {
 
+/// F3H4: configuracion de gameplay per-proyecto. Defaults coinciden con
+/// el tuning de F2H41 (walk 5.5 m/s estilo HL2/CoD/Doom). Tras F3H3 fix,
+/// Player y Editor leen ambos de aqui (paridad garantizada por un solo
+/// source of truth).
+struct GameplaySettings {
+    /// Velocidad de caminata del jugador en m/s. Defaults 5.5 (F2H41
+    /// fix: convencion FPS HL2~5.5, CoD~6, Doom Eternal~7).
+    f32 walkSpeed = 5.5f;
+
+    /// Velocidad de caminata agachado en m/s. Defaults 3.0 (proporcion
+    /// ~55% del walk, mismo ratio que HL2/CoD).
+    f32 crouchSpeed = 3.0f;
+
+    /// Velocidad vertical instantanea del salto en m/s. Defaults 5.5
+    /// (~1.5 m de altura con g=9.81).
+    f32 jumpVelocity = 5.5f;
+
+    /// Cooldown entre saltos en segundos. Defaults 0.2 — evita doble-
+    /// salto por mantener la tecla apretada.
+    f32 jumpCooldownSec = 0.2f;
+};
+
 struct ProjectSettings {
     // === General ===
 
@@ -27,6 +49,9 @@ struct ProjectSettings {
     /// real (frame pacing) se cabllea cuando se migre el `Window`
     /// hardcoded a leer de aca (hito siguiente).
     int targetFps = 60;
+
+    /// F3H4: gameplay tier 1 (walk/crouch/jump).
+    GameplaySettings gameplay;
 
     // Sub-secciones futuras (SpawnDefaults / Rendering / Physics) se
     // agregan como structs anidadas cuando entren hitos que las llenen.

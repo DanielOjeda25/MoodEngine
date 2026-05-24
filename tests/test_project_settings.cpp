@@ -70,3 +70,58 @@ TEST_CASE("ProjectSettings fromJson tipo incorrecto: skip silencioso del field")
     const auto s = projectSettingsFromJson(j);
     CHECK(s.targetFps == 60);            // default
 }
+
+// ============================================================
+// F3H4: GameplaySettings (nested struct).
+// ============================================================
+
+TEST_CASE("Gameplay defaults: toJson no incluye subobjeto si todo default") {
+    ProjectSettings s;  // gameplay todo default
+    const auto j = toJson(s);
+    CHECK(!j.contains("gameplay"));
+}
+
+TEST_CASE("Gameplay non-default: subobjeto incluido con solo los fields cambiados") {
+    ProjectSettings s;
+    s.gameplay.walkSpeed = 7.0f;
+    const auto j = toJson(s);
+    REQUIRE(j.contains("gameplay"));
+    CHECK(j.at("gameplay").contains("walk_speed"));
+    CHECK(j.at("gameplay").at("walk_speed").get<f32>() == doctest::Approx(7.0f));
+    // crouch_speed quedo default → no se escribe
+    CHECK(!j.at("gameplay").contains("crouch_speed"));
+}
+
+TEST_CASE("Gameplay roundtrip preserva los 4 fields") {
+    ProjectSettings before;
+    before.gameplay.walkSpeed       = 6.5f;
+    before.gameplay.crouchSpeed     = 2.5f;
+    before.gameplay.jumpVelocity    = 7.0f;
+    before.gameplay.jumpCooldownSec = 0.35f;
+
+    const auto j = toJson(before);
+    const auto after = projectSettingsFromJson(j);
+
+    CHECK(after.gameplay.walkSpeed       == doctest::Approx(6.5f));
+    CHECK(after.gameplay.crouchSpeed     == doctest::Approx(2.5f));
+    CHECK(after.gameplay.jumpVelocity    == doctest::Approx(7.0f));
+    CHECK(after.gameplay.jumpCooldownSec == doctest::Approx(0.35f));
+}
+
+TEST_CASE("Gameplay back-compat: .moodproj pre-F3H4 (sin gameplay subkey) carga con defaults") {
+    nlohmann::json j;
+    j["target_fps"] = 120;  // solo el field viejo, sin "gameplay"
+    const auto s = projectSettingsFromJson(j);
+    CHECK(s.targetFps                 == 120);
+    CHECK(s.gameplay.walkSpeed        == doctest::Approx(5.5f));  // default F3H4
+    CHECK(s.gameplay.crouchSpeed      == doctest::Approx(3.0f));
+    CHECK(s.gameplay.jumpVelocity     == doctest::Approx(5.5f));
+    CHECK(s.gameplay.jumpCooldownSec  == doctest::Approx(0.2f));
+}
+
+TEST_CASE("Gameplay malformed: subkey no-object devuelve defaults silencioso") {
+    nlohmann::json j;
+    j["gameplay"] = "no-soy-objeto";  // futuro: bug o corrupcion
+    const auto s = projectSettingsFromJson(j);
+    CHECK(s.gameplay.walkSpeed == doctest::Approx(5.5f));  // default
+}

@@ -13,6 +13,7 @@
 
 #include "core/Time.h"
 #include "core/Types.h"
+#include "engine/project/ProjectSettings.h"  // F3H4: GameplaySettings member
 #include "engine/saving/SaveLoad.h"  // SaveData (Hito 38)
 #include "engine/scene/core/FpsCamera.h"
 #include "engine/world/grid/GridMap.h"
@@ -119,6 +120,9 @@ private:
     // `.moodproj`). Defaults coinciden con los hardcoded del Hito 34 C.
     f32 m_coyoteWindowSec     = 0.10f;
     f32 m_jumpBufferWindowSec = 0.15f;
+    // F3H4: gameplay tier 1 leido del `.moodproj > settings.gameplay`.
+    // Defaults coinciden con el struct (5.5/3.0/5.5/0.2 — convencion FPS).
+    GameplaySettings m_gameplay;
     // Hito 31 D: crouch lerp visual + headbob (paridad con EditorApplication).
     f32 m_crouchVisualT = 0.0f;
     f32 m_headbobTime   = 0.0f;

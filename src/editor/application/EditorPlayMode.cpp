@@ -489,20 +489,21 @@ void EditorApplication::updateOnFootCharController(f32 dt) {
     constexpr f32 k_charHalfHeightStand  = 0.5f;
     constexpr f32 k_charHalfHeightCrouch = 0.1f;
     constexpr f32 k_charRadius           = 0.4f;
-    constexpr f32 k_jumpVel              = 5.5f;
-    constexpr f32 k_jumpCooldown         = 0.2f;
     // Hito 40 G: ventanas del char controller editables per-proyecto
     // (ver `.moodproj`). Si no hay project cargado, usa los defaults
     // del Hito 34 C.
     const f32 k_coyoteWindow     = m_project ? m_project->coyoteWindowSec     : 0.10f;
     const f32 k_jumpBufferWindow = m_project ? m_project->jumpBufferWindowSec : 0.15f;
-    // F2H41 fix lateral: tuning del feel de caminata. Pre-F2H41
-    // walk=4 m/s daba sensacion lenta vs convencion FPS (HL2 ~5.5,
-    // CoD ~6, Doom Eternal ~7). 5.5 m/s con freq de bob mas bajo
-    // (ver mas abajo) da pasitos largos + paso rapido sin sentir
-    // que el char "trota muy chiquito".
-    constexpr f32 k_walkSpeed            = 5.5f;
-    constexpr f32 k_crouchSpeed          = 3.0f;
+    // F3H4: walk/crouch/jump leidos live de settings.gameplay (el dev
+    // edita en Project Settings y siente el cambio sin reiniciar Play).
+    // Defaults coinciden con F2H41 (convencion FPS HL2~5.5 / CoD~6 /
+    // Doom Eternal~7). Si no hay project, defaults inline.
+    const GameplaySettings k_gp = m_project ? m_project->settings.gameplay
+                                            : GameplaySettings{};
+    const f32 k_walkSpeed     = k_gp.walkSpeed;
+    const f32 k_crouchSpeed   = k_gp.crouchSpeed;
+    const f32 k_jumpVel       = k_gp.jumpVelocity;
+    const f32 k_jumpCooldown  = k_gp.jumpCooldownSec;
     if (m_playerCharId == 0) {
         const f32 eyeStand = k_charHalfHeightStand + k_charRadius - 0.2f;
         const glm::vec3 camPos = m_playCamera.position();

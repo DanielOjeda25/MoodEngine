@@ -238,6 +238,9 @@ bool PlayerApplication::tryLoadGameManifest() {
     // Hito 40 G: char controller windows del proyecto.
     m_coyoteWindowSec     = loaded->coyoteWindowSec;
     m_jumpBufferWindowSec = loaded->jumpBufferWindowSec;
+    // F3H4: gameplay tier 1 (walk/crouch/jump). Captura al load igual
+    // que coyote/jumpBuffer — el Player no tiene UI para editar live.
+    m_gameplay = loaded->settings.gameplay;
 
     Log::engine()->info(
         "MoodPlayer: proyecto '{}' cargado ({} entidades persistidas)",
