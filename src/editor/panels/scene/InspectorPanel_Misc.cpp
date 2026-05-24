@@ -36,6 +36,16 @@ void InspectorPanel::renderTagSection(Entity e) {
 void InspectorPanel::renderCameraSection(Entity e) {
     auto& cam = e.getComponent<CameraComponent>();
     if (!beginComponentSection<CameraComponent>(e, ICON_FA_VIDEO " Camera")) return;
+    // break-A7 (auditoria): CameraComponent es stub. Los 3 campos
+    // (fovDeg/nearPlane/farPlane) se editan, se serializan via
+    // EditPropertyCommand y se "guardan" en el componente, pero el render
+    // sigue usando `m_editorCamera.fovDeg()` — el componente no esta
+    // cableado al pipeline. Para no engañar al dev hacemos los 3 widgets
+    // read-only (BeginDisabled) y agregamos un label "(stub)". El sistema
+    // de "active camera" que derive proyeccion del CameraComponent activo
+    // es un item de Fase 3.
+    ImGui::TextDisabled("(stub: no afecta al render)");
+    ImGui::BeginDisabled(true);
     if (detail::fieldDragFloat(m_editTracker, m_ui, e,
             "editor.panel.inspector.camera.fov", "##cam", cam.fovDeg,
             [](Entity& en, const f32& v) {
@@ -60,6 +70,7 @@ void InspectorPanel::renderCameraSection(Entity e) {
             "Editar camera far", 0.1f, 1.0f, 10000.0f)) {
         m_editedThisFrame = true;
     }
+    ImGui::EndDisabled();
     ImGui::Separator();
 }
 
