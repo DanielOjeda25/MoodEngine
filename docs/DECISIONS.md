@@ -11,6 +11,65 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-24: F3H4 cierre — Gameplay tier 1 + polish reactivo (reset buttons, dock revert)
+
+### Decisión 1 — Reset buttons (↺) per-field en Project Settings
+
+**Contexto:** durante validación visual de F3H4, el dev notó que faltaba forma rápida de volver un slider a su default ("le falta un boton para resetear los valores por default"). Sin él, si tocás walk speed y querés volver a 5.5 hay que saber el número exacto y reescribirlo.
+
+**Decisión:** botón pequeño con ícono `↺` (`ICON_FA_ROTATE_LEFT`, agregado al subset curado) al lado de cada control, **solo visible cuando `current != default`** (sin visual noise para fields no-modificados). Helper template `resetButton<T>` en el anonymous namespace de `ProjectSettingsPanel.cpp`. Aplicado a Target FPS (Performance) y los 4 sliders Gameplay; el patrón se reusa cuando F3H5+ agreguen fields nuevos.
+
+**Razones:**
+- Es UX estándar en Unity (right-click → Reset on field), Unreal (small reset arrow visible only when overridden), Godot (revert icon). El dev tiene la expectativa internalizada.
+- El "visible solo cuando difiere del default" es key — surfacea el override sin ensuciar la vista cuando todo está en estado canónico.
+- Helper template-based para reusar con int (Target FPS) y f32 (sliders) sin duplicación.
+- i18n: 1 key compartida (`editor.project_settings.reset_default`) — reusable por cualquier panel futuro que copie el pattern.
+
+**Alternativas descartadas:**
+- Right-click context menu (Unity classic): más oculto, requiere descubrimiento, peor para devs novatos en el editor.
+- "Reset all" botón a nivel sección: menos granular, fuerza reset de todo o nada.
+- Mostrar siempre el botón (incluso si == default): visual noise innecesario.
+
+### Decisión 2 — Project Settings vuelve a flotante NO dockeable (revert del intento polish)
+
+**Contexto:** durante validación de F3H4, el dev pidió poder editar valores **mientras juega** ("recontra antiintuitivo abrir panel, cambiar, cerrar, poner play y testear"). Mi primer fix fue hacer el panel dockeable (quitar `NoDocking | NoResize`) para que pudiera quedar al costado del Inspector. El dev cuestionó: *"no me gusta que pueda agregarlo a un panel, ni redimensionar, dime en los motores graficos reales donde tienen estas opciones?"*.
+
+**Respuesta honesta (engines reales):**
+- **Unity** (2022+): `Edit > Project Settings` abre una **ventana flotante independiente**, NO dockeable al main editor. Tree de categorías a la izquierda + properties a la derecha. Cerrás cuando terminás.
+- **Unreal**: Igual — Project Settings es ventana separada, NO parte del docking del editor.
+- **Godot**: `Project > Project Settings...` es un **modal dialog** centrado de tamaño fijo. No dockeable, no redimensionable libre.
+
+El común denominador: **Project Settings es SET-AND-FORGET, no para tunear en vivo.** Lo que el usuario tunea live durante Play va en otra superficie (Inspector sobre un component, debug HUD).
+
+**Decisión:** revertir el dockable. Project Settings vuelve a `NoResize | NoCollapse | NoDocking`, centrado, tamaño fijo 540×360 (mismo que F3H1 polish). Los reset buttons se mantienen (esos sí están en convención de engines).
+
+**Razones:**
+- Honesto con la convención de la industria — devs que vienen de Unity/Unreal encuentran lo que esperan.
+- Separación clara de paradigmas: panel de config defaults vs. live tuning son problemas distintos con UI distinta.
+- El intento de "dockable para live tuning" mezclaba responsabilidades y ya estaba creando fricción (el dev intuitivamente quería cerrarlo antes de Play).
+
+**Lo que NO se resuelve acá (diferido a hito futuro):**
+- **Live tuning durante Play** queda como necesidad real pero sin solución en F3H4. Camino convencional: cuando exista un `PlayerControllerComponent` (per-entidad en escena), el Inspector dockeado lo edita en Play mode (Unity-style — `PlayerApplication` actual no tiene componente, es código directo). Alternativa: HUD overlay "Quick Tuning" en Play mode con sliders rápidos.
+- Anotar como pendiente cuando el dev encuentre fricción real al tunear gameplay. Probable F3H5 o un mini-hito dedicado.
+
+**Aplicación retroactiva:** la decisión F3H1 D1 ("dockable → floating modal-like") queda consolidada — esto NO la contradice, la confirma. Lo que se aprendió en F3H4 es que el caso de uso "tunear live durante Play" no es responsabilidad de Project Settings.
+
+### Decisión 3 — Schema `.moodproj` con nested struct para Gameplay (no flat keys)
+
+**Contexto:** F3H4 agregó 4 fields nuevos al `.moodproj`. Opciones de schema: (a) flat keys (`"walk_speed": 5.5, "crouch_speed": 3.0, ...`) al mismo nivel que `target_fps`; (b) nested subobject (`"gameplay": {"walk_speed": 5.5, "crouch_speed": 3.0, ...}`).
+
+**Decisión:** nested subobject — `settings.gameplay.walk_speed`.
+
+**Razones:**
+- Escala mejor: cuando F3H5 sume Character (capsule/eye/headbob) tendrá su propio subobject `"character": {...}` sin chocar con `"gameplay": {...}`. Idem F3H6 Shortcuts, F3H7 Snap.
+- Refleja la organización del UI (tabs del panel) directamente en el JSON.
+- Forward-compat: agregar fields nuevos en cualquier subobject no contamina los hermanos.
+- Match con la estructura de C++: `ProjectSettings::gameplay::walkSpeed`.
+
+**Alternativa descartada:** flat keys con prefijo (`"gameplay.walk_speed"`) — funciona pero menos navegable en JSON, y rompe la convención nlohmann::json de pure objects.
+
+---
+
 ## 2026-05-24: F3H3 cierre — auditoría hardcoded values + 2 fixes reactivos
 
 ### Decisión 1 — Audit-only NO: fix reactivo de bugs durante el sweep
