@@ -42,10 +42,12 @@ bool save(const SaveData& d, const std::filesystem::path& path) {
     nlohmann::json j;
     j["version"]  = k_supportedVersion;
     j["map_path"] = d.mapPath;
-    j["hud"]["hp"]   = d.hud.hp;
-    j["hud"]["ammo"] = d.hud.ammo;
+    j["hud"]["hp"] = d.hud.hp;
     // F2H39: campos nuevos del HUD framework. Solo serializar si difieren
-    // del default — keep saves chicas para gameplay basico.
+    // del default — keep saves chicas para gameplay basico. post-v2.0.2:
+    // HudState.ammo legacy borrado (no se usa post-F2H39, mag+reserve son
+    // los reales). Saves v4 con `ammo` siguen cargando (json ignora keys
+    // extra) — no se rompe back-compat ni hace falta bump de version.
     if (d.hud.max_hp  != 100) j["hud"]["max_hp"]  = d.hud.max_hp;
     if (d.hud.mag     !=  30) j["hud"]["mag"]     = d.hud.mag;
     if (d.hud.max_mag !=  30) j["hud"]["max_mag"] = d.hud.max_mag;
@@ -150,7 +152,7 @@ bool save(const SaveData& d, const std::filesystem::path& path) {
     f << j.dump(2);
     Log::engine()->info(
         "SaveLoad::save: '{}' OK ({} bytes, {} bodies, {} script globals, "
-        "{} quests, {} inventories, {} dialog vars, hp={}, ammo={})",
+        "{} quests, {} inventories, {} dialog vars, hp={}, mag={}/{} reserve={})",
         path.generic_string(),
         static_cast<usize>(f.tellp()),
         d.bodies.size(),
@@ -158,7 +160,7 @@ bool save(const SaveData& d, const std::filesystem::path& path) {
         d.quests.size(),
         d.inventories.size(),
         d.dialogVars.size(),
-        d.hud.hp, d.hud.ammo);
+        d.hud.hp, d.hud.mag, d.hud.max_mag, d.hud.reserve);
     return true;
 }
 
@@ -198,10 +200,11 @@ std::optional<SaveData> load(const std::filesystem::path& path) {
     d.mapPath = j.value("map_path", std::string{});
     if (j.contains("hud")) {
         const auto& jhud = j.at("hud");
-        d.hud.hp   = jhud.value("hp",   d.hud.hp);
-        d.hud.ammo = jhud.value("ammo", d.hud.ammo);
+        d.hud.hp = jhud.value("hp", d.hud.hp);
         // F2H39: campos nuevos opcionales. Saves pre-F2H39 no los tienen
-        // - default values en HudState garantizan back-compat.
+        // - default values en HudState garantizan back-compat. post-v2.0.2:
+        // `ammo` legacy borrado — saves v4 con la key cargan fine porque
+        // json::value() solo lee keys que existen y no errorea si sobran.
         d.hud.max_hp           = jhud.value("max_hp",  d.hud.max_hp);
         d.hud.mag              = jhud.value("mag",     d.hud.mag);
         d.hud.max_mag          = jhud.value("max_mag", d.hud.max_mag);
@@ -327,10 +330,11 @@ std::optional<SaveData> load(const std::filesystem::path& path) {
     }
 
     Log::engine()->info(
-        "SaveLoad::load: '{}' OK (map='{}', hp={}, ammo={}, {} bodies, "
-        "{} script globals, {} quests, {} inventories, {} dialog vars)",
+        "SaveLoad::load: '{}' OK (map='{}', hp={}, mag={}/{} reserve={}, "
+        "{} bodies, {} script globals, {} quests, {} inventories, "
+        "{} dialog vars)",
         path.generic_string(),
-        d.mapPath, d.hud.hp, d.hud.ammo,
+        d.mapPath, d.hud.hp, d.hud.mag, d.hud.max_mag, d.hud.reserve,
         d.bodies.size(), d.scriptGlobals.size(), d.quests.size(),
         d.inventories.size(), d.dialogVars.size());
     return d;

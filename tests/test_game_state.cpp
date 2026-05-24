@@ -36,43 +36,44 @@ std::filesystem::path writeTempScript(const std::string& content) {
 
 TEST_CASE("GameState: defaults razonables") {
     GameState::reset();
-    CHECK(GameState::hud().hp   == 100);
-    CHECK(GameState::hud().ammo == 30);
-    CHECK(GameState::paused()   == false);
+    CHECK(GameState::hud().hp     == 100);
+    CHECK(GameState::hud().mag    == 30);
+    CHECK(GameState::hud().reserve == 90);
+    CHECK(GameState::paused()      == false);
 }
 
 TEST_CASE("GameState: mutacion directa C++ persiste") {
     GameState::reset();
-    GameState::hud().hp     = 42;
-    GameState::hud().ammo   = 7;
-    GameState::paused()     = true;
+    GameState::hud().hp  = 42;
+    GameState::hud().mag = 7;
+    GameState::paused()  = true;
 
-    CHECK(GameState::hud().hp   == 42);
-    CHECK(GameState::hud().ammo == 7);
-    CHECK(GameState::paused()   == true);
+    CHECK(GameState::hud().hp  == 42);
+    CHECK(GameState::hud().mag == 7);
+    CHECK(GameState::paused()  == true);
 
     GameState::reset();
 }
 
 TEST_CASE("GameState: reset() vuelve a defaults") {
-    GameState::hud().hp   = 1;
-    GameState::hud().ammo = 1;
-    GameState::paused()   = true;
+    GameState::hud().hp  = 1;
+    GameState::hud().mag = 1;
+    GameState::paused()  = true;
 
     GameState::reset();
 
-    CHECK(GameState::hud().hp   == 100);
-    CHECK(GameState::hud().ammo == 30);
-    CHECK(GameState::paused()   == false);
+    CHECK(GameState::hud().hp  == 100);
+    CHECK(GameState::hud().mag == 30);
+    CHECK(GameState::paused()  == false);
 }
 
-TEST_CASE("Lua hud.setHp / setAmmo / setPaused mutan GameState") {
+TEST_CASE("Lua hud.setHp / setMag / setPaused mutan GameState") {
     GameState::reset();
 
     const auto path = writeTempScript(R"(
         function onUpdate(self, dt)
             hud.setHp(55)
-            hud.setAmmo(13)
+            hud.setMag(13)
             hud.setPaused(true)
         end
     )");
@@ -84,19 +85,19 @@ TEST_CASE("Lua hud.setHp / setAmmo / setPaused mutan GameState") {
     ScriptSystem sys;
     sys.update(scene, 0.016f);
 
-    CHECK(GameState::hud().hp   == 55);
-    CHECK(GameState::hud().ammo == 13);
-    CHECK(GameState::paused()   == true);
+    CHECK(GameState::hud().hp  == 55);
+    CHECK(GameState::hud().mag == 13);
+    CHECK(GameState::paused()  == true);
 
     std::filesystem::remove(path);
     GameState::reset();
 }
 
-TEST_CASE("Lua hud.getHp / getAmmo / getPaused leen GameState") {
+TEST_CASE("Lua hud.getHp / getMag / getPaused leen GameState") {
     GameState::reset();
-    GameState::hud().hp   = 88;
-    GameState::hud().ammo = 99;
-    GameState::paused()   = true;
+    GameState::hud().hp  = 88;
+    GameState::hud().mag = 99;
+    GameState::paused()  = true;
 
     // El script copia lo leido de C++ a la posicion del Transform como
     // canal de exfiltracion verificable desde el host (no hay un binding
@@ -104,7 +105,7 @@ TEST_CASE("Lua hud.getHp / getAmmo / getPaused leen GameState") {
     const auto path = writeTempScript(R"(
         function onUpdate(self, dt)
             self.transform.position.x = hud.getHp()
-            self.transform.position.y = hud.getAmmo()
+            self.transform.position.y = hud.getMag()
             self.transform.position.z = hud.getPaused() and 1.0 or 0.0
         end
     )");

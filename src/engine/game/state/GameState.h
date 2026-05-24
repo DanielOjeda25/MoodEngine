@@ -1,8 +1,8 @@
 #pragma once
 
 // Estado global del juego accesible desde C++ y desde Lua. Hito 20:
-// los scripts pueden leer/escribir el HUD (hp/ammo) y el flag de pausa
-// via la tabla `hud` registrada en LuaBindings.
+// los scripts pueden leer/escribir el HUD (hp/mag/reserve) y el flag de
+// pausa via la tabla `hud` registrada en LuaBindings.
 //
 // F2H39: HudState extendido con campos para los nuevos widgets del
 // HUD framework (DamageVignette, HitMarker, InteractPrompt, Pickup
@@ -45,8 +45,7 @@ struct KillEntry {
 
 struct HudState {
     // --- Hito 20 (preservado) ---
-    int hp   = 100;
-    int ammo = 30;  // legacy, no se usa post-F2H39 (ahora mag+reserve)
+    int hp = 100;
 
     // --- F2H39: Health extendido ---
     int max_hp = 100;

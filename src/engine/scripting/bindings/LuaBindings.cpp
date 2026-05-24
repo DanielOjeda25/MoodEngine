@@ -66,11 +66,11 @@ void setupLuaBindings(sol::state& lua, Entity self,
     sol::table hudTable = lua.create_named_table("hud");
 
     // Hito 20 — preservadas para back-compat con scripts existentes.
-    hudTable.set_function("setHp",     [](int v) { GameState::hud().hp   = v; });
-    hudTable.set_function("setAmmo",   [](int v) { GameState::hud().ammo = v; });
+    // post-v2.0.2: setAmmo/getAmmo borrados (HudState.ammo legacy eliminado).
+    // Los scripts deben usar setMag/getMag (mag actual) o setReserve/getReserve.
+    hudTable.set_function("setHp",     [](int v) { GameState::hud().hp = v; });
     hudTable.set_function("setPaused", [](bool v) { GameState::paused() = v; });
     hudTable.set_function("getHp",     []() { return GameState::hud().hp; });
-    hudTable.set_function("getAmmo",   []() { return GameState::hud().ammo; });
     hudTable.set_function("getPaused", []() { return GameState::paused(); });
 
     // F2H39 — health extendido + ammo split.

@@ -421,7 +421,8 @@ SaveLoad::SaveData PlayerApplication::captureCurrentState() {
     d.playerPitch = m_playCamera.pitchDeg();
 
     Log::engine()->info("[Save] capturando state...");
-    Log::engine()->info("  - hud: hp={}, ammo={}", d.hud.hp, d.hud.ammo);
+    Log::engine()->info("  - hud: hp={}, mag={}/{} reserve={}",
+        d.hud.hp, d.hud.mag, d.hud.max_mag, d.hud.reserve);
     Log::engine()->info("  - player pos=({:.2f},{:.2f},{:.2f}) yaw={:.1f} pitch={:.1f}",
         d.playerPosition.x, d.playerPosition.y, d.playerPosition.z,
         d.playerYaw, d.playerPitch);

@@ -33,7 +33,8 @@ TEST_CASE("SaveLoad: round-trip preserva campos basicos") {
     SaveLoad::SaveData d;
     d.mapPath        = "maps/level1.moodmap";
     d.hud.hp         = 75;
-    d.hud.ammo       = 22;
+    d.hud.mag        = 22;
+    d.hud.reserve    = 44;
     d.playerPosition = glm::vec3(3.5f, 1.6f, -7.25f);
     d.playerYaw      = 45.0f;
     d.playerPitch    = -10.5f;
@@ -44,8 +45,9 @@ TEST_CASE("SaveLoad: round-trip preserva campos basicos") {
     const auto loaded = SaveLoad::load(path);
     REQUIRE(loaded.has_value());
     CHECK(loaded->mapPath == "maps/level1.moodmap");
-    CHECK(loaded->hud.hp == 75);
-    CHECK(loaded->hud.ammo == 22);
+    CHECK(loaded->hud.hp      == 75);
+    CHECK(loaded->hud.mag     == 22);
+    CHECK(loaded->hud.reserve == 44);
     CHECK(loaded->playerPosition.x == doctest::Approx(3.5f));
     CHECK(loaded->playerPosition.y == doctest::Approx(1.6f));
     CHECK(loaded->playerPosition.z == doctest::Approx(-7.25f));
@@ -176,7 +178,7 @@ TEST_CASE("SaveLoad: load v1 file con campos v2 vacios (back-compat Hito 41)") {
 
 TEST_CASE("SaveLoad: campos faltantes caen a defaults sin lanzar") {
     // JSON valido pero solo con version + map_path; el resto debe caer a
-    // defaults del SaveData (hp=100, ammo=30, position=0, yaw=-90, pitch=0).
+    // defaults del SaveData (hp=100, mag=30, position=0, yaw=-90, pitch=0).
     const auto path = tempSavePath("partial");
     {
         std::ofstream f(path);
@@ -185,8 +187,8 @@ TEST_CASE("SaveLoad: campos faltantes caen a defaults sin lanzar") {
     const auto r = SaveLoad::load(path);
     REQUIRE(r.has_value());
     CHECK(r->mapPath == "maps/partial.moodmap");
-    CHECK(r->hud.hp == 100);     // default de HudState
-    CHECK(r->hud.ammo == 30);    // default de HudState
+    CHECK(r->hud.hp  == 100);    // default de HudState
+    CHECK(r->hud.mag == 30);     // default de HudState
     CHECK(r->playerPosition == glm::vec3(0.0f));
     CHECK(r->playerYaw == doctest::Approx(-90.0f));
     CHECK(r->playerPitch == doctest::Approx(0.0f));
