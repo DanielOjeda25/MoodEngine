@@ -209,20 +209,37 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ImGui::EndMenu();
         }
 
+        // Menu Debug: stress tests para benchmarkear perf cuando se toca
+        // un subsistema (Forward+ light grid, scene iteration, draw-call
+        // cost). post-v2.0.2: agregado para reemplazar el entry point
+        // perdido cuando F2H57 eliminó el submenú "Demos" del menu Ayuda.
+        if (ImGui::BeginMenu((std::string(ICON_FA_BUG " ") + I18n::T("editor.menu.debug")).c_str(),
+                              ui.hasProject())) {
+            if (ImGui::MenuItem(I18n::T("editor.menu.debug.light_stress").c_str())) {
+                ui.requestSpawnLightStress();
+            }
+            if (ImGui::BeginMenu(I18n::T("editor.menu.debug.stress_tris").c_str())) {
+                if (ImGui::MenuItem(I18n::T("editor.menu.debug.stress_tris.10k").c_str())) {
+                    ui.requestSpawnStressTris(10000);
+                }
+                if (ImGui::MenuItem(I18n::T("editor.menu.debug.stress_tris.100k").c_str())) {
+                    ui.requestSpawnStressTris(100000);
+                }
+                if (ImGui::MenuItem(I18n::T("editor.menu.debug.stress_tris.500k").c_str())) {
+                    ui.requestSpawnStressTris(500000);
+                }
+                if (ImGui::MenuItem(I18n::T("editor.menu.debug.stress_tris.1m").c_str())) {
+                    ui.requestSpawnStressTris(1000000);
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenu();
+        }
+
         if (ImGui::BeginMenu((std::string(ICON_FA_CIRCLE_QUESTION " ") + I18n::T("editor.menu.help")).c_str())) {
             if (ImGui::MenuItem(I18n::T("editor.menu.help.about").c_str())) {
                 m_showAboutPopup = true;
             }
-            // F2H57 Bloque E: submenu "Demos" eliminado. El workflow
-            // canonico es "+ Crear Entidad" en el panel Escena +
-            // right-click "Cambiar tipo" (estilo Hammer Editor). Los
-            // handlers process*Request de DemoSpawners_*.cpp quedan
-            // como dead code linkeado, pero sin trigger desde UI.
-            // break-A9 (auditoria): cleanup completo (DemoSpawners_Basic/
-            // Prefab/Stress.cpp ~1000 LOC + 17 process*Request methods +
-            // 17 request flags en EditorUI) se difiere — es un cross-file
-            // refactor de 4 capas que excede el scope cosmetico de A9.
-            // Item a abordar en su propio commit antes de Fase 3.
             ImGui::EndMenu();
         }
 

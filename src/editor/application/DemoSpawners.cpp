@@ -1,13 +1,19 @@
-// F2H24: nucleo de DemoSpawners. Cada handler vive en archivos
+// Nucleo del modulo (post-v2.0.2 cleanup). Cada handler vive en archivos
 // parciales por dominio:
-//   _Basic.cpp   — demos simples (rotator, HUD, physics box, etc.)
-//   _Stress.cpp  — demos pesados / showcase (enemy, shadow, PBR grid,
-//                  light stress, animated char, stress tris)
+//   _Basic.cpp   — spawners de features reales (Audio, PointLight,
+//                  PhysicsBox, Environment, Trigger)
+//   _Stress.cpp  — stress tests (LightStress, StressTris) en menu Debug
 //   _Prefab.cpp  — guardar/instanciar prefab
-//   _Drop.cpp    — drops del viewport (textura, mesh, material, script)
+//   _Drop.cpp    — drops del viewport (textura, mesh, material, script,
+//                  item, vehicle)
 //
 // Aca solo vive `pushCreatedEntities`, helper compartido para empujar
 // CreateEntityCommand al HistoryStack.
+//
+// Nota historica: nombre del modulo se mantiene "DemoSpawners" por costo
+// de rename (cross-CMakeLists + git mv). Tras el cleanup de demos, el
+// nombre es algo enganoso pero no bloqueante; rename queda como
+// polish opcional.
 
 #include "editor/application/EditorApplication.h"
 

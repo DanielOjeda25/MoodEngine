@@ -241,20 +241,12 @@ public:
     bool consumeDeleteSelectedRequest();
 
     // ============================================================
-    // Spawn demos (Hito 8-19, F2H42-F2H53). Bodies en EditorUI_Spawn.inl.
+    // Spawn requests (features reales + stress tests). Bodies en
+    // EditorUI_Spawn.inl. post-v2.0.2 cleanup: borrados 12 demos historicos
+    // (Rotator, HudDemo, EnemyDemo, ShadowDemo, PbrSpheres, AnimatedChar,
+    // FireParticles, DialogDemo, NarrativeDemoMap, FullStressScene,
+    // OpenDemoMap, OpenNarrativeDemo) sin entry point UI desde F2H57.
     // ============================================================
-
-    /// @brief Hito 8 — ScriptComponent(`scripts/rotator.lua`).
-    void requestSpawnRotator();
-    bool consumeSpawnRotatorRequest();
-
-    /// @brief Hito 23 Bloque 3 — enemigo demo con NavAgent.
-    void requestSpawnEnemyDemo();
-    bool consumeSpawnEnemyDemoRequest();
-
-    /// @brief Hito 20 Bloque 5 — `scripts/hud_demo.lua`.
-    void requestSpawnHudDemo();
-    bool consumeSpawnHudDemoRequest();
 
     /// @brief Hito 9 — AudioSource (beep.wav loop + 3D).
     void requestSpawnAudioSource();
@@ -272,53 +264,17 @@ public:
     void requestSpawnEnvironment();
     bool consumeSpawnEnvironmentRequest();
 
-    /// @brief Hito 16 — piso + columna + dir light castShadows=true.
-    void requestSpawnShadowDemo();
-    bool consumeSpawnShadowDemoRequest();
-
-    /// @brief Hito 17 Bloque 3 — 4 esferas PBR (gold/copper/plastic/matte).
-    void requestSpawnPbrSpheres();
-    bool consumeSpawnPbrSpheresRequest();
-
-    /// @brief Hito 18 — 64 point lights en grid 8x8 (stress Forward+).
+    /// @brief Hito 18 — 64 point lights en grid 8x8 (stress Forward+, menu Debug).
     void requestSpawnLightStress();
     bool consumeSpawnLightStressRequest();
-
-    /// @brief Hito 19 — Fox.glb con Animator (Survey/Walk/Run).
-    void requestSpawnAnimatedCharacter();
-    bool consumeSpawnAnimatedCharacterRequest();
-
-    /// @brief Hito 29 Bloque 3 — emisor partículas "fuego".
-    void requestSpawnFireParticles();
-    bool consumeSpawnFireParticlesRequest();
 
     /// @brief Hito 33 Bloque 4 — TriggerComponent (AABB 2x2x2) + script demo.
     void requestSpawnTrigger();
     bool consumeSpawnTriggerRequest();
 
-    /// @brief F2H47 — .mooddialog demo (3 nodos + 2 choices).
-    void requestSpawnDialogDemo();
-    bool consumeSpawnDialogDemoRequest();
-
-    /// @brief F2H50 Bloque A — narrative_demo.moodmap (NPC + Animator + Dialog + Trigger).
-    void requestGenerateNarrativeDemoMap();
-    bool consumeGenerateNarrativeDemoMapRequest();
-
-    /// @brief F2H42 — escena stress completa (cubos + luces + esferas + sombras + chars + particles + trigger).
-    void requestSpawnFullStressScene();
-    bool consumeSpawnFullStressSceneRequest();
-
-    /// @brief F2H2 — grid de cubos hasta el target (10k / 100k / 500k / 1M tris).
+    /// @brief F2H2 — grid de cubos hasta el target (menu Debug, 10k/100k/500k/1M tris).
     void requestSpawnStressTris(int targetTris);
     int  consumeSpawnStressTrisRequest();
-
-    /// @brief F2H44 — Welcome modal "demo onboarding" (NewProject + spawn animated char).
-    void requestOpenDemoMap();
-    bool consumeOpenDemoMapRequest();
-
-    /// @brief F2H50 Bloque C — Welcome modal narrative demo (NPC Y Bot + Dialog + Trigger).
-    void requestOpenNarrativeDemo();
-    bool consumeOpenNarrativeDemoRequest();
 
     // ============================================================
     // Project state / recents / maps (bodies en EditorUI_Project.inl).
@@ -408,9 +364,6 @@ private:
 
     ProjectAction m_projectAction = ProjectAction::None;
     bool m_hasProject = false;
-    bool m_spawnRotatorRequested = false;
-    bool m_spawnHudDemoRequested = false;
-    bool m_spawnEnemyDemoRequested = false;
     bool m_spawnAudioSourceRequested = false;
     bool m_spawnPointLightRequested = false;
     bool m_spawnPhysicsBoxRequested = false;
@@ -422,18 +375,9 @@ private:
     entt::entity m_convertModalTarget{entt::null};   // F2H57 Bloque C
     bool m_deleteSelectedRequested = false;          // F2H57 Bloque C
     bool m_spawnEnvironmentRequested = false;
-    bool m_spawnShadowDemoRequested = false; // Hito 16
-    bool m_spawnPbrSpheresRequested = false; // Hito 17
-    bool m_spawnLightStressRequested = false; // Hito 18
-    bool m_spawnAnimatedCharacterRequested = false; // Hito 19
-    bool m_openDemoMapRequested = false; // F2H44
-    bool m_openNarrativeDemoRequested = false; // F2H50 Bloque C
-    bool m_spawnFireParticlesRequested = false;     // Hito 29
+    bool m_spawnLightStressRequested = false;       // Hito 18 (menu Debug)
     bool m_spawnTriggerRequested = false;           // Hito 33
-    bool m_spawnDialogDemoRequested = false;        // F2H47
-    bool m_generateNarrativeDemoMapRequested = false; // F2H50 Bloque A
-    int  m_spawnStressTrisRequested = 0;            // F2H2 (target tris)
-    bool m_spawnFullStressSceneRequested = false;   // F2H42
+    int  m_spawnStressTrisRequested = 0;            // F2H2 (target tris, menu Debug)
     bool m_recentsDirty = false;
     std::vector<std::filesystem::path> m_recentProjects;
     std::optional<std::filesystem::path> m_openProjectPath;

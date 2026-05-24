@@ -335,28 +335,6 @@ void EditorApplication::pumpUiRequests() {
         case ProjectAction::None:           break;
     }
 
-    // F2H44: Welcome modal demo. Crea proyecto vacio + spawnea Fox.
-    // Sincronia: handleNewProject bloquea con un pfd::save_file dialog;
-    // cuando retorna ya hay m_project (o el dev cancelo). Si hubo proyecto
-    // creado, agendamos el spawn via flag — la dispatch de spawners corre
-    // mas abajo en el mismo frame.
-    if (m_ui.consumeOpenDemoMapRequest()) {
-        handleNewProject();
-        if (m_project.has_value()) {
-            m_ui.requestSpawnAnimatedCharacter();
-        }
-    }
-
-    // F2H50 Bloque C: Welcome modal — demo narrativo. Crea proyecto fresco
-    // y agenda la generacion/apertura del narrative_demo.moodmap (genera
-    // el .moodmap + el .mooddialog si faltan, despues lo abre).
-    if (m_ui.consumeOpenNarrativeDemoRequest()) {
-        handleNewProject();
-        if (m_project.has_value()) {
-            m_ui.requestGenerateNarrativeDemoMap();
-        }
-    }
-
     // F2H8: open map request (con payload del path).
     if (auto openMap = m_ui.consumeOpenMapRequest()) {
         handleOpenMap(*openMap);
@@ -394,30 +372,18 @@ void EditorApplication::pumpUiRequests() {
 // drops desde AssetBrowser) + delete + convert modal + interacciones
 // de viewport. Es el bloque mas grande de run() pre-split.
 void EditorApplication::pumpSpawnAndDropRequests() {
-    // Demo Hito 8: "Ayuda > Agregar rotador demo". Crea una entidad
-    // flotante sobre el centro del mapa con ScriptComponent apuntando a
-    // assets/scripts/rotator.lua. Util para validar el ScriptSystem sin
-    // tocar el mapa ni el serializer.
-    // Demos del menu Ayuda + handlers de drag&drop al viewport. Hito 16:
-    // implementaciones movidas a `DemoSpawners.cpp` para mantener `run()`
-    // legible.
-    // F2H42: full stress scene PRIMERO — setea flags individuales que los
-    // process*Request de abajo consumen en este mismo frame.
-    processSpawnFullStressSceneRequest();
-    processSpawnRotatorRequest();
-    processSpawnHudDemoRequest();
-    processSpawnEnemyDemoRequest();
+    // Handlers de spawn (features reales en menu/Welcome) + drops del
+    // viewport. Cada process*Request consume su flag y, si lo encontro
+    // seteado, materializa la entidad. post-v2.0.2: los 10 handlers demo
+    // historicos (Rotator, HudDemo, EnemyDemo, ShadowDemo, PbrSpheres,
+    // AnimatedCharacter, FireParticles, DialogDemo, NarrativeDemoMap,
+    // FullStressScene) fueron borrados — muletas de desarrollo de Fase 1-2
+    // sin entry point UI desde F2H57.
     processSpawnPhysicsBoxRequest();
     processSpawnEnvironmentRequest();
-    processSpawnShadowDemoRequest();
-    processSpawnPbrSpheresRequest();
-    processSpawnLightStressRequest();
-    processSpawnAnimatedCharacterRequest();
-    processSpawnFireParticlesRequest();
+    processSpawnLightStressRequest();      // stress test (menu Debug)
     processSpawnTriggerRequest();
-    processSpawnDialogDemoRequest();  // F2H47
-    processGenerateNarrativeDemoMapRequest();  // F2H50 Bloque A
-    processSpawnStressTrisRequest();
+    processSpawnStressTrisRequest();       // stress test (menu Debug)
     processSpawnPointLightRequest();
     processSpawnAudioSourceRequest();
     processSavePrefabRequest();

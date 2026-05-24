@@ -281,28 +281,21 @@ private:
     ///        puede proceder, `false` si hay que abortarla.
     bool confirmDiscardChanges();
 
-    // Hito 16 refactor: handlers de spawn demos (menu Ayuda) y drops
-    // del viewport. Implementaciones en `DemoSpawners.cpp`. Cada uno
-    // hace su propio `consume*Request` y, si hay request pendiente,
-    // crea/edita la entidad correspondiente. No-op si la condicion no
-    // se cumple (sin scene, etc.).
-    void processSpawnRotatorRequest();
-    void processSpawnHudDemoRequest(); // Hito 20 Bloque 5
-    void processSpawnEnemyDemoRequest(); // Hito 23 Bloque 3
+    // Handlers de spawn (features reales) y drops del viewport.
+    // Implementaciones en `DemoSpawners_*.cpp`. Cada uno hace su propio
+    // `consume*Request` y, si hay request pendiente, crea la entidad
+    // correspondiente. No-op si la condicion no se cumple (sin scene, etc.).
+    // post-v2.0.2 (cleanup): los handlers demo (Rotator, HudDemo, EnemyDemo,
+    // ShadowDemo, PbrSpheres, AnimatedCharacter, FireParticles, DialogDemo,
+    // NarrativeDemoMap, FullStressScene) fueron borrados — muletas de
+    // desarrollo de Fase 1-2 sin entry point UI desde F2H57.
     void processSpawnAudioSourceRequest();
     void processSpawnPointLightRequest();
     void processSpawnPhysicsBoxRequest();
     void processSpawnEnvironmentRequest();
-    void processSpawnShadowDemoRequest();
-    void processSpawnPbrSpheresRequest();
-    void processSpawnLightStressRequest();
-    void processSpawnAnimatedCharacterRequest(); // Hito 19
-    void processSpawnFireParticlesRequest();     // Hito 29
+    void processSpawnLightStressRequest();       // stress test (menu Debug)
     void processSpawnTriggerRequest();           // Hito 33
-    void processSpawnDialogDemoRequest();        // F2H47
-    void processGenerateNarrativeDemoMapRequest(); // F2H50 Bloque A
-    void processSpawnStressTrisRequest();        // F2H2
-    void processSpawnFullStressSceneRequest();   // F2H42
+    void processSpawnStressTrisRequest();        // F2H2 (menu Debug)
 
     /// @brief Hito 28: empaqueta una creacion (spawn / drop) como
     ///        `CreateEntityCommand` y la empuja al `m_history`. El

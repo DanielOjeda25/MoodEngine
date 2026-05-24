@@ -1,8 +1,12 @@
 #pragma once
 
-// F2H24: helpers compartidos por los archivos parciales de
-// DemoSpawners (DemoSpawners.cpp + DemoSpawners_*.cpp). Header
-// privado del modulo — no incluir desde otro modulo.
+// Helpers compartidos por DemoSpawners_*.cpp (header privado del modulo —
+// no incluir desde otro modulo).
+//
+// post-v2.0.2 cleanup: ensureDemoIntroDialogExists() borrado junto con los
+// handlers Dialog/Narrative demo que lo usaban. attachSiblingAnimClips
+// sigue vivo porque lo consume processViewportMeshDrop (drag&drop de un
+// .glb/.fbx con esqueleto al viewport).
 
 #include "core/Types.h"
 
@@ -10,7 +14,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <filesystem>
 #include <limits>
 #include <string>
 
@@ -31,15 +34,6 @@ namespace Mood::detail {
 void attachSiblingAnimClips(AssetManager& am,
                               const std::string& meshLogicalPath,
                               AnimatorComponent& outAnim);
-
-/// @brief F2H50 Bloque A: asegura que el `.mooddialog` demo exista en disco.
-///        Si no existe, genera 3 nodos (saludo + 2 ramas) y lo guarda.
-///        Compartido entre el handler "Cargar dialogo demo" (que despues
-///        abre el DialogEditor) y el handler "Cargar demo narrativo" (que
-///        lo usa como dependencia del NPC de la escena).
-///        Devuelve true si el archivo existe al retornar (ya estaba o se
-///        creo ok), false si la generacion fallo (loguea el motivo).
-bool ensureDemoIntroDialogExists(const std::filesystem::path& demoPath);
 
 
 // Hito 23: rota un AABB por un Euler en orden YXZ (mismo que
