@@ -27,6 +27,7 @@
 #include "editor/panels/narrative/DialogNodeInspectorPanel.h"  // F2H47
 #include "editor/panels/inventory/ItemBrowserPanel.h"          // F2H51
 #include "editor/panels/inventory/ItemPropertyEditorPanel.h"   // F2H51
+#include "editor/panels/project/ProjectSettingsPanel.h"        // F3H1
 #include "editor/panels/quest/QuestBrowserPanel.h"             // F2H53
 #include "editor/panels/quest/QuestPropertyEditorPanel.h"      // F2H53
 #include "editor/panels/scene/InspectorPanel.h"
@@ -49,6 +50,7 @@
 namespace Mood {
 
 class Scene;
+struct Project;  // F3H1 (forward-decl; ProjectSerializer.h define la struct)
 
 class EditorUI {
 public:
@@ -277,6 +279,33 @@ public:
     bool hasProject() const { return m_hasProject; }
     void setHasProject(bool v) { m_hasProject = v; }
 
+    /// @brief F3H1: puntero NON-OWNING al `Project` activo. Lo setea
+    ///        `EditorApplication::updateWindowTitle` cada vez que cambia
+    ///        el estado del proyecto (load / new / close). nullptr si no
+    ///        hay proyecto. Usado por ProjectSettingsPanel para
+    ///        leer/mutar settings directo en el Project del editor.
+    void setCurrentProject(Project* p) { m_currentProject = p; }
+    Project* currentProject() { return m_currentProject; }
+
+    /// @brief F3H1: request que el proyecto se marque dirty (asterisco en
+    ///        titlebar + sin-guardar en status bar). Mismo patron
+    ///        request/consume que otros flags single-frame. Lo dispara
+    ///        ProjectSettingsPanel al editar fields; EditorApplication lo
+    ///        consume en pumpUiRequests y llama `markDirty()`.
+    void requestProjectDirty() { m_projectDirtyRequested = true; }
+    bool consumeProjectDirtyRequest() {
+        const bool r = m_projectDirtyRequested;
+        m_projectDirtyRequested = false;
+        return r;
+    }
+
+    /// @brief F3H1: abre el panel Project Settings (lo dispara MenuBar
+    ///        desde `Edit > Project Settings...`). Como el panel es
+    ///        miembro de EditorUI, mutamos directo su flag visible — no
+    ///        hace falta pasar por request/consume (el panel state vive
+    ///        aca, no en EditorApplication).
+    void requestShowProjectSettings() { m_projectSettings.visible = true; }
+
     /// @brief Lista de proyectos recientes (mostrada en Welcome modal).
     void setRecentProjects(std::vector<std::filesystem::path> paths);
     void eraseRecent(const std::filesystem::path& path);
@@ -326,6 +355,7 @@ private:
     ScriptEditorPanel m_scriptEditor;  // Hito 28 F
     MaterialEditorPanel m_materialEditor;  // Hito 42
     ShaderGraphEditorPanel m_shaderGraphEditor;  // F2H62 Bloque C
+    ProjectSettingsPanel m_projectSettings;  // F3H1
     Toolbar m_toolbar;  // F2H22
     MapEditorTopBar m_mapEditorTopBar;  // F2H30
     VisGroupsPanel m_visGroupsPanel;  // F2H33
@@ -365,6 +395,9 @@ private:
     std::vector<std::filesystem::path> m_projectMaps;       // F2H8
     std::filesystem::path m_currentMapPath;
     std::filesystem::path m_defaultMapPath;
+
+    Project* m_currentProject = nullptr;        // F3H1 (non-owning)
+    bool m_projectDirtyRequested = false;       // F3H1
 
     /// @brief Dibuja un modal bloqueante con [Nuevo Proyecto] [Abrir Proyecto]
     ///        + lista de recientes. SOLO cuando `m_hasProject == false`.

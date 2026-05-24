@@ -77,6 +77,87 @@ TEST_CASE("ProjectSerializer: round-trip de un proyecto con 2 mapas") {
     nukeDir(root);
 }
 
+TEST_CASE("ProjectSerializer F3H1: settings roundtrip preservan los fields") {
+    const auto root = tempDir("settings_roundtrip");
+    nukeDir(root);
+    fs::create_directories(root);
+
+    Project original;
+    original.root       = root;
+    original.name       = "ConSettings";
+    original.defaultMap = "maps/default.moodmap";
+    original.maps       = {"maps/default.moodmap"};
+    original.settings.targetFps   = 144;
+    original.settings.description = "Demo F3H1";
+
+    CHECK_NOTHROW(ProjectSerializer::save(original));
+
+    const auto path = root / "ConSettings.moodproj";
+    const auto loaded = ProjectSerializer::load(path);
+    REQUIRE(loaded.has_value());
+    CHECK(loaded->settings.targetFps == 144);
+    CHECK(loaded->settings.description == "Demo F3H1");
+
+    nukeDir(root);
+}
+
+TEST_CASE("ProjectSerializer F3H1: defaults no escriben 'settings' al .moodproj") {
+    const auto root = tempDir("settings_omit_defaults");
+    nukeDir(root);
+    fs::create_directories(root);
+
+    Project original;
+    original.root       = root;
+    original.name       = "SinSettings";
+    original.defaultMap = "maps/default.moodmap";
+    original.maps       = {"maps/default.moodmap"};
+    // settings sin tocar = todos default → no debe aparecer "settings"
+
+    CHECK_NOTHROW(ProjectSerializer::save(original));
+
+    const auto path = root / "SinSettings.moodproj";
+    nlohmann::json j;
+    {
+        std::ifstream in(path);
+        in >> j;
+    }
+    CHECK_FALSE(j.contains("settings"));
+    // pero al cargar igual hay defaults disponibles
+    const auto loaded = ProjectSerializer::load(path);
+    REQUIRE(loaded.has_value());
+    CHECK(loaded->settings.targetFps == 60);
+    CHECK(loaded->settings.description.empty());
+
+    nukeDir(root);
+}
+
+TEST_CASE("ProjectSerializer F3H1: back-compat con .moodproj pre-F3H1 (sin 'settings')") {
+    const auto root = tempDir("settings_back_compat");
+    nukeDir(root);
+    fs::create_directories(root);
+
+    // Escribimos un .moodproj a mano sin la key "settings" (simula proyectos
+    // creados en Fase 2 antes de que existiera el subobject).
+    const auto path = root / "preF3H1.moodproj";
+    nlohmann::json j;
+    j["version"]    = k_MoodprojFormatVersion;
+    j["name"]       = "preF3H1";
+    j["defaultMap"] = "maps/default.moodmap";
+    j["maps"]       = nlohmann::json::array({"maps/default.moodmap"});
+    {
+        std::ofstream out(path);
+        out << j.dump(2);
+    }
+
+    const auto loaded = ProjectSerializer::load(path);
+    REQUIRE(loaded.has_value());
+    // settings vienen con defaults sin warnings
+    CHECK(loaded->settings.targetFps == 60);
+    CHECK(loaded->settings.description.empty());
+
+    nukeDir(root);
+}
+
 TEST_CASE("ProjectSerializer: load archivo inexistente -> nullopt") {
     const auto path = tempDir("nope") / "no_existe.moodproj";
     CHECK_FALSE(ProjectSerializer::load(path).has_value());

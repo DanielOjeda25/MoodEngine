@@ -14,6 +14,7 @@
 // Todos los paths son relativos a la carpeta del `.moodproj`.
 
 #include "core/Types.h"  // f32 (Hito 40 G)
+#include "engine/project/ProjectSettings.h"  // F3H1
 #include "engine/project/Workspace.h"  // F2H7 (movido a engine/project en AUDIT-3)
 
 #include <filesystem>
@@ -48,6 +49,12 @@ struct Project {
     /// perspective + ortos. Default true. Persistido por proyecto solo
     /// si difiere del default (mismo patron que coyoteWindowSec).
     bool showEntityLabels = true;
+
+    /// F3H1: configuracion editable desde el panel "Project Settings".
+    /// Vive en .moodproj bajo la key "settings". Solo se persiste si
+    /// algun field difiere del default (mismo patron back-compat que el
+    /// resto de fields opcionales arriba). Ver `ProjectSettings.h`.
+    ProjectSettings settings;
 };
 
 class ProjectSerializer {

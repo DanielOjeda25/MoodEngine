@@ -52,6 +52,17 @@ void ProjectSerializer::save(const Project& project) {
         j["showEntityLabels"] = project.showEntityLabels;
     }
 
+    // F3H1: subobject "settings" — solo se persiste si algun field difiere
+    // del default (toJson devuelve object vacio para defaults). Mantiene
+    // .moodproj limpios para proyectos basicos. Schema sin bump: agregar
+    // settings nuevos no rompe .moodproj viejos.
+    {
+        nlohmann::json js = toJson(project.settings);
+        if (!js.empty()) {
+            j["settings"] = std::move(js);
+        }
+    }
+
     // F2H7: workspaces — solo persistir si la lista no esta vacia (proyectos
     // nuevos los inicializan al abrirse via WorkspaceManager defaults).
     if (!project.workspaces.empty()) {
@@ -116,6 +127,13 @@ std::optional<Project> ProjectSerializer::load(const std::filesystem::path& mood
         // F2H35 Bloque E: toggle Nombres opcional. Ausente = default true.
         if (j.contains("showEntityLabels")) {
             p.showEntityLabels = j.at("showEntityLabels").get<bool>();
+        }
+
+        // F3H1: subobject "settings" opcional. Ausente = defaults del
+        // struct. Forward-compat: keys nuevas que el codigo viejo no
+        // conoce se ignoran en silencio dentro de `projectSettingsFromJson`.
+        if (j.contains("settings")) {
+            p.settings = projectSettingsFromJson(j.at("settings"));
         }
 
         // F2H7: workspaces opcionales. Si no estan, queda vacio y el

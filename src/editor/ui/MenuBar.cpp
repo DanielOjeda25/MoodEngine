@@ -166,6 +166,15 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             if (ImGui::MenuItem(I18n::T("editor.menu.edit.preferences").c_str())) {
                 m_showPreferencesPopup = true;
             }
+            // F3H1: Project Settings — togglea la visibilidad del panel
+            // dockeable. Disabled si no hay proyecto activo (el panel
+            // tampoco renderea fields sin Project, pero el toggle es mas
+            // claro para el dev cuando esta deshabilitado a nivel menu).
+            if (ImGui::MenuItem(
+                    I18n::T("editor.menu.edit.project_settings").c_str(),
+                    nullptr, false, ui.hasProject())) {
+                ui.requestShowProjectSettings();
+            }
             ImGui::EndMenu();
         }
 
@@ -176,7 +185,7 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             // (lo mas frecuente), Assets despues, Debug al final, World
             // placeholder hasta F2H10+ (CSG).
             const char* kCategories[] = {"Scene", "Assets", "Narrative",
-                                          "Gameplay", "Debug"};
+                                          "Gameplay", "Project", "Debug"};
             for (const char* cat : kCategories) {
                 if (ImGui::BeginMenu(cat)) {
                     bool any = false;

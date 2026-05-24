@@ -340,6 +340,14 @@ void EditorApplication::pumpUiRequests() {
         handleOpenMap(*openMap);
     }
 
+    // F3H1: el ProjectSettingsPanel (u otros editores per-proyecto futuros)
+    // pueden pedir marcar dirty tras editar campos. Lo aplicamos aca, dentro
+    // del bloque que requiere proyecto activo no es necesario porque
+    // `markDirty` ya checkea `m_project.has_value()`.
+    if (m_ui.consumeProjectDirtyRequest()) {
+        markDirty();
+    }
+
     // F2H12: boolean op request (con payload kind + entity B).
     if (auto bopKind = m_ui.consumeBooleanOpRequest()) {
         handleBooleanOp(*bopKind);

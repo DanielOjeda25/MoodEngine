@@ -49,6 +49,12 @@ void EditorApplication::updateWindowTitle() {
     // se llama en cada transicion de m_projectDirty (markDirty / save / new /
     // open / close), asi que no hace falta polling por frame.
     m_ui.setProjectDirty(m_project.has_value() && m_projectDirty);
+    // F3H1: mismo punto de sync sirve para el puntero al proyecto que
+    // consumen panels editables (ProjectSettingsPanel). El address de un
+    // `std::optional<T>::value()` es estable mientras el optional no
+    // cambie de estado vacio↔no-vacio (lo cual SI ocurre aca; por eso el
+    // re-sync en cada transicion).
+    m_ui.setCurrentProject(m_project.has_value() ? &*m_project : nullptr);
 }
 
 void EditorApplication::markDirty() {

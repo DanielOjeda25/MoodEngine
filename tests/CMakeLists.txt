@@ -18,6 +18,7 @@ add_executable(mood_tests
     test_environment_entity.cpp                 # F2H86
     test_ray.cpp                                # AUDIT-3 (pickRayFromNdc)
     test_project_serializer.cpp
+    test_project_settings.cpp                  # F3H1
     test_scene.cpp
     test_lua.cpp
     test_lua_bindings.cpp
@@ -173,6 +174,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/EntitySerializer_Parse.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/SceneSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/ProjectSerializer.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/project/ProjectSettings.cpp  # F3H1
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/PrefabSerializer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/audio/clips/AudioClip.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/audio/device/AudioDevice.cpp
