@@ -11,7 +11,7 @@ MoodEngine es un motor gráfico 3D propio con editor visual integrado, escrito e
 - **Separación estricta entre editor y runtime.** El runtime puede correr sin el editor.
 - **Separación estricta entre motor y juego.** El motor expone una API; el juego la consume.
 - **Una sola aplicación, dos modos.** `MoodEditor.exe` corre en Editor Mode o Play Mode. `MoodPlayer.exe` solo Play.
-- **Abstracción de API gráfica (RHI).** `engine/render/backend/opengl/` es el único lugar que incluye `glad/gl.h`. El resto del motor es agnóstico de OpenGL.
+- **Abstracción de API gráfica (RHI).** `glad/gl.h` está permitido en `engine/render/` (passes, scene_renderer, preview renderers) y en los apps (editor/player) — son los sitios donde se orquestan recursos GL. La **lógica portable** del motor (assets, scene, queries, systems no-render) sigue agnóstica de OpenGL detrás de la fachada RHI (`IRenderer`/`IShader`/`ITexture`). Para un motor de un solo backend, la regla estricta "solo `backend/opengl/`" era demasiado restrictiva; rutear *todos* los passes por RHI queda como follow-up de Fase 3+ si emerge un segundo backend.
 - **Entity-Component-System** como modelo de escena (EnTT detrás de una fachada propia).
 - **Carpetas como dominios.** Cada subsistema vive en una carpeta dedicada con sub-carpetas internas (resources, queries, components, etc.). Soft-cap 500 líneas / `.cpp`, hard-cap 800.
 
@@ -25,7 +25,7 @@ src/
 ├── engine/
 │   ├── render/
 │   │   ├── rhi/               # Interfaces puras (IRenderer, IShader, ITexture, ...)
-│   │   ├── backend/opengl/    # Implementación GL (único include de glad/gl.h)
+│   │   ├── backend/opengl/    # Implementación GL (glad/gl.h también permitido en passes/scene_renderer)
 │   │   ├── pipeline/          # Fog, LightGrid (Forward+), PbrMath, ShadowMath
 │   │   ├── passes/            # (placeholder; passes viven hoy en systems/render/)
 │   │   ├── resources/         # MeshAsset, MaterialAsset
@@ -119,7 +119,7 @@ src/
 │  ┌──────────────────────┐   │
 │  │  engine/render/rhi/  │   │  ← Interfaces puras (sin GL)
 │  │  engine/render/      │   │
-│  │   backend/opengl/    │   │  ← Único lugar con glad/gl.h
+│  │   backend/opengl/    │   │  ← Implementación GL (orquestación GL también permitida en passes/scene_renderer y apps)
 │  └──────────────────────┘   │
 ├─────────────────────────────┤
 │           platform/         │  ← SDL2, ventana, VFS, filesystem
@@ -129,7 +129,7 @@ src/
 ```
 
 **Reglas operativas:**
-- `engine/render/backend/opengl/` es el **único** lugar que incluye `glad/gl.h`.
+- `glad/gl.h` está permitido en `engine/render/` (backend, passes, scene_renderer, preview renderers) y en los apps. La lógica portable del motor (assets, scene, queries, systems no-render) sigue agnóstica de GL.
 - `engine/render/rhi/` define interfaces puras, sin includes de OpenGL.
 - `editor/` puede usar `engine/` y `systems/`, pero `engine/` y `systems/` nunca incluyen nada de `editor/`.
 - `player/` puede usar `engine/` y `systems/`, pero nunca `editor/`.
