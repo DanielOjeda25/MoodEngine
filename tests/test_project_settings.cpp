@@ -125,3 +125,65 @@ TEST_CASE("Gameplay malformed: subkey no-object devuelve defaults silencioso") {
     const auto s = projectSettingsFromJson(j);
     CHECK(s.gameplay.walkSpeed == doctest::Approx(5.5f));  // default
 }
+
+// ============================================================
+// F3H5: CharacterSettings (nested struct).
+// ============================================================
+
+TEST_CASE("Character defaults: toJson no incluye subobjeto si todo default") {
+    ProjectSettings s;
+    const auto j = toJson(s);
+    CHECK(!j.contains("character"));
+}
+
+TEST_CASE("Character non-default: subobjeto incluido con solo los fields cambiados") {
+    ProjectSettings s;
+    s.character.radius = 0.6f;  // mas ancho
+    const auto j = toJson(s);
+    REQUIRE(j.contains("character"));
+    CHECK(j.at("character").contains("radius"));
+    CHECK(j.at("character").at("radius").get<f32>() == doctest::Approx(0.6f));
+    CHECK(!j.at("character").contains("half_height_stand"));  // default → no escrito
+}
+
+TEST_CASE("Character roundtrip preserva los 7 fields") {
+    ProjectSettings before;
+    before.character.halfHeightStand   = 0.6f;
+    before.character.halfHeightCrouch  = 0.15f;
+    before.character.radius            = 0.5f;
+    before.character.eyeHeightStand    = 0.8f;
+    before.character.eyeHeightCrouch   = 0.4f;
+    before.character.headbobFrequency  = 3.5f;
+    before.character.headbobAmplitude  = 0.06f;
+
+    const auto j = toJson(before);
+    const auto after = projectSettingsFromJson(j);
+
+    CHECK(after.character.halfHeightStand   == doctest::Approx(0.6f));
+    CHECK(after.character.halfHeightCrouch  == doctest::Approx(0.15f));
+    CHECK(after.character.radius            == doctest::Approx(0.5f));
+    CHECK(after.character.eyeHeightStand    == doctest::Approx(0.8f));
+    CHECK(after.character.eyeHeightCrouch   == doctest::Approx(0.4f));
+    CHECK(after.character.headbobFrequency  == doctest::Approx(3.5f));
+    CHECK(after.character.headbobAmplitude  == doctest::Approx(0.06f));
+}
+
+TEST_CASE("Character back-compat: .moodproj pre-F3H5 (sin character) carga con defaults") {
+    nlohmann::json j;
+    j["target_fps"] = 120;
+    j["gameplay"]   = {{"walk_speed", 6.0f}};  // pre-F3H5 podia tener gameplay (F3H4)
+    const auto s = projectSettingsFromJson(j);
+    CHECK(s.character.halfHeightStand   == doctest::Approx(0.5f));   // default F3H5
+    CHECK(s.character.radius            == doctest::Approx(0.4f));
+    CHECK(s.character.headbobFrequency  == doctest::Approx(3.5f));   // F2H41 tuning
+    CHECK(s.character.headbobAmplitude  == doctest::Approx(0.05f));  // F2H41 tuning
+    // gameplay tambien se carga correctamente (no interferencia entre buckets)
+    CHECK(s.gameplay.walkSpeed == doctest::Approx(6.0f));
+}
+
+TEST_CASE("Character malformed: subkey no-object devuelve defaults silencioso") {
+    nlohmann::json j;
+    j["character"] = 42;  // futuro: corrupcion / version-mismatch
+    const auto s = projectSettingsFromJson(j);
+    CHECK(s.character.radius == doctest::Approx(0.4f));  // default
+}

@@ -376,8 +376,13 @@ void EditorApplication::updateRigidBodies(f32 dt) {
             // (ver EditorPlayMode.cpp), 3.5 Hz da ~1.6 m por paso —
             // stride humana realista. Amplitud subida a 5 cm para
             // compensar la menor frecuencia y mantener visibilidad.
-            constexpr f32 k_bobFreq = 3.5f * 6.2831853f; // 3.5 Hz a rad/s
-            constexpr f32 k_bobAmp  = 0.05f;
+            // F3H5: headbob freq/amp leidos live de settings.character.
+            // Default 3.5 Hz / 0.05 m = F2H41 tuning. Conversion Hz→rad/s
+            // (2π) en el call-site.
+            const CharacterSettings k_char = m_project
+                ? m_project->settings.character : CharacterSettings{};
+            const f32 k_bobFreq = k_char.headbobFrequency * 6.2831853f;
+            const f32 k_bobAmp  = k_char.headbobAmplitude;
             const f32 bobY = std::sin(m_headbobTime * k_bobFreq) * k_bobAmp
                               * m_horizSpeed01;
             const glm::vec3 charPos = m_physicsWorld->characterPosition(m_playerCharId);

@@ -117,6 +117,12 @@ void ProjectSettingsPanel::onImGuiRender() {
             drawGameplaySection(project->settings);
             ImGui::EndTabItem();
         }
+        if (ImGui::BeginTabItem(
+                I18n::T("editor.project_settings.section.character").c_str())) {
+            ImGui::Spacing();
+            drawCharacterSection(project->settings);
+            ImGui::EndTabItem();
+        }
         ImGui::EndTabBar();
     }
 
@@ -245,6 +251,83 @@ void ProjectSettingsPanel::drawGameplaySection(ProjectSettings& settings) {
                "##jump_cooldown", "jump_cooldown",
                settings.gameplay.jumpCooldownSec, defaults.jumpCooldownSec,
                0.0f, 1.0f, "%.2f s");
+
+    ImGui::Unindent();
+}
+
+// F3H5: seccion Character (capsule + eye + headbob). 7 SliderFloat con
+// reset buttons + tooltips. Mismo patron exacto que drawGameplaySection
+// — copy-paste validado. Si llega F3H6/F3H7 con mas tabs, refactorear
+// el helper drawSlider a metodo de clase o namespace helper.
+void ProjectSettingsPanel::drawCharacterSection(ProjectSettings& settings) {
+    ImGui::Indent();
+
+    const CharacterSettings defaults;
+
+    auto drawSlider = [&](const char* keyLabel,
+                          const char* keyHint,
+                          const char* widgetId,
+                          const char* resetIdSuffix,
+                          f32& value,
+                          f32 defaultValue,
+                          f32 minVal,
+                          f32 maxVal,
+                          const char* fmt) {
+        ImGui::TextUnformatted(I18n::T(keyLabel).c_str());
+        ImGui::SameLine(kLabelColumnWidth);
+        ImGui::SetNextItemWidth(kControlWidth);
+        if (ImGui::SliderFloat(widgetId, &value, minVal, maxVal, fmt)) {
+            if (m_ui != nullptr) m_ui->requestProjectDirty();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", I18n::T(keyHint).c_str());
+        }
+        if (resetButton(resetIdSuffix, value, defaultValue)) {
+            if (m_ui != nullptr) m_ui->requestProjectDirty();
+        }
+    };
+
+    drawSlider("editor.project_settings.character.half_height_stand",
+               "editor.project_settings.character.half_height_stand_hint",
+               "##half_height_stand", "half_height_stand",
+               settings.character.halfHeightStand, defaults.halfHeightStand,
+               0.25f, 1.25f, "%.2f m");
+
+    drawSlider("editor.project_settings.character.half_height_crouch",
+               "editor.project_settings.character.half_height_crouch_hint",
+               "##half_height_crouch", "half_height_crouch",
+               settings.character.halfHeightCrouch, defaults.halfHeightCrouch,
+               0.05f, 0.75f, "%.2f m");
+
+    drawSlider("editor.project_settings.character.radius",
+               "editor.project_settings.character.radius_hint",
+               "##char_radius", "char_radius",
+               settings.character.radius, defaults.radius,
+               0.2f, 1.0f, "%.2f m");
+
+    drawSlider("editor.project_settings.character.eye_height_stand",
+               "editor.project_settings.character.eye_height_stand_hint",
+               "##eye_height_stand", "eye_height_stand",
+               settings.character.eyeHeightStand, defaults.eyeHeightStand,
+               0.0f, 1.5f, "%.2f m");
+
+    drawSlider("editor.project_settings.character.eye_height_crouch",
+               "editor.project_settings.character.eye_height_crouch_hint",
+               "##eye_height_crouch", "eye_height_crouch",
+               settings.character.eyeHeightCrouch, defaults.eyeHeightCrouch,
+               0.0f, 0.8f, "%.2f m");
+
+    drawSlider("editor.project_settings.character.headbob_frequency",
+               "editor.project_settings.character.headbob_frequency_hint",
+               "##headbob_freq", "headbob_freq",
+               settings.character.headbobFrequency, defaults.headbobFrequency,
+               0.5f, 10.0f, "%.1f Hz");
+
+    drawSlider("editor.project_settings.character.headbob_amplitude",
+               "editor.project_settings.character.headbob_amplitude_hint",
+               "##headbob_amp", "headbob_amp",
+               settings.character.headbobAmplitude, defaults.headbobAmplitude,
+               0.0f, 0.2f, "%.3f m");
 
     ImGui::Unindent();
 }

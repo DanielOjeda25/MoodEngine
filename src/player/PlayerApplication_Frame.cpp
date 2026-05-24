@@ -169,9 +169,11 @@ void PlayerApplication::updateCamera(f32 dt) {
     // Hito 30: capsule del jugador. Standing total height = 1.8m;
     // crouching = 1.0m. eyeOffset (ojos respecto al CENTRO de capsule)
     // depende del shape activo.
-    constexpr f32 k_charHalfHeightStand    = 0.5f;
-    constexpr f32 k_charHalfHeightCrouch   = 0.1f;
-    constexpr f32 k_charRadius             = 0.4f;
+    // F3H5: capsule dimensions leidas de settings.character (capturado
+    // en m_character al load — gemelo de m_gameplay de F3H4).
+    const f32 k_charHalfHeightStand    = m_character.halfHeightStand;
+    const f32 k_charHalfHeightCrouch   = m_character.halfHeightCrouch;
+    const f32 k_charRadius             = m_character.radius;
     // Hito 40 G: per-proyecto via .moodproj — capturados al cargar.
     const f32 k_coyoteWindow     = m_coyoteWindowSec;
     const f32 k_jumpBufferWindow = m_jumpBufferWindowSec;
@@ -211,7 +213,7 @@ void PlayerApplication::updateCamera(f32 dt) {
     // hay que ajustar manualmente para mantener la base al ras del
     // piso. El delta del centro = standHalf - crouchHalf = 0.4.
     const bool wantCrouch = !dialogLocked && keys[SDL_SCANCODE_LCTRL] != 0;
-    constexpr f32 k_centerDelta = k_charHalfHeightStand - k_charHalfHeightCrouch;
+    const f32 k_centerDelta = k_charHalfHeightStand - k_charHalfHeightCrouch;  // F3H5: runtime ahora
     if (wantCrouch && !m_crouching) {
         // Crouch: shape primero, luego bajar el centro (la capsule
         // chiquita queda con su base al ras de donde estaba antes).
@@ -414,11 +416,15 @@ void PlayerApplication::updateRigidBodies(f32 dt) {
         // Hito 30: sync cámara con la pos del character post-step.
         // Hito 31 D: eye Y interpola con m_crouchVisualT + headbob.
         if (m_playerCharId != 0) {
-            constexpr f32 k_eyeStanding = 0.5f + 0.4f - 0.2f;  // 0.7
-            constexpr f32 k_eyeCrouched = 0.1f + 0.4f - 0.2f;  // 0.3
+            // F3H5: eye + headbob leidos de settings.character (capturado
+            // en m_character al load). Cierra desync Editor↔Player:
+            // pre-F3H5 el Player tenia freq 5.0/amp 0.04 mientras Editor
+            // (F2H41) tuneó a 3.5/0.05. Ahora ambos leen del mismo source.
+            const f32 k_eyeStanding = m_character.eyeHeightStand;
+            const f32 k_eyeCrouched = m_character.eyeHeightCrouch;
             const f32 eye = glm::mix(k_eyeStanding, k_eyeCrouched, m_crouchVisualT);
-            constexpr f32 k_bobFreq = 5.0f * 6.2831853f;
-            constexpr f32 k_bobAmp  = 0.04f;
+            const f32 k_bobFreq = m_character.headbobFrequency * 6.2831853f;
+            const f32 k_bobAmp  = m_character.headbobAmplitude;
             // Hito 34 D: la amplitud escala con la velocidad horizontal
             // del frame [0..1]. Caminando full-speed = bob completo;
             // crouched (~0.5) = bob sutil; quieto = sin bob.

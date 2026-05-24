@@ -123,6 +123,10 @@ private:
     // F3H4: gameplay tier 1 leido del `.moodproj > settings.gameplay`.
     // Defaults coinciden con el struct (5.5/3.0/5.5/0.2 — convencion FPS).
     GameplaySettings m_gameplay;
+    // F3H5: character controller (capsule + eye + headbob) leido del
+    // `.moodproj > settings.character`. Cierra otra desync Editor↔Player
+    // detectada en F3H5 (headbob 3.5 Hz en Editor / 5.0 Hz en Player).
+    CharacterSettings m_character;
     // Hito 31 D: crouch lerp visual + headbob (paridad con EditorApplication).
     f32 m_crouchVisualT = 0.0f;
     f32 m_headbobTime   = 0.0f;

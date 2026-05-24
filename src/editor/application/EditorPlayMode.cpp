@@ -486,9 +486,13 @@ void EditorApplication::updateMountPromptHint() {
 // primer tick. Asume early-returns de pausa/physicsWorld ya pasados.
 void EditorApplication::updateOnFootCharController(f32 dt) {
     // Hito 30: shape standing/crouching + lazy create.
-    constexpr f32 k_charHalfHeightStand  = 0.5f;
-    constexpr f32 k_charHalfHeightCrouch = 0.1f;
-    constexpr f32 k_charRadius           = 0.4f;
+    // F3H5: capsule dimensions leidas live de settings.character (dev
+    // edita y siente al proximo tick). Defaults coinciden con Hito 30.
+    const CharacterSettings k_char = m_project ? m_project->settings.character
+                                                : CharacterSettings{};
+    const f32 k_charHalfHeightStand  = k_char.halfHeightStand;
+    const f32 k_charHalfHeightCrouch = k_char.halfHeightCrouch;
+    const f32 k_charRadius           = k_char.radius;
     // Hito 40 G: ventanas del char controller editables per-proyecto
     // (ver `.moodproj`). Si no hay project cargado, usa los defaults
     // del Hito 34 C.
@@ -530,7 +534,7 @@ void EditorApplication::updateOnFootCharController(f32 dt) {
     // pos manual para mantener base al ras (mismo patron que en
     // PlayerApplication).
     const bool wantCrouch = keys[SDL_SCANCODE_LCTRL] != 0;
-    constexpr f32 k_centerDelta = k_charHalfHeightStand - k_charHalfHeightCrouch;
+    const f32 k_centerDelta = k_charHalfHeightStand - k_charHalfHeightCrouch;  // F3H5: runtime ahora
     if (wantCrouch && !m_crouching) {
         if (m_physicsWorld->setCharacterShape(m_playerCharId,
                                                 k_charHalfHeightCrouch,

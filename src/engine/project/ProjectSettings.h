@@ -20,6 +20,48 @@
 
 namespace Mood {
 
+/// F3H5: configuracion del character controller per-proyecto. Capsule
+/// dimensions + eye height (offset desde centro de capsule) + headbob.
+/// Defaults coinciden con los literales del Hito 30 (capsule) + F2H41
+/// (headbob/eye). Migrados aca para que el dev pueda tunear el "feel"
+/// del personaje sin recompilar (un proyecto FPS arcade quiere capsule
+/// mas chica y headbob mas fuerte; uno realista quiere lo opuesto).
+struct CharacterSettings {
+    /// Half-height del capsule del player en standing en metros. Total
+    /// height = (halfHeight + radius) * 2. Default 0.5 → standing 1.8m
+    /// con radio 0.4.
+    f32 halfHeightStand = 0.5f;
+
+    /// Half-height del capsule en crouching. Default 0.1 → crouch 1.0m.
+    f32 halfHeightCrouch = 0.1f;
+
+    /// Radio del capsule en metros (no cambia entre standing/crouch).
+    /// Default 0.4 — pasa por puertas standard FPS.
+    f32 radius = 0.4f;
+
+    /// Altura de los ojos desde el centro del capsule en standing, en
+    /// metros. Default 0.7. El eyeOffset real lo calcula el char
+    /// controller como `halfHeight + radius - 0.2` — el `-0.2` queda
+    /// hardcoded por ahora (anotado en HARDCODED_AUDIT.md, futuro hito
+    /// lo expone como `eyeOffsetBias`).
+    f32 eyeHeightStand = 0.7f;
+
+    /// Altura de los ojos en crouching. Default 0.3.
+    f32 eyeHeightCrouch = 0.3f;
+
+    /// Frecuencia del headbob en Hz. Default 3.5 — F2H41 cambio de 5.0
+    /// a 3.5 explicitamente: "stride humana realista (~1.6m por paso a
+    /// walkSpeed 5.5)". El Player runtime quedo en 5.0 pre-F3H5; F3H5
+    /// unifica via single source of truth (mismo bug latente que walk
+    /// speed cerrado en F3H3).
+    f32 headbobFrequency = 3.5f;
+
+    /// Amplitud del headbob en metros. Default 0.05 — F2H41 subio de
+    /// 0.04 a 0.05 para "compensar la menor frecuencia y mantener
+    /// visibilidad" tras bajar freq. Mismo unify Editor<->Player en F3H5.
+    f32 headbobAmplitude = 0.05f;
+};
+
 /// F3H4: configuracion de gameplay per-proyecto. Defaults coinciden con
 /// el tuning de F2H41 (walk 5.5 m/s estilo HL2/CoD/Doom). Tras F3H3 fix,
 /// Player y Editor leen ambos de aqui (paridad garantizada por un solo
@@ -52,6 +94,9 @@ struct ProjectSettings {
 
     /// F3H4: gameplay tier 1 (walk/crouch/jump).
     GameplaySettings gameplay;
+
+    /// F3H5: character controller (capsule + eye + headbob).
+    CharacterSettings character;
 
     // Sub-secciones futuras (SpawnDefaults / Rendering / Physics) se
     // agregan como structs anidadas cuando entren hitos que las llenen.

@@ -241,6 +241,8 @@ bool PlayerApplication::tryLoadGameManifest() {
     // F3H4: gameplay tier 1 (walk/crouch/jump). Captura al load igual
     // que coyote/jumpBuffer — el Player no tiene UI para editar live.
     m_gameplay = loaded->settings.gameplay;
+    // F3H5: character controller (capsule + eye + headbob).
+    m_character = loaded->settings.character;
 
     Log::engine()->info(
         "MoodPlayer: proyecto '{}' cargado ({} entidades persistidas)",
