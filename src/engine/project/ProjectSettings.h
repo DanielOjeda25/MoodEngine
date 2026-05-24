@@ -5,8 +5,8 @@
 //
 // Regla "nada hardcodeado" de Fase 3: cualquier valor de comportamiento
 // que el dev deberia poder tunear sin recompilar entra aca. F3H1 es el
-// chasis (2 fields prueba: targetFps + description); F3H4+ migra
-// hardcodes existentes (spawn defaults, lighting defaults, etc.).
+// chasis (1 field prueba: targetFps); hitos siguientes migran hardcodes
+// existentes (spawn defaults, lighting defaults, etc.).
 //
 // Back-compat: campos opcionales (solo se persisten si != default).
 // Schema sin bump: agregar fields nuevos no rompe .moodproj viejos
@@ -18,26 +18,19 @@
 
 #include <nlohmann/json_fwd.hpp>
 
-#include <string>
-
 namespace Mood {
 
 struct ProjectSettings {
     // === General ===
 
-    /// FPS objetivo del runtime. NO se consume todavia: F3H1 solo
-    /// almacena el valor; el cap real (frame pacing) entra en F3H4+
-    /// cuando se cableee al frame loop.
+    /// FPS objetivo del runtime. F3H1 solo almacena el valor; el cap
+    /// real (frame pacing) se cabllea cuando se migre el `Window`
+    /// hardcoded a leer de aca (hito siguiente).
     int targetFps = 60;
 
-    /// Descripcion libre del proyecto (autor, proposito, notas).
-    /// Vacio por default; persistido solo si no-vacio.
-    std::string description;
-
-    // === Sub-secciones futuras (placeholder, vacias en F3H1) ===
-    // SpawnDefaults spawnDefaults;     // F3H4
-    // RenderingSettings rendering;     // F3H4
-    // PhysicsSettings physics;         // F3H4
+    // Sub-secciones futuras (SpawnDefaults / Rendering / Physics) se
+    // agregan como structs anidadas cuando entren hitos que las llenen.
+    // No agregar placeholders vacios — solo lo que se usa hoy.
 };
 
 /// @brief Serializa los settings a JSON. Solo escribe fields que

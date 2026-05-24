@@ -87,8 +87,7 @@ TEST_CASE("ProjectSerializer F3H1: settings roundtrip preservan los fields") {
     original.name       = "ConSettings";
     original.defaultMap = "maps/default.moodmap";
     original.maps       = {"maps/default.moodmap"};
-    original.settings.targetFps   = 144;
-    original.settings.description = "Demo F3H1";
+    original.settings.targetFps = 144;
 
     CHECK_NOTHROW(ProjectSerializer::save(original));
 
@@ -96,7 +95,6 @@ TEST_CASE("ProjectSerializer F3H1: settings roundtrip preservan los fields") {
     const auto loaded = ProjectSerializer::load(path);
     REQUIRE(loaded.has_value());
     CHECK(loaded->settings.targetFps == 144);
-    CHECK(loaded->settings.description == "Demo F3H1");
 
     nukeDir(root);
 }
@@ -126,7 +124,6 @@ TEST_CASE("ProjectSerializer F3H1: defaults no escriben 'settings' al .moodproj"
     const auto loaded = ProjectSerializer::load(path);
     REQUIRE(loaded.has_value());
     CHECK(loaded->settings.targetFps == 60);
-    CHECK(loaded->settings.description.empty());
 
     nukeDir(root);
 }
@@ -153,7 +150,6 @@ TEST_CASE("ProjectSerializer F3H1: back-compat con .moodproj pre-F3H1 (sin 'sett
     REQUIRE(loaded.has_value());
     // settings vienen con defaults sin warnings
     CHECK(loaded->settings.targetFps == 60);
-    CHECK(loaded->settings.description.empty());
 
     nukeDir(root);
 }

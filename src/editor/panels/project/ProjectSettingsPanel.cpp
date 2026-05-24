@@ -7,15 +7,53 @@
 
 #include <imgui.h>
 
-#include <algorithm>
-#include <cstdio>
-#include <cstring>
+#include <string>
 
 namespace Mood {
 
+namespace {
+
+// Presets de Target FPS (estilo Unity Quality > Target Frame Rate). Si
+// el .moodproj trae un valor que no esta en esta lista (caso edge: dev
+// edito el JSON a mano), se prepende como una entry extra "Personalizado"
+// para no perder el valor — el dev puede seguir editandolo solo via JSON
+// hasta que aparezca un control de input numerico en hitos siguientes.
+constexpr int kFpsPresets[]   = {30, 60, 120, 144};
+constexpr int kFpsPresetCount = 4;
+const char*   kFpsLabels[]    = {"30 FPS", "60 FPS", "120 FPS", "144 FPS"};
+
+int findPresetIndex(int targetFps) {
+    for (int i = 0; i < kFpsPresetCount; ++i) {
+        if (kFpsPresets[i] == targetFps) return i;
+    }
+    return -1;  // no es un preset estandar
+}
+
+// Layout estilo Unity: label a la izquierda con ancho fijo, control a
+// la derecha. Hint debajo en color disabled.
+constexpr float kLabelColumnWidth = 160.0f;
+constexpr float kControlWidth     = 200.0f;
+
+} // namespace
+
 void ProjectSettingsPanel::onImGuiRender() {
     if (!visible) return;
-    if (!ImGui::Begin(name(), &visible)) {
+
+    // Ventana flotante centrada + tamano fijo, no dockeable, sin
+    // resize/collapse — estilo Unity Project Settings.
+    const ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos(
+        ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
+        ImGuiCond_Appearing,
+        ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(540.0f, 360.0f), ImGuiCond_Always);
+
+    constexpr ImGuiWindowFlags kFlags =
+        ImGuiWindowFlags_NoResize
+        | ImGuiWindowFlags_NoCollapse
+        | ImGuiWindowFlags_NoDocking;
+
+    if (!ImGui::Begin(name(), &visible, kFlags)) {
         ImGui::End();
         return;
     }
@@ -28,77 +66,67 @@ void ProjectSettingsPanel::onImGuiRender() {
         return;
     }
 
-    if (ImGui::BeginTabBar("##project_settings_tabs")) {
-        if (ImGui::BeginTabItem(I18n::T("editor.project_settings.tab.general").c_str())) {
-            drawGeneralTab(project->settings);
-            ImGui::EndTabItem();
-        }
-        if (ImGui::BeginTabItem(I18n::T("editor.project_settings.tab.spawn").c_str())) {
-            drawPlaceholderTab();
-            ImGui::EndTabItem();
-        }
-        if (ImGui::BeginTabItem(I18n::T("editor.project_settings.tab.rendering").c_str())) {
-            drawPlaceholderTab();
-            ImGui::EndTabItem();
-        }
-        if (ImGui::BeginTabItem(I18n::T("editor.project_settings.tab.physics").c_str())) {
-            drawPlaceholderTab();
-            ImGui::EndTabItem();
-        }
-        ImGui::EndTabBar();
-    }
+    ImGui::Spacing();
+    drawPerformanceSection(project->settings);
 
     ImGui::End();
 }
 
-void ProjectSettingsPanel::drawGeneralTab(ProjectSettings& settings) {
+void ProjectSettingsPanel::drawPerformanceSection(ProjectSettings& settings) {
+    ImGui::SeparatorText(I18n::T("editor.project_settings.section.performance").c_str());
     ImGui::Spacing();
+    ImGui::Indent();
 
-    // === Target FPS ===
-    int targetFps = settings.targetFps;
-    const int kMinFps = 10;
-    const int kMaxFps = 240;
-    if (ImGui::DragInt(I18n::T("editor.project_settings.target_fps").c_str(),
-                       &targetFps, 1.0f, kMinFps, kMaxFps)) {
-        targetFps = std::clamp(targetFps, kMinFps, kMaxFps);
-        if (targetFps != settings.targetFps) {
-            settings.targetFps = targetFps;
+    // === Target FPS (Combo de presets) ===
+    int currentIdx = findPresetIndex(settings.targetFps);
+
+    // Si el valor cargado no es un preset, prepender una entry extra al
+    // combo para mostrarlo sin perderlo. El i18n `target_fps.custom_label`
+    // usa interpolacion estilo fmt (`{}`).
+    std::string customLabel;
+    const bool isCustom = (currentIdx < 0);
+    const char* labels[kFpsPresetCount + 1];
+    int comboCount = kFpsPresetCount;
+    if (isCustom) {
+        customLabel = I18n::T(
+            "editor.project_settings.target_fps.custom_label",
+            settings.targetFps);
+        labels[0] = customLabel.c_str();
+        for (int i = 0; i < kFpsPresetCount; ++i) labels[i + 1] = kFpsLabels[i];
+        comboCount = kFpsPresetCount + 1;
+        currentIdx = 0;  // entry custom en posicion 0
+    } else {
+        for (int i = 0; i < kFpsPresetCount; ++i) labels[i] = kFpsLabels[i];
+    }
+
+    ImGui::TextUnformatted(I18n::T("editor.project_settings.target_fps").c_str());
+    ImGui::SameLine(kLabelColumnWidth);
+    ImGui::SetNextItemWidth(kControlWidth);
+
+    if (ImGui::Combo("##target_fps", &currentIdx, labels, comboCount)) {
+        // Mapear el index seleccionado al int real. Si habia entry Custom
+        // en index 0 y el dev eligio un preset, sumamos -1 para skipearla.
+        int newVal = settings.targetFps;
+        if (isCustom) {
+            if (currentIdx == 0) {
+                newVal = settings.targetFps;  // re-seleccionar Custom = no-op
+            } else {
+                newVal = kFpsPresets[currentIdx - 1];
+            }
+        } else {
+            newVal = kFpsPresets[currentIdx];
+        }
+        if (newVal != settings.targetFps) {
+            settings.targetFps = newVal;
             if (m_ui != nullptr) m_ui->requestProjectDirty();
         }
     }
+
+    ImGui::Spacing();
     ImGui::TextDisabled("%s",
         I18n::T("editor.project_settings.target_fps_hint").c_str());
 
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    // === Descripcion ===
-    // InputTextMultiline necesita buffer mutable. Hacemos copia local +
-    // commit al perder foco (IsItemDeactivatedAfterEdit) para no
-    // disparar dirty cada keystroke (mucho ruido en el undo histo
-    // futuro + spam en la status bar "* dirty").
-    static constexpr size_t kDescBufSize = 2048;
-    char descBuf[kDescBufSize];
-    std::snprintf(descBuf, sizeof(descBuf), "%s", settings.description.c_str());
-    if (ImGui::InputTextMultiline(
-            I18n::T("editor.project_settings.description").c_str(),
-            descBuf, sizeof(descBuf),
-            ImVec2(0.0f, 100.0f))) {
-        // edit in progress — copia al modelo pero no marca dirty
-        settings.description = descBuf;
-    }
-    if (ImGui::IsItemDeactivatedAfterEdit()) {
-        if (m_ui != nullptr) m_ui->requestProjectDirty();
-    }
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.project_settings.description_hint").c_str());
-}
-
-void ProjectSettingsPanel::drawPlaceholderTab() {
-    ImGui::Spacing();
-    ImGui::TextWrapped("%s",
-        I18n::T("editor.project_settings.placeholder_f3h4").c_str());
+    ImGui::Unindent();
 }
 
 } // namespace Mood

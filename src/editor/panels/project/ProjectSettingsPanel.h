@@ -1,13 +1,15 @@
 #pragma once
 
 // Panel "Project Settings" (F3H1): edita la config per-proyecto que vive
-// en .moodproj > "settings" (struct ProjectSettings). Dockeable, default
-// oculto — se abre desde `Edit > Project Settings...` en MenuBar o desde
-// `View > Project > Project Settings`.
+// en .moodproj > "settings" (struct ProjectSettings). Floating window
+// centered + size fijo (estilo Unity Project Settings), no dockeable, no
+// resizable. Default oculto — se abre desde `Edit > Project Settings...`
+// en MenuBar.
 //
-// F3H1 (chasis): tabs General (2 fields prueba) + 3 placeholders para
-// las sub-secciones que se llenan en F3H4+ (SpawnDefaults / Rendering /
-// Physics).
+// F3H1 (chasis): una sola seccion "Performance" con Target FPS como
+// Combo de presets (30/60/120/144). El TabBar se reintroduce cuando
+// los hitos siguientes agreguen mas categorias (Spawn Defaults,
+// Rendering, Physics).
 //
 // El panel NO almacena estado propio del settings: lee y muta directo el
 // ProjectSettings del Project activo (via `EditorUI::currentProject()`).
@@ -34,8 +36,7 @@ public:
     void setEditorUi(EditorUI* ui) { m_ui = ui; }
 
 private:
-    void drawGeneralTab(ProjectSettings& settings);
-    void drawPlaceholderTab();
+    void drawPerformanceSection(ProjectSettings& settings);
 
     EditorUI* m_ui = nullptr;
 };
