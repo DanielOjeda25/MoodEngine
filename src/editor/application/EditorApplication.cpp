@@ -20,7 +20,7 @@
 #include "core/Log.h"
 #include "core/Profiler.h"
 #include "editor/panels/IPanel.h"  // F2H78: consumesSaveShortcut() en Ctrl+S contextual
-#include "editor/panels/scene/OrthoViewportPanel.h"  // F2H44: Ctrl+wheel snap step
+#include "editor/panels/scene/OrthoViewportPanel.h"  // F2H44: Shift+wheel snap step
 #include "engine/game/state/GameState.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
@@ -226,14 +226,20 @@ void EditorApplication::processEvents() {
             if (k_stepsCount > 0) m_hammerSnapStep = static_cast<u32>(k_steps[idx]);
             Log::editor()->info("[hammer] snap step -> {}", m_hammerSnapStep);
         }
-        // F2H44: Ctrl+ScrollWheel sobre cualquiera de los 3 ortho
-        // viewports tambien cicla el snap step (atajo paralelo a Ctrl+=
-        // / Ctrl+-, mas natural cuando ya tenes el mouse encima del
-        // viewport). Solo en Editor Mode + workspace map_editor + cursor
-        // hovered en alguno de los ortos. Mismo set de pasos.
+        // F2H44 + F3H6 polish: Shift+ScrollWheel sobre cualquiera de los 3
+        // ortho viewports cicla el snap step (atajo paralelo a Ctrl+= /
+        // Ctrl+-, mas natural cuando ya tenes el mouse encima del viewport).
+        // Solo en Editor Mode + workspace map_editor + cursor hovered en
+        // alguno de los ortos. Mismo set de pasos.
+        //
+        // F3H6 polish: cambiamos Ctrl+Wheel -> Shift+Wheel porque los
+        // trackpads (Windows Precision / Synaptics / Elan) inyectan KMOD_CTRL
+        // automaticamente para soportar pinch-zoom en browsers. Con Ctrl
+        // el atajo era inutilizable en notebook (cualquier wheel ciclaba el
+        // grid). Shift no es simulado por ningun gesto de trackpad estandar.
         else if (ev.type == SDL_MOUSEWHEEL &&
                   ev.wheel.y != 0 &&
-                  (SDL_GetModState() & KMOD_CTRL) != 0 &&
+                  (SDL_GetModState() & KMOD_SHIFT) != 0 &&
                   m_mode == EditorMode::Editor &&
                   m_ui.workspaceManager().activeWorkspace().name == "map_editor" &&
                   (m_ui.orthoTop().liveCursor().hovered ||
@@ -252,7 +258,7 @@ void EditorApplication::processEvents() {
             if (up && idx + 1 < k_wheelStepsCount) ++idx;
             if (!up && idx - 1 >= 0) --idx;
             if (k_wheelStepsCount > 0) m_hammerSnapStep = static_cast<u32>(k_wheelSteps[idx]);
-            Log::editor()->info("[hammer] snap step -> {} (Ctrl+wheel)",
+            Log::editor()->info("[hammer] snap step -> {} (Shift+wheel)",
                                   m_hammerSnapStep);
         }
     }

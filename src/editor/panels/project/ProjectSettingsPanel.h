@@ -39,7 +39,10 @@ private:
     void drawPerformanceSection(ProjectSettings& settings);
     void drawGameplaySection(ProjectSettings& settings);  // F3H4
     void drawCharacterSection(ProjectSettings& settings); // F3H5
-    void drawSnapSection(ProjectSettings& settings);      // F3H6
+    // F3H6 polish: snap se movio al MapEditorTopBar (popover) — no es
+    // un setting "del proyecto" en sentido conceptual sino del editor
+    // de mapas. Storage sigue en .moodproj > settings.snap (per-project
+    // sigue siendo correcto), solo la UI cambio de lugar.
 
     EditorUI* m_ui = nullptr;
 };

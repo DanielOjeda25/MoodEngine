@@ -180,8 +180,12 @@ void OrthoViewportPanel::onImGuiRender() {
         }
 
         if (hovered) {
-            // Zoom con scroll wheel.
-            if (io.MouseWheel != 0.0f) {
+            // Zoom con scroll wheel. Shift+Wheel esta reservado al ciclado
+            // de snap step (EditorApplication SDL handler) — gateamos aqui
+            // para que cambiar el grid no zoomee la camara al mismo tiempo.
+            // (Antes era Ctrl+Wheel; trackpads inyectaban Ctrl para pinch,
+            // ver comentario en EditorApplication.cpp.)
+            if (io.MouseWheel != 0.0f && !io.KeyShift) {
                 m_camera.zoom(io.MouseWheel);
             }
 
