@@ -6,6 +6,7 @@
 #include "editor/application/EditorApplication.h"
 #include "editor/application/EditorOverlay_Internal.h"
 
+#include "core/UserSettings.h"  // F3H7: gizmo sizes live de prefs
 #include "editor/commands/EditTransformCommand.h"
 #include "editor/selection/SelectionSet.h"
 #include "engine/assets/manager/AssetManager.h"
@@ -54,7 +55,9 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
         IM_COL32(70, 120, 255, 230),  // Z azul
     };
     const ImU32 hoverCol = IM_COL32(255, 220, 30, 255);
-    const f32 k_armLen = 60.0f;
+    // F3H7: gizmo sizes leidos live de UserSettings — dev tunea en
+    // 4K vs 1080p sin recompilar.
+    const f32 k_armLen = UserSettings::editor().gizmoArmLengthPx;
     const f32 k_ringRad = 55.0f;
 
     // F2H35 fix: radio del ring de Rotate CONSTANTE EN PANTALLA (igual
@@ -73,7 +76,8 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
         const f32 fovYrad = m_editorCamera.fovDeg() * 3.1415926f / 180.0f;
         const f32 halfH = std::max(dist * std::tan(fovYrad * 0.5f), 0.001f);
         const f32 pxPerWorld = (h * 0.5f) / halfH;
-        constexpr f32 k_targetRingPx = 70.0f;
+        // F3H7: target size del ring leido live de UserSettings.
+        const f32 k_targetRingPx = UserSettings::editor().gizmoRotateRingPx;
         gizmoRingRadius = k_targetRingPx / std::max(pxPerWorld, 0.001f);
     }
 

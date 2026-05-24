@@ -10,6 +10,7 @@
 // SceneRenderer::renderOrthoView(); este panel solo lo MUESTRA.
 
 #include "core/Types.h"
+#include "core/UserSettings.h"  // F3H7: init worldHeight from editor prefs
 #include "editor/panels/IPanel.h"
 #include "editor/panels/scene/OrthoCamera.h"
 
@@ -22,6 +23,10 @@ class OrthoViewportPanel : public IPanel {
 public:
     explicit OrthoViewportPanel(OrthoView view) {
         m_camera.view = view;
+        // F3H7: el alto inicial del frustum es preferencia del dev
+        // (mundo abierto sube, interior detallado baja). Live el zoom
+        // del wheel actualiza worldHeight; este es el default al crear.
+        m_camera.worldHeight = UserSettings::editor().orthoInitialZoom;
     }
 
     void onImGuiRender() override;

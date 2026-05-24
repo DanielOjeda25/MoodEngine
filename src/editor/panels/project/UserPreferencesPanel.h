@@ -6,14 +6,15 @@
 // dockeable, no resizable — gemelo del ProjectSettingsPanel de F3H1.
 // Default oculto, se abre desde `Edit > Preferences...` en MenuBar.
 //
-// F3H2 (chasis): una sola seccion "General" con Tema + Idioma. El TabBar
-// se reintroduce cuando hitos siguientes sumen Shortcuts (F3H6),
-// Autosave (F3H7+), font size, etc.
+// F3H2 chasis: una seccion "General". F3H7: TabBar reintroducido con
+// 2 tabs (General + Editor). Editor tab = sensibilidades del editor
+// (zoom orto, gizmo size, click/drag threshold).
 //
-// El panel NO almacena estado: lee y muta directo `UserSettings::theme()`
-// y `I18n::currentLanguage()`. Cada cambio se aplica live (al ImGui style
-// o al diccionario i18n) y se persiste al disco via `UserSettings::save()`
-// — sin boton OK/Cancel (settings.json es chico, UX estilo Unity).
+// El panel NO almacena estado: lee y muta directo `UserSettings::*` y
+// `I18n::currentLanguage()`. Cada cambio se aplica live (al ImGui
+// style / diccionario i18n / al next frame de los call-sites) y se
+// persiste al disco via `UserSettings::save()` — sin boton OK/Cancel
+// (settings.json es chico, UX estilo Unity).
 
 #include "editor/panels/IPanel.h"
 
@@ -28,7 +29,8 @@ public:
     const char* category() const override { return "Project"; }
 
 private:
-    void drawGeneralSection();
+    void drawGeneralTab();
+    void drawEditorTab();  // F3H7
 };
 
 } // namespace Mood

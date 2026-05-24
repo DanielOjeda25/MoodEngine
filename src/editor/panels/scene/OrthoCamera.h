@@ -110,8 +110,11 @@ struct OrthoCamera {
              + upAxis()    * (ndcY * halfH);
     }
 
-    void zoom(float wheelDelta) {
-        const float factor = std::pow(1.1f, -wheelDelta);
+    /// F3H7: el zoom factor se inyecta por parametro para que el caller
+    /// pueda leerlo live de `UserSettings::editor().orthoZoomFactor` sin
+    /// que esta clase pura tenga que conocer UserSettings.
+    void zoom(float wheelDelta, float factorPerTick = 1.1f) {
+        const float factor = std::pow(factorPerTick, -wheelDelta);
         worldHeight = std::clamp(worldHeight * factor, k_minHeight, k_maxHeight);
     }
 

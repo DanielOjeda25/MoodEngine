@@ -3,6 +3,7 @@
 #include "editor/application/EditorMode.h"   // F2H59: EditorSubMode para Cara toggle.
 #include "editor/ui/EditorUI.h"               // F2H59: overlay tool buttons.
 #include "editor/ui/IconsFontAwesome6.h"     // F2H59: icons del overlay.
+#include "core/UserSettings.h"               // F3H7: click-vs-drag threshold
 #include "core/i18n/I18n.h"  // F2H43
 #include "engine/render/rhi/IFramebuffer.h"
 
@@ -310,7 +311,11 @@ void ViewportPanel::onImGuiRender() {
                 const ImVec2 p = ImGui::GetMousePos();
                 const float dx = p.x - m_leftDownX;
                 const float dy = p.y - m_leftDownY;
-                const bool wasClick = (dx*dx + dy*dy) < 16.0f; // 4px
+                // F3H7: umbral leido live de UserSettings. Comparacion
+                // al cuadrado para evitar sqrt.
+                const float thresh = static_cast<float>(
+                    UserSettings::editor().clickDragThresholdPx);
+                const bool wasClick = (dx*dx + dy*dy) < thresh*thresh;
                 if (wasClick && m_imageHovered) {
                     float ndcX = 0.0f;
                     float ndcY = 0.0f;

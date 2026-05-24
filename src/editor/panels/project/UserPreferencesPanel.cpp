@@ -3,6 +3,7 @@
 #include "core/UserSettings.h"
 #include "core/i18n/I18n.h"
 #include "editor/ui/EditorThemes.h"
+#include "editor/ui/IconsFontAwesome6.h"  // F3H7: ICON_FA_ROTATE_LEFT
 
 #include <imgui.h>
 
@@ -16,6 +17,28 @@ namespace {
 // ancho fijo, control derecha.
 constexpr float kLabelColumnWidth = 160.0f;
 constexpr float kControlWidth     = 200.0f;
+
+// F3H7: mismo helper que ProjectSettingsPanel — boton ↺ chiquito a la
+// derecha del control que solo aparece si el valor difiere del default.
+// Reusa la key i18n `editor.common.reset_default`.
+template <typename T>
+bool resetButton(const char* widgetIdSuffix, T& value, T defaultValue) {
+    if (value == defaultValue) return false;
+
+    ImGui::SameLine();
+    const std::string btnLabel =
+        std::string(ICON_FA_ROTATE_LEFT) + "##reset_" + widgetIdSuffix;
+    bool clicked = false;
+    if (ImGui::SmallButton(btnLabel.c_str())) {
+        value = defaultValue;
+        clicked = true;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.common.reset_default").c_str());
+    }
+    return clicked;
+}
 
 } // namespace
 
@@ -42,14 +65,29 @@ void UserPreferencesPanel::onImGuiRender() {
     }
 
     ImGui::Spacing();
-    drawGeneralSection();
+
+    // F3H7: TabBar con General (tema + idioma de F3H2) + Editor
+    // (sensibilidades nuevas). Mismo patron que ProjectSettingsPanel.
+    if (ImGui::BeginTabBar("##user_pref_tabs")) {
+        if (ImGui::BeginTabItem(
+                I18n::T("editor.user_preferences.tab.general").c_str())) {
+            ImGui::Spacing();
+            drawGeneralTab();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem(
+                I18n::T("editor.user_preferences.tab.editor").c_str())) {
+            ImGui::Spacing();
+            drawEditorTab();
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
 
     ImGui::End();
 }
 
-void UserPreferencesPanel::drawGeneralSection() {
-    ImGui::SeparatorText(I18n::T("editor.user_preferences.section.general").c_str());
-    ImGui::Spacing();
+void UserPreferencesPanel::drawGeneralTab() {
     ImGui::Indent();
 
     // === Tema ===
@@ -114,6 +152,102 @@ void UserPreferencesPanel::drawGeneralSection() {
     ImGui::Spacing();
     ImGui::TextDisabled("%s",
         I18n::T("editor.user_preferences.live_apply_hint").c_str());
+
+    ImGui::Unindent();
+}
+
+void UserPreferencesPanel::drawEditorTab() {
+    ImGui::Indent();
+
+    // F3H7: trabajamos sobre una copia + flags dirty/saveNow para
+    // separar 2 cosas:
+    //  - `dirty`: el dev movio algo este frame -> `setEditor(cfg)` para
+    //    que el live read en los call-sites refleje el cambio.
+    //  - `saveNow`: el dev solto el slider (o clickeo reset) -> `save()`
+    //    al disco. Asi el JSON se escribe una vez al soltar, no 60 fps
+    //    mientras se arrastra el slider.
+    UserSettings::EditorSettings cfg = UserSettings::editor();
+    const UserSettings::EditorSettings defaults;
+    bool dirty   = false;
+    bool saveNow = false;
+
+    // Helper local para SliderFloat + reset button + tooltip.
+    auto drawSliderF = [&](const char* labelKey, const char* hintKey,
+                            const char* idSuffix,
+                            f32& field, f32 fieldDefault,
+                            f32 minV, f32 maxV, const char* fmt) {
+        ImGui::TextUnformatted(I18n::T(labelKey).c_str());
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", I18n::T(hintKey).c_str());
+        }
+        ImGui::SameLine(kLabelColumnWidth);
+        ImGui::SetNextItemWidth(kControlWidth);
+        const std::string widgetId = std::string("##user_pref_") + idSuffix;
+        if (ImGui::SliderFloat(widgetId.c_str(), &field, minV, maxV, fmt)) {
+            dirty = true;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) saveNow = true;
+        if (resetButton(idSuffix, field, fieldDefault)) {
+            dirty = true;
+            saveNow = true;  // click es commit instantaneo
+        }
+    };
+
+    drawSliderF("editor.user_preferences.editor.ortho_initial_zoom",
+                "editor.user_preferences.editor.ortho_initial_zoom_hint",
+                "ortho_initial_zoom",
+                cfg.orthoInitialZoom, defaults.orthoInitialZoom,
+                4.0f, 256.0f, "%.0f");
+
+    drawSliderF("editor.user_preferences.editor.ortho_zoom_factor",
+                "editor.user_preferences.editor.ortho_zoom_factor_hint",
+                "ortho_zoom_factor",
+                cfg.orthoZoomFactor, defaults.orthoZoomFactor,
+                1.05f, 1.5f, "%.2fx");
+
+    ImGui::Spacing();
+
+    drawSliderF("editor.user_preferences.editor.gizmo_arm_length",
+                "editor.user_preferences.editor.gizmo_arm_length_hint",
+                "gizmo_arm_length",
+                cfg.gizmoArmLengthPx, defaults.gizmoArmLengthPx,
+                30.0f, 120.0f, "%.0f px");
+
+    drawSliderF("editor.user_preferences.editor.gizmo_rotate_ring",
+                "editor.user_preferences.editor.gizmo_rotate_ring_hint",
+                "gizmo_rotate_ring",
+                cfg.gizmoRotateRingPx, defaults.gizmoRotateRingPx,
+                30.0f, 140.0f, "%.0f px");
+
+    ImGui::Spacing();
+
+    // Click/drag threshold como int — SliderInt.
+    ImGui::TextUnformatted(
+        I18n::T("editor.user_preferences.editor.click_drag_threshold").c_str());
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.user_preferences.editor.click_drag_threshold_hint").c_str());
+    }
+    ImGui::SameLine(kLabelColumnWidth);
+    ImGui::SetNextItemWidth(kControlWidth);
+    if (ImGui::SliderInt("##user_pref_click_drag_threshold",
+                          &cfg.clickDragThresholdPx, 1, 32, "%d px")) {
+        dirty = true;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) saveNow = true;
+    if (resetButton("click_drag_threshold",
+                     cfg.clickDragThresholdPx,
+                     defaults.clickDragThresholdPx)) {
+        dirty = true;
+        saveNow = true;
+    }
+
+    if (dirty)   UserSettings::setEditor(cfg);
+    if (saveNow) UserSettings::save();
+
+    ImGui::Spacing();
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.user_preferences.editor.live_apply_hint").c_str());
 
     ImGui::Unindent();
 }

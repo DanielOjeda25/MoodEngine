@@ -11,12 +11,49 @@
 // idioma desde el menu, al salir del programa, etc). Esto evita writes
 // accidentales por cambios transitorios.
 
+#include "core/Types.h"
 #include "core/i18n/I18n.h"
+
+#include <nlohmann/json_fwd.hpp>
 
 #include <filesystem>
 #include <string>
 
 namespace Mood::UserSettings {
+
+/// F3H7: preferencias del editor per-instalacion. Sensibilidades de
+/// camara orto + tamano de gizmo + umbral click-vs-drag. NO viven en
+/// `.moodproj` porque son ergonomia del dev (notebook touchpad vs mouse
+/// 16K DPI, pantalla 4K vs 1080p), no decisiones del proyecto.
+struct EditorSettings {
+    /// Alto inicial del frustum ortografico en world units al crear un
+    /// viewport orto nuevo. Default 32 — Hammer-style "ves ~32m". Mundo
+    /// abierto subir; interior detallado bajar. El zoom posterior (wheel)
+    /// modifica el state vivo de la camara, no este default.
+    f32 orthoInitialZoom = 32.0f;
+
+    /// Multiplicador por tick del wheel sobre la camara orto. Default
+    /// 1.1 — cada wheel up reduce `worldHeight` por 1/1.1 (~9.1%) y cada
+    /// wheel down lo aumenta. Subir = zoom mas agresivo.
+    f32 orthoZoomFactor = 1.1f;
+
+    /// Largo del brazo de los handles translate/scale del gizmo en
+    /// pixeles de pantalla. Default 60 — calibrado para 1080p. En 4K
+    /// el dev probablemente quiere ~100.
+    f32 gizmoArmLengthPx = 60.0f;
+
+    /// Tamano target del ring de rotate del gizmo en pixeles de pantalla.
+    /// Default 70 (F2H35 fix: ring CONSTANTE en pantalla — pre-F2H35 era
+    /// proporcional al AABB y se hacia muy chico al alejar la cam).
+    f32 gizmoRotateRingPx = 70.0f;
+
+    /// Umbral en pixeles para distinguir click puro de drag (LMB sobre
+    /// viewport). Default 4 — clamp `>= 1`. Comparacion real es
+    /// `dx*dx + dy*dy >= threshold*threshold` en los 2 viewports
+    /// (perspectiva + orto). Subir si el trackpad genera drags
+    /// accidentales.
+    int clickDragThresholdPx = 4;
+};
 
 /// @brief Lee `settings.json` del disco. Si no existe o tiene parse
 ///        error, usa defaults (idioma=Spanish) y NO crea el archivo
@@ -52,5 +89,24 @@ void setTheme(const std::string& id);
 
 /// @brief Path absoluto al `settings.json`. Util para debug/test.
 std::filesystem::path settingsPath();
+
+/// @brief F3H7: editor preferences loaded from `settings.json` (defaults
+///        si no habia subkey).
+const EditorSettings& editor();
+
+/// @brief Marca los editor settings nuevos en memoria. NO escribe al
+///        disco — el caller llama `save()` cuando corresponde.
+void setEditor(const EditorSettings& s);
+
+/// @brief F3H7: serializa el struct a JSON. Solo escribe fields que
+///        difieren del default — devuelve object vacio si todo es
+///        default (el caller puede chequear `.empty()` para decidir si
+///        incluir la subkey "editor" en settings.json).
+nlohmann::json editorSettingsToJson(const EditorSettings& s);
+
+/// @brief F3H7: lee + sanitize. Fields ausentes/invalidos → defaults.
+///        Valores fuera de rango sano se clampean (zoom factor > 1.0,
+///        thresholds >= 1, sizes > 0). JSON no-object → defaults.
+EditorSettings editorSettingsFromJson(const nlohmann::json& j);
 
 } // namespace Mood::UserSettings

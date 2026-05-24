@@ -186,7 +186,10 @@ void OrthoViewportPanel::onImGuiRender() {
             // (Antes era Ctrl+Wheel; trackpads inyectaban Ctrl para pinch,
             // ver comentario en EditorApplication.cpp.)
             if (io.MouseWheel != 0.0f && !io.KeyShift) {
-                m_camera.zoom(io.MouseWheel);
+                // F3H7: zoom factor leido live de UserSettings — dev
+                // puede tunear sensibilidad sin reiniciar editor.
+                m_camera.zoom(io.MouseWheel,
+                              UserSettings::editor().orthoZoomFactor);
             }
 
             // Pan con MMB drag.
@@ -218,7 +221,12 @@ void OrthoViewportPanel::onImGuiRender() {
             const ImVec2 p = ImGui::GetMousePos();
             const float dx = p.x - m_leftDownX;
             const float dy = p.y - m_leftDownY;
-            if (!m_dragState.active && (dx*dx + dy*dy) >= 16.0f) {
+            // F3H7: umbral click-vs-drag leido live de UserSettings —
+            // comparacion al cuadrado para evitar sqrt cada frame.
+            const float thresh = static_cast<float>(
+                UserSettings::editor().clickDragThresholdPx);
+            const float threshSq = thresh * thresh;
+            if (!m_dragState.active && (dx*dx + dy*dy) >= threshSq) {
                 m_dragState.active = true;
             }
             if (m_dragState.active) {

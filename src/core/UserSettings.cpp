@@ -4,6 +4,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 
@@ -13,6 +14,7 @@ namespace {
 
 I18n::Language s_language = I18n::Language::Spanish;
 std::string s_theme = "dark";  // F2H76: default dark
+EditorSettings s_editor{};     // F3H7: editor prefs (default-constructed)
 std::filesystem::path s_path;
 
 std::filesystem::path computePath() {
@@ -31,6 +33,7 @@ void init() {
     s_path = computePath();
     s_language = I18n::Language::Spanish;  // default si no hay archivo
     s_theme = "dark";
+    s_editor = EditorSettings{};
 
     std::ifstream in(s_path);
     if (!in.is_open()) {
@@ -53,6 +56,9 @@ void init() {
     }
     if (j.contains("theme") && j["theme"].is_string()) {
         s_theme = j["theme"].get<std::string>();
+    }
+    if (j.contains("editor")) {
+        s_editor = editorSettingsFromJson(j.at("editor"));
     }
     Log::engine()->info("[settings] cargado '{}' (language={}, theme={})",
                          s_path.generic_string(),
@@ -81,6 +87,10 @@ bool save() {
     nlohmann::json j;
     j["language"] = I18n::languageCode(s_language);
     j["theme"]    = s_theme;
+    // F3H7: solo persistir "editor" si alguno de los fields difiere del
+    // default (settings.json limpio cuando todo es default).
+    const auto editorJson = editorSettingsToJson(s_editor);
+    if (!editorJson.empty()) j["editor"] = editorJson;
     out << j.dump(2) << "\n";
     Log::engine()->info("[settings] guardado '{}' (language={}, theme={})",
                          s_path.generic_string(),
@@ -96,9 +106,57 @@ const std::string& theme() { return s_theme; }
 
 void setTheme(const std::string& id) { s_theme = id; }
 
+const EditorSettings& editor() { return s_editor; }
+
+void setEditor(const EditorSettings& s) { s_editor = s; }
+
 std::filesystem::path settingsPath() {
     if (s_path.empty()) return computePath();
     return s_path;
+}
+
+// F3H7: solo escribe fields que difieren del default — mantiene
+// settings.json minimal para devs que no tocan el editor.
+nlohmann::json editorSettingsToJson(const EditorSettings& s) {
+    nlohmann::json j = nlohmann::json::object();
+    const EditorSettings defaults;
+    if (s.orthoInitialZoom        != defaults.orthoInitialZoom)        j["ortho_initial_zoom"]        = s.orthoInitialZoom;
+    if (s.orthoZoomFactor         != defaults.orthoZoomFactor)         j["ortho_zoom_factor"]         = s.orthoZoomFactor;
+    if (s.gizmoArmLengthPx        != defaults.gizmoArmLengthPx)        j["gizmo_arm_length_px"]       = s.gizmoArmLengthPx;
+    if (s.gizmoRotateRingPx       != defaults.gizmoRotateRingPx)       j["gizmo_rotate_ring_px"]      = s.gizmoRotateRingPx;
+    if (s.clickDragThresholdPx    != defaults.clickDragThresholdPx)    j["click_drag_threshold_px"]   = s.clickDragThresholdPx;
+    return j;
+}
+
+// F3H7: lee + sanitize. Cualquier campo malformado/fuera de rango
+// cae al default (sin log — el dev edito a mano el settings.json y
+// quedo invalido, mostrarle un editor crasheado no ayuda).
+EditorSettings editorSettingsFromJson(const nlohmann::json& j) {
+    EditorSettings s;
+    if (!j.is_object()) return s;
+
+    if (j.contains("ortho_initial_zoom") && j.at("ortho_initial_zoom").is_number()) {
+        const f32 v = j.at("ortho_initial_zoom").get<f32>();
+        if (v > 0.0f) s.orthoInitialZoom = v;
+    }
+    if (j.contains("ortho_zoom_factor") && j.at("ortho_zoom_factor").is_number()) {
+        const f32 v = j.at("ortho_zoom_factor").get<f32>();
+        // factor <= 1.0 hace que el zoom no cambie o vaya al reves; clamp a 1.05.
+        s.orthoZoomFactor = std::max(v, 1.05f);
+    }
+    if (j.contains("gizmo_arm_length_px") && j.at("gizmo_arm_length_px").is_number()) {
+        const f32 v = j.at("gizmo_arm_length_px").get<f32>();
+        if (v > 0.0f) s.gizmoArmLengthPx = v;
+    }
+    if (j.contains("gizmo_rotate_ring_px") && j.at("gizmo_rotate_ring_px").is_number()) {
+        const f32 v = j.at("gizmo_rotate_ring_px").get<f32>();
+        if (v > 0.0f) s.gizmoRotateRingPx = v;
+    }
+    if (j.contains("click_drag_threshold_px") && j.at("click_drag_threshold_px").is_number_integer()) {
+        const int v = j.at("click_drag_threshold_px").get<int>();
+        s.clickDragThresholdPx = std::max(v, 1);
+    }
+    return s;
 }
 
 } // namespace Mood::UserSettings
