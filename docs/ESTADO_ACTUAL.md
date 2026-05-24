@@ -18,17 +18,18 @@
 
 **Norte:** *pulido, no features*. Sub-fases 3.1-3.4. Plan maestro en [`PLAN_FASE3.md`](PLAN_FASE3.md). Espina dorsal de la fase: **regla "nada hardcodeado"** — todo valor de comportamiento debe ser editable sin recompilar (`.moodproj`, `UserSettings`, Inspector). Ver `PLAN_FASE3.md` sección 2.
 
-### Sub-fase 3.1 — El editor te respeta (en curso, 1/7)
+### Sub-fase 3.1 — El editor te respeta (en curso, 2/7)
 
-**Hito cerrado:**
+**Hitos cerrados:**
 - ✅ **F3H1** — Project Settings panel + persistencia `.moodproj` (`v2.1.0-fase3-hito1`). Chasis para Fase 3 — el panel arranca con una sola sección "Performance" (Target FPS como Combo de presets 30/60/120/144 estilo Unity). Schema `.moodproj` sin bump (back-compat por defaults, mismo patrón que el cleanup de `HudState.ammo`). Sub-secciones futuras (Spawn Defaults / Rendering / Physics) se agregan cuando hitos siguientes las llenen. Suite **1097/11202** verde. Tras polish reactivo del dev: ventana centrada + sin resize + sin TabBar vacío + descripción eliminada + cero refs a "F3H4" en strings user-facing (nueva memoria `feedback_no_internal_milestone_refs_in_ui`). Detalle en [`PLAN_HITO_F3H1.md`](PLAN_HITO_F3H1.md).
+- ✅ **F3H2** — User Preferences panel + popup viejo eliminado (`v2.2.0-fase3-hito2`). Gemelo de F3H1 pero per-instalación: refactor del modal de `Edit > Preferences...` (F2H76) a `IPanel` flotante centrado (540×360, NoResize/NoCollapse/NoDocking). Sección "General" con Tema (Oscuro/Claro/Medianoche/Sepia) + Idioma (Español/English); cada cambio aplica y persiste live a `%APPDATA%\MoodEngine\settings.json`. Eliminado el popup modal viejo + 5 keys i18n huérfanas (`editor.modal.preferences.title`, `editor.preferences.theme`, `editor.menu.view.language*`); 6 keys nuevas bajo `editor.user_preferences.*`. Suite **1097/11202** verde (sin tests automáticos — UserSettings escribe a APPDATA real, validación por reabrir editor). Decisión UX confirmada por el dev: panels no mutuamente exclusivos (Project Settings + Preferences pueden coexistir como en Unity/Unreal). Detalle en [`PLAN_HITO_F3H2.md`](PLAN_HITO_F3H2.md).
 
 **Próximo hito:**
-- 🔲 **F3H2** — User Preferences panel + persistencia `UserSettings`. Gemelo de F3H1 pero per-instalación (no per-proyecto): tema dark/light persistido, fields seed para shortcuts (F3H6) + comportamiento del editor (autosave interval, mouse sensitivity placeholders). Plan a crear en [`PLAN_HITO_F3H2.md`](PLAN_HITO_F3H2.md) cuando se agende.
+- 🔲 **F3H3** — Auditoría + catalogación de valores hardcodeados (sin refactors aún). Recorrer el código, identificar cada constante de comportamiento que el usuario debería poder editar (FPS targets adicionales, mouse sensitivities, autosave intervals, gravity, gizmo snap defaults, etc.) y clasificarla por destino: `.moodproj` (per-proyecto), `UserSettings` (per-instalación), Inspector (per-entidad), `.moodmap` (per-mapa). Output: documento `docs/HARDCODED_AUDIT.md` con tabla `file:line → valor → destino propuesto`. Sin código nuevo — solo el mapa para los hitos F3H4-F3H7. Plan en [`PLAN_HITO_F3H3.md`](PLAN_HITO_F3H3.md) (a crear).
 
 **Roadmap (~27 hitos):**
 ```
-Sub-fase 3.1 — El editor te respeta              F3H1 ✅ F3H2-F3H7
+Sub-fase 3.1 — El editor te respeta              F3H1 ✅ F3H2 ✅ F3H3-F3H7
 Sub-fase 3.2 — Inspector + Hierarchy pulidos     F3H8  – F3H13
 Sub-fase 3.3 — Asset Browser de verdad           F3H14 – F3H19
 Sub-fase 3.4 — Viewport pro + Performance        F3H20 – F3H27

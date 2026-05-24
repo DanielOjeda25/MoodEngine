@@ -11,6 +11,62 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-24: F3H2 cierre — User Preferences panel + popup viejo eliminado
+
+### Decisión 1 — Mirror exacto de F3H1 (no innovar en patrón)
+
+**Contexto:** F3H2 podía elegir entre (a) explorar un patrón distinto al de F3H1 (ej. modal con título dinámico tipo "Settings >" estilo VSCode), (b) replicar F3H1 al pie de la letra (mismas flags, mismo accessor `requestShow*`, mismo folder, misma estructura de sección única).
+
+**Decisión:** mirror exacto. Mismas flags `NoResize|NoCollapse|NoDocking`, mismo tamaño 540×360, mismo folder `editor/panels/project/`, mismo accessor `requestShowUserPreferences()` que mutea `m_userPreferences.visible = true` directo (sin pasar por request/consume porque el panel state vive en EditorUI, no en EditorApplication).
+
+**Razones:**
+- Consistencia para el dev: aprende el patrón con F3H1, lo aplica con F3H2 sin re-leer.
+- Consistencia para el usuario: los dos panels de "ajustes" del editor se ven iguales y se comportan igual (la única diferencia es que Project Settings exige proyecto activo).
+- Reduce surface de bugs: copiar un patrón validado en producción es más seguro que inventar uno nuevo.
+
+**Alternativas descartadas:** modal con título dinámico (gana flexibilidad pero pierde simplicidad — no hay demanda).
+
+### Decisión 2 — Eliminar el popup F2H76 en vez de coexistir con el panel nuevo
+
+**Contexto:** el popup modal `BeginPopupModal("###preferences_modal")` de F2H76 funcionaba bien. Opción: dejarlo como "legacy backup" y agregar el panel nuevo en paralelo.
+
+**Decisión:** eliminar el popup completo (90 LOC de body en MenuBar.cpp + flags `m_showPreferencesPopup`/`m_prefsOpen` en MenuBar.h + 5 keys i18n huérfanas). `Edit > Preferences...` ahora siempre abre el panel nuevo.
+
+**Razones:**
+- Pulir = simplificar, no agregar paralelo. Tener dos formas de abrir Preferences = confusión.
+- Code rot: el popup quedaría sin tocar y eventualmente nadie sabría cuál usar.
+- Sin riesgo de regresión: la persistencia de tema+idioma vive en `UserSettings` (no en el popup), el panel nuevo reusa exactamente la misma infra.
+
+**Aplicación:** mismo principio que F3H1 polish (eliminar tabs placeholder en vez de dejarlos esperando) — pulir = sustraer.
+
+### Decisión 3 — Sin tests automáticos por path real APPDATA
+
+**Contexto:** el plan F3H2 sugería "tests headless: roundtrip `UserSettings::save/load`". Pero `UserSettings::save()` escribe a `%APPDATA%\MoodEngine\settings.json` real (sin inyección de path posible sin refactorear el módulo). Un test que llame `save()/init()` contaminaría el state real del dev.
+
+**Decisión:** no agregar tests automáticos en F3H2. La persistencia está validada en producción desde F2H43+F2H76 (idioma + tema funcionan hace meses). La verificación aquí es **visual** (cerrar editor + reabrir → preferencias persisten).
+
+**Razones:**
+- F3H2 no agrega fields nuevos a `UserSettings` (solo expone los existentes). No hay superficie nueva sin cobertura.
+- Refactorear `UserSettings` para inyectar path es scope out (cambio de API que afecta `MoodEditor` + `MoodPlayer` + bootstrap). Si el módulo crece (F3H6 shortcuts, F3H7 autosave/font/density), refactorear ahí con tests aislados.
+- Suite verde sin sumar fragilidad.
+
+**Condiciones de revisión:** cuando F3H6 o F3H7 agreguen fields no triviales (ej. struct de shortcuts con N keybindings), considerar refactor + tests inyectando path.
+
+### Decisión 4 — Panels coexisten (no mutuamente exclusivos)
+
+**Contexto:** tras validación visual del dev, surgió la pregunta: "puedo abrir 2 paneles simultáneamente?" (refiriéndose a Project Settings + User Preferences abiertos a la vez, ambos centrados, solapados visualmente en el primer spawn). Tres opciones: (a) dejar como está (UX Unity/Unreal — panels coexisten), (b) mutuamente exclusivos (abrir uno cierra el otro), (c) offset al spawn (cada panel arranca con offset distinto).
+
+**Decisión:** dejar como está. Los panels son ventanas flotantes (no modales bloqueantes); pueden coexistir igual que en Unity (Project Settings + Preferences) y Unreal (Project Settings + Editor Preferences).
+
+**Razones:**
+- Antes (F2H76): popup `BeginPopupModal` bloqueaba todo. UX limitada.
+- Ahora (F3H1+F3H2): `Begin` flotante, panels son singleton (un solo miembro = no se pueden abrir 2 instancias del mismo), y el solape visual inicial se resuelve arrastrando una vez (ImGui recuerda la posición en `imgui.ini`).
+- Mutuamente exclusivos sería más rígido que Unity/Unreal, sin ganancia clara.
+
+**Condiciones de revisión:** si el solape inicial molesta como fricción real (no como observación), evaluar offset al spawn (opción C). Sin demanda concreta, no se cambia.
+
+---
+
 ## 2026-05-24: F3H1 cierre — polish reactivo del panel + regla "no internal refs en UI"
 
 ### Decisión 1 — Panel "dockeable" → "floating modal-like" (revisión de D3 del plan)
