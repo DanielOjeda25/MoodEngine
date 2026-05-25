@@ -1,6 +1,6 @@
 # PLAN F3H10 — Ampliar `ComponentClipboard` + kits del convert_entity_modal
 
-**Estado:** Planeado (tercer hito de Sub-fase 3.2 "Inspector + Hierarchy pulidos", arranca tras `v2.9.0-fase3-hito9`).
+**Estado:** **CERRADO** — `v2.10.0-fase3-hito10` (tercer hito de Sub-fase 3.2 "Inspector + Hierarchy pulidos").
 **Predecesor:** F3H9 (EntityType model + paste Tier 1 + popup remake + Material Inspector Blender-style).
 **Origen:** dos backlogs explícitamente diferidos por el dev en F3H9 (anotados en memorias `project_convert_modal_followup` + `project_component_clipboard_expand`):
 - El Hierarchy "Copiar valores" muestra grisado con tooltip "pendiente F3H10+" en types no-Tier-1 (Mesh/Audio/Brush/Vehicle/Camera/Environment + bases compuestos Dialog/ItemPickup).
@@ -135,11 +135,25 @@ Modal hoy en `renderConvertEntityModal()` (F2H57 + F3H9 patch) ofrece 4 kits con
 
 ---
 
-## Cierre del hito
+## Cierre del hito — checklist verificado
 
-- [ ] Suite verde (+8 tests clipboard + 9 tests convert_modal kits).
-- [ ] Hierarchy "Copiar valores" deja de grisar para los 8 types nuevos.
-- [ ] convert_modal muestra TODOS los EntityType disponibles + cada kit aplica el componente base + setea el `entityType` correcto.
-- [ ] Validación visual end-to-end por el dev.
-- [ ] Tag `v2.10.0-fase3-hito10`.
-- [ ] Update `ESTADO_ACTUAL.md`, `HITOS.md`, `DECISIONS.md`. Crear `PLAN_HITO_F3H11.md` cuando se decida el próximo bloque de Sub-fase 3.2 (probable: Undo coverage audit del Inspector, F3H11-F3H13 según `PLAN_FASE3.md`).
+- [x] Suite verde **1170/11492** (+6 cases / +49 asserts vs F3H9: 5 roundtrip tests Tier 2 + 1 case `isSupported` con 9 keys).
+- [x] Hierarchy "Copiar valores" deja de grisar para **5 de los 8 types** previstos (mesh_renderer, dialog, item_pickup, vehicle, environment). Brush/Audio/Camera quedaron fuera por dependencias técnicas — anotado backlog en memoria `clipboard-brush-audio-camera` para F3H11+ dedicado.
+- [x] convert_modal con 13 kits ahora (4 originales + 9 nuevos: trigger, particle_emitter, force_field, environment, audio, camera, vehicle, brush, mesh). Cada kit aplica el componente base + setea `entityType` correctamente.
+- [x] Validación visual end-to-end por el dev.
+- [ ] Tag `v2.10.0-fase3-hito10` (al confirmar push).
+
+## Scope final ejecutado vs planeado
+
+**Planeado:** 8 types al clipboard + 9 kits convert_modal.
+
+**Ejecutado:** 5 types al clipboard + 9 kits convert_modal. Audio/Camera/Brush quedaron fuera:
+- **Audio + Camera**: no están serializados al `.moodmap` (gap conocido de Fase 2 — necesitan `SavedAudio` + `SavedCamera` + writes/reads en `EntitySerializer`). Sin schema, el clipboard no puede roundtrip.
+- **Brush**: `serializeBrush` y `parseBrush` viven en namespace anónimo de `SceneSerializer.cpp` + el applier está inline en el loop de `SceneLoader::applyMap`. Necesita refactor (exponer al header + extraer applier público) para integrar al clipboard.
+
+**Reasonable** porque los 3 forman un cluster con dependencia técnica común (cambios al EntitySerializer / SceneLoader). Agruparlos en un hito dedicado F3H11 mantiene F3H10 enfocado en la "fruta accesible" + entrega valor consistente (los 5 types tier 2 cubren los EntityType más comunes — Mesh/NPC/Pickable/Vehicle/Environment).
+
+## Memorias actualizadas
+
+- `clipboard-brush-audio-camera`: nuevo backlog específico para F3H11+ (plan técnico detallado: `SavedAudio`/`SavedCamera` structs + brush refactor).
+- `convert-modal-followup`: ya parcialmente atendido (9 kits agregados); queda pendiente la decisión de rework destructivo (sigue aditivo en F3H10).

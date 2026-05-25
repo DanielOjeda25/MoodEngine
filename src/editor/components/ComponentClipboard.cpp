@@ -13,6 +13,8 @@ namespace {
 const std::unordered_set<std::string>& supportedKeys() {
     static const std::unordered_set<std::string> k = {
         kKeyLight, kKeyTrigger, kKeyForceField, kKeyParticleEmitter,
+        // F3H10: Tier 2 — types con SavedX en SavedEntity.
+        kKeyMeshRenderer, kKeyDialog, kKeyItemPickup, kKeyVehicle, kKeyEnvironment,
     };
     return k;
 }
@@ -81,6 +83,102 @@ void applyForceField(const SavedForceField& s, Entity& e) {
     ff.enabled       = s.enabled;
 }
 
+// F3H10: Tier 2 appliers. Mismo patron que Tier 1 — addComponent si falta +
+// sobrescribir fields. Resolucion de paths via AssetManager.
+
+void applyMeshRenderer(const SavedMeshRenderer& s, Entity& e,
+                          AssetManager& assets) {
+    const MeshAssetId meshId = s.meshPath.empty()
+        ? assets.missingMeshId()
+        : assets.loadMesh(s.meshPath);
+    std::vector<MaterialAssetId> mats;
+    mats.reserve(s.materials.size());
+    for (const auto& matPath : s.materials) {
+        mats.push_back(matPath.empty()
+            ? assets.missingMaterialId()
+            : assets.loadMaterial(matPath));
+    }
+    if (mats.empty()) {
+        mats = assets.createMaterialsForMesh(meshId);
+    }
+    if (!e.hasComponent<MeshRendererComponent>()) {
+        e.addComponent<MeshRendererComponent>(meshId, std::move(mats));
+    } else {
+        auto& mr = e.getComponent<MeshRendererComponent>();
+        mr.mesh        = meshId;
+        mr.materials   = std::move(mats);
+        mr.subMeshName = s.subMeshName;
+    }
+}
+
+void applyDialog(const SavedDialog& s, Entity& e) {
+    if (!e.hasComponent<DialogComponent>()) {
+        e.addComponent<DialogComponent>();
+    }
+    auto& dc = e.getComponent<DialogComponent>();
+    dc.dialogPath          = s.dialogPath;
+    dc.autoStartOnInteract = s.autoStartOnInteract;
+}
+
+void applyItemPickup(const SavedItemPickup& s, Entity& e) {
+    if (!e.hasComponent<ItemPickupComponent>()) {
+        e.addComponent<ItemPickupComponent>();
+    }
+    auto& ip = e.getComponent<ItemPickupComponent>();
+    ip.itemPath        = s.itemPath;
+    ip.quantity        = s.quantity;
+    ip.destroyOnPickup = s.destroyOnPickup;
+}
+
+void applyVehicle(const SavedVehicle& s, Entity& e) {
+    if (!e.hasComponent<VehicleComponent>()) {
+        e.addComponent<VehicleComponent>();
+    }
+    auto& vc = e.getComponent<VehicleComponent>();
+    vc.configPath = s.configPath;
+    vc.dirty      = true;  // forzar reload del .moodvehicle al primer frame
+}
+
+void applyEnvironment(const SavedEnvironment& s, Entity& e) {
+    if (!e.hasComponent<EnvironmentComponent>()) {
+        e.addComponent<EnvironmentComponent>();
+    }
+    auto& env = e.getComponent<EnvironmentComponent>();
+    env.skyboxPath     = s.skyboxPath;
+    // FogMode: 0=Off, 1=Linear, 2=Exp, 3=Exp2 (raw u32 en el componente).
+    if      (s.fogMode == "linear") env.fogMode = 1u;
+    else if (s.fogMode == "exp")    env.fogMode = 2u;
+    else if (s.fogMode == "exp2")   env.fogMode = 3u;
+    else                             env.fogMode = 0u;
+    env.fogColor       = s.fogColor;
+    env.fogDensity     = s.fogDensity;
+    env.fogLinearStart = s.fogLinearStart;
+    env.fogLinearEnd   = s.fogLinearEnd;
+    env.exposure       = s.exposure;
+    // TonemapMode: 0=None, 1=Reinhard, 2=ACES.
+    if      (s.tonemapMode == "reinhard") env.tonemapMode = 1u;
+    else if (s.tonemapMode == "aces")     env.tonemapMode = 2u;
+    else                                   env.tonemapMode = 0u;
+    env.iblIntensity   = s.iblIntensity;
+    env.bloomEnabled   = s.bloomEnabled;
+    env.bloomThreshold = s.bloomThreshold;
+    env.bloomIntensity = s.bloomIntensity;
+    env.bloomRadius    = s.bloomRadius;
+    env.ssaoEnabled    = s.ssaoEnabled;
+    env.ssaoRadius     = s.ssaoRadius;
+    env.ssaoIntensity  = s.ssaoIntensity;
+    env.colorGradingEnabled   = s.colorGradingEnabled;
+    env.colorGradingLutPath   = s.colorGradingLutPath;
+    env.colorGradingIntensity = s.colorGradingIntensity;
+    env.csmCascadeCount = s.csmCascadeCount;
+    env.csmSplitLambda  = s.csmSplitLambda;
+    env.ssrEnabled    = s.ssrEnabled;
+    env.ssrMaxSteps   = s.ssrMaxSteps;
+    env.ssrThickness  = s.ssrThickness;
+    env.ssrStepSize   = s.ssrStepSize;
+    env.ssrIntensity  = s.ssrIntensity;
+}
+
 void applyParticleEmitter(const SavedParticleEmitter& s, Entity& e,
                             AssetManager& assets) {
     if (!e.hasComponent<ParticleEmitterComponent>()) {
@@ -125,6 +223,12 @@ std::string componentNameKey(const std::string& componentKey) {
     if (componentKey == kKeyTrigger)         return "component.name.trigger";
     if (componentKey == kKeyForceField)      return "component.name.force_field";
     if (componentKey == kKeyParticleEmitter) return "component.name.particle_emitter";
+    // F3H10:
+    if (componentKey == kKeyMeshRenderer)    return "component.name.mesh_renderer";
+    if (componentKey == kKeyDialog)          return "component.name.dialog";
+    if (componentKey == kKeyItemPickup)      return "component.name.item_pickup";
+    if (componentKey == kKeyVehicle)         return "component.name.vehicle";
+    if (componentKey == kKeyEnvironment)     return "component.name.environment";
     return {};
 }
 
@@ -134,6 +238,12 @@ bool entityHasComponent(const std::string& componentKey, const Entity& e) {
     if (componentKey == kKeyTrigger)         return e.hasComponent<TriggerComponent>();
     if (componentKey == kKeyForceField)      return e.hasComponent<ForceFieldComponent>();
     if (componentKey == kKeyParticleEmitter) return e.hasComponent<ParticleEmitterComponent>();
+    // F3H10:
+    if (componentKey == kKeyMeshRenderer)    return e.hasComponent<MeshRendererComponent>();
+    if (componentKey == kKeyDialog)          return e.hasComponent<DialogComponent>();
+    if (componentKey == kKeyItemPickup)      return e.hasComponent<ItemPickupComponent>();
+    if (componentKey == kKeyVehicle)         return e.hasComponent<VehicleComponent>();
+    if (componentKey == kKeyEnvironment)     return e.hasComponent<EnvironmentComponent>();
     return false;
 }
 
@@ -180,6 +290,32 @@ bool applyPayload(const std::string& componentKey,
         applyParticleEmitter(*se.particleEmitter, entity, assets);
         return true;
     }
+    // F3H10:
+    if (componentKey == kKeyMeshRenderer) {
+        if (!se.meshRenderer.has_value()) return false;
+        applyMeshRenderer(*se.meshRenderer, entity, assets);
+        return true;
+    }
+    if (componentKey == kKeyDialog) {
+        if (!se.dialog.has_value()) return false;
+        applyDialog(*se.dialog, entity);
+        return true;
+    }
+    if (componentKey == kKeyItemPickup) {
+        if (!se.itemPickup.has_value()) return false;
+        applyItemPickup(*se.itemPickup, entity);
+        return true;
+    }
+    if (componentKey == kKeyVehicle) {
+        if (!se.vehicle.has_value()) return false;
+        applyVehicle(*se.vehicle, entity);
+        return true;
+    }
+    if (componentKey == kKeyEnvironment) {
+        if (!se.environment.has_value()) return false;
+        applyEnvironment(*se.environment, entity);
+        return true;
+    }
     return false;
 }
 
@@ -205,6 +341,32 @@ bool removeComponent(const std::string& componentKey, Entity entity) {
     if (componentKey == kKeyParticleEmitter) {
         if (!entity.hasComponent<ParticleEmitterComponent>()) return false;
         entity.removeComponent<ParticleEmitterComponent>();
+        return true;
+    }
+    // F3H10:
+    if (componentKey == kKeyMeshRenderer) {
+        if (!entity.hasComponent<MeshRendererComponent>()) return false;
+        entity.removeComponent<MeshRendererComponent>();
+        return true;
+    }
+    if (componentKey == kKeyDialog) {
+        if (!entity.hasComponent<DialogComponent>()) return false;
+        entity.removeComponent<DialogComponent>();
+        return true;
+    }
+    if (componentKey == kKeyItemPickup) {
+        if (!entity.hasComponent<ItemPickupComponent>()) return false;
+        entity.removeComponent<ItemPickupComponent>();
+        return true;
+    }
+    if (componentKey == kKeyVehicle) {
+        if (!entity.hasComponent<VehicleComponent>()) return false;
+        entity.removeComponent<VehicleComponent>();
+        return true;
+    }
+    if (componentKey == kKeyEnvironment) {
+        if (!entity.hasComponent<EnvironmentComponent>()) return false;
+        entity.removeComponent<EnvironmentComponent>();
         return true;
     }
     return false;

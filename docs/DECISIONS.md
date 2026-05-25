@@ -11,6 +11,53 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-25: F3H10 cierre — ComponentClipboard Tier 2 + 9 kits nuevos en convert_entity_modal
+
+### Decisión 1 — Scope acotado a "fruta accesible" (5 types con SavedX) vs forzar refactor del serializer
+
+**Contexto:** F3H10 originalmente planteaba extender el clipboard a 8 types nuevos (`mesh_renderer/audio_source/dialog/item_pickup/brush/vehicle/camera/environment`). Al revisar el código, 3 quedaron con dependencias técnicas no triviales: Audio + Camera **no están serializados al `.moodmap`** (gap F2 — necesitan `SavedAudio`/`SavedCamera` structs + writes/reads en `EntitySerializer`); Brush tiene `serializeBrush`/`parseBrush` en **namespace anónimo** de `SceneSerializer.cpp` y el applier está inline en el loop de `SceneLoader::applyMap`.
+
+**Decisión:** **diferir los 3 a F3H11** y cerrar F3H10 con los 5 types restantes (`mesh_renderer/dialog/item_pickup/vehicle/environment` — todos con `SavedX` ya existente en `SavedEntity`).
+
+**Razones:**
+- **Cluster técnico común**: los 3 diferidos comparten "modificación al `EntitySerializer`/`SceneLoader`" — sumarlos juntos en un hito dedicado es más coherente que mezclar en F3H10.
+- **Entrega de valor consistente**: F3H10 cierra con 5 types que cubren los EntityType más comunes (Mesh/NPC/Pickable/Vehicle/Environment). El dev ve impacto inmediato sin que F3H10 se infle.
+- **Riesgo de scope creep**: forzar Brush en F3H10 era un refactor del namespace anónimo del serializer + extraer ~75 LOC del SceneLoader. Mezclar con la mecánica del clipboard rompe el principio "un hito = un cambio coherente".
+
+**Alternativas descartadas:**
+- **Hacer los 8 en F3H10**: sumaba 3-5h de refactor del serializer encima del scope ya validado por el dev.
+- **Dropear F3H10 y arrancar F3H11 directamente**: pierde el valor de tener 5 types operativos antes de tocar el serializer.
+
+**Cómo aplica:** memoria `clipboard-brush-audio-camera` documenta el plan técnico detallado para F3H11+ (no se pierde contexto entre hitos).
+
+### Decisión 2 — Mantener convert_modal aditivo (confirmar la D1 de F3H9)
+
+**Contexto:** F3H9 D1 propuso "ampliar kits, no rework destructivo" como path para F3H10. Al implementar los 9 kits nuevos, se reconfirmó al toque la decisión.
+
+**Decisión:** **mantener aditivo**. Cada kit AGREGA su componente base + setea el `entityType` sin tocar el resto de componentes existentes.
+
+**Razones:**
+- **Caso de uso real**: el dev a veces necesita acumular kits (ej. NPC con AudioSource — el modelo "NPC" no necesariamente excluye tener un audio loop ambiental). Forzar borrado destructivo rompe ese flow.
+- **Undo destructivo es riesgoso**: borrar un componente con todos sus valores tuneados sin que el dev pueda undo trivial es mala UX. El dev limpia manualmente lo que no le sirve con click-derecho + Remove (que ya es undoable via `RemoveComponentCommand`).
+- El popup "Add Component" filtrado por type (F3H9 Stage 6) impide combinaciones absurdas en entidades NUEVAS. Las viejas mezcladas son responsabilidad del dev.
+
+**Revisar si:** emerge demanda real del dev por behavior destructivo. Probable F3H11+ o futuro.
+
+### Decisión 3 — El patrón "placeholder UX honesto" paga al extender el set
+
+**Contexto:** F3H9 D5 decidió que el Hierarchy "Copiar valores" muestra el menú item **grisado con tooltip honesto** ("pendiente F3H10+") para types fuera de Tier 1, en lugar de ocultarlos. La pregunta retrospectiva al implementar F3H10: ¿paga este patrón al extender?
+
+**Decisión (retrospectiva):** **sí, pago directo**. Al sumar los 5 types a `supportedKeys()`, el Hierarchy automáticamente dejó de grisar para esos types — cero líneas de código tocadas en `HierarchyPanel.cpp`. La UI ya consulta `ComponentClipboard::isSupported(baseKey)` como condición del grisado.
+
+**Razones:**
+- **Single source of truth**: el `supportedKeys()` set es la verdad. UI, applier y tests todos lo consultan. Extender = 1 línea en el set + branches en 4 dispatchers (componentNameKey/entityHasComponent/applyPayload/removeComponent).
+- **Cero churn en presentación**: tooltips, grisado, separadores — todo sigue consistente sin tocar UI.
+- **Plan futuro automático**: cuando F3H11 sume Brush/Audio/Camera, el Hierarchy también se actualiza sin diff de UI.
+
+**Lección:** placeholders UX honestos con check al backend pagan exponencialmente al cerrar el backlog. Vale más que ocultar items por completo (que sugiere "no existe").
+
+---
+
 ## 2026-05-24: F3H9 cierre — EntityType model + popup remake + Material Inspector Blender-style
 
 ### Decisión 1 — `EntityType` como campo de `TagComponent` (no componente separado)

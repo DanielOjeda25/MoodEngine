@@ -37,6 +37,14 @@ constexpr const char* kKeyLight           = "light";
 constexpr const char* kKeyTrigger         = "trigger";
 constexpr const char* kKeyForceField      = "force_field";
 constexpr const char* kKeyParticleEmitter = "particle_emitter";
+// F3H10: extension a Tier 2 — types con SavedX en SavedEntity (serializables
+// al `.moodmap` desde Fase 2). Audio/Camera siguen fuera (gap F2 — no
+// estan persistidos al schema, abrir hito dedicado).
+constexpr const char* kKeyMeshRenderer    = "mesh_renderer";
+constexpr const char* kKeyDialog          = "dialog";
+constexpr const char* kKeyItemPickup      = "item_pickup";
+constexpr const char* kKeyVehicle         = "vehicle";
+constexpr const char* kKeyEnvironment     = "environment";
 
 /// @brief True si componentKey esta en el set Tier 1 soportado por F3H9.
 bool isSupported(const std::string& componentKey);

@@ -20,6 +20,7 @@
 #include "engine/assets/manager/AssetManager.h"
 #include "core/i18n/I18n.h"
 #include "engine/render/resources/MeshAsset.h"
+#include "engine/scene/components/BrushComponent.h"  // F3H10: kit brush (no esta en Components.h)
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -392,6 +393,119 @@ void EditorApplication::renderConvertEntityModal() {
         target.addComponent<LightComponent>(light);
         target.getComponent<TagComponent>().entityType = EntityType::Light;  // F3H9
         Log::editor()->info("[convert] '{}' -> Luz direccional", tagName);
+        applied = true;
+    }
+
+    // F3H10: 9 kits adicionales para cubrir el resto de EntityTypes. Patron
+    // identico a los 4 originales — kitButton + addComponent + set entityType
+    // + log. Comportamiento sigue aditivo (no destructivo).
+
+    // --- Kit 5: Trigger volumétrico (solo) ---
+    const bool hasTrigger = target.hasComponent<TriggerComponent>();
+    if (kitButton("editor.convert_modal.kit.trigger",
+                  "editor.convert_modal.kit.trigger_desc",
+                  hasTrigger)) {
+        target.addComponent<TriggerComponent>(TriggerComponent{});
+        target.getComponent<TagComponent>().entityType = EntityType::Trigger;
+        Log::editor()->info("[convert] '{}' -> Trigger volumetrico", tagName);
+        applied = true;
+    }
+
+    // --- Kit 6: Emisor de partículas ---
+    const bool hasParticleEmitter = target.hasComponent<ParticleEmitterComponent>();
+    if (kitButton("editor.convert_modal.kit.particle_emitter",
+                  "editor.convert_modal.kit.particle_emitter_desc",
+                  hasParticleEmitter)) {
+        target.addComponent<ParticleEmitterComponent>(ParticleEmitterComponent{});
+        target.getComponent<TagComponent>().entityType = EntityType::ParticleEmitter;
+        Log::editor()->info("[convert] '{}' -> Emisor de particulas", tagName);
+        applied = true;
+    }
+
+    // --- Kit 7: Campo de fuerza ---
+    const bool hasForceField = target.hasComponent<ForceFieldComponent>();
+    if (kitButton("editor.convert_modal.kit.force_field",
+                  "editor.convert_modal.kit.force_field_desc",
+                  hasForceField)) {
+        target.addComponent<ForceFieldComponent>(ForceFieldComponent{});
+        target.getComponent<TagComponent>().entityType = EntityType::ForceField;
+        Log::editor()->info("[convert] '{}' -> Campo de fuerza", tagName);
+        applied = true;
+    }
+
+    // --- Kit 8: Entorno (skybox + fog + post-process) ---
+    const bool hasEnvironment = target.hasComponent<EnvironmentComponent>();
+    if (kitButton("editor.convert_modal.kit.environment",
+                  "editor.convert_modal.kit.environment_desc",
+                  hasEnvironment)) {
+        target.addComponent<EnvironmentComponent>(EnvironmentComponent{});
+        target.getComponent<TagComponent>().entityType = EntityType::Environment;
+        Log::editor()->info("[convert] '{}' -> Entorno", tagName);
+        applied = true;
+    }
+
+    // --- Kit 9: Fuente de audio ---
+    const bool hasAudio = target.hasComponent<AudioSourceComponent>();
+    if (kitButton("editor.convert_modal.kit.audio",
+                  "editor.convert_modal.kit.audio_desc",
+                  hasAudio)) {
+        target.addComponent<AudioSourceComponent>(AudioSourceComponent{});
+        target.getComponent<TagComponent>().entityType = EntityType::Audio;
+        Log::editor()->info("[convert] '{}' -> Fuente de audio", tagName);
+        applied = true;
+    }
+
+    // --- Kit 10: Cámara ---
+    const bool hasCamera = target.hasComponent<CameraComponent>();
+    if (kitButton("editor.convert_modal.kit.camera",
+                  "editor.convert_modal.kit.camera_desc",
+                  hasCamera)) {
+        target.addComponent<CameraComponent>(CameraComponent{});
+        target.getComponent<TagComponent>().entityType = EntityType::Camera;
+        Log::editor()->info("[convert] '{}' -> Camara", tagName);
+        applied = true;
+    }
+
+    // --- Kit 11: Vehículo stub ---
+    const bool hasVehicle = target.hasComponent<VehicleComponent>();
+    if (kitButton("editor.convert_modal.kit.vehicle",
+                  "editor.convert_modal.kit.vehicle_desc",
+                  hasVehicle)) {
+        VehicleComponent vc;
+        vc.configPath = "";  // dev asigna el .moodvehicle via Inspector despues
+        vc.dirty = true;
+        target.addComponent<VehicleComponent>(std::move(vc));
+        target.getComponent<TagComponent>().entityType = EntityType::Vehicle;
+        Log::editor()->info("[convert] '{}' -> Vehiculo stub", tagName);
+        applied = true;
+    }
+
+    // --- Kit 12: Brush vacío ---
+    const bool hasBrush = target.hasComponent<BrushComponent>();
+    if (kitButton("editor.convert_modal.kit.brush",
+                  "editor.convert_modal.kit.brush_desc",
+                  hasBrush)) {
+        target.addComponent<BrushComponent>(BrushComponent{});
+        target.getComponent<TagComponent>().entityType = EntityType::Brush;
+        Log::editor()->info("[convert] '{}' -> Brush vacio (definir caras via Brush Tool)",
+                              tagName);
+        applied = true;
+    }
+
+    // --- Kit 13: Mesh (placeholder, dev cambia el mesh via Inspector) ---
+    const bool hasMesh = target.hasComponent<MeshRendererComponent>();
+    if (kitButton("editor.convert_modal.kit.mesh",
+                  "editor.convert_modal.kit.mesh_desc",
+                  hasMesh)) {
+        const MeshAssetId placeholderId = m_assetManager
+            ? m_assetManager->missingMeshId()
+            : 0u;
+        auto mats = m_assetManager
+            ? m_assetManager->createMaterialsForMesh(placeholderId)
+            : std::vector<MaterialAssetId>{};
+        target.addComponent<MeshRendererComponent>(placeholderId, std::move(mats));
+        target.getComponent<TagComponent>().entityType = EntityType::Mesh;
+        Log::editor()->info("[convert] '{}' -> Mesh placeholder", tagName);
         applied = true;
     }
 
