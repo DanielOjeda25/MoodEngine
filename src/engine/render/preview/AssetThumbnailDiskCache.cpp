@@ -1,4 +1,4 @@
-#include "engine/render/preview/MeshThumbnailDiskCache.h"
+#include "engine/render/preview/AssetThumbnailDiskCache.h"
 
 #include "core/Log.h"
 
@@ -8,7 +8,7 @@
 #include <iomanip>
 #include <sstream>
 
-namespace Mood::MeshThumbnailDiskCache {
+namespace Mood::AssetThumbnailDiskCache {
 
 u64 hashLogicalPath(const std::string& logicalPath) {
     // FNV-1a 64-bit. Mismas constantes que LodCache (spec oficial).
@@ -23,11 +23,12 @@ u64 hashLogicalPath(const std::string& logicalPath) {
 }
 
 std::filesystem::path pathFor(const std::filesystem::path& cacheRoot,
+                                const std::string& prefix,
                                 const std::string& logicalPath,
                                 u32 size) {
     const u64 h = hashLogicalPath(logicalPath);
     std::ostringstream oss;
-    oss << "mesh_"
+    oss << prefix << "_"
         << std::hex << std::setw(16) << std::setfill('0') << h
         << "_" << std::dec << size << ".png";
     std::error_code ec;
@@ -38,7 +39,7 @@ std::filesystem::path pathFor(const std::filesystem::path& cacheRoot,
 }
 
 bool tryLoad(const std::filesystem::path& cachePath,
-              const std::filesystem::path& meshSourcePath,
+              const std::filesystem::path& assetSourcePath,
               std::vector<u8>& outRgba,
               u32& outW, u32& outH) {
     std::error_code ec;
@@ -46,13 +47,13 @@ bool tryLoad(const std::filesystem::path& cachePath,
     if (!std::filesystem::exists(cachePath, ec)) return false;
 
     // Mtime check: el cache vale si el PNG es al menos tan reciente como
-    // el mesh source. Si meshSourcePath esta vacio o no existe (path
+    // el asset source. Si assetSourcePath esta vacio o no existe (path
     // resuelto a algo invalido), asumimos valido — el caller decide.
-    if (!meshSourcePath.empty() &&
-        std::filesystem::exists(meshSourcePath, ec)) {
+    if (!assetSourcePath.empty() &&
+        std::filesystem::exists(assetSourcePath, ec)) {
         const auto cacheTime  = std::filesystem::last_write_time(cachePath, ec);
         if (ec) return false;
-        const auto sourceTime = std::filesystem::last_write_time(meshSourcePath, ec);
+        const auto sourceTime = std::filesystem::last_write_time(assetSourcePath, ec);
         if (ec) return false;
         if (cacheTime < sourceTime) return false;  // stale
     }
@@ -101,4 +102,4 @@ bool store(const std::filesystem::path& cachePath,
     return true;
 }
 
-} // namespace Mood::MeshThumbnailDiskCache
+} // namespace Mood::AssetThumbnailDiskCache

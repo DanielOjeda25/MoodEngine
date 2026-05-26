@@ -9,6 +9,7 @@
 
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/render/preview/MaterialPreviewRenderer.h"  // F3H15: setDiskCacheRoot
 #include "engine/render/preview/MeshThumbnailRenderer.h"  // F3H14: setDiskCacheRoot
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/scene/serialization/ProjectSerializer.h"
@@ -97,10 +98,13 @@ void EditorApplication::handleNewProject() {
     m_project = std::move(created);
     m_currentMapPath = m_project->defaultMap;
     m_projectDirty = false;
-    // F3H14: cache disco de thumbs apunta al proyecto recien creado.
-    if (m_meshThumbnails) {
-        m_meshThumbnails->setDiskCacheRoot(
-            m_project->root / ".cache" / "thumbs");
+    // F3H14/F3H15: cache disco de thumbs (meshes + materiales) apunta al
+    // proyecto recien creado. Mismo directorio compartido, prefix distinto
+    // en el filename ("mesh"/"mat").
+    {
+        const auto cacheRoot = m_project->root / ".cache" / "thumbs";
+        if (m_meshThumbnails)  m_meshThumbnails->setDiskCacheRoot(cacheRoot);
+        if (m_materialPreview) m_materialPreview->setDiskCacheRoot(cacheRoot);
     }
     // F3H6: snap step inicial del proyecto (settings.snap).
     {
@@ -178,10 +182,12 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
     m_project = std::move(loaded);
     m_currentMapPath = m_project->defaultMap;
     m_projectDirty = false;
-    // F3H14: cache disco de thumbs apunta al proyecto recien abierto.
-    if (m_meshThumbnails) {
-        m_meshThumbnails->setDiskCacheRoot(
-            m_project->root / ".cache" / "thumbs");
+    // F3H14/F3H15: cache disco de thumbs (meshes + materiales) apunta al
+    // proyecto recien abierto.
+    {
+        const auto cacheRoot = m_project->root / ".cache" / "thumbs";
+        if (m_meshThumbnails)  m_meshThumbnails->setDiskCacheRoot(cacheRoot);
+        if (m_materialPreview) m_materialPreview->setDiskCacheRoot(cacheRoot);
     }
     // F3H6: snap step inicial del proyecto cargado.
     {
@@ -307,11 +313,11 @@ void EditorApplication::handleCloseProject() {
     m_project.reset();
     m_currentMapPath.clear();
     m_projectDirty = false;
-    // F3H14: sin proyecto, cache disco off (los thumbs en memoria
-    // siguen valiendo hasta abrir el proximo proyecto).
-    if (m_meshThumbnails) {
-        m_meshThumbnails->setDiskCacheRoot({});
-    }
+    // F3H14/F3H15: sin proyecto, cache disco off para meshes + materiales
+    // (los thumbs en memoria siguen valiendo hasta abrir el proximo
+    // proyecto).
+    if (m_meshThumbnails)  m_meshThumbnails->setDiskCacheRoot({});
+    if (m_materialPreview) m_materialPreview->setDiskCacheRoot({});
     syncMapsSnapshot();  // F2H8: limpiar snapshot del menu Mapa.
     // El mapa de prueba queda como "fondo" mientras el modal Welcome esta
     // abierto (el usuario lo ve borroso detras del popup). Ayuda visualmente

@@ -24,6 +24,7 @@
 #include "core/Log.h"
 #include "core/Profiler.h"
 #include "core/UserSettings.h"  // F3H14: thumbnailResolution change detect
+#include "engine/render/preview/MaterialPreviewRenderer.h"  // F3H15: recreacion en vivo
 #include "engine/render/preview/MeshThumbnailRenderer.h"  // F3H14: recreacion en vivo
 #include "engine/render/scene_renderer/SceneRenderer.h"  // F3H14: iblIrradiance/Prefilter/BrdfLut
 #include "core/math/AABB.h"  // F2H29 Bloque C: AABB del block tool preview.
@@ -78,9 +79,9 @@ int EditorApplication::run() {
         tickHotReload(dt);
         tickFrameMetrics(dt, dtD);
 
-        // F3H14: si el dev movio el slider de thumbnailResolution en
-        // User Preferences, recrear el MeshThumbnailRenderer con el
-        // nuevo size + reinyectar todo. La cache memoria se pierde
+        // F3H14/F3H15: si el dev movio el slider de thumbnailResolution
+        // en User Preferences, recrear MeshThumbnailRenderer + MaterialPreviewRenderer
+        // con el nuevo size + reinyectar todo. La cache memoria se pierde
         // (proximo render regen), la cache disco persiste con el size
         // viejo en el filename (PNGs distintos por resolucion).
         {
@@ -88,20 +89,29 @@ int EditorApplication::run() {
             if (m_meshThumbnails && desired != m_lastThumbnailResolution
                 && desired >= 64 && desired <= 512) {
                 m_lastThumbnailResolution = desired;
-                auto newRenderer = std::make_unique<MeshThumbnailRenderer>(
-                    static_cast<u32>(desired));
+                const u32 sz = static_cast<u32>(desired);
+                auto newMeshRenderer = std::make_unique<MeshThumbnailRenderer>(sz);
+                auto newMatRenderer = std::make_unique<MaterialPreviewRenderer>(sz, sz);
                 if (m_sceneRenderer) {
-                    newRenderer->setIblTextures(
+                    newMeshRenderer->setIblTextures(
+                        m_sceneRenderer->iblIrradiance(),
+                        m_sceneRenderer->iblPrefilter(),
+                        m_sceneRenderer->iblBrdfLut());
+                    newMatRenderer->setIblTextures(
                         m_sceneRenderer->iblIrradiance(),
                         m_sceneRenderer->iblPrefilter(),
                         m_sceneRenderer->iblBrdfLut());
                 }
                 if (m_project.has_value()) {
-                    newRenderer->setDiskCacheRoot(
-                        m_project->root / ".cache" / "thumbs");
+                    const auto cacheRoot = m_project->root / ".cache" / "thumbs";
+                    newMeshRenderer->setDiskCacheRoot(cacheRoot);
+                    newMatRenderer->setDiskCacheRoot(cacheRoot);
                 }
-                m_meshThumbnails = std::move(newRenderer);
+                m_meshThumbnails  = std::move(newMeshRenderer);
+                m_materialPreview = std::move(newMatRenderer);
                 m_ui.assetBrowser().setThumbnailRenderer(m_meshThumbnails.get());
+                m_ui.assetBrowser().setMaterialPreviewRenderer(m_materialPreview.get());
+                m_ui.materialEditor().setPreviewRenderer(m_materialPreview.get());
             }
         }
 

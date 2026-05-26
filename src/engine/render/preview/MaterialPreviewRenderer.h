@@ -18,6 +18,7 @@
 
 #include <glad/gl.h>
 
+#include <filesystem>
 #include <memory>
 #include <unordered_map>
 
@@ -48,6 +49,13 @@ public:
     void setIblTextures(OpenGLCubemapTexture* irradiance,
                          OpenGLCubemapTexture* prefilter,
                          ITexture* brdfLut);
+
+    /// @brief F3H15: directorio donde persistir las miniaturas de
+    ///        materiales. Tipicamente `<projectRoot>/.cache/thumbs/`.
+    ///        Path vacio = cache disco off (solo memoria, comportamiento
+    ///        F2H81). El renderer crea el directorio al primer store si
+    ///        no existe. Llamar al cargar/cerrar proyecto.
+    void setDiskCacheRoot(std::filesystem::path cacheRoot);
 
     /// @brief Renderiza la esfera con el material indicado al FBO
     ///        interno. Restaura el FBO y viewport originales antes
@@ -82,6 +90,8 @@ private:
 
     std::unique_ptr<OpenGLFramebuffer> m_fb;
     std::unique_ptr<IShader>           m_pbrShader;
+    std::unique_ptr<IShader>           m_bgShader;     // F3H15: fondo gradient
+    GLuint                              m_dummyVao = 0; // F3H15: VAO empty para fullscreen draw
 
     // SSBOs vacios para compatibilidad con el shader PBR (Forward+
     // bindings 2/3/4). Para el preview no hay point lights — un solo
@@ -97,6 +107,10 @@ private:
 
     // F2H81: cache de miniaturas por materialId (FBO con textura persistente).
     std::unordered_map<u32, std::unique_ptr<OpenGLFramebuffer>> m_thumbCache;
+
+    // F3H15: cache disco. Vacio = off. Cuando seteado, `thumbnail`
+    // intenta `tryLoad` antes de rendear y `store` despues.
+    std::filesystem::path m_diskCacheRoot;
 };
 
 } // namespace Mood

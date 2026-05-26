@@ -11,6 +11,81 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-26: F3H15 cierre — Mejoras del MaterialPreviewRenderer (cache disco compartido + resolución compartida + gradiente reusado)
+
+### Decisión 1 — Helper compartido `AssetThumbnailDiskCache` con `prefix` vs caches separadas
+
+**Contexto:** F3H14 creó `MeshThumbnailDiskCache` específico para meshes. F3H15 necesita una cache disco análoga para materiales. La opción "obvia" era crear `MaterialThumbnailDiskCache` espejo, copiando el algoritmo entero.
+
+**Decisión:** Renombrar `MeshThumbnailDiskCache` → `AssetThumbnailDiskCache` (más genérico) + agregar parámetro `prefix` en `pathFor` para discriminar tipos. Filename: `<prefix>_<hash>_<size>.png` con `"mesh"` o `"mat"` (o futuros `"anim"`, `"audio"`).
+
+**Razones:**
+1. **Algoritmo 100% idéntico**: FNV-1a, mtime check, stbi_load/write, flip vertical. La única diferencia entre las 2 caches es el filename prefix.
+2. **Evitar drift**: si en el futuro se agrega features al cache (compresión PNG distinta, sidecar opcional, etc.), un solo lugar para tocar. Caches separadas habrían divergido por inevitable copy-paste mantenido a mano.
+3. **Extensibilidad gratis**: agregar un thumb de animaciones o de audio waveforms = 1 nuevo prefix, cero código nuevo de cache.
+4. **Migración trivial**: el call-site existente del mesh (`MeshThumbnailRenderer`) pasa de `pathFor(root, logical, size)` a `pathFor(root, "mesh", logical, size)` — 1 token de diff.
+
+**Alternativas descartadas:**
+- Caches separadas (`MeshThumbnailDiskCache` + `MaterialThumbnailDiskCache`): duplicación pura, ~200 LOC para mantener sincronizadas.
+- Cache abstracta con jerarquía de clases: overengineering para un detalle (prefix) que solo varía como literal.
+
+**Revisión:** si emerge una distinción real entre cómo se cachea meshes vs materiales (ej. el material necesita lighting state serializado adentro del archivo), revisitar split.
+
+### Decisión 2 — Una sola pref `thumbnailResolution` afecta meshes + materiales
+
+**Contexto:** F3H14 introdujo `UserSettings.editor.thumbnailResolution` para los thumbs de meshes. Una opción para F3H15 era agregar una pref hermana `materialThumbnailResolution` (config independiente per-tipo).
+
+**Decisión:** Reusar la misma pref. Un solo slider en User Preferences afecta los DOS renderers a la vez.
+
+**Razones:**
+1. **UX consistente**: el dev no piensa "qué resolución para meshes / qué resolución para materiales" — piensa "quiero thumbs más grandes". Un slider con un significado claro.
+2. **Menos ruido en Preferences**: 1 slider en lugar de 2.
+3. **Caso de asimetría hipotético**: no hay caso de uso actual donde el dev quiera meshes a 96 y materiales a 256. Si emerge, agregar la pref específica después.
+4. **Implementación más simple en `EditorApplication_Run.cpp`**: el bloque de live recreate se amplía a recrear AMBOS renderers en un solo `if (desired != m_lastThumbnailResolution)`. Dos prefs separadas requerirían tracking de `m_lastMeshRes` + `m_lastMatRes` independientes.
+
+**Alternativas descartadas:**
+- Pref por tipo: aumenta superficie de configuración sin caso de uso identificado.
+- Pref global + override per-tipo: más complejo aún, sin payoff visible.
+
+**Revisión:** si un dev pide explícitamente "materiales más grandes que meshes en mi 4K", agregar `materialThumbnailResolutionOverride` (opcional, default = global pref).
+
+### Decisión 3 — Shader `thumbnail_bg` compartido entre los 2 renderers, instancias separadas
+
+**Contexto:** F3H14 creó `shaders/thumbnail_bg.vert/frag` para el gradient del fondo del MeshThumbnailRenderer. F3H15 también necesita ese gradient para el MaterialPreviewRenderer. Opciones: (A) singleton del shader compartido; (B) cada renderer carga su propia instancia.
+
+**Decisión:** Opción B — instancias separadas. Cada renderer hace `std::make_unique<OpenGLShader>("shaders/thumbnail_bg.vert", "shaders/thumbnail_bg.frag")` en su propio constructor.
+
+**Razones:**
+1. **Shader trivial**: vert + frag son ~30 LOC totales, instanciar 2 veces es ~ms de overhead al boot.
+2. **Lifecycle simple**: cada renderer maneja su `unique_ptr<IShader>` y lo destruye con su `~` propio. No hay que sincronizar quién es dueño del shader compartido.
+3. **Patrón consistente con `m_pbrShader`**: ambos renderers YA tenían su propio `m_pbrShader` por instancia (no compartido). Mantener el mismo patrón para `m_bgShader`.
+4. **Recreación al cambiar resolución (decisión D3 de F3H14)**: al cambiar la pref, los renderers se destruyen y recrean. Un singleton del shader sobreviviría la recreación; instancias propias mueren con el renderer y se reconstruyen — simpler reasoning.
+
+**Alternativas descartadas:**
+- Singleton del shader: complica el ownership; el shader vive más allá del último renderer que lo usa.
+- Compartir vía puntero crudo inyectado: el caller (EditorApplication) tendría que cargar el shader y mantenerlo vivo. Más wiring.
+
+**Revisión:** si el editor crece a tener 10+ renderers que reusan este shader, considerar shader registry o pre-warm cache.
+
+### Decisión 4 — Filename con prefix `mat_` (no `material_`)
+
+**Contexto:** Prefix del filename para discriminar materiales de meshes en el cache disco. Opciones: `mat_<hash>_<size>.png` vs `material_<hash>_<size>.png`.
+
+**Decisión:** `mat_`. 4 caracteres ahorrados x N archivos en el directorio.
+
+**Razones:**
+1. **Listing más legible**: con 50+ thumbs en `<proyecto>/.cache/thumbs/`, columnas alineadas se ven mejor con prefijos cortos. `mesh_` y `mat_` son visualmente parejos.
+2. **Tradicion**: shorts prefixes tipo `mat`, `tex`, `obj` son convención en muchos engines (Substance, Unreal asset naming).
+3. **Sin colisión**: `mat` no se confunde con otros tipos planeados (`mesh`, `anim`, `audio`).
+
+**Alternativas descartadas:**
+- `material_`: más explícito pero infla el filename sin valor de claridad (el contexto del directorio `thumbs/` ya hace obvio que son thumbs).
+- `m_` o `t_`: demasiado críptico, futuro grep difícil.
+
+**Revisión:** si emerge ambigüedad (ej. `mat_` confunde con "matrix"), renombrar y agregar comando de migración.
+
+---
+
 ## 2026-05-26: F3H14 cierre — Mejoras del MeshThumbnailRenderer (cache disco + resolución + gradiente + mtime)
 
 ### Decisión 1 — Filename incluye `_<size>` (coexistencia de resoluciones)

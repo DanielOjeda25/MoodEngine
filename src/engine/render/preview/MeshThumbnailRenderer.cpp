@@ -5,7 +5,7 @@
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
 #include "engine/render/backend/opengl/OpenGLSSBO.h"
 #include "engine/render/backend/opengl/OpenGLShader.h"
-#include "engine/render/preview/MeshThumbnailDiskCache.h"  // F3H14
+#include "engine/render/preview/AssetThumbnailDiskCache.h"  // F3H14
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/rhi/IMesh.h"
@@ -287,12 +287,12 @@ GLuint MeshThumbnailRenderer::thumbnailFor(u32 meshId, AssetManager& assets) {
     const bool diskOn = !m_diskCacheRoot.empty() && !logicalPath.empty();
     std::filesystem::path cachePath;
     if (diskOn) {
-        cachePath = MeshThumbnailDiskCache::pathFor(
-            m_diskCacheRoot, logicalPath, m_size);
+        cachePath = AssetThumbnailDiskCache::pathFor(
+            m_diskCacheRoot, "mesh", logicalPath, m_size);
         const auto meshFsPath = assets.resolvePath(logicalPath);
         std::vector<u8> rgba;
         u32 cachedW = 0, cachedH = 0;
-        if (MeshThumbnailDiskCache::tryLoad(
+        if (AssetThumbnailDiskCache::tryLoad(
                 cachePath, meshFsPath, rgba, cachedW, cachedH) &&
             cachedW == m_size && cachedH == m_size) {
             // HIT: armar FBO con el size esperado + uploadear el RGBA al
@@ -351,7 +351,7 @@ GLuint MeshThumbnailRenderer::thumbnailFor(u32 meshId, AssetManager& assets) {
                          rowBytes,
                          flipped.data() + y * rowBytes);
         }
-        MeshThumbnailDiskCache::store(cachePath, flipped.data(), m_size, m_size);
+        AssetThumbnailDiskCache::store(cachePath, flipped.data(), m_size, m_size);
     }
 
     fb->unbind();

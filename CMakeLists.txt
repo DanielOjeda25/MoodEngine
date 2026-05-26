@@ -479,9 +479,9 @@ add_library(mood_engine_lib STATIC
     src/engine/render/backend/opengl/OpenGLClothRenderer.cpp  # F2H75 Bloque E
 
     src/engine/render/pipeline/LightGrid.cpp
+    src/engine/render/preview/AssetThumbnailDiskCache.cpp
     src/engine/render/preview/MaterialPreviewRenderer.cpp
     src/engine/render/preview/MeshThumbnailRenderer.cpp
-    src/engine/render/preview/MeshThumbnailDiskCache.cpp
     src/engine/render/preview/AnimationPreviewRenderer.cpp
     src/engine/render/scene_renderer/RenderBatching.cpp
     src/engine/render/scene_renderer/SceneRenderer.cpp

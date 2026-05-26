@@ -6,6 +6,7 @@
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
 #include "engine/render/backend/opengl/OpenGLSSBO.h"
 #include "engine/render/backend/opengl/OpenGLShader.h"
+#include "engine/render/preview/AssetThumbnailDiskCache.h"  // F3H15
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/rhi/IMesh.h"
@@ -17,8 +18,10 @@
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <stdexcept>
+#include <vector>
 
 namespace Mood {
 
@@ -60,6 +63,14 @@ MaterialPreviewRenderer::MaterialPreviewRenderer(u32 width, u32 height)
     m_pbrShader = std::make_unique<OpenGLShader>(
         "shaders/pbr.vert", "shaders/pbr.frag");
 
+    // F3H15: shader del fondo gradient (mismo que F3H14 — un solo set
+    // de archivos compartido entre los preview renderers).
+    m_bgShader = std::make_unique<OpenGLShader>(
+        "shaders/thumbnail_bg.vert", "shaders/thumbnail_bg.frag");
+
+    // F3H15: VAO empty necesario para glDrawArrays en core profile.
+    glGenVertexArrays(1, &m_dummyVao);
+
     // SSBOs vacios para Forward+: 1 dummy point light (count=0 igual,
     // pero el SSBO no puede estar vacio porque algunos drivers fallan
     // al bindear un buffer de tamaño 0).
@@ -77,7 +88,16 @@ MaterialPreviewRenderer::MaterialPreviewRenderer(u32 width, u32 height)
     m_lightIndicesSsbo->upload(&zero, sizeof(u32));
 }
 
-MaterialPreviewRenderer::~MaterialPreviewRenderer() = default;
+MaterialPreviewRenderer::~MaterialPreviewRenderer() {
+    if (m_dummyVao != 0) {
+        glDeleteVertexArrays(1, &m_dummyVao);
+        m_dummyVao = 0;
+    }
+}
+
+void MaterialPreviewRenderer::setDiskCacheRoot(std::filesystem::path cacheRoot) {
+    m_diskCacheRoot = std::move(cacheRoot);
+}
 
 void MaterialPreviewRenderer::setIblTextures(OpenGLCubemapTexture* irradiance,
                                                OpenGLCubemapTexture* prefilter,
@@ -120,6 +140,45 @@ GLuint MaterialPreviewRenderer::thumbnail(u32 materialId, AssetManager& assets) 
     MaterialAsset* mat = assets.getMaterial(materialId);
     if (mat == nullptr) return 0u;
 
+    // F3H15: cache disco. Mismo patron que F3H14 en MeshThumbnailRenderer
+    // — el filename usa prefix "mat" para discriminar de los meshes en el
+    // mismo directorio .cache/thumbs/.
+    const std::string logicalPath = assets.materialPathOf(materialId);
+    const bool diskOn = !m_diskCacheRoot.empty() && !logicalPath.empty();
+    std::filesystem::path cachePath;
+    if (diskOn) {
+        cachePath = AssetThumbnailDiskCache::pathFor(
+            m_diskCacheRoot, "mat", logicalPath, m_width);
+        const auto matFsPath = assets.resolvePath(logicalPath);
+        std::vector<u8> rgba;
+        u32 cachedW = 0, cachedH = 0;
+        if (AssetThumbnailDiskCache::tryLoad(
+                cachePath, matFsPath, rgba, cachedW, cachedH) &&
+            cachedW == m_width && cachedH == m_height) {
+            // HIT: armar FBO + uploadear el RGBA al color attachment.
+            // Flip vertical (PNG top-to-bottom -> GL bottom-to-top) para
+            // mantener orientacion consistente con el path render.
+            std::vector<u8> flipped(rgba.size());
+            const usize rowBytes = static_cast<usize>(m_width) * 4;
+            for (u32 y = 0; y < m_height; ++y) {
+                std::copy_n(rgba.data() + (m_height - 1 - y) * rowBytes,
+                             rowBytes,
+                             flipped.data() + y * rowBytes);
+            }
+            auto fb = std::make_unique<OpenGLFramebuffer>(
+                m_width, m_height, OpenGLFramebuffer::Format::LDR);
+            const GLuint tex = fb->glColorTextureId();
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                             static_cast<GLsizei>(m_width),
+                             static_cast<GLsizei>(m_height),
+                             GL_RGBA, GL_UNSIGNED_BYTE, flipped.data());
+            glBindTexture(GL_TEXTURE_2D, 0);
+            m_thumbCache.emplace(materialId, std::move(fb));
+            return tex;
+        }
+    }
+
     auto fb = std::make_unique<OpenGLFramebuffer>(
         m_width, m_height, OpenGLFramebuffer::Format::LDR);
     GLint prevViewport[4]{};
@@ -127,6 +186,26 @@ GLuint MaterialPreviewRenderer::thumbnail(u32 materialId, AssetManager& assets) 
     fb->bind();
     glViewport(0, 0, static_cast<GLsizei>(m_width), static_cast<GLsizei>(m_height));
     renderSphereToBoundFbo(*mat, assets, 0.6f);  // ángulo fijo 3/4 (estático)
+
+    // F3H15: readback + store al disco (solo si hay cache disco seteado).
+    if (diskOn) {
+        std::vector<u8> rgba(static_cast<usize>(m_width) * m_height * 4);
+        glReadPixels(0, 0,
+                      static_cast<GLsizei>(m_width),
+                      static_cast<GLsizei>(m_height),
+                      GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+        // Flip vertical: GL bottom-to-top -> PNG top-to-bottom.
+        std::vector<u8> flipped(rgba.size());
+        const usize rowBytes = static_cast<usize>(m_width) * 4;
+        for (u32 y = 0; y < m_height; ++y) {
+            std::copy_n(rgba.data() + (m_height - 1 - y) * rowBytes,
+                         rowBytes,
+                         flipped.data() + y * rowBytes);
+        }
+        AssetThumbnailDiskCache::store(
+            cachePath, flipped.data(), m_width, m_height);
+    }
+
     fb->unbind();
     glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
 
@@ -147,9 +226,20 @@ void MaterialPreviewRenderer::renderSphereToBoundFbo(const MaterialAsset& mat,
     IMesh* mesh = sphere->submeshes[0].mesh.get();
     if (mesh == nullptr) return;
 
-    // Clear con un gris neutro para que el material se distinga del fondo.
+    // Clear con un gris neutro como fallback si el shader bg fallo.
     glClearColor(0.18f, 0.18f, 0.20f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // F3H15: fondo gradient (mismo patron que F3H14 en MeshThumbnailRenderer).
+    // Depth test off para que el quad fullscreen no escriba depth.
+    if (m_bgShader && m_dummyVao != 0) {
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        m_bgShader->bind();
+        glBindVertexArray(m_dummyVao);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glBindVertexArray(0);
+    }
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);

@@ -347,7 +347,14 @@ EditorApplication::EditorApplication() {
     // post SceneRenderer para inyectarle el IBL compartido. Si la carga
     // del IBL del SceneRenderer fallo (try/catch silencioso en su ctor),
     // los handles seran nullptr y el preview cae a ambient escalar.
-    m_materialPreview = std::make_unique<MaterialPreviewRenderer>(256u, 256u);
+    // F3H15: la resolucion del MaterialPreviewRenderer usa la misma pref
+    // UserSettings.editor.thumbnailResolution que F3H14 (un solo slider
+    // afecta meshes + materiales — consistencia UX).
+    {
+        const u32 matRes = static_cast<u32>(
+            UserSettings::editor().thumbnailResolution);
+        m_materialPreview = std::make_unique<MaterialPreviewRenderer>(matRes, matRes);
+    }
     m_materialPreview->setIblTextures(
         m_sceneRenderer->iblIrradiance(),
         m_sceneRenderer->iblPrefilter(),
