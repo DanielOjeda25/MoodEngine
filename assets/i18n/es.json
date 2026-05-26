@@ -265,6 +265,7 @@
   "editor.panel.inspector.entity_type_label": "Tipo: {}",
   "editor.panel.inspector.remove_disabled_base": "No se puede quitar el componente base. Borrá la entidad si querés deshacerte de ella.",
   "editor.panel.inspector.remove_disabled_autogen": "Entidad auto-generada por el grid del mapa. Read-only.",
+  "editor.panel.inspector.reset_default": "Restablecer al valor por defecto",
   "entity_type.generic": "Genérica",
   "entity_type.light": "Luz",
   "entity_type.camera": "Cámara",

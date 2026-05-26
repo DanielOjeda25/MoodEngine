@@ -20,6 +20,11 @@ namespace Mood {
 void InspectorPanel::renderParticleEmitterSection(Entity e) {
     auto& em = e.getComponent<ParticleEmitterComponent>();
     if (!beginComponentSection<ParticleEmitterComponent>(e, ICON_FA_FIRE " Particle Emitter")) return;
+    // F3H13: defaults de los fields mas tuneados (Components_Gameplay.h:147-).
+    constexpr bool kPeDefaultEmitting     = true;
+    constexpr bool kPeDefaultAdditive     = false;
+    constexpr f32  kPeDefaultEmitRate     = 60.0f;
+    constexpr u32  kPeDefaultMaxParticles = 256;
 
     const std::string emittingLabel = I18n::T("editor.panel.inspector.particles.emitting") + "##pe";
     if (ImGui::Checkbox(emittingLabel.c_str(), &em.emitting)) m_editedThisFrame = true;
@@ -28,6 +33,15 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             en.getComponent<ParticleEmitterComponent>().emitting = v;
         },
         "Toggle particle emitting");
+    if (detail::inspectorResetButton<bool>(m_ui, e, "pe_emitting",
+            em.emitting, kPeDefaultEmitting,
+            [](Entity& en, const bool& v) {
+                if (en.hasComponent<ParticleEmitterComponent>())
+                    en.getComponent<ParticleEmitterComponent>().emitting = v;
+            },
+            "Reset particle emitting")) {
+        m_editedThisFrame = true;
+    }
     ImGui::SameLine();
     const std::string additiveLabel = I18n::T("editor.panel.inspector.particles.additive") + "##pe";
     if (ImGui::Checkbox(additiveLabel.c_str(), &em.additive)) m_editedThisFrame = true;
@@ -36,6 +50,15 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             en.getComponent<ParticleEmitterComponent>().additive = v;
         },
         "Toggle particle additive");
+    if (detail::inspectorResetButton<bool>(m_ui, e, "pe_additive",
+            em.additive, kPeDefaultAdditive,
+            [](Entity& en, const bool& v) {
+                if (en.hasComponent<ParticleEmitterComponent>())
+                    en.getComponent<ParticleEmitterComponent>().additive = v;
+            },
+            "Reset particle additive")) {
+        m_editedThisFrame = true;
+    }
     ImGui::SameLine();
     const std::string localSpaceLabel = I18n::T("editor.panel.inspector.particles.local_space") + "##pe";
     if (ImGui::Checkbox(localSpaceLabel.c_str(), &em.localSpace)) m_editedThisFrame = true;
@@ -96,6 +119,15 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
                 en.getComponent<ParticleEmitterComponent>().emitRate = v;
             },
             "Editar emit rate", 1.0f, 0.0f, 10000.0f)) {
+        m_editedThisFrame = true;
+    }
+    if (detail::inspectorResetButton<f32>(m_ui, e, "pe_emitRate",
+            em.emitRate, kPeDefaultEmitRate,
+            [](Entity& en, const f32& v) {
+                if (en.hasComponent<ParticleEmitterComponent>())
+                    en.getComponent<ParticleEmitterComponent>().emitRate = v;
+            },
+            "Reset emit rate")) {
         m_editedThisFrame = true;
     }
     const std::string lifeLabel = I18n::T("editor.panel.inspector.particles.lifetime") + "##pe";
@@ -200,6 +232,22 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
             emc.aliveCount = 0;
         },
         "Editar maxParticles");
+    if (detail::inspectorResetButton<u32>(m_ui, e, "pe_maxParticles",
+            em.maxParticles, kPeDefaultMaxParticles,
+            [](Entity& en, const u32& v) {
+                if (!en.hasComponent<ParticleEmitterComponent>()) return;
+                auto& emc = en.getComponent<ParticleEmitterComponent>();
+                emc.maxParticles = v;
+                emc.alive.clear();
+                emc.positions.clear();
+                emc.velocities.clear();
+                emc.ages.clear();
+                emc.lifetimes.clear();
+                emc.aliveCount = 0;
+            },
+            "Reset maxParticles")) {
+        m_editedThisFrame = true;
+    }
     ImGui::TextDisabled("%s",
         I18n::T("editor.panel.inspector.particles.alive_count",
                 em.aliveCount, em.maxParticles).c_str());

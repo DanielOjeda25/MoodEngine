@@ -11,6 +11,81 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-26: F3H13 cierre — Reset to default per-field del Inspector + cierre Sub-fase 3.2
+
+### Decisión 1 — Helper en `InspectorPanel_Internal.h` vs duplicar el `resetButton<T>` de `ProjectSettingsPanel`/`UserPreferencesPanel`
+
+**Contexto:** Sub-fase 3.1 ya introdujo un helper `resetButton<T>` en `ProjectSettingsPanel` (F3H4) y `UserPreferencesPanel` (F3H7) para los sliders de configuración. La opción "obvia" era extraer ese helper a un header compartido y reusarlo en el Inspector.
+
+**Decisión:** Crear un helper **separado** `detail::inspectorResetButton<T>` en `src/editor/panels/scene/InspectorPanel_Internal.h`, distinto del de Settings/Preferences.
+
+**Razones:**
+1. **Contextos distintos**: el Inspector edita `Entity`s a través de `EditorUI` + `HistoryStack` — cada reset es un `EditPropertyCommand<T>` en el stack (Ctrl+Z debe revertir). Los reset de Settings/Preferences operan sobre **copias locales** del struct + flags `dirty/saveNow` que se persisten al disco al soltar el slider. No tocan `HistoryStack`.
+2. **Firmas naturales distintas**: el del Inspector recibe `(ui, entity, idSuffix, current, default, setter, cmdLabel)`; el de Settings recibe `(buttonId, current, default, settersWithDirtyFlag)`. Generalizarlo implica un helper con `std::variant` o `if constexpr` que cubra ambos contextos — más complejo que duplicar 20 líneas.
+3. **Estabilidad**: los call-sites de Settings/Preferences son estables (4 paneles, ~30 sliders) y los del Inspector también (6 paneles, ~24 fields). No hay riesgo de "ay, cambiar la API del helper compartido rompe los dos lados".
+
+**Alternativas descartadas:**
+- Helper genérico en `editor/ui/`: agregaría dependencias cruzadas (Inspector incluye un helper de UI que sabe de `EditorUI`/`HistoryStack`; Settings que NO los necesita los heredaría inadvertidamente).
+- Heredar uno de otro: vínculo conceptual débil — son convenciones UI parecidas, no la misma operación.
+
+**Revisión:** si emergiera un tercer contexto (ej. Asset Browser con reset-to-default de import settings) y los 3 compartieran más del 80% de la firma, refactorear a un helper base. Mientras tanto, duplicar 20 LOC es más legible.
+
+### Decisión 2 — Reuso de `pushAtomicEdit<T>` (de F3H12) vs helper nuevo
+
+**Contexto:** El reset hace `current → defaultValue` y eso es un cambio atómico (1 click, sin frames intermedios). F3H12 introdujo `pushAtomicEdit<T>` exactamente para eso (combos, checkboxes, file pickers).
+
+**Decisión:** Reusar `pushAtomicEdit<T>` directamente — no crear un wrapper específico de "reset".
+
+**Razones:**
+1. **Semántica idéntica**: el reset es indistinguible de un checkbox toggle o un combo change desde la perspectiva del HistoryStack — captura `before`, aplica `after`, push como `EditPropertyCommand<T>`. Inventar otro helper es ceremonial.
+2. **Mensaje del command**: el caller pasa el `cmdLabel` ("Reset Light enabled", "Reset RigidBody mass", etc) — eso ya identifica la operación si el dev mira el HistoryStack.
+
+**Alternativas descartadas:**
+- `pushResetEdit<T>` específico: cero valor agregado, mismo cuerpo, mismo signature menos legibilidad por separación artificial.
+
+**Revisión:** si el reset eventualmente necesitara batch (un solo Ctrl+Z deshace 7 fields a la vez como hizo F3H12 con `EditEnvironmentSubsetCommand`), revisar el diseño. Por ahora cada reset es per-field — un Ctrl+Z deshace UN reset, alineado con la convención Unity (no Unreal — Unreal a veces agrupa).
+
+### Decisión 3 — No-render del botón cuando `current == defaultValue`
+
+**Contexto:** En cada `renderXxxSection` el botón ↺ se evalúa para todos los fields que tienen reset. La opción alternativa: renderear siempre el botón, pero gris/disabled cuando ya está en default.
+
+**Decisión:** **No renderear nada** cuando `current == default`. El botón solo aparece para campos con override.
+
+**Razones:**
+1. **Convención Unity/Unreal**: Unity (>2020) muestra el ↺ solo si hay override; Unreal lo muestra cuando el field difiere del template/parent. Es la UX esperada.
+2. **Surface de overrides**: el dev escanea el Inspector y ve **dónde tocó** — no se pierde entre 24 botones grises que dicen "no hay nada que resetear".
+3. **Visual noise zero**: en un componente recién creado con todos los defaults, no hay un solo ↺ — el panel se ve limpio.
+
+**Alternativas descartadas:**
+- Botón siempre visible (gris/enabled según override): aumenta ruido visual sin ganancia (la decisión "puedo resetear esto" es informacionalmente vacía si ya está en default).
+- Botón visible solo en hover de la fila: cambia el patrón de descubribilidad — el dev no sabría a priori qué campos son reseteables. Worse than current.
+
+**Revisión:** si emergiera un caso donde el dev quiere "indicador visual de que un field tiene default conocido" (ej. para distinguir entre "campo con default 0" y "campo sin default"), reabrir. Por ahora todos los fields del Inspector tienen default conocido (la construcción `{}` del componente).
+
+### Decisión 4 — Scope acotado a 6 paneles (Light/Trigger/ForceField/Particle/Audio/RigidBody)
+
+**Contexto:** El plan original mencionó cobertura amplia ("cada Inspector field"). Cubrir TODOS los paneles incluye Cloth/Joint/Ragdoll/MeshRenderer/Brush/Vehicle/Script/Animator/Inventory — cada uno con sus propios fields.
+
+**Decisión:** F3H13 cubre los 6 paneles más usados (Light/Trigger/ForceField/ParticleEmitter/AudioSource/RigidBody). Cloth/Joint/Ragdoll/MeshRenderer/Brush quedan diferidos con backlog explícito en memoria `project_reset_button_coverage`. Script/Animator/Inventory/Vehicle/Camera no se tocaron — sus fields son configuración compleja, no edits frecuentes per-field.
+
+**Razones:**
+1. **Plan discipline**: el hito cierra Sub-fase 3.2; el alcance es "introducir el patrón + cubrir el grueso del Inspector", NO "cobertura 100%". Inflar a 11 paneles añade horas sin valor proporcional (los paneles diferidos se editan raramente; cuando se necesite, el helper ya está listo).
+2. **Defaults no triviales para los diferidos**:
+   - **Cloth**: defaults de mass/damping/iterations dependen del mesh (un cloth grande necesita más iterations); reset a "1.0/0.5/10" puede romper la simulación visualmente.
+   - **Joint**: anchor/axis/limits son función del tipo de joint (hinge vs ball vs slider) — defaults universales no existen.
+   - **Ragdoll**: replicable trivialmente con el helper, pero uso bajo justifica diferir.
+   - **MeshRenderer**: defaults de material son per-slot (textura/color por slot), no un "default canónico genérico".
+   - **Brush**: vertices/faces no son property-drawer — el "reset" semántico es vaciar el brush, ya cubierto por otro flow.
+3. **Plan discipline + memoria explícita**: cumple la regla "pendings futuros esperan su hito" — el backlog vive en `project_reset_button_coverage.md` con replicación del patrón ya documentada.
+
+**Alternativas descartadas:**
+- Cobertura total: 4-6 horas adicionales con valor marginal; arriesga romper Cloth/Joint con defaults incorrectos.
+- Solo helper + 1 panel (Light) como demo: subutiliza el helper, deja pelado al resto del Inspector.
+
+**Revisión:** si el dev al usar el editor pide reset en Cloth/Joint/Ragdoll/MeshRenderer/Brush, extender en un hito propio (estimado: 1-2h con el helper ya en su lugar).
+
+---
+
 ## 2026-05-26: F3H12 cierre — Undo coverage audit del Inspector + fixes en 8 paneles
 
 ### Decisión 1 — `pushAtomicEdit<T>` helper separado de `pushEditIfDone<T>`

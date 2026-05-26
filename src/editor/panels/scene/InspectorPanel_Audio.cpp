@@ -23,6 +23,11 @@ namespace Mood {
 void InspectorPanel::renderAudioSourceSection(Entity e) {
     auto& asrc = e.getComponent<AudioSourceComponent>();
     if (!beginComponentSection<AudioSourceComponent>(e, ICON_FA_VOLUME_HIGH " AudioSource")) return;
+    // F3H13: defaults (Components_Gameplay.h:57-).
+    constexpr f32  kAudioDefaultVolume      = 1.0f;
+    constexpr bool kAudioDefaultLoop        = false;
+    constexpr bool kAudioDefaultPlayOnStart = true;
+    constexpr bool kAudioDefaultIs3D        = false;
 
     // Lista de clips del manager como combo. Si aun no hay assets manager
     // inyectado, mostrar solo el id crudo.
@@ -86,6 +91,15 @@ void InspectorPanel::renderAudioSourceSection(Entity e) {
             en.getComponent<AudioSourceComponent>().volume = v;
         },
         "Editar audio volume");
+    if (detail::inspectorResetButton<f32>(m_ui, e, "as_volume",
+            asrc.volume, kAudioDefaultVolume,
+            [](Entity& en, const f32& v) {
+                if (en.hasComponent<AudioSourceComponent>())
+                    en.getComponent<AudioSourceComponent>().volume = v;
+            },
+            "Reset audio volume")) {
+        m_editedThisFrame = true;
+    }
     const std::string loopLabel = I18n::T("editor.panel.inspector.audio.loop") + "##as";
     if (ImGui::Checkbox(loopLabel.c_str(), &asrc.loop)) { m_editedThisFrame = true; }
     detail::pushEditIfDone<bool>(m_editTracker, m_ui, e, asrc.loop,
@@ -93,6 +107,15 @@ void InspectorPanel::renderAudioSourceSection(Entity e) {
             en.getComponent<AudioSourceComponent>().loop = v;
         },
         "Toggle audio loop");
+    if (detail::inspectorResetButton<bool>(m_ui, e, "as_loop",
+            asrc.loop, kAudioDefaultLoop,
+            [](Entity& en, const bool& v) {
+                if (en.hasComponent<AudioSourceComponent>())
+                    en.getComponent<AudioSourceComponent>().loop = v;
+            },
+            "Reset audio loop")) {
+        m_editedThisFrame = true;
+    }
     ImGui::SameLine();
     const std::string playOnStartLabel = I18n::T("editor.panel.inspector.audio.play_on_start") + "##as";
     if (ImGui::Checkbox(playOnStartLabel.c_str(), &asrc.playOnStart)) {
@@ -103,6 +126,15 @@ void InspectorPanel::renderAudioSourceSection(Entity e) {
             en.getComponent<AudioSourceComponent>().playOnStart = v;
         },
         "Toggle audio playOnStart");
+    if (detail::inspectorResetButton<bool>(m_ui, e, "as_playOnStart",
+            asrc.playOnStart, kAudioDefaultPlayOnStart,
+            [](Entity& en, const bool& v) {
+                if (en.hasComponent<AudioSourceComponent>())
+                    en.getComponent<AudioSourceComponent>().playOnStart = v;
+            },
+            "Reset audio playOnStart")) {
+        m_editedThisFrame = true;
+    }
     ImGui::SameLine();
     const std::string is3DLabel = I18n::T("editor.panel.inspector.audio.is_3d") + "##as";
     if (ImGui::Checkbox(is3DLabel.c_str(), &asrc.is3D)) { m_editedThisFrame = true; }
@@ -111,6 +143,15 @@ void InspectorPanel::renderAudioSourceSection(Entity e) {
             en.getComponent<AudioSourceComponent>().is3D = v;
         },
         "Toggle audio is3D");
+    if (detail::inspectorResetButton<bool>(m_ui, e, "as_is3D",
+            asrc.is3D, kAudioDefaultIs3D,
+            [](Entity& en, const bool& v) {
+                if (en.hasComponent<AudioSourceComponent>())
+                    en.getComponent<AudioSourceComponent>().is3D = v;
+            },
+            "Reset audio is3D")) {
+        m_editedThisFrame = true;
+    }
 
     // Preview: resetear `started` fuerza al AudioSystem a volver a
     // disparar la reproduccion en el proximo frame. Requiere playOnStart.

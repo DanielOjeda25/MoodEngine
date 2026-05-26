@@ -15,6 +15,19 @@
 
 namespace Mood {
 
+// F3H13: defaults del LightComponent — fuente unica para los reset
+// buttons. Reflejan la construccion `LightComponent{}` (en sync con
+// Components_Render.h:209-215).
+namespace {
+constexpr LightComponent::Type kLightDefaultType = LightComponent::Type::Point;
+constexpr float kLightDefaultIntensity = 1.0f;
+constexpr float kLightDefaultRadius    = 10.0f;
+constexpr bool  kLightDefaultEnabled     = true;
+constexpr bool  kLightDefaultCastShadows = false;
+const glm::vec3 kLightDefaultColor     {1.0f, 1.0f, 1.0f};
+const glm::vec3 kLightDefaultDirection {0.0f, -1.0f, 0.0f};
+} // namespace
+
 // LightComponent (Hito 11)
 // Activado: tiene type / color / intensity (Hito 7) + radius (point) +
 // direction (directional) + enabled.
@@ -35,6 +48,15 @@ void InspectorPanel::renderLightSection(Entity e) {
                 en.getComponent<LightComponent>().enabled = v;
             },
             "Toggle light enabled")) {
+        m_editedThisFrame = true;
+    }
+    if (detail::inspectorResetButton<bool>(m_ui, e, "lt_enabled",
+            lt.enabled, kLightDefaultEnabled,
+            [](Entity& en, const bool& v) {
+                if (en.hasComponent<LightComponent>())
+                    en.getComponent<LightComponent>().enabled = v;
+            },
+            "Reset Light enabled")) {
         m_editedThisFrame = true;
     }
 
@@ -62,6 +84,16 @@ void InspectorPanel::renderLightSection(Entity e) {
             m_editedThisFrame = true;
         }
     }
+    if (detail::inspectorResetButton<u32>(m_ui, e, "lt_type",
+            static_cast<u32>(lt.type), static_cast<u32>(kLightDefaultType),
+            [](Entity& en, const u32& v) {
+                if (en.hasComponent<LightComponent>())
+                    en.getComponent<LightComponent>().type =
+                        static_cast<LightComponent::Type>(v);
+            },
+            "Reset Light type")) {
+        m_editedThisFrame = true;
+    }
     // F3H8: multi-edit awareness. Si hay multi-seleccion con N luces,
     // el helper muestra "—" si los valores difieren, hace live preview
     // en peers, y pushea MultiEditPropertyCommand al soltar. Si hay 1
@@ -84,6 +116,15 @@ void InspectorPanel::renderLightSection(Entity e) {
             "Editar light color")) {
         m_editedThisFrame = true;
     }
+    if (detail::inspectorResetButton<glm::vec3>(m_ui, e, "lt_color",
+            lt.color, kLightDefaultColor,
+            [](Entity& en, const glm::vec3& v) {
+                if (en.hasComponent<LightComponent>())
+                    en.getComponent<LightComponent>().color = v;
+            },
+            "Reset Light color")) {
+        m_editedThisFrame = true;
+    }
     if (detail::multiEditDragFloat(m_multiEditTracker, m_editTracker, m_ui, e,
             "editor.panel.inspector.light.intensity", "##lt", lt.intensity,
             [activeIntensity](Entity en) -> f32 {
@@ -95,6 +136,15 @@ void InspectorPanel::renderLightSection(Entity e) {
                 en.getComponent<LightComponent>().intensity = v;
             },
             "Editar light intensity", 0.01f, 0.0f, 100.0f)) {
+        m_editedThisFrame = true;
+    }
+    if (detail::inspectorResetButton<f32>(m_ui, e, "lt_intensity",
+            lt.intensity, kLightDefaultIntensity,
+            [](Entity& en, const f32& v) {
+                if (en.hasComponent<LightComponent>())
+                    en.getComponent<LightComponent>().intensity = v;
+            },
+            "Reset Light intensity")) {
         m_editedThisFrame = true;
     }
 
@@ -113,6 +163,15 @@ void InspectorPanel::renderLightSection(Entity e) {
                 "Editar light radius", 0.1f, 0.1f, 1000.0f)) {
             m_editedThisFrame = true;
         }
+        if (detail::inspectorResetButton<f32>(m_ui, e, "lt_radius",
+                lt.radius, kLightDefaultRadius,
+                [](Entity& en, const f32& v) {
+                    if (en.hasComponent<LightComponent>())
+                        en.getComponent<LightComponent>().radius = v;
+                },
+                "Reset Light radius")) {
+            m_editedThisFrame = true;
+        }
     } else {
         // F3H12: direction DragFloat3 con undo (single-entity — la
         // direction es semanticamente diferente entre lights, no aplica
@@ -124,6 +183,15 @@ void InspectorPanel::renderLightSection(Entity e) {
                     en.getComponent<LightComponent>().direction = v;
                 },
                 "Editar light direction", 0.01f, -1.0f, 1.0f)) {
+            m_editedThisFrame = true;
+        }
+        if (detail::inspectorResetButton<glm::vec3>(m_ui, e, "lt_direction",
+                lt.direction, kLightDefaultDirection,
+                [](Entity& en, const glm::vec3& v) {
+                    if (en.hasComponent<LightComponent>())
+                        en.getComponent<LightComponent>().direction = v;
+                },
+                "Reset Light direction")) {
             m_editedThisFrame = true;
         }
         // Hito 16: solo directional puede emitir shadow map (point shadows
@@ -141,6 +209,15 @@ void InspectorPanel::renderLightSection(Entity e) {
                     en.getComponent<LightComponent>().castShadows = v;
                 },
                 "Toggle light castShadows")) {
+            m_editedThisFrame = true;
+        }
+        if (detail::inspectorResetButton<bool>(m_ui, e, "lt_castShadows",
+                lt.castShadows, kLightDefaultCastShadows,
+                [](Entity& en, const bool& v) {
+                    if (en.hasComponent<LightComponent>())
+                        en.getComponent<LightComponent>().castShadows = v;
+                },
+                "Reset Light castShadows")) {
             m_editedThisFrame = true;
         }
     }

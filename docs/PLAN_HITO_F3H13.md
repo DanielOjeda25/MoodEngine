@@ -1,67 +1,97 @@
-# PLAN F3H13 — TBD (cierre Sub-fase 3.2)
+# PLAN F3H13 — Reset to default per-field del Inspector (CIERRA Sub-fase 3.2)
 
-**Estado:** **A DEFINIR**.
+**Estado:** **CERRADO** (`v2.13.0-fase3-hito13`, 2026-05-26).
 **Predecesor:** F3H12 (Undo coverage audit del Inspector).
-**Origen:** `PLAN_FASE3.md` Sub-fase 3.2 menciona "Reset to default en cada Inspector field" como uno de los hitos de la sub-fase.
+**Cierra Sub-fase 3.2** (6/6).
+**Origen:** `PLAN_FASE3.md` Sub-fase 3.2 lista "Reset to default en cada Inspector field".
 
 ---
 
-## Candidatos para F3H13 (a decidir con el dev)
+## Resumen
 
-### A) Reset to default per-field en el Inspector (candidato fuerte del plan original)
+Convención Unity/Unreal: cada field editable del Inspector tiene un botón `↺` (rotate-left) que aparece **solo cuando `current != default`**, sin visual noise para valores en default. Hace fácil al dev devolver un override al estado canónico sin pisar el valor a mano.
 
-`PLAN_FASE3.md` Sub-fase 3.2 declara:
-> **F3H13 — "Reset to default" en cada Inspector field.**
-
-Convención Unity/Unreal: cada field tiene un botón `↺` que aparece solo cuando `current != default`. El dev ya implementó esto para Project Settings (F3H4) y User Preferences (F3H7) via helper template `resetButton<T>` — Sub-fase 3.1 lo usa para 4 secciones (Performance/Gameplay/Character/Editor).
-
-**Trabajo estimado:**
-- Llevar el helper `resetButton<T>` del `ProjectSettingsPanel` a `InspectorPanel_Internal.h` (compartido).
-- Cada widget editable del Inspector recibe un reset button al lado.
-- Default por componente: tomar de la construcción `{}` del componente (mismo patrón que `kEnvDefaults` que F3H12 ya usa en Environment).
-- Edits via reset deben generar entrada al HistoryStack (mismo `EditPropertyCommand<T>` que F3H12 usa para combos/checkboxes).
-
-**Trabajo NO trivial:**
-- ¿Reset por field o por sección? F3H12 ya implementó "reset por sección" en Environment (6 secciones). Inspector general probablemente quiere por-field (Unity convention).
-- Defaults compuestos: la dirección de una luz directional, los axisU/V de un brush face, etc. ¿Cuáles tienen un "default" sensato?
-- Defaults runtime: algunos fields se inicializan desde el spawn handler (ej. capsule de player se inicializa desde `CharacterSettings`). El reset debe restaurar al default del componente o al del runtime inicial?
-
-**Por qué cierra Sub-fase 3.2:** completa la trifecta "Inspector que el dev controla" — multi-edit (F3H8) + copy/paste (F3H9-F3H11) + undo coverage (F3H12) + reset to default (F3H13).
-
-### B) Búsqueda en Hierarchy + Asset Browser
-
-`PLAN_FASE3.md` también menciona:
-> **F3H12 — Búsqueda en Hierarchy + Asset Browser.**
-> Ctrl+F filtra en vivo. Por nombre, por tipo de componente, por tag. Tecla Esc limpia.
-
-El plan original tenía esto como F3H12 — pero el dev priorizó undo coverage. Esta búsqueda sigue siendo deuda. Si el Hierarchy crece a >50 entities el filtrado es indispensable.
-
-### C) Backlog UX descubierto en F3H12
-
-Memoria `backlog-ux-gaps-editor`:
-- Spawn de ForceField/Cloth desde el menú Add Entity / Hierarchy / AssetBrowser.
-- Workflow "agregar sonido al mesh" (puerta con audio al activarse) — Inspector slot, evento o prefab.
-
-El dev pidió anotar "para luego" — re-evaluar al planificar 3.3/3.4 o si se le ocurre algo más urgente al cerrar 3.2.
+Reusa la infra de F3H12 (`pushAtomicEdit<T>`, `EditPropertyCommand<T>`, `HistoryStack`): el reset es un edit más en el stack — Ctrl+Z lo deshace y devuelve al valor que el dev tenía antes.
 
 ---
 
-## Recomendación
+## Diseño
 
-Yo (Claude) sugiero **opción A — Reset to default per-field**:
-1. Cierra Sub-fase 3.2 con el último bloque del plan original.
-2. Aprovecha la infra que F3H12 puso (`pushAtomicEdit<T>`, helpers en Internal.h, defaults conocidos via `kEnvDefaults`).
-3. Tier 1 acotado: Light, Trigger, ForceField, Particle, Cloth, RigidBody, Ragdoll, Joint, Audio (los paneles con defaults claros).
-4. Tier 2 diferible: MeshRenderer (material es asset compartido, "reset" significa qué exactamente?), Brush (default per-face vs per-brush?), Vehicle (config viene del .moodvehicle, reset al asset load?), Script (overrides ya tienen el Reset SmallButton).
+### Helper template — `detail::inspectorResetButton<T>`
 
-**Pregunta al dev cuando arranque F3H13:** ¿confirmás opción A o querés B/C?
+Ubicación: `src/editor/panels/scene/InspectorPanel_Internal.h` (compartido por todos los partials del Inspector). Firma:
+
+```cpp
+template <typename T>
+inline bool inspectorResetButton(EditorUI* ui, Entity e,
+        const char* idSuffix,
+        const T& current,
+        const T& defaultValue,
+        typename EditPropertyCommand<T>::Setter setter,
+        const std::string& cmdLabel);
+```
+
+- Returns `true` si se hizo reset este frame (caller setea `m_editedThisFrame`).
+- Si `current == defaultValue` no renderea NADA (visual noise zero).
+- Llamada **inmediatamente después** del widget editable (SameLine + SmallButton).
+- Internamente: `pushAtomicEdit<T>(ui, e, current, defaultValue, setter, cmdLabel)`.
+
+### Style polish (iteraciones con el dev)
+
+Las primeras versiones del botón se veían "muy alejadas" del control. Tras 5 iteraciones de feedback visual el ajuste final fue:
+
+- `ImGui::SameLine(0.0f, 3.0f)` — 3 px externos (apenas aire entre el label del widget y el icono).
+- `ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f))` — padding interno fino para que el icono ↺ respire dentro del botón sin inflarlo.
+
+Total visual entre el label y el icono: ~7 px. Suficientemente cerca para sentirse parte del control, suficientemente lejos para no fusionarse.
+
+### Tooltip
+
+Key i18n nueva: `editor.panel.inspector.reset_default` ("Restablecer al valor por defecto" / "Reset to default value"). Se muestra al hover. Una sola key compartida por todos los reset buttons (no hace falta una por field — la semántica es la misma).
 
 ---
 
-## Lo que NO toca F3H13 (cualquiera sea la opción)
+## Cobertura
 
-- Sub-fase 3.3 (Asset Browser de verdad): F3H14-F3H19 son scope diferente.
-- Sub-fase 3.4 (Viewport pro + Performance): F3H20-F3H27.
-- Los gaps de UX externos del memoria `backlog-ux-gaps-editor` (a menos que se elija opción C explícitamente).
-- Inventory operaciones estructurales sin undo — diferido a hito propio si el dev lo reclama.
-- Script Reset SmallButton del override sin undo — ídem.
+Tier 1 acotado del hito — los 6 paneles más usados:
+
+| Panel | Fields con reset | LOC añadidas approx |
+|---|---|---|
+| **Light** (`InspectorPanel_Light.cpp`) | enabled, type, color, intensity, radius, direction, castShadows | 7 |
+| **Trigger** (`InspectorPanel_Misc.cpp`) | halfExtents, triggerOnEnter, triggerOnExit, fireOnce | 4 |
+| **ForceField** (`InspectorPanel_Misc.cpp`) | strength | 1 |
+| **ParticleEmitter** (`InspectorPanel_Particles.cpp`) | emitting, additive, emitRate, maxParticles | 4 |
+| **AudioSource** (`InspectorPanel_Audio.cpp`) | volume, loop, playOnStart, is3D | 4 |
+| **RigidBody** (`InspectorPanel_Physics.cpp`) | type, mass, friction, isSensor | 4 |
+
+Total: **6 paneles, ~24 reset buttons**. Defaults declarados como `constexpr`/`static const` al inicio de cada `renderXxxSection`, en sync con la construcción `{}` del componente.
+
+### Diferidos (con backlog en memoria `project_reset_button_coverage`)
+
+- **Cloth/Joint/Ragdoll** — semántica especializada (defaults discutibles, fields de joint varían por tipo).
+- **MeshRenderer** — defaults per-slot de material no son triviales (cada slot trae su textura/color/factor distinto, no hay "canónico" genérico).
+- **Brush** — vertices/faces no son property-drawer; el "reset" semántico es vaciar el brush, ya cubierto por otro flow.
+
+El helper queda en Internal.h listo para extender — replicar el patrón cuando un dev pida resets en alguno de los diferidos.
+
+---
+
+## Decisiones
+
+1. **Helper en Internal.h vs duplicar `resetButton<T>` de `ProjectSettingsPanel`/`UserPreferencesPanel`**: archivo separado por contexto. Internal.h es del Inspector y entiende `Entity` + `EditorUI` + `HistoryStack` (sus reset buttons necesitan undo); los de Settings/Preferences operan sobre copias locales del struct + `dirty/saveNow` flags (no van al HistoryStack del Inspector). Duplicar es más limpio que generalizar.
+
+2. **`pushAtomicEdit<T>` reusado, no nuevo helper**: el reset es semánticamente idéntico a un combo/checkbox change que F3H12 ya cubría — un cambio atómico que mueve `current → defaultValue`. Sin tracker drag, sin live preview. Reuso directo.
+
+3. **No-render cuando `current == default`**: convención Unity/Unreal probada — el override es información, lo canónico no. Evita ruido en Inspector con todos los fields en default.
+
+4. **Scope acotado a 6 paneles**: F3H13 cierra Sub-fase 3.2 con el hito que el plan original prevé, pero NO infla scope a Cloth/Joint/Ragdoll/MeshRenderer/Brush. Esos quedan en backlog explícito (memoria `project_reset_button_coverage`) con el helper listo para reusar.
+
+---
+
+## Lo que NO toca F3H13
+
+- Cloth/Joint/Ragdoll resets (diferidos por uso bajo + semántica especializada).
+- MeshRenderer per-slot reset (defaults compuestos no triviales).
+- Brush reset (no es property-drawer; flow distinto).
+- Script/Animator/Vehicle resets (no incluidos — quedan en backlog si el dev los reclama).
+- Sub-fase 3.3 (Asset Browser): F3H14+.

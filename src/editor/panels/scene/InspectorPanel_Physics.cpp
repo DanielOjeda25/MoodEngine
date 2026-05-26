@@ -22,6 +22,13 @@ namespace Mood {
 void InspectorPanel::renderRigidBodySection(Entity e) {
     auto& rb = e.getComponent<RigidBodyComponent>();
     if (!beginComponentSection<RigidBodyComponent>(e, ICON_FA_WEIGHT_HANGING " RigidBody")) return;
+    // F3H13: defaults de RigidBodyComponent (en sync con el struct).
+    constexpr u32 kRbDefaultType  = static_cast<u32>(RigidBodyComponent::Type::Dynamic);
+    constexpr u32 kRbDefaultShape = static_cast<u32>(RigidBodyComponent::Shape::Box);
+    static const glm::vec3 kRbDefaultHalfExtents{0.5f, 0.5f, 0.5f};
+    constexpr f32  kRbDefaultMass     = 1.0f;
+    constexpr f32  kRbDefaultFriction = 0.5f;
+    constexpr bool kRbDefaultIsSensor = false;
 
     const char* typeNames[] = {"Static", "Kinematic", "Dynamic"};
     int typeIdx = static_cast<int>(rb.type);
@@ -47,6 +54,16 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
             }
             m_editedThisFrame = true;
         }
+    }
+    if (detail::inspectorResetButton<u32>(m_ui, e, "rb_type",
+            static_cast<u32>(rb.type), kRbDefaultType,
+            [](Entity& en, const u32& v) {
+                if (en.hasComponent<RigidBodyComponent>())
+                    en.getComponent<RigidBodyComponent>().type =
+                        static_cast<RigidBodyComponent::Type>(v);
+            },
+            "Reset RigidBody type")) {
+        m_editedThisFrame = true;
     }
 
     const char* shapeNames[] = {"Box", "Sphere", "Capsule"};
@@ -91,6 +108,15 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
                 "Editar rigid body mass", 0.1f, 0.001f, 10000.0f)) {
             m_editedThisFrame = true;
         }
+        if (detail::inspectorResetButton<f32>(m_ui, e, "rb_mass",
+                rb.mass, kRbDefaultMass,
+                [](Entity& en, const f32& v) {
+                    if (en.hasComponent<RigidBodyComponent>())
+                        en.getComponent<RigidBodyComponent>().mass = v;
+                },
+                "Reset RigidBody mass")) {
+            m_editedThisFrame = true;
+        }
     }
     // Hito 34 A: friction. Aplica a static + dynamic (el contacto en
     // ambos lados afecta el comportamiento).
@@ -100,6 +126,15 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
                 en.getComponent<RigidBodyComponent>().friction = v;
             },
             "Editar friction (RigidBody)", 0.01f, 0.0f, 2.0f)) {
+        m_editedThisFrame = true;
+    }
+    if (detail::inspectorResetButton<f32>(m_ui, e, "rb_friction",
+            rb.friction, kRbDefaultFriction,
+            [](Entity& en, const f32& v) {
+                if (en.hasComponent<RigidBodyComponent>())
+                    en.getComponent<RigidBodyComponent>().friction = v;
+            },
+            "Reset RigidBody friction")) {
         m_editedThisFrame = true;
     }
 
@@ -131,6 +166,15 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("%s",
             I18n::T("editor.panel.inspector.physics.is_sensor_tip").c_str());
+    }
+    if (detail::inspectorResetButton<bool>(m_ui, e, "rb_isSensor",
+            rb.isSensor, kRbDefaultIsSensor,
+            [](Entity& en, const bool& v) {
+                if (en.hasComponent<RigidBodyComponent>())
+                    en.getComponent<RigidBodyComponent>().isSensor = v;
+            },
+            "Reset RigidBody isSensor")) {
+        m_editedThisFrame = true;
     }
 
     ImGui::TextDisabled("%s",

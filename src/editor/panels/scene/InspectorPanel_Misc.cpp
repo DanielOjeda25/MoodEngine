@@ -77,12 +77,28 @@ void InspectorPanel::renderCameraSection(Entity e) {
 void InspectorPanel::renderTriggerSection(Entity e) {
     auto& tc = e.getComponent<TriggerComponent>();
     if (!beginComponentSection<TriggerComponent>(e, ICON_FA_BORDER_NONE " Trigger")) return;
+    // F3H13: defaults de TriggerComponent (en sync con
+    // Components_Gameplay.h:204-).
+    static const glm::vec3 kTrigDefaultHalfExtents{1.0f, 1.0f, 1.0f};
+    constexpr bool kTrigDefaultTriggersOnPlayer = true;
+    constexpr bool kTrigDefaultOneShot          = false;
+    constexpr bool kTrigDefaultEnabled          = true;
+
     if (detail::fieldDragFloat3(m_editTracker, m_ui, e,
             "editor.panel.inspector.trigger.half_extents", "##trig", tc.halfExtents,
             [](Entity& en, const glm::vec3& v) {
                 en.getComponent<TriggerComponent>().halfExtents = v;
             },
             "Editar trigger halfExtents", 0.05f, 0.01f, 100.0f)) {
+        m_editedThisFrame = true;
+    }
+    if (detail::inspectorResetButton<glm::vec3>(m_ui, e, "trig_halfExtents",
+            tc.halfExtents, kTrigDefaultHalfExtents,
+            [](Entity& en, const glm::vec3& v) {
+                if (en.hasComponent<TriggerComponent>())
+                    en.getComponent<TriggerComponent>().halfExtents = v;
+            },
+            "Reset Trigger halfExtents")) {
         m_editedThisFrame = true;
     }
 
@@ -118,6 +134,15 @@ void InspectorPanel::renderTriggerSection(Entity e) {
             "Toggle trigger triggersOnPlayer")) {
         m_editedThisFrame = true;
     }
+    if (detail::inspectorResetButton<bool>(m_ui, e, "trig_triggersOnPlayer",
+            tc.triggersOnPlayer, kTrigDefaultTriggersOnPlayer,
+            [](Entity& en, const bool& v) {
+                if (en.hasComponent<TriggerComponent>())
+                    en.getComponent<TriggerComponent>().triggersOnPlayer = v;
+            },
+            "Reset Trigger triggersOnPlayer")) {
+        m_editedThisFrame = true;
+    }
     const bool activeTrigOneShot = tc.oneShot;
     if (detail::multiEditCheckbox(m_multiEditTracker, m_editTracker, m_ui, e,
             "editor.panel.inspector.trigger.one_shot", "##trig", tc.oneShot,
@@ -130,6 +155,15 @@ void InspectorPanel::renderTriggerSection(Entity e) {
                 en.getComponent<TriggerComponent>().oneShot = v;
             },
             "Toggle trigger oneShot")) {
+        m_editedThisFrame = true;
+    }
+    if (detail::inspectorResetButton<bool>(m_ui, e, "trig_oneShot",
+            tc.oneShot, kTrigDefaultOneShot,
+            [](Entity& en, const bool& v) {
+                if (en.hasComponent<TriggerComponent>())
+                    en.getComponent<TriggerComponent>().oneShot = v;
+            },
+            "Reset Trigger oneShot")) {
         m_editedThisFrame = true;
     }
     const bool activeTrigEnabled = tc.enabled;
@@ -146,6 +180,15 @@ void InspectorPanel::renderTriggerSection(Entity e) {
             "Toggle trigger enabled")) {
         m_editedThisFrame = true;
     }
+    if (detail::inspectorResetButton<bool>(m_ui, e, "trig_enabled",
+            tc.enabled, kTrigDefaultEnabled,
+            [](Entity& en, const bool& v) {
+                if (en.hasComponent<TriggerComponent>())
+                    en.getComponent<TriggerComponent>().enabled = v;
+            },
+            "Reset Trigger enabled")) {
+        m_editedThisFrame = true;
+    }
 
     ImGui::TextDisabled("%s",
         I18n::T(tc.playerInside ? "editor.panel.inspector.trigger.player_inside_yes"
@@ -160,6 +203,16 @@ void InspectorPanel::renderTriggerSection(Entity e) {
 void InspectorPanel::renderForceFieldSection(Entity e) {
     auto& ff = e.getComponent<ForceFieldComponent>();
     if (!beginComponentSection<ForceFieldComponent>(e, ICON_FA_MAGNET " Force Field")) return;
+    // F3H13: defaults (Components_Physics.h:243-).
+    constexpr u32 kFfDefaultShape = static_cast<u32>(ForceFieldComponent::Shape::Sphere);
+    constexpr u32 kFfDefaultMode  = static_cast<u32>(ForceFieldComponent::Mode::Radial);
+    static const glm::vec3 kFfDefaultHalfExtents{2.0f, 2.0f, 2.0f};
+    constexpr f32  kFfDefaultRadius        = 3.0f;
+    static const glm::vec3 kFfDefaultDirection{0.0f, 1.0f, 0.0f};
+    constexpr f32  kFfDefaultStrength      = 20.0f;
+    constexpr bool kFfDefaultLinearFalloff = true;
+    constexpr bool kFfDefaultIgnoreMass    = false;
+    constexpr bool kFfDefaultEnabled       = true;
 
     // --- Shape combo + parametro de la zona ---
     // F3H12: shape combo con undo + multi-edit.
@@ -260,6 +313,15 @@ void InspectorPanel::renderForceFieldSection(Entity e) {
                 en.getComponent<ForceFieldComponent>().strength = v;
             },
             "Editar force field strength", 0.5f, -10000.0f, 10000.0f)) {
+        m_editedThisFrame = true;
+    }
+    if (detail::inspectorResetButton<f32>(m_ui, e, "ff_strength",
+            ff.strength, kFfDefaultStrength,
+            [](Entity& en, const f32& v) {
+                if (en.hasComponent<ForceFieldComponent>())
+                    en.getComponent<ForceFieldComponent>().strength = v;
+            },
+            "Reset ForceField strength")) {
         m_editedThisFrame = true;
     }
     detail::helpMarker(I18n::T("editor.panel.inspector.force_field.strength_help").c_str());

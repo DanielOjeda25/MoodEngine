@@ -76,6 +76,52 @@ void pushAtomicEdit(EditorUI* ui, Entity e,
     }
 }
 
+// F3H13: boton "↺" reset-to-default per-field. Convencion Unity/Unreal:
+// aparece SOLO si current != default (sin visual noise para fields
+// default; surface override cuando el dev cambio algo, para que sea facil
+// volver al estado canonico).
+//
+// Diferencia con el `resetButton` de ProjectSettingsPanel: este integra
+// undo via `pushAtomicEdit` — el reset queda en el HistoryStack como un
+// EditPropertyCommand<T> regular (Ctrl+Z deshace el reset, devuelve al
+// valor que el dev tenia antes).
+//
+// Llamar INMEDIATAMENTE despues del widget editable que se quiere
+// resetear (SameLine + SmallButton). Devuelve true si se hizo reset
+// este frame (para que el caller setee `m_editedThisFrame`). Si current
+// == default, no renderea nada y devuelve false.
+template <typename T>
+inline bool inspectorResetButton(EditorUI* ui, Entity e,
+        const char* idSuffix,
+        const T& current,
+        const T& defaultValue,
+        typename EditPropertyCommand<T>::Setter setter,
+        const std::string& cmdLabel) {
+    if (current == defaultValue) return false;  // no visual noise
+
+    // F3H13 polish: padding fino para el boton de reset.
+    //   - Spacing externo = 3 px (un pelin de aire entre el label y el icono,
+    //     sin que se vea flotando).
+    //   - Padding interno = (4, 2) — apenas margen para que el icono ↺
+    //     respire dentro del boton, sin inflarlo.
+    ImGui::SameLine(0.0f, 3.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f));
+    const std::string btnLabel =
+        std::string(ICON_FA_ROTATE_LEFT) + "##reset_" + idSuffix;
+    const bool clicked = ImGui::SmallButton(btnLabel.c_str());
+    ImGui::PopStyleVar();
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.panel.inspector.reset_default").c_str());
+    }
+    if (clicked) {
+        pushAtomicEdit<T>(ui, e, current, defaultValue, std::move(setter),
+                           cmdLabel);
+        return true;
+    }
+    return false;
+}
+
 // F2H23: helper estandar de ImGui samples — texto gris "(?)" con tooltip
 // al hover. Sirve para descubribilidad sin inflar el panel con texto.
 // Llamar INMEDIATAMENTE despues del widget que se quiere documentar.
