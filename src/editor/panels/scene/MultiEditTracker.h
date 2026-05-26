@@ -21,6 +21,7 @@
 #include "engine/scene/core/Entity.h"
 
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 #include <imgui.h>
 
 #include <variant>
@@ -38,14 +39,19 @@ struct MultiEditTracker {
     std::vector<Entity> entities;
 
     /// Variant de vectores tipados — solo uno populado por sesion de
-    /// edit. `monostate` = sin edit activo. Tipos cubren lo que el
-    /// Inspector edita hoy en multi-edit (F3H8): f32 (intensity,
-    /// radius, opacity...) y glm::vec3 (color, position offsets...).
-    /// Tipos futuros (bool, int) se agregan aca cuando se necesiten.
+    /// edit. `monostate` = sin edit activo.
+    /// F3H8: f32 (intensity, radius, opacity...) + glm::vec3 (color,
+    /// position offsets...).
+    /// F3H12: bool (checkboxes — Light.enabled, Trigger.oneShot...),
+    /// u32 (combos enum + asset ids — Light.type, AudioSource.clip...),
+    /// glm::vec4 (ColorEdit4 — ParticleEmitter.colorStart/End).
     std::variant<
         std::monostate,
         std::vector<f32>,
-        std::vector<glm::vec3>
+        std::vector<glm::vec3>,
+        std::vector<bool>,
+        std::vector<u32>,
+        std::vector<glm::vec4>
     > before;
 
     /// Limpia el state (post-commit o cancel).

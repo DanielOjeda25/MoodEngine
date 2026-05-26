@@ -32,6 +32,16 @@ void InspectorPanel::renderScriptSection(Entity e) {
         sc.lastError.clear();
         m_editedThisFrame = true;
     }
+    // F3H12: undo del path InputText. El setter aplica path + resetea
+    // loaded/lastError para que el ScriptSystem recargue.
+    detail::pushEditIfDone<std::string>(m_editTracker, m_ui, e, sc.path,
+        [](Entity& en, const std::string& v) {
+            auto& s = en.getComponent<ScriptComponent>();
+            s.path = v;
+            s.loaded = false;
+            s.lastError.clear();
+        },
+        "Editar script path");
     const std::string reloadLabel = I18n::T("editor.panel.inspector.script.reload") + "##sc";
     if (ImGui::Button(reloadLabel.c_str())) {
         sc.loaded = false;
@@ -64,6 +74,12 @@ void InspectorPanel::renderScriptSection(Entity e) {
             if (ovIt != sc.overrides.end()) current = ovIt->second;
 
             bool changed = false;
+            // F3H12: cada tipo expone undo via pushEditIfDone<T>. Setter
+            // captura prop.name por valor (el cmd puede vivir mas que el
+            // sc.exposedProps vector si el script se recarga). Setter
+            // tambien resetea loaded/lastError para que ScriptSystem
+            // re-aplique el override.
+            const std::string propName = prop.name;
             switch (prop.type) {
                 case ExposedType::Number: {
                     f32 v = std::get<f32>(current);
@@ -71,12 +87,30 @@ void InspectorPanel::renderScriptSection(Entity e) {
                         sc.overrides[prop.name] = v;
                         changed = true;
                     }
+                    detail::pushEditIfDone<f32>(m_editTracker, m_ui, e, v,
+                        [propName](Entity& en, const f32& val) {
+                            auto& s = en.getComponent<ScriptComponent>();
+                            s.overrides[propName] = val;
+                            s.loaded = false;
+                            s.lastError.clear();
+                        },
+                        "Editar script prop (Number)");
                     break;
                 }
                 case ExposedType::Bool: {
                     bool v = std::get<bool>(current);
                     if (ImGui::Checkbox(prop.name.c_str(), &v)) {
+                        // Checkbox YA toggled `v` localmente; pushAtomicEdit
+                        // captura before=!v, after=v.
                         sc.overrides[prop.name] = v;
+                        detail::pushAtomicEdit<bool>(m_ui, e, !v, v,
+                            [propName](Entity& en, const bool& val) {
+                                auto& s = en.getComponent<ScriptComponent>();
+                                s.overrides[propName] = val;
+                                s.loaded = false;
+                                s.lastError.clear();
+                            },
+                            "Toggle script prop (Bool)");
                         changed = true;
                     }
                     break;
@@ -87,9 +121,18 @@ void InspectorPanel::renderScriptSection(Entity e) {
                     std::snprintf(sbuf, sizeof(sbuf), "%s", v.c_str());
                     if (ImGui::InputText(prop.name.c_str(),
                                          sbuf, sizeof(sbuf))) {
-                        sc.overrides[prop.name] = std::string(sbuf);
+                        v.assign(sbuf);
+                        sc.overrides[prop.name] = v;
                         changed = true;
                     }
+                    detail::pushEditIfDone<std::string>(m_editTracker, m_ui, e, v,
+                        [propName](Entity& en, const std::string& val) {
+                            auto& s = en.getComponent<ScriptComponent>();
+                            s.overrides[propName] = val;
+                            s.loaded = false;
+                            s.lastError.clear();
+                        },
+                        "Editar script prop (String)");
                     break;
                 }
                 case ExposedType::Vec3: {
@@ -107,12 +150,26 @@ void InspectorPanel::renderScriptSection(Entity e) {
                         sc.overrides[prop.name] = v;
                         changed = true;
                     }
+                    detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, v,
+                        [propName](Entity& en, const glm::vec3& val) {
+                            auto& s = en.getComponent<ScriptComponent>();
+                            s.overrides[propName] = val;
+                            s.loaded = false;
+                            s.lastError.clear();
+                        },
+                        "Editar script prop (Vec3)");
                     break;
                 }
             }
 
             ImGui::SameLine();
             if (ImGui::SmallButton(I18n::T("editor.panel.inspector.script.reset").c_str())) {
+                // F3H12: el reset borra el override del map. Undo no
+                // implementado para este boton — re-editar el slider
+                // restaura el override (los exposed props default vienen
+                // del script Lua, no hace falta snapshot). Follow-up: si
+                // se vuelve molesto, agregar un EditScriptOverrideCommand
+                // que snapshotee la entry pre-borrado.
                 sc.overrides.erase(prop.name);
                 changed = true;
             }

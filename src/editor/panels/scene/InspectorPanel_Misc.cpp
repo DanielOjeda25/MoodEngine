@@ -103,12 +103,49 @@ void InspectorPanel::renderTriggerSection(Entity e) {
         "Editar trigger requiredTag");
     detail::helpMarker(I18n::T("editor.panel.inspector.trigger.required_tag_help").c_str());
 
-    const std::string playerLabel = I18n::T("editor.panel.inspector.trigger.triggers_on_player") + "##trig";
-    if (ImGui::Checkbox(playerLabel.c_str(), &tc.triggersOnPlayer)) m_editedThisFrame = true;
-    const std::string oneShotLabel = I18n::T("editor.panel.inspector.trigger.one_shot") + "##trig";
-    if (ImGui::Checkbox(oneShotLabel.c_str(), &tc.oneShot)) m_editedThisFrame = true;
-    const std::string enabledLabel = I18n::T("editor.panel.inspector.trigger.enabled") + "##trig";
-    if (ImGui::Checkbox(enabledLabel.c_str(), &tc.enabled)) m_editedThisFrame = true;
+    // F3H12: los 3 checkboxes con undo + multi-edit.
+    const bool activeTrigPlayer = tc.triggersOnPlayer;
+    if (detail::multiEditCheckbox(m_multiEditTracker, m_editTracker, m_ui, e,
+            "editor.panel.inspector.trigger.triggers_on_player", "##trig", tc.triggersOnPlayer,
+            [activeTrigPlayer](Entity en) -> bool {
+                if (!en.hasComponent<TriggerComponent>()) return activeTrigPlayer;
+                return en.getComponent<TriggerComponent>().triggersOnPlayer;
+            },
+            [](Entity& en, const bool& v) {
+                if (!en.hasComponent<TriggerComponent>()) return;
+                en.getComponent<TriggerComponent>().triggersOnPlayer = v;
+            },
+            "Toggle trigger triggersOnPlayer")) {
+        m_editedThisFrame = true;
+    }
+    const bool activeTrigOneShot = tc.oneShot;
+    if (detail::multiEditCheckbox(m_multiEditTracker, m_editTracker, m_ui, e,
+            "editor.panel.inspector.trigger.one_shot", "##trig", tc.oneShot,
+            [activeTrigOneShot](Entity en) -> bool {
+                if (!en.hasComponent<TriggerComponent>()) return activeTrigOneShot;
+                return en.getComponent<TriggerComponent>().oneShot;
+            },
+            [](Entity& en, const bool& v) {
+                if (!en.hasComponent<TriggerComponent>()) return;
+                en.getComponent<TriggerComponent>().oneShot = v;
+            },
+            "Toggle trigger oneShot")) {
+        m_editedThisFrame = true;
+    }
+    const bool activeTrigEnabled = tc.enabled;
+    if (detail::multiEditCheckbox(m_multiEditTracker, m_editTracker, m_ui, e,
+            "editor.panel.inspector.trigger.enabled", "##trig", tc.enabled,
+            [activeTrigEnabled](Entity en) -> bool {
+                if (!en.hasComponent<TriggerComponent>()) return activeTrigEnabled;
+                return en.getComponent<TriggerComponent>().enabled;
+            },
+            [](Entity& en, const bool& v) {
+                if (!en.hasComponent<TriggerComponent>()) return;
+                en.getComponent<TriggerComponent>().enabled = v;
+            },
+            "Toggle trigger enabled")) {
+        m_editedThisFrame = true;
+    }
 
     ImGui::TextDisabled("%s",
         I18n::T(tc.playerInside ? "editor.panel.inspector.trigger.player_inside_yes"
@@ -125,11 +162,24 @@ void InspectorPanel::renderForceFieldSection(Entity e) {
     if (!beginComponentSection<ForceFieldComponent>(e, ICON_FA_MAGNET " Force Field")) return;
 
     // --- Shape combo + parametro de la zona ---
-    const char* shapeNames[] = {"Box", "Sphere"};
-    int shapeIdx = static_cast<int>(ff.shape);
-    const std::string shapeLabel = I18n::T("editor.panel.inspector.force_field.shape") + "##ff";
-    if (ImGui::Combo(shapeLabel.c_str(), &shapeIdx, shapeNames, 2)) {
-        ff.shape = static_cast<ForceFieldComponent::Shape>(shapeIdx);
+    // F3H12: shape combo con undo + multi-edit.
+    static const char* shapeNames[] = {"Box", "Sphere"};
+    u32 shapeU32 = static_cast<u32>(ff.shape);
+    const u32 activeShape = shapeU32;
+    if (detail::multiEditCombo(m_multiEditTracker, m_editTracker, m_ui, e,
+            "editor.panel.inspector.force_field.shape", "##ff", shapeU32,
+            shapeNames, 2,
+            [activeShape](Entity en) -> u32 {
+                if (!en.hasComponent<ForceFieldComponent>()) return activeShape;
+                return static_cast<u32>(en.getComponent<ForceFieldComponent>().shape);
+            },
+            [](Entity& en, const u32& v) {
+                if (!en.hasComponent<ForceFieldComponent>()) return;
+                en.getComponent<ForceFieldComponent>().shape =
+                    static_cast<ForceFieldComponent::Shape>(v);
+            },
+            "Cambiar force field shape")) {
+        ff.shape = static_cast<ForceFieldComponent::Shape>(shapeU32);
         m_editedThisFrame = true;
     }
     if (ff.shape == ForceFieldComponent::Shape::Box) {
@@ -153,11 +203,24 @@ void InspectorPanel::renderForceFieldSection(Entity e) {
     }
 
     // --- Mode combo + parametro especifico ---
-    const char* modeNames[] = {"Directional", "Radial"};
-    int modeIdx = static_cast<int>(ff.mode);
-    const std::string modeLabel = I18n::T("editor.panel.inspector.force_field.mode") + "##ff";
-    if (ImGui::Combo(modeLabel.c_str(), &modeIdx, modeNames, 2)) {
-        ff.mode = static_cast<ForceFieldComponent::Mode>(modeIdx);
+    // F3H12: mode combo con undo + multi-edit.
+    static const char* modeNames[] = {"Directional", "Radial"};
+    u32 modeU32 = static_cast<u32>(ff.mode);
+    const u32 activeMode = modeU32;
+    if (detail::multiEditCombo(m_multiEditTracker, m_editTracker, m_ui, e,
+            "editor.panel.inspector.force_field.mode", "##ff", modeU32,
+            modeNames, 2,
+            [activeMode](Entity en) -> u32 {
+                if (!en.hasComponent<ForceFieldComponent>()) return activeMode;
+                return static_cast<u32>(en.getComponent<ForceFieldComponent>().mode);
+            },
+            [](Entity& en, const u32& v) {
+                if (!en.hasComponent<ForceFieldComponent>()) return;
+                en.getComponent<ForceFieldComponent>().mode =
+                    static_cast<ForceFieldComponent::Mode>(v);
+            },
+            "Cambiar force field mode")) {
+        ff.mode = static_cast<ForceFieldComponent::Mode>(modeU32);
         m_editedThisFrame = true;
     }
     if (ff.mode == ForceFieldComponent::Mode::Directional) {
@@ -170,8 +233,20 @@ void InspectorPanel::renderForceFieldSection(Entity e) {
             m_editedThisFrame = true;
         }
     } else {
-        const std::string falloffLabel = I18n::T("editor.panel.inspector.force_field.linear_falloff") + "##ff";
-        if (ImGui::Checkbox(falloffLabel.c_str(), &ff.linearFalloff)) {
+        // F3H12: linearFalloff con undo + multi-edit.
+        const bool activeLinear = ff.linearFalloff;
+        if (detail::multiEditCheckbox(m_multiEditTracker, m_editTracker, m_ui, e,
+                "editor.panel.inspector.force_field.linear_falloff", "##ff",
+                ff.linearFalloff,
+                [activeLinear](Entity en) -> bool {
+                    if (!en.hasComponent<ForceFieldComponent>()) return activeLinear;
+                    return en.getComponent<ForceFieldComponent>().linearFalloff;
+                },
+                [](Entity& en, const bool& v) {
+                    if (!en.hasComponent<ForceFieldComponent>()) return;
+                    en.getComponent<ForceFieldComponent>().linearFalloff = v;
+                },
+                "Toggle force field linearFalloff")) {
             m_editedThisFrame = true;
         }
     }
@@ -190,11 +265,36 @@ void InspectorPanel::renderForceFieldSection(Entity e) {
     detail::helpMarker(I18n::T("editor.panel.inspector.force_field.strength_help").c_str());
 
     // --- Toggles ---
-    const std::string imLabel = I18n::T("editor.panel.inspector.force_field.ignore_mass") + "##ff";
-    if (ImGui::Checkbox(imLabel.c_str(), &ff.ignoreMass)) m_editedThisFrame = true;
+    // F3H12: ignoreMass + enabled checkboxes con undo + multi-edit.
+    const bool activeIgnoreMass = ff.ignoreMass;
+    if (detail::multiEditCheckbox(m_multiEditTracker, m_editTracker, m_ui, e,
+            "editor.panel.inspector.force_field.ignore_mass", "##ff", ff.ignoreMass,
+            [activeIgnoreMass](Entity en) -> bool {
+                if (!en.hasComponent<ForceFieldComponent>()) return activeIgnoreMass;
+                return en.getComponent<ForceFieldComponent>().ignoreMass;
+            },
+            [](Entity& en, const bool& v) {
+                if (!en.hasComponent<ForceFieldComponent>()) return;
+                en.getComponent<ForceFieldComponent>().ignoreMass = v;
+            },
+            "Toggle force field ignoreMass")) {
+        m_editedThisFrame = true;
+    }
     detail::helpMarker(I18n::T("editor.panel.inspector.force_field.ignore_mass_help").c_str());
-    const std::string enLabel = I18n::T("editor.panel.inspector.force_field.enabled") + "##ff";
-    if (ImGui::Checkbox(enLabel.c_str(), &ff.enabled)) m_editedThisFrame = true;
+    const bool activeFfEnabled = ff.enabled;
+    if (detail::multiEditCheckbox(m_multiEditTracker, m_editTracker, m_ui, e,
+            "editor.panel.inspector.force_field.enabled", "##ff", ff.enabled,
+            [activeFfEnabled](Entity en) -> bool {
+                if (!en.hasComponent<ForceFieldComponent>()) return activeFfEnabled;
+                return en.getComponent<ForceFieldComponent>().enabled;
+            },
+            [](Entity& en, const bool& v) {
+                if (!en.hasComponent<ForceFieldComponent>()) return;
+                en.getComponent<ForceFieldComponent>().enabled = v;
+            },
+            "Toggle force field enabled")) {
+        m_editedThisFrame = true;
+    }
 
     ImGui::Separator();
 }
@@ -228,26 +328,59 @@ void InspectorPanel::renderClothSection(Entity e) {
     }
 
     // --- Resolucion (particulas por lado) ---
+    // F3H12: resX/resY SliderInt con undo via pushEditIfDone<u32>.
+    // El tracker lee el ID del ultimo widget (SliderInt) y captura
+    // el u32 actual (post-edit). Setter castea de vuelta a int +
+    // dirty=true para que el ClothSystem rematerialize.
     int rx = cl.resX;
     const std::string rxLabel =
         I18n::T("editor.panel.inspector.cloth.res_x") + "##cloth";
     if (ImGui::SliderInt(rxLabel.c_str(), &rx, 2, 40)) {
         cl.resX = rx; m_editedThisFrame = true; simChanged = true;
     }
+    detail::pushEditIfDone<u32>(m_editTracker, m_ui, e,
+        static_cast<u32>(cl.resX),
+        [](Entity& en, const u32& v) {
+            auto& c = en.getComponent<ClothComponent>();
+            c.resX = static_cast<int>(v);
+            c.dirty = true;
+        },
+        "Editar cloth resX");
     int ry = cl.resY;
     const std::string ryLabel =
         I18n::T("editor.panel.inspector.cloth.res_y") + "##cloth";
     if (ImGui::SliderInt(ryLabel.c_str(), &ry, 2, 40)) {
         cl.resY = ry; m_editedThisFrame = true; simChanged = true;
     }
+    detail::pushEditIfDone<u32>(m_editTracker, m_ui, e,
+        static_cast<u32>(cl.resY),
+        [](Entity& en, const u32& v) {
+            auto& c = en.getComponent<ClothComponent>();
+            c.resY = static_cast<int>(v);
+            c.dirty = true;
+        },
+        "Editar cloth resY");
 
     // --- Anclaje ---
-    const char* anchorNames[] = {"None", "Top Edge", "Top Corners", "Left Edge"};
-    int aIdx = static_cast<int>(cl.anchor);
-    const std::string aLabel =
-        I18n::T("editor.panel.inspector.cloth.anchor") + "##cloth";
-    if (ImGui::Combo(aLabel.c_str(), &aIdx, anchorNames, 4)) {
-        cl.anchor = static_cast<ClothComponent::Anchor>(aIdx);
+    // F3H12: anchor combo con undo + multi-edit. Setter incluye dirty=true.
+    static const char* anchorNames[] = {"None", "Top Edge", "Top Corners", "Left Edge"};
+    u32 anchorU32 = static_cast<u32>(cl.anchor);
+    const u32 activeAnchor = anchorU32;
+    if (detail::multiEditCombo(m_multiEditTracker, m_editTracker, m_ui, e,
+            "editor.panel.inspector.cloth.anchor", "##cloth", anchorU32,
+            anchorNames, 4,
+            [activeAnchor](Entity en) -> u32 {
+                if (!en.hasComponent<ClothComponent>()) return activeAnchor;
+                return static_cast<u32>(en.getComponent<ClothComponent>().anchor);
+            },
+            [](Entity& en, const u32& v) {
+                if (!en.hasComponent<ClothComponent>()) return;
+                auto& c = en.getComponent<ClothComponent>();
+                c.anchor = static_cast<ClothComponent::Anchor>(v);
+                c.dirty = true;
+            },
+            "Cambiar cloth anchor")) {
+        cl.anchor = static_cast<ClothComponent::Anchor>(anchorU32);
         m_editedThisFrame = true; simChanged = true;
     }
 
@@ -277,9 +410,21 @@ void InspectorPanel::renderClothSection(Entity e) {
         m_editedThisFrame = true; simChanged = true;
     }
 
-    const std::string gLabel =
-        I18n::T("editor.panel.inspector.cloth.use_gravity") + "##cloth";
-    if (ImGui::Checkbox(gLabel.c_str(), &cl.useGravity)) {
+    // F3H12: useGravity con undo + multi-edit. Setter incluye dirty=true.
+    const bool activeUseGravity = cl.useGravity;
+    if (detail::multiEditCheckbox(m_multiEditTracker, m_editTracker, m_ui, e,
+            "editor.panel.inspector.cloth.use_gravity", "##cloth", cl.useGravity,
+            [activeUseGravity](Entity en) -> bool {
+                if (!en.hasComponent<ClothComponent>()) return activeUseGravity;
+                return en.getComponent<ClothComponent>().useGravity;
+            },
+            [](Entity& en, const bool& v) {
+                if (!en.hasComponent<ClothComponent>()) return;
+                auto& c = en.getComponent<ClothComponent>();
+                c.useGravity = v;
+                c.dirty = true;
+            },
+            "Toggle cloth useGravity")) {
         m_editedThisFrame = true; simChanged = true;
     }
 

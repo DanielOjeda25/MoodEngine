@@ -42,9 +42,30 @@ void InspectorPanel::renderAudioSourceSection(Entity e) {
             for (int i = 0; i < static_cast<int>(labels.size()); ++i) {
                 const bool selected = (current == i);
                 if (ImGui::Selectable(labels[i].c_str(), selected)) {
-                    asrc.clip = static_cast<AudioAssetId>(i);
-                    asrc.started = false; // obligar a re-arrancar con el nuevo clip
-                    m_editedThisFrame = true;
+                    // F3H12: clip change con undo via EditPropertyCommand<u32>
+                    // (cambio atomico — setter resetea `started` para que el
+                    // AudioSystem dispare el clip nuevo, igual que la
+                    // asignacion manual pre-F3H12).
+                    const u32 oldClip = static_cast<u32>(asrc.clip);
+                    const u32 newClip = static_cast<u32>(i);
+                    if (oldClip != newClip) {
+                        HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
+                        if (h != nullptr) {
+                            auto cmd = std::make_unique<EditPropertyCommand<u32>>(
+                                e, oldClip, newClip,
+                                [](Entity& en, const u32& v) {
+                                    auto& a = en.getComponent<AudioSourceComponent>();
+                                    a.clip = static_cast<AudioAssetId>(v);
+                                    a.started = false;
+                                },
+                                "Cambiar AudioSource clip");
+                            h->push(std::move(cmd));
+                        } else {
+                            asrc.clip = static_cast<AudioAssetId>(newClip);
+                            asrc.started = false;
+                        }
+                        m_editedThisFrame = true;
+                    }
                 }
                 if (selected) ImGui::SetItemDefaultFocus();
             }

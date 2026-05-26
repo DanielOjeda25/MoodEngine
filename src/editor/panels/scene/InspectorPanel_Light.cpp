@@ -22,8 +22,21 @@ void InspectorPanel::renderLightSection(Entity e) {
     auto& lt = e.getComponent<LightComponent>();
     if (!beginComponentSection<LightComponent>(e, ICON_FA_LIGHTBULB " Light")) return;
 
-    const std::string enabledLabel = I18n::T("editor.panel.inspector.light.enabled") + "##lt";
-    if (ImGui::Checkbox(enabledLabel.c_str(), &lt.enabled)) m_editedThisFrame = true;
+    // F3H12: enabled checkbox con undo + multi-edit.
+    const bool activeEnabled = lt.enabled;
+    if (detail::multiEditCheckbox(m_multiEditTracker, m_editTracker, m_ui, e,
+            "editor.panel.inspector.light.enabled", "##lt", lt.enabled,
+            [activeEnabled](Entity en) -> bool {
+                if (!en.hasComponent<LightComponent>()) return activeEnabled;
+                return en.getComponent<LightComponent>().enabled;
+            },
+            [](Entity& en, const bool& v) {
+                if (!en.hasComponent<LightComponent>()) return;
+                en.getComponent<LightComponent>().enabled = v;
+            },
+            "Toggle light enabled")) {
+        m_editedThisFrame = true;
+    }
 
     const char* items[] = {"Directional", "Point"};
     int current = static_cast<int>(lt.type);
@@ -101,14 +114,33 @@ void InspectorPanel::renderLightSection(Entity e) {
             m_editedThisFrame = true;
         }
     } else {
-        const std::string dirLabel = I18n::T("editor.panel.inspector.light.direction") + "##lt";
-        if (ImGui::DragFloat3(dirLabel.c_str(), &lt.direction.x, 0.01f, -1.0f, 1.0f)) {
+        // F3H12: direction DragFloat3 con undo (single-entity — la
+        // direction es semanticamente diferente entre lights, no aplica
+        // multi-edit "homogeneo" como color/intensity).
+        if (detail::fieldDragFloat3(m_editTracker, m_ui, e,
+                "editor.panel.inspector.light.direction", "##lt", lt.direction,
+                [](Entity& en, const glm::vec3& v) {
+                    if (!en.hasComponent<LightComponent>()) return;
+                    en.getComponent<LightComponent>().direction = v;
+                },
+                "Editar light direction", 0.01f, -1.0f, 1.0f)) {
             m_editedThisFrame = true;
         }
         // Hito 16: solo directional puede emitir shadow map (point shadows
         // requeririan cubemap depth, fuera de scope).
-        const std::string castLabel = I18n::T("editor.panel.inspector.light.cast_shadows") + "##lt";
-        if (ImGui::Checkbox(castLabel.c_str(), &lt.castShadows)) {
+        // F3H12: castShadows con undo + multi-edit.
+        const bool activeCastShadows = lt.castShadows;
+        if (detail::multiEditCheckbox(m_multiEditTracker, m_editTracker, m_ui, e,
+                "editor.panel.inspector.light.cast_shadows", "##lt", lt.castShadows,
+                [activeCastShadows](Entity en) -> bool {
+                    if (!en.hasComponent<LightComponent>()) return activeCastShadows;
+                    return en.getComponent<LightComponent>().castShadows;
+                },
+                [](Entity& en, const bool& v) {
+                    if (!en.hasComponent<LightComponent>()) return;
+                    en.getComponent<LightComponent>().castShadows = v;
+                },
+                "Toggle light castShadows")) {
             m_editedThisFrame = true;
         }
     }

@@ -141,6 +141,7 @@ void drawMaterialPbrMultipliers(MaterialAsset* mat,
 // estandar — el cache solo conoce `pbr.vert`), mostramos un warning visible
 // para que el dev no piense que el grafo esta activo cuando no lo esta.
 void drawMaterialShaderGraph(MaterialAsset* mat, AssetManager* assets,
+                              MaterialAssetId matId,
                               EditorUI* ui, bool isSkinned, bool isInstanced,
                               bool& editedFlag) {
     if (!ImGui::CollapsingHeader("Shader")) return;
@@ -207,14 +208,37 @@ void drawMaterialShaderGraph(MaterialAsset* mat, AssetManager* assets,
     if (ImGui::Combo("Shader graph", &curIdx,
                         items.data(),
                         static_cast<int>(items.size()))) {
+        // F3H12: shaderGraphPath change con undo via
+        // EditPropertyCommand<std::string>. Setter captura assets +
+        // matId — re-resuelve el material por id en cada execute/undo
+        // (mismo patron que albedoTint / metallic / etc en este archivo).
+        std::string newPath;
         if (curIdx == 0) {
-            mat->shaderGraphPath.clear();
+            newPath.clear();
         } else if (curIdx <= static_cast<int>(graphPaths.size())) {
-            mat->shaderGraphPath = graphPaths[curIdx - 1];
+            newPath = graphPaths[curIdx - 1];
+        } else {
+            // Huerfano re-seleccionado = no-op (newPath == oldPath).
+            newPath = mat->shaderGraphPath;
         }
-        // (caso huerfano: el dev re-seleccionando el huerfano no cambia
-        // nada; no hace falta accion.)
-        editedFlag = true;
+        const std::string oldPath = mat->shaderGraphPath;
+        if (oldPath != newPath) {
+            HistoryStack* h = ui ? ui->historyStack() : nullptr;
+            if (h != nullptr) {
+                auto cmd = std::make_unique<EditPropertyCommand<std::string>>(
+                    Entity{}, oldPath, newPath,
+                    [assets, matId](Entity&, const std::string& v) {
+                        if (auto* m = assets->getMaterial(matId)) {
+                            m->shaderGraphPath = v;
+                        }
+                    },
+                    "Cambiar shader graph");
+                h->push(std::move(cmd));
+            } else {
+                mat->shaderGraphPath = newPath;
+            }
+            editedFlag = true;
+        }
     }
 
     // 3) Botones de accion segun el estado actual.
@@ -558,7 +582,8 @@ void InspectorPanel::renderMeshRendererSection(Entity e) {
         if (mat != nullptr) {
             drawMaterialPbrMultipliers(mat, m_assets, matId,
                                           m_editTracker, m_ui, e, m_editedThisFrame);
-            drawMaterialShaderGraph(mat, m_assets, m_ui, isSkinned, isInstanced,
+            drawMaterialShaderGraph(mat, m_assets, matId, m_ui,
+                                       isSkinned, isInstanced,
                                        m_editedThisFrame);
             drawMaterialBlending(mat, m_assets, matId,
                                    m_editTracker, m_ui, e, m_editedThisFrame);

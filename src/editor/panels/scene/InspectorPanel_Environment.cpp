@@ -24,16 +24,22 @@
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/scene/InspectorPanel_Internal.h"
 
+#include "editor/commands/Command.h"
+#include "editor/commands/HistoryStack.h"
 #include "editor/ui/EditorUI.h"
 #include "core/i18n/I18n.h"
 #include "engine/scene/components/Components.h"
+#include "engine/scene/core/Entity.h"
+#include "engine/scene/core/Scene.h"
 
 #include <imgui.h>
 #include <portable-file-dialogs.h>
 
 #include <cstring>
 #include <filesystem>
+#include <functional>
 #include <memory>
+#include <utility>
 
 namespace Mood {
 
@@ -43,6 +49,54 @@ namespace {
 // campo. Construida una vez por proceso (no por frame). El reset por seccion
 // asigna desde este snapshot.
 const EnvironmentComponent kEnvDefaults{};
+
+// F3H12: comando custom para los reset buttons del Environment. Cada
+// "Restablecer" reasigna 3-7 fields a defaults — agruparlos en 1 solo
+// command (no N commands separados) permite que Ctrl+Z revierta el reset
+// entero en una sola accion. Snapshot-based: captura el "antes" (lambda
+// que restaura los fields originales) y el "despues" (lambda que aplica
+// defaults). undo/redo solo aplican la lambda correspondiente.
+class EditEnvironmentSubsetCommand : public ICommand {
+public:
+    using Apply = std::function<void(EnvironmentComponent&)>;
+
+    EditEnvironmentSubsetCommand(Entity entity, Apply applyBefore,
+                                   Apply applyAfter, std::string label)
+        : m_entity(entity)
+        , m_before(std::move(applyBefore))
+        , m_after(std::move(applyAfter))
+        , m_label(std::move(label)) {}
+
+    void execute() override {
+        if (!isValid() || !m_after) return;
+        m_after(m_entity.getComponent<EnvironmentComponent>());
+    }
+
+    void undo() override {
+        if (!isValid() || !m_before) return;
+        m_before(m_entity.getComponent<EnvironmentComponent>());
+    }
+
+    std::string name() const override { return m_label; }
+
+    void onEntityRemap(entt::entity oldH, entt::entity newH) override {
+        if (m_entity.handle() == oldH) {
+            m_entity = Entity(newH, m_entity.scene());
+        }
+    }
+
+private:
+    bool isValid() const {
+        return m_entity.scene() != nullptr
+            && m_entity.scene()->registry().valid(m_entity.handle())
+            && m_entity.hasComponent<EnvironmentComponent>();
+    }
+
+    Entity      m_entity;
+    Apply       m_before;
+    Apply       m_after;
+    std::string m_label;
+};
 
 // Helper: pinta un boton "Restablecer" pequeno alineado a la derecha.
 // Llama `apply` si el dev clickea. Convencion Unity Inspector / Unreal
@@ -137,7 +191,14 @@ void drawEnvSkyAndFog(EnvironmentComponent& env, InspectorEditTracker& tracker,
             const bool selected = (currentSkyIdx == i);
             const std::string itemLabel = I18n::T(kSkyPresets[i].labelKey);
             if (ImGui::Selectable(itemLabel.c_str(), selected)) {
-                env.skyboxPath = kSkyPresets[i].path;
+                // F3H12: undo del cambio de skybox preset.
+                detail::pushAtomicEdit<std::string>(ui, e,
+                    env.skyboxPath, std::string(kSkyPresets[i].path),
+                    [](Entity& en, const std::string& v) {
+                        if (!en.hasComponent<EnvironmentComponent>()) return;
+                        en.getComponent<EnvironmentComponent>().skyboxPath = v;
+                    },
+                    "Cambiar skybox preset");
                 editedFlag = true;
             }
             if (selected) ImGui::SetItemDefaultFocus();
@@ -162,11 +223,17 @@ void drawEnvSkyAndFog(EnvironmentComponent& env, InspectorEditTracker& tracker,
                 const fs::path assetsRoot = fs::current_path() / "assets";
                 std::error_code ec;
                 fs::path rel = fs::relative(abs, assetsRoot, ec);
-                if (!ec && !rel.empty()) {
-                    env.skyboxPath = rel.generic_string();
-                } else {
-                    env.skyboxPath = abs.generic_string();
-                }
+                std::string newPath = (!ec && !rel.empty())
+                    ? rel.generic_string()
+                    : abs.generic_string();
+                // F3H12: undo del custom skybox path (file picker).
+                detail::pushAtomicEdit<std::string>(ui, e,
+                    env.skyboxPath, std::move(newPath),
+                    [](Entity& en, const std::string& v) {
+                        if (!en.hasComponent<EnvironmentComponent>()) return;
+                        en.getComponent<EnvironmentComponent>().skyboxPath = v;
+                    },
+                    "Cambiar skybox custom");
                 editedFlag = true;
             }
         }
@@ -175,12 +242,18 @@ void drawEnvSkyAndFog(EnvironmentComponent& env, InspectorEditTracker& tracker,
     ImGui::TextDisabled("%s",
         I18n::T("editor.panel.inspector.environment.skybox_hint").c_str());
 
-    const char* fogModes[] = {"Off", "Linear", "Exp", "Exp2"};
+    // F3H12: fog mode combo con undo (atomico, sin tracker drag).
+    static const char* fogModes[] = {"Off", "Linear", "Exp", "Exp2"};
     int fogIdx = static_cast<int>(env.fogMode);
     const std::string fogModeLabel =
         I18n::T("editor.panel.inspector.environment.mode") + "##env";
     if (ImGui::Combo(fogModeLabel.c_str(), &fogIdx, fogModes, 4)) {
-        env.fogMode = static_cast<u32>(fogIdx);
+        detail::pushAtomicEdit<u32>(ui, e, env.fogMode, static_cast<u32>(fogIdx),
+            [](Entity& en, const u32& v) {
+                if (!en.hasComponent<EnvironmentComponent>()) return;
+                en.getComponent<EnvironmentComponent>().fogMode = v;
+            },
+            "Cambiar fog mode");
         editedFlag = true;
     }
     if (detail::fieldColorEdit3(tracker, ui, e,
@@ -218,12 +291,42 @@ void drawEnvSkyAndFog(EnvironmentComponent& env, InspectorEditTracker& tracker,
             editedFlag = true;
         }
     }
+    // F3H12: reset con undo via EditEnvironmentSubsetCommand. Snapshot
+    // del before, push command que aplica defaults — 1 Ctrl+Z revierte
+    // los 5 campos a la vez.
     drawSectionResetButton("fog", [&]() {
-        env.fogMode        = kEnvDefaults.fogMode;
-        env.fogColor       = kEnvDefaults.fogColor;
-        env.fogDensity     = kEnvDefaults.fogDensity;
-        env.fogLinearStart = kEnvDefaults.fogLinearStart;
-        env.fogLinearEnd   = kEnvDefaults.fogLinearEnd;
+        HistoryStack* h = ui ? ui->historyStack() : nullptr;
+        const u32        b_fogMode        = env.fogMode;
+        const glm::vec3  b_fogColor       = env.fogColor;
+        const f32        b_fogDensity     = env.fogDensity;
+        const f32        b_fogLinearStart = env.fogLinearStart;
+        const f32        b_fogLinearEnd   = env.fogLinearEnd;
+        if (h != nullptr) {
+            auto cmd = std::make_unique<EditEnvironmentSubsetCommand>(
+                e,
+                [=](EnvironmentComponent& c) {
+                    c.fogMode        = b_fogMode;
+                    c.fogColor       = b_fogColor;
+                    c.fogDensity     = b_fogDensity;
+                    c.fogLinearStart = b_fogLinearStart;
+                    c.fogLinearEnd   = b_fogLinearEnd;
+                },
+                [](EnvironmentComponent& c) {
+                    c.fogMode        = kEnvDefaults.fogMode;
+                    c.fogColor       = kEnvDefaults.fogColor;
+                    c.fogDensity     = kEnvDefaults.fogDensity;
+                    c.fogLinearStart = kEnvDefaults.fogLinearStart;
+                    c.fogLinearEnd   = kEnvDefaults.fogLinearEnd;
+                },
+                "Restablecer fog");
+            h->push(std::move(cmd));
+        } else {
+            env.fogMode        = kEnvDefaults.fogMode;
+            env.fogColor       = kEnvDefaults.fogColor;
+            env.fogDensity     = kEnvDefaults.fogDensity;
+            env.fogLinearStart = kEnvDefaults.fogLinearStart;
+            env.fogLinearEnd   = kEnvDefaults.fogLinearEnd;
+        }
         editedFlag = true;
     });
 }
@@ -245,12 +348,18 @@ void drawEnvTonemapExposureIbl(EnvironmentComponent& env,
         editedFlag = true;
     }
 
-    const char* tonemaps[] = {"None", "Reinhard", "ACES"};
+    // F3H12: tonemap combo con undo.
+    static const char* tonemaps[] = {"None", "Reinhard", "ACES"};
     int toneIdx = static_cast<int>(env.tonemapMode);
     const std::string tonemapLabel =
         I18n::T("editor.panel.inspector.environment.tonemap") + "##env";
     if (ImGui::Combo(tonemapLabel.c_str(), &toneIdx, tonemaps, 3)) {
-        env.tonemapMode = static_cast<u32>(toneIdx);
+        detail::pushAtomicEdit<u32>(ui, e, env.tonemapMode, static_cast<u32>(toneIdx),
+            [](Entity& en, const u32& v) {
+                if (!en.hasComponent<EnvironmentComponent>()) return;
+                en.getComponent<EnvironmentComponent>().tonemapMode = v;
+            },
+            "Cambiar tonemap mode");
         editedFlag = true;
     }
 
@@ -267,10 +376,32 @@ void drawEnvTonemapExposureIbl(EnvironmentComponent& env,
             en.getComponent<EnvironmentComponent>().iblIntensity = v;
         },
         "Editar IBL intensity");
+    // F3H12: reset con undo.
     drawSectionResetButton("tonemap", [&]() {
-        env.exposure     = kEnvDefaults.exposure;
-        env.tonemapMode  = kEnvDefaults.tonemapMode;
-        env.iblIntensity = kEnvDefaults.iblIntensity;
+        HistoryStack* h = ui ? ui->historyStack() : nullptr;
+        const f32 b_exposure     = env.exposure;
+        const u32 b_tonemapMode  = env.tonemapMode;
+        const f32 b_iblIntensity = env.iblIntensity;
+        if (h != nullptr) {
+            auto cmd = std::make_unique<EditEnvironmentSubsetCommand>(
+                e,
+                [=](EnvironmentComponent& c) {
+                    c.exposure     = b_exposure;
+                    c.tonemapMode  = b_tonemapMode;
+                    c.iblIntensity = b_iblIntensity;
+                },
+                [](EnvironmentComponent& c) {
+                    c.exposure     = kEnvDefaults.exposure;
+                    c.tonemapMode  = kEnvDefaults.tonemapMode;
+                    c.iblIntensity = kEnvDefaults.iblIntensity;
+                },
+                "Restablecer tonemap");
+            h->push(std::move(cmd));
+        } else {
+            env.exposure     = kEnvDefaults.exposure;
+            env.tonemapMode  = kEnvDefaults.tonemapMode;
+            env.iblIntensity = kEnvDefaults.iblIntensity;
+        }
         editedFlag = true;
     });
 }
@@ -283,9 +414,17 @@ void drawEnvBloom(EnvironmentComponent& env, InspectorEditTracker& tracker,
             ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
+    // F3H12: bloomEnabled con undo. Checkbox YA toggled env.bloomEnabled
+    // — before = !after, push aplica after via setter (idempotente).
     const std::string bloomEnabledLabel =
         I18n::T("editor.panel.inspector.environment.bloom_enabled") + "##env";
     if (ImGui::Checkbox(bloomEnabledLabel.c_str(), &env.bloomEnabled)) {
+        detail::pushAtomicEdit<bool>(ui, e, !env.bloomEnabled, env.bloomEnabled,
+            [](Entity& en, const bool& v) {
+                if (!en.hasComponent<EnvironmentComponent>()) return;
+                en.getComponent<EnvironmentComponent>().bloomEnabled = v;
+            },
+            "Toggle bloom enabled");
         editedFlag = true;
     }
     if (env.bloomEnabled) {
@@ -323,11 +462,36 @@ void drawEnvBloom(EnvironmentComponent& env, InspectorEditTracker& tracker,
             },
             "Editar bloom radius");
     }
+    // F3H12: reset con undo.
     drawSectionResetButton("bloom", [&]() {
-        env.bloomEnabled   = kEnvDefaults.bloomEnabled;
-        env.bloomThreshold = kEnvDefaults.bloomThreshold;
-        env.bloomIntensity = kEnvDefaults.bloomIntensity;
-        env.bloomRadius    = kEnvDefaults.bloomRadius;
+        HistoryStack* h = ui ? ui->historyStack() : nullptr;
+        const bool b_bloomEnabled   = env.bloomEnabled;
+        const f32  b_bloomThreshold = env.bloomThreshold;
+        const f32  b_bloomIntensity = env.bloomIntensity;
+        const f32  b_bloomRadius    = env.bloomRadius;
+        if (h != nullptr) {
+            auto cmd = std::make_unique<EditEnvironmentSubsetCommand>(
+                e,
+                [=](EnvironmentComponent& c) {
+                    c.bloomEnabled   = b_bloomEnabled;
+                    c.bloomThreshold = b_bloomThreshold;
+                    c.bloomIntensity = b_bloomIntensity;
+                    c.bloomRadius    = b_bloomRadius;
+                },
+                [](EnvironmentComponent& c) {
+                    c.bloomEnabled   = kEnvDefaults.bloomEnabled;
+                    c.bloomThreshold = kEnvDefaults.bloomThreshold;
+                    c.bloomIntensity = kEnvDefaults.bloomIntensity;
+                    c.bloomRadius    = kEnvDefaults.bloomRadius;
+                },
+                "Restablecer bloom");
+            h->push(std::move(cmd));
+        } else {
+            env.bloomEnabled   = kEnvDefaults.bloomEnabled;
+            env.bloomThreshold = kEnvDefaults.bloomThreshold;
+            env.bloomIntensity = kEnvDefaults.bloomIntensity;
+            env.bloomRadius    = kEnvDefaults.bloomRadius;
+        }
         editedFlag = true;
     });
 }
@@ -340,9 +504,16 @@ void drawEnvSsao(EnvironmentComponent& env, InspectorEditTracker& tracker,
             ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
+    // F3H12: ssaoEnabled con undo.
     const std::string ssaoEnabledLabel =
         I18n::T("editor.panel.inspector.environment.ssao_enabled") + "##env";
     if (ImGui::Checkbox(ssaoEnabledLabel.c_str(), &env.ssaoEnabled)) {
+        detail::pushAtomicEdit<bool>(ui, e, !env.ssaoEnabled, env.ssaoEnabled,
+            [](Entity& en, const bool& v) {
+                if (!en.hasComponent<EnvironmentComponent>()) return;
+                en.getComponent<EnvironmentComponent>().ssaoEnabled = v;
+            },
+            "Toggle SSAO enabled");
         editedFlag = true;
     }
     if (env.ssaoEnabled) {
@@ -369,10 +540,32 @@ void drawEnvSsao(EnvironmentComponent& env, InspectorEditTracker& tracker,
             },
             "Editar SSAO intensity");
     }
+    // F3H12: reset con undo.
     drawSectionResetButton("ssao", [&]() {
-        env.ssaoEnabled   = kEnvDefaults.ssaoEnabled;
-        env.ssaoRadius    = kEnvDefaults.ssaoRadius;
-        env.ssaoIntensity = kEnvDefaults.ssaoIntensity;
+        HistoryStack* h = ui ? ui->historyStack() : nullptr;
+        const bool b_ssaoEnabled   = env.ssaoEnabled;
+        const f32  b_ssaoRadius    = env.ssaoRadius;
+        const f32  b_ssaoIntensity = env.ssaoIntensity;
+        if (h != nullptr) {
+            auto cmd = std::make_unique<EditEnvironmentSubsetCommand>(
+                e,
+                [=](EnvironmentComponent& c) {
+                    c.ssaoEnabled   = b_ssaoEnabled;
+                    c.ssaoRadius    = b_ssaoRadius;
+                    c.ssaoIntensity = b_ssaoIntensity;
+                },
+                [](EnvironmentComponent& c) {
+                    c.ssaoEnabled   = kEnvDefaults.ssaoEnabled;
+                    c.ssaoRadius    = kEnvDefaults.ssaoRadius;
+                    c.ssaoIntensity = kEnvDefaults.ssaoIntensity;
+                },
+                "Restablecer SSAO");
+            h->push(std::move(cmd));
+        } else {
+            env.ssaoEnabled   = kEnvDefaults.ssaoEnabled;
+            env.ssaoRadius    = kEnvDefaults.ssaoRadius;
+            env.ssaoIntensity = kEnvDefaults.ssaoIntensity;
+        }
         editedFlag = true;
     });
 }
@@ -417,9 +610,28 @@ void drawEnvCsmShadows(EnvironmentComponent& env, InspectorEditTracker& tracker,
             en.getComponent<EnvironmentComponent>().csmSplitLambda = v;
         },
         "Editar CSM lambda");
+    // F3H12: reset con undo.
     drawSectionResetButton("csm", [&]() {
-        env.csmCascadeCount = kEnvDefaults.csmCascadeCount;
-        env.csmSplitLambda  = kEnvDefaults.csmSplitLambda;
+        HistoryStack* h = ui ? ui->historyStack() : nullptr;
+        const u32 b_csmCascadeCount = env.csmCascadeCount;
+        const f32 b_csmSplitLambda  = env.csmSplitLambda;
+        if (h != nullptr) {
+            auto cmd = std::make_unique<EditEnvironmentSubsetCommand>(
+                e,
+                [=](EnvironmentComponent& c) {
+                    c.csmCascadeCount = b_csmCascadeCount;
+                    c.csmSplitLambda  = b_csmSplitLambda;
+                },
+                [](EnvironmentComponent& c) {
+                    c.csmCascadeCount = kEnvDefaults.csmCascadeCount;
+                    c.csmSplitLambda  = kEnvDefaults.csmSplitLambda;
+                },
+                "Restablecer CSM");
+            h->push(std::move(cmd));
+        } else {
+            env.csmCascadeCount = kEnvDefaults.csmCascadeCount;
+            env.csmSplitLambda  = kEnvDefaults.csmSplitLambda;
+        }
         editedFlag = true;
     });
 }
@@ -432,9 +644,17 @@ void drawEnvColorGrading(EnvironmentComponent& env, InspectorEditTracker& tracke
             ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
+    // F3H12: colorGradingEnabled con undo.
     const std::string cgEnabledLabel =
         I18n::T("editor.panel.inspector.environment.color_grading_enabled") + "##env";
     if (ImGui::Checkbox(cgEnabledLabel.c_str(), &env.colorGradingEnabled)) {
+        detail::pushAtomicEdit<bool>(ui, e,
+            !env.colorGradingEnabled, env.colorGradingEnabled,
+            [](Entity& en, const bool& v) {
+                if (!en.hasComponent<EnvironmentComponent>()) return;
+                en.getComponent<EnvironmentComponent>().colorGradingEnabled = v;
+            },
+            "Toggle color grading enabled");
         editedFlag = true;
     }
     if (env.colorGradingEnabled) {
@@ -490,7 +710,14 @@ void drawEnvColorGrading(EnvironmentComponent& env, InspectorEditTracker& tracke
                 const bool selected = (currentIdx == i);
                 const std::string itemLabel = I18n::T(kPresets[i].labelKey);
                 if (ImGui::Selectable(itemLabel.c_str(), selected)) {
-                    env.colorGradingLutPath = kPresets[i].path;
+                    // F3H12: undo del cambio de LUT preset.
+                    detail::pushAtomicEdit<std::string>(ui, e,
+                        env.colorGradingLutPath, std::string(kPresets[i].path),
+                        [](Entity& en, const std::string& v) {
+                            if (!en.hasComponent<EnvironmentComponent>()) return;
+                            en.getComponent<EnvironmentComponent>().colorGradingLutPath = v;
+                        },
+                        "Cambiar LUT preset");
                     editedFlag = true;
                 }
                 if (selected) ImGui::SetItemDefaultFocus();
@@ -517,11 +744,17 @@ void drawEnvColorGrading(EnvironmentComponent& env, InspectorEditTracker& tracke
                     const fs::path assetsRoot = fs::current_path() / "assets";
                     std::error_code ec;
                     fs::path rel = fs::relative(abs, assetsRoot, ec);
-                    if (!ec && !rel.empty()) {
-                        env.colorGradingLutPath = rel.generic_string();
-                    } else {
-                        env.colorGradingLutPath = abs.generic_string();
-                    }
+                    std::string newPath = (!ec && !rel.empty())
+                        ? rel.generic_string()
+                        : abs.generic_string();
+                    // F3H12: undo del custom LUT path.
+                    detail::pushAtomicEdit<std::string>(ui, e,
+                        env.colorGradingLutPath, std::move(newPath),
+                        [](Entity& en, const std::string& v) {
+                            if (!en.hasComponent<EnvironmentComponent>()) return;
+                            en.getComponent<EnvironmentComponent>().colorGradingLutPath = v;
+                        },
+                        "Cambiar LUT custom");
                     editedFlag = true;
                 }
             }
@@ -541,10 +774,32 @@ void drawEnvColorGrading(EnvironmentComponent& env, InspectorEditTracker& tracke
             },
             "Editar color grading intensity");
     }
+    // F3H12: reset con undo.
     drawSectionResetButton("cgrade", [&]() {
-        env.colorGradingEnabled   = kEnvDefaults.colorGradingEnabled;
-        env.colorGradingLutPath   = kEnvDefaults.colorGradingLutPath;
-        env.colorGradingIntensity = kEnvDefaults.colorGradingIntensity;
+        HistoryStack* h = ui ? ui->historyStack() : nullptr;
+        const bool        b_cgEnabled   = env.colorGradingEnabled;
+        const std::string b_cgLutPath   = env.colorGradingLutPath;
+        const f32         b_cgIntensity = env.colorGradingIntensity;
+        if (h != nullptr) {
+            auto cmd = std::make_unique<EditEnvironmentSubsetCommand>(
+                e,
+                [=](EnvironmentComponent& c) {
+                    c.colorGradingEnabled   = b_cgEnabled;
+                    c.colorGradingLutPath   = b_cgLutPath;
+                    c.colorGradingIntensity = b_cgIntensity;
+                },
+                [](EnvironmentComponent& c) {
+                    c.colorGradingEnabled   = kEnvDefaults.colorGradingEnabled;
+                    c.colorGradingLutPath   = kEnvDefaults.colorGradingLutPath;
+                    c.colorGradingIntensity = kEnvDefaults.colorGradingIntensity;
+                },
+                "Restablecer color grading");
+            h->push(std::move(cmd));
+        } else {
+            env.colorGradingEnabled   = kEnvDefaults.colorGradingEnabled;
+            env.colorGradingLutPath   = kEnvDefaults.colorGradingLutPath;
+            env.colorGradingIntensity = kEnvDefaults.colorGradingIntensity;
+        }
         editedFlag = true;
     });
 }
@@ -560,9 +815,16 @@ void drawEnvSsr(EnvironmentComponent& env, InspectorEditTracker& tracker,
     ImGui::TextDisabled("%s",
         I18n::T("editor.panel.inspector.environment.ssr_hint").c_str());
 
+    // F3H12: ssrEnabled con undo.
     const std::string ssrEnabledLabel =
         I18n::T("editor.panel.inspector.environment.ssr_enabled") + "##env";
     if (ImGui::Checkbox(ssrEnabledLabel.c_str(), &env.ssrEnabled)) {
+        detail::pushAtomicEdit<bool>(ui, e, !env.ssrEnabled, env.ssrEnabled,
+            [](Entity& en, const bool& v) {
+                if (!en.hasComponent<EnvironmentComponent>()) return;
+                en.getComponent<EnvironmentComponent>().ssrEnabled = v;
+            },
+            "Toggle SSR enabled");
         editedFlag = true;
     }
     if (env.ssrEnabled) {
@@ -619,12 +881,40 @@ void drawEnvSsr(EnvironmentComponent& env, InspectorEditTracker& tracker,
             },
             "Editar SSR thickness");
     }
+    // F3H12: reset con undo.
     drawSectionResetButton("ssr", [&]() {
-        env.ssrEnabled   = kEnvDefaults.ssrEnabled;
-        env.ssrMaxSteps  = kEnvDefaults.ssrMaxSteps;
-        env.ssrThickness = kEnvDefaults.ssrThickness;
-        env.ssrStepSize  = kEnvDefaults.ssrStepSize;
-        env.ssrIntensity = kEnvDefaults.ssrIntensity;
+        HistoryStack* h = ui ? ui->historyStack() : nullptr;
+        const bool b_ssrEnabled   = env.ssrEnabled;
+        const u32  b_ssrMaxSteps  = env.ssrMaxSteps;
+        const f32  b_ssrThickness = env.ssrThickness;
+        const f32  b_ssrStepSize  = env.ssrStepSize;
+        const f32  b_ssrIntensity = env.ssrIntensity;
+        if (h != nullptr) {
+            auto cmd = std::make_unique<EditEnvironmentSubsetCommand>(
+                e,
+                [=](EnvironmentComponent& c) {
+                    c.ssrEnabled   = b_ssrEnabled;
+                    c.ssrMaxSteps  = b_ssrMaxSteps;
+                    c.ssrThickness = b_ssrThickness;
+                    c.ssrStepSize  = b_ssrStepSize;
+                    c.ssrIntensity = b_ssrIntensity;
+                },
+                [](EnvironmentComponent& c) {
+                    c.ssrEnabled   = kEnvDefaults.ssrEnabled;
+                    c.ssrMaxSteps  = kEnvDefaults.ssrMaxSteps;
+                    c.ssrThickness = kEnvDefaults.ssrThickness;
+                    c.ssrStepSize  = kEnvDefaults.ssrStepSize;
+                    c.ssrIntensity = kEnvDefaults.ssrIntensity;
+                },
+                "Restablecer SSR");
+            h->push(std::move(cmd));
+        } else {
+            env.ssrEnabled   = kEnvDefaults.ssrEnabled;
+            env.ssrMaxSteps  = kEnvDefaults.ssrMaxSteps;
+            env.ssrThickness = kEnvDefaults.ssrThickness;
+            env.ssrStepSize  = kEnvDefaults.ssrStepSize;
+            env.ssrIntensity = kEnvDefaults.ssrIntensity;
+        }
         editedFlag = true;
     });
 }

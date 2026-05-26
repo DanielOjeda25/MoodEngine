@@ -46,12 +46,26 @@ void InspectorPanel::renderParticleEmitterSection(Entity e) {
         "Toggle particle localSpace");
 
     // Hito 37 C / 39 A: shape de emision (Point/Box/Sphere/Disc/Cone).
+    // F3H12: emissionShape combo con undo + multi-edit.
     using ES = ParticleEmitterComponent::EmissionShape;
-    const char* shapeNames[] = {"Point", "Box", "Sphere", "Disc", "Cone"};
-    int shapeIdx = static_cast<int>(em.emissionShape);
-    const std::string emitShapeLabel = I18n::T("editor.panel.inspector.particles.emit_shape") + "##pe";
-    if (ImGui::Combo(emitShapeLabel.c_str(), &shapeIdx, shapeNames, 5)) {
-        em.emissionShape = static_cast<ES>(shapeIdx);
+    static const char* shapeNames[] = {"Point", "Box", "Sphere", "Disc", "Cone"};
+    u32 shapeU32 = static_cast<u32>(em.emissionShape);
+    const u32 activeShape = shapeU32;
+    if (detail::multiEditCombo(m_multiEditTracker, m_editTracker, m_ui, e,
+            "editor.panel.inspector.particles.emit_shape", "##pe", shapeU32,
+            shapeNames, 5,
+            [activeShape](Entity en) -> u32 {
+                if (!en.hasComponent<ParticleEmitterComponent>()) return activeShape;
+                return static_cast<u32>(
+                    en.getComponent<ParticleEmitterComponent>().emissionShape);
+            },
+            [](Entity& en, const u32& v) {
+                if (!en.hasComponent<ParticleEmitterComponent>()) return;
+                en.getComponent<ParticleEmitterComponent>().emissionShape =
+                    static_cast<ES>(v);
+            },
+            "Cambiar particle emission shape")) {
+        em.emissionShape = static_cast<ES>(shapeU32);
         m_editedThisFrame = true;
     }
     if (em.emissionShape != ES::Point) {

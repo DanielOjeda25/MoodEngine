@@ -58,10 +58,21 @@ void InspectorPanel::renderInventorySection(Entity e) {
     }
 
     // -------- 1. Mode dropdown --------
+    // F3H12: mode combo con undo via pushAtomicEdit<u32>.
     int modeIdx = modeToInt(st.mode);
+    const u32 modeBefore = static_cast<u32>(modeIdx);
     if (ImGui::Combo(I18n::T("editor.panel.inspector.inventory.mode").c_str(),
                       &modeIdx, k_modeLabels, IM_ARRAYSIZE(k_modeLabels))) {
         st.mode = intToMode(modeIdx);
+        detail::pushAtomicEdit<u32>(m_ui, e, modeBefore, static_cast<u32>(modeIdx),
+            [](Entity& en, const u32& v) {
+                if (!en.hasComponent<InventoryComponent>()) return;
+                auto& s = en.getComponent<InventoryComponent>().state;
+                s.mode = (v == 1) ? Inventory::LayoutMode::Grid2D
+                        : (v == 2) ? Inventory::LayoutMode::EquipmentSlots
+                        : Inventory::LayoutMode::FlatList;
+            },
+            "Cambiar inventory mode");
         m_editedThisFrame = true;
     }
 
@@ -75,6 +86,15 @@ void InspectorPanel::renderInventorySection(Entity e) {
             st.config.max_items = max_items;
             m_editedThisFrame = true;
         }
+        // F3H12: undo de max_items via pushEditIfDone<u32>.
+        detail::pushEditIfDone<u32>(m_editTracker, m_ui, e,
+            static_cast<u32>(st.config.max_items),
+            [](Entity& en, const u32& v) {
+                if (!en.hasComponent<InventoryComponent>()) return;
+                en.getComponent<InventoryComponent>().state.config.max_items =
+                    static_cast<int>(v);
+            },
+            "Editar inventory max_items");
     } else if (st.mode == Inventory::LayoutMode::Grid2D) {
         int w = st.config.grid_width;
         int h = st.config.grid_height;
@@ -84,12 +104,28 @@ void InspectorPanel::renderInventorySection(Entity e) {
             st.config.grid_width = w;
             m_editedThisFrame = true;
         }
+        detail::pushEditIfDone<u32>(m_editTracker, m_ui, e,
+            static_cast<u32>(st.config.grid_width),
+            [](Entity& en, const u32& v) {
+                if (!en.hasComponent<InventoryComponent>()) return;
+                en.getComponent<InventoryComponent>().state.config.grid_width =
+                    static_cast<int>(v);
+            },
+            "Editar inventory grid_width");
         if (ImGui::InputInt("grid_height", &h)) {
             if (h < 1) h = 1;
             if (h > 32) h = 32;
             st.config.grid_height = h;
             m_editedThisFrame = true;
         }
+        detail::pushEditIfDone<u32>(m_editTracker, m_ui, e,
+            static_cast<u32>(st.config.grid_height),
+            [](Entity& en, const u32& v) {
+                if (!en.hasComponent<InventoryComponent>()) return;
+                en.getComponent<InventoryComponent>().state.config.grid_height =
+                    static_cast<int>(v);
+            },
+            "Editar inventory grid_height");
     } else {
         // EquipmentSlots: lista editable.
         ImGui::TextDisabled("%s",
@@ -107,6 +143,22 @@ void InspectorPanel::renderInventorySection(Entity e) {
                 m_editedThisFrame = true;
             }
             ImGui::PopItemWidth();
+            // F3H12: undo del slot name. El setter captura `i` por valor —
+            // si entre edit y undo el dev agrega/quita slots, el undo
+            // aplica al slot que ahora tiene ese indice (limitacion
+            // aceptada — typical workflow no entrelaza ambos).
+            {
+                const size_t slotIdx = i;
+                detail::pushEditIfDone<std::string>(m_editTracker, m_ui, e, slot.name,
+                    [slotIdx](Entity& en, const std::string& v) {
+                        if (!en.hasComponent<InventoryComponent>()) return;
+                        auto& s = en.getComponent<InventoryComponent>().state;
+                        if (slotIdx < s.config.equipment_slots.size()) {
+                            s.config.equipment_slots[slotIdx].name = v;
+                        }
+                    },
+                    "Editar slot name");
+            }
             ImGui::SameLine();
 
             char tagBuf[64];
@@ -120,10 +172,27 @@ void InspectorPanel::renderInventorySection(Entity e) {
                 m_editedThisFrame = true;
             }
             ImGui::PopItemWidth();
+            // F3H12: undo del tag_filter.
+            {
+                const size_t slotIdx = i;
+                detail::pushEditIfDone<std::string>(m_editTracker, m_ui, e, slot.tag_filter,
+                    [slotIdx](Entity& en, const std::string& v) {
+                        if (!en.hasComponent<InventoryComponent>()) return;
+                        auto& s = en.getComponent<InventoryComponent>().state;
+                        if (slotIdx < s.config.equipment_slots.size()) {
+                            s.config.equipment_slots[slotIdx].tag_filter = v;
+                        }
+                    },
+                    "Editar slot tag_filter");
+            }
             ImGui::SameLine();
             if (ImGui::SmallButton("x")) toRemove = i;
             ImGui::PopID();
         }
+        // F3H12 follow-up: remove slot, add slot, remove entry, drop ITEM,
+        // clear — operaciones estructurales sin undo en F3H12. Snapshot
+        // del Inventory::State entero es la solucion (EditInventoryState
+        // Command). Diferido a hito propio si el dev lo reclama.
         if (toRemove != static_cast<size_t>(-1)) {
             st.config.equipment_slots.erase(st.config.equipment_slots.begin() + toRemove);
             m_editedThisFrame = true;
@@ -165,6 +234,20 @@ void InspectorPanel::renderInventorySection(Entity e) {
                     m_editedThisFrame = true;
                 }
                 ImGui::PopItemWidth();
+                // F3H12: undo del qty. Setter captura el index por valor.
+                {
+                    const size_t entryIdx = i;
+                    detail::pushEditIfDone<u32>(m_editTracker, m_ui, e,
+                        static_cast<u32>(en.quantity),
+                        [entryIdx](Entity& en2, const u32& v) {
+                            if (!en2.hasComponent<InventoryComponent>()) return;
+                            auto& s = en2.getComponent<InventoryComponent>().state;
+                            if (entryIdx < s.entries.size()) {
+                                s.entries[entryIdx].quantity = static_cast<int>(v);
+                            }
+                        },
+                        "Editar entry quantity");
+                }
                 ImGui::TableSetColumnIndex(2);
                 if (st.mode == Inventory::LayoutMode::FlatList) {
                     ImGui::TextDisabled("-");
@@ -176,6 +259,20 @@ void InspectorPanel::renderInventorySection(Entity e) {
                         m_editedThisFrame = true;
                     }
                     ImGui::PopItemWidth();
+                    // F3H12: undo del slot_index.
+                    {
+                        const size_t entryIdx = i;
+                        detail::pushEditIfDone<u32>(m_editTracker, m_ui, e,
+                            static_cast<u32>(en.slot_index),
+                            [entryIdx](Entity& en2, const u32& v) {
+                                if (!en2.hasComponent<InventoryComponent>()) return;
+                                auto& s = en2.getComponent<InventoryComponent>().state;
+                                if (entryIdx < s.entries.size()) {
+                                    s.entries[entryIdx].slot_index = static_cast<int>(v);
+                                }
+                            },
+                            "Editar entry slot_index");
+                    }
                 }
                 ImGui::TableSetColumnIndex(3);
                 if (ImGui::SmallButton("x")) toRemove = i;
