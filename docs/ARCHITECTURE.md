@@ -1,6 +1,6 @@
 # Arquitectura de MoodEngine
 
-> Documento vivo. La fuente de verdad detallada es `MOODENGINE_CONTEXTO_TECNICO.md` y `PLAN_FASE2.md`. Aquí se resume lo esencial para alguien que llega por primera vez al repo.
+> Documento vivo. La fuente de verdad detallada es `MOODENGINE_CONTEXTO_TECNICO.md` y `PLAN_FASE3.md` (plans previos archivados en `archive/plans/`). Aquí se resume lo esencial para alguien que llega por primera vez al repo.
 
 ## Visión
 

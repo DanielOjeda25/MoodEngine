@@ -94,11 +94,11 @@ progreso de *objectives* sí se restaura.
 
 **Evidencia:** set/get en memoria OK (`LuaBindings.cpp:324-339`, `GameState.cpp:22`); quests
 Talk/Reach evalúan `dialog.has_var` (`QuestSystem.cpp:74-77`); `SaveLoad` no toca `dialogVars`.
-Documentado como YAGNI en `PENDIENTES.md:129`.
+Era YAGNI explícito en el legacy `PENDIENTES.md` (borrado en cleanup F3H12); ahora se reabre.
 
 **Acción:** agregar `std::unordered_map<std::string,std::string> dialogVars` a `SaveData`,
 capturar/restaurar `GameState::dialogVars()` **en el mismo bump 3→4 que A1** (hacer A1+A2
-juntos). Quitar la nota de `PENDIENTES.md:129`. **Test:** extender `test_saveload_inventory.cpp`
+juntos). **Test:** extender `test_saveload_inventory.cpp`
 con set_var → save → load → has_var.
 
 ## A3 · [MEDIO] El auto-avance de quests depende de que exista ≥1 entidad con ScriptComponent

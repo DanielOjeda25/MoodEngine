@@ -11,6 +11,71 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-26: F3H12 cierre — Undo coverage audit del Inspector + fixes en 8 paneles
+
+### Decisión 1 — `pushAtomicEdit<T>` helper separado de `pushEditIfDone<T>`
+
+**Contexto:** El Inspector tiene dos clases de widgets:
+- **Drag**: DragFloat/SliderFloat/ColorEdit3 — el dev arrastra durante N frames, suelta al final. El undo necesita capturar el `before` al click inicial y el `after` al `IsItemDeactivatedAfterEdit` → 1 sola entrada del HistoryStack por gesto. `pushEditIfDone<T>` con tracker hace esto.
+- **Atómico**: Checkbox, Combo, Selectable, file picker — 1 click = 1 cambio. No hay drag, no hay frames intermedios.
+
+Pregunta: ¿extender `pushEditIfDone` para soportar también el caso atómico (detectando que el widget no usa drag), o crear un helper nuevo `pushAtomicEdit<T>`?
+
+**Decisión:** **helper nuevo separado**. `pushAtomicEdit<T>(ui, e, before, after, setter, label)` recibe ambos valores explícitamente (sin tracker), chequea `before != after`, crea + pushea el `EditPropertyCommand<T>`.
+
+**Razones:**
+- **Semánticas distintas que confunden si se mezclan**: el tracker drag tiene state (activeId, before en variant); el atómico no necesita state porque el cambio se detecta en el frame del click.
+- **Call-site más legible**: el caller del helper atómico pasa explícitamente before+after, evita tener que saber que el tracker capturó algo "antes".
+- **Independiente del tracker**: el atómico funciona con o sin tracker — no requiere que el panel tenga `m_editTracker`.
+
+**Alternativas descartadas:**
+- Unificar en `pushEditIfDone`: detectar si `IsItemActivated`/`IsItemDeactivatedAfterEdit` disparan en el mismo frame para inferir atómico vs drag. Frágil — depende de comportamiento interno de ImGui que puede cambiar entre widgets.
+- Helper `pushComboEdit` y `pushCheckboxEdit` específicos: granularidad excesiva — el patrón `before/after/setter` es el mismo, no justifica un helper por widget.
+
+### Decisión 2 — Commands custom file-local (`EditEnvironmentSubsetCommand` + `EditVehicleConfigCommand`)
+
+**Contexto:** Environment reset buttons reasignan 3-7 fields a defaults; el preset combo del Vehicle reasigna ~10 fields del `VehicleConfig` (asset compartido). Cada operación es lógicamente 1 acción del dev pero N escrituras de campo. Pregunta: ¿pushear N commands de `EditPropertyCommand<T>` (uno por field — N Ctrl+Z para revertir un solo "reset"), agregar un command genérico al namespace `commands/`, o hacer commands file-local específicos por panel?
+
+**Decisión:** **commands custom file-local** dentro del `.cpp` del panel. `EditEnvironmentSubsetCommand` vive en `InspectorPanel_Environment.cpp`; `EditVehicleConfigCommand` en `InspectorPanel_Vehicle.cpp`. Captura `std::function<void(Component&)>` para `applyBefore` + `applyAfter`.
+
+**Razones:**
+- **1 click = 1 entrada del HistoryStack**: el dev clicka "Restablecer fog" y Ctrl+Z revierte los 5 fields en una sola acción. UX consistente con Unity Reset y Unreal Reset to Default.
+- **Uso file-local exclusivo**: ningún otro panel necesita un command que reescribe N fields de `EnvironmentComponent` o `VehicleConfig`. Promover a `commands/` ensucia el namespace global sin justificación.
+- **Captura por lambda**: las lambdas `applyBefore`/`applyAfter` permiten que el call-site exprese exactamente qué fields toca, sin tener que parametrizar un command genérico con un map<string, value> o similar.
+
+**Alternativas descartadas:**
+- N commands separados: 1 reset del fog = 5 commands = 5 Ctrl+Z. UX horrible.
+- Command genérico `EditComponentSnapshotCommand<T>` con `T` por valor: requiere `T` copyable + operator== para isNoOp. `EnvironmentComponent` no tiene operator==, agregarlo sería trabajo extra que no se reutiliza.
+- Public `EditEnvironmentResetCommand` en `commands/`: 0 callers fuera del panel. Solo agregaría header churn.
+
+### Decisión 3 — Scope acotado en Inventory (operaciones estructurales sin undo)
+
+**Contexto:** `InventoryComponent` tiene tanto edits "tipados" (mode combo, max_items/grid_w/grid_h InputInt, slot name/tag InputText, entry qty/slot_index InputInt) como operaciones "estructurales" (add slot, remove slot, add entry, remove entry, drop ITEM, clear). Las tipadas encajan con `EditPropertyCommand<T>`/`pushEditIfDone`/`pushAtomicEdit`. Las estructurales requerirían snapshot-based command (`EditInventoryStateCommand` que captura `Inventory::State` entero antes/después).
+
+**Decisión:** **undo solo para edits tipados**. Operaciones estructurales sin undo + comentario explícito en el código documentando el follow-up.
+
+**Razones:**
+- **Scope F3H12 = "undo coverage audit"**: el patrón usado por el resto del Inspector aplica a edits tipados. Diseñar un command snapshot-based para Inventory expande scope a "diseño de un command nuevo" que aplica a 1 sólo componente.
+- **Frecuencia de uso**: el dev típicamente arma el inventory una vez al setup del proyecto. Add/remove slot/entry son ops poco frecuentes. La friction de "no puedo Ctrl+Z después de borrar un slot" es real pero baja.
+- **Re-aplicar es trivial**: si el dev borra accidentalmente un slot, agregarlo de nuevo es 1 click + retipar el nombre. No es como perder 30 min de tuning fino.
+
+**Cuándo revisar:** si el dev pide el undo después de un accidente real, o si Inventory crece a tener edits más caros que justifiquen el `EditInventoryStateCommand`.
+
+### Decisión 4 — Multi-edit innecesario en Environment
+
+**Contexto:** Los nuevos helpers `multiEditCheckbox/multiEditCombo` soportan multi-edit (N entidades). Environment no se usa multi-entity típicamente — 1 EnvironmentComponent por escena (típico de Unity/Unreal Post Process Volume).
+
+**Decisión:** **single-entity helpers** (`pushAtomicEdit<T>`) para Environment en lugar de `multiEditCheckbox/multiEditCombo`.
+
+**Razones:**
+- **Caso de uso real**: el dev solo tiene 1 entity con `EnvironmentComponent` por mapa. Multi-edit es feature muerta para este panel.
+- **Menos código**: helpers single-entity no requieren getter callback, son más cortos en el call-site.
+- **Helpers multi-edit siguen disponibles** para los otros paneles donde sí aplican (Light, Trigger, ForceField, Cloth, ParticleEmitter).
+
+**Cuándo revisar:** si en el futuro el engine permite múltiples Environment con scoping (zonas con distinto fog), promover los call-sites a `multiEditCheckbox/multiEditCombo`. La signatura es compatible.
+
+---
+
 ## 2026-05-25: F3H11 cierre — Persistencia Audio/Camera + refactor Brush + clipboard Tier 3
 
 ### Decisión 1 — `AudioAssetId` runtime vs `clipPath` string en `SavedAudio`
