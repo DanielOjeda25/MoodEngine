@@ -347,6 +347,15 @@ private:
     ///        del SceneRenderer, igual que m_materialPreview.
     std::unique_ptr<MeshThumbnailRenderer> m_meshThumbnails;
 
+    /// @brief F3H14: ultimo `UserSettings::editor().thumbnailResolution` que
+    ///        usamos al construir m_meshThumbnails. Si en el siguiente
+    ///        frame difiere (dev movio el slider en User Preferences),
+    ///        recreamos m_meshThumbnails con el nuevo size + reinyectamos
+    ///        IBL + reinyectamos diskCacheRoot + Asset Browser. La cache
+    ///        memoria se pierde, la cache disco persiste (filename incluye
+    ///        size, no chocan).
+    int m_lastThumbnailResolution = 128;
+
     /// @brief F2H81: preview de animaciones (NPC skinneado posado por un clip,
     ///        render por frame). IBL del SceneRenderer; inyectado al Asset
     ///        Browser. Solo dibuja cuando el tab Animations tiene un clip

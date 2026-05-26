@@ -111,6 +111,8 @@
   "editor.user_preferences.editor.gizmo_rotate_ring_hint": "Tamaño target del anillo del gizmo de rotar en píxeles de pantalla. Constante en pantalla (no escala con la distancia de cámara).",
   "editor.user_preferences.editor.click_drag_threshold": "Umbral click vs drag",
   "editor.user_preferences.editor.click_drag_threshold_hint": "Distancia en píxeles que debe moverse el mouse para que un click izquierdo sostenido pase a contar como drag. Subir si el trackpad genera drags accidentales al hacer click.",
+  "editor.user_preferences.editor.thumbnail_resolution": "Resolución de miniaturas",
+  "editor.user_preferences.editor.thumbnail_resolution_hint": "Tamaño en píxeles de las miniaturas 3D de los meshes en el Asset Browser. Subir para más detalle en pantallas 4K; bajar si hay muchos meshes y se nota tirón al abrir el panel. Las miniaturas se cachean en disco entre sesiones.",
   "editor.user_preferences.editor.live_apply_hint": "Los cambios se aplican al soltar el slider y se guardan al disco.",
   "theme.dark": "Oscuro",
   "theme.light": "Claro",

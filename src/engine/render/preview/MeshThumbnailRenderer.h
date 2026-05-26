@@ -22,6 +22,7 @@
 #include <glm/vec3.hpp>
 #include <glm/mat4x4.hpp>
 
+#include <filesystem>
 #include <memory>
 #include <unordered_map>
 
@@ -60,6 +61,13 @@ public:
                         OpenGLCubemapTexture* prefilter,
                         ITexture* brdfLut);
 
+    /// @brief F3H14: directorio donde persistir los thumbnails generados.
+    ///        Tipicamente `<projectRoot>/.cache/thumbs/`. Path vacio =
+    ///        cache disco off (solo memoria, comportamiento F2H80). El
+    ///        renderer crea el directorio al primer store si no existe.
+    ///        Llamar al cargar/cerrar proyecto.
+    void setDiskCacheRoot(std::filesystem::path cacheRoot);
+
     /// @brief Textura (color attachment) de la miniatura del mesh. La
     ///        renderiza la primera vez y la cachea; devuelve 0 si no se pudo
     ///        (mesh inválido / sin submeshes / FBO inválido).
@@ -90,6 +98,8 @@ private:
     u32 m_size = 0;
 
     std::unique_ptr<IShader>    m_pbrShader;
+    std::unique_ptr<IShader>    m_bgShader;     // F3H14: fondo gradient
+    GLuint                      m_dummyVao = 0;  // F3H14: VAO empty para fullscreen draw
     std::unique_ptr<OpenGLSSBO> m_pointLightsSsbo;
     std::unique_ptr<OpenGLSSBO> m_lightTilesSsbo;
     std::unique_ptr<OpenGLSSBO> m_lightIndicesSsbo;
@@ -103,6 +113,10 @@ private:
     std::unordered_map<u32, std::unique_ptr<OpenGLFramebuffer>> m_cache;
     // Cache de primitivas, keyed por PrimitiveKind (int).
     std::unordered_map<int, std::unique_ptr<OpenGLFramebuffer>> m_primCache;
+
+    // F3H14: cache disco. Vacio = off. Cuando seteado, `thumbnailFor`
+    // intenta `tryLoad` antes de rendear y `store` despues.
+    std::filesystem::path m_diskCacheRoot;
 };
 
 } // namespace Mood

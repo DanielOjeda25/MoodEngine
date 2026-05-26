@@ -11,6 +11,81 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-26: F3H14 cierre — Mejoras del MeshThumbnailRenderer (cache disco + resolución + gradiente + mtime)
+
+### Decisión 1 — Filename incluye `_<size>` (coexistencia de resoluciones)
+
+**Contexto:** El cache disco persiste PNGs entre sesiones. Al cambiar `thumbnailResolution` (64 → 128 → 256), ¿qué pasa con los PNGs viejos del size anterior?
+
+**Decisión:** El filename incluye el size: `mesh_<hash>_<size>.png`. Cambio de resolución NO invalida nada — los PNGs viejos quedan en disco bajo otro nombre. Hit/miss se evalúa por (logicalPath, size).
+
+**Razones:**
+1. **Idempotencia trivial**: cambiar el slider 128→256 no requiere "limpiar el cache" — los nuevos PNGs se nombran distinto y conviven sin chocar.
+2. **Reversibilidad gratuita**: si el dev vuelve a 128 después de probar 256, los 128 viejos siguen ahí (cache HIT instantáneo).
+3. **Simpleza**: alternativa "borrar PNGs del size viejo al cambiar" agrega manejo de errores y lifecycle que el hito chico no justifica.
+
+**Alternativas descartadas:**
+- Filename sin size (`mesh_<hash>.png`) + invalidación masiva al cambiar resolución: requiere iterar el directorio + delete, propenso a fallar si hay file locks o permisos.
+- Subdirectorios por size (`.cache/thumbs/128/mesh_<hash>.png`): más jerarquía sin ventaja real; el filename plano es más fácil de inspeccionar manualmente.
+
+**Revisión:** si el cache crece descontroladamente (dev probando muchos sizes), agregar comando "Limpiar cache de thumbnails" en menu Debug. Backlog si el dev lo nota.
+
+### Decisión 2 — Sin sidecar `.meta` para metadata (mtime check via filesystem)
+
+**Contexto:** Para validar staleness del cache (mesh modificado después del PNG), una opción es escribir un sidecar `mesh_<hash>_<size>.meta` con el mtime serializado. La otra es usar `last_write_time(cachePng)` directamente del filesystem.
+
+**Decisión:** Sin sidecar. La validez del cache se chequea con `last_write_time(cachePng) >= last_write_time(meshSource)`.
+
+**Razones:**
+1. **Menos archivos por mesh**: 1 PNG en vez de 2 archivos (PNG + meta).
+2. **Atomicity natural**: `stbi_write_png` actualiza el mtime del PNG al rato de escribir. No hay window donde el PNG existe sin meta o vice versa.
+3. **Race conditions evitadas**: si el dev modifica el mesh source justo cuando el editor está escribiendo el sidecar, podría quedar inconsistente. El mtime del filesystem es atómico por archivo.
+4. **Patrón distinto a LodCache**: LodCache sí tiene magic + version + mtime adentro del binario porque sus archivos `.moodlod` son formato propio (versionable). Los PNGs son blobs opaque renderizables.
+
+**Alternativas descartadas:**
+- Sidecar `.meta` con JSON: agrega parsing + I/O extra; el mtime del filesystem ya tiene esa info.
+- Header binario propio antes del PNG: rompe la convención `*.png` (los archivos no abrirían en visores externos para inspección manual del dev).
+
+**Revisión:** si el comportamiento es muy sensible a relojes desincronizados entre máquinas (pull-and-test entre 2 PCs con offset NTP), reconsiderar. Por ahora una sola máquina por edit, sin issue.
+
+### Decisión 3 — Recrear el renderer al cambiar resolución vs setter `setSize`
+
+**Contexto:** Cambio dinámico de `thumbnailResolution` requiere que los FBOs internos se rehagan con el nuevo size. Dos opciones: (A) `m_meshThumbnails->setSize(newSize)` que internamente clear cache + actualiza miembro; (B) destruir `m_meshThumbnails` y `make_unique<MeshThumbnailRenderer>(newSize)`.
+
+**Decisión:** Opción B — destruir y recrear el `unique_ptr<MeshThumbnailRenderer>`.
+
+**Razones:**
+1. **Constructor único como fuente de verdad**: el size se fija al construir (FBOs lazy van con `m_size`). No hace falta lógica de "qué hacer si size cambió mid-life" — el renderer nuevo arranca limpio con el size correcto.
+2. **Cache memoria implícitamente limpia**: el destructor del `unique_ptr` libera los FBOs antiguos. No hace falta `clear()` explícito antes del cambio de size.
+3. **Reinyección obligatoria**: IBL + diskCacheRoot + AssetBrowser apuntan a `m_meshThumbnails.get()`. Como el puntero cambia, el caller (EditorApplication) tiene que reinyectar todo — y eso fuerza a NO olvidar ningún wire (si algo nuevo se inyectara en el futuro, falla rápido).
+4. **Cache disco persiste**: como el filename incluye `_<size>` (decisión D1), no hay churn en el directorio.
+
+**Alternativas descartadas:**
+- `setSize(u32)` mutador: requiere clearear cache memoria + invalidar FBOs internamente + manejar que el size puede cambiar mid-render. Más superficie de bugs.
+- "Aplicar al reiniciar el editor" (Unity-style para algunas opciones): UX pobre — el dev mueve el slider y no ve nada.
+
+**Revisión:** si recrear el renderer es notablemente lento (FPS hitch al mover el slider), considerar setSize. Hoy es ~ms por la inicialización de shaders compartidos, no se nota.
+
+### Decisión 4 — Cache en `<proyecto>/.cache/thumbs/` vs `assets/.cache/thumbs/`
+
+**Contexto:** `LodCache` (existente) usa `assets/.cache/lods/`. Para mantener consistencia, lo natural era poner los thumbs en `assets/.cache/thumbs/`. Pero el dev pidió explícitamente `<proyecto>/.cache/thumbs/` (raíz del proyecto, no dentro de `assets/`).
+
+**Decisión:** Cache en `<projectRoot>/.cache/thumbs/`. NO dentro de `assets/`.
+
+**Razones:**
+1. **Pedido explícito del dev** en la decisión de scope.
+2. **Gitignore limpio**: una sola línea `.cache/` en `.gitignore` del proyecto ignora todo el cache (thumbs + futuros caches). Si estuviera en `assets/.cache/`, habría que listar `assets/.cache/` específicamente (o aceptar que `assets/.cache/` aparezca como dir bajo `assets/` aunque vacío en commit).
+3. **Mental model más claro**: assets son inputs del proyecto, cache es output transitorio del editor. Separar refleja la intención.
+4. **LodCache es legacy**: la convención `assets/.cache/lods/` viene de F2; podría migrarse en un hito de cleanup futuro. F3H14 NO toca LodCache para no inflar scope.
+
+**Alternativas descartadas:**
+- `assets/.cache/thumbs/`: consistencia con LodCache pero contra el pedido del dev.
+- `%APPDATA%/MoodEngine/thumbs/<proyecto_hash>/`: per-instalación; rechazada en la pregunta de scope inicial.
+
+**Revisión:** si LodCache se migra a `<proyecto>/.cache/lods/` en un hito futuro, las dos caches quedan en el mismo padre.
+
+---
+
 ## 2026-05-26: F3H13 cierre — Reset to default per-field del Inspector + cierre Sub-fase 3.2
 
 ### Decisión 1 — Helper en `InspectorPanel_Internal.h` vs duplicar el `resetButton<T>` de `ProjectSettingsPanel`/`UserPreferencesPanel`

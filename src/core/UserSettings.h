@@ -53,6 +53,14 @@ struct EditorSettings {
     /// (perspectiva + orto). Subir si el trackpad genera drags
     /// accidentales.
     int clickDragThresholdPx = 4;
+
+    /// F3H14: resolucion en pixeles de los thumbnails del Asset Browser
+    /// (meshes). Default 128 — calibrado para grids 80-96 px en 1080p.
+    /// En 4K subir a 192/256; en notebook bajar a 64 si hay >100 meshes
+    /// para reducir VRAM. Clamp `[64, 512]`. Cambiar este valor invalida
+    /// el cache en memoria; los PNGs en disco coexisten por size en el
+    /// filename (no se borran al cambiar).
+    int thumbnailResolution = 128;
 };
 
 /// @brief Lee `settings.json` del disco. Si no existe o tiene parse

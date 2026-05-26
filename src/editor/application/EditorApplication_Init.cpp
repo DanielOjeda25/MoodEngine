@@ -357,8 +357,11 @@ EditorApplication::EditorApplication() {
 
     // F2H80: renderer de miniaturas 3D de meshes (cache por mesh). Mismo IBL
     // que el material preview. Lo usa el modal "+ Crear Entidad" y se inyecta
-    // al Asset Browser. 128² por miniatura (suficiente para cards).
-    m_meshThumbnails = std::make_unique<MeshThumbnailRenderer>(128u);
+    // al Asset Browser. F3H14: la resolucion viene de UserSettings.editor
+    // (default 128, slider en User Preferences).
+    m_lastThumbnailResolution = UserSettings::editor().thumbnailResolution;
+    m_meshThumbnails = std::make_unique<MeshThumbnailRenderer>(
+        static_cast<u32>(m_lastThumbnailResolution));
     m_meshThumbnails->setIblTextures(
         m_sceneRenderer->iblIrradiance(),
         m_sceneRenderer->iblPrefilter(),

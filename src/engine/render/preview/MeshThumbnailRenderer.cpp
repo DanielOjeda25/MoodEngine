@@ -5,6 +5,7 @@
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
 #include "engine/render/backend/opengl/OpenGLSSBO.h"
 #include "engine/render/backend/opengl/OpenGLShader.h"
+#include "engine/render/preview/MeshThumbnailDiskCache.h"  // F3H14
 #include "engine/render/resources/MaterialAsset.h"
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/render/rhi/IMesh.h"
@@ -20,6 +21,7 @@
 #include <glm/glm.hpp>
 
 #include <algorithm>
+#include <vector>
 
 namespace Mood {
 
@@ -76,6 +78,15 @@ MeshThumbnailRenderer::MeshThumbnailRenderer(u32 size) : m_size(size) {
     m_pbrShader = std::make_unique<OpenGLShader>(
         "shaders/pbr.vert", "shaders/pbr.frag");
 
+    // F3H14: shader del fondo gradient. Fullscreen-triangle trick (sin VBO)
+    // — vert usa gl_VertexID, frag computa mix(bottom, top, v_uv.y).
+    m_bgShader = std::make_unique<OpenGLShader>(
+        "shaders/thumbnail_bg.vert", "shaders/thumbnail_bg.frag");
+
+    // F3H14: VAO empty necesario para glDrawArrays en core profile.
+    // Sin atributos — el vert shader genera los vertices via gl_VertexID.
+    glGenVertexArrays(1, &m_dummyVao);
+
     // SSBOs no-vacíos (count=0) para el path Forward+ del shader: algunos
     // drivers fallan al bindear un buffer de tamaño 0.
     m_pointLightsSsbo  = std::make_unique<OpenGLSSBO>();
@@ -90,7 +101,12 @@ MeshThumbnailRenderer::MeshThumbnailRenderer(u32 size) : m_size(size) {
     m_lightIndicesSsbo->upload(&zero, sizeof(u32));
 }
 
-MeshThumbnailRenderer::~MeshThumbnailRenderer() = default;
+MeshThumbnailRenderer::~MeshThumbnailRenderer() {
+    if (m_dummyVao != 0) {
+        glDeleteVertexArrays(1, &m_dummyVao);
+        m_dummyVao = 0;
+    }
+}
 
 void MeshThumbnailRenderer::setIblTextures(OpenGLCubemapTexture* irradiance,
                                            OpenGLCubemapTexture* prefilter,
@@ -104,13 +120,30 @@ void MeshThumbnailRenderer::clear() { m_cache.clear(); m_primCache.clear(); }
 
 void MeshThumbnailRenderer::invalidate(u32 meshId) { m_cache.erase(meshId); }
 
+void MeshThumbnailRenderer::setDiskCacheRoot(std::filesystem::path cacheRoot) {
+    m_diskCacheRoot = std::move(cacheRoot);
+}
+
 // ============================================================================
 // Setup PBR común
 // ============================================================================
 
 void MeshThumbnailRenderer::clearAndSetGlState() {
-    glClearColor(0.16f, 0.16f, 0.18f, 1.0f);  // gris neutro
+    glClearColor(0.16f, 0.16f, 0.18f, 1.0f);  // fallback si el shader bg fallo
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // F3H14: fondo gradient. Depth test off para que el quad fullscreen
+    // no escriba depth (los 3 vertices estan a z=0 NDC). El mesh se
+    // dibuja despues con depth test on, asi nunca queda detras del fondo.
+    if (m_bgShader && m_dummyVao != 0) {
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        m_bgShader->bind();
+        glBindVertexArray(m_dummyVao);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glBindVertexArray(0);
+    }
+
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
     glEnable(GL_CULL_FACE);
@@ -247,6 +280,48 @@ GLuint MeshThumbnailRenderer::thumbnailFor(u32 meshId, AssetManager& assets) {
     MeshAsset* asset = assets.getMesh(meshId);
     if (asset == nullptr || asset->submeshes.empty()) return 0u;
 
+    // F3H14: si hay cache disco seteado, intentar load antes de rendear.
+    // El logical path del mesh es la key para el filename; el fs absoluto
+    // del mesh source nos da el mtime para validar staleness.
+    const std::string logicalPath = assets.meshPathOf(meshId);
+    const bool diskOn = !m_diskCacheRoot.empty() && !logicalPath.empty();
+    std::filesystem::path cachePath;
+    if (diskOn) {
+        cachePath = MeshThumbnailDiskCache::pathFor(
+            m_diskCacheRoot, logicalPath, m_size);
+        const auto meshFsPath = assets.resolvePath(logicalPath);
+        std::vector<u8> rgba;
+        u32 cachedW = 0, cachedH = 0;
+        if (MeshThumbnailDiskCache::tryLoad(
+                cachePath, meshFsPath, rgba, cachedW, cachedH) &&
+            cachedW == m_size && cachedH == m_size) {
+            // HIT: armar FBO con el size esperado + uploadear el RGBA al
+            // color attachment. ImGui consume `glColorTextureId()` igual
+            // que el path render. Flip vertical: PNG storage es
+            // top-to-bottom; queremos que la textura quede como si
+            // hubiera salido del render path (bottom-to-top GL natural),
+            // para que ImGui la pinte right-way-up igual que F2H80.
+            std::vector<u8> flipped(rgba.size());
+            const usize rowBytes = static_cast<usize>(m_size) * 4;
+            for (u32 y = 0; y < m_size; ++y) {
+                std::copy_n(rgba.data() + (m_size - 1 - y) * rowBytes,
+                             rowBytes,
+                             flipped.data() + y * rowBytes);
+            }
+            auto fb = std::make_unique<OpenGLFramebuffer>(
+                m_size, m_size, OpenGLFramebuffer::Format::LDR);
+            const GLuint tex = fb->glColorTextureId();
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                             static_cast<GLsizei>(m_size),
+                             static_cast<GLsizei>(m_size),
+                             GL_RGBA, GL_UNSIGNED_BYTE, flipped.data());
+            glBindTexture(GL_TEXTURE_2D, 0);
+            m_cache.emplace(meshId, std::move(fb));
+            return tex;
+        }
+    }
+
     auto fb = std::make_unique<OpenGLFramebuffer>(
         m_size, m_size, OpenGLFramebuffer::Format::LDR);
 
@@ -255,6 +330,30 @@ GLuint MeshThumbnailRenderer::thumbnailFor(u32 meshId, AssetManager& assets) {
     fb->bind();
     glViewport(0, 0, static_cast<GLsizei>(m_size), static_cast<GLsizei>(m_size));
     renderMeshToBoundFbo(meshId, assets);
+
+    // F3H14: readback + store al disco (solo si hay cache disco seteado).
+    // glReadPixels desde el FBO bindeado — el PNG queda como CPU-snapshot
+    // del color attachment. NO bloqueamos en GPU (sin glFinish): si el
+    // driver demora, el PNG saldra del frame anterior, aceptable para un
+    // thumbnail estatico que se cachea persistente.
+    if (diskOn) {
+        std::vector<u8> rgba(static_cast<usize>(m_size) * m_size * 4);
+        glReadPixels(0, 0,
+                      static_cast<GLsizei>(m_size),
+                      static_cast<GLsizei>(m_size),
+                      GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+        // PNG: las filas vienen bottom-to-top desde GL pero stbi_write_png
+        // espera top-to-bottom — flip vertical antes de escribir.
+        std::vector<u8> flipped(rgba.size());
+        const usize rowBytes = static_cast<usize>(m_size) * 4;
+        for (u32 y = 0; y < m_size; ++y) {
+            std::copy_n(rgba.data() + (m_size - 1 - y) * rowBytes,
+                         rowBytes,
+                         flipped.data() + y * rowBytes);
+        }
+        MeshThumbnailDiskCache::store(cachePath, flipped.data(), m_size, m_size);
+    }
+
     fb->unbind();
     glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
 

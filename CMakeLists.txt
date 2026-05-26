@@ -481,6 +481,7 @@ add_library(mood_engine_lib STATIC
     src/engine/render/pipeline/LightGrid.cpp
     src/engine/render/preview/MaterialPreviewRenderer.cpp
     src/engine/render/preview/MeshThumbnailRenderer.cpp
+    src/engine/render/preview/MeshThumbnailDiskCache.cpp
     src/engine/render/preview/AnimationPreviewRenderer.cpp
     src/engine/render/scene_renderer/RenderBatching.cpp
     src/engine/render/scene_renderer/SceneRenderer.cpp

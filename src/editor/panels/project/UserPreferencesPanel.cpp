@@ -242,6 +242,31 @@ void UserPreferencesPanel::drawEditorTab() {
         saveNow = true;
     }
 
+    ImGui::Spacing();
+
+    // F3H14: thumbnail resolution del Asset Browser (mesh thumbs). Cambiar
+    // este valor en vivo recrea el renderer + invalida cache memoria; la
+    // cache disco persiste con el size viejo en el filename.
+    ImGui::TextUnformatted(
+        I18n::T("editor.user_preferences.editor.thumbnail_resolution").c_str());
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.user_preferences.editor.thumbnail_resolution_hint").c_str());
+    }
+    ImGui::SameLine(kLabelColumnWidth);
+    ImGui::SetNextItemWidth(kControlWidth);
+    if (ImGui::SliderInt("##user_pref_thumbnail_resolution",
+                          &cfg.thumbnailResolution, 64, 512, "%d px")) {
+        dirty = true;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) saveNow = true;
+    if (resetButton("thumbnail_resolution",
+                     cfg.thumbnailResolution,
+                     defaults.thumbnailResolution)) {
+        dirty = true;
+        saveNow = true;
+    }
+
     if (dirty)   UserSettings::setEditor(cfg);
     if (saveNow) UserSettings::save();
 

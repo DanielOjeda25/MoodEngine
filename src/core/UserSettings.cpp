@@ -125,6 +125,7 @@ nlohmann::json editorSettingsToJson(const EditorSettings& s) {
     if (s.gizmoArmLengthPx        != defaults.gizmoArmLengthPx)        j["gizmo_arm_length_px"]       = s.gizmoArmLengthPx;
     if (s.gizmoRotateRingPx       != defaults.gizmoRotateRingPx)       j["gizmo_rotate_ring_px"]      = s.gizmoRotateRingPx;
     if (s.clickDragThresholdPx    != defaults.clickDragThresholdPx)    j["click_drag_threshold_px"]   = s.clickDragThresholdPx;
+    if (s.thumbnailResolution     != defaults.thumbnailResolution)     j["thumbnail_resolution"]      = s.thumbnailResolution;
     return j;
 }
 
@@ -155,6 +156,10 @@ EditorSettings editorSettingsFromJson(const nlohmann::json& j) {
     if (j.contains("click_drag_threshold_px") && j.at("click_drag_threshold_px").is_number_integer()) {
         const int v = j.at("click_drag_threshold_px").get<int>();
         s.clickDragThresholdPx = std::max(v, 1);
+    }
+    if (j.contains("thumbnail_resolution") && j.at("thumbnail_resolution").is_number_integer()) {
+        const int v = j.at("thumbnail_resolution").get<int>();
+        s.thumbnailResolution = std::clamp(v, 64, 512);
     }
     return s;
 }

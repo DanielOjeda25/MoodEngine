@@ -111,6 +111,8 @@
   "editor.user_preferences.editor.gizmo_rotate_ring_hint": "Target on-screen size of the rotate gizmo ring in pixels. Constant on screen (does not scale with camera distance).",
   "editor.user_preferences.editor.click_drag_threshold": "Click vs drag threshold",
   "editor.user_preferences.editor.click_drag_threshold_hint": "Pixel distance the mouse must move before a held left click counts as a drag. Raise this if your trackpad fires accidental drags on click.",
+  "editor.user_preferences.editor.thumbnail_resolution": "Thumbnail resolution",
+  "editor.user_preferences.editor.thumbnail_resolution_hint": "Size in pixels of the 3D mesh thumbnails in the Asset Browser. Raise for more detail on 4K displays; lower if you have many meshes and notice a hitch when opening the panel. Thumbnails are cached on disk across sessions.",
   "editor.user_preferences.editor.live_apply_hint": "Changes apply when the slider is released and persist to disk.",
   "theme.dark": "Dark",
   "theme.light": "Light",

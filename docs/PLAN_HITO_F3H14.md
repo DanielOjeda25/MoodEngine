@@ -1,99 +1,93 @@
-# PLAN F3H14 — Arranque Sub-fase 3.3 (Asset Browser de verdad)
+# PLAN F3H14 — Mejoras del MeshThumbnailRenderer (cache disco + resolución + gradiente + mtime)
 
-**Estado:** **A DEFINIR** (arrancar tras cierre F3H13).
-**Predecesor:** F3H13 (Reset to default per-field — cierre Sub-fase 3.2).
-**Origen:** `PLAN_FASE3.md` Sub-fase 3.3 `(F3H14 - F3H19)`.
-
----
-
-## Norte de Sub-fase 3.3
-
-> *"Asset Browser de verdad"* — pasa de listado de paths a panel visual con previews, drag&drop con feedback, validador de assets rotos, rename con cascada.
-
-Hitos planeados (PLAN_FASE3 §4):
-1. **F3H14 — Thumbnails de meshes** (preview 3D off-screen + cache disco).
-2. **F3H15 — Thumbnails de materiales** (esfera PBR con material aplicado).
-3. **F3H16 — Hover preview ampliada** (tooltip grande estilo Substance).
-4. **F3H17 — Drag&drop con feedback visual** (drop zones destacadas).
-5. **F3H18 — Validador de assets rotos** (panel dedicado).
-6. **F3H19 — Rename con cascada** (refs en `.material`/`.moodmap`/`ScriptComponent`).
+**Estado:** **CERRADO** (`v2.14.0-fase3-hito14`, 2026-05-26). Primer hito de Sub-fase 3.3.
+**Predecesor:** F3H13 (cierre Sub-fase 3.2 — Reset to default per-field).
+**Origen:** `PLAN_FASE3.md` Sub-fase 3.3 lista "Thumbnails de meshes (preview 3D)".
 
 ---
 
-## Candidato F3H14 (recomendado del plan original)
+## Descubrimiento al arrancar el hito
 
-### Thumbnails de meshes (preview 3D)
+F2H80 (Fase 2) **ya implementó** `MeshThumbnailRenderer` + integración con Asset Browser + modal "+ Crear Entidad":
 
-`PLAN_FASE3.md` declara:
-> **F3H14 — Thumbnails de meshes (preview 3D).**
-> Render off-screen de cada `.moodmesh` cargado. Cache en `<proyecto>/.cache/thumbs/`. Lazy generation. Resolución configurable en Preferences.
+- `src/engine/render/preview/MeshThumbnailRenderer.{h,cpp}`: renderer PBR + IBL completo, encuadre AABB automático, cache en memoria por `meshId`, `thumbnailForPrimitive` para CSG kits.
+- `AssetBrowserPanel`: ya tiene grid 80×80 en `renderMeshesTab` que pide `m_thumbnails->thumbnailFor(meshId, assets)`.
+- Fondo: gris liso `(0.16, 0.16, 0.18)` ya seteado.
 
-**Por qué es el primer hito de 3.3:**
-- Es **prerequisito visual** de F3H15-F3H17 (todos los thumbs y previews necesitan el patrón render off-screen + cache).
-- Establece el **directorio `.cache/thumbs/`** y el formato (PNG con hash del asset) — F3H15+ lo reusan.
-- Establece la **regla de invalidación** (cuando el mesh cambia, invalidar el thumb).
-- El Asset Browser actual muestra paths como texto — un dev escaneando 50 meshes para "el sniper rifle" pierde tiempo. Con thumbs es identificación instantánea.
-
-### Trabajo estimado
-
-1. **Off-screen rendering**: FBO mínimo (color + depth) en `editor/thumbnails/MeshThumbnailRenderer.cpp`. Reusa `SceneRenderer` light path con 1 luz direccional + ambient. Modelo centrado/escalado a frame.
-2. **Cache disco**: `<proyecto>/.cache/thumbs/mesh_<hash>.png`. Hash = sha1 del path + mtime (invalida si el `.moodmesh` cambia). Lazy: si existe el png + hash matches → load; sino → render off-screen + write.
-3. **Cache memoria**: `AssetThumbnailCache` LRU con N slots (texture handle + path → handle). Asset Browser pide `getThumbnail(meshPath)` → cache HIT devuelve handle, MISS dispara render async/sync (sync v1, async F3H15+ si la latencia molesta).
-4. **UI del Asset Browser**: grid con tiles 64×64 / 96×96 / 128×128 (toggle en topbar del browser, default 96). Tile = imgui Image + label debajo. Hover muestra tooltip con path completo.
-5. **Resolución configurable** (UserSettings > Editor): `thumbnailResolution` int slider 64-256, default 128. Recalc-on-demand al cambiar.
-6. **Invalidación**: hook al save del `.moodmesh` (cuando exista import re-bake) o al mtime mismatch al startup del editor. v1: validar mtime al abrir el browser.
-
-### Decisiones a tomar al arrancar
-
-- **Sync vs async**: v1 sync (mismo frame que el browser pide). Si la lib de assets crece, mover a thread pool. Empezar simple.
-- **Cache path**: ¿`<proyecto>/.cache/thumbs/` (per-proyecto, .gitignore-able) o `<APPDATA>/MoodEngine/thumbs/<proyecto_hash>/` (per-instalación)? Per-proyecto es más obvio (el dev ve la carpeta) y se borra con el repo limpio.
-- **Default lighting**: ¿luz fija pre-calibrada (mismo lighting para todos los thumbs — consistencia visual) o usar lighting de la escena actual? Pre-calibrada (consistencia + thumbs portables entre escenas).
-- **Background**: ¿checkerboard transparente (DCC standard), gris liso, o el skybox actual de la escena? Gris medio con leve gradiente — neutral, no compite con el mesh.
-
-### Trabajo NO trivial
-
-- **Skeletal meshes**: ¿se rendean en T-pose (bind pose) o estáticos? T-pose es el default sensato.
-- **Meshes muy chicos / muy grandes**: el frame debe encuadrar correctamente. Bounding box → escalado uniforme a "encajar en cámara".
-- **Meshes con materials missing**: usar material default (rosado debug) o el material asignado al primer load? Material asignado — el thumb refleja el estado real.
+**Lo que F3H14 originalmente proponía (preview 3D + grid + lazy gen) ya está cubierto por F2H80.** Scope de F3H14 se reduce a las 4 mejoras puntuales sobre lo existente.
 
 ---
 
-## Alternativas candidatos para F3H14 (a discutir con el dev)
+## Scope (4 mejoras)
 
-### B) Sub-fase 3.3 mecánica de juego (no Asset Browser visual)
+### A) Cache en disco (`<proyecto>/.cache/thumbs/`)
 
-Si el dev prefiere mecánicas observables en el juego antes que pulido del editor:
-- Saltar a Sub-fase 3.4 (Viewport pro) directamente.
-- F3H14 = snapping configurable (F3H20 del plan original — toolbar de snap más rica, vertex/face/angle).
+Hoy el cache es solo en memoria — al cerrar el editor se pierde, al reabrir el editor regenera todos los thumbs (1-2s con muchos meshes; visible como flicker).
 
-Trade-off: rompe el orden del plan; Asset Browser sin thumbs sigue siendo "lista de paths".
+**Implementación:**
+- Nueva clase `MeshThumbnailDiskCache` (`src/engine/render/preview/MeshThumbnailDiskCache.{h,cpp}`):
+  - Hash FNV-1a 64 del logical path (mismo patrón que `LodCache::hashLogicalPath`).
+  - Filename: `mesh_<hash>_<size>.png` (size incluido para que un cambio de resolución no chocara nombres).
+  - `tryLoad(meshFsPath, cachePngPath, outRgba, outW, outH) → bool`: chequea `last_write_time(cachePath) >= last_write_time(meshPath)`; si OK lee PNG con `stbi_load`. Sino devuelve false. Sin sidecar `.meta` — el mtime del propio PNG sirve.
+  - `store(cachePngPath, rgbaData, w, h)`: stbi_write_png + asegura `create_directories(parent_path)`.
+- `MeshThumbnailRenderer`:
+  - `setDiskCacheRoot(std::filesystem::path)`: setter inyectado por `EditorApplication` al cargar proyecto.
+  - En `thumbnailFor(meshId, assets)`:
+    1. Cache memoria HIT → return.
+    2. Sino, si diskCacheRoot set → `tryLoad(meshFsPath, cachePath, ...)`. Si OK → crear `OpenGLFramebuffer` + `glTexImage2D(rgba)` → cachear memoria → return.
+    3. Sino render PBR original → `glReadPixels` + `stbi_write_png` al cache → cachear memoria → return.
+- `EditorApplication`:
+  - Al `loadProjectFromPath`: `m_meshThumbnails->setDiskCacheRoot(m_project->root / ".cache" / "thumbs")`.
+  - Al cerrar proyecto: setter con `fs::path{}` (cache disco off — fallback a solo memoria).
 
-### C) Backlog UX descubierto en F3H12
+### B) Resolución configurable (`UserSettings.editor.thumbnailResolution`)
 
-Memoria `backlog-ux-gaps-editor`:
-- Spawn de ForceField/Cloth desde el menú Add Entity / Hierarchy / AssetBrowser.
-- Workflow "agregar sonido al mesh" (puerta con audio al activarse) — Inspector slot, evento o prefab.
+Hoy hardcoded 128 en el constructor.
 
-Pequeños, pero rompen el flujo de Sub-fase 3.3. Mejor anotarlos como tareas chicas y procesarlas al cerrar 3.3 si no aparecieron por el camino.
+**Implementación:**
+- `UserSettings::EditorSettings` agrega `int thumbnailResolution = 128;` (clamp `[64, 512]`).
+- `editorSettingsToJson/fromJson`: subkey `"thumbnail_resolution"` solo si != default.
+- `UserPreferencesPanel.cpp` `drawEditorTab`: SliderInt 64-512 con reset button + tooltip i18n.
+- `EditorApplication::tick()` (o equivalente): detecta cambio vs `m_lastThumbnailResolution`; si cambió → `m_meshThumbnails = std::make_unique<MeshThumbnailRenderer>(newSize)` + reinyectar IBL + reinyectar diskCacheRoot + reinyectar al AssetBrowser.
+
+### C) Mtime invalidation
+
+Hoy el cache memoria nunca expira (vive lo que vive el renderer); el cache disco que añadimos en (A) ya tiene check `last_write_time(cache) >= last_write_time(mesh)`. Para que el cache memoria también respete cambios:
+
+**Implementación:**
+- `MeshThumbnailRenderer::thumbnailFor`:
+  - Si memoria HIT pero `m_cachedMtimes[meshId] < currentMtime(meshFsPath)` → invalidar memoria + recargar via disco/render.
+- Mantenemos un `std::unordered_map<u32, fs::file_time_type> m_cachedMtimes` paralelo al cache de FBOs.
+
+### D) Gradiente vertical en el fondo
+
+Hoy fondo gris liso `(0.16, 0.16, 0.18)`. El dev pidió "gris medio con leve gradiente" (estilo Substance/Marmoset).
+
+**Implementación:**
+- Shader nuevo `shaders/thumbnail_bg.vert/frag`:
+  - Vert: fullscreen triangle trick (sin VBO, usa `gl_VertexID`).
+  - Frag: gradient vertical entre `(0.13, 0.13, 0.15)` (abajo) y `(0.20, 0.20, 0.22)` (arriba), por `gl_FragCoord.y / uViewportSize.y`.
+- `MeshThumbnailRenderer::clearAndSetGlState`:
+  - glClearColor + glClear como ahora.
+  - Bind shader bg + glDrawArrays(GL_TRIANGLES, 0, 3) con depth test off (escribe color, no depth).
+  - Reenable depth test para el mesh.
+- Cargar shader en el constructor del renderer (mismo patrón que `m_pbrShader`).
 
 ---
 
-## Recomendación
+## Decisiones
 
-Yo (Claude) sugiero **opción A — Thumbnails de meshes**:
-1. Es el primer hito del plan original de Sub-fase 3.3.
-2. Habilita F3H15+ (mismo patrón de render + cache para materials).
-3. Mejora inmediata visible en el editor — el dev "siente" el panel cambiar.
-4. Scope acotado (off-screen render + cache disco + UI grid).
-
-**Pregunta al dev cuando arranque F3H14:** ¿confirmás opción A o querés B/C?
+1. **Filename incluye `_<size>`**: cambio de resolución NO invalida cache disco vieja (otros sizes quedan por si el dev vuelve). Simple coexistencia. Limpieza manual o backlog.
+2. **Sin sidecar `.meta`**: el mtime del propio PNG basta para validar contra mtime del mesh. Menos archivos, menos race conditions.
+3. **Recrear renderer al cambiar resolución vs setter**: recrear es más simple (FBOs lazy van con el size del renderer). El cache memoria se pierde pero el cache disco persiste (nuevos thumbs a 64, viejos PNGs a 128 ignorados).
+4. **`<proyecto>/.cache/thumbs/` vs `assets/.cache/thumbs/`**: el dev pidió `<proyecto>/.cache/` (raíz del proyecto, no dentro de `assets/`). Honramos: cache fuera de los assets, fácil de gitignore con una sola línea `.cache/`.
 
 ---
 
-## Lo que NO toca F3H14 (cualquiera sea la opción)
+## Lo que NO toca F3H14
 
-- F3H15 (Material thumbs): hito propio para no inflar scope.
-- F3H16 (Hover ampliada): depende de F3H14/F3H15 estando.
-- F3H17 (Drag&drop): scope distinto (eventos drag, no thumbs).
-- F3H18-F3H19 (Validador + Rename): hitos propios.
-- Sub-fase 3.4 (Viewport pro + Performance): F3H20-F3H27.
+- F3H15 (Material thumbs): hito propio.
+- Comando "Clear thumbnails" en menu Debug: backlog si el dev lo pide.
+- Hot-reload de meshes (assimp re-import al cambio del archivo): scope distinto, no es del Asset Browser.
+- Async generation (thread pool): scope futuro si el sync molesta con 100+ meshes.
+- Limpieza automática de PNGs huérfanos al cambiar `_<size>`: backlog.
