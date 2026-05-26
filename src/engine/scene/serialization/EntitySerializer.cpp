@@ -459,6 +459,29 @@ void writeVehicleSeat(json& je, const VehicleSeatComponent& seat) {
     je["vehicle_seat"] = js;
 }
 
+// F3H11: persistir AudioSourceComponent. El runtime `clip` (AudioAssetId)
+// se traduce a `clipPath` via assets; los flags persisten as-is. Estado
+// runtime (handle, started) NO se escribe.
+void writeAudio(json& je, const AudioSourceComponent& a,
+                  const AssetManager& assets) {
+    json ja;
+    ja["clipPath"]    = (a.clip == 0u) ? std::string{} : assets.audioPathOf(a.clip);
+    ja["volume"]      = a.volume;
+    ja["loop"]        = a.loop;
+    ja["playOnStart"] = a.playOnStart;
+    ja["is3D"]        = a.is3D;
+    je["audio_source"] = ja;
+}
+
+// F3H11: persistir CameraComponent (3 fields scalar).
+void writeCamera(json& je, const CameraComponent& c) {
+    json jc;
+    jc["fovDeg"]    = c.fovDeg;
+    jc["nearPlane"] = c.nearPlane;
+    jc["farPlane"]  = c.farPlane;
+    je["camera"] = jc;
+}
+
 // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la
 // entidad tiene un `PrefabLinkComponent`. Sin propagacion bidireccional
 // por ahora; es solo un breadcrumb para futuras features ("revertir a
@@ -522,6 +545,11 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         writeVehicle(je, entity.getComponent<VehicleComponent>());
     if (entity.hasComponent<VehicleSeatComponent>())
         writeVehicleSeat(je, entity.getComponent<VehicleSeatComponent>());
+    // F3H11: Audio + Camera (gap F2 cerrado).
+    if (entity.hasComponent<AudioSourceComponent>())
+        writeAudio(je, entity.getComponent<AudioSourceComponent>(), assets);
+    if (entity.hasComponent<CameraComponent>())
+        writeCamera(je, entity.getComponent<CameraComponent>());
     if (entity.hasComponent<PrefabLinkComponent>())
         writePrefabLink(je, entity.getComponent<PrefabLinkComponent>());
 

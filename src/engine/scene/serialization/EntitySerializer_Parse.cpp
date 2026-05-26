@@ -291,6 +291,27 @@ SavedEntity parseEntityFromJson(const json& j) {
         se.vehicleSeat = std::move(ss);
     }
 
+    // F3H11: audio_source + camera. Aditivos — mapas pre-F3H11 sin el
+    // campo se leen igual (sin AudioSource/Camera component, back-compat).
+    if (j.contains("audio_source")) {
+        const auto& ja = j.at("audio_source");
+        SavedAudio sa;
+        sa.clipPath    = ja.value("clipPath",    std::string{});
+        sa.volume      = ja.value("volume",      1.0f);
+        sa.loop        = ja.value("loop",        false);
+        sa.playOnStart = ja.value("playOnStart", true);
+        sa.is3D        = ja.value("is3D",        false);
+        se.audio = std::move(sa);
+    }
+    if (j.contains("camera")) {
+        const auto& jc = j.at("camera");
+        SavedCamera sc;
+        sc.fovDeg    = jc.value("fovDeg",    60.0f);
+        sc.nearPlane = jc.value("nearPlane",  0.1f);
+        sc.farPlane  = jc.value("farPlane",  100.0f);
+        se.camera = std::move(sc);
+    }
+
     // F2H65: joint. Aditivo — mapas pre-F2H65 sin el campo se leen igual
     // (la entidad queda sin JointComponent).
     if (j.contains("joint")) {

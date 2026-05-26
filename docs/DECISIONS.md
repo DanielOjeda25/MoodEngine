@@ -11,6 +11,50 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-25: F3H11 cierre — Persistencia Audio/Camera + refactor Brush + clipboard Tier 3
+
+### Decisión 1 — `AudioAssetId` runtime vs `clipPath` string en `SavedAudio`
+
+**Contexto:** F3H11 cierra el gap F2 de no-persistencia de `AudioSourceComponent`. El componente runtime usa `AudioAssetId` (u32 inestable entre sesiones porque depende del orden de load del `AssetManager`). Pregunta: persistir el `AudioAssetId` directo (mismo valor numérico) o el `clipPath` lógico (string)?
+
+**Decisión:** **`clipPath` (string)** en `SavedAudio`. Al cargar, `SceneLoader::applyOneEntity` lo re-resuelve a `AudioAssetId` via `AssetManager::loadAudio(clipPath)`. Fallback a `missingAudioId()` si el string está vacío.
+
+**Razones:**
+- **Consistencia con F2**: todos los componentes con asset refs ya usan path puro (`DialogComponent.dialogPath`, `ItemPickupComponent.itemPath`, `VehicleComponent.configPath`). Audio sigue el patrón.
+- **Estabilidad cross-session**: paths son estables (el archivo `.wav`/`.ogg` no cambia de nombre); IDs no (el cache del AssetManager se reordena al cargar otros assets antes).
+- **Cross-project resilience**: si el clipboard cross-project se permite en el futuro, el path tiene chances de seguir siendo válido (si el otro proyecto tiene un asset con el mismo logical path); el ID sería garbage.
+
+**Cómo aplica:** mismo patrón sirve para futuras extensions del clipboard a componentes con asset refs no triviales.
+
+### Decisión 2 — Persistir `CameraComponent` aunque sea stub en el editor
+
+**Contexto:** El `CameraComponent` es stub desde el audit F2H85 — el editor usa su propia cámara, no la del componente. Persistir es trabajo "por completeness" sin payoff inmediato en el flujo del editor.
+
+**Decisión:** **persistir igual** (con `SavedCamera` minimal: fovDeg + nearPlane + farPlane). Schema sin bump.
+
+**Razones:**
+- **Habilita objetivo del hito**: sin persistencia, el clipboard de Camera tampoco funcionaría (el serializer reusa el path del .moodmap schema). F3H11 quiere cerrar los 3 types pendientes del Hierarchy paste — Camera es uno de ellos.
+- **MoodPlayer futuro**: si en el futuro las cámaras del componente se usan para cinemáticas (no hay nada que lo impida en el engine), los valores ya estarán persistidos.
+- **Costo bajo**: 3 fields scalar, 4 funciones triviales (write/read/apply + branch en el clipboard).
+
+**Alternativa descartada:**
+- **Diferir Camera al hito que active el componente en MoodPlayer**: rompe la coherencia del bundle Tier 3 (Audio/Camera/Brush). Mejor cerrar los 3 juntos.
+
+### Decisión 3 — Brush dispatch especial en el ComponentClipboard (no SavedEntity wrapper)
+
+**Contexto:** Los demás types del clipboard usan el wrapper SavedEntity — `serializeEntityToJson` produce el sub-object del componente, `parsePayloadAsSavedEntity` envuelve el payload en un fake-entity y delega a `parseEntityFromJson`. Para Brush, el schema persistido es **distinto**: `SavedBrush` vive en `SavedMap.brushes`, no en `SavedEntity` — tiene su propio top-level tag/position/transform/materialPaths/faces (no anidado bajo `brush`). Pregunta: forzar Brush al schema `SavedEntity` (refactor del `.moodmap` para inflar `SavedEntity::brush`) o dispatch especial en el clipboard?
+
+**Decisión:** **dispatch especial** en `ComponentClipboard::serializeComponent` y `applyPayload`. Si `componentKey == kKeyBrush`, llama directamente a `serializeBrush(entity, assets)` (público desde F3H11 — Parte C del hito) y `parseBrush(payload)` + `SceneLoader::applyBrushFromSaved`.
+
+**Razones:**
+- **Zero churn al schema `.moodmap`**: los Brushes han vivido en `SavedMap.brushes` (top-level) desde F2H11. Migrarlos a `SavedEntity::brush` requeriría refactor del schema + upgrader + back-compat con todos los `.moodmap` existentes — scope grande para un payoff cosmético (consistencia del dispatch interno).
+- **Helpers existen**: `serializeBrush` y `parseBrush` ya tienen toda la lógica robusta (UV defaults canónicos, material indices, visgroup membership). Exponerlas al público (Parte C) + dispatch especial en clipboard es mínimo trabajo.
+- **Conceptualmente honesto**: Brush ES un caso especial del modelo `.moodmap` (vive aparte por razones históricas de F2H11). Reflejar eso en el clipboard es más claro que disimularlo.
+
+**Cómo aplica:** si futuras extensions del clipboard necesitan tipos con schema separado (ej. compiled mesh data), el patrón "branch antes del SavedEntity dispatch" es reusable.
+
+---
+
 ## 2026-05-25: F3H10 cierre — ComponentClipboard Tier 2 + 9 kits nuevos en convert_entity_modal
 
 ### Decisión 1 — Scope acotado a "fruta accesible" (5 types con SavedX) vs forzar refactor del serializer

@@ -456,6 +456,35 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<VehicleSeatComponent>(seat);
         }
 
+        // F3H11: AudioSourceComponent. `clipPath` se re-resuelve a
+        // AudioAssetId via assets — el handle runtime (SoundHandle) y el
+        // flag `started` arrancan vacios; AudioSystem los rebuild al
+        // primer playback. Mismo patron que Dialog/ItemPickup (path no
+        // ID — paths estables entre sesiones).
+        if (se.audio.has_value()) {
+            const auto& sa = *se.audio;
+            AudioSourceComponent ac{};
+            ac.clip        = sa.clipPath.empty()
+                ? assets.missingAudioId()
+                : assets.loadAudio(sa.clipPath);
+            ac.volume      = sa.volume;
+            ac.loop        = sa.loop;
+            ac.playOnStart = sa.playOnStart;
+            ac.is3D        = sa.is3D;
+            e.addComponent<AudioSourceComponent>(ac);
+        }
+
+        // F3H11: CameraComponent (stub — fov/near/far). El editor usa
+        // su propia camara; persiste igual para MoodPlayer + clipboard.
+        if (se.camera.has_value()) {
+            const auto& sc = *se.camera;
+            CameraComponent cc{};
+            cc.fovDeg    = sc.fovDeg;
+            cc.nearPlane = sc.nearPlane;
+            cc.farPlane  = sc.farPlane;
+            e.addComponent<CameraComponent>(cc);
+        }
+
         // F2H65: JointComponent. El targetEntity (raw handle) se resuelve
         // desde el tag persistido — handles no son estables entre
         // sesiones. Eager lookup primero (sirve para undo de un single
@@ -621,83 +650,93 @@ void applyEntitiesToScene(const SavedMap& saved,
 
     // F2H11: aplicar brushes CSG. Cada SavedBrush -> nueva entidad con
     // TagComponent + TransformComponent (los crea createEntity) +
-    // BrushComponent. Reconstruimos `Csg::Brush` directamente desde
-    // los planos persistidos: los SavedBrushFace ya contienen normal y
-    // distance en world space (las que makeBoxBrush escribio al
-    // serializar). dirty=true fuerza al SceneRenderer a regenerar la
-    // mesh en el primer frame.
+    // BrushComponent. F3H11: el cuerpo del loop se extrajo a
+    // `applyBrushFromSaved` (helper publico) para reuso desde
+    // ComponentClipboard (paste de Brush cross-entity).
     for (const auto& sb : saved.brushes) {
         Entity e = scene.createEntity(sb.tag);
-        auto& t = e.getComponent<TransformComponent>();
-        t.position      = sb.position;
-        t.rotationEuler = sb.rotationEuler;
-        t.scale         = sb.scale;
+        applyBrushFromSaved(sb, e, assets, /*applyVisGroupMembership=*/isEditorPath);
+    }
+}
 
-        BrushComponent bc;
-        bc.brush.faces.reserve(sb.faces.size());
-        for (const auto& sf : sb.faces) {
-            Csg::BrushFace face;
-            face.plane.normal   = sf.normal;
-            face.plane.distance = sf.distance;
-            face.materialIndex  = sf.materialIndex;
-            // F2H15: UV params per-cara. Si son los defaults
-            // canonicos (uAxis=+X, vAxis=+Y) significa que el JSON
-            // viene de v10 sin los campos UV (parseBrush los dejo
-            // en default) — recomputar tangent basis auto desde
-            // la normal para mantener consistencia visual con las
-            // primitivas que generan brushes en F2H15.
-            const bool uvDefaultCanonical =
-                std::fabs(sf.uAxis.x - 1.0f) < 1e-4f &&
-                std::fabs(sf.uAxis.y) < 1e-4f &&
-                std::fabs(sf.uAxis.z) < 1e-4f &&
-                std::fabs(sf.vAxis.x) < 1e-4f &&
-                std::fabs(sf.vAxis.y - 1.0f) < 1e-4f &&
-                std::fabs(sf.vAxis.z) < 1e-4f;
-            if (uvDefaultCanonical) {
-                Csg::defaultTangentBasis(face.plane.normal,
-                                          face.uAxis, face.vAxis);
-            } else {
-                face.uAxis = sf.uAxis;
-                face.vAxis = sf.vAxis;
-            }
-            face.uvOffset    = sf.uvOffset;
-            face.uvScale     = sf.uvScale;
-            face.uvRotation  = sf.uvRotation;
-            face.lockToWorld = sf.lockToWorld;
-            bc.brush.faces.push_back(face);
+// F3H11: extraido del loop de applyMap. Aplica un SavedBrush a una entity
+// existente (ya creada con createEntity por el caller). Reconstruye
+// Csg::Brush + resuelve material paths + setea dirty=true para forzar
+// rebuild de mesh en el primer frame.
+void applyBrushFromSaved(const SavedBrush& sb,
+                          Entity e,
+                          AssetManager& assets,
+                          bool applyVisGroupMembership) {
+    auto& t = e.getComponent<TransformComponent>();
+    t.position      = sb.position;
+    t.rotationEuler = sb.rotationEuler;
+    t.scale         = sb.scale;
+
+    BrushComponent bc;
+    bc.brush.faces.reserve(sb.faces.size());
+    for (const auto& sf : sb.faces) {
+        Csg::BrushFace face;
+        face.plane.normal   = sf.normal;
+        face.plane.distance = sf.distance;
+        face.materialIndex  = sf.materialIndex;
+        // F2H15: UV params per-cara. Si son los defaults canonicos
+        // (uAxis=+X, vAxis=+Y) significa que el JSON viene de v10 sin
+        // los campos UV (parseBrush los dejo en default) — recomputar
+        // tangent basis auto desde la normal para mantener consistencia
+        // visual con las primitivas que generan brushes en F2H15.
+        const bool uvDefaultCanonical =
+            std::fabs(sf.uAxis.x - 1.0f) < 1e-4f &&
+            std::fabs(sf.uAxis.y) < 1e-4f &&
+            std::fabs(sf.uAxis.z) < 1e-4f &&
+            std::fabs(sf.vAxis.x) < 1e-4f &&
+            std::fabs(sf.vAxis.y - 1.0f) < 1e-4f &&
+            std::fabs(sf.vAxis.z) < 1e-4f;
+        if (uvDefaultCanonical) {
+            Csg::defaultTangentBasis(face.plane.normal,
+                                      face.uAxis, face.vAxis);
+        } else {
+            face.uAxis = sf.uAxis;
+            face.vAxis = sf.vAxis;
         }
-        bc.brush.localAabb = Csg::computeBrushAabb(bc.brush);
-        // F2H15: recompute cache de lock-to-world.
-        bc.anyFaceLockToWorld = false;
-        for (const auto& f : bc.brush.faces) {
-            if (f.lockToWorld) {
-                bc.anyFaceLockToWorld = true;
-                break;
-            }
+        face.uvOffset    = sf.uvOffset;
+        face.uvScale     = sf.uvScale;
+        face.uvRotation  = sf.uvRotation;
+        face.lockToWorld = sf.lockToWorld;
+        bc.brush.faces.push_back(face);
+    }
+    bc.brush.localAabb = Csg::computeBrushAabb(bc.brush);
+    // F2H15: recompute cache de lock-to-world.
+    bc.anyFaceLockToWorld = false;
+    for (const auto& f : bc.brush.faces) {
+        if (f.lockToWorld) {
+            bc.anyFaceLockToWorld = true;
+            break;
         }
-        // Material por path logico. "" significa "sin material"
-        // (slot 0 = look blank gris).
-        // F2H17: cargar todos los slots de material desde
-        // materialPaths. Si esta vacio (mapas v10 puros sin nada),
-        // crear 1 slot default 0.
-        bc.materials.clear();
-        for (const auto& path : sb.materialPaths) {
-            const MaterialAssetId id = path.empty()
-                ? 0u : assets.loadMaterial(path);
-            bc.materials.push_back(id);
-        }
-        if (bc.materials.empty()) {
-            bc.materials.push_back(0);
-        }
-        bc.dirty = true;
+    }
+    // Material por path logico. "" significa "sin material" (slot 0 =
+    // look blank gris). F2H17: cargar todos los slots desde
+    // materialPaths. Si esta vacio (mapas v10 puros), crear 1 slot 0.
+    bc.materials.clear();
+    for (const auto& path : sb.materialPaths) {
+        const MaterialAssetId id = path.empty()
+            ? 0u : assets.loadMaterial(path);
+        bc.materials.push_back(id);
+    }
+    if (bc.materials.empty()) {
+        bc.materials.push_back(0);
+    }
+    bc.dirty = true;
+    // F3H11: si la entity ya tenia BrushComponent (paste sobre existente),
+    // reemplazamos. Sino lo agregamos.
+    if (e.hasComponent<BrushComponent>()) {
+        e.getComponent<BrushComponent>() = std::move(bc);
+    } else {
         e.addComponent<BrushComponent>(std::move(bc));
+    }
 
-        // F2H33: VisGroup membership opcional para brushes (mismo flow
-        // que applyOneEntity). Solo en path editor; Player ignora.
-        // (Si llegamos aca con useCompiledMesh=true es porque el mapa
-        // legacy no tiene compiledMesh — el fallback igual carga brushes
-        // pero los grupos no aplican.)
-        if (isEditorPath && sb.visgroupId != 0) {
+    // F2H33: VisGroup membership opcional para brushes.
+    if (applyVisGroupMembership && sb.visgroupId != 0) {
+        if (!e.hasComponent<VisGroupMembershipComponent>()) {
             e.addComponent<VisGroupMembershipComponent>(sb.visgroupId);
         }
     }

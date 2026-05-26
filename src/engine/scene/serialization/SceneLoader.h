@@ -15,6 +15,7 @@
 // `applyEntitiesToScene` para que el player tambien lo use.
 
 #include "engine/scene/core/Entity.h"
+#include "engine/scene/serialization/SceneSerializer.h"  // F3H11: SavedBrush
 
 #include <filesystem>
 
@@ -63,6 +64,23 @@ Entity applyOneEntity(const SavedEntity& saved,
                       Scene& scene,
                       AssetManager& assets,
                       bool applyVisGroupMembership = true);
+
+/// F3H11: aplica un SavedBrush a una entity existente. Antes vivia inline
+/// en el loop de `applyMap`; extraido a helper publico porque el
+/// `ComponentClipboard` lo usa para paste de Brush cross-entity.
+///
+/// - Setea Transform desde `sb.position/rotationEuler/scale`.
+/// - Resuelve materialPaths a `MaterialAssetId`s via `assets.loadMaterial`.
+/// - Reconstruye `Csg::Brush` desde las faces persistidas (recompute
+///   tangent basis si los UV vienen en defaults canonicos — back-compat
+///   con faces v10 sin UV params).
+/// - `bc.dirty = true` para que el SceneRenderer rebuild la mesh.
+/// - Si `applyVisGroupMembership && sb.visgroupId != 0`, agrega
+///   `VisGroupMembershipComponent`. Default false (paste no hereda grupo).
+void applyBrushFromSaved(const SavedBrush& sb,
+                          Entity e,
+                          AssetManager& assets,
+                          bool applyVisGroupMembership = false);
 
 } // namespace SceneLoader
 

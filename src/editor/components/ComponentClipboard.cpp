@@ -1,8 +1,12 @@
 #include "editor/components/ComponentClipboard.h"
 
+#include "core/Log.h"  // F3H11: warn al clampear material indices del Brush
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/scene/components/BrushComponent.h"  // F3H11: paste Brush
 #include "engine/scene/components/Components.h"
 #include "engine/scene/serialization/EntitySerializer.h"
+#include "engine/scene/serialization/SceneLoader.h"   // F3H11: applyBrushFromSaved
+#include "engine/scene/serialization/SceneSerializer.h"  // F3H11: serializeBrush/parseBrush
 
 #include <unordered_set>
 
@@ -15,6 +19,8 @@ const std::unordered_set<std::string>& supportedKeys() {
         kKeyLight, kKeyTrigger, kKeyForceField, kKeyParticleEmitter,
         // F3H10: Tier 2 — types con SavedX en SavedEntity.
         kKeyMeshRenderer, kKeyDialog, kKeyItemPickup, kKeyVehicle, kKeyEnvironment,
+        // F3H11: Tier 3 — bundle Audio/Camera/Brush.
+        kKeyAudioSource, kKeyCamera, kKeyBrush,
     };
     return k;
 }
@@ -179,6 +185,30 @@ void applyEnvironment(const SavedEnvironment& s, Entity& e) {
     env.ssrIntensity  = s.ssrIntensity;
 }
 
+void applyAudio(const SavedAudio& s, Entity& e, AssetManager& assets) {
+    if (!e.hasComponent<AudioSourceComponent>()) {
+        e.addComponent<AudioSourceComponent>();
+    }
+    auto& ac = e.getComponent<AudioSourceComponent>();
+    ac.clip        = s.clipPath.empty()
+        ? assets.missingAudioId()
+        : assets.loadAudio(s.clipPath);
+    ac.volume      = s.volume;
+    ac.loop        = s.loop;
+    ac.playOnStart = s.playOnStart;
+    ac.is3D        = s.is3D;
+}
+
+void applyCamera(const SavedCamera& s, Entity& e) {
+    if (!e.hasComponent<CameraComponent>()) {
+        e.addComponent<CameraComponent>();
+    }
+    auto& cc = e.getComponent<CameraComponent>();
+    cc.fovDeg    = s.fovDeg;
+    cc.nearPlane = s.nearPlane;
+    cc.farPlane  = s.farPlane;
+}
+
 void applyParticleEmitter(const SavedParticleEmitter& s, Entity& e,
                             AssetManager& assets) {
     if (!e.hasComponent<ParticleEmitterComponent>()) {
@@ -229,6 +259,10 @@ std::string componentNameKey(const std::string& componentKey) {
     if (componentKey == kKeyItemPickup)      return "component.name.item_pickup";
     if (componentKey == kKeyVehicle)         return "component.name.vehicle";
     if (componentKey == kKeyEnvironment)     return "component.name.environment";
+    // F3H11:
+    if (componentKey == kKeyAudioSource)     return "component.name.audio_source";
+    if (componentKey == kKeyCamera)          return "component.name.camera";
+    if (componentKey == kKeyBrush)           return "component.name.brush";
     return {};
 }
 
@@ -244,6 +278,10 @@ bool entityHasComponent(const std::string& componentKey, const Entity& e) {
     if (componentKey == kKeyItemPickup)      return e.hasComponent<ItemPickupComponent>();
     if (componentKey == kKeyVehicle)         return e.hasComponent<VehicleComponent>();
     if (componentKey == kKeyEnvironment)     return e.hasComponent<EnvironmentComponent>();
+    // F3H11:
+    if (componentKey == kKeyAudioSource)     return e.hasComponent<AudioSourceComponent>();
+    if (componentKey == kKeyCamera)          return e.hasComponent<CameraComponent>();
+    if (componentKey == kKeyBrush)           return e.hasComponent<BrushComponent>();
     return false;
 }
 
@@ -252,6 +290,12 @@ nlohmann::json serializeComponent(const std::string& componentKey,
                                     const AssetManager& assets) {
     if (!static_cast<bool>(entity)) return nullptr;
     if (!entityHasComponent(componentKey, entity)) return nullptr;
+    // F3H11: Brush vive en un schema separado (SavedBrush, no SavedEntity).
+    // Llamamos directamente al serializer publico — `serializeEntityToJson`
+    // no escribe BrushComponent.
+    if (componentKey == kKeyBrush) {
+        return serializeBrush(entity, assets);
+    }
     // Reusa serializeEntityToJson (que escribe TODO el JSON entity-level)
     // y extrae solo el sub-object del componentKey indicado. Mas trabajo
     // que necesario pero cero codigo nuevo y se mantiene en sync con
@@ -267,6 +311,25 @@ bool applyPayload(const std::string& componentKey,
     if (!isSupported(componentKey)) return false;
     if (!static_cast<bool>(entity)) return false;
     if (payload.is_null()) return false;
+
+    // F3H11: caso especial — Brush usa SavedBrush directo (no SavedEntity
+    // wrapper). El applier reusa el helper publico del SceneLoader.
+    // Caveat de material indices: si la entity destino YA tenia un
+    // BrushComponent con materialPaths distintos, los face.materialIndex
+    // del source pueden quedar fuera de rango. `applyBrushFromSaved`
+    // sobrescribe `bc.materials` con los del source — no hay clamp
+    // explicito porque ambos arrays vienen del mismo SavedBrush
+    // (los indices son consistentes consigo mismos).
+    if (componentKey == kKeyBrush) {
+        SavedBrush sb;
+        try {
+            sb = parseBrush(payload);
+        } catch (...) { return false; }
+        if (sb.faces.empty()) return false;
+        SceneLoader::applyBrushFromSaved(sb, entity, assets,
+                                           /*applyVisGroupMembership=*/false);
+        return true;
+    }
 
     const SavedEntity se = parsePayloadAsSavedEntity(componentKey, payload);
 
@@ -314,6 +377,17 @@ bool applyPayload(const std::string& componentKey,
     if (componentKey == kKeyEnvironment) {
         if (!se.environment.has_value()) return false;
         applyEnvironment(*se.environment, entity);
+        return true;
+    }
+    // F3H11:
+    if (componentKey == kKeyAudioSource) {
+        if (!se.audio.has_value()) return false;
+        applyAudio(*se.audio, entity, assets);
+        return true;
+    }
+    if (componentKey == kKeyCamera) {
+        if (!se.camera.has_value()) return false;
+        applyCamera(*se.camera, entity);
         return true;
     }
     return false;
@@ -367,6 +441,22 @@ bool removeComponent(const std::string& componentKey, Entity entity) {
     if (componentKey == kKeyEnvironment) {
         if (!entity.hasComponent<EnvironmentComponent>()) return false;
         entity.removeComponent<EnvironmentComponent>();
+        return true;
+    }
+    // F3H11:
+    if (componentKey == kKeyAudioSource) {
+        if (!entity.hasComponent<AudioSourceComponent>()) return false;
+        entity.removeComponent<AudioSourceComponent>();
+        return true;
+    }
+    if (componentKey == kKeyCamera) {
+        if (!entity.hasComponent<CameraComponent>()) return false;
+        entity.removeComponent<CameraComponent>();
+        return true;
+    }
+    if (componentKey == kKeyBrush) {
+        if (!entity.hasComponent<BrushComponent>()) return false;
+        entity.removeComponent<BrushComponent>();
         return true;
     }
     return false;

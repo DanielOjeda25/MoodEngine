@@ -41,7 +41,7 @@ std::unique_ptr<AssetManager> makeAssets() {
 
 } // namespace
 
-TEST_CASE("ComponentClipboard::isSupported acepta Tier 1+2, rechaza desconocidos") {
+TEST_CASE("ComponentClipboard::isSupported acepta Tier 1+2+3, rechaza desconocidos") {
     // Tier 1 (F3H9): leaf components.
     CHECK(CC::isSupported(CC::kKeyLight));
     CHECK(CC::isSupported(CC::kKeyTrigger));
@@ -53,11 +53,12 @@ TEST_CASE("ComponentClipboard::isSupported acepta Tier 1+2, rechaza desconocidos
     CHECK(CC::isSupported(CC::kKeyItemPickup));
     CHECK(CC::isSupported(CC::kKeyVehicle));
     CHECK(CC::isSupported(CC::kKeyEnvironment));
-    // Aun fuera (F3H11+).
-    CHECK_FALSE(CC::isSupported("audio_source"));     // gap F2 — no persiste
-    CHECK_FALSE(CC::isSupported("camera"));           // gap F2 — no persiste
-    CHECK_FALSE(CC::isSupported("brush"));            // requiere refactor serializer
-    CHECK_FALSE(CC::isSupported("rigid_body"));       // Tier 3 (no programado)
+    // Tier 3 (F3H11): bundle Audio/Camera/Brush.
+    CHECK(CC::isSupported(CC::kKeyAudioSource));
+    CHECK(CC::isSupported(CC::kKeyCamera));
+    CHECK(CC::isSupported(CC::kKeyBrush));
+    // Aun fuera (no programado o tipos excluidos).
+    CHECK_FALSE(CC::isSupported("rigid_body"));       // Tier 4 (no programado)
     CHECK_FALSE(CC::isSupported("transform"));        // excluido (Transform/Tag)
     CHECK_FALSE(CC::isSupported(""));
     CHECK_FALSE(CC::isSupported("garbage"));
@@ -190,12 +191,10 @@ TEST_CASE("applyPayload rechaza componentKey desconocido") {
     auto assets = makeAssets();
     Scene scene;
     Entity e = scene.createEntity("A");
-    // "audio_source" / "camera" / "brush" siguen fuera del clipboard (F3H11+).
-    CHECK_FALSE(CC::applyPayload("audio_source",
+    // RigidBody no esta en el clipboard (Tier 4 no programado).
+    CHECK_FALSE(CC::applyPayload("rigid_body",
                                    nlohmann::json::object(), e, *assets));
-    CHECK_FALSE(CC::applyPayload("camera",
-                                   nlohmann::json::object(), e, *assets));
-    CHECK_FALSE(CC::applyPayload("brush",
+    CHECK_FALSE(CC::applyPayload("transform",
                                    nlohmann::json::object(), e, *assets));
     CHECK_FALSE(CC::applyPayload("garbage",
                                    nlohmann::json::object(), e, *assets));
@@ -368,7 +367,7 @@ TEST_CASE("ComponentClipboard: Environment roundtrip (Tier 2)") {
     CHECK(denv.tonemapMode == 1u);
 }
 
-TEST_CASE("ComponentClipboard: isSupported true para los 9 types (Tier 1+2)") {
+TEST_CASE("ComponentClipboard: isSupported true para los 12 types (Tier 1+2+3)") {
     CHECK(CC::isSupported(CC::kKeyLight));
     CHECK(CC::isSupported(CC::kKeyTrigger));
     CHECK(CC::isSupported(CC::kKeyForceField));
@@ -379,8 +378,72 @@ TEST_CASE("ComponentClipboard: isSupported true para los 9 types (Tier 1+2)") {
     CHECK(CC::isSupported(CC::kKeyItemPickup));
     CHECK(CC::isSupported(CC::kKeyVehicle));
     CHECK(CC::isSupported(CC::kKeyEnvironment));
-    // Audio/Camera siguen fuera (gap F2 — no persisten al `.moodmap`).
-    CHECK_FALSE(CC::isSupported("audio_source"));
-    CHECK_FALSE(CC::isSupported("camera"));
-    CHECK_FALSE(CC::isSupported("brush"));  // F3H11+
+    // F3H11 Tier 3:
+    CHECK(CC::isSupported(CC::kKeyAudioSource));
+    CHECK(CC::isSupported(CC::kKeyCamera));
+    CHECK(CC::isSupported(CC::kKeyBrush));
+}
+
+// ============================================================================
+// F3H11: Tier 3 — Audio + Camera + Brush. Audio + Camera ahora persisten al
+// `.moodmap` (cerrando el gap F2); Brush usa schema separado (SavedBrush)
+// con applier publico `SceneLoader::applyBrushFromSaved`.
+// ============================================================================
+
+TEST_CASE("ComponentClipboard: AudioSource roundtrip (Tier 3)") {
+    auto assets = makeAssets();
+    Scene scene;
+    Entity src = scene.createEntity("Src");
+    AudioSourceComponent ac;
+    ac.clip        = 0;  // missing audio (clipPath sera vacio al serializar)
+    ac.volume      = 0.75f;
+    ac.loop        = true;
+    ac.playOnStart = false;
+    ac.is3D        = true;
+    src.addComponent<AudioSourceComponent>(ac);
+    auto payload = CC::serializeComponent(CC::kKeyAudioSource, src, *assets);
+    REQUIRE_FALSE(payload.is_null());
+
+    Entity dst = scene.createEntity("Dst");
+    CHECK(CC::applyPayload(CC::kKeyAudioSource, payload, dst, *assets));
+    REQUIRE(dst.hasComponent<AudioSourceComponent>());
+    auto& dac = dst.getComponent<AudioSourceComponent>();
+    CHECK(doctest::Approx(dac.volume) == 0.75f);
+    CHECK(dac.loop == true);
+    CHECK(dac.playOnStart == false);
+    CHECK(dac.is3D == true);
+}
+
+TEST_CASE("ComponentClipboard: Camera roundtrip (Tier 3)") {
+    auto assets = makeAssets();
+    Scene scene;
+    Entity src = scene.createEntity("Src");
+    CameraComponent cc;
+    cc.fovDeg    = 75.0f;
+    cc.nearPlane = 0.5f;
+    cc.farPlane  = 500.0f;
+    src.addComponent<CameraComponent>(cc);
+    auto payload = CC::serializeComponent(CC::kKeyCamera, src, *assets);
+    REQUIRE_FALSE(payload.is_null());
+
+    Entity dst = scene.createEntity("Dst");
+    CHECK(CC::applyPayload(CC::kKeyCamera, payload, dst, *assets));
+    REQUIRE(dst.hasComponent<CameraComponent>());
+    auto& dcc = dst.getComponent<CameraComponent>();
+    CHECK(doctest::Approx(dcc.fovDeg) == 75.0f);
+    CHECK(doctest::Approx(dcc.nearPlane) == 0.5f);
+    CHECK(doctest::Approx(dcc.farPlane) == 500.0f);
+}
+
+// Smoke test mas chico para Brush — no construimos un brush completo (los
+// brushes requieren AssetManager con materiales reales), solo verificamos
+// que el dispatch `kKeyBrush` reconoce el componente + serializeComponent
+// devuelve null si no hay BrushComponent (no crashea).
+TEST_CASE("ComponentClipboard: Brush serialize devuelve null si no hay componente") {
+    auto assets = makeAssets();
+    Scene scene;
+    Entity e = scene.createEntity("NoBrush");
+    auto payload = CC::serializeComponent(CC::kKeyBrush, e, *assets);
+    CHECK(payload.is_null());
+    CHECK_FALSE(CC::entityHasComponent(CC::kKeyBrush, e));
 }

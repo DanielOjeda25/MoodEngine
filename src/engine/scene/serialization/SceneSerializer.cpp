@@ -42,7 +42,12 @@ inline SavedEntity parseEntity(const json& j) {
     return parseEntityFromJson(j);
 }
 
-// F2H11: helpers de (de)serializacion de SavedBrush.
+// F2H11: helpers de (de)serializacion de SavedBrush. F3H11: movidas del
+// anonymous namespace al publico — las usa el ComponentClipboard para
+// copy/paste de Brush cross-entity. Cierre temporal del anonymous,
+// declaracion publica, y reapertura del anonymous abajo.
+
+} // namespace (anonymous)
 
 json serializeBrush(Entity e, const AssetManager& assets) {
     auto& tag = e.getComponent<TagComponent>();
@@ -101,6 +106,8 @@ json serializeBrush(Entity e, const AssetManager& assets) {
     return out;
 }
 
+namespace {
+
 /// @brief F2H26: serializa un SavedCompiledSubmesh a JSON. Layout
 ///        PBR de 11 floats por vertex; indices ya expandidos.
 json serializeCompiledSubmesh(const SavedCompiledSubmesh& sub) {
@@ -120,6 +127,8 @@ SavedCompiledSubmesh parseCompiledSubmesh(const json& j) {
     }
     return sub;
 }
+
+} // namespace (anonymous, parseBrush sale al publico abajo)
 
 SavedBrush parseBrush(const json& j) {
     SavedBrush sb;
@@ -169,8 +178,6 @@ SavedBrush parseBrush(const json& j) {
     sb.visgroupId = j.value("visgroupId", u64{0});
     return sb;
 }
-
-} // namespace
 
 void SceneSerializer::save(const GridMap& map, const std::string& name,
                            const Scene* scene, const AssetManager& assets,

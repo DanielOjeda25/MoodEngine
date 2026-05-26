@@ -1,6 +1,6 @@
 # PLAN F3H11 — Persistencia Audio/Camera + refactor Brush serializer + clipboard de los 3
 
-**Estado:** Planeado (cuarto hito de Sub-fase 3.2 "Inspector + Hierarchy pulidos", arranca tras `v2.10.0-fase3-hito10`).
+**Estado:** **CERRADO** — `v2.11.0-fase3-hito11` (cuarto hito de Sub-fase 3.2 "Inspector + Hierarchy pulidos").
 **Predecesor:** F3H10 (Tier 2 al ComponentClipboard + 9 kits convert_modal).
 **Origen:** memoria `clipboard-brush-audio-camera` — backlog explícito de F3H10 (los 3 types que quedaron grisados en el Hierarchy "Copiar valores").
 
@@ -122,13 +122,27 @@
 
 ---
 
-## Cierre del hito
+## Cierre del hito — checklist verificado
 
-- [ ] Suite verde (+~5 tests).
-- [ ] Save/Load roundtrip preserva AudioSource + Camera en `.moodmap`.
-- [ ] Hierarchy "Copiar valores" deja de grisar para Audio/Camera/Brush.
-- [ ] convert_modal sin cambios (los 13 kits siguen igual).
-- [ ] Validación visual end-to-end por el dev.
-- [ ] Tag `v2.11.0-fase3-hito11`.
-- [ ] Update `ESTADO_ACTUAL.md`, `HITOS.md`, `DECISIONS.md`. Crear `PLAN_HITO_F3H12.md` cuando se decida el próximo bloque de Sub-fase 3.2 (probable: Undo coverage audit del Inspector según `PLAN_FASE3.md`).
-- [ ] Limpiar memoria `clipboard-brush-audio-camera` (backlog cerrado).
+- [x] Suite verde **1173/11506** (+3 cases / +14 asserts vs F3H10: 2 roundtrip Tier 3 Audio/Camera + 1 smoke Brush + 1 ampliación de `isSupported` cubriendo los 12 keys).
+- [x] Save/Load roundtrip preserva AudioSource + Camera en `.moodmap` (gap F2 cerrado).
+- [x] Hierarchy "Copiar valores" deja de grisar para Audio/Camera/Brush — los 12 EntityType del editor tienen copy/paste 100% funcional.
+- [x] convert_modal sin cambios (los 13 kits de F3H10 siguen igual).
+- [x] Validación visual end-to-end por el dev.
+- [ ] Tag `v2.11.0-fase3-hito11` (al confirmar push).
+
+## Scope ejecutado
+
+Todas las partes del plan ejecutadas sin diferimientos:
+- **Parte A**: `SavedAudio` struct + `writeAudio` + parse + `applyAudio` en SceneLoader. `clipPath` (string) → `AudioAssetId` runtime via `assets.loadAudio` (decisión D1).
+- **Parte B**: `SavedCamera` struct + `writeCamera` + parse + apply. 3 fields (fovDeg/nearPlane/farPlane) — minimal.
+- **Parte C**: `serializeBrush` + `parseBrush` movidas del namespace anónimo al público en `SceneSerializer.h` + `nlohmann/json.hpp` agregado al header. Applier `applyBrushFromSaved(SavedBrush, Entity, AssetManager&, bool)` extraído del loop de `SceneLoader::applyMap` a helper público. El loop ahora delega al helper (zero cambio de comportamiento).
+- **Parte D**: 3 keys nuevas al ComponentClipboard (`kKeyAudioSource`, `kKeyCamera`, `kKeyBrush`) + branches en los 4 dispatchers. Brush usa dispatch especial — no pasa por `SavedEntity` wrapper, llama a `serializeBrush` y `parseBrush` directamente, paste via `SceneLoader::applyBrushFromSaved`.
+
+## Memorias actualizadas
+
+- `clipboard-brush-audio-camera`: **eliminada** (backlog cerrado por completo). Los 3 types están en el clipboard.
+
+## Cerró la Parte UX de la Sub-fase 3.2
+
+Con F3H11 los **12 EntityType** del editor tienen copy/paste end-to-end funcional + persistencia completa al `.moodmap`. La estructura del modelo EntityType (F3H9) + clipboard expandible (F3H10) + persistencia completa (F3H11) está consolidada. Próximos hitos de la sub-fase pueden enfocar otros aspectos del Inspector/Hierarchy según `PLAN_FASE3.md` (probable: Undo coverage audit).

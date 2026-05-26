@@ -46,6 +46,8 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include <nlohmann/json.hpp>  // F3H11: serializeBrush/parseBrush publicas
+
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -55,6 +57,7 @@
 namespace Mood {
 
 class AssetManager;
+class Entity;  // F3H11: serializeBrush(Entity, ...)
 class Scene;
 
 /// @brief Copia persistida de un MeshRendererComponent para round-trip.
@@ -347,12 +350,36 @@ struct SavedVehicleSeat {
     glm::vec3 seatOffsetLocal{0.0f, 0.6f, 0.2f};
 };
 
+/// @brief F3H11: copia persistida de un AudioSourceComponent. El `clip`
+///        runtime es un `AudioAssetId` (unstable entre sesiones); persistimos
+///        el `clipPath` logico (string), el AudioSystem re-resuelve via
+///        `AssetManager::loadAudio` al primer frame. Mismo patron que
+///        SavedDialog/SavedItemPickup/SavedVehicle.
+///        Estado runtime (handle, started) NO se persiste.
+struct SavedAudio {
+    std::string clipPath;           // vacio = sin clip (cae a missing silencio)
+    float       volume      = 1.0f;
+    bool        loop        = false;
+    bool        playOnStart = true;
+    bool        is3D        = false;
+};
+
+/// @brief F3H11: copia persistida de un CameraComponent. El editor usa su
+///        propia camara — esto solo se persiste para que el MoodPlayer
+///        pueda usar la del componente (cinematicas) + para que el
+///        clipboard de F3H11 funcione cross-entity.
+struct SavedCamera {
+    float fovDeg    = 60.0f;
+    float nearPlane = 0.1f;
+    float farPlane  = 100.0f;
+};
+
 /// @brief Copia persistida de una entidad no-tile. Hito 10 agrego mesh
 ///        renderer; Hito 11 agrega light; Hito 12 agrega rigid body;
 ///        Hito 14 agrega prefabPath (link suave al asset del que se
 ///        instancio, vacio si no vino de prefab); Hito 24 agrega script
-///        (path + overrides de exposed properties).
-///        Otros componentes (Audio) siguen sin persistirse.
+///        (path + overrides de exposed properties). F3H11 cerro el gap
+///        de Audio + Camera (antes Audio se ignoraba al guardar).
 struct SavedEntity {
     std::string tag;
     glm::vec3 position{0.0f};
@@ -375,6 +402,8 @@ struct SavedEntity {
     std::optional<SavedRagdoll>    ragdoll;               // F2H66
     std::optional<SavedVehicle>    vehicle;               // F2H67
     std::optional<SavedVehicleSeat> vehicleSeat;          // F2H67
+    std::optional<SavedAudio>      audio;                 // F3H11
+    std::optional<SavedCamera>     camera;                // F3H11
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.
@@ -475,6 +504,18 @@ struct SavedMap {
 ///        para persistir la mesh compilada en el `.moodmap`.
 SavedCompiledMesh buildSavedCompiledMeshFromScene(Scene& scene,
                                                     AssetManager& assets);
+
+/// @brief F2H11 (publico desde F3H11): serializa el BrushComponent + tag
+///        + transform + visgroup de `e` a JSON. Antes vivía en el
+///        anonymous namespace de `SceneSerializer.cpp`; ahora es publico
+///        porque el `ComponentClipboard` lo usa para copy/paste cross-
+///        entity de Brush. Requiere que `e` tenga BrushComponent.
+nlohmann::json serializeBrush(Entity e, const AssetManager& assets);
+
+/// @brief F2H11 (publico desde F3H11): parsea un sub-object JSON con el
+///        schema de SavedBrush. Acepta v10 (sin UV params) cayendo a
+///        defaults. Visgroup default 0.
+SavedBrush parseBrush(const nlohmann::json& j);
 
 class SceneSerializer {
 public:
