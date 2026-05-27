@@ -3,6 +3,7 @@
 #include "core/Log.h"
 #include "editor/commands/HistoryStack.h"          // F2H84
 #include "editor/panels/assets/AssetEditTracker.h"  // F2H84
+#include "editor/ui/DragDropFeedback.h"            // F3H17: halo overlay
 #include "editor/ui/EditorUI.h"                    // F2H84
 #include "engine/assets/manager/AssetManager.h"
 #include "core/i18n/I18n.h"  // F2H43
@@ -227,7 +228,12 @@ void MaterialEditorPanel::onImGuiRender() {
         const f32 mainBtnW = ImGui::GetContentRegionAvail().x - clearBtnW
                               - ImGui::GetStyle().ItemSpacing.x;
         ImGui::Button(btnLabel.c_str(), ImVec2(mainBtnW, 0));
-        if (ImGui::IsItemHovered()) {
+        // F3H17: halo durante drag activo de textura (cada slot del material).
+        const bool slotHover = ImGui::IsItemHovered();
+        if (DragDropFeedback::isDragActiveOfType("MOOD_TEXTURE_ASSET")) {
+            DragDropFeedback::drawItemDropHalo(slotHover);
+        }
+        if (slotHover) {
             const std::string ttBody = empty
                 ? I18n::T("editor.panel.material.slot_no_texture")
                 : path;

@@ -116,59 +116,68 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
         }
     }
 
-    // Highlights de drag-and-drop. Distinguen segun el tipo de payload:
-    //   - Texture / Mesh / Prefab apuntan a un TILE -> cubo cyan sobre
-    //     el tile bajo el cursor (raycast vs grid).
-    //   - Material apunta a una ENTIDAD -> OBB amarillo sobre el mesh
-    //     bajo el cursor (raycast vs Scene).
+    // Highlights de drag-and-drop. Lenguaje visual unificado (F3H17):
+    // todos los highlights de drop target usan cyan brillante. Logica:
+    //   - Mesh / Prefab spawnean en TILE -> cubo cyan sobre el tile.
+    //   - Texture sobre TILE (no hay brush bajo cursor) -> cubo cyan.
+    //   - Texture sobre Brush -> AABB cyan del brush (el handler real
+    //     prioriza el brush bajo el cursor antes de caer al tile pick).
+    //   - Material / Script sobre Entity con MeshRenderer -> AABB cyan
+    //     de la entity (el handler asigna al primer slot).
     using DragKind = ViewportPanel::AssetDragKind;
     const DragKind dragKind = m_ui.viewport().assetDragKind();
-    const bool dragIsTile =
+    const glm::vec3 kDragCyan(0.30f, 0.85f, 1.0f);
+
+    // Paso 1: si el drag apunta a una ENTITY (brush para Texture, mesh
+    // para Material/Script), priorizar el AABB de esa entity. Si no hay
+    // hit valido, caer al highlight de tile.
+    bool drawnEntityHighlight = false;
+    const bool dragMayTargetEntity =
         dragKind == DragKind::Texture
-        || dragKind == DragKind::Mesh
-        || dragKind == DragKind::Prefab;
-    if (hovered.hit && dragIsTile) {
-        const glm::vec3 hoverColor(0.2f, 0.9f, 1.0f); // cyan
-        const AABB local = m_map.aabbOfTile(hovered.tileX, hovered.tileY);
-        const AABB world{worldOrigin + local.min, worldOrigin + local.max};
-        dbg.drawAabb(world, hoverColor);
-    }
-    // Script drop tambien apunta a una entidad — mismo highlight OBB
-    // amarillo que Material para mantener consistencia visual (Hito 22
-    // Bloque 2). Para entidades sin mesh (Light/Audio) el OBB no se
-    // dibuja porque el branch interno verifica `MeshRendererComponent`.
-    const bool dragTargetsEntity =
-        dragKind == DragKind::Material || dragKind == DragKind::Script;
-    if (dragTargetsEntity && m_scene
+        || dragKind == DragKind::Material
+        || dragKind == DragKind::Script;
+    if (dragMayTargetEntity && m_scene
         && m_mode == EditorMode::Editor
         && m_ui.viewport().imageHovered()) {
         const glm::vec2 ndc(m_ui.viewport().mouseNdcX(),
                              m_ui.viewport().mouseNdcY());
         ScenePickResult ehit = pickEntity(*m_scene, view, projection, ndc,
                                             m_assetManager.get());
-        if (ehit && ehit.entity.hasComponent<TransformComponent>()
-                  && ehit.entity.hasComponent<MeshRendererComponent>()) {
+        if (ehit && ehit.entity.hasComponent<TransformComponent>()) {
             const auto& tf = ehit.entity.getComponent<TransformComponent>();
-            const glm::mat4 model = tf.worldMatrix();
-            constexpr glm::vec3 kCorners[8] = {
-                {-0.5f, -0.5f, -0.5f}, { 0.5f, -0.5f, -0.5f},
-                { 0.5f,  0.5f, -0.5f}, {-0.5f,  0.5f, -0.5f},
-                {-0.5f, -0.5f,  0.5f}, { 0.5f, -0.5f,  0.5f},
-                { 0.5f,  0.5f,  0.5f}, {-0.5f,  0.5f,  0.5f}};
-            glm::vec3 w[8];
-            for (int i = 0; i < 8; ++i) {
-                const glm::vec4 p = model * glm::vec4(kCorners[i], 1.0f);
-                w[i] = glm::vec3(p);
-            }
-            constexpr int kEdges[12][2] = {
-                {0,1},{1,2},{2,3},{3,0},
-                {4,5},{5,6},{6,7},{7,4},
-                {0,4},{1,5},{2,6},{3,7}};
-            const glm::vec3 dropColor(1.0f, 0.95f, 0.15f);
-            for (const auto& e : kEdges) {
-                dbg.drawLine(w[e[0]], w[e[1]], dropColor);
+            const bool isTexture = (dragKind == DragKind::Texture);
+            const bool hasBrush =
+                ehit.entity.hasComponent<BrushComponent>();
+            const bool hasMesh =
+                ehit.entity.hasComponent<MeshRendererComponent>();
+            // Texture: solo aceptar Brush (el handler de drop solo asigna
+            // textura a brush; mesh entities sueltas caen a tile pick).
+            // Material/Script: aceptar MeshRenderer o Brush.
+            if (hasBrush) {
+                const auto& bc = ehit.entity.getComponent<BrushComponent>();
+                dbg.drawAabb(brushAabbWorld(tf, bc), kDragCyan);
+                drawnEntityHighlight = true;
+            } else if (!isTexture && hasMesh) {
+                const auto& mr =
+                    ehit.entity.getComponent<MeshRendererComponent>();
+                dbg.drawAabb(meshAabbWorld(tf, &mr, m_assetManager.get()),
+                              kDragCyan);
+                drawnEntityHighlight = true;
             }
         }
+    }
+
+    // Paso 2: highlight de tile (solo si no pintamos entity en este frame
+    // — evita doble feedback cuando el dev apunta a un brush que casualmente
+    // se solapa con un tile pickable).
+    const bool dragIsTile =
+        dragKind == DragKind::Texture
+        || dragKind == DragKind::Mesh
+        || dragKind == DragKind::Prefab;
+    if (hovered.hit && dragIsTile && !drawnEntityHighlight) {
+        const AABB local = m_map.aabbOfTile(hovered.tileX, hovered.tileY);
+        const AABB world{worldOrigin + local.min, worldOrigin + local.max};
+        dbg.drawAabb(world, kDragCyan);
     }
 
     // F2H13: outline 3D de TODAS las entidades del SelectionSet.

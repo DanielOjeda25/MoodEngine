@@ -2,6 +2,7 @@
 
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/scene/InspectorPanel_Internal.h"
+#include "editor/ui/DragDropFeedback.h"  // F3H17: halo overlay
 
 #include "editor/ui/EditorUI.h"
 #include "engine/animation/clips/AnimationClip.h"  // F2H49: metadata externa
@@ -181,6 +182,10 @@ void InspectorPanel::renderAnimatorSection(Entity e) {
         ImGui::Button(
             I18n::T("editor.panel.inspector.animator.drop_clip_hint").c_str(),
             ImVec2(-1.0f, 28.0f));
+        // F3H17: halo durante drag activo de animclip.
+        if (DragDropFeedback::isDragActiveOfType("MOOD_ANIMCLIP_ASSET")) {
+            DragDropFeedback::drawItemDropHalo(ImGui::IsItemHovered());
+        }
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload =
                     ImGui::AcceptDragDropPayload("MOOD_ANIMCLIP_ASSET")) {

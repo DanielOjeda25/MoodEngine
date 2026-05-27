@@ -168,14 +168,8 @@ GLuint MaterialPreviewRenderer::loadOrRenderMatThumb(
         if (AssetThumbnailDiskCache::tryLoad(
                 cachePath, matFsPath, rgba, cachedW, cachedH) &&
             cachedW == size && cachedH == size) {
-            // HIT: flip vertical + armar FBO + upload.
-            std::vector<u8> flipped(rgba.size());
-            const usize rowBytes = static_cast<usize>(size) * 4;
-            for (u32 y = 0; y < size; ++y) {
-                std::copy_n(rgba.data() + (size - 1 - y) * rowBytes,
-                             rowBytes,
-                             flipped.data() + y * rowBytes);
-            }
+            // HIT: upload directo. tryLoad ya devuelve los bytes en GL
+            // convention (bottom-up) — no hace falta flip manual aca.
             auto fb = std::make_unique<OpenGLFramebuffer>(
                 size, size, OpenGLFramebuffer::Format::LDR);
             const GLuint tex = fb->glColorTextureId();
@@ -183,7 +177,7 @@ GLuint MaterialPreviewRenderer::loadOrRenderMatThumb(
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                              static_cast<GLsizei>(size),
                              static_cast<GLsizei>(size),
-                             GL_RGBA, GL_UNSIGNED_BYTE, flipped.data());
+                             GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
             glBindTexture(GL_TEXTURE_2D, 0);
             cache.emplace(materialId, std::move(fb));
             return tex;

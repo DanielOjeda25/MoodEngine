@@ -21,6 +21,7 @@
 #include "core/Profiler.h"
 #include "editor/panels/IPanel.h"  // F2H78: consumesSaveShortcut() en Ctrl+S contextual
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H44: Shift+wheel snap step
+#include "editor/ui/DragDropFeedback.h"  // F3H17: cancelDragOnEscape
 #include "engine/game/state/GameState.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
@@ -274,6 +275,11 @@ void EditorApplication::beginFrame() {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
+
+    // F3H17: Esc cancela el drag&drop activo (si hay). Hook al inicio
+    // del frame, antes de que cualquier BeginDragDropSource/Target del
+    // widget tree dispare handlers.
+    DragDropFeedback::cancelDragOnEscape();
 
     // F2H41 fix lateral: en Play Mode el cursor SDL esta capturado
     // (relative mouse mode) — el FpsCamera lee deltas via

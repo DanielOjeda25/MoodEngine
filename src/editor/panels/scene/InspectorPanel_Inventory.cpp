@@ -13,6 +13,7 @@
 
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/scene/InspectorPanel_Internal.h"  // F2H81: beginComponentSection
+#include "editor/ui/DragDropFeedback.h"  // F3H17: halo overlay
 
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
@@ -293,6 +294,10 @@ void InspectorPanel::renderInventorySection(Entity e) {
     ImGui::Dummy(ImVec2(0, 4));
     ImGui::Button(I18n::T("editor.panel.inspector.inventory.drop_here").c_str(),
                    ImVec2(-1, 28));
+    // F3H17: halo durante drag activo de item.
+    if (DragDropFeedback::isDragActiveOfType("MOOD_ITEM_ASSET")) {
+        DragDropFeedback::drawItemDropHalo(ImGui::IsItemHovered());
+    }
     if (ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("MOOD_ITEM_ASSET")) {
             const char* path = static_cast<const char*>(payload->Data);

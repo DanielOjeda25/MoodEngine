@@ -11,6 +11,7 @@
 
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/scene/InspectorPanel_Internal.h"
+#include "editor/ui/DragDropFeedback.h"  // F3H17: halo overlay
 
 #include "editor/ui/EditorUI.h"
 #include "core/i18n/I18n.h"
@@ -94,6 +95,10 @@ void InspectorPanel::renderJointSection(Entity e) {
     ImGui::Button(targetLabel.c_str(), ImVec2(-1.0f, 0.0f));
     if (dragActive) {
         ImGui::PopStyleColor(2);
+    }
+    // F3H17: halo durante drag activo de entity.
+    if (dragActive) {
+        DragDropFeedback::drawItemDropHalo(ImGui::IsItemHovered());
     }
     if (ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* payload =

@@ -59,6 +59,12 @@ bool tryLoad(const std::filesystem::path& cachePath,
     }
 
     int w = 0, h = 0, comps = 0;
+    // Garantizar GL convention (origin bottom-left): los renderers uploadean
+    // los bytes directo a una FBO color texture que luego ImGui muestra con
+    // uv flip (0,1)-(1,0). El flag global de stbi suele estar en true (lo
+    // setea OpenGLTexture), pero lo forzamos explicito por si algun load
+    // previo lo dejo en false.
+    stbi_set_flip_vertically_on_load(true);
     // Forzar RGBA para upload directo a GL como GL_RGBA / GL_UNSIGNED_BYTE.
     u8* pixels = stbi_load(cachePath.string().c_str(), &w, &h, &comps, 4);
     if (pixels == nullptr) {

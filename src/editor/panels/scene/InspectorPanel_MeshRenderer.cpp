@@ -8,6 +8,7 @@
 
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/scene/InspectorPanel_Internal.h"
+#include "editor/ui/DragDropFeedback.h"  // F3H17: halo overlay
 
 #include "core/Log.h"  // F2H62 polish: warn al evitar overwrite de dirty shader graph
 #include "editor/panels/assets/ShaderGraphEditorPanel.h"  // F2H62 Bloque D
@@ -442,6 +443,12 @@ void drawMaterialDropTarget(Entity e, MeshRendererComponent& mr, usize i,
     ImGui::Button(I18n::T("editor.panel.inspector.mesh.drop_replace").c_str(),
                     ImVec2(-FLT_MIN, 0));
     if (dragTex) ImGui::PopStyleColor();
+    // F3H17: halo overlay durante drag activo de textura. Verde si el
+    // cursor esta sobre este boton (drop OK al soltar), cyan si esta
+    // en otro lado.
+    if (dragTex) {
+        DragDropFeedback::drawItemDropHalo(ImGui::IsItemHovered());
+    }
     if (!ImGui::BeginDragDropTarget()) return;
     if (const ImGuiPayload* p =
             ImGui::AcceptDragDropPayload("MOOD_TEXTURE_ASSET")) {

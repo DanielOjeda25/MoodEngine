@@ -317,15 +317,9 @@ GLuint MeshThumbnailRenderer::loadOrRenderThumb(
         if (AssetThumbnailDiskCache::tryLoad(
                 cachePath, meshFsPath, rgba, cachedW, cachedH) &&
             cachedW == size && cachedH == size) {
-            // HIT: armar FBO + uploadear el RGBA + flip vertical
-            // (PNG top-to-bottom → GL bottom-to-top).
-            std::vector<u8> flipped(rgba.size());
-            const usize rowBytes = static_cast<usize>(size) * 4;
-            for (u32 y = 0; y < size; ++y) {
-                std::copy_n(rgba.data() + (size - 1 - y) * rowBytes,
-                             rowBytes,
-                             flipped.data() + y * rowBytes);
-            }
+            // HIT: armar FBO + upload directo. tryLoad ya devuelve los bytes
+            // en convention GL (bottom-up) porque stbi_set_flip_vertically_on_load
+            // esta forzado a true ahi. No hace falta flip manual aca.
             auto fb = std::make_unique<OpenGLFramebuffer>(
                 size, size, OpenGLFramebuffer::Format::LDR);
             const GLuint tex = fb->glColorTextureId();
@@ -333,7 +327,7 @@ GLuint MeshThumbnailRenderer::loadOrRenderThumb(
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                              static_cast<GLsizei>(size),
                              static_cast<GLsizei>(size),
-                             GL_RGBA, GL_UNSIGNED_BYTE, flipped.data());
+                             GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
             glBindTexture(GL_TEXTURE_2D, 0);
             cache.emplace(meshId, std::move(fb));
             return tex;

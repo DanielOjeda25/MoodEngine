@@ -280,6 +280,12 @@ void ViewportPanel::onImGuiRender() {
             // drags (sin eso, al arrastrar una textura se pierde el cyan).
             const bool hovered = ImGui::IsItemHovered(
                 ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+
+            // F3H17: el feedback visual de drag dentro del viewport se hace
+            // sobre el TARGET especifico (cubo cyan en tile / outline en
+            // entity bajo cursor), no en el borde del panel. La logica vive
+            // en `EditorRenderPass_Overlay.cpp` (overlay 3D del editor) que
+            // ya tiene acceso a Scene + cameras + `pickEntity`.
             ImGuiIO& io = ImGui::GetIO();
 
             if (hovered) {

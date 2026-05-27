@@ -11,6 +11,113 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-26: F3H17 cierre — Drag & drop con feedback visual
+
+### Decisión 1 — Helper compartido `DragDropFeedback` vs duplicar en cada panel
+
+**Contexto:** F3H17 agrega 4 piezas de feedback visual de drag&drop usadas en ≥8 sites del editor:
+1. Halo overlay (cyan/verde) alrededor del último ítem dibujado — usado en 6 Inspector slots + Material Editor.
+2. Halo de rect (similar) — primer intento incluía borde del viewport, descartado tras feedback.
+3. Detección de "drag activo de tipo X" — usado en cada slot drop target.
+4. Cancel con Esc — usado globalmente en EditorApplication.
+
+Opciones: (a) duplicar las 4 lambdas en cada panel; (b) helper compartido en un header reusable.
+
+**Decisión:** Helper compartido — `src/editor/ui/DragDropFeedback.h` (header-only, ~100 LOC). 5 funciones inline: `isViewportDragActive`, `drawDropHalo`, `isDragActiveOfType`, `drawItemDropHalo`, `cancelDragOnEscape`.
+
+**Razones:**
+1. **Cero duplicación**: el color (`IM_COL32(80, 180, 255, 200)` cyan + `IM_COL32(80, 230, 130, 230)` verde), el thickness (3 px viewport / 2 px slots), y los `kViewportSupportedTypes[7]` viven en UN solo lugar.
+2. **Mantenible**: cuando un hito futuro cambie la convención (ej. color), se cambia una sola constante.
+3. **Header-only**: 5 funciones cortas, ningún state. No paga linker overhead; cada cpp que incluya recibe inlines.
+4. **Reusable fuera del Inspector**: `Material Editor` también lo usa para los texture slots — sin el helper habría que importar `InspectorPanel_Internal.h` cross-module, lo cual rompía capa.
+
+**Alternativas descartadas:**
+- Duplicar en cada panel: 4-5 LOC × 8 sites = ~32 LOC de duplicación + drift inevitable cuando alguien polish uno y se olvida del resto.
+- Meterlo en `InspectorPanel_Internal.h`: el Material Editor no es parte del Inspector; importar `Internal.h` cross-module ensucia el header del Inspector y rompe encapsulación. F3H17 quería un helper que pueda usar el Material Editor sin importar Inspector internals.
+
+**Revisión:** si el helper crece > 200 LOC, partir a `DragDropFeedback.h` + `DragDropFeedback.cpp` (state si emerge).
+
+### Decisión 2 — Cancel con Esc vía API interna de ImGui
+
+**Contexto:** F3H17 quiere que Esc cancele un drag activo (convención universal: Photoshop / Blender / Unity / VS Code). ImGui no expone API pública para cancel — su filosofía es "el dev puede soltar el botón del mouse" (declinación documentada en https://github.com/ocornut/imgui/issues/1717).
+
+**Decisión:** Acceder a la API interna via `<imgui_internal.h>` + setear `GImGui->DragDropActive = false` + limpiar `DragDropPayload` + resetear `DragDropAcceptIdCurr/Prev` + resetear `DragDropSourceFlags`.
+
+**Razones:**
+1. **Convención universal**: todos los editores DCC tienen Esc-cancel-drag. Aceptar la limitación de ImGui rompe expectation del dev.
+2. **API interna estable**: `DragDropActive` existe sin breaking change desde la inception del drag&drop module en ImGui 1.66 (2019). Acceder a internals es un trade-off documentado y aceptado por la comunidad de ImGui (el header `imgui_internal.h` está públicamente disponible precisamente para esto).
+3. **Cleanup completo**: solo poner `DragDropActive = false` deja state residual (payload + acceptId del frame anterior). Limpiar los 4 fields garantiza que el frame siguiente ningún target acepta el payload "fantasma".
+
+**Alternativas descartadas:**
+- Sin Esc-cancel: requiere mover el mouse fuera del editor antes de soltar (frágil — un click accidental sobre target válido = drop no deseado).
+- Forkear ImGui para exponer `CancelDragDrop()` público: maintain overhead enorme para 5 líneas de cambio.
+- PR upstream a ImGui: agendar para futuro (issue #1717 lleva 5 años abierta — no es probable que se merge en el corto plazo).
+
+**Revisión:** si una versión futura de ImGui cambia el nombre o struct de `DragDropActive`, romper compile time → adaptar. Riesgo bajo dada la estabilidad histórica.
+
+### Decisión 3 — Halo del borde del viewport eliminado tras feedback del dev
+
+**Contexto:** El primer intento de F3H17 dibujaba un halo cyan/verde sobre el **borde del panel viewport** (`drawDropHalo` llamado desde `ViewportPanel.cpp` tras `EndDragDropTarget`) — pensé que daba feedback complementario al highlight 3D existente. Dev reportó visualmente al validar: *"el halo cyan no debería aparecer sobre el área que afectaré, me refiero si arrastro una textura y la idea es que un plano tome esa textura no debería ese plano tener el halo cyan?"*.
+
+**Decisión:** Eliminar el halo del borde. El feedback de drag-over-viewport pasa exclusivamente por el **highlight 3D sobre el target específico** (entity bajo cursor con AABB cyan, o tile bajo cursor con cubo cyan). Mantener halo solo en Inspector slots (donde sí tiene sentido — los slots no son obvios sin la pista visual).
+
+**Razones:**
+1. **Doble feedback = ninguno**: el halo del borde era visualmente prominente y el dev no veía el highlight 3D ya pintado. Quitar lo prominente para que lo informativo se vea.
+2. **Lenguaje del editor coherente**: "el target específico se ilumina" >> "el panel acepta". Otros editores (Unreal, Substance) usan target-specific feedback, no panel-level glow.
+3. **Inspector slots SÍ necesitan halo**: a diferencia del viewport (área grande y obvia), un slot del Inspector es un cuadrito chico y el dev no sabe si acepta este tipo de payload sin la pista visual.
+
+**Alternativas descartadas:**
+- Halo del borde sutil (thickness 1 px): aún distrae sin agregar info útil.
+- Halo del borde solo cuando el target 3D NO está pintado: complejidad innecesaria — si no hay target debajo, el dev igual ve el cursor de ImGui con el payload preview, eso basta.
+
+**Revisión:** si el dev reporta "no veo cuándo entró el cursor al viewport durante drag", reconsiderar — quizás un cambio sutil del cursor (sombra/glow del payload preview de ImGui) es mejor que el halo del borde.
+
+### Decisión 4 — Lenguaje visual unificado a cyan brillante para todos los drag targets
+
+**Contexto:** Pre-F3H17 el editor tenía 2 convenciones distintas para drag-over feedback:
+- **Cubo cyan** (`vec3(0.2, 0.9, 1.0)`) sobre tile bajo cursor — para Texture/Mesh/Prefab drag.
+- **OBB amarillo** (`vec3(1.0, 0.95, 0.15)`) sobre entity bajo cursor — para Material/Script drag.
+
+El amarillo era residual de F2 cuando el highlight de entity era visualmente distinto del de tile.
+
+**Decisión:** Unificar a **AABB cyan brillante** (`vec3(0.30, 0.85, 1.0)`) en ambos casos. Eliminar el OBB amarillo + el loop manual de 12 líneas; usar `dbg.drawAabb(world_aabb, kDragCyan)` directo (3-4 líneas).
+
+**Razones:**
+1. **Lenguaje visual coherente**: 1 color = drop target. El dev no piensa "amarillo significa entity, cyan significa tile" — piensa "cyan = ahí cae el drop".
+2. **Match con halo de Inspector slots**: los slots también usan cyan (`IM_COL32(80, 180, 255, 200)`). Mismo lenguaje en todo el editor.
+3. **Menos código**: el helper `brushAabbWorld` / `meshAabbWorld` (públicos en `ScenePick.h` desde F2H31 Bloque B) + `dbg.drawAabb` reemplaza ~20 LOC de matriz × 8 corners + 12 drawLine.
+4. **Amarillo es color de selección de cara** (Face Mode F2H17). Reservar el amarillo para selección — no para drag-over.
+
+**Alternativas descartadas:**
+- Mantener 2 colores distintos: el dev ya tenía drag&drop functioning, pero el lenguaje no era enseñable ("cuándo es amarillo vs cyan, otra vez?"). El dev se beneficia de una sola convención.
+- Highlight diferente (outline, glow): los 3 estilos los probó F2 y el AABB ganó por simplicidad de implementación. F3H17 no necesita rediseñar el estilo, solo el color.
+
+**Revisión:** si un futuro hito agrega multi-target drag (ej. brush paint sobre N tiles a la vez), considerar shade gradient entre targets — pero un solo color sigue siendo correcto.
+
+### Decisión 5 — Texture drag highlight extendido a Brush, NO a MeshRenderer suelto
+
+**Contexto:** Pre-F3H17 el flow real de `processViewportTextureDrop` (`DemoSpawners_Drop.cpp:206`) tenía 2 paths: (a) si hit entity con `BrushComponent` → asigna textura al material del brush; (b) sino → tile pick → pinta tile con la textura. Mesh entities sueltas con `MeshRendererComponent` (sin BrushComponent) caen al path (b) tile pick.
+
+F3H17 quería extender el highlight visual a algún target además de tile. Opciones:
+- (i) Highlight solo Brush — match exacto del behavior del handler.
+- (ii) Highlight Brush O MeshRenderer — sugiere al dev que mesh entities también aceptan, aunque el handler no asigne.
+- (iii) Highlight Brush + extender el handler a también asignar a MeshRenderer.
+
+**Decisión:** Opción (i). Highlight visual solo cuando hit Brush; mesh entities sueltas siguen cayendo al cubo cyan del tile.
+
+**Razones:**
+1. **Consistencia visual ↔ behavior**: si pintamos highlight cyan sobre un mesh entity, el dev espera que al soltar se asigne. Si el handler ignora y cae al tile, el dev se confunde ("¿por qué se asignó al tile y no al mesh?"). Mantener visual = behavior es respeto al modelo mental.
+2. **Cambio de comportamiento es scope de hito propio**: extender Texture drop a MeshRenderer es decisión arquitectónica con preguntas abiertas (¿reemplazar slot 0 del MeshRenderer? ¿crear material wrapper como con Brush? ¿afecta otros slots?). F3H17 es "drag&drop con feedback visual" — no extender funcionalidad.
+3. **El feedback de tile sigue funcionando**: el dev no pierde info — el cubo cyan sobre el tile aparece donde su drop caerá. Solo no se pinta sobre el mesh suelto (correcto, no recibe el drop).
+
+**Alternativas descartadas:**
+- Opción (ii) (highlight sin behavior): rompe la regla "visual = behavior".
+- Opción (iii) (extender handler): scope de F3 hito propio si el dev lo pide. No es trivial — Brush usa `createMaterialFromTexture` que es helper específico del brush flow.
+
+**Revisión:** si el dev pide "quiero que al arrastrar textura sobre un mesh asigne al primer slot", agendar como hito (probablemente F3H17b o F3H_extras).
+
+---
+
 ## 2026-05-26: F3H16 cierre — Hover preview ampliada del Asset Browser
 
 ### Decisión 1 — Timer manual vs `ImGuiHoveredFlags_DelayNormal`
