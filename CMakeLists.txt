@@ -493,6 +493,8 @@ add_library(mood_engine_lib STATIC
 
     src/engine/assets/cache/LodCache.cpp
 
+    src/engine/assets/validation/AssetValidator.cpp  # F3H18
+
     src/engine/scene/serialization/TilePersistence.cpp
 
     src/editor/workspace/WorkspaceManager.cpp
@@ -501,6 +503,7 @@ add_library(mood_engine_lib STATIC
     src/engine/project/ProjectSettings.cpp  # F3H1
     src/editor/panels/project/ProjectSettingsPanel.cpp  # F3H1
     src/editor/panels/project/UserPreferencesPanel.cpp  # F3H2
+    src/editor/panels/project/AssetIssuesPanel.cpp      # F3H18
 )
 
 target_include_directories(mood_engine_lib PUBLIC

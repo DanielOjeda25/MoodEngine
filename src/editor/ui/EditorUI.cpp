@@ -58,6 +58,7 @@ EditorUI::EditorUI() {
                 &m_shaderGraphEditor,  // F2H62 Bloque C
                 &m_projectSettings,    // F3H1
                 &m_userPreferences,    // F3H2
+                &m_assetIssues,        // F3H18
                 // F2H59: Toolbar removido del dockspace -- las herramientas
                 // (Mover/Rotar/Escala/Cara) viven ahora como overlay flotante
                 // sobre el viewport, estilo Blender. El struct `m_toolbar`

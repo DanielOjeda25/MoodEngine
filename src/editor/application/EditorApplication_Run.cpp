@@ -221,6 +221,16 @@ void EditorApplication::tickFrameMetrics(f32 dt, f64 dtD) {
 // break-B3: consume todas las requests de la UI (Play/Stop, Toolbar,
 // Project actions, Welcome modals, Open Map, Boolean Op, Recents).
 void EditorApplication::pumpUiRequests() {
+    // F3H18: refresh del Asset Issues panel + consumir go-to a entity.
+    // El refresh es on-demand (al abrir proyecto o cuando el dev clickea
+    // Refresh en el panel) — el scan no corre por frame.
+    if (m_ui.assetIssues().refreshRequested() && m_scene && m_assetManager) {
+        m_ui.assetIssues().refresh(*m_scene, *m_assetManager);
+    }
+    if (Entity sel = m_ui.assetIssues().consumePendingSelect(); sel) {
+        m_ui.setSelectedEntity(sel);
+    }
+
     // 2) Atender toggles de modo solicitados desde la UI (boton Play/Stop).
     if (m_ui.consumeTogglePlayRequest()) {
         if (m_mode == EditorMode::Editor) {

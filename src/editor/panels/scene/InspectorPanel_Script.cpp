@@ -32,6 +32,9 @@ void InspectorPanel::renderScriptSection(Entity e) {
         sc.lastError.clear();
         m_editedThisFrame = true;
     }
+    // F3H18: pinta borde rojo sobre el InputText si el path no existe en
+    // disco segun el AssetIssuesPanel.
+    detail::inspectorBrokenRefBorder(m_ui, e, sc.path);
     // F3H12: undo del path InputText. El setter aplica path + resetea
     // loaded/lastError para que el ScriptSystem recargue.
     detail::pushEditIfDone<std::string>(m_editTracker, m_ui, e, sc.path,

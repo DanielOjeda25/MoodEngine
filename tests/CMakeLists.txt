@@ -48,6 +48,7 @@ add_executable(mood_tests
     test_edit_property_command.cpp
     test_multi_edit_property_command.cpp  # F3H8
     test_f3h12_inspector_undo.cpp  # F3H12: bool/u32/string/vec4 round-trip
+    test_asset_validator.cpp               # F3H18
     test_component_clipboard.cpp           # F3H9
     test_entity_type.cpp                   # F3H9 Stage 2
     test_add_component_command.cpp  # F2H45 Bloque A
@@ -124,6 +125,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/editor/commands/EditScriptComponentCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/commands/PasteComponentCommand.cpp  # F3H9
     ${CMAKE_SOURCE_DIR}/src/editor/components/ComponentClipboard.cpp   # F3H9
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/validation/AssetValidator.cpp  # F3H18
 
     ${CMAKE_SOURCE_DIR}/src/engine/scene/serialization/TilePersistence.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/MapsManager.cpp

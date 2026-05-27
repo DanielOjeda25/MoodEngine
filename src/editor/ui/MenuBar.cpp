@@ -8,6 +8,7 @@
 
 #include <imgui.h>
 
+#include <cstdio>  // F3H18: snprintf para el badge "! N"
 #include <string>
 #include <string_view>
 
@@ -280,6 +281,34 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ui.requestTogglePlay();
         }
         ImGui::PopStyleColor(3);
+
+        // --- F3H18: badge "! N" cuando hay asset issues detectados ---
+        // Visible solo cuando hay > 0 issues. Click abre el panel. Rojo
+        // saturado para que el dev lo note en peripheral vision sin
+        // intrusion. Si N=0 no se pinta.
+        {
+            const usize issueCount = ui.assetIssues().issueCount();
+            if (issueCount > 0) {
+                ImGui::PushStyleColor(ImGuiCol_Button,
+                    ImVec4(0.62f, 0.22f, 0.22f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                    ImVec4(0.78f, 0.30f, 0.30f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                    ImVec4(0.92f, 0.35f, 0.35f, 1.0f));
+                char badge[32];
+                std::snprintf(badge, sizeof(badge), "%s %zu",
+                                ICON_FA_TRIANGLE_EXCLAMATION, issueCount);
+                if (ImGui::Button(badge)) {
+                    ui.requestShowAssetIssues();
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s",
+                        I18n::T("editor.menu.asset_issues_badge_tooltip")
+                            .c_str());
+                }
+                ImGui::PopStyleColor(3);
+            }
+        }
 
         // --- Selector de workspace (boton hamburguesa a la derecha) ---
         // F2H79: el dropdown con el nombre del workspace activo abria el popup

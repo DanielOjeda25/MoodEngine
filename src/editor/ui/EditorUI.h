@@ -27,6 +27,7 @@
 #include "editor/panels/narrative/DialogNodeInspectorPanel.h"  // F2H47
 #include "editor/panels/inventory/ItemBrowserPanel.h"          // F2H51
 #include "editor/panels/inventory/ItemPropertyEditorPanel.h"   // F2H51
+#include "editor/panels/project/AssetIssuesPanel.h"            // F3H18
 #include "editor/panels/project/ProjectSettingsPanel.h"        // F3H1
 #include "editor/panels/project/UserPreferencesPanel.h"        // F3H2
 #include "editor/panels/quest/QuestBrowserPanel.h"             // F2H53
@@ -313,6 +314,16 @@ public:
     ///        desde `Edit > Preferences...`). Mismo patron que F3H1.
     void requestShowUserPreferences() { m_userPreferences.visible = true; }
 
+    /// @brief F3H18: abre el panel Asset Issues. Lo dispara MenuBar al
+    ///        clickear el badge `! N` o desde View > Asset Issues.
+    void requestShowAssetIssues() { m_assetIssues.visible = true; }
+
+    /// @brief F3H18: acceso al panel (lectura + scan). EditorApplication
+    ///        lo usa en su orquestador del frame para llamar refresh()
+    ///        post project load y consumir pending selects.
+    AssetIssuesPanel& assetIssues() { return m_assetIssues; }
+    const AssetIssuesPanel& assetIssues() const { return m_assetIssues; }
+
     /// @brief Lista de proyectos recientes (mostrada en Welcome modal).
     void setRecentProjects(std::vector<std::filesystem::path> paths);
     void eraseRecent(const std::filesystem::path& path);
@@ -364,6 +375,7 @@ private:
     ShaderGraphEditorPanel m_shaderGraphEditor;  // F2H62 Bloque C
     ProjectSettingsPanel m_projectSettings;  // F3H1
     UserPreferencesPanel m_userPreferences;  // F3H2
+    AssetIssuesPanel     m_assetIssues;       // F3H18
     Toolbar m_toolbar;  // F2H22
     MapEditorTopBar m_mapEditorTopBar;  // F2H30
     VisGroupsPanel m_visGroupsPanel;  // F2H33

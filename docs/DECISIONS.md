@@ -11,6 +11,100 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-26: F3H18 cierre — Validador de assets rotos
+
+### Decisión 1 — Cobertura inicial Tier 1 (broken refs only) vs ampliada (4 tipos)
+
+**Contexto:** F3H18 quiere detectar problemas de refs entre assets. El plan stub identificaba 4 tipos posibles: broken refs (path no existe), load failed (carga runtime falló), schema mismatch (`.moodmap` viejo), oversized files (>N MB). Cada uno requiere lógica distinta + UI distinta + tests distintos.
+
+**Decisión:** Tier 1 = broken refs (paths que no resuelven en disco) + LoadFailed reservado como enum value para Tier 2 futuro pero no detectado todavía. Validado con el dev via `AskUserQuestion` antes de empezar.
+
+**Razones:**
+1. **Cubre el 90% del caso real**: el dev pierde refs al renombrar / mover / borrar archivos externamente. Eso es lo que el validador necesita cazar primero.
+2. **Schema mismatch requeriría infra propia**: cada schema tiene su versión + upgrader. Detectar mismatch requiere reflexionar el schema versioning + plantear policy de migración. Scope hito propio.
+3. **Oversized files es policy decisional**: ¿cuál es el cap razonable? 50 MB PNG? 200 MB FBX? Sin demanda concreta del dev, hardcodear cualquier número es premature. Backlog si emerge.
+4. **Flujo end-to-end testeable**: F3H18 entrega el flujo completo (scanner → panel → badge → highlight inline). Cobertura ampliada hereda esa infra cuando emerja sin re-diseñar nada.
+
+**Alternativas descartadas:**
+- Tier 1 + LoadFailed detectado: el LoadFailed real requiere instrumentar el AssetManager para registrar paths que intentaron cargar pero cayeron al fallback (`missingX()`). Hoy esa info se pierde después del log warn. Refactorear AssetManager para retener fail-tracking es scope mayor.
+- Cobertura ampliada toda junta: 4 features distintos = 4 sub-hitos. Inflaría F3H18 a 2 semanas. El plan F3 prefiere hitos chicos y enviables.
+
+**Revisión:** si el dev abre un proyecto pre-F3 y se queja "no veo qué assets están viejos del schema", agendar F3H_schema_validator. Si abre un proyecto con `assets/textures/4k_uncompressed.png` y nota lag → F3H_oversized.
+
+### Decisión 2 — Engine `AssetValidator` agnóstico a i18n
+
+**Contexto:** El `AssetIssue.detail` necesita ser texto legible que el dev vea en el panel ("Script no encontrado en disco" / "Script not found on disk"). Opción 1: el engine resuelve i18n al armar el issue. Opción 2: el engine devuelve la i18n key (string como `"editor.asset_validator.detail.script"`), el panel UI resuelve a runtime.
+
+**Decisión:** Opción 2. `AssetIssue.detail` es la i18n key. El panel resuelve via `I18n::T(detail.c_str())`.
+
+**Razones:**
+1. **Engine no depende de I18n**: la capa `src/engine/` no incluye `core/i18n/`. Mantenerla agnóstica permite que `AssetValidator` sea reusable por MoodPlayer (no necesita texto), por CLI tooling (validar headless en CI), o por scripts de migración batch.
+2. **El locale activo NO viaja con el AssetManager**: el AssetManager corre por instancia del editor, pero un mismo proyecto podría validarse desde Spanish + English + headless CI. El detail como key separa el dato del idioma.
+3. **Panel UI ya está integrado a I18n**: resolver `I18n::T(key)` es 1 llamada por issue durante el render del panel. N pequeño (típicamente <20), no es bottleneck.
+4. **Cambiar la key rompe el panel ↔ permite freeze del contrato**: el test `F3H18: AssetIssue.detail es i18n key estable` valida que el código nunca cambie la key silenciosamente — si alguien la renombra, el test falla y obliga sync con `es.json` / `en.json`.
+
+**Alternativas descartadas:**
+- Engine resuelve i18n: rompe capa + duplica el work en cada AssetValidator instance + el reusable cross-frontend muere.
+- Engine devuelve enum tipado (`IssueKind::ScriptMissing` etc): mejor que string pero infla el header con N variantes. La string-as-key es indirecta natural para i18n.
+
+**Revisión:** si emerge demanda de MoodPlayer mostrando issues en runtime con i18n localizado, el panel ya enseña el patrón. Si CI validation reporta plain English, podemos agregar un `formatIssue(issue, locale)` helper.
+
+### Decisión 3 — Scan on-demand (refresh manual + post-open) vs continuo
+
+**Contexto:** El validador puede correr en distintos momentos: cada frame (continuo), cuando algo cambia en la Scene (selectivo invalidate), al abrir proyecto (one-shot), o solo cuando el dev pide (manual refresh).
+
+**Decisión:** Scan on-demand. Se ejecuta SOLO al abrir proyecto (`tryOpenProjectPath` post-load) + cuando el dev clickea "Refrescar" en el panel.
+
+**Razones:**
+1. **Costo del scan es O(entities + materials)**: ~5 ms para proyectos medianos (200 entities + 50 materials). Aceptable de pagar 1 vez al abrir; inaceptable como 60 ms/segundo continuo.
+2. **El dev no necesita feedback frame-perfect**: las refs muertas son condición statica del proyecto. Renombrar un archivo externamente NO se notifica automáticamente al editor (filesystem watch sería otro feature). El dev sabe cuándo cambió algo y puede refresh.
+3. **Si el dev edita un InputText path en el Inspector ↔ el badge queda stale unos segundos**: trade-off explícito. La alternativa "invalidate al editar" requiere instrumentar cada InputText con un callback al validator — complejidad alta para un caso edge (el dev típicamente abre el panel después de editar para verificar).
+4. **Post-open es donde más valor agrega**: cuando el dev abre un proyecto dormido o que recibió cambios desde otra rama, la primera vista del editor incluye el badge si hay issues. UX óptimo para el caso primario.
+
+**Alternativas descartadas:**
+- Scan continuo: O(N) per frame es overhead permanente sin valor proporcional. Profiler mostraría 0.1-0.5% del frame budget gastado en algo que no cambia.
+- Invalidate selectivo (al editar InputText, marcar dirty + refresh next frame): complejidad alta, beneficio marginal. Agendar si dev se queja del stale.
+- Background polling cada N segundos: thread complexity por feature de baja prioridad. No vale la pena.
+
+**Revisión:** si el dev reporta "edité el path y el badge no actualiza, me confunde", agregar `requestRefresh()` desde el handler del InputText de path strings. Trivial — el helper `requestRefresh` ya existe en `AssetIssuesPanel`.
+
+### Decisión 4 — Helper inline solo en 2 sites (Script + Vehicle) en F3H18, diferir el resto
+
+**Contexto:** El helper `detail::inspectorBrokenRefBorder(EditorUI*, Entity, const std::string& path)` es reusable en cualquier widget drop-target / InputText del Inspector. Sites posibles: Script.path, Vehicle.configPath, MeshRenderer materials/mesh, Animation externalClips, Inventory items, Audio.clip combo, Dialog.dialogPath, ItemPickup.itemPath. Total ~8 sites.
+
+**Decisión:** F3H18 instrumenta solo en 2 sites (Script + Vehicle). Los otros 6 quedan como backlog mecánico.
+
+**Razones:**
+1. **Extender es 1 LOC por site**: `detail::inspectorBrokenRefBorder(m_ui, e, path);` después del widget. No agrega capacidad nueva — el helper ya existe.
+2. **Inflar el diff sin agregar capacidad** dificulta el code review. F3H18 entrega: validator + panel + badge + helper + 2 sites como prueba de concepto. Extender a los 6 restantes vale por sí solo cuando emerja demanda.
+3. **Algunos sites tienen UI compleja (BeginCombo + Selectable inline)** donde el `IsItemHovered` para tooltip puede colisionar con tooltips existentes. Hacerlo bien requiere caso-por-caso. F3H18 prefiere 2 sites bien hechos a 8 sites con bugs.
+4. **Backlog explícito en código + memoria**: si el dev pide "extender el highlight a MeshRenderer slots", el follow-up es trivial.
+
+**Alternativas descartadas:**
+- Extender a los 8 sites en F3H18: scope creep. Cada site agregaría 5-15 LOC al hito sin tests propios (el helper ya está testeado).
+- No agregar inline highlight en F3H18 (solo panel + badge): pierde el UX feedback de borde rojo en el field donde el dev edita. El panel está OK pero el dev tendría que abrir el panel + recordar qué arreglar.
+
+**Revisión:** memoria `[[asset_validator_inline_coverage]]` agenda los 6 sites diferidos. Activar cuando un site específico genere fricción.
+
+### Decisión 5 — Reporte por entity (con "Ir a" entity), Material issues quedan con botón disabled
+
+**Contexto:** Los issues vienen de 2 fuentes: (a) componentes con refs en una entity (Script/Dialog/etc — entity asociada); (b) Material assets cacheados con texture refs muertas (sin entity directa). El panel necesita acción de "Ir a" para que el dev navegue al fix.
+
+**Decisión:** El `AssetIssue.entity` lleva la entity source (cuando aplica). El botón "Ir a" funciona en entities (selecciona en Hierarchy + Inspector). Para issues de Material cacheado, `entity` queda falsy y el botón "Ir a" queda disabled con tooltip ("Esta referencia no pertenece a una entidad — revisar en el panel Asset Browser").
+
+**Razones:**
+1. **El dev típicamente repara desde la entity**: cambia el path en el Inspector (InputText con border rojo de F3H18), o reemplaza el componente. El "Ir a entity" cubre ese flow directo.
+2. **Material refs no tienen flow "Ir a entity" obvio**: un Material vive en `AssetManager`, no en Scene. Si el dev quiere reparar la textura del material, debe abrir el Material Editor — flow distinto. El `usedBy = "Material: <path>"` da al dev el nombre del material para abrir manualmente.
+3. **Disable + tooltip honesto > botón clickeable que no hace nada**: ofrecer una acción que no funciona confundiría más que no ofrecerla. El tooltip explica por qué.
+
+**Alternativas descartadas:**
+- "Ir al asset" (abrir Material Editor con ese material): scope hito propio. Requiere wire del panel al Material Editor + foco al material. Por ahora "abrir Asset Browser y buscarlo manualmente" es aceptable.
+- No mostrar issues de Material cacheado: cubrir todos los issues es valor — el dev quiere saber qué necesita arreglar, incluso si requiere acción manual.
+
+**Revisión:** si el dev pide "click en este issue de material me debería llevar al Material Editor", agendar `pendingSelectAsset` + wire al panel correspondiente. Patrón gemelo de `pendingSelect` entity.
+
+---
+
 ## 2026-05-26: F3H17 cierre — Drag & drop con feedback visual
 
 ### Decisión 1 — Helper compartido `DragDropFeedback` vs duplicar en cada panel

@@ -85,6 +85,8 @@ inline constexpr unsigned short k_FontAwesomeRange[] = { 0xE005, 0xF8FF, 0 };
 #define ICON_FA_TRIANGLE_EXCLAMATION                "\xef\x81\xb1" // 0xF071 warn
 #define ICON_FA_CIRCLE_XMARK                        "\xef\x81\x97" // 0xF057 err
 #define ICON_FA_SKULL                               "\xef\x95\x8c" // 0xF54C critical
+#define ICON_FA_LINK_SLASH                          "\xef\x84\xa7" // 0xF127 broken ref (F3H18)
+#define ICON_FA_CIRCLE_CHECK                        "\xef\x81\x98" // 0xF058 ok / all clear (F3H18)
 
 // --- MenuBar (top-level menus) ---
 #define ICON_FA_FOLDER                              "\xef\x81\xbb" // 0xF07B Archivo

@@ -14,6 +14,7 @@
 #include "editor/panels/scene/InspectorPanel.h"  // F2H81: def. de beginComponentSection
 #include "editor/panels/scene/MultiEditTracker.h"  // F3H8
 #include "editor/selection/SelectionSet.h"  // F3H8: itera N entidades
+#include "editor/panels/project/AssetIssuesPanel.h"  // F3H18: chequeo inline de refs rotas
 #include "editor/ui/EditorUI.h"
 #include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons en headers de seccion
 #include "engine/assets/manager/AssetManager.h"  // F3H9: serializeComponent
@@ -120,6 +121,27 @@ inline bool inspectorResetButton(EditorUI* ui, Entity e,
         return true;
     }
     return false;
+}
+
+// F3H18: chequea si el ultimo widget (InputText / Drop slot) refiere a un
+// asset rotos segun el AssetIssuesPanel y, si lo esta, le pinta un borde
+// rojo + tooltip explicando el problema. Llamar INMEDIATAMENTE despues
+// del widget (lee `GetItemRectMin/Max`). No-op si `ui == nullptr`, si
+// el path esta vacio, o si el path resuelve OK.
+inline void inspectorBrokenRefBorder(EditorUI* ui, Entity e,
+                                       const std::string& path) {
+    if (ui == nullptr || path.empty() || !e) return;
+    const AssetIssuesPanel& issues = ui->assetIssues();
+    if (!issues.isFieldBroken(e, path)) return;
+    const ImVec2 min = ImGui::GetItemRectMin();
+    const ImVec2 max = ImGui::GetItemRectMax();
+    // Border rojo 2 px sobre el ultimo item.
+    ImGui::GetWindowDrawList()->AddRect(min, max,
+        IM_COL32(232, 92, 92, 230), 0.0f, 0, 2.0f);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.panel.inspector.broken_ref_tooltip").c_str());
+    }
 }
 
 // F2H23: helper estandar de ImGui samples — texto gris "(?)" con tooltip

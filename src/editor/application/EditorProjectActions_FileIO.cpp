@@ -202,6 +202,13 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
     // assets (texture paths del ParticleEmitter) que no existen en el
     // proyecto nuevo, dejar contenido stale confunde al dev.
     m_ui.clearClipboardComponent();
+    // F3H18: post-load asset scan. Al abrir un proyecto que estuvo dormido
+    // (o recibio cambios desde otra rama) el dev quiere ver inmediatamente
+    // si hay refs muertas. El badge en MenuBar lee `issueCount()` cada
+    // frame y aparece cuando > 0.
+    if (m_scene && m_assetManager) {
+        m_ui.assetIssues().refresh(*m_scene, *m_assetManager);
+    }
     addToRecentProjects(std::filesystem::absolute(moodproj));
     updateWindowTitle();
 

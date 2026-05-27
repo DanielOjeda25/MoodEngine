@@ -173,6 +173,8 @@ void InspectorPanel::renderVehicleSection(Entity e) {
             m_editedThisFrame = true;
         }
     }
+    // F3H18: border rojo si el path no existe en disco.
+    detail::inspectorBrokenRefBorder(m_ui, e, veh.configPath);
     // F2H70.3 Bloque F: drop target del Vehicle Browser. Un InputText no
     // funciona como BeginDragDropTarget (es un widget activo que consume el
     // drag), asi que usamos un boton dedicado como zona de drop — mismo patron
