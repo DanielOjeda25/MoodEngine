@@ -80,11 +80,19 @@ La regla más importante de Fase 3. Cuando aparezca un magic number, un default,
 Cuatro sub-fases ordenadas por **dependencia** (no por importancia). La 3.1 es prerequisito conceptual de las otras tres.
 
 ```
-Sub-fase 3.1 — El editor te respeta (defaults configurables)   F3H1  - F3H7
-Sub-fase 3.2 — Inspector + Hierarchy pulidos                   F3H8  - F3H13
+Sub-fase 3.1 — El editor te respeta (defaults configurables)   F3H1  - F3H7    🏁
+Sub-fase 3.2 — Inspector + Hierarchy pulidos                   F3H8  - F3H13   🏁
 Sub-fase 3.3 — Asset Browser de verdad                         F3H14 - F3H19
-Sub-fase 3.4 — Viewport pro + Performance + Feedback           F3H20 - F3H27
+Sub-fase 3.4 — Viewport pro + Performance + Feedback           F3H20 - F3H24
 ```
+
+> **Consolidación post-F3H18 (2026-05-26):** la Sub-fase 3.4 original tenía 8 hitos (F3H20-F3H27). Tras revisar oportunidades de unir hitos que comparten infraestructura, el dev autorizó **consolidación agresiva a 5 hitos**:
+> - F3H21 = ex-F3H21 (cámaras numpad) + ex-F3H22 (modos visualización) → "Viewport pro".
+> - F3H22 = ex-F3H23 (Profiler) + ex-F3H24 (Stats overlay) → "Performance feedback".
+> - F3H23 = ex-F3H25 (Console mejorada) + ex-F3H26 (Toasts) → "Comunicación al dev".
+> - F3H24 = ex-F3H27 (Crash recovery + autosave) sin cambios.
+>
+> La numeración bumpa: F3H20 (Snapping) queda; F3H21 (Viewport pro); F3H22 (Performance feedback); F3H23 (Comunicación al dev); F3H24 (Crash recovery). Total Fase 3 = 24 hitos (era 27).
 
 **Por qué ese orden:** 3.1 construye la infraestructura de Project Settings + User Preferences. Las sub-fases 3.2-3.4 *consumen* esa infraestructura: cuando 3.2 quiera agregar "hot reload de shaders" debe respetar la pref "auto-reload on save" del usuario; cuando 3.4 agregue snapping, los snap defaults viven en Project Settings.
 
@@ -159,30 +167,29 @@ Panel "Asset Validator" dedicado. Lista: materiales con texturas faltantes, pref
 **F3H19 — Rename con cascada.**
 Renombrar `.png` actualiza refs en `.material`. Renombrar `.lua` actualiza refs en `ScriptComponent`. Confirmación modal con lista de archivos afectados.
 
-### Sub-fase 3.4 — Viewport pro + Performance + Feedback (F3H20 - F3H27)
+### Sub-fase 3.4 — Viewport pro + Performance + Feedback (F3H20 - F3H24)
+
+> **Consolidación 2026-05-26:** original tenía 8 hitos (F3H20-F3H27). Ver índice arriba para el mapeo ex→nuevo. Lo que sigue es el plan consolidado.
 
 **F3H20 — Snapping configurable.**
 Grid snap (existe parcial), vertex snap (existe: F2H31C), ángulo snap (15°/45°/90°), face-align (orientar a normal). Defaults en Project Settings. Toggle visual en toolbar.
 
-**F3H21 — Cámaras guardadas (numpad 1-9).**
-Ctrl+Numpad N = guardar pose actual de cámara editor. Numpad N = ir a esa pose. Persistencia per-`.moodmap`. Igual que Blender.
+**F3H21 — Viewport pro: Cámaras numpad + Modos de visualización.**
+*(Une el ex-F3H21 Cámaras + ex-F3H22 Modos visualización — ambos son herramientas del viewport para workflow del dev. Aunque no comparten infra técnica directa, comparten contexto UX y caen naturalmente en la misma sesión.)*
+- **Cámaras guardadas**: Ctrl+Numpad N = guardar pose actual de cámara editor. Numpad N = ir a esa pose. Persistencia per-`.moodmap`. Igual que Blender.
+- **Modos de visualización**: Wireframe / overdraw (heatmap de fragmentos) / lighting only / albedo only / normal map. Toggle en toolbar. Útil para debug de assets y perf.
 
-**F3H22 — Modos de visualización del viewport.**
-Wireframe / overdraw (heatmap de fragmentos) / lighting only / albedo only / normal map. Toggle en toolbar. Útil para debug de assets y perf.
+**F3H22 — Performance feedback: Profiler + Stats overlay.**
+*(Une el ex-F3H23 Profiler + ex-F3H24 Stats overlay — comparten métricas runtime FPS/drawcalls/tris/mem GPU. Stats es "vista mínima del Profiler".)*
+- **Profiler in-engine**: Panel con timing por subsistema (Render / Physics / Scripts / Animation / Audio). GPU markers básicos. Frame graph (últimos N frames como histograma). N configurable. Tracy ya integrado desde F2H2.
+- **Stats overlay**: overlay con FPS, drawcalls, triángulos, mem GPU/CPU, lights activas, entities. Cada widget toggleable desde Preferences. Estilo Quake `r_speeds`.
 
-**F3H23 — Profiler in-engine.**
-Panel "Profiler" con timing por subsistema (Render / Physics / Scripts / Animation / Audio). GPU markers básicos. Frame graph (últimos N frames como histograma). N configurable.
+**F3H23 — Comunicación al dev: Console mejorada + Toasts.**
+*(Une el ex-F3H25 Console + ex-F3H26 Toasts — comparten fuente, log severity pipeline. Toasts = snippet transitorio de la Console.)*
+- **Console panel mejorada**: filtros por severidad (info/warn/error/debug). Search box. Click en `file:line` salta al editor de scripts/material. Botón "Copy as bug report".
+- **Toasts no-modales**: notificaciones efímeras esquina inferior derecha: "Guardado", "Asset importado", "Shader compilado OK", "Project Settings actualizadas". Lifetime configurable. Estilo VSCode.
 
-**F3H24 — Stats overlay configurable.**
-Overlay con FPS, drawcalls, triángulos, mem GPU/CPU, lights activas, entities. Cada widget toggleable desde Preferences. Estilo Quake `r_speeds`.
-
-**F3H25 — Console panel mejorada.**
-Filtros por severidad (info/warn/error/debug). Search box. Click en `file:line` salta al editor de scripts/material. Botón "Copy as bug report".
-
-**F3H26 — Toasts no-modales.**
-Notificaciones efímeras esquina inferior derecha: "Guardado", "Asset importado", "Shader compilado OK", "Project Settings actualizadas". Lifetime configurable. Estilo VSCode.
-
-**F3H27 — Crash recovery + autosave.**
+**F3H24 — Crash recovery + autosave.**
 Autosave del `.moodmap` cada N minutos (configurable en Preferences, default 5). On crash, al reabrir el proyecto → modal "Recuperar última sesión?". Lock file que detecta crashes.
 
 ---

@@ -11,6 +11,39 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-26: Consolidación de Sub-fase 3.4 (8 hitos → 5 hitos)
+
+### Decisión 1 — Consolidación agresiva post-F3H18
+
+**Contexto:** Al cerrar F3H18 (5/6 de Sub-fase 3.3), el dev pidió revisar los hitos restantes del plan F3 para detectar oportunidades de unir hitos y reducir el overhead de "cierre + commit + tag" por hito (cada cierre toma ~30-60 min de docs + validation). El plan original tenía 27 hitos totales (F3H1-F3H27), de los cuales 18 están cerrados y 9 pendientes (F3H19 + F3H20-F3H27 = Sub-fase 3.4 completa).
+
+**Decisión:** Consolidación agresiva validada via `AskUserQuestion`. Aplica 3 uniones a la Sub-fase 3.4, llevando de 8 hitos a 5:
+- F3H21 (ex-Cámaras numpad) + F3H22 (ex-Modos visualización) → **F3H21 Viewport pro**.
+- F3H23 (ex-Profiler) + F3H24 (ex-Stats overlay) → **F3H22 Performance feedback**.
+- F3H25 (ex-Console mejorada) + F3H26 (ex-Toasts) → **F3H23 Comunicación al dev**.
+- F3H27 (Crash recovery) → **F3H24** sin cambios.
+
+F3H19 (Rename con cascada, cierre de Sub-fase 3.3) + F3H20 (Snapping configurable) quedan sin cambios. **Total Fase 3: 27 → 24 hitos.**
+
+**Razones:**
+1. **Infra compartida real** (F3H22 + F3H23): Profiler y Stats overlay leen las mismas métricas runtime (FPS/drawcalls/triangle count/GPU mem); Console y Toasts comparten el pipeline de log severity. Unirlos evita duplicar lectura/wiring de métricas + duplicar handlers de log filter.
+2. **Proximidad UX** (F3H21): Cámaras numpad + Modos visualización son ambos features del viewport para workflow del dev — el dev típicamente está agregando "comandos del viewport" en una sesión cuando agrega uno, agregar el otro en la misma sesión es ergonómico.
+3. **Hitos siguen chicos** (~1-1.5 días cada uno): la consolidación NO infla cada hito a tamaño inmanejable. El F3H22 (Profiler + Stats) sigue siendo ~1.5 días, dentro del rango del hito mediano de F3 (compare F3H9, que tomó varios días por el bundle de 9 stages).
+4. **Reduce overhead de cierre**: cada hito requiere actualizar PLAN_HITO + ESTADO_ACTUAL + HITOS + DECISIONS + tag + commit + validation con dev. 8 cierres vs 5 cierres = ahorro ~3 horas de pure overhead.
+
+**Alternativas descartadas:**
+- Sin cambios (9 hitos): cero riesgo de scope creep, pero overhead alto. El dev pidió explícitamente ver opciones de consolidación, descartando esta.
+- Consolidación máxima (4 hitos): unir también F3H19 (Rename) + F3H20 (Snapping) o F3H22 + F3H23 en uno solo. Rechazada porque rompería el principio "hitos chicos y enviables" — F3H22 con todo (Profiler + Stats + Console + Toasts) sería ~3 días, demasiado grande para iteración rápida.
+
+**Implicaciones de versionado:**
+- Tags: F3H19, F3H20, F3H21, F3H22, F3H23, F3H24 — tags futuros usan los nuevos números (no los ex-números del plan original).
+- PLAN_HITO_F3H<N>.md: documentos para hitos cerrados (F3H1-F3H18) NO se renumeran. Los pendientes (F3H19-F3H24) usan numeración nueva.
+- `v3.0.0` (cierre de Fase 3) será al cerrar F3H24 (era F3H27).
+
+**Revisión:** Si al arrancar un hito consolidado (ej. F3H22) se descubre que las 2 partes pelean por scope (cada una creció más de lo previsto), partir back to 2 hitos. La consolidación es decisional pre-implementación, no obligatorio durante.
+
+---
+
 ## 2026-05-26: F3H18 cierre — Validador de assets rotos
 
 ### Decisión 1 — Cobertura inicial Tier 1 (broken refs only) vs ampliada (4 tipos)

@@ -78,7 +78,7 @@
 Sub-fase 3.1 — El editor te respeta              F3H1 ✅ F3H2 ✅ F3H3 ✅ F3H4 ✅ F3H5 ✅ F3H6 ✅ F3H7 ✅   🏁
 Sub-fase 3.2 — Inspector + Hierarchy pulidos     F3H8 ✅ F3H9 ✅ F3H10 ✅ F3H11 ✅ F3H12 ✅ F3H13 ✅   🏁
 Sub-fase 3.3 — Asset Browser de verdad           F3H14 ✅ F3H15 ✅ F3H16 ✅ F3H17 ✅ F3H18 ✅ F3H19
-Sub-fase 3.4 — Viewport pro + Performance        F3H20 – F3H27
+Sub-fase 3.4 — Viewport pro + Performance        F3H20 – F3H24   (consolidada 8→5 hitos el 2026-05-26)
 ```
 
 ---
