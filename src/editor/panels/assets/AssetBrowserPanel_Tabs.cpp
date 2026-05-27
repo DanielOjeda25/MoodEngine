@@ -116,6 +116,7 @@ void AssetBrowserPanel::renderTexturesTab() {
             ImGui::TextUnformatted(e.displayName.c_str());
             ImGui::EndDragDropSource();
         }
+        addRenameContextMenu(e.logicalPath);  // F3H19
 
         // Textura conserva tooltip al truncar (el resto de tabs usa cardLabel).
         const float textW = ImGui::CalcTextSize(e.displayName.c_str()).x;
@@ -190,6 +191,7 @@ void AssetBrowserPanel::renderMeshesTab() {
             ImGui::TextUnformatted(me.displayName.c_str());
             ImGui::EndDragDropSource();
         }
+        addRenameContextMenu(me.logicalPath);  // F3H19
         // F3H16: tooltip ampliado al hover prolongado — preview 384x384 del
         // mesh + metadata. Si el hover es corto (debajo de hoverPreviewDelayMs),
         // cae al tooltip simple legacy.
@@ -308,7 +310,11 @@ void AssetBrowserPanel::renderVehiclesTab() {
         }
         // F2H82: right-click sobre la card abre menu contextual con "Eliminar".
         // La eliminacion pasa por un modal de confirmacion (no se borra al toque).
+        // F3H19: el mismo popup incluye "Renombrar..." (sin sub-popup).
         if (ImGui::BeginPopupContextItem("##veh_ctx_menu")) {
+            if (ImGui::MenuItem(I18n::T("editor.asset_browser.rename").c_str())) {
+                openRenameModal(ve.logicalPath);
+            }
             if (ImGui::MenuItem("Eliminar...")) {
                 m_pendingDeleteVehicle = ve.logicalPath;
             }
@@ -384,6 +390,7 @@ void AssetBrowserPanel::renderAnimationsTab() {
             ImGui::TextUnformatted(ce.displayName.c_str());
             ImGui::EndDragDropSource();
         }
+        addRenameContextMenu(ce.logicalPath);  // F3H19
         if (ImGui::IsItemHovered() && clip != nullptr) {
             ImGui::SetTooltip("%s\n[%u tracks, %.2fs]", ce.displayName.c_str(),
                               static_cast<u32>(clip->tracks.size()), clip->duration);
@@ -429,6 +436,7 @@ void AssetBrowserPanel::renderPrefabsTab() {
             ImGui::TextUnformatted(pe.displayName.c_str());
             ImGui::EndDragDropSource();
         }
+        addRenameContextMenu(pe.logicalPath);  // F3H19
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", pe.displayName.c_str());
         cardLabel(pe.displayName, kCard);
         ImGui::EndGroup();
@@ -471,6 +479,7 @@ void AssetBrowserPanel::renderMaterialsTab() {
             ImGui::TextUnformatted(me.displayName.c_str());
             ImGui::EndDragDropSource();
         }
+        addRenameContextMenu(me.logicalPath);  // F3H19
         // F3H16: tooltip ampliado al hover prolongado — esfera 384x384 +
         // metadata del material.
         MaterialAsset* matAsset = m_assetManager
@@ -545,6 +554,7 @@ void AssetBrowserPanel::renderScriptsTab() {
             ImGui::TextUnformatted(se.displayName.c_str());
             ImGui::EndDragDropSource();
         }
+        addRenameContextMenu(se.logicalPath);  // F3H19
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s\n%s", se.displayName.c_str(),
                 I18n::T("editor.panel.assets.script_lines", se.lineCount).c_str());
@@ -579,6 +589,7 @@ void AssetBrowserPanel::renderAudioTab() {
         ImGui::PushID(ae.logicalPath.c_str());
         ImGui::BeginGroup();
         bigIconButton(ICON_FA_MUSIC, kCard);
+        addRenameContextMenu(ae.logicalPath);  // F3H19
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s\n[%.2fs, %uHz, %uch]", ae.displayName.c_str(),
                               clip->durationSeconds(), clip->sampleRate(),

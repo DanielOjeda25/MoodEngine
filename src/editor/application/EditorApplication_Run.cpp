@@ -32,6 +32,7 @@
 #include "editor/commands/EditBrushGeometryCommand.h"  // F2H30 Bloque B: vertex/edge edit undo.
 #include "editor/commands/EditTransformCommand.h"  // F2H29 Bloque B: Field enum.
 #include "editor/commands/HistoryStack.h"
+#include "editor/commands/RenameAssetCommand.h"  // F3H19: rename con cascada
 #include "editor/commands/MultiEditTransformCommand.h"  // F2H29 Bloque B: drag-edit undo agrupado.
 #include "editor/panels/debug/PerformanceHudPanel.h"
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28 Bloque F: click-select desde ortos
@@ -229,6 +230,23 @@ void EditorApplication::pumpUiRequests() {
     }
     if (Entity sel = m_ui.assetIssues().consumePendingSelect(); sel) {
         m_ui.setSelectedEntity(sel);
+    }
+
+    // F3H19: pending rename con cascada del Asset Browser. Construye el
+    // RenameAssetCommand + push al history + rescan del browser (para que
+    // el item renombrado aparezca con el nombre nuevo). El rescan también
+    // refresca el AssetIssues por si el rename arregló refs rotas.
+    if (auto pr = m_ui.assetBrowser().consumePendingRename()) {
+        m_history.push(std::make_unique<RenameAssetCommand>(
+            m_scene.get(), m_assetManager.get(),
+            pr->oldDiskPath, pr->newDiskPath,
+            pr->oldLogical, pr->newLogical,
+            std::move(pr->refs)));
+        m_ui.assetBrowser().rescan();
+        if (m_scene && m_assetManager) {
+            m_ui.assetIssues().refresh(*m_scene, *m_assetManager);
+        }
+        markDirty();
     }
 
     // 2) Atender toggles de modo solicitados desde la UI (boton Play/Stop).

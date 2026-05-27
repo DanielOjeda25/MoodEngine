@@ -353,6 +353,7 @@ add_library(mood_engine_lib STATIC
     src/engine/assets/manager/AssetManager_Item.cpp  # F2H51
     src/engine/assets/manager/AssetManager_Quest.cpp  # F2H53 Bloque B
     src/engine/assets/manager/AssetManager_Vehicle.cpp  # F2H67 Polish 2
+    src/engine/assets/manager/AssetManager_Rename.cpp   # F3H19
     src/engine/assets/loaders/MeshLoader.cpp
     src/engine/assets/primitives/PrimitiveMeshes.cpp
     src/engine/assets/loaders/stb_impl.cpp
@@ -494,6 +495,7 @@ add_library(mood_engine_lib STATIC
     src/engine/assets/cache/LodCache.cpp
 
     src/engine/assets/validation/AssetValidator.cpp  # F3H18
+    src/engine/assets/refs/AssetRefIndex.cpp         # F3H19
 
     src/engine/scene/serialization/TilePersistence.cpp
 
@@ -600,6 +602,7 @@ add_executable(MoodEditor
     src/editor/commands/VisGroupCommands.cpp  # F2H33
     src/editor/commands/NodeGraphCommand.cpp  # F2H46
     src/editor/commands/PasteComponentCommand.cpp  # F3H9
+    src/editor/commands/RenameAssetCommand.cpp     # F3H19
     src/editor/components/ComponentClipboard.cpp   # F3H9
     src/editor/panels/scene/ViewportPanel.cpp
     src/editor/panels/scene/OrthoViewportPanel.cpp  # F2H28
@@ -621,6 +624,7 @@ add_executable(MoodEditor
     src/editor/panels/assets/AssetBrowserPanel.cpp
     src/editor/panels/assets/AssetBrowserPanel_Tabs.cpp   # F2H81 auditoría (split)
     src/editor/panels/assets/AssetBrowserPanel_ImportVehicle.cpp  # F2H82 modal
+    src/editor/panels/assets/AssetBrowserPanel_Rename.cpp         # F3H19 modal
     src/editor/panels/debug/ConsolePanel.cpp
     src/editor/panels/scene/HierarchyPanel.cpp
     src/editor/panels/scene/HierarchyCollect.cpp

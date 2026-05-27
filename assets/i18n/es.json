@@ -625,6 +625,16 @@
   "editor.panel.visgroups.no_members": "    (sin miembros — click derecho > Asignar selección)",
   "editor.panel.visgroups.remove_from_group": "Quitar del grupo",
 
+  "editor.asset_browser.rename": "Renombrar...",
+  "editor.asset_browser.rename_modal.title": "Renombrar asset con cascada",
+  "editor.asset_browser.rename_modal.new_name": "Nuevo nombre:",
+  "editor.asset_browser.rename_modal.refs_count": "Referencias que se actualizarán",
+  "editor.asset_browser.rename_modal.no_refs": "Sin referencias en la escena.",
+  "editor.asset_browser.rename_modal.confirm": "Renombrar",
+  "editor.asset_browser.rename_modal.cancel": "Cancelar",
+  "editor.asset_browser.rename_modal.error_same": "El nombre nuevo es igual al actual.",
+  "editor.asset_browser.rename_modal.error_exists": "Ya existe un archivo con ese nombre.",
+
   "editor.panel.assets.no_manager": "Asset manager no inyectado",
   "editor.panel.assets.reload_tooltip": "Recargar assets desde disco",
   "editor.panel.assets.tab.textures": "Texturas",

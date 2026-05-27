@@ -481,6 +481,23 @@ public:
     /// @brief Cantidad de configs cacheados (incluye slot 0).
     usize vehicleConfigCount() const;
 
+    // ---- Rename de path lógico (F3H19) ----
+
+    /// @brief F3H19: actualiza el path lógico asociado a un asset cacheado.
+    ///        Pensado para rename con cascada desde el editor. El asset NO
+    ///        se mueve / recarga — solo se reescribe el mapeo id↔path
+    ///        interno. El caller es responsable de mover el archivo en
+    ///        disco antes (std::filesystem::rename).
+    ///
+    ///        Detecta la familia por extensión del path (`.png` →
+    ///        textures, `.material` → materials, `.fbx` con stem `anim_*`
+    ///        → animation clips, etc). Si la extensión no es reconocida
+    ///        (ej. `.lua`) o el asset no está cacheado, no-op.
+    ///
+    /// @return true si el rename interno se aplicó, false si fue no-op.
+    bool renameLogicalPath(const std::string& oldPath,
+                            const std::string& newPath);
+
 private:
     VFS m_vfs;
     TextureFactory m_textureFactory;

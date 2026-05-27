@@ -334,6 +334,7 @@ EditorApplication::EditorApplication() {
 
     // Inyectar dependencias en los paneles de ECS.
     m_ui.setScene(m_scene.get());  // F2H12: necesario para drawBooleanOpMenu
+    m_ui.assetBrowser().setScene(m_scene.get());  // F3H19: rename con cascada
     m_ui.hierarchy().setScene(m_scene.get());
     m_ui.hierarchy().setEditorUi(&m_ui);
     m_ui.hierarchy().setAssetManager(m_assetManager.get());  // F3H9: paste de componentes

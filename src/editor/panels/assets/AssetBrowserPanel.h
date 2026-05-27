@@ -7,9 +7,11 @@
 
 #include "editor/panels/IPanel.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/assets/refs/AssetRefIndex.h"             // F3H19
 #include "engine/physics/vehicle/VehicleMeshAnalyzer.h"  // F2H82
 #include "engine/physics/vehicle/VehiclePresets.h"       // F2H82
 
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -19,6 +21,7 @@ namespace Mood {
 class MeshThumbnailRenderer;       // F2H80
 class AnimationPreviewRenderer;    // F2H81
 class MaterialPreviewRenderer;     // F2H81
+class Scene;                       // F3H19
 
 class AssetBrowserPanel : public IPanel {
 public:
@@ -42,6 +45,28 @@ public:
     /// @brief F2H81: preview de materiales (esfera, miniaturas cacheadas).
     ///        Non-owning. Null → tab Materiales cae al listado de texto.
     void setMaterialPreviewRenderer(MaterialPreviewRenderer* m) { m_matPreview = m; }
+
+    /// @brief F3H19: inyecta la Scene activa para que el rename con cascada
+    ///        pueda escanear refs en componentes. Non-owning.
+    void setScene(Scene* s) { m_scene = s; }
+
+    /// @brief F3H19: pending rename request. EditorApplication la consume en
+    ///        pumpUiRequests para construir el RenameAssetCommand y push al
+    ///        history. Single-frame consume.
+    struct PendingRename {
+        std::filesystem::path oldDiskPath;
+        std::filesystem::path newDiskPath;
+        std::string oldLogical;
+        std::string newLogical;
+        std::vector<asset_refs::RefSite> refs;
+    };
+
+    std::optional<PendingRename> consumePendingRename() {
+        if (!m_pendingRename.has_value()) return std::nullopt;
+        auto out = std::move(m_pendingRename);
+        m_pendingRename.reset();
+        return out;
+    }
 
     /// @brief Path logico (relativo a la raiz de assets) del item seleccionado
     ///        por click en este panel. `nullopt` si nada esta seleccionado.
@@ -188,6 +213,35 @@ private:
     // path logico mientras espera confirmacion.
     std::string m_pendingDeleteVehicle;
     void confirmAndDeleteVehicle();   // dibuja el modal de confirmacion
+
+    // F3H19: rename con cascada. El context menu de cada tab abre el modal,
+    // que muestra preview de refs + InputText del nuevo nombre. Al confirmar,
+    // se construye `m_pendingRename` que EditorApplication consume para
+    // push el RenameAssetCommand al history.
+    Scene* m_scene = nullptr;
+    std::optional<PendingRename> m_pendingRename;
+
+    // Estado del modal de rename:
+    bool m_renameModalOpen = false;
+    std::string m_renameOldLogical;        // path lógico actual (ej. "scripts/player.lua")
+    std::filesystem::path m_renameOldDisk; // path filesystem actual (resolvido via VFS)
+    std::string m_renameNewName;           // editable: solo el filename + ext nuevo
+    std::string m_renameError;             // mensaje rojo en el modal si validation falla
+    std::vector<asset_refs::RefSite> m_renameRefsCache;  // snapshot al abrir
+
+    /// @brief F3H19: abre el modal de rename para un asset logical path. Si
+    ///        el panel no tiene Scene+AssetManager, no-op (queda silenciado).
+    void openRenameModal(const std::string& logicalPath);
+
+    /// @brief F3H19: cuerpo del modal. Llamar UNA vez por frame desde
+    ///        `onImGuiRender` si `m_renameModalOpen`.
+    void drawRenameModal();
+
+    /// @brief F3H19: dibuja el context menu (right-click sobre el item)
+    ///        con la opción "Renombrar...". Llamar inmediatamente después
+    ///        del widget (Button/ImageButton) del item para que ImGui
+    ///        adjunte el popup al item correcto.
+    void addRenameContextMenu(const std::string& logicalPath);
 
     // F3H16: helper que detecta hover prolongado sobre el ultimo
     // ImGui::ImageButton dibujado. Llamar INMEDIATAMENTE despues del

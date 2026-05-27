@@ -11,6 +11,101 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-27: F3H19 cierre — Rename con cascada
+
+### Decisión 1 — Cobertura backend completa, UI inicial en AssetBrowser principal
+
+**Contexto:** F3H19 debe entregar rename con cascada — renombrar un asset actualiza todas las refs en la escena + cache del AssetManager + en disco. Cobertura posible: subset Tier 1 (Texture/Mesh/Material/Script, 80% del caso), cobertura completa (todos los tipos: Texture/Mesh/Material/Script/Animation/Prefab/Dialog/Item/Vehicle/Audio + dependencias derivadas), o mínimo viable (solo Material + Texture).
+
+**Decisión:** Cobertura backend completa (todos los tipos). UI inicial limitada al AssetBrowser principal (8 tabs); rename desde ItemBrowserPanel/DialogBrowserPanel/QuestPropertyEditorPanel queda como follow-up mecánico cuando emerja demanda.
+
+**Razones:**
+1. **Backend completo no infla complejidad significativamente** vs subset: el patrón es `if (ext == X) m_xxx.rename(id, newPath)` repetido por familia. 10 familias = 10 if blocks. El subset Tier 1 sería 4 if blocks. Marginal.
+2. **Refs id-based unifica el flow**: los componentes que apuntan por id (MeshRenderer.mesh, Audio.clip, etc) NO se reescriben individualmente — el cache del AssetManager hace todo el trabajo. Cubrir más familias = más entradas en `renameLogicalPath`, no más complejidad del comando.
+3. **El AssetRefIndex es agnóstico al tipo**: la función `findRefs(scene, assets, path)` retorna refs de TODOS los tipos sin distinguir. El subset Tier 1 introduciría arbitrary cutoffs en el walk.
+4. **UI inicial en AssetBrowser cubre el 90% del UX caso real**: el dev típicamente renombra desde el browser donde explora los assets. Browsers especializados (ItemBrowser/DialogBrowser/etc) son para editar UN asset — agregar "Renombrar" ahí es follow-up natural cuando el dev lo pida.
+
+**Alternativas descartadas:**
+- Subset Tier 1: ahorra ~30 LOC pero pierde 6 tipos de assets sin razón estructural. Si el dev renombra un `.moodquest` y se queda huérfano del cache, hay que volver a F3H19 a expandir. Cobertura completa lo cierra de una.
+- Cobertura completa + UI en TODOS los browsers (incluido ItemBrowser/DialogBrowser/QuestPropertyEditorPanel): infla diff sin agregar capacidad técnica nueva. Cada panel es 1 wire trivial — diferir hasta que emerja demanda.
+
+**Revisión:** Memoria backlog [[asset_rename_browser_coverage]] agenda los 3 paneles diferidos. Activar cuando el dev pida "renombrar desde aquí".
+
+### Decisión 2 — Abort si el nombre destino ya existe
+
+**Contexto:** Al renombrar, el dev puede ingresar un nombre que ya está usado por otro archivo. Opciones: error + abort (cancelar la operación), sufijo automático `_2` / `_3` (renombrar el destino), confirmar overwrite (preguntar al dev si quiere sobreescribir).
+
+**Decisión:** Abort + mensaje de error rojo "Ya existe un archivo con ese nombre" en el modal. Botón Renombrar reapply el check al click — no destruye el archivo destino.
+
+**Razones:**
+1. **Patrón más seguro para operación destructiva**: el rename mueve un archivo en disco. Si el destino ya existe, hay riesgo de pérdida de datos (sobrescritura silenciosa). Abort elimina ese riesgo.
+2. **Sufijo automático es sorprendente**: el dev escribe "hero.lua" y termina con "hero_2.lua" sin darse cuenta. UX trap.
+3. **Confirm overwrite agrega clicks sin reducir riesgo**: si el dev confirma por accidente, mismo problema que el sufijo. Mejor que decida con un nombre limpio.
+4. **El dev sabe mejor**: si quería renombrar el destino primero, puede hacerlo + retry. Si quería overwrite, puede borrar el destino + retry. El abort respeta agency.
+
+**Alternativas descartadas:**
+- Sufijo automático: descartado por UX trap (descrito arriba).
+- Confirm overwrite: agrega 1 click sin reducir riesgo real — el dev clickea Sí por inercia.
+
+**Revisión:** Si el dev pide bulk rename con conflict resolution (sufijo o overwrite por defecto), agendar F3H_bulk_rename.
+
+### Decisión 3 — RenameAssetCommand confía en pre-conditions del caller
+
+**Contexto:** El RenameAssetCommand recibe (oldDiskPath, newDiskPath, oldLogical, newLogical, refs) en su ctor. ¿Dónde se valida que newDiskPath no exista en disco? Opciones: en el ctor del comando (rechaza si no se cumple), en el caller (modal UI), o en ambos lados (defensive double-check).
+
+**Decisión:** El caller (modal del Asset Browser) valida pre-construct. El comando NO duplica validation — confía.
+
+**Razones:**
+1. **El modal es la única fuente del comando**: no hay otros call sites. Validar en el modal es suficiente para el flow real.
+2. **El comando NO tiene UI para reportar errores**: si el ctor rechaza por pre-condition no cumplida, ¿cómo le decimos al dev? El modal es donde el error tiene sentido (mensaje rojo inline).
+3. **Defensive double-check es redundante**: poner el mismo check en 2 lugares aumenta probabilidad de drift (uno mejora, otro queda viejo).
+4. **Si por bug el caller no valida y fs::rename sobreescribe** (en Windows lo hace silenciosamente): el comando loguea pero no rollback. Trade-off explícito — un bug en el modal puede causar pérdida de datos. Aceptable porque el modal está testeado.
+
+**Alternativas descartadas:**
+- Validar en el ctor del comando + throw: rompe ICommand interface (no se espera que tire). Y el modal igual debería validar para mostrar el error al dev pre-click.
+- Validar en ambos lados: redundancia + drift.
+
+**Revisión:** Si emerge un segundo caller del RenameAssetCommand (ej. CLI batch rename), evaluar si vale la pena agregar pre-validation en el comando.
+
+### Decisión 4 — Refs id-based NO se reescriben en componentes — solo cache del AssetManager
+
+**Contexto:** Los componentes que referencian assets lo hacen de 2 formas: por string path (ScriptComponent.path) o por AssetId resoluble via AssetManager (MeshRendererComponent.mesh, AudioSourceComponent.clip, etc). Al renombrar un asset, ¿cómo se actualizan ambos tipos de refs?
+
+**Decisión:** Las refs id-based NO se reescriben en cada componente. Solo se actualiza el path interno del AssetManager via `renameLogicalPath(oldPath, newPath)`. El id no cambia; el componente sigue apuntando al mismo id. La próxima llamada a `pathOf(id)` devuelve el path nuevo automáticamente. Solo las refs string-path (7 tipos específicos) se reescriben directamente en el componente.
+
+**Razones:**
+1. **Rendimiento masivo**: si 500 entities tienen MeshRendererComponent apuntando al mismo mesh `barrel.fbx`, renombrar a `crate.fbx` con id-based update requiere TOCAR 1 línea (el `m_meshes.rename(id, "crate.fbx")` en el AssetManager). Con string-path update, requeriría iterar 500 componentes. El factor 500x es claramente la decisión correcta.
+2. **Path único de verdad**: el AssetManager es el único que sabe el path real de un id. Reescribir en componentes duplicaría el path → drift posible.
+3. **Save round-trip preserva el rename**: cuando el SceneSerializer escribe el .moodmap, escribe el path actual del AssetManager (`pathOf(id)`). El nuevo path queda persistido automáticamente.
+
+**Alternativas descartadas:**
+- Reescribir refs id-based en componentes (uniformidad teórica): factor 500x peor en rendimiento sin beneficio real. Si el cache del AssetManager está actualizado, el resto sigue.
+- Solo reescribir refs string-path + ignorar refs id-based (cache sin update): rompe el round-trip — al save, el path viejo se persiste y al load próximo, el AssetManager carga desde el path viejo (que ya no existe en disco). Falla.
+
+**Revisión:** Patrón validado con tests (rename de Mesh + entity con MeshRendererComponent → tras execute, `assets.meshPathOf(mr.mesh)` devuelve el nuevo path sin tocar el componente). Si emerge un caso edge donde el id apunta a un asset deleted, el comportamiento ya está cubierto por el fallback al slot 0 del AssetRegistry.
+
+### Decisión 5 — Side-effects al reescribir paths string en componentes
+
+**Contexto:** Cuando el comando reescribe `ScriptComponent.path = newPath`, ¿qué pasa con el estado runtime derivado? El ScriptComponent tiene `loaded = true` si el script fue cargado por ScriptSystem en el path viejo. Si solo cambiamos el path, el sistema no detecta el cambio y sigue ejecutando el script viejo.
+
+**Decisión:** Algunos componentes con string-path tienen side-effects extra al reescribir:
+- `ScriptComponent.loaded = false` → fuerza ScriptSystem a recargar el .lua con el path nuevo en el próximo tick.
+- `VehicleComponent.dirty = true` → fuerza VehicleSystem a rematerializar el physics body con el config nuevo.
+- `DialogComponent` / `ItemPickupComponent` / `EnvironmentComponent` / `PrefabLinkComponent`: NO tienen estado derivado de invalidar. Los sistemas correspondientes leen lazy del path y el path nuevo entra en el primer uso.
+
+**Razones:**
+1. **Consistencia entre rename + reload**: el dev espera que al renombrar un script, el sistema use el archivo nuevo. Si `loaded` queda en true, el ScriptSystem cree que ya cargó este componente y skip.
+2. **Side-effect mínimo y localizado**: la invalidación es 1 boolean flip por componente afectado. No re-correr lógica pesada en el comando.
+3. **Asymmetría reconocida explícitamente**: cada componente decide qué necesita invalidar — no hay regla genérica "siempre invalidar". El comando hace switch sobre RefKind y aplica los side-effects necesarios case-by-case.
+
+**Alternativas descartadas:**
+- No invalidar nada: el rename funciona "técnicamente" (path actualizado, archivo movido) pero el sistema runtime sigue con el estado viejo. UX incoherente.
+- Invalidar todos los componentes uniformemente (reset de cualquier flag derivado): rompe el comportamiento de los que no necesitan invalidar (PrefabLink no tiene estado).
+
+**Revisión:** Si se agrega un nuevo componente con string-path + estado runtime derivado, el switch del RenameAssetCommand necesita una nueva case. Patrón claro — agregar es 3-4 LOC.
+
+---
+
 ## 2026-05-26: Consolidación de Sub-fase 3.4 (8 hitos → 5 hitos)
 
 ### Decisión 1 — Consolidación agresiva post-F3H18

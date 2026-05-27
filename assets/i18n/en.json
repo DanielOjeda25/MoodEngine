@@ -625,6 +625,16 @@
   "editor.panel.visgroups.no_members": "    (no members — right-click > Assign selection)",
   "editor.panel.visgroups.remove_from_group": "Remove from group",
 
+  "editor.asset_browser.rename": "Rename...",
+  "editor.asset_browser.rename_modal.title": "Rename asset with cascade",
+  "editor.asset_browser.rename_modal.new_name": "New name:",
+  "editor.asset_browser.rename_modal.refs_count": "References that will be updated",
+  "editor.asset_browser.rename_modal.no_refs": "No references in the scene.",
+  "editor.asset_browser.rename_modal.confirm": "Rename",
+  "editor.asset_browser.rename_modal.cancel": "Cancel",
+  "editor.asset_browser.rename_modal.error_same": "The new name matches the current name.",
+  "editor.asset_browser.rename_modal.error_exists": "A file with that name already exists.",
+
   "editor.panel.assets.no_manager": "Asset manager not injected",
   "editor.panel.assets.reload_tooltip": "Reload assets from disk",
   "editor.panel.assets.tab.textures": "Textures",

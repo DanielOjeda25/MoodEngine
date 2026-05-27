@@ -1,12 +1,12 @@
 # PLAN F3H19 — Rename con cascada
 
-**Estado:** **A DEFINIR** (arrancar tras F3H18).
+**Estado:** ✅ **CERRADO** (`v2.19.0-fase3-hito19`, 2026-05-27).
 **Predecesor:** F3H18 (validador de assets rotos).
 **Origen:** `PLAN_FASE3.md` Sub-fase 3.3 lista "Rename con cascada".
 
 ---
 
-## Avance de Sub-fase 3.3
+## Cierre de Sub-fase 3.3
 
 ```
 F3H14 ✅ — Mejoras MeshThumbnailRenderer
@@ -14,93 +14,167 @@ F3H15 ✅ — Mejoras MaterialPreviewRenderer
 F3H16 ✅ — Hover preview ampliada
 F3H17 ✅ — Drag & drop con feedback visual
 F3H18 ✅ — Validador de assets rotos
-F3H19 –  — ⬅ próximo: Rename con cascada (cierra Sub-fase 3.3)
+F3H19 ✅ — Rename con cascada            ⬅ ESTE
+─────────────────────────────────────────
+Sub-fase 3.3 CERRADA 🏁
+```
+
+Próxima sub-fase: 3.4 — Viewport pro + Performance + Feedback (5 hitos consolidados desde 8 originales).
+
+---
+
+## Lo que entregó
+
+### Stage A — `AssetRefIndex` engine
+
+Subsistema nuevo en `src/engine/assets/refs/`:
+- **`AssetRefIndex.h`**: API + structs.
+  - `enum RefKind` (17 variantes cubriendo string-path + id-based + Material textures).
+  - `struct RefSite{kind, entity, materialPath, slotIndex, animAlias}`.
+  - `std::vector<RefSite> findRefs(Scene&, AssetManager&, const std::string& assetLogicalPath)`.
+  - Helper `std::string normalizePath(const std::string&)` (forward slashes, quita prefijo `assets/`).
+- **`AssetRefIndex.cpp`** (~200 LOC): walk de la Scene + Materials cacheados. Reusa el patrón del `AssetValidator` (F3H18) pero acumula RefSites tipados en vez de issues.
+
+**Cobertura backend completa** (decisión D1 del dev):
+- 7 string paths en componentes: `ScriptComponent.path`, `DialogComponent.dialogPath`, `ItemPickupComponent.itemPath`, `VehicleComponent.configPath`, `EnvironmentComponent.{skyboxPath, colorGradingLutPath}`, `PrefabLinkComponent.path`.
+- 6 refs id-based: `AudioSourceComponent.clip`, `MeshRendererComponent.{mesh, materials[]}`, `AnimatorComponent.externalClips[alias]`, `ParticleEmitterComponent.texture`, `BrushComponent.materials[]`.
+- 4 texturas en Materials cargados: `albedo`, `metallicRoughness`, `normal`, `ao`.
+
+### Stage B — `AssetManager::renameLogicalPath` API
+
+- **`AssetRegistry<T>::rename(Id, std::string newPath)`** (~25 LOC): actualiza el path lógico asociado a un id en el registry interno. Reescribe el mapeo bidirección id↔path en `m_cache` + `m_paths`. No-op para slot 0 (sentinela fallback).
+- **`AssetManager::renameLogicalPath(oldPath, newPath)`** (~85 LOC, archivo nuevo `AssetManager_Rename.cpp`): detecta familia por extension del path, delega a `m_xxx.rename()`. Cubre 10 familias:
+  - `.png/.jpg/.jpeg/.tga/.hdr/.bmp` → textures.
+  - `.wav/.ogg/.mp3/.flac` → audio.
+  - `.fbx` con stem `anim_*` → animation clips; otro → meshes.
+  - `.obj/.gltf/.glb` → meshes.
+  - `.material` → materials.
+  - `.moodprefab` → prefabs.
+  - `.mooddialog` → dialogs.
+  - `.mooditem` → items.
+  - `.moodquest` → quests.
+  - `.moodvehicle` → vehicle configs.
+  - `.lua` → no-op (scripts no se cachean, viven solo como string en componentes).
+
+### Stage C — `RenameAssetCommand` undoable
+
+- **`src/editor/commands/RenameAssetCommand.h/.cpp`** (~180 LOC).
+- 3 mutaciones atómicas en `execute()`:
+  1. `std::filesystem::rename(oldDisk, newDisk)`.
+  2. `assets.renameLogicalPath(oldLogical, newLogical)` → cache id↔path sincronizado.
+  3. Por cada RefSite con kind string-path (los 7 tipos), reescribir el campo del componente.
+- Refs id-based NO se tocan individualmente — siguen apuntando al mismo id, y el AssetManager devuelve el nuevo path en `pathOf(id)` automáticamente. **Esta es la clave del diseño**: el rename es eficiente porque la mayoría de las refs son id-based y no requieren tocar la Scene.
+- Side-effects extra al reescribir:
+  - `ScriptComponent.loaded = false` → fuerza reload con el nuevo path en el siguiente tick del ScriptSystem.
+  - `VehicleComponent.dirty = true` → fuerza rematerialización del physics body.
+- `undo()` aplica las 3 mutaciones en reversa (newDisk → oldDisk, newLogical → oldLogical, refs con `to=oldLogical`).
+- Si `fs::rename` falla (ec set), abort silencioso: loguea + retorna sin mutar scene ni AssetManager. **El caller (modal del Asset Browser) debe validar pre-construct que `newDisk` no existe** (decisión D2 — abort vs sufijo automático).
+
+### Stage D — UI Asset Browser (rename modal + context menu)
+
+- **`AssetBrowserPanel_Rename.cpp`** (~165 LOC, archivo nuevo): `openRenameModal`, `drawRenameModal`, `addRenameContextMenu` helpers + state miembros nuevos en `AssetBrowserPanel.h` (m_renameModalOpen, m_renameOldLogical, m_renameOldDisk, m_renameNewName, m_renameError, m_renameRefsCache).
+- **Modal de rename**:
+  - InputText con el filename actual (preserva carpeta).
+  - Lista compacta de refs (max 8 visibles, scroll) — muestra `Entity N` o `Material: <path>` según source.
+  - Validación inline: empty / mismo nombre / nombre ya existe en disco (mensaje rojo).
+  - Botón Renombrar disabled si el nuevo nombre no es válido.
+  - Cancel descarta el snapshot y cierra.
+- **Context menu**: helper `addRenameContextMenu(logicalPath)` llamado después de cada widget en los 8 tabs (Textures / Meshes / Vehicles / Animations / Prefabs / Materials / Scripts / Audio). Vehicle tab tiene su propio popup multi-acción ("Renombrar..." + "Eliminar..."), así que el item de rename se agrega inline al popup existente para evitar conflict de IDs.
+- **Wire en EditorApplication**:
+  - `setScene(m_scene.get())` inyectado en `EditorApplication_Init.cpp` post-init de la scene.
+  - `consumePendingRename()` consumido en `pumpUiRequests` (`EditorApplication_Run.cpp`): construye `RenameAssetCommand`, push al `m_history` (undoable), rescan del browser + refresh del AssetIssues panel + `markDirty()`.
+- **`PendingRename` struct** público en el panel (`AssetBrowserPanel.h`): oldDiskPath / newDiskPath / oldLogical / newLogical / refs. Single-frame consume vía `consumePendingRename()` (patrón gemelo de `m_pendingDeleteVehicle`).
+
+### Tests headless
+
+`tests/test_asset_ref_index.cpp` + `tests/test_rename_asset_command.cpp`:
+- **AssetRefIndex (9 casos)**: normalizePath, scene vacía, ScriptComponent matching, path distinto, campo vacío, multiples refs al mismo path, 7 tipos string-path simultáneos, Skybox vs ColorGradingLut, PrefabLink path.
+- **renameLogicalPath (6 casos)**: asset no cargado, oldPath == newPath, extension `.lua`, textura cargada actualiza pathOf, tras rename el oldPath queda huérfano del cache, `.fbx` con stem anim distingue mesh vs anim.
+- **RenameAssetCommand (5 casos)**: rename de Script + componente actualizado + undo restaura, cascada a 3 entities, textura cargada con pathOf actualizado, Skybox + ColorGradingLut del mismo Environment, name() incluye old + new.
+
+Total: **20 cases / 62 asserts F3H19**, suite verde 1207/11519+ (incremental sobre F3H18).
+
+### i18n
+
+9 keys nuevas en `es.json` + `en.json`:
+- `editor.asset_browser.rename` — "Renombrar..." / "Rename..." (context menu item).
+- `editor.asset_browser.rename_modal.{title, new_name, refs_count, no_refs, confirm, cancel, error_same, error_exists}` — labels + errores inline del modal.
+
+---
+
+## Sites tocados
+
+```
+src/engine/assets/refs/AssetRefIndex.h                       NEW
+src/engine/assets/refs/AssetRefIndex.cpp                     NEW
+src/engine/assets/manager/AssetRegistry.h                    +rename() method
+src/engine/assets/manager/AssetManager.h                     +renameLogicalPath decl
+src/engine/assets/manager/AssetManager_Rename.cpp            NEW
+src/editor/commands/RenameAssetCommand.h                     NEW
+src/editor/commands/RenameAssetCommand.cpp                   NEW
+src/editor/panels/assets/AssetBrowserPanel.h                 +setScene + PendingRename + state del modal
+src/editor/panels/assets/AssetBrowserPanel.cpp               +drawRenameModal call
+src/editor/panels/assets/AssetBrowserPanel_Tabs.cpp          +addRenameContextMenu en 7 tabs + inline en Vehicles popup
+src/editor/panels/assets/AssetBrowserPanel_Rename.cpp        NEW
+src/editor/application/EditorApplication_Init.cpp            +assetBrowser().setScene(m_scene)
+src/editor/application/EditorApplication_Run.cpp             +consumePendingRename + push command + rescan + refresh issues
+tests/test_asset_ref_index.cpp                               NEW
+tests/test_rename_asset_command.cpp                          NEW
+tests/CMakeLists.txt                                         +2 tests + +2 .cpp engine
+CMakeLists.txt                                               +3 .cpp (AssetRefIndex + AssetManager_Rename + AssetBrowserPanel_Rename) + RenameAssetCommand
+assets/i18n/es.json                                          +9 keys
+assets/i18n/en.json                                          +9 keys
 ```
 
 ---
 
-## Norte
+## Decisiones
 
-`PLAN_FASE3.md` declara:
-> **F3H19 — Rename con cascada.**
-> Renombrar un asset (mesh/material/texture/script/dialog/item/vehicle) actualiza todas las refs en la escena + en otros assets que lo referencian. Confirmación previa con preview del diff ("13 entidades + 2 materiales serán actualizados"). Undo deshace todo en un solo Ctrl+Z.
+**D1 — Cobertura backend completa, UI inicial en AssetBrowser.**
+Validada via `AskUserQuestion`. El backend (AssetRefIndex + renameLogicalPath + RenameAssetCommand) cubre los 17 tipos de refs identificados. La UI de iniciar el rename se ofrece desde el AssetBrowser principal (8 tabs). Browsers especializados (ItemBrowserPanel, DialogBrowserPanel, QuestPropertyEditorPanel) NO tienen botón "Renombrar" todavía — al ser browsers para edición de un asset, el rename desde ahí es secundario; cuando emerja demanda concreta, agregar el menú es mecánico (1 llamada a `openRenameModal` por panel). Memoria backlog [[asset_rename_browser_coverage]] agenda los 3 paneles diferidos.
 
-**Mecánica del editor (cómo se siente):** el dev decide renombrar `metal_rust.material` → `metal_oxidized.material` desde el Asset Browser. Aparece un dialog: "13 entidades + 2 prefabs hacen ref a este asset — ¿confirmar rename y actualizar todas las refs?". Click Sí → el archivo se renombra en disco + todas las refs en la scene + los .moodprefab + .material que referenciaban la textura se actualizan a la vez. Ctrl+Z deshace todo (renombrado + cascada).
+**D2 — Abort si el nombre destino ya existe.**
+Validada via `AskUserQuestion`. Cuando el dev intenta renombrar a un nombre que ya existe en disco, el modal muestra error rojo "Ya existe un archivo con ese nombre" y el botón Renombrar queda en estado de fallo (al click vuelve a chequear pero no destruye el archivo destino). Alternativas descartadas: sufijo automático `_2` (puede sorprender al dev — no quiere magia en operación destructiva), confirmar overwrite (más clicks, mismo riesgo que sufijo). El abort es el patrón más seguro para evitar pérdida de datos.
 
----
+**D3 — RenameAssetCommand confía en pre-conditions del caller.**
+El comando NO valida que `newDiskPath` no exista. La validación vive en el modal (Stage D), antes de construir el comando. Si por bug el caller no valida, `fs::rename` en Windows sobreescribe el destino — el comando loguea pero no rollback. Razón: poner validación en el comando duplicaría check con el modal y el comando no tiene UI para reportar errores. Trade-off explícito: el modal es la fuente de verdad para validación.
 
-## Scope candidato
+**D4 — Refs id-based NO se reescriben en componentes — solo se actualiza el cache del AssetManager.**
+Las refs por AssetId (Mesh/Material/Audio/Animation/etc) NO requieren tocar individualmente cada componente porque el id no cambia, solo el path interno del AssetManager. `pathOf(id)` devuelve el nuevo path automáticamente al render/save siguiente. Esto vale 80%+ del rendimiento del rename: si hay 500 entities con MeshRendererComponent apuntando al mismo mesh renombrado, no iteramos 500 componentes — basta un solo `m_meshes.rename(id, newPath)`. Las únicas refs reescritas son string-path en 7 componentes específicos (Script/Dialog/Item/Vehicle/Skybox/ColorGradingLut/PrefabLink) donde el path es directo, no via id.
 
-### Trabajo principal
-
-1. **`AssetRefIndex`** (nueva clase, namespace `Mood::asset_refs`): índice reverse de "qué entidades / materiales / prefabs refieren a path X". Reusa la lógica de walk del `AssetValidator` (F3H18) pero con output `std::unordered_map<std::string, std::vector<RefSite>>`.
-   ```cpp
-   struct RefSite {
-     enum class Source { Entity, Material, Prefab } source;
-     std::string description; // "Entity 'NPC_01' / ScriptComponent.path"
-     Entity entity{};         // si source==Entity
-     std::string assetPath;   // si source==Material o Prefab
-   };
-   std::unordered_map<std::string, std::vector<RefSite>> buildRefIndex(...);
-   ```
-
-2. **`RenameAssetCommand`** undoable: snapshot del estado pre-rename (incluye disk path + todas las refs) + ejecuta rename + actualiza refs. `undo` restaura.
-
-3. **Dialog de confirmación**: modal con tabla "13 refs serán actualizadas: ..." + botones Confirmar / Cancelar.
-
-4. **Wire desde Asset Browser**: context menu "Renombrar" sobre un asset (right-click) → input modal con nuevo nombre → genera el ref index → muestra dialog → ejecuta `RenameAssetCommand`.
-
-5. **Wire desde AssetIssuesPanel** (F3H18): boton "Reemplazar..." en cada issue → file picker de asset nuevo → ejecuta el "rename inverso" (todas las refs al path roto pasan al path nuevo).
-
-### Sites a tocar
-
-- `src/engine/assets/refs/AssetRefIndex.h/.cpp` (NUEVO).
-- `src/editor/commands/RenameAssetCommand.h/.cpp` (NUEVO).
-- `src/editor/panels/assets/AssetBrowserPanel_Tabs.cpp`: context menu + rename dialog.
-- `src/editor/panels/project/AssetIssuesPanel.cpp`: boton "Reemplazar..." en cada issue.
-- `src/editor/application/EditorApplication_Run.cpp`: pumpUiRequests para procesar rename requests.
-
-### Decisiones a tomar al arrancar
-
-1. **Cobertura de tipos**: ¿todos los assets (mesh/material/texture/script/dialog/item/vehicle/animation/prefab) o solo los más usados?
-2. **Persistencia del rename**: cada componente que refiere al asset por string-path se serializa al `.moodmap` con el nuevo path. ¿Re-save automático del .moodmap o solo en-memory + dirty flag?
-3. **Conflict resolution**: si el nuevo nombre ya existe, ¿error / sufijar `_2` / pedir confirmación de overwrite?
-4. **Undo granularidad**: ¿un solo comando (atomic rename + cascada) o comando compuesto (rename file + N edit-component commands)?
+**D5 — Side-effects al reescribir paths string en componentes.**
+Algunos componentes con string path tienen estado runtime derivado que necesita invalidarse al cambiar el path:
+- `ScriptComponent.loaded = false` → fuerza ScriptSystem a recargar el .lua con el path nuevo.
+- `VehicleComponent.dirty = true` → fuerza VehicleSystem a rematerializar el physics body con el config nuevo.
+Otros (`DialogComponent`, `ItemPickupComponent`, `EnvironmentComponent`, `PrefabLinkComponent`) no tienen estado derivado de invalidar — se leen lazy por el sistema correspondiente y el path nuevo entra en el primer uso.
 
 ---
 
-## Alternativas a F3H19
+## Validación
 
-### B) Cerrar Sub-fase 3.3 sin rename
-
-F3H14-F3H18 ya cierran 5/6. Saltar F3H19 y arrancar Sub-fase 3.4 (Viewport pro). Pero rename es feature pedido históricamente — backlog mediano.
-
-### C) Backlog UX (memoria `backlog-ux-gaps-editor`)
-
-- ForceField/Cloth no spawnables desde UI.
-- "Agregar sonido al activar mesh" workflow.
-
-Items chicos que cierran fricciones pre-existentes.
-
----
-
-## Recomendación
-
-Yo (Claude) sugiero **opción A — Rename con cascada**:
-1. Cierra Sub-fase 3.3 con la trifecta del Asset Browser (thumbnails + drag&drop + validador + rename).
-2. Reusa la lógica de walk de F3H18 (`AssetRefIndex` ~ generalización del scanner).
-3. Rename es feature pesado pero scope acotado (1 comando + 1 dialog + 1 wire).
-
-**Preguntas al dev cuando arranque F3H19:**
-1. ¿Confirmás A o querés B/C?
-2. ¿Cobertura inicial: todos los tipos o subset (mesh/material/texture/script)?
-3. ¿Conflict resolution al hacer rename a nombre existente: error / sufijo auto / confirm?
+Dev confirmó "todo ok" tras testear:
+1. Right-click en cualquier tab del Asset Browser → context menu con "Renombrar...".
+2. Modal aparece con path actual + InputText + preview de refs.
+3. Cambiar nombre + Renombrar → archivo se mueve en disco, refs en componentes se actualizan (validado en Inspector), browser muestra el nombre nuevo tras rescan.
+4. Validation inline:
+   - Nombre vacío → botón disabled.
+   - Mismo nombre → botón disabled.
+   - Nombre ya existe → mensaje rojo + abort.
+5. Ctrl+Z → archivo restaurado + refs revertidas.
 
 ---
 
 ## Lo que NO toca F3H19
 
-- Sub-fase 3.4 (Viewport pro): F3H20+.
-- Move (cambiar carpeta) de un asset: similar a rename pero scope distinto.
-- Bulk rename (renombrar N assets a la vez): backlog si emerge.
-- Schema migration al renombrar (ej. `texture_path` → `texturePath` en JSON): no aplica acá.
+- **Rename desde ItemBrowserPanel / DialogBrowserPanel / QuestPropertyEditorPanel**: backlog mecánico — 1 llamada por panel cuando emerja demanda. Memoria [[asset_rename_browser_coverage]].
+- **Bulk rename** (renombrar N assets a la vez): backlog si emerge.
+- **Move** (cambiar carpeta de un asset): scope distinto, no entra a F3H19.
+- **Rename con conflict resolution intelligent** (sufijo auto / overwrite confirm): scope hito propio si emerge.
+- **Rename de refs dentro de prefabs cacheados sin spawn** (los prefabs son `SavedPrefab` con su propio sub-Scene): backlog si emerge — walk del prefab content es similar al walk de Scene.
+- **Rename de refs dentro de shader graphs** (`.shadergraph`): los shadergraphs tienen sus propias refs internas a texturas/samplers, no cubiertas por AssetRefIndex. Backlog si emerge.
+
+---
+
+## Siguiente hito
+
+**F3H20 — Snapping configurable** (Sub-fase 3.4 arranca). Plan stub en [`PLAN_HITO_F3H20.md`](PLAN_HITO_F3H20.md).

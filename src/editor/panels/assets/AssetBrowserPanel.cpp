@@ -389,6 +389,11 @@ void AssetBrowserPanel::onImGuiRender() {
         ImGui::EndTabBar();
     }
 
+    // F3H19: modal de rename con cascada, single instance compartido por
+    // todos los tabs. El context menu de cada item lo abre via
+    // openRenameModal(logicalPath).
+    drawRenameModal();
+
     ImGui::End();
 }
 

@@ -120,6 +120,33 @@ public:
         m_items[id] = std::move(newAsset);
     }
 
+    /// @brief F3H19: cambia el path logico asociado a `id`. Caso de uso:
+    ///        rename de un asset desde el editor + cascada a todas las refs.
+    ///        El asset NO se mueve / recarga — solo se reescribe el mapeo
+    ///        id <-> path interno. El caller es responsable de mover el
+    ///        archivo en disco antes (std::filesystem::rename).
+    ///
+    ///        No-op si:
+    ///          - `id` == 0 (slot 0 = sentinela del fallback, intocable).
+    ///          - `id` fuera de rango.
+    ///          - `newPath` es identico al actual.
+    ///
+    /// @return true si el rename se aplico, false si fue no-op.
+    bool rename(Id id, std::string newPath) {
+        if (id == 0) return false;
+        if (id >= m_items.size()) return false;
+        if (m_paths[id] == newPath) return false;
+        // Quitar el path viejo del cache (solo si apunta a este id —
+        // addUncached puede haber registrado el path sin id en el cache).
+        auto it = m_cache.find(m_paths[id]);
+        if (it != m_cache.end() && it->second == id) {
+            m_cache.erase(it);
+        }
+        m_paths[id] = newPath;
+        m_cache[std::move(newPath)] = id;
+        return true;
+    }
+
     /// @brief Path con el que se agrego. Slot 0 devuelve el sentinela.
     ///        Ids fuera de rango tambien caen al slot 0.
     std::string pathOf(Id id) const {
