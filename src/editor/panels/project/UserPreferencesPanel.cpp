@@ -267,6 +267,29 @@ void UserPreferencesPanel::drawEditorTab() {
         saveNow = true;
     }
 
+    // F3H16: hover preview delay (ms) del Asset Browser. Tiempo que el
+    // dev tiene que dejar el cursor quieto sobre un thumb antes de que
+    // aparezca el tooltip ampliado.
+    ImGui::TextUnformatted(
+        I18n::T("editor.user_preferences.editor.hover_preview_delay").c_str());
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.user_preferences.editor.hover_preview_delay_hint").c_str());
+    }
+    ImGui::SameLine(kLabelColumnWidth);
+    ImGui::SetNextItemWidth(kControlWidth);
+    if (ImGui::SliderInt("##user_pref_hover_preview_delay",
+                          &cfg.hoverPreviewDelayMs, 0, 3000, "%d ms")) {
+        dirty = true;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) saveNow = true;
+    if (resetButton("hover_preview_delay",
+                     cfg.hoverPreviewDelayMs,
+                     defaults.hoverPreviewDelayMs)) {
+        dirty = true;
+        saveNow = true;
+    }
+
     if (dirty)   UserSettings::setEditor(cfg);
     if (saveNow) UserSettings::save();
 

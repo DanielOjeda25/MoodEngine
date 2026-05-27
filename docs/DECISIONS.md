@@ -11,6 +11,82 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-26: F3H16 cierre — Hover preview ampliada del Asset Browser
+
+### Decisión 1 — Timer manual vs `ImGuiHoveredFlags_DelayNormal`
+
+**Contexto:** ImGui 1.89+ tiene `ImGuiHoveredFlags_DelayNormal` que retorna `true` desde `IsItemHovered()` solo después de `style.HoverDelayNormal` (~0.4s). Sería la solución "obvia" para implementar hover delay.
+
+**Decisión:** Manual timer. Trackeamos `m_hoverItemKey` + `m_hoverTimerSec` en el panel, acumulamos `DeltaTime` cuando `IsItemHovered()` retorna `true` con el mismo item, reseteamos al cambiar de item o salir.
+
+**Razones:**
+1. **Delay configurable per-usuario**: queremos que `UserSettings.editor.hoverPreviewDelayMs` controle el delay. `HoveredFlags_DelayNormal` lee de `style.HoverDelayNormal` que es GLOBAL — mutarlo cada frame afecta TODOS los hovers del editor (combos, tooltips de otras secciones, etc).
+2. **Configuración granular**: una pref controla el delay del Asset Browser específicamente. Si en el futuro otros panels quieren hover preview con diferente delay, cada uno tiene su lógica sin afectar al otro.
+3. **0 ms a 3000 ms range**: el manual timer soporta 0 (instantáneo) que `HoveredFlags_DelayNormal` no haría — ese flag siempre espera el delay configurado en style.
+4. **Sin dependencia de versión específica de ImGui**: el flag requiere 1.89+. Manual funciona con cualquier versión.
+
+**Alternativas descartadas:**
+- `HoveredFlags_DelayNormal` con mutación de `style.HoverDelayNormal` antes de cada `IsItemHovered`: ensucia el style global; afecta cualquier otro lugar que lea ese valor en el mismo frame.
+- Tracker per-item (cada thumb su propio timer): solo uno puede estar hovered a la vez en ImGui — un single tracker en el panel es suficiente y más simple.
+
+**Revisión:** si emerge UX donde el dev quiere "delay default ImGui para algunos tooltips, delay propio para otros", revisitar. Hoy un solo delay para los thumbs del Asset Browser cubre el 100% del caso.
+
+### Decisión 2 — `kLargePreviewSize = 384` hardcoded vs configurable
+
+**Contexto:** El tooltip ampliado renderea el thumb a 384×384 px. Opción alterna: exponer una pref `UserSettings.editor.hoverPreviewSize` (clamp 256-768, default 384) con slider.
+
+**Decisión:** Hardcoded `static constexpr u32 kLargePreviewSize = 384u` en ambos renderers. Sin pref.
+
+**Razones:**
+1. **UX consistente**: el dev no quiere pensar "¿cuán grande debería ser mi preview?" — 384 es un sweet spot probado (Substance Designer ~ 360, Marmoset ~ 400). Una sola UI menos.
+2. **Cache disco consume espacio**: cada size genera PNGs nuevos. Permitir al dev cambiar 384→512→640 deja 3 sizes en disco sin invalidar los viejos (filename incluye size). Hardcoded mantiene el footprint chico.
+3. **Sin caso de uso identificado**: nadie pidió "tooltip más grande" o "más chico". Si emerge, mover a pref después es trivial — los thumbs grandes ya están parametrizados internamente.
+4. **Tooltip ya respeta layout de ImGui**: 384px se ve bien en pantalla 1080p (no ocupa más de la mitad) y en 4K (no se ve micro porque el viewport del thumb es proporcional al espacio del cursor).
+
+**Alternativas descartadas:**
+- Pref con slider: agrega complejidad por configurabilidad sin demanda.
+- Auto-calcular según resolución de pantalla: heurística sin caso de uso claro; el dev podría tener 4K con el Asset Browser en una ventana chica donde 384 quedaría grande.
+
+**Revisión:** si un dev pide explícitamente "preview más chico para mi laptop" o "más grande para mi 4K", agregar `hoverPreviewSize`.
+
+### Decisión 3 — Helper compartido `loadOrRenderThumb`/`loadOrRenderMatThumb` vs duplicar el flow load/render/cache
+
+**Contexto:** F3H14 había implementado el flow load disco / render / cache memoria / store disco en `thumbnailFor`. F3H16 necesita el mismo flow para `thumbnailLargeFor` con un size + cache map distintos. Opciones: (A) duplicar el flow entero copy-pasted; (B) extraer a helper privado que toma `size` + `cache map` como parámetros.
+
+**Decisión:** Opción B — `loadOrRenderThumb(meshId, assets, size, cacheMap)` privado, llamado por ambos `thumbnailFor` y `thumbnailLargeFor`. Mismo patrón en `MaterialPreviewRenderer` con `loadOrRenderMatThumb`.
+
+**Razones:**
+1. **DRY estricto**: el flow es 100% idéntico — solo varían los 2 parámetros explícitos. Duplicar ~80 LOC por método nuevo significa que cada mejora futura del flow (compresión, logging, async) requiere 2 toques en lugar de 1.
+2. **`size` ya estaba parametrizado en disco**: `AssetThumbnailDiskCache::pathFor` desde F3H14 acepta `size` en su signature. Pasarlo desde más arriba en la stack es 1 línea más.
+3. **Cache map por puntero/referencia**: pasar `std::unordered_map&` permite que el caller decida qué cache poblar. No hay encapsulación rota — el helper es privado.
+
+**Alternativas descartadas:**
+- Duplicar el flow: bug-prone (cada vez que un branch se actualiza, hay que recordar tocar las 2 copias).
+- Macro o template: overkill para 2 call-sites con un solo tipo (`u32` cache key, `unique_ptr<OpenGLFramebuffer>` value).
+
+**Revisión:** si emerge un tercer caso de uso (ej. thumb extra small para list compacto), el helper escala — solo agregar otra pareja `m_xsCache` + `thumbnailXsFor`.
+
+### Decisión 4 — Cobertura inicial mesh + material (no animaciones/prefabs/texturas/audio)
+
+**Contexto:** El Asset Browser tiene tabs adicionales (Animations, Prefabs, Textures, Audio, Scripts, Vehicles). El plan de Sub-fase 3.3 menciona "hover preview ampliada" sin detallar qué tipos.
+
+**Decisión:** F3H16 cubre **solo mesh + material**. Animations/Prefabs/Textures/Audio/Scripts/Vehicles quedan en backlog.
+
+**Razones:**
+1. **Mesh + material son los 2 paneles más visitados**: el dev pasa más tiempo eligiendo meshes para spawnear y materiales para asignar que escogiendo prefabs/animations/etc. Cobertura del caso 80%.
+2. **Texturas ya tienen preview real**: la textura es su propia imagen. Hover ampliado para texturas es trivial (sería `ImGui::Image` con la GLuint de la textura cargada). Lo dejo para un follow-up de 1 línea cuando emerja.
+3. **Animations tienen un preview LIVE distinto**: el `AnimationPreviewRenderer` de F2H81 ya renderea el NPC posado en tiempo real cuando seleccionás un clip — el "hover ampliado" requeriría un preview pose-estático, distinto al render dinámico que ya existe.
+4. **Audio + Scripts no tienen preview visual obvio**: audio waveform o script syntax-highlighted son features de hito propio.
+5. **Infraestructura lista para extender**: agregar otro tipo es solo un nuevo prefix en `AssetThumbnailDiskCache::pathFor` + helper analógico en el respectivo render.
+
+**Alternativas descartadas:**
+- Cobertura total en F3H16: infla scope sin payoff visible para tipos poco visitados.
+- Solo mesh (sin material): F3H15 acababa de agregar la infraestructura paralela; tener mesh sin material rompe la simetría que se acababa de establecer.
+
+**Revisión:** cuando un dev mencione "quiero hover de X en el Asset Browser" para un tipo nuevo, agregar el helper espejo.
+
+---
+
 ## 2026-05-26: F3H15 cierre — Mejoras del MaterialPreviewRenderer (cache disco compartido + resolución compartida + gradiente reusado)
 
 ### Decisión 1 — Helper compartido `AssetThumbnailDiskCache` con `prefix` vs caches separadas

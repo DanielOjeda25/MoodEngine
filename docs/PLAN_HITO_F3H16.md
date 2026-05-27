@@ -1,6 +1,6 @@
 # PLAN F3H16 — Hover preview ampliada (Asset Browser)
 
-**Estado:** **A DEFINIR** (arrancar tras F3H15).
+**Estado:** **CERRADO** (`v2.16.0-fase3-hito16`, 2026-05-26). Tercer hito de Sub-fase 3.3.
 **Predecesor:** F3H15 (mejoras del MaterialPreviewRenderer — cache disco compartido).
 **Origen:** `PLAN_FASE3.md` Sub-fase 3.3 lista "Hover preview ampliada".
 

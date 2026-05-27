@@ -147,6 +147,13 @@ private:
     MeshThumbnailRenderer* m_thumbnails = nullptr;  // F2H80, non-owning
     AnimationPreviewRenderer* m_animPreview = nullptr;  // F2H81, non-owning
     MaterialPreviewRenderer* m_matPreview = nullptr;    // F2H81, non-owning
+
+    // F3H16: tracker manual del tiempo de hover sobre el item activo. Se
+    // mantiene entre frames; al cambiar el item hovered, se resetea. Solo
+    // uno puede estar hovered a la vez en ImGui, asi que el state global
+    // del panel basta (no necesita ser per-entry).
+    u32 m_hoverItemKey = 0;   // hash del logical path del item hovered
+    f32 m_hoverTimerSec = 0.0f;
     // F2H81: estado del preview de animaciones (tab Animations).
     AnimationClipAssetId m_animPreviewClip = 0;  // clip seleccionado (0 = ninguno)
     MeshAssetId m_animPreviewNpc = 0;            // NPC de referencia (lazy-load)
@@ -181,6 +188,14 @@ private:
     // path logico mientras espera confirmacion.
     std::string m_pendingDeleteVehicle;
     void confirmAndDeleteVehicle();   // dibuja el modal de confirmacion
+
+    // F3H16: helper que detecta hover prolongado sobre el ultimo
+    // ImGui::ImageButton dibujado. Llamar INMEDIATAMENTE despues del
+    // ImageButton del thumb. Devuelve `true` si el cursor estuvo quieto
+    // sobre el item al menos `UserSettings.editor.hoverPreviewDelayMs`
+    // milisegundos consecutivos. `itemKey` es un hash estable del item
+    // (ej. FNV del logical path) para identificarlo entre frames.
+    bool hoverPreviewElapsed(u32 itemKey);
 };
 
 } // namespace Mood

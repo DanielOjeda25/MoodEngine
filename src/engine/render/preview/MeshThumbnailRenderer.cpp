@@ -116,9 +116,16 @@ void MeshThumbnailRenderer::setIblTextures(OpenGLCubemapTexture* irradiance,
     m_iblBrdfLut    = brdfLut;
 }
 
-void MeshThumbnailRenderer::clear() { m_cache.clear(); m_primCache.clear(); }
+void MeshThumbnailRenderer::clear() {
+    m_cache.clear();
+    m_largeCache.clear();
+    m_primCache.clear();
+}
 
-void MeshThumbnailRenderer::invalidate(u32 meshId) { m_cache.erase(meshId); }
+void MeshThumbnailRenderer::invalidate(u32 meshId) {
+    m_cache.erase(meshId);
+    m_largeCache.erase(meshId);
+}
 
 void MeshThumbnailRenderer::setDiskCacheRoot(std::filesystem::path cacheRoot) {
     m_diskCacheRoot = std::move(cacheRoot);
@@ -153,7 +160,8 @@ void MeshThumbnailRenderer::clearAndSetGlState() {
 
 void MeshThumbnailRenderer::setCamera(const glm::vec3& aabbMin,
                                       const glm::vec3& aabbMax,
-                                      const glm::mat4& model) {
+                                      const glm::mat4& model,
+                                      u32 viewportSize) {
     // Bounding sphere (radio rotation-invariant; el centro lo mueve el model).
     const glm::vec3 centerLocal = (aabbMin + aabbMax) * 0.5f;
     const glm::vec3 target = glm::vec3(model * glm::vec4(centerLocal, 1.0f));
@@ -175,7 +183,8 @@ void MeshThumbnailRenderer::setCamera(const glm::vec3& aabbMin,
     m_pbrShader->setMat4("uModel", model);
     m_pbrShader->setVec3("uCameraPos", camPos);
     m_pbrShader->setVec2("uScreenSize",
-                         glm::vec2(static_cast<f32>(m_size), static_cast<f32>(m_size)));
+                         glm::vec2(static_cast<f32>(viewportSize),
+                                    static_cast<f32>(viewportSize)));
 }
 
 void MeshThumbnailRenderer::bindInvariantState() {
@@ -271,9 +280,24 @@ void MeshThumbnailRenderer::bindMaterial(const MaterialAsset* mat,
 // ============================================================================
 
 GLuint MeshThumbnailRenderer::thumbnailFor(u32 meshId, AssetManager& assets) {
-    if (!m_pbrShader || m_size == 0) return 0u;
+    return loadOrRenderThumb(meshId, assets, m_size, m_cache);
+}
 
-    if (auto it = m_cache.find(meshId); it != m_cache.end()) {
+GLuint MeshThumbnailRenderer::thumbnailLargeFor(u32 meshId, AssetManager& assets) {
+    return loadOrRenderThumb(meshId, assets, kLargePreviewSize, m_largeCache);
+}
+
+// F3H16: helper interno load-or-render. Reusable por thumbnailFor (size
+// normal, cache memoria m_cache) y thumbnailLargeFor (size grande, cache
+// memoria m_largeCache). El filename del cache disco incluye el size
+// — los PNGs no chocan entre tamanos.
+GLuint MeshThumbnailRenderer::loadOrRenderThumb(
+        u32 meshId, AssetManager& assets,
+        u32 size,
+        std::unordered_map<u32, std::unique_ptr<OpenGLFramebuffer>>& cache) {
+    if (!m_pbrShader || size == 0) return 0u;
+
+    if (auto it = cache.find(meshId); it != cache.end()) {
         return it->second ? it->second->glColorTextureId() : 0u;
     }
 
@@ -281,88 +305,77 @@ GLuint MeshThumbnailRenderer::thumbnailFor(u32 meshId, AssetManager& assets) {
     if (asset == nullptr || asset->submeshes.empty()) return 0u;
 
     // F3H14: si hay cache disco seteado, intentar load antes de rendear.
-    // El logical path del mesh es la key para el filename; el fs absoluto
-    // del mesh source nos da el mtime para validar staleness.
     const std::string logicalPath = assets.meshPathOf(meshId);
     const bool diskOn = !m_diskCacheRoot.empty() && !logicalPath.empty();
     std::filesystem::path cachePath;
     if (diskOn) {
         cachePath = AssetThumbnailDiskCache::pathFor(
-            m_diskCacheRoot, "mesh", logicalPath, m_size);
+            m_diskCacheRoot, "mesh", logicalPath, size);
         const auto meshFsPath = assets.resolvePath(logicalPath);
         std::vector<u8> rgba;
         u32 cachedW = 0, cachedH = 0;
         if (AssetThumbnailDiskCache::tryLoad(
                 cachePath, meshFsPath, rgba, cachedW, cachedH) &&
-            cachedW == m_size && cachedH == m_size) {
-            // HIT: armar FBO con el size esperado + uploadear el RGBA al
-            // color attachment. ImGui consume `glColorTextureId()` igual
-            // que el path render. Flip vertical: PNG storage es
-            // top-to-bottom; queremos que la textura quede como si
-            // hubiera salido del render path (bottom-to-top GL natural),
-            // para que ImGui la pinte right-way-up igual que F2H80.
+            cachedW == size && cachedH == size) {
+            // HIT: armar FBO + uploadear el RGBA + flip vertical
+            // (PNG top-to-bottom → GL bottom-to-top).
             std::vector<u8> flipped(rgba.size());
-            const usize rowBytes = static_cast<usize>(m_size) * 4;
-            for (u32 y = 0; y < m_size; ++y) {
-                std::copy_n(rgba.data() + (m_size - 1 - y) * rowBytes,
+            const usize rowBytes = static_cast<usize>(size) * 4;
+            for (u32 y = 0; y < size; ++y) {
+                std::copy_n(rgba.data() + (size - 1 - y) * rowBytes,
                              rowBytes,
                              flipped.data() + y * rowBytes);
             }
             auto fb = std::make_unique<OpenGLFramebuffer>(
-                m_size, m_size, OpenGLFramebuffer::Format::LDR);
+                size, size, OpenGLFramebuffer::Format::LDR);
             const GLuint tex = fb->glColorTextureId();
             glBindTexture(GL_TEXTURE_2D, tex);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                             static_cast<GLsizei>(m_size),
-                             static_cast<GLsizei>(m_size),
+                             static_cast<GLsizei>(size),
+                             static_cast<GLsizei>(size),
                              GL_RGBA, GL_UNSIGNED_BYTE, flipped.data());
             glBindTexture(GL_TEXTURE_2D, 0);
-            m_cache.emplace(meshId, std::move(fb));
+            cache.emplace(meshId, std::move(fb));
             return tex;
         }
     }
 
     auto fb = std::make_unique<OpenGLFramebuffer>(
-        m_size, m_size, OpenGLFramebuffer::Format::LDR);
+        size, size, OpenGLFramebuffer::Format::LDR);
 
     GLint prevViewport[4]{};
     glGetIntegerv(GL_VIEWPORT, prevViewport);
     fb->bind();
-    glViewport(0, 0, static_cast<GLsizei>(m_size), static_cast<GLsizei>(m_size));
-    renderMeshToBoundFbo(meshId, assets);
+    glViewport(0, 0, static_cast<GLsizei>(size), static_cast<GLsizei>(size));
+    renderMeshToBoundFbo(meshId, assets, size);
 
-    // F3H14: readback + store al disco (solo si hay cache disco seteado).
-    // glReadPixels desde el FBO bindeado — el PNG queda como CPU-snapshot
-    // del color attachment. NO bloqueamos en GPU (sin glFinish): si el
-    // driver demora, el PNG saldra del frame anterior, aceptable para un
-    // thumbnail estatico que se cachea persistente.
+    // F3H14: readback + store al disco (si hay cache disco seteado).
     if (diskOn) {
-        std::vector<u8> rgba(static_cast<usize>(m_size) * m_size * 4);
+        std::vector<u8> rgba(static_cast<usize>(size) * size * 4);
         glReadPixels(0, 0,
-                      static_cast<GLsizei>(m_size),
-                      static_cast<GLsizei>(m_size),
+                      static_cast<GLsizei>(size),
+                      static_cast<GLsizei>(size),
                       GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
-        // PNG: las filas vienen bottom-to-top desde GL pero stbi_write_png
-        // espera top-to-bottom — flip vertical antes de escribir.
         std::vector<u8> flipped(rgba.size());
-        const usize rowBytes = static_cast<usize>(m_size) * 4;
-        for (u32 y = 0; y < m_size; ++y) {
-            std::copy_n(rgba.data() + (m_size - 1 - y) * rowBytes,
+        const usize rowBytes = static_cast<usize>(size) * 4;
+        for (u32 y = 0; y < size; ++y) {
+            std::copy_n(rgba.data() + (size - 1 - y) * rowBytes,
                          rowBytes,
                          flipped.data() + y * rowBytes);
         }
-        AssetThumbnailDiskCache::store(cachePath, flipped.data(), m_size, m_size);
+        AssetThumbnailDiskCache::store(cachePath, flipped.data(), size, size);
     }
 
     fb->unbind();
     glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
 
     const GLuint tex = fb->glColorTextureId();
-    m_cache.emplace(meshId, std::move(fb));
+    cache.emplace(meshId, std::move(fb));
     return tex;
 }
 
-void MeshThumbnailRenderer::renderMeshToBoundFbo(u32 meshId, AssetManager& assets) {
+void MeshThumbnailRenderer::renderMeshToBoundFbo(u32 meshId, AssetManager& assets,
+                                                  u32 viewportSize) {
     MeshAsset* asset = assets.getMesh(meshId);
     if (asset == nullptr || asset->submeshes.empty()) return;
 
@@ -377,7 +390,7 @@ void MeshThumbnailRenderer::renderMeshToBoundFbo(u32 meshId, AssetManager& asset
     model = glm::rotate(model, e.z, glm::vec3(0.0f, 0.0f, 1.0f));
 
     m_pbrShader->bind();
-    setCamera(asset->aabbMin, asset->aabbMax, model);
+    setCamera(asset->aabbMin, asset->aabbMax, model, viewportSize);
     bindInvariantState();
 
     const std::vector<MaterialAssetId> matIds = assets.createMaterialsForMesh(meshId);
@@ -439,7 +452,7 @@ GLuint MeshThumbnailRenderer::thumbnailForPrimitive(PrimitiveKind kind,
     glGetIntegerv(GL_VIEWPORT, prevViewport);
     fb->bind();
     glViewport(0, 0, static_cast<GLsizei>(m_size), static_cast<GLsizei>(m_size));
-    renderRawMeshToBoundFbo(mesh.get(), lo, hi, assets);
+    renderRawMeshToBoundFbo(mesh.get(), lo, hi, assets, m_size);
     fb->unbind();
     glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
 
@@ -450,15 +463,16 @@ GLuint MeshThumbnailRenderer::thumbnailForPrimitive(PrimitiveKind kind,
 }
 
 void MeshThumbnailRenderer::renderRawMeshToBoundFbo(IMesh* mesh,
-                                                    const glm::vec3& aabbMin,
-                                                    const glm::vec3& aabbMax,
-                                                    AssetManager& assets) {
+                                                     const glm::vec3& aabbMin,
+                                                     const glm::vec3& aabbMax,
+                                                     AssetManager& assets,
+                                                     u32 viewportSize) {
     if (mesh == nullptr) return;
     clearAndSetGlState();
     m_pbrShader->bind();
-    setCamera(aabbMin, aabbMax, glm::mat4(1.0f));
+    setCamera(aabbMin, aabbMax, glm::mat4(1.0f), viewportSize);
     bindInvariantState();
-    bindMaterial(nullptr, assets);  // look default (sin material)
+    bindMaterial(nullptr, assets);
     mesh->bind();
     glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh->vertexCount()));
 }

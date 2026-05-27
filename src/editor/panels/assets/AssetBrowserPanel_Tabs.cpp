@@ -6,6 +6,7 @@
 #include "editor/panels/assets/AssetBrowserPanel_Internal.h"
 
 #include "core/Log.h"
+#include "core/UserSettings.h"  // F3H16: hoverPreviewDelayMs
 #include "core/i18n/I18n.h"
 #include "editor/ui/IconsFontAwesome6.h"
 #include "engine/animation/clips/AnimationClip.h"
@@ -29,6 +30,51 @@ namespace Mood {
 using assetbrowser_detail::bigIconButton;
 using assetbrowser_detail::cardGridCols;
 using assetbrowser_detail::cardLabel;
+
+namespace {
+
+// F3H16: FNV-1a 32-bit hash de strings, para una key estable per-item al
+// trackear hover. Mas chico que el FNV-64 del AssetThumbnailDiskCache —
+// 32 bits sobran para distinguir items en un panel.
+u32 hashItemKey(const std::string& s) {
+    constexpr u32 k_offset = 0x811c9dc5u;
+    constexpr u32 k_prime  = 0x01000193u;
+    u32 h = k_offset;
+    for (unsigned char c : s) {
+        h ^= c;
+        h *= k_prime;
+    }
+    return h == 0u ? 1u : h;  // reservamos 0 para "ningun item"
+}
+
+}  // namespace
+
+// F3H16: helper de hover prolongado. Llamado inmediatamente despues del
+// ImageButton del thumb. Devuelve true cuando el cursor estuvo quieto
+// sobre el item al menos `hoverPreviewDelayMs` ms consecutivos.
+bool AssetBrowserPanel::hoverPreviewElapsed(u32 itemKey) {
+    if (!ImGui::IsItemHovered()) {
+        // El cursor no esta sobre este item este frame. Si era el ultimo
+        // hovered, resetear el tracker — al volver a entrar arranca de 0.
+        if (m_hoverItemKey == itemKey) {
+            m_hoverItemKey  = 0;
+            m_hoverTimerSec = 0.0f;
+        }
+        return false;
+    }
+    // Hover activo sobre este item.
+    if (m_hoverItemKey != itemKey) {
+        // Cambio de item — resetear el tracker. El usuario tiene que
+        // dejar el cursor quieto sobre este item desde cero.
+        m_hoverItemKey  = itemKey;
+        m_hoverTimerSec = 0.0f;
+    } else {
+        m_hoverTimerSec += ImGui::GetIO().DeltaTime;
+    }
+    const f32 thresholdSec =
+        static_cast<f32>(UserSettings::editor().hoverPreviewDelayMs) / 1000.0f;
+    return m_hoverTimerSec >= thresholdSec;
+}
 
 // ============================================================
 // TAB: Texturas (grid de miniaturas)
@@ -144,7 +190,35 @@ void AssetBrowserPanel::renderMeshesTab() {
             ImGui::TextUnformatted(me.displayName.c_str());
             ImGui::EndDragDropSource();
         }
-        if (ImGui::IsItemHovered() && asset != nullptr) {
+        // F3H16: tooltip ampliado al hover prolongado — preview 384x384 del
+        // mesh + metadata. Si el hover es corto (debajo de hoverPreviewDelayMs),
+        // cae al tooltip simple legacy.
+        if (asset != nullptr && m_thumbnails != nullptr &&
+            hoverPreviewElapsed(hashItemKey(me.logicalPath))) {
+            const GLuint large = m_thumbnails->thumbnailLargeFor(
+                me.id, *m_assetManager);
+            ImGui::BeginTooltip();
+            if (large != 0u) {
+                ImGui::Image((ImTextureID)(uintptr_t)large,
+                              ImVec2(384.0f, 384.0f),
+                              ImVec2(0, 1), ImVec2(1, 0));
+            }
+            ImGui::TextUnformatted(me.displayName.c_str());
+            ImGui::TextDisabled("%s", me.logicalPath.c_str());
+            ImGui::Separator();
+            ImGui::Text("%s",
+                I18n::T("editor.panel.assets.mesh_meta",
+                        static_cast<u32>(asset->submeshes.size()),
+                        asset->totalVertexCount()).c_str());
+            const glm::vec3 ext = asset->aabbMax - asset->aabbMin;
+            ImGui::Text("AABB: %.2f x %.2f x %.2f", ext.x, ext.y, ext.z);
+            if (asset->hasSkeleton()) {
+                ImGui::Text("%s", I18n::T(
+                    "editor.panel.assets.mesh_meta_skeleton",
+                    static_cast<u32>(asset->animations.size())).c_str());
+            }
+            ImGui::EndTooltip();
+        } else if (ImGui::IsItemHovered() && asset != nullptr) {
             ImGui::SetTooltip("%s\n%s", me.displayName.c_str(),
                 I18n::T("editor.panel.assets.mesh_meta",
                         static_cast<u32>(asset->submeshes.size()),
@@ -397,7 +471,42 @@ void AssetBrowserPanel::renderMaterialsTab() {
             ImGui::TextUnformatted(me.displayName.c_str());
             ImGui::EndDragDropSource();
         }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", me.displayName.c_str());
+        // F3H16: tooltip ampliado al hover prolongado — esfera 384x384 +
+        // metadata del material.
+        MaterialAsset* matAsset = m_assetManager
+            ? m_assetManager->getMaterial(me.id) : nullptr;
+        if (matAsset != nullptr && m_matPreview != nullptr &&
+            hoverPreviewElapsed(hashItemKey(me.logicalPath))) {
+            const GLuint large = m_matPreview->thumbnailLarge(
+                me.id, *m_assetManager);
+            ImGui::BeginTooltip();
+            if (large != 0u) {
+                ImGui::Image((ImTextureID)(uintptr_t)large,
+                              ImVec2(384.0f, 384.0f),
+                              ImVec2(0, 1), ImVec2(1, 0));
+            }
+            ImGui::TextUnformatted(me.displayName.c_str());
+            ImGui::TextDisabled("%s", me.logicalPath.c_str());
+            ImGui::Separator();
+            ImGui::Text("Albedo: (%.2f, %.2f, %.2f)",
+                          matAsset->albedoTint.x,
+                          matAsset->albedoTint.y,
+                          matAsset->albedoTint.z);
+            ImGui::Text("Metallic: %.2f", matAsset->metallicMult);
+            ImGui::Text("Roughness: %.2f", matAsset->roughnessMult);
+            ImGui::Text("AO: %.2f", matAsset->aoMult);
+            int mapCount = 0;
+            if (matAsset->useAlbedoMap)       ++mapCount;
+            if (matAsset->metallicRoughness)  ++mapCount;
+            if (matAsset->normal)             ++mapCount;
+            if (matAsset->ao)                 ++mapCount;
+            ImGui::Text("%s",
+                I18n::T("editor.panel.assets.material_meta_maps",
+                        mapCount).c_str());
+            ImGui::EndTooltip();
+        } else if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", me.displayName.c_str());
+        }
         cardLabel(me.displayName, kCard);
         ImGui::EndGroup();
         ImGui::PopID();

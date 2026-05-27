@@ -126,6 +126,7 @@ nlohmann::json editorSettingsToJson(const EditorSettings& s) {
     if (s.gizmoRotateRingPx       != defaults.gizmoRotateRingPx)       j["gizmo_rotate_ring_px"]      = s.gizmoRotateRingPx;
     if (s.clickDragThresholdPx    != defaults.clickDragThresholdPx)    j["click_drag_threshold_px"]   = s.clickDragThresholdPx;
     if (s.thumbnailResolution     != defaults.thumbnailResolution)     j["thumbnail_resolution"]      = s.thumbnailResolution;
+    if (s.hoverPreviewDelayMs     != defaults.hoverPreviewDelayMs)     j["hover_preview_delay_ms"]    = s.hoverPreviewDelayMs;
     return j;
 }
 
@@ -160,6 +161,10 @@ EditorSettings editorSettingsFromJson(const nlohmann::json& j) {
     if (j.contains("thumbnail_resolution") && j.at("thumbnail_resolution").is_number_integer()) {
         const int v = j.at("thumbnail_resolution").get<int>();
         s.thumbnailResolution = std::clamp(v, 64, 512);
+    }
+    if (j.contains("hover_preview_delay_ms") && j.at("hover_preview_delay_ms").is_number_integer()) {
+        const int v = j.at("hover_preview_delay_ms").get<int>();
+        s.hoverPreviewDelayMs = std::clamp(v, 0, 3000);
     }
     return s;
 }

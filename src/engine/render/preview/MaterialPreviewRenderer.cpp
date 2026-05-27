@@ -133,88 +133,100 @@ void MaterialPreviewRenderer::renderPreview(const MaterialAsset& mat,
 }
 
 GLuint MaterialPreviewRenderer::thumbnail(u32 materialId, AssetManager& assets) {
-    if (!m_pbrShader) return 0u;
-    if (auto it = m_thumbCache.find(materialId); it != m_thumbCache.end()) {
+    return loadOrRenderMatThumb(materialId, assets, m_width, m_thumbCache);
+}
+
+GLuint MaterialPreviewRenderer::thumbnailLarge(u32 materialId, AssetManager& assets) {
+    return loadOrRenderMatThumb(materialId, assets, kLargePreviewSize, m_largeCache);
+}
+
+// F3H16: helper interno load-or-render. Reusable por thumbnail (size del
+// constructor, cache m_thumbCache) y thumbnailLarge (kLargePreviewSize,
+// cache m_largeCache). El filename del cache disco incluye el size —
+// los PNGs no chocan entre tamanos en el mismo directorio.
+GLuint MaterialPreviewRenderer::loadOrRenderMatThumb(
+        u32 materialId, AssetManager& assets,
+        u32 size,
+        std::unordered_map<u32, std::unique_ptr<OpenGLFramebuffer>>& cache) {
+    if (!m_pbrShader || size == 0) return 0u;
+    if (auto it = cache.find(materialId); it != cache.end()) {
         return it->second ? it->second->glColorTextureId() : 0u;
     }
     MaterialAsset* mat = assets.getMaterial(materialId);
     if (mat == nullptr) return 0u;
 
-    // F3H15: cache disco. Mismo patron que F3H14 en MeshThumbnailRenderer
-    // — el filename usa prefix "mat" para discriminar de los meshes en el
-    // mismo directorio .cache/thumbs/.
+    // F3H15: cache disco con prefix "mat".
     const std::string logicalPath = assets.materialPathOf(materialId);
     const bool diskOn = !m_diskCacheRoot.empty() && !logicalPath.empty();
     std::filesystem::path cachePath;
     if (diskOn) {
         cachePath = AssetThumbnailDiskCache::pathFor(
-            m_diskCacheRoot, "mat", logicalPath, m_width);
+            m_diskCacheRoot, "mat", logicalPath, size);
         const auto matFsPath = assets.resolvePath(logicalPath);
         std::vector<u8> rgba;
         u32 cachedW = 0, cachedH = 0;
         if (AssetThumbnailDiskCache::tryLoad(
                 cachePath, matFsPath, rgba, cachedW, cachedH) &&
-            cachedW == m_width && cachedH == m_height) {
-            // HIT: armar FBO + uploadear el RGBA al color attachment.
-            // Flip vertical (PNG top-to-bottom -> GL bottom-to-top) para
-            // mantener orientacion consistente con el path render.
+            cachedW == size && cachedH == size) {
+            // HIT: flip vertical + armar FBO + upload.
             std::vector<u8> flipped(rgba.size());
-            const usize rowBytes = static_cast<usize>(m_width) * 4;
-            for (u32 y = 0; y < m_height; ++y) {
-                std::copy_n(rgba.data() + (m_height - 1 - y) * rowBytes,
+            const usize rowBytes = static_cast<usize>(size) * 4;
+            for (u32 y = 0; y < size; ++y) {
+                std::copy_n(rgba.data() + (size - 1 - y) * rowBytes,
                              rowBytes,
                              flipped.data() + y * rowBytes);
             }
             auto fb = std::make_unique<OpenGLFramebuffer>(
-                m_width, m_height, OpenGLFramebuffer::Format::LDR);
+                size, size, OpenGLFramebuffer::Format::LDR);
             const GLuint tex = fb->glColorTextureId();
             glBindTexture(GL_TEXTURE_2D, tex);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                             static_cast<GLsizei>(m_width),
-                             static_cast<GLsizei>(m_height),
+                             static_cast<GLsizei>(size),
+                             static_cast<GLsizei>(size),
                              GL_RGBA, GL_UNSIGNED_BYTE, flipped.data());
             glBindTexture(GL_TEXTURE_2D, 0);
-            m_thumbCache.emplace(materialId, std::move(fb));
+            cache.emplace(materialId, std::move(fb));
             return tex;
         }
     }
 
     auto fb = std::make_unique<OpenGLFramebuffer>(
-        m_width, m_height, OpenGLFramebuffer::Format::LDR);
+        size, size, OpenGLFramebuffer::Format::LDR);
     GLint prevViewport[4]{};
     glGetIntegerv(GL_VIEWPORT, prevViewport);
     fb->bind();
-    glViewport(0, 0, static_cast<GLsizei>(m_width), static_cast<GLsizei>(m_height));
+    glViewport(0, 0, static_cast<GLsizei>(size), static_cast<GLsizei>(size));
     renderSphereToBoundFbo(*mat, assets, 0.6f);  // ángulo fijo 3/4 (estático)
 
-    // F3H15: readback + store al disco (solo si hay cache disco seteado).
+    // F3H15: readback + store al disco.
     if (diskOn) {
-        std::vector<u8> rgba(static_cast<usize>(m_width) * m_height * 4);
+        std::vector<u8> rgba(static_cast<usize>(size) * size * 4);
         glReadPixels(0, 0,
-                      static_cast<GLsizei>(m_width),
-                      static_cast<GLsizei>(m_height),
+                      static_cast<GLsizei>(size),
+                      static_cast<GLsizei>(size),
                       GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
-        // Flip vertical: GL bottom-to-top -> PNG top-to-bottom.
         std::vector<u8> flipped(rgba.size());
-        const usize rowBytes = static_cast<usize>(m_width) * 4;
-        for (u32 y = 0; y < m_height; ++y) {
-            std::copy_n(rgba.data() + (m_height - 1 - y) * rowBytes,
+        const usize rowBytes = static_cast<usize>(size) * 4;
+        for (u32 y = 0; y < size; ++y) {
+            std::copy_n(rgba.data() + (size - 1 - y) * rowBytes,
                          rowBytes,
                          flipped.data() + y * rowBytes);
         }
-        AssetThumbnailDiskCache::store(
-            cachePath, flipped.data(), m_width, m_height);
+        AssetThumbnailDiskCache::store(cachePath, flipped.data(), size, size);
     }
 
     fb->unbind();
     glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
 
     const GLuint tex = fb->glColorTextureId();
-    m_thumbCache.emplace(materialId, std::move(fb));
+    cache.emplace(materialId, std::move(fb));
     return tex;
 }
 
-void MaterialPreviewRenderer::clearThumbnailCache() { m_thumbCache.clear(); }
+void MaterialPreviewRenderer::clearThumbnailCache() {
+    m_thumbCache.clear();
+    m_largeCache.clear();
+}
 
 void MaterialPreviewRenderer::renderSphereToBoundFbo(const MaterialAsset& mat,
                                                      AssetManager& assets,

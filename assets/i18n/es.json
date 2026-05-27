@@ -113,6 +113,8 @@
   "editor.user_preferences.editor.click_drag_threshold_hint": "Distancia en píxeles que debe moverse el mouse para que un click izquierdo sostenido pase a contar como drag. Subir si el trackpad genera drags accidentales al hacer click.",
   "editor.user_preferences.editor.thumbnail_resolution": "Resolución de miniaturas",
   "editor.user_preferences.editor.thumbnail_resolution_hint": "Tamaño en píxeles de las miniaturas 3D de los meshes en el Asset Browser. Subir para más detalle en pantallas 4K; bajar si hay muchos meshes y se nota tirón al abrir el panel. Las miniaturas se cachean en disco entre sesiones.",
+  "editor.user_preferences.editor.hover_preview_delay": "Retraso preview al pasar el cursor",
+  "editor.user_preferences.editor.hover_preview_delay_hint": "Milisegundos que el cursor debe quedarse quieto sobre una miniatura del Asset Browser antes de mostrar el preview ampliado (esfera/mesh grande + datos del asset). 0 = al instante; subir si el tooltip aparece sin querer mientras se navega rápido.",
   "editor.user_preferences.editor.live_apply_hint": "Los cambios se aplican al soltar el slider y se guardan al disco.",
   "theme.dark": "Oscuro",
   "theme.light": "Claro",
@@ -620,6 +622,8 @@
   "editor.panel.assets.kind.material": "(material)",
   "editor.panel.assets.script_lines": "({} líneas)",
   "editor.panel.assets.mesh_meta": "[{} submeshes, {} v]",
+  "editor.panel.assets.mesh_meta_skeleton": "Esqueleto: {} animación(es)",
+  "editor.panel.assets.material_meta_maps": "Texturas: {} mapa(s) activos",
 
   "editor.panel.material.no_manager": "AssetManager no inyectado",
   "editor.panel.material.no_materials": "No hay materiales registrados.",

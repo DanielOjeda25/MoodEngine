@@ -73,9 +73,19 @@ public:
     ///        (mesh inválido / sin submeshes / FBO inválido).
     GLuint thumbnailFor(u32 meshId, AssetManager& assets);  // meshId = MeshAssetId
 
+    /// @brief F3H16: miniatura grande (`kLargePreviewSize` px, default 384)
+    ///        para el tooltip ampliado del Asset Browser. Cache memoria
+    ///        + cache disco separados del thumb normal — el filename
+    ///        incluye el size, asi que coexisten en disco con los 128.
+    GLuint thumbnailLargeFor(u32 meshId, AssetManager& assets);
+
     /// @brief Miniatura de una primitiva CSG (construye el brush + mesh una vez
     ///        y cachea). Devuelve 0 si no se pudo.
     GLuint thumbnailForPrimitive(PrimitiveKind kind, AssetManager& assets);
+
+    /// @brief F3H16: size de la miniatura grande. Hardcoded por ahora
+    ///        (puede mover a UserSettings si emerge demanda).
+    static constexpr u32 kLargePreviewSize = 384u;
 
     /// @brief Invalida toda la cache (ej. al re-importar assets) o un mesh.
     void clear();
@@ -87,13 +97,21 @@ private:
     // Setup PBR común (compartido por el path de mesh y el de primitiva).
     void clearAndSetGlState();
     void setCamera(const glm::vec3& aabbMin, const glm::vec3& aabbMax,
-                   const glm::mat4& model);
+                   const glm::mat4& model, u32 viewportSize);
     void bindInvariantState();
     void bindMaterial(const MaterialAsset* mat, AssetManager& assets);
 
-    void renderMeshToBoundFbo(u32 meshId, AssetManager& assets);
+    void renderMeshToBoundFbo(u32 meshId, AssetManager& assets, u32 viewportSize);
     void renderRawMeshToBoundFbo(IMesh* mesh, const glm::vec3& aabbMin,
-                                 const glm::vec3& aabbMax, AssetManager& assets);
+                                 const glm::vec3& aabbMax, AssetManager& assets,
+                                 u32 viewportSize);
+
+    /// @brief F3H16: helper interno load-or-render para reusar entre
+    ///        thumbnailFor (size normal) y thumbnailLargeFor (kLargePreviewSize).
+    GLuint loadOrRenderThumb(u32 meshId, AssetManager& assets,
+                              u32 size,
+                              std::unordered_map<u32,
+                                  std::unique_ptr<OpenGLFramebuffer>>& cache);
 
     u32 m_size = 0;
 
@@ -111,6 +129,8 @@ private:
 
     // Cache: meshId -> FBO con la miniatura ya renderizada (textura persistente).
     std::unordered_map<u32, std::unique_ptr<OpenGLFramebuffer>> m_cache;
+    // F3H16: cache paralela para los thumbs grandes (kLargePreviewSize).
+    std::unordered_map<u32, std::unique_ptr<OpenGLFramebuffer>> m_largeCache;
     // Cache de primitivas, keyed por PrimitiveKind (int).
     std::unordered_map<int, std::unique_ptr<OpenGLFramebuffer>> m_primCache;
 

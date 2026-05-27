@@ -72,6 +72,14 @@ public:
     ///        Asset Browser (tab Materiales). Devuelve 0 si falla.
     GLuint thumbnail(u32 materialId, AssetManager& assets);  // materialId = MaterialAssetId
 
+    /// @brief F3H16: miniatura grande (`kLargePreviewSize` px) para el
+    ///        tooltip ampliado del Asset Browser. Cache memoria + disco
+    ///        separados del thumb normal — filename incluye el size.
+    GLuint thumbnailLarge(u32 materialId, AssetManager& assets);
+
+    /// @brief F3H16: size de la miniatura grande. Hardcoded por ahora.
+    static constexpr u32 kLargePreviewSize = 384u;
+
     /// @brief Invalida la cache de miniaturas (llamar al recargar/editar
     ///        materiales — si no, las miniaturas quedan stale).
     void clearThumbnailCache();
@@ -107,10 +115,20 @@ private:
 
     // F2H81: cache de miniaturas por materialId (FBO con textura persistente).
     std::unordered_map<u32, std::unique_ptr<OpenGLFramebuffer>> m_thumbCache;
+    // F3H16: cache paralela para los thumbs grandes (kLargePreviewSize).
+    std::unordered_map<u32, std::unique_ptr<OpenGLFramebuffer>> m_largeCache;
 
     // F3H15: cache disco. Vacio = off. Cuando seteado, `thumbnail`
     // intenta `tryLoad` antes de rendear y `store` despues.
     std::filesystem::path m_diskCacheRoot;
+
+    /// @brief F3H16: helper interno load-or-render. Reusable por
+    ///        thumbnail (m_width/m_height del FBO principal) y
+    ///        thumbnailLarge (kLargePreviewSize).
+    GLuint loadOrRenderMatThumb(u32 materialId, AssetManager& assets,
+                                  u32 size,
+                                  std::unordered_map<u32,
+                                      std::unique_ptr<OpenGLFramebuffer>>& cache);
 };
 
 } // namespace Mood

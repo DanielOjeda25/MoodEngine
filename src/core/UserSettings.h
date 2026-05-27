@@ -61,6 +61,13 @@ struct EditorSettings {
     /// el cache en memoria; los PNGs en disco coexisten por size en el
     /// filename (no se borran al cambiar).
     int thumbnailResolution = 128;
+
+    /// F3H16: milisegundos de hover prolongado antes de mostrar el
+    /// tooltip ampliado del Asset Browser (preview grande + metadata).
+    /// Default 500 ms — sensacion natural sin "saltar" al primer movimiento.
+    /// Subir si el dev encuentra el tooltip intrusivo; bajar a 200 si
+    /// quiere previews instantaneas. Clamp `[0, 3000]`.
+    int hoverPreviewDelayMs = 500;
 };
 
 /// @brief Lee `settings.json` del disco. Si no existe o tiene parse
