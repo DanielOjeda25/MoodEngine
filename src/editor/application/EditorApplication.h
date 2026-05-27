@@ -508,6 +508,15 @@ private:
                                   const struct OrthoCamera& cam,
                                   f32 oAspect);
 
+    // F3H20: el experimento de vertex snap en el perspectivo (helpers
+    // snapToVertexInScene + findSnapTargetForGizmo +
+    // closestVertexOnEntityToWorld) se descarto en iter 4. Resulto "medio
+    // raro" comparado a grid snap estilo Hammer — los marcadores yellow
+    // confundian mas de lo que ayudaban. El perspectivo usa grid snap
+    // (snapGridEnabled / snapGridStep) integrado en EditorOverlay_Gizmo +
+    // EditorOverlay_Modal. El vertex snap orto (workspace "Editor de
+    // mapas") sigue intacto en snapToVertexOrGrid.
+
     /// @brief F2H28 Bloque G: snap step (en world units) de los viewports
     ///        ortograficos del workspace "Editor de mapas". Cycleable con
     ///        Ctrl + + / Ctrl + - en valores [1, 2, 4, 8, 16, 32, 64, 128].

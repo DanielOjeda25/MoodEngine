@@ -344,9 +344,24 @@ void EditorApplication::pumpUiRequests() {
     // F2H31 Bloque C: toggle snap-to-vertex desde el toolbar (alias de la
     // tecla V que vive en EditorOverlay).
     if (m_ui.consumeToggleSnapToVertexRequest()) {
-        m_snapToVertexEnabled = !m_snapToVertexEnabled;
+        // F3H20: muta el ProjectSettings (single source of truth);
+        // el mirror runtime se sincroniza más abajo.
+        if (m_project) {
+            m_project->settings.snap.snapToVertexEnabled =
+                !m_project->settings.snap.snapToVertexEnabled;
+            markDirty();
+        }
+        m_snapToVertexEnabled = m_project
+            ? m_project->settings.snap.snapToVertexEnabled
+            : !m_snapToVertexEnabled;
         Log::editor()->info("[snap] vertex snap = {} (via toolbar)",
             m_snapToVertexEnabled ? "on" : "off");
+    }
+    // F3H20: sync continuo del mirror runtime con el ProjectSettings —
+    // el toggle del Toolbar del viewport (F3H20) muta el ProjectSettings
+    // directo y este sync mantiene el miembro local + UI status alineados.
+    if (m_project) {
+        m_snapToVertexEnabled = m_project->settings.snap.snapToVertexEnabled;
     }
     // F2H32 Bloque C: carve action button (sin keyboard shortcut).
     if (m_ui.consumeCarveRequest()) {

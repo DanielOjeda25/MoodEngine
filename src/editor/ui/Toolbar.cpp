@@ -102,6 +102,8 @@ void Toolbar::onImGuiRender() {
                     faceActive)) {
         m_ui->requestToggleFaceMode();
     }
+    // F3H20: snap toggles viven en el overlay del viewport (estilo
+    // Blender), no acá. Ver `ViewportPanel.cpp::drawViewportToolsOverlay`.
 
     ImGui::End();
 }

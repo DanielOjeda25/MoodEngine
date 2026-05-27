@@ -89,6 +89,39 @@ struct SnapSettings {
     /// broadphase real es `max(snap*2, broadphaseMinWorld)` para que
     /// snaps chicos no enumeren miles de vertices.
     f32 snapBroadphaseMinWorld = 16.0f;
+
+    // ---- F3H20: toggles persistentes + increments. ----
+
+    /// Snap to vertex (orthos del workspace "Editor de mapas" — pincel
+    /// + block tool). Threshold screen-space para que el pincel se pegue
+    /// a vertices de brushes existentes en los 3 ortos. El gizmo
+    /// perspectivo NO usa este toggle (decidido en F3H20 iter 4: snap
+    /// vertex en perspectiva resulto "medio raro" comparado a grid snap
+    /// estilo Hammer). Default off (Hammer clasico solo grid).
+    bool snapToVertexEnabled = false;
+
+    /// F3H20 iter4: grid snap del gizmo perspectivo translate + modal G.
+    /// Cuantiza el delta del drag a multiplos de `snapGridStep`. Workflow
+    /// estilo Hammer/Source: el objeto se mueve en saltos limpios, sin
+    /// target hunting. Convive con las orthos que ya tenian grid snap
+    /// (m_hammerSnapStep) — aca expandimos al perspectivo.
+    bool snapGridEnabled = false;
+
+    /// Paso del grid del gizmo perspectivo, en unidades de mundo (= metros).
+    /// Default 0.5 (granular para escenas chicas). Cycle Ctrl++/Ctrl+- en
+    /// la lista [0.125, 0.25, 0.5, 1, 2, 4]. Sub-meter: ideal para FPS
+    /// indoor; meter+: ideal para mapas grandes (combine con escala 1u=1m
+    /// para que coincida con el grid de impresion mental del dev).
+    f32 snapGridStep = 0.5f;
+
+    /// Angle snap (rotate gizmo + modal R libre). Multiplos del incremento.
+    /// Default off — el dev lo activa cuando quiere snap a 15/45/90.
+    bool snapAngleEnabled = false;
+
+    /// Incremento del angle snap en grados. Defaults Hammer-style 15°
+    /// (presets razonables: 5/10/15/30/45/90). Clamp al cargar: > 0,
+    /// <= 360.
+    f32 snapAngleDegrees = 15.0f;
 };
 
 /// F3H4: configuracion de gameplay per-proyecto. Defaults coinciden con

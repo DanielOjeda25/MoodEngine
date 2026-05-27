@@ -901,6 +901,12 @@
   "editor.panel.toolbar.cylinder_tooltip": "Añadir Cylinder brush al mapa actual",
   "editor.panel.toolbar.face": "Cara",
   "editor.panel.toolbar.face_tooltip": "Toggle Face mode (3) - editar caras del brush",
+  "editor.panel.toolbar.snap_grid": "Grid",
+  "editor.panel.toolbar.snap_grid_tooltip": "Grid snap (estilo Hammer) durante translate — cuantiza el delta a múltiplos del step. Ctrl++/Ctrl+- cicla el step (también click en el número de abajo).",
+  "editor.panel.toolbar.snap_grid_step_tooltip": "Step actual del grid. Click cicla 0.125 → 0.25 → 0.5 → 1 → 2 → 4. Ctrl++/Ctrl+- también cicla.",
+  "editor.panel.toolbar.snap_angle_step_tooltip": "Step actual del angle snap (grados). Click cicla 5 → 10 → 15 → 30 → 45 → 90.",
+  "editor.panel.toolbar.snap_angle": "Ángulo",
+  "editor.panel.toolbar.snap_angle_tooltip": "Snap a ángulos múltiplos del incremento durante rotate",
 
   "editor.panel.map_tools.no_ui": "EditorUI no inyectado",
   "editor.panel.map_tools.tool": "Herramienta",

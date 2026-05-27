@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace Mood {
 
@@ -262,9 +263,23 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
                         axisPoint, axes[m_gizmo.axis], rayOrigin, rayDir);
                     const f32 delta = nowParam - m_gizmo.startParam;
                     if (effectiveMode == GizmoMode::Translate) {
-                        const glm::vec3 deltaVec = axes[m_gizmo.axis] * delta;
-                        tform.position = m_gizmo.startValue + deltaVec;
-                        applyDeltaLive(deltaVec);
+                        // F3H20: grid snap estilo Hammer — cuantizar el
+                        // delta del drag (NO la posicion absoluta). Asi
+                        // un objeto colocado off-grid se mueve en saltos
+                        // limpios sin jolt inicial; cuando ambos objetos
+                        // arrancan on-grid, se mantienen on-grid.
+                        f32 effectiveDelta = delta;
+                        if (m_project
+                            && m_project->settings.snap.snapGridEnabled) {
+                            const f32 step = m_project->settings.snap.snapGridStep;
+                            if (step > 0.0f) {
+                                effectiveDelta = std::round(delta / step) * step;
+                            }
+                        }
+                        const glm::vec3 newPos = m_gizmo.startValue
+                            + axes[m_gizmo.axis] * effectiveDelta;
+                        tform.position = newPos;
+                        applyDeltaLive(newPos - m_gizmo.startValue);
                     } else {
                         glm::vec3 ns = m_gizmo.startValue;
                         ns[m_gizmo.axis] = std::max(0.01f, ns[m_gizmo.axis] + delta);
@@ -333,6 +348,37 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
                     ImVec2(endSX[i] - perpX * s,   endSY[i] - perpY * s),
                     col);
             }
+        }
+
+        // F3H20: floating text del delta durante translate drag. Estilo
+        // Hammer/Unreal: muestra cuanto te moviste en world units + el
+        // step actual si el grid snap esta activo. Asi el dev sabe si
+        // movio 1.5m o 0.05m sin tener que mirar el Inspector.
+        if (m_gizmo.active && effectiveMode == GizmoMode::Translate
+            && m_gizmo.axis >= 0 && m_gizmo.axis < 3) {
+            const glm::vec3 totalDelta = tform.position - m_gizmo.startValue;
+            const f32 axisDelta = totalDelta[m_gizmo.axis];
+            const char axisChar = (m_gizmo.axis == 0) ? 'X'
+                                : (m_gizmo.axis == 1) ? 'Y' : 'Z';
+            char readout[64];
+            const bool gridOn = m_project
+                && m_project->settings.snap.snapGridEnabled;
+            if (gridOn) {
+                const f32 step = m_project->settings.snap.snapGridStep;
+                std::snprintf(readout, sizeof(readout),
+                               "%c %+.3f  (grid %.3f)", axisChar, axisDelta, step);
+            } else {
+                std::snprintf(readout, sizeof(readout),
+                               "%c %+.3f", axisChar, axisDelta);
+            }
+            // Posicion: 18 px debajo del origen del gizmo, con sombra
+            // negra para legibilidad sobre fondos claros.
+            const ImVec2 textPos(osx + 14.0f, osy + 14.0f);
+            const ImU32 shadowCol = IM_COL32(0, 0, 0, 220);
+            const ImU32 textCol   = IM_COL32(255, 230, 60, 255);
+            dl->AddText(ImVec2(textPos.x + 1.0f, textPos.y + 1.0f),
+                         shadowCol, readout);
+            dl->AddText(textPos, textCol, readout);
         }
     }
     // ====== MODO ROTATE (3 anillos eje-alineados) ======
@@ -428,7 +474,19 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
             const glm::vec3 camPos = glm::vec3(glm::inverse(m_sceneRenderer->lastView())[3]);
             const glm::vec3 camToOrigin = worldOrigin - camPos;
             const f32 sgn = (glm::dot(axes[m_gizmo.axis], camToOrigin) > 0.0f) ? 1.0f : -1.0f;
-            const f32 axisDelta = sgn * deltaDeg;
+            f32 axisDelta = sgn * deltaDeg;
+            // F3H20 iter 5: angle snap aplicado al gizmo R (anillos).
+            // Pre-iter5 el snap solo vivia en el modal R (tecla R + drag);
+            // el gizmo de anillos rotaba libre — bug reportado por el dev.
+            // Snap al delta (no al angulo absoluto): mantiene el offset
+            // inicial del autor (rotar desde 37° con step 15° => 37°/52°/67°,
+            // no 30°/45°/60°).
+            if (m_project && m_project->settings.snap.snapAngleEnabled) {
+                const f32 step = m_project->settings.snap.snapAngleDegrees;
+                if (step > 0.0f) {
+                    axisDelta = std::round(axisDelta / step) * step;
+                }
+            }
             nr[m_gizmo.axis] = m_gizmo.startValue[m_gizmo.axis] + axisDelta;
             tform.rotationEuler = nr;
             // F2H23 iter 5: aplicar el mismo delta del eje a las

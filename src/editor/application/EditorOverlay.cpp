@@ -463,9 +463,17 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
         // tiene significado y podria pisar inputs futuros.
         if (ImGui::IsKeyPressed(ImGuiKey_V, false) &&
             m_ui.workspaceManager().activeWorkspace().name == "map_editor") {
-            m_snapToVertexEnabled = !m_snapToVertexEnabled;
-            Log::editor()->info("[snap] vertex snap = {}",
-                m_snapToVertexEnabled ? "on" : "off");
+            // F3H20: muta directo el ProjectSettings — single source of
+            // truth con el toggle del Toolbar. El miembro local se
+            // sincroniza en pumpUiRequests.
+            if (m_project) {
+                m_project->settings.snap.snapToVertexEnabled =
+                    !m_project->settings.snap.snapToVertexEnabled;
+                m_snapToVertexEnabled = m_project->settings.snap.snapToVertexEnabled;
+                markDirty();
+                Log::editor()->info("[snap] vertex snap = {}",
+                    m_snapToVertexEnabled ? "on" : "off");
+            }
         }
         // F2H30 Bloque C: Enter cierra el polígono activo.
         // F2H32 Bloque B: Enter tambien confirma el clip si hay sesion.

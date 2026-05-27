@@ -267,3 +267,85 @@ TEST_CASE("Snap back-compat: .moodproj pre-F3H6 (sin snap) carga con defaults") 
     CHECK(s.snap.snapToVertexThresholdNdc == doctest::Approx(0.02f));
     CHECK(s.snap.snapBroadphaseMinWorld == doctest::Approx(16.0f));
 }
+
+// ============================================================
+// F3H20: SnapSettings toggles + steps (vertex / grid / angle).
+// ============================================================
+
+TEST_CASE("Snap F3H20 defaults: todos los toggles arrancan off") {
+    ProjectSettings s;
+    CHECK(s.snap.snapToVertexEnabled == false);
+    CHECK(s.snap.snapGridEnabled     == false);
+    CHECK(s.snap.snapAngleEnabled    == false);
+    CHECK(s.snap.snapGridStep        == doctest::Approx(0.5f));
+    CHECK(s.snap.snapAngleDegrees    == doctest::Approx(15.0f));
+}
+
+TEST_CASE("Snap F3H20 roundtrip preserva toggles + steps") {
+    ProjectSettings before;
+    before.snap.snapToVertexEnabled = true;
+    before.snap.snapGridEnabled     = true;
+    before.snap.snapGridStep        = 0.25f;
+    before.snap.snapAngleEnabled    = true;
+    before.snap.snapAngleDegrees    = 45.0f;
+
+    const auto j = toJson(before);
+    const auto after = projectSettingsFromJson(j);
+
+    CHECK(after.snap.snapToVertexEnabled == true);
+    CHECK(after.snap.snapGridEnabled     == true);
+    CHECK(after.snap.snapGridStep        == doctest::Approx(0.25f));
+    CHECK(after.snap.snapAngleEnabled    == true);
+    CHECK(after.snap.snapAngleDegrees    == doctest::Approx(45.0f));
+}
+
+TEST_CASE("Snap F3H20 sanitize: grid_step <= 0 cae al default") {
+    nlohmann::json j;
+    nlohmann::json snap;
+    snap["grid_enabled"] = true;
+    snap["grid_step"]    = -1.0f;
+    j["snap"] = snap;
+    const auto s = projectSettingsFromJson(j);
+    CHECK(s.snap.snapGridEnabled == true);
+    CHECK(s.snap.snapGridStep    == doctest::Approx(0.5f));  // default
+}
+
+TEST_CASE("Snap F3H20 sanitize: angle_degrees fuera de rango cae al default") {
+    nlohmann::json j;
+    nlohmann::json snap;
+    snap["angle_enabled"] = true;
+    snap["angle_degrees"] = 720.0f;  // > 360
+    j["snap"] = snap;
+    const auto s = projectSettingsFromJson(j);
+    CHECK(s.snap.snapAngleEnabled  == true);
+    CHECK(s.snap.snapAngleDegrees  == doctest::Approx(15.0f));  // default
+}
+
+TEST_CASE("Snap F3H20 back-compat: pre-F3H20 sin toggles -> defaults off") {
+    nlohmann::json j;
+    nlohmann::json snap;
+    snap["steps_available"]    = nlohmann::json::array({1, 2, 4});
+    snap["default_step_index"] = 0;
+    // sin vertex_enabled / grid_enabled / angle_enabled / etc
+    j["snap"] = snap;
+    const auto s = projectSettingsFromJson(j);
+    CHECK(s.snap.snapToVertexEnabled == false);
+    CHECK(s.snap.snapGridEnabled     == false);
+    CHECK(s.snap.snapAngleEnabled    == false);
+    CHECK(s.snap.snapGridStep        == doctest::Approx(0.5f));
+}
+
+TEST_CASE("Snap F3H20 ignora keys de scale snap (feature removida)") {
+    // Forward-compat: si un .moodproj viejo trae scale_enabled / scale_increment
+    // (eran fields de F3H20 pre-iter5), deben ser ignorados sin crash y sin
+    // afectar el resto.
+    nlohmann::json j;
+    nlohmann::json snap;
+    snap["scale_enabled"]   = true;   // ignorado
+    snap["scale_increment"] = 0.3f;   // ignorado
+    snap["grid_enabled"]    = true;
+    j["snap"] = snap;
+    const auto s = projectSettingsFromJson(j);
+    CHECK(s.snap.snapGridEnabled == true);  // grid sí se aplica
+    // El struct ya no tiene snapScale* — el test pasa si no rompe el load.
+}

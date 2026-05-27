@@ -11,6 +11,81 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-27: F3H20 cierre — Snapping configurable (Hammer-style)
+
+### Decisión 1 — Hammer-style grid snap reemplaza vertex snap perspectivo
+
+**Contexto:** F3H20 arrancó con un plan de 4 features (grid + vertex + angle + face-align). El dev eligió en planeación inicial "Vertex snap extendido" como feature principal del translate gizmo. Tras 3 iteraciones implementando vertex snap (pivot-to-vertex → source-at-drag-start → dynamic Closest mode con marcadores yellow source/target) y validación visual, el dev reportó *"es medio raro"* y preguntó *"se usa en Hammer?"*. Honesto: vertex snap perspectivo con marcadores yellow es UX cuestionable (los corners que se alinean no son obvios, los marcadores agregan ruido visual). Hammer-style grid snap es más predictible: cuantizá el delta a múltiplos del step y listo.
+
+**Decisión:** Reemplazar vertex snap perspectivo por grid snap Hammer-style. Borrar las funciones `snapToVertexInScene` / `findSnapTargetForGizmo` / `closestVertexOnEntityToWorld` y el code de marcadores yellow. Mantener `snapToVertexEnabled` como field para el feature ortho original de F2H31C (workspace "Editor de mapas" — funcionalidad distinta, preservada intacta).
+
+**Razones:**
+- Predictibilidad: grid snap es determinístico (no depende de cursor hovering sobre vertex). El dev sabe que va a moverse en saltos de N unidades.
+- Sin ruido visual: sin marcadores ni labels SNAP. Solo el gizmo brinca de a step.
+- Match con el workflow Hammer/Source que el dev quiere reproducir (brushes en grid).
+- El vertex snap orto ya cumple el rol de "alinear con geometría existente" en el contexto donde tiene sentido (pincel/block tool de mapas).
+
+**Alternativas descartadas:**
+- Mantener ambos snap modes mutuamente exclusivos (toggles V y G como radio buttons): viola "menos UI", ningún engine lo hace de esta forma, vertex snap perspectivo no agrega valor.
+- Keep vertex snap como toggle adicional opt-in (G + V combinable): el dev dijo explícito que prefiere Hammer-style. Ese workflow está descartado para el perspective viewport.
+
+**Revisión:** estable. Si en el futuro emerge demanda de vertex snap perspectivo (e.g., para meshes importadas exactas), se puede reintroducir como toggle separado sin romper el grid snap.
+
+### Decisión 2 — Snap al delta del drag, no a la posición absoluta
+
+**Contexto:** Cuando el grid snap está activo y el dev arrastra un objeto colocado off-grid (posición no múltiplo del step), hay dos comportamientos posibles: (a) snap absoluto — el objeto salta al múltiplo del step más cercano al iniciar el drag (Hammer "puro"); (b) snap al delta — el objeto se mueve en saltos limpios de N unidades pero conserva su offset original (Blender/Unity-style).
+
+**Decisión:** Snap al delta. `newPos = startValue + axis * round(delta/step)*step`.
+
+**Razones:**
+- Sin "jolt" inicial: objetos importados, prefab spawns, o entities placed sin grid quedan donde estaban — el dev no se sorprende.
+- Cuando ambos objetos arrancan on-grid, se mantienen on-grid (caso común en map editing).
+- Para "limpiar" objetos off-grid el dev tiene la opción "Alinear al grid" (backlog) — comando one-shot explícito.
+
+**Alternativas descartadas:**
+- Snap absoluto puro: rompe el caso de meshes importadas (saltan al activar snap). En Hammer puro esto no es problema porque los brushes se crean ON grid; en MoodEngine las entidades vienen de prefabs/scripts.
+- Modo configurable (absolute vs delta): otro toggle, complica la UI. La regla "menos UI" gana — preferimos el comportamiento default sano y un comando explícito para el caso del jolt.
+
+**Revisión:** estable. Si emerge backlog "Alinear al grid", ese feature cubre el caso "quiero todo on-grid" sin necesitar absolute-snap mode.
+
+### Decisión 3 — Scale snap removido
+
+**Contexto:** Iter1 implementé scale snap (toggle `S` + chip `Scale 0.1` + lógica en gizmo scale uniform + per-axis + modal E). En iter7 el dev preguntó *"se usa en Hammer?"*. Honesto: no. Hammer no escala brushes (los modifica vertex por vertex); los props tienen `modelscale` tipeado a mano sin gizmo. Unity y Unreal tienen scale snap pero casi nadie lo usa — los artistas tipean valores exactos en el Inspector. Casos de uso reales (kits modulares con scale `0.5x/1x/1.5x`, tiles escalables por enteros) son raros y se resuelven con typing directo.
+
+**Decisión:** Remover scale snap por completo. Borrar `snapScaleEnabled` + `snapScaleIncrement` de SnapSettings, toggle `S` del overlay, chip `Scale` del status bar, lógica en gizmo + modal, i18n keys. Forward-compat: load ignora keys `scale_*` en `.moodproj` viejos sin crash.
+
+**Razones:**
+- Menos UI, menos código, menos cognitive load.
+- Workflow real: scale se tipea en Inspector, no se arrastra con gizmo + snap.
+- Honestidad sobre qué features valen su peso. Mantener "por si las moscas" agrega entropy sin uso medible.
+
+**Alternativas descartadas:**
+- Dejarlo "por compleción": no agregaba valor real, agregaba ruido.
+- Reusar S para "snap to surface" (raycast hacia abajo): scope distinto, agendizado al backlog `align-and-drop-backlog`.
+
+**Revisión:** estable. Si emerge feedback "quería scale snap para X", reintroducirlo es trivial (re-añadir field + toggle + lógica idempotente).
+
+### Decisión 4 — Status bar arriba del viewport (no inline bajo cada toggle)
+
+**Contexto:** Iter5 agregué un step picker bajo el toggle G en el side toolbar (botoncito `0.5` clickeable). El dev lo vio en validación: *"queda re mal que quede ahi, seria mejor que se vea como un texto en la zona superior, como lo suele hacer blender"*. Blender muestra el snap config en una status bar arriba del 3D viewport (chips horizontales con orientation, pivot, snap mode + step).
+
+**Decisión:** Status bar arriba-centro del viewport con chips horizontales (`Grid 0.5` / `Angle 15°`) que aparecen solo cuando ese snap está activo. Click sobre el chip cicla su step. Sin snaps activos → no se renderiza nada (sin ruido visual).
+
+**Razones:**
+- Patrón estándar Blender/Maya/Unreal (Modify panel del viewport).
+- Side toolbar queda limpio (solo toggles, no clutter de step pickers).
+- Status bar es compacta y solo aparece cuando informa algo útil.
+- Clickear el chip para ciclar evita el patrón "abrir menú contextual con 6 opciones" que sería más clicks.
+
+**Alternativas descartadas:**
+- Inline bajo cada toggle (lo que probé en iter5): el dev lo rechazó visualmente. El side toolbar se vuelve un mosaico de cosas distintas (toggles + valores numéricos).
+- Combo/dropdown ImGui::Combo en el side toolbar: ocupa más espacio vertical, no es plug-and-play con el iconBtn helper.
+- No mostrar el step en ningún lado (solo Ctrl++/Ctrl+- + log): el dev no sabe en qué step está sin activarlo + dragear. Mal feedback.
+
+**Revisión:** estable. Si en el futuro emerge más config relacionada al viewport (pivot point / orientation / snap target type), va al mismo status bar como chips adicionales.
+
+---
+
 ## 2026-05-27: F3H19 cierre — Rename con cascada
 
 ### Decisión 1 — Cobertura backend completa, UI inicial en AssetBrowser principal

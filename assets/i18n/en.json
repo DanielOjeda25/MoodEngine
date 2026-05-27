@@ -901,6 +901,12 @@
   "editor.panel.toolbar.cylinder_tooltip": "Add Cylinder brush to current map",
   "editor.panel.toolbar.face": "Face",
   "editor.panel.toolbar.face_tooltip": "Toggle Face mode (3) - edit brush faces",
+  "editor.panel.toolbar.snap_grid": "Grid",
+  "editor.panel.toolbar.snap_grid_tooltip": "Grid snap (Hammer-style) during translate — quantizes delta to multiples of step. Ctrl++/Ctrl+- cycles the step (click on the number below also).",
+  "editor.panel.toolbar.snap_grid_step_tooltip": "Current grid step. Click cycles 0.125 → 0.25 → 0.5 → 1 → 2 → 4. Ctrl++/Ctrl+- also cycles.",
+  "editor.panel.toolbar.snap_angle_step_tooltip": "Current angle snap step (degrees). Click cycles 5 → 10 → 15 → 30 → 45 → 90.",
+  "editor.panel.toolbar.snap_angle": "Angle",
+  "editor.panel.toolbar.snap_angle_tooltip": "Snap to angle multiples of the increment during rotate",
 
   "editor.panel.map_tools.no_ui": "EditorUI not injected",
   "editor.panel.map_tools.tool": "Tool",

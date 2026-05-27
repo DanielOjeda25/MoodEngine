@@ -69,6 +69,12 @@ nlohmann::json snapToJson(const SnapSettings& s) {
     if (s.defaultStepIndex != defaults.defaultStepIndex) j["default_step_index"] = s.defaultStepIndex;
     if (s.snapToVertexThresholdNdc != defaults.snapToVertexThresholdNdc) j["vertex_threshold_ndc"] = s.snapToVertexThresholdNdc;
     if (s.snapBroadphaseMinWorld != defaults.snapBroadphaseMinWorld) j["broadphase_min_world"] = s.snapBroadphaseMinWorld;
+    // F3H20: toggles + increments.
+    if (s.snapToVertexEnabled  != defaults.snapToVertexEnabled)  j["vertex_enabled"]  = s.snapToVertexEnabled;
+    if (s.snapGridEnabled      != defaults.snapGridEnabled)      j["grid_enabled"]    = s.snapGridEnabled;
+    if (s.snapGridStep         != defaults.snapGridStep)         j["grid_step"]       = s.snapGridStep;
+    if (s.snapAngleEnabled     != defaults.snapAngleEnabled)     j["angle_enabled"]   = s.snapAngleEnabled;
+    if (s.snapAngleDegrees     != defaults.snapAngleDegrees)     j["angle_degrees"]   = s.snapAngleDegrees;
     return j;
 }
 
@@ -107,6 +113,30 @@ SnapSettings snapFromJson(const nlohmann::json& j) {
     }
     if (j.contains("broadphase_min_world") && j.at("broadphase_min_world").is_number()) {
         s.snapBroadphaseMinWorld = j.at("broadphase_min_world").get<f32>();
+    }
+
+    // F3H20: toggles + increments (sanitize sin log — defaults razonables
+    // si el dev edito a mano y quedo invalido).
+    if (j.contains("vertex_enabled") && j.at("vertex_enabled").is_boolean()) {
+        s.snapToVertexEnabled = j.at("vertex_enabled").get<bool>();
+    }
+    if (j.contains("grid_enabled") && j.at("grid_enabled").is_boolean()) {
+        s.snapGridEnabled = j.at("grid_enabled").get<bool>();
+    }
+    if (j.contains("grid_step") && j.at("grid_step").is_number()) {
+        s.snapGridStep = j.at("grid_step").get<f32>();
+        if (s.snapGridStep <= 0.0f) {
+            s.snapGridStep = SnapSettings{}.snapGridStep;
+        }
+    }
+    if (j.contains("angle_enabled") && j.at("angle_enabled").is_boolean()) {
+        s.snapAngleEnabled = j.at("angle_enabled").get<bool>();
+    }
+    if (j.contains("angle_degrees") && j.at("angle_degrees").is_number()) {
+        s.snapAngleDegrees = j.at("angle_degrees").get<f32>();
+        if (s.snapAngleDegrees <= 0.0f || s.snapAngleDegrees > 360.0f) {
+            s.snapAngleDegrees = SnapSettings{}.snapAngleDegrees;
+        }
     }
 
     return s;

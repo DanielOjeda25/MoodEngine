@@ -195,37 +195,53 @@ void EditorApplication::processEvents() {
                     ev.key.keysym.sym == SDLK_KP_MINUS) &&
                    ev.key.repeat == 0 &&
                    m_mode == EditorMode::Editor &&
-                   m_ui.workspaceManager().activeWorkspace().name
-                       == "map_editor" &&
                    !ImGui::GetIO().WantTextInput) {
-            // F2H28 Bloque G: ciclar snap step del workspace orto.
-            // Acepta:
-            //   Ctrl+= (US/UK: la tecla fisica es '='; con shift produce '+')
-            //   Ctrl++ via SDLK_PLUS (layout ES: tecla a la derecha de Ñ
-            //                         da '+' SIN shift — F2H33 fix bug
-            //                         reportado por el dev en teclado 80%
-            //                         sin numerico).
-            //   Ctrl+ KP_PLUS  (numerico, opcional en 80%).
-            //   Ctrl+- y Ctrl+ KP_MINUS para reducir.
+            // Ciclar snap step. Dos contextos:
+            //   - workspace "map_editor" => orto step (m_hammerSnapStep,
+            //     int [1..128], F2H28).
+            //   - cualquier otro workspace => grid step perspectivo
+            //     (snapGridStep, f32 [0.125..4], F3H20).
+            // Acepta Ctrl+= / Ctrl++ / Ctrl+ KP_PLUS / Ctrl+- / Ctrl+ KP_MINUS.
             // Ignora shift en la modifier mask para que Ctrl++ y Ctrl+=
             // entren por el mismo branch.
-            // F3H6: array de steps leido live de settings.snap.stepsAvailable
-            // (fallback a defaults del struct si no hay proyecto).
-            const SnapSettings k_snapCfg = m_project
-                ? m_project->settings.snap : SnapSettings{};
-            const auto& k_steps = k_snapCfg.stepsAvailable;
-            const int k_stepsCount = static_cast<int>(k_steps.size());
-            int idx = k_snapCfg.defaultStepIndex;  // fallback al default del proyecto
-            for (int i = 0; i < k_stepsCount; ++i) {
-                if (static_cast<u32>(k_steps[i]) == m_hammerSnapStep) { idx = i; break; }
-            }
             const bool up = (ev.key.keysym.sym == SDLK_EQUALS ||
                               ev.key.keysym.sym == SDLK_PLUS  ||
                               ev.key.keysym.sym == SDLK_KP_PLUS);
-            if (up && idx + 1 < k_stepsCount) ++idx;
-            if (!up && idx - 1 >= 0) --idx;
-            if (k_stepsCount > 0) m_hammerSnapStep = static_cast<u32>(k_steps[idx]);
-            Log::editor()->info("[hammer] snap step -> {}", m_hammerSnapStep);
+            const bool inMapEditor = m_ui.workspaceManager().activeWorkspace().name
+                                     == "map_editor";
+            if (inMapEditor) {
+                // F2H28 Bloque G + F3H6: array de steps leido live de
+                // settings.snap.stepsAvailable (fallback a defaults sin proyecto).
+                const SnapSettings k_snapCfg = m_project
+                    ? m_project->settings.snap : SnapSettings{};
+                const auto& k_steps = k_snapCfg.stepsAvailable;
+                const int k_stepsCount = static_cast<int>(k_steps.size());
+                int idx = k_snapCfg.defaultStepIndex;
+                for (int i = 0; i < k_stepsCount; ++i) {
+                    if (static_cast<u32>(k_steps[i]) == m_hammerSnapStep) { idx = i; break; }
+                }
+                if (up && idx + 1 < k_stepsCount) ++idx;
+                if (!up && idx - 1 >= 0) --idx;
+                if (k_stepsCount > 0) m_hammerSnapStep = static_cast<u32>(k_steps[idx]);
+                Log::editor()->info("[hammer] snap step -> {}", m_hammerSnapStep);
+            } else if (m_project) {
+                // F3H20: cycle del grid step perspectivo. Lista fija
+                // hardcoded (sub-meter granular). Sin proyecto -> no-op
+                // (no hay donde persistir).
+                constexpr f32 k_gridSteps[] = {0.125f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f};
+                constexpr int k_gridStepsCount = sizeof(k_gridSteps) / sizeof(f32);
+                f32 cur = m_project->settings.snap.snapGridStep;
+                int idx = 2;  // 0.5 default
+                for (int i = 0; i < k_gridStepsCount; ++i) {
+                    if (std::abs(k_gridSteps[i] - cur) < 1e-4f) { idx = i; break; }
+                }
+                if (up && idx + 1 < k_gridStepsCount) ++idx;
+                if (!up && idx - 1 >= 0) --idx;
+                m_project->settings.snap.snapGridStep = k_gridSteps[idx];
+                markDirty();
+                Log::editor()->info("[grid] snap step -> {:.3f}",
+                                      m_project->settings.snap.snapGridStep);
+            }
         }
         // F2H44 + F3H6 polish: Shift+ScrollWheel sobre cualquiera de los 3
         // ortho viewports cicla el snap step (atajo paralelo a Ctrl+= /

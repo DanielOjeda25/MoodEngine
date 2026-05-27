@@ -181,4 +181,5 @@ struct GizmoDragState {
         glm::vec3 startValue;
     };
     std::vector<OtherStart> otherStarts;
+
 };

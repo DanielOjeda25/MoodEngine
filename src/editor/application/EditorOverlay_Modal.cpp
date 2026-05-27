@@ -181,12 +181,19 @@ void EditorApplication::updateModalShortcut(const glm::mat4& vp,
                 if (i != m_modalShortcut.axisLock) deltaWorld[i] = 0.0f;
             }
         }
-        // Snap al grid de hammer si esta activo.
-        const f32 snap = static_cast<f32>(m_hammerSnapStep);
-        if (snap > 0.0f) {
-            for (int i = 0; i < 3; ++i) {
-                if (std::abs(deltaWorld[i]) > 1e-4f) {
-                    deltaWorld[i] = std::round(deltaWorld[i] / snap) * snap;
+        // F3H20: grid snap del modal G — usa el step de SnapSettings
+        // (single source of truth con el gizmo perspectivo). Toggle off
+        // => sin snap (free drag). Pre-F3H20 leia m_hammerSnapStep que
+        // es el step de las orthos del workspace "Editor de mapas"
+        // (default 16, escala Hammer) — incompatible con escalas SI
+        // del perspectivo (default 0.5m).
+        if (m_project && m_project->settings.snap.snapGridEnabled) {
+            const f32 step = m_project->settings.snap.snapGridStep;
+            if (step > 0.0f) {
+                for (int i = 0; i < 3; ++i) {
+                    if (std::abs(deltaWorld[i]) > 1e-4f) {
+                        deltaWorld[i] = std::round(deltaWorld[i] / step) * step;
+                    }
                 }
             }
         }
@@ -211,6 +218,16 @@ void EditorApplication::updateModalShortcut(const glm::mat4& vp,
             m_modalShortcut.mouseStart.x - cx);
         const f32 curAng = std::atan2(mp.y - cy, mp.x - cx);
         f32 dAngDeg = (curAng - startAng) * (180.0f / 3.1415926f);
+        // F3H20: angle snap — múltiplos del incremento si el toggle está
+        // activo. Snap al delta (no al ángulo absoluto) — asi rotar desde
+        // startEuler=37° con step 15° produce 37°/52°/67° (mantiene el
+        // offset del autor original, solo el delta queda en step).
+        if (m_project && m_project->settings.snap.snapAngleEnabled) {
+            const f32 step = m_project->settings.snap.snapAngleDegrees;
+            if (step > 0.0f) {
+                dAngDeg = std::round(dAngDeg / step) * step;
+            }
+        }
         // Eje rotacion: axisLock determina (0=X/1=Y/2=Z); default = Y.
         int rotAxis = (m_modalShortcut.axisLock >= 0)
                        ? m_modalShortcut.axisLock : 1;

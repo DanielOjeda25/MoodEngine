@@ -6,10 +6,14 @@
 #include "core/UserSettings.h"               // F3H7: click-vs-drag threshold
 #include "core/i18n/I18n.h"  // F2H43
 #include "engine/render/rhi/IFramebuffer.h"
+#include "engine/scene/serialization/ProjectSerializer.h"  // F3H20: snap toggles
 
 #include <imgui.h>
 
+#include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <functional>
 #include <string>
 
 namespace Mood {
@@ -95,8 +99,121 @@ void drawViewportToolsOverlay(EditorUI* ui, ImVec2 imageMin) {
         ui->requestToggleFaceMode();
     }
 
+    // ---- F3H20: snap toggles del gizmo perspectivo (Grid / Angle).
+    //   G (grid)  -> translate (W) cuantiza delta a multiplos del step.
+    //   A (angle) -> rotate (R) cuantiza grados a multiplos del increment.
+    // No son mutuamente exclusivos (afectan modos distintos). Vertex snap
+    // de orthos (workspace "Editor de mapas") vive en su propia UI; aca
+    // solo lo del perspectivo. Sin proyecto no hay donde persistir => sin
+    // botones. El step actual se ve en el status bar arriba del viewport
+    // (`drawViewportSnapStatusBar`).
+    Project* project = ui->currentProject();
+    if (project != nullptr) {
+        ImGui::Separator();
+        auto& snap = project->settings.snap;
+        auto snapToggle = [&](const char* shortLabel, const char* tooltipKey,
+                                bool& flag) {
+            if (iconBtn(shortLabel, tooltipKey, flag)) {
+                flag = !flag;
+                ui->setProjectDirty(true);
+            }
+        };
+        snapToggle("G",
+                    "editor.panel.toolbar.snap_grid_tooltip",
+                    snap.snapGridEnabled);
+        snapToggle("A",
+                    "editor.panel.toolbar.snap_angle_tooltip",
+                    snap.snapAngleEnabled);
+    }
+
     ImGui::End();
     ImGui::PopStyleVar(2);  // WindowBorderSize + WindowPadding push del prologo.
+}
+
+// F3H20 iter 6: status bar de snap arriba del viewport, estilo Blender.
+// Muestra chips para cada snap mode activo con su step/valor actual:
+//   "Grid 0.5"   (cuando snapGridEnabled)
+//   "Angle 15°"  (cuando snapAngleEnabled)
+// Click sobre cada chip cicla su step (forward; backward via Ctrl+- en
+// el global handler para grid). Cuando no hay snap activo, el status bar
+// no se renderiza — sin ruido visual cuando no hace falta.
+void drawViewportSnapStatusBar(EditorUI* ui, ImVec2 imageMin,
+                                ImVec2 imageSize) {
+    if (ui == nullptr) return;
+    Project* project = ui->currentProject();
+    if (project == nullptr) return;
+    auto& snap = project->settings.snap;
+    if (!snap.snapGridEnabled && !snap.snapAngleEnabled) {
+        return;
+    }
+
+    constexpr float kTopOffset = 8.0f;
+    // Centro horizontal del viewport. AutoResize hace que el ancho de la
+    // ventana se ajuste al contenido; pivot 0.5 centra respecto al X dado.
+    ImGui::SetNextWindowPos(
+        ImVec2(imageMin.x + imageSize.x * 0.5f, imageMin.y + kTopOffset),
+        ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+    ImGui::SetNextWindowBgAlpha(0.55f);
+    constexpr ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoDocking |
+        ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoFocusOnAppearing |
+        ImGuiWindowFlags_NoNav;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
+    if (!ImGui::Begin("##viewport_snap_status", nullptr, flags)) {
+        ImGui::End();
+        ImGui::PopStyleVar();
+        return;
+    }
+
+    // Chip helper: SmallButton con label "Mode val". Click invoca onCycle.
+    auto chip = [&](const char* label, std::function<void()> onCycle,
+                    const char* tooltipKey) {
+        if (ImGui::SmallButton(label)) onCycle();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", I18n::T(tooltipKey).c_str());
+        }
+    };
+
+    // Helper para ciclar un step en una lista circular.
+    auto cycleStep = [&](f32& current, const f32* steps, int count) {
+        int idx = 0;
+        for (int i = 0; i < count; ++i) {
+            if (std::abs(steps[i] - current) < 1e-4f) { idx = i; break; }
+        }
+        idx = (idx + 1) % count;
+        current = steps[idx];
+        ui->setProjectDirty(true);
+    };
+
+    bool first = true;
+    if (snap.snapGridEnabled) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "Grid %.3g", snap.snapGridStep);
+        constexpr f32 k_gridSteps[] = {0.125f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f};
+        chip(buf, [&]() {
+            cycleStep(snap.snapGridStep, k_gridSteps,
+                       sizeof(k_gridSteps) / sizeof(f32));
+        }, "editor.panel.toolbar.snap_grid_step_tooltip");
+        first = false;
+    }
+    if (snap.snapAngleEnabled) {
+        if (!first) { ImGui::SameLine(); }
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "Angle %.4g\xc2\xb0", snap.snapAngleDegrees);
+        constexpr f32 k_angleSteps[] = {5.0f, 10.0f, 15.0f, 30.0f, 45.0f, 90.0f};
+        chip(buf, [&]() {
+            cycleStep(snap.snapAngleDegrees, k_angleSteps,
+                       sizeof(k_angleSteps) / sizeof(f32));
+        }, "editor.panel.toolbar.snap_angle_step_tooltip");
+        first = false;
+    }
+    ImGui::End();
+    ImGui::PopStyleVar();
 }
 
 } // namespace
@@ -170,6 +287,9 @@ void ViewportPanel::onImGuiRender() {
             // El overlay aparece DESPUES del drawlist callback para que
             // los iconos no queden ocultos por gizmos / outlines.
             drawViewportToolsOverlay(m_editorUi, imageMin);
+            // F3H20 iter 6: status bar arriba del viewport mostrando los
+            // steps de cada snap activo (Grid/Angle/Scale). Estilo Blender.
+            drawViewportSnapStatusBar(m_editorUi, imageMin, imageSize);
 
             // Helper local: pos del cursor -> NDC dentro de la imagen.
             auto mousePosToNdc = [&imageMin, &imageSize](ImVec2 mp, float& ndcX, float& ndcY) {

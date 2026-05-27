@@ -6,11 +6,13 @@
 
 #include "editor/application/EditorApplication.h"
 
+#include "engine/assets/manager/AssetManager.h"          // F3H20: mesh AABB lookup
+#include "engine/render/resources/MeshAsset.h"           // F3H20: aabbMin/Max
 #include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
-#include "engine/scene/queries/ScenePick.h"   // brushAabbWorld
+#include "engine/scene/queries/ScenePick.h"   // brushAabbWorld + meshAabbWorld
 #include "editor/panels/scene/OrthoCamera.h"
 #include "engine/world/csg/Brush.h"            // enumerateBrushVertices
 
@@ -36,14 +38,16 @@ glm::vec3 EditorApplication::snapToVertexOrGrid(const glm::vec3& worldPt,
         return v;
     };
 
-    if (!m_snapToVertexEnabled || !m_scene) {
-        return gridSnap(worldPt);
-    }
-
-    // Threshold ndc ~ 8 px / 800 px aspect-typical = 0.02 default.
-    // F3H6: leido live del proyecto (settings.snap.snapToVertexThresholdNdc).
+    // F3H20: el toggle vive en .moodproj > settings.snap (single source
+    // of truth). Sin proyecto, no hay snap-to-vertex (no hay donde
+    // persistir el flag). El miembro `m_snapToVertexEnabled` queda como
+    // mirror runtime para la tecla V / UI request — se sincroniza con
+    // ProjectSettings en `pumpUiRequests`.
     const SnapSettings k_snapCfg = m_project
         ? m_project->settings.snap : SnapSettings{};
+    if (!k_snapCfg.snapToVertexEnabled || !m_scene) {
+        return gridSnap(worldPt);
+    }
     const f32 kThresholdNdc = k_snapCfg.snapToVertexThresholdNdc;
     // Broadphase world: solo brushes cuyo AABB world expandido por
     // threshold contiene worldPt. Sin esto, en escenas con cientos de
@@ -103,5 +107,18 @@ glm::vec3 EditorApplication::snapToVertexOrGrid(const glm::vec3& worldPt,
 
     return found ? bestVertex : gridSnap(worldPt);
 }
+
+// F3H20 iter 4: las funciones de vertex snap perspectivo (snapToVertexInScene,
+// closestVertexOnEntityToWorld, findSnapTargetForGizmo) se removieron en
+// favor de grid snap Hammer-style. El experimento de vertex snap con
+// source-point + marcadores yellow resultó confuso de usar — los corners
+// que se alineaban no eran intuitivos y los marcadores agregaban ruido
+// visual. El gizmo perspectivo ahora usa solo grid snap (cuantiza delta
+// a multiplos de SnapSettings::snapGridStep), pattern Hammer/SFM-style.
+// Ver EditorOverlay_Gizmo.cpp::drawEditorOverlayGizmo y
+// EditorOverlay_Modal.cpp::updateModalShortcut. El path orto del workspace
+// "Editor de mapas" sigue usando vertex snap (`snapToVertexOrGrid` arriba) —
+// ese flujo era hammer-correct: vertex snap actua como override del grid
+// snap orto cuando hay un brush vertex dentro del threshold pixel.
 
 } // namespace Mood
