@@ -19,6 +19,10 @@ namespace Mood {
 struct FrameStats {
     u32 drawCalls = 0;
     u32 triangles = 0;
+    /// F3H23: luces activas que entraron al binning Forward+. Lo setea el
+    /// SceneRenderer al inicio del pase de iluminación (después de
+    /// `buildLightFrameData`). Resetea a 0 en `beginFrame`.
+    u32 activeLights = 0;
 };
 
 class IRenderer {
@@ -57,6 +61,12 @@ public:
     /// @brief F2H2: contadores acumulados durante el frame actual. Reset en
     ///        cada `beginFrame`. Util para el Performance HUD del editor.
     virtual FrameStats frameStats() const = 0;
+
+    /// @brief F3H23: setea el contador de luces activas del frame actual.
+    ///        Lo llama el SceneRenderer después de `LightSystem::buildFrameData`.
+    ///        No es default-virtual porque IRenderer no almacena state de
+    ///        lighting per se — solo cachea el número en m_stats.
+    virtual void setActiveLights(u32 n) = 0;
 };
 
 } // namespace Mood

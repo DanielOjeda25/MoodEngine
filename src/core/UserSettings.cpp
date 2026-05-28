@@ -131,6 +131,21 @@ nlohmann::json editorSettingsToJson(const EditorSettings& s) {
     if (s.smoothViewEnabled       != defaults.smoothViewEnabled)       j["smooth_view_enabled"]       = s.smoothViewEnabled;
     if (s.smoothViewDurationMs    != defaults.smoothViewDurationMs)    j["smooth_view_duration_ms"]   = s.smoothViewDurationMs;
     if (s.inspectorActiveCategory != defaults.inspectorActiveCategory) j["inspector_active_category"] = s.inspectorActiveCategory;
+
+    // F3H23: stats overlay (subobject opcional — solo si difiere del default).
+    const auto& so = s.statsOverlay;
+    const auto& soDef = defaults.statsOverlay;
+    nlohmann::json soJson = nlohmann::json::object();
+    if (so.showFps       != soDef.showFps)       soJson["show_fps"]       = so.showFps;
+    if (so.showDrawcalls != soDef.showDrawcalls) soJson["show_drawcalls"] = so.showDrawcalls;
+    if (so.showTris      != soDef.showTris)      soJson["show_tris"]      = so.showTris;
+    if (so.showMemGpu    != soDef.showMemGpu)    soJson["show_mem_gpu"]   = so.showMemGpu;
+    if (so.showMemCpu    != soDef.showMemCpu)    soJson["show_mem_cpu"]   = so.showMemCpu;
+    if (so.showLights    != soDef.showLights)    soJson["show_lights"]    = so.showLights;
+    if (so.showEntities  != soDef.showEntities)  soJson["show_entities"]  = so.showEntities;
+    if (!soJson.empty()) j["stats_overlay"] = std::move(soJson);
+
+    if (s.profilerFrameCount != defaults.profilerFrameCount) j["profiler_frame_count"] = s.profilerFrameCount;
     return j;
 }
 
@@ -196,6 +211,27 @@ EditorSettings editorSettingsFromJson(const nlohmann::json& j) {
             v == "environment") {
             s.inspectorActiveCategory = v;
         }
+    }
+
+    // F3H23: stats overlay subobject. Cada bool independiente — flag
+    // ausente queda en su default (no all-or-nothing).
+    if (j.contains("stats_overlay") && j.at("stats_overlay").is_object()) {
+        const auto& so = j.at("stats_overlay");
+        auto readBool = [&](const char* key, bool& out) {
+            if (so.contains(key) && so.at(key).is_boolean()) out = so.at(key).get<bool>();
+        };
+        readBool("show_fps",       s.statsOverlay.showFps);
+        readBool("show_drawcalls", s.statsOverlay.showDrawcalls);
+        readBool("show_tris",      s.statsOverlay.showTris);
+        readBool("show_mem_gpu",   s.statsOverlay.showMemGpu);
+        readBool("show_mem_cpu",   s.statsOverlay.showMemCpu);
+        readBool("show_lights",    s.statsOverlay.showLights);
+        readBool("show_entities",  s.statsOverlay.showEntities);
+    }
+
+    if (j.contains("profiler_frame_count") && j.at("profiler_frame_count").is_number_integer()) {
+        const int v = j.at("profiler_frame_count").get<int>();
+        s.profilerFrameCount = std::clamp(v, 60, 1200);
     }
     return s;
 }

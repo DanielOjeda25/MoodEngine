@@ -238,3 +238,103 @@ TEST_CASE("F3H22: fromJson type incorrecto (int) cae a default 'object'") {
     j["inspector_active_category"] = 42;  // no es string
     CHECK(editorSettingsFromJson(j).inspectorActiveCategory == "object");
 }
+
+// =====================================================================
+// F3H23: stats overlay (7 bools) + profiler frame count
+// =====================================================================
+
+TEST_CASE("F3H23: StatsOverlay defaults — FPS/Draws/Tris ON, resto OFF") {
+    EditorSettings s;
+    CHECK(s.statsOverlay.showFps == true);
+    CHECK(s.statsOverlay.showDrawcalls == true);
+    CHECK(s.statsOverlay.showTris == true);
+    CHECK(s.statsOverlay.showMemGpu == false);
+    CHECK(s.statsOverlay.showMemCpu == false);
+    CHECK(s.statsOverlay.showLights == false);
+    CHECK(s.statsOverlay.showEntities == false);
+    CHECK(s.statsOverlay.anyEnabled() == true);
+    CHECK(s.profilerFrameCount == 240);
+}
+
+TEST_CASE("F3H23: toJson omite stats_overlay si todo igual al default") {
+    EditorSettings s;
+    const auto j = editorSettingsToJson(s);
+    CHECK(j.empty());  // ningun field cambio
+}
+
+TEST_CASE("F3H23: toJson incluye stats_overlay solo con fields que difieren") {
+    EditorSettings s;
+    s.statsOverlay.showEntities = true;  // ON (default OFF)
+    const auto j = editorSettingsToJson(s);
+    REQUIRE(j.contains("stats_overlay"));
+    const auto& so = j.at("stats_overlay");
+    CHECK(so.size() == 1u);
+    CHECK(so.at("show_entities") == true);
+    // FPS/Draws/Tris siguen en default ON → NO se escriben.
+    CHECK_FALSE(so.contains("show_fps"));
+    CHECK_FALSE(so.contains("show_drawcalls"));
+}
+
+TEST_CASE("F3H23: StatsOverlay roundtrip de los 7 flags") {
+    EditorSettings before;
+    before.statsOverlay.showFps       = false;  // OFF (default ON)
+    before.statsOverlay.showDrawcalls = false;
+    before.statsOverlay.showTris      = false;
+    before.statsOverlay.showMemGpu    = true;
+    before.statsOverlay.showMemCpu    = true;
+    before.statsOverlay.showLights    = true;
+    before.statsOverlay.showEntities  = true;
+
+    const auto j = editorSettingsToJson(before);
+    const auto after = editorSettingsFromJson(j);
+
+    CHECK(after.statsOverlay.showFps       == false);
+    CHECK(after.statsOverlay.showDrawcalls == false);
+    CHECK(after.statsOverlay.showTris      == false);
+    CHECK(after.statsOverlay.showMemGpu    == true);
+    CHECK(after.statsOverlay.showMemCpu    == true);
+    CHECK(after.statsOverlay.showLights    == true);
+    CHECK(after.statsOverlay.showEntities  == true);
+}
+
+TEST_CASE("F3H23: anyEnabled() devuelve false con todos los toggles OFF") {
+    EditorSettings s;
+    s.statsOverlay.showFps = false;
+    s.statsOverlay.showDrawcalls = false;
+    s.statsOverlay.showTris = false;
+    CHECK(s.statsOverlay.anyEnabled() == false);
+}
+
+TEST_CASE("F3H23: profilerFrameCount toJson solo si difiere del default") {
+    EditorSettings s;
+    s.profilerFrameCount = 600;
+    const auto j = editorSettingsToJson(s);
+    REQUIRE(j.contains("profiler_frame_count"));
+    CHECK(j.at("profiler_frame_count") == 600);
+}
+
+TEST_CASE("F3H23: profilerFrameCount sanitize clamp [60, 1200]") {
+    {
+        nlohmann::json j;
+        j["profiler_frame_count"] = 30;  // por debajo
+        CHECK(editorSettingsFromJson(j).profilerFrameCount == 60);
+    }
+    {
+        nlohmann::json j;
+        j["profiler_frame_count"] = 5000;  // por encima
+        CHECK(editorSettingsFromJson(j).profilerFrameCount == 1200);
+    }
+    {
+        nlohmann::json j;
+        j["profiler_frame_count"] = 600;  // valido
+        CHECK(editorSettingsFromJson(j).profilerFrameCount == 600);
+    }
+}
+
+TEST_CASE("F3H23: stats_overlay fromJson ignora claves de tipo equivocado") {
+    nlohmann::json j;
+    j["stats_overlay"]["show_fps"] = "true";  // string, no bool
+    const auto s = editorSettingsFromJson(j);
+    // Debe quedar en default (true) porque la clave es invalida.
+    CHECK(s.statsOverlay.showFps == true);
+}

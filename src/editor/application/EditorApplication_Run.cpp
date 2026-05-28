@@ -22,6 +22,7 @@
 #include "editor/application/EditorApplication.h"
 
 #include "core/Log.h"
+#include "core/MemoryStats.h"  // F3H23: getRssBytes para stats overlay
 #include "core/Profiler.h"
 #include "core/UserSettings.h"  // F3H14: thumbnailResolution change detect
 #include "engine/render/preview/MaterialPreviewRenderer.h"  // F3H15: recreacion en vivo
@@ -40,6 +41,7 @@
 #include "engine/dialog/DialogSystem.h"          // F2H48
 #include "engine/game/state/GameState.h"         // F2H52 H: Tab toggle inventory_panel
 #include "engine/inventory/ItemPickupSystem.h"   // F2H52 Bloque C
+#include "engine/profile/ProfilerBuffer.h"        // F3H23: ring buffer endFrame + resize
 #include "engine/quest/QuestSystem.h"            // F2H53 Bloque F
 #include "engine/render/backend/opengl/OpenGLDebugRenderer.h"  // F2H29 Bloque C: drawAabb preview.
 #include "engine/assets/manager/AssetManager.h"
@@ -207,6 +209,22 @@ void EditorApplication::tickFrameMetrics(f32 dt, f64 dtD) {
         metrics.entityCount = static_cast<u32>(m_scene->entityCount());
     }
     m_ui.performanceHud().setMetrics(metrics);
+
+    // F3H23: chips a la status bar (toggleables desde Preferences).
+    m_ui.setStatsDrawCalls(metrics.drawCalls);
+    m_ui.setStatsTriangles(metrics.triangles);
+    m_ui.setStatsEntityCount(metrics.entityCount);
+    if (m_sceneRenderer) {
+        m_ui.setStatsActiveLights(m_sceneRenderer->frameStats().activeLights);
+        m_ui.setStatsVramBytes(m_sceneRenderer->vramUsedBytes());
+    }
+    m_ui.setStatsRssBytes(MemoryStats::getRssBytes());
+
+    // F3H23: cerrar el frame del ProfilerBuffer + reajustar capacity si
+    // el dev cambió la pref desde el slider. resize() no-op si no cambió.
+    profilerBuffer().resize(
+        static_cast<u32>(UserSettings::editor().profilerFrameCount));
+    profilerBuffer().endFrame();
 
     // F2H42: aplicar toggle VSync si el dev clickeo el checkbox.
     bool vsyncRequested = true;

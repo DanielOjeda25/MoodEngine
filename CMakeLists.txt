@@ -332,6 +332,7 @@ endif()
 add_library(mood_engine_lib STATIC
     src/core/Log.cpp
     src/core/LogRingSink.cpp
+    src/core/MemoryStats.cpp  # F3H23: RSS del proceso para stats overlay
     src/core/Time.cpp
     src/core/UserSettings.cpp  # F2H43
 
@@ -423,6 +424,8 @@ add_library(mood_engine_lib STATIC
     src/engine/scene/serialization/SceneSerializer.cpp
     src/engine/scene/serialization/ProjectSerializer.cpp
     src/engine/scene/serialization/PrefabSerializer.cpp
+
+    src/engine/profile/ProfilerBuffer.cpp  # F3H23: ring + ScopeTimer dtor
 
     src/engine/scene/core/EditorCamera.cpp
     src/engine/scene/core/FpsCamera.cpp
@@ -534,6 +537,12 @@ target_link_libraries(mood_engine_lib PUBLIC
     OpenGL::GL
 )
 
+# F3H23: Windows psapi para GetProcessMemoryInfo (RSS del proceso). En
+# otros sistemas el helper de core/MemoryStats devuelve 0.
+if(WIN32)
+    target_link_libraries(mood_engine_lib PUBLIC psapi)
+endif()
+
 # Tracy (F2H2): el target Tracy::TracyClient ya define TRACY_ENABLE PUBLIC,
 # asi que cualquier consumidor que incluya core/Profiler.h y linke a
 # mood_engine_lib activa las macros. Cuando MOOD_PROFILE=OFF, no se linkea
@@ -631,6 +640,7 @@ add_executable(MoodEditor
     src/editor/panels/scene/VisGroupsPanel.cpp  # F2H33
     src/editor/panels/debug/LuaApiPanel.cpp
     src/editor/panels/debug/PerformanceHudPanel.cpp
+    src/editor/panels/debug/ProfilerPanel.cpp  # F3H23
     src/editor/panels/debug/NodeGraphSandboxPanel.cpp     # F2H46
     src/editor/panels/narrative/NarrativeIntroPanel.cpp        # F2H46
     src/editor/panels/narrative/DialogBrowserPanel.cpp         # F2H47

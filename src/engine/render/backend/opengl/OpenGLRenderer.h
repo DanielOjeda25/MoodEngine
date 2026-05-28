@@ -18,6 +18,7 @@ public:
     void drawMeshInstanced(const IMesh& mesh, const IShader& shader,
                             u32 instanceCount) override;
     FrameStats frameStats() const override { return m_stats; }
+    void setActiveLights(u32 n) override { m_stats.activeLights = n; }
 
 private:
     FrameStats m_stats{};  // F2H2: reset en beginFrame, increment en drawMesh

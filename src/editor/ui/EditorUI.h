@@ -21,6 +21,7 @@
 #include "editor/panels/debug/LuaApiPanel.h"
 #include "editor/panels/debug/NodeGraphSandboxPanel.h"  // F2H46
 #include "editor/panels/debug/PerformanceHudPanel.h"
+#include "editor/panels/debug/ProfilerPanel.h"  // F3H23
 #include "editor/panels/narrative/NarrativeIntroPanel.h"  // F2H46
 #include "editor/panels/narrative/DialogBrowserPanel.h"    // F2H47
 #include "editor/panels/narrative/DialogEditorPanel.h"     // F2H47
@@ -67,6 +68,17 @@ public:
     /// @brief Actualiza el FPS mostrado en la status bar.
     void setFps(float fps) { m_statusBar.setFps(fps); }
 
+    /// @brief F3H23: pasa chips de metricas a la status bar (drawcalls,
+    ///        triangles, entityCount, lights, VRAM, RSS). Cada uno se
+    ///        muestra solo si el toggle de Preferences > Editor > Stats
+    ///        overlay esta ON.
+    void setStatsDrawCalls(u32 v)    { m_statusBar.setDrawCalls(v); }
+    void setStatsTriangles(u32 v)    { m_statusBar.setTriangles(v); }
+    void setStatsEntityCount(u32 v)  { m_statusBar.setEntityCount(v); }
+    void setStatsActiveLights(u32 v) { m_statusBar.setActiveLights(v); }
+    void setStatsVramBytes(u64 v)    { m_statusBar.setVramUsedBytes(v); }
+    void setStatsRssBytes(u64 v)     { m_statusBar.setRssBytes(v); }
+
     /// @brief Mensaje libre de la status bar (ej. "Guardado" tras un save).
     void setStatusMessage(std::string msg) { m_statusBar.setMessage(std::move(msg)); }
 
@@ -97,6 +109,7 @@ public:
     MaterialEditorPanel& materialEditor()    { return m_materialEditor; }     // Hito 42
     ShaderGraphEditorPanel& shaderGraphEditor() { return m_shaderGraphEditor; }// F2H62
     PerformanceHudPanel& performanceHud()    { return m_performanceHud; }     // F2H2
+    ProfilerPanel&       profilerPanel()     { return m_profilerPanel; }      // F3H23
     DialogEditorPanel&         dialogEditor()    { return m_dialogEditor; }    // F2H47
     DialogBrowserPanel&        dialogBrowser()   { return m_dialogBrowser; }   // F2H47
     DialogNodeInspectorPanel&  dialogInspector() { return m_dialogInspector; } // F2H47
@@ -361,6 +374,7 @@ private:
     ConsolePanel m_console;
     LuaApiPanel m_luaApi;
     PerformanceHudPanel m_performanceHud;  // F2H2
+    ProfilerPanel m_profilerPanel;          // F3H23
     NodeGraphSandboxPanel m_nodeGraphSandbox;  // F2H46
     NarrativeIntroPanel       m_narrativeIntro;    // F2H46
     DialogBrowserPanel        m_dialogBrowser;     // F2H47

@@ -37,6 +37,11 @@ public:
 
     void setMetrics(const Metrics& m) { m_metrics = m; }
 
+    /// @brief F3H23: getter para que el stats overlay del viewport
+    ///        (Unity-style bottom bar) lea las mismas metricas que el
+    ///        panel HUD sin duplicar el wire desde EditorApplication.
+    const Metrics& metrics() const { return m_metrics; }
+
     /// @brief F2H42: setea el estado mostrado del checkbox VSync (sync con
     ///        el valor real del Window). El caller llama esto una vez al
     ///        inicio y luego cada vez que cambia VSync via API.

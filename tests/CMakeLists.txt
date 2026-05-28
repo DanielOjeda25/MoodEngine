@@ -19,8 +19,9 @@ add_executable(mood_tests
     test_ray.cpp                                # AUDIT-3 (pickRayFromNdc)
     test_project_serializer.cpp
     test_project_settings.cpp                  # F3H1
-    test_user_settings_editor.cpp              # F3H7 (+F3H21 fields)
+    test_user_settings_editor.cpp              # F3H7 (+F3H21/F3H22/F3H23 fields)
     test_editor_camera_lerp.cpp                # F3H21
+    test_profiler_buffer.cpp                   # F3H23
     test_scene.cpp
     test_lua.cpp
     test_lua_bindings.cpp
@@ -219,6 +220,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/physics/world/PhysicsWorld_Impact.cpp  # F2H68 Bloque A
     ${CMAKE_SOURCE_DIR}/src/core/i18n/I18n.cpp  # F2H43 (movido a core en AUDIT-3)
     ${CMAKE_SOURCE_DIR}/src/core/UserSettings.cpp  # F2H43
+    ${CMAKE_SOURCE_DIR}/src/engine/profile/ProfilerBuffer.cpp  # F3H23
     ${CMAKE_SOURCE_DIR}/src/engine/nodegraph/Graph.cpp  # F2H46
     ${CMAKE_SOURCE_DIR}/src/engine/shader_graph/ShaderGraphAsset.cpp     # F2H62
     ${CMAKE_SOURCE_DIR}/src/engine/shader_graph/ShaderGraphGenerator.cpp # F2H62

@@ -45,6 +45,8 @@ void EditorUI::pruneMissingRecents() {
 EditorUI::EditorUI() {
     m_panels = {&m_viewport, &m_hierarchy, &m_inspector, &m_assetBrowser,
                 &m_console, &m_luaApi, &m_performanceHud,
+                &m_profilerPanel,  // F3H23
+
                 &m_nodeGraphSandbox,  // F2H46
                 &m_narrativeIntro,    // F2H46
                 &m_dialogBrowser,     // F2H47

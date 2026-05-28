@@ -112,6 +112,36 @@ struct EditorSettings {
     /// Default "object" — siempre presente (toda entity tiene Transform).
     /// Sanitize: ID desconocido cae a "object" silencioso (sin log).
     std::string inspectorActiveCategory = "object";
+
+    /// F3H23: stats overlay del viewport (estilo Unity bottom bar — single
+    /// line al pie con chips por metric). Cada flag controla un widget
+    /// independiente; el dev toggleta desde Preferences > Editor > Stats
+    /// Overlay. Defaults: FPS + drawcalls + tris ON (las 3 métricas más
+    /// usadas en day-to-day); memoria + lights + entities OFF (info
+    /// adicional, on-demand).
+    struct StatsOverlaySettings {
+        bool showFps       = true;
+        bool showDrawcalls = true;
+        bool showTris      = true;
+        bool showMemGpu    = false;
+        bool showMemCpu    = false;
+        bool showLights    = false;
+        bool showEntities  = false;
+
+        /// Helper para saber si hay al menos un widget activo (gate del
+        /// render del bottom bar — sin chips activos, no se dibuja nada).
+        bool anyEnabled() const {
+            return showFps || showDrawcalls || showTris
+                || showMemGpu || showMemCpu || showLights || showEntities;
+        }
+    };
+    StatsOverlaySettings statsOverlay{};
+
+    /// F3H23: tamano del ring buffer del profiler in-engine. N frames de
+    /// historia para mostrar avg/min/max + histograma. Default 240 (≈4s a
+    /// 60fps). Clamp `[60, 1200]` — debajo no hay suficiente data para
+    /// detectar spikes, encima la memoria del ring se infla sin upside.
+    int profilerFrameCount = 240;
 };
 
 /// @brief Lee `settings.json` del disco. Si no existe o tiene parse

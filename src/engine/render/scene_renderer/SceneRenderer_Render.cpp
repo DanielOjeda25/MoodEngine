@@ -181,6 +181,14 @@ void SceneRenderer::renderScene(Scene& scene,
         MOOD_PROFILE_SCOPE("LightSystem::buildFrameData");
         lights = m_lightSystem->buildFrameData(scene);
     }
+    // F3H23: light count para el stats overlay. Directional cuenta como 1
+    // solo si está habilitada (enabled=false por default = "no hay sol"
+    // en escenas nuevas, no debería sumar).
+    if (m_renderer) {
+        const u32 nDir = lights.directional.enabled ? 1u : 0u;
+        m_renderer->setActiveLights(
+            nDir + static_cast<u32>(lights.pointLights.size()));
+    }
 
     // Hito 18: Forward+ light grid.
     // break-B2: body movido a SceneRenderer_Render_Lighting.cpp.

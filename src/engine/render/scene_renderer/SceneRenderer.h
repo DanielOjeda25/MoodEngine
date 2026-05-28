@@ -181,6 +181,13 @@ public:
     ///        se cuentan.
     FrameStats frameStats() const;
 
+    /// @brief F3H23: VRAM consumida por el proceso en bytes. Requiere la
+    ///        extensión `GL_NVX_gpu_memory_info` (drivers NVIDIA). Si no
+    ///        está disponible (AMD/Intel/Mesa) devuelve 0 — el caller
+    ///        muestra "—" en el UI. Calculado como
+    ///        `TOTAL_AVAILABLE - CURRENT_AVAILABLE` (en KB, convertido a B).
+    u64 vramUsedBytes() const;
+
     /// @brief F2H21: handles del IBL del SceneRenderer para que el
     ///        `MaterialPreviewRenderer` use el mismo prefilter /
     ///        irradiance / brdfLut sin duplicar la carga de disco.

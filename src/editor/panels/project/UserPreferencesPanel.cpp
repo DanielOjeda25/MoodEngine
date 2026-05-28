@@ -15,7 +15,10 @@ namespace {
 
 // Mismo layout estilo Unity que ProjectSettingsPanel — label izquierda con
 // ancho fijo, control derecha.
-constexpr float kLabelColumnWidth = 160.0f;
+// F3H23: subido de 160 a 240 — labels largos del editor en español
+// ("Tamaño gizmo (mover/escalar)", "Retraso preview al pasar el cursor")
+// pisaban la columna del slider con el valor anterior.
+constexpr float kLabelColumnWidth = 240.0f;
 constexpr float kControlWidth     = 200.0f;
 
 // F3H7: mismo helper que ProjectSettingsPanel — boton ↺ chiquito a la
@@ -286,6 +289,80 @@ void UserPreferencesPanel::drawEditorTab() {
     if (resetButton("hover_preview_delay",
                      cfg.hoverPreviewDelayMs,
                      defaults.hoverPreviewDelayMs)) {
+        dirty = true;
+        saveNow = true;
+    }
+
+    // F3H23: Stats overlay del viewport (Unity-style bottom bar). Cada
+    // checkbox controla un widget independiente — el dev arma su HUD
+    // según lo que quiera monitorear. Defaults: FPS + Draws + Tris ON
+    // (las 3 más usadas day-to-day); memoria/lights/entities OFF.
+    ImGui::Spacing();
+    ImGui::SeparatorText(
+        I18n::T("editor.user_preferences.editor.stats_overlay.section").c_str());
+
+    auto statsCheckbox = [&](const char* idSuffix, const char* labelKey,
+                              const char* tooltipKey, bool& value, bool defaultVal) {
+        const std::string id = std::string("##user_pref_stats_") + idSuffix;
+        if (ImGui::Checkbox((I18n::T(labelKey) + id).c_str(), &value)) {
+            dirty = true;
+            saveNow = true;
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", I18n::T(tooltipKey).c_str());
+        }
+        // Reset inline a la derecha si el valor difiere del default.
+        if (value != defaultVal) {
+            ImGui::SameLine();
+            if (resetButton((std::string("stats_") + idSuffix).c_str(),
+                              value, defaultVal)) {
+                dirty = true;
+                saveNow = true;
+            }
+        }
+    };
+
+    statsCheckbox("fps", "editor.user_preferences.editor.stats_overlay.fps",
+                   "editor.user_preferences.editor.stats_overlay.fps.tooltip",
+                   cfg.statsOverlay.showFps, defaults.statsOverlay.showFps);
+    statsCheckbox("drawcalls", "editor.user_preferences.editor.stats_overlay.drawcalls",
+                   "editor.user_preferences.editor.stats_overlay.drawcalls.tooltip",
+                   cfg.statsOverlay.showDrawcalls, defaults.statsOverlay.showDrawcalls);
+    statsCheckbox("tris", "editor.user_preferences.editor.stats_overlay.tris",
+                   "editor.user_preferences.editor.stats_overlay.tris.tooltip",
+                   cfg.statsOverlay.showTris, defaults.statsOverlay.showTris);
+    statsCheckbox("mem_gpu", "editor.user_preferences.editor.stats_overlay.mem_gpu",
+                   "editor.user_preferences.editor.stats_overlay.mem_gpu.tooltip",
+                   cfg.statsOverlay.showMemGpu, defaults.statsOverlay.showMemGpu);
+    statsCheckbox("mem_cpu", "editor.user_preferences.editor.stats_overlay.mem_cpu",
+                   "editor.user_preferences.editor.stats_overlay.mem_cpu.tooltip",
+                   cfg.statsOverlay.showMemCpu, defaults.statsOverlay.showMemCpu);
+    statsCheckbox("lights", "editor.user_preferences.editor.stats_overlay.lights",
+                   "editor.user_preferences.editor.stats_overlay.lights.tooltip",
+                   cfg.statsOverlay.showLights, defaults.statsOverlay.showLights);
+    statsCheckbox("entities", "editor.user_preferences.editor.stats_overlay.entities",
+                   "editor.user_preferences.editor.stats_overlay.entities.tooltip",
+                   cfg.statsOverlay.showEntities, defaults.statsOverlay.showEntities);
+
+    // F3H23: ring buffer size del profiler (frames de historia para
+    // avg/min/max + histograma).
+    ImGui::Spacing();
+    ImGui::TextUnformatted(
+        I18n::T("editor.user_preferences.editor.profiler_frame_count").c_str());
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.user_preferences.editor.profiler_frame_count.tooltip").c_str());
+    }
+    ImGui::SameLine(kLabelColumnWidth);
+    ImGui::SetNextItemWidth(kControlWidth);
+    if (ImGui::SliderInt("##user_pref_profiler_frame_count",
+                          &cfg.profilerFrameCount, 60, 1200, "%d frames")) {
+        dirty = true;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) saveNow = true;
+    if (resetButton("profiler_frame_count",
+                     cfg.profilerFrameCount,
+                     defaults.profilerFrameCount)) {
         dirty = true;
         saveNow = true;
     }

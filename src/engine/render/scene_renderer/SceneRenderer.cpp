@@ -326,6 +326,20 @@ FrameStats SceneRenderer::frameStats() const {
     return m_renderer ? m_renderer->frameStats() : FrameStats{};
 }
 
+// F3H23: VRAM query via NVX_gpu_memory_info (NVIDIA). Si el driver
+// no expone la extensión (AMD/Intel/Mesa), GLAD_GL_NVX_gpu_memory_info
+// es 0 y devolvemos 0 sin loguear (el caller muestra "—").
+u64 SceneRenderer::vramUsedBytes() const {
+    if (!GLAD_GL_NVX_gpu_memory_info) return 0;
+    GLint totalKb = 0;
+    GLint availKb = 0;
+    glGetIntegerv(GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, &totalKb);
+    glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &availKb);
+    if (totalKb <= 0 || availKb < 0 || availKb > totalKb) return 0;
+    const u64 usedKb = static_cast<u64>(totalKb - availKb);
+    return usedKb * 1024ull;
+}
+
 void SceneRenderer::loadSkyboxAndIblFromBase(const std::string& skyboxBase) {
     if (skyboxBase.empty()) return;
     if (skyboxBase == m_currentSkyboxBase) return; // idempotente per-frame.
