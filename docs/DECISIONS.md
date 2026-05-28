@@ -11,6 +11,31 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-27: F3H21 cierre — Viewport pro (numpad views + render modes)
+
+**Contexto:** Segundo hito de Sub-fase 3.4. Plan tenía 4 decisiones cerradas pre-implementación (D1-D4 con investigación industrial Blender/Unreal/Unity); durante la implementación + validación visual con el dev emergieron 2 más (D5-D6).
+
+**D1 — Lerp Blender 200ms vs teleport Unity/Unreal.** Numpad views animadas con smoothstep + yaw shortest-path, default ON, duración configurable en `UserSettings.editor.smoothViewDurationMs` (clamp 0-1000, 0=teleport). Razón: el dev ya usa Blender como referencia mental (memoria `feedback_no_reinventar_rueda`); el lerp evita la desorientación que el teleport genera al saltar entre vistas ortogonales. Alternativa descartada (teleport default): Unity/Unreal lo hacen pero el dev no viene de ese workflow.
+
+**D2 — Render modes en perspectiva + ortho ambos.** Los 4 modes (Wireframe/Solid/MaterialPreview/Rendered) funcionan en viewport perspectivo + los 3 ortográficos del map_editor. Sin gating. Razón: convención industrial 100% (Blender shading modes en ambos, Unreal Alt+1/2/3/4 en perspective + 4 ortho, Unity Shaded modes en ambos). Restringir generaría fricción sin upside.
+
+**D3 — Numpad 0 = pose-copy a la primera CameraComponent.** El editor camera salta a la pose (yaw/pitch desde rotationEuler, target a 5m frente) de la primera entity con CameraComponent. Si no hay → log "no hay CameraComponent en la escena". Alternativa descartada (view-through dual como Blender — entrar a modo "viendo a través de la cámara activa"): requeriría estado dual del editor (cam editor vs cam scene), invalidar el orbit, manejar input switching. Pose-copy es 1 setter + 0 estado. Si emerge demanda real de view-through, hito propio.
+
+**D4 — Rendered fuerza bloom + SSAO con defaults conservadores; SSR opt-in vía Environment.** El modo Rendered usa OR con flags de Environment + intensidades default sensatas cuando el Env tiene 0 (bloom intensity 0.6/threshold 1.5/radius 1.0; SSAO intensity 1.0/radius 0.5). SSR NO se fuerza. Razón: la primera implementación forzaba SSR ON con defaults, generaba artifacts garantizados sin tuning del Environment (bandas verticales en el cielo por rayos escapando del FB, ghost reflections). El dev validó visual y reportó "en el modo render final hay artifacts". Bloom threshold subido de 1.0 a 1.5 (1.0 sobre-brighteaba cielos claros). SSR es opt-in: el dev lo activa en Environment con tuning propio. Alternativa descartada (forzar SSR con defaults agresivos): el approach correcto sería autodetect de scale del scene para tunear SSR — out-of-scope de F3H21, sería hito propio.
+
+**D5 — Solid mode = branch en `pbr.frag` (uniform `uSolidShading`) vs material override CPU.** El shader chequea al inicio del main; si on, devuelve `vec3(0.65) * (ambient 0.35 + NdotL * 0.65)` con light hardcoded y `NormalRT = vec4(0.0)` para que SSR descarte, saltando TODO el PBR loop. Razón: branch shader es ~5% costo del PBR completo (las texturas no se samplean, no hay loop de luces, no IBL), cero state per-draw call, escala a N entidades trivialmente. Alternativa descartada (sobrescribir cada material en CPU con `albedoTint=gris + uHasAlbedoMap=0`): invasivo, costo per-draw, requeriría capturar/restaurar state al toggle entre modes.
+
+**D6 — F2H30 sub-mode keys 1/2/3 → top-row only.** Pre-F3H21 los sub-mode keys aceptaban `ImGuiKey_1 || ImGuiKey_Keypad1` (idem 2/3). F3H21 los limita a top-row only para liberar Numpad 1/3/7 para views. Razón: convención Blender pura — top-row reservado para sub-modes (Vertex/Edge/Face), numpad reservado para views (Front/Right/Top). El dev ya está acostumbrado al Blender mental model. Trade-off: dev que usaba numpad para sub-modes pierde ese atajo — pero gana las 7 numpad keys para views. Hito-net positivo en hotkey budget.
+
+**Polish reactivo F3H20:** floating text del delta en translate drag (`X +1.500 (grid 0.5)`) gateado al `snapGridEnabled` — sin snap activo, drag silencioso. El dev reportó al cerrar F3H21 que era ruido visual cuando no usaba snap.
+
+**Backlog del hito:**
+- Solid con texture passthrough opcional: hoy es gris uniforme. Texture opt-in (mostrar albedo sin lighting completo) sería útil para ver UV layout — hito propio si emerge demanda.
+- Rendered con SSR auto-tuneado por scale del scene: autodetect de bounding del Environment + tune `maxSteps`/`thickness`/`stepSize`. Out-of-scope F3H21 (decisión D4) — hito propio cuando el dev quiera SSR confiable en Rendered sin tocar Environment.
+- **Properties Editor con icons laterales tipo Blender**: rediseño de los 15+ paneles del Inspector a "categorías" con icons verticales clickeables (Render / World / Object / Mesh / Material / Particles / Physics / Script / etc) estilo el Properties Editor de Blender. El dev lo pidió al validar F3H21 ("podriamos mejorar exponencialmente esto", "esto se que es un hito mas grande"). Anotado en memoria `backlog-ux-gaps-editor` como hito propio de Sub-fase 3.4 (si emerge demanda antes de cerrar Fase 3) o Fase 4.
+
+---
+
 ## 2026-05-27: F3H20 cierre — Snapping configurable (Hammer-style)
 
 ### Decisión 1 — Hammer-style grid snap reemplaza vertex snap perspectivo
