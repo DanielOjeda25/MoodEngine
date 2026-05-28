@@ -17,14 +17,17 @@ public:
     const char* category() const override { return "Debug"; }
 
 private:
-    // Filtro por substring dentro del campo `channel` de cada entry.
-    // "" = sin filtro.
-    std::array<char, 32> m_channelFilter{};
-    bool m_autoScroll = true;
     // F2H37: filtro por nivel — 6 toggles independientes (trace, debug,
     // info, warn, err, critical). Default = todos visibles. Si un nivel
     // esta off, sus entries se skipean al iterar el snapshot del sink.
     std::array<bool, 6> m_levelEnabled{ true, true, true, true, true, true };
+
+    /// F3H24: filtro por mensaje. Match case-insensitive contra
+    /// `entry.text + " " + entry.channel`. Reemplaza el viejo filtro
+    /// por channel (mucho mas util en day-to-day — el dev tipea
+    /// "vehicle" / "shader" / un keyword del bug y filtra todo el log).
+    std::array<char, 64> m_messageFilter{};
+    bool m_autoScroll = true;
 };
 
 } // namespace Mood

@@ -1,5 +1,6 @@
 #include "editor/panels/project/UserPreferencesPanel.h"
 
+#include "core/Toasts.h"  // F3H24: toast al cerrar con cambios
 #include "core/UserSettings.h"
 #include "core/i18n/I18n.h"
 #include "editor/ui/EditorThemes.h"
@@ -46,7 +47,16 @@ bool resetButton(const char* widgetIdSuffix, T& value, T defaultValue) {
 } // namespace
 
 void UserPreferencesPanel::onImGuiRender() {
-    if (!visible) return;
+    // F3H24: detectar transición visible: true→false (panel cerrado).
+    // Si hubo cambios entre apertura y cierre, emitir 1 toast resumen.
+    if (m_wasVisibleLastFrame && !visible && m_changedSinceOpen) {
+        Toasts::pushSuccess(I18n::T("editor.toast.preferences_saved"));
+    }
+    m_wasVisibleLastFrame = visible;
+    if (!visible) {
+        m_changedSinceOpen = false;  // reset al estar cerrado
+        return;
+    }
 
     // Ventana flotante centrada + tamano fijo, no dockeable, sin resize/
     // collapse — espejo de ProjectSettingsPanel (consistencia UX).
@@ -112,6 +122,7 @@ void UserPreferencesPanel::drawGeneralTab() {
                 UserSettings::setTheme(themes[i].id);
                 EditorThemes::apply(themes[i].id);  // preview live
                 UserSettings::save();
+                m_changedSinceOpen = true;  // F3H24
             }
             if (sel) ImGui::SetItemDefaultFocus();
         }
@@ -137,6 +148,7 @@ void UserPreferencesPanel::drawGeneralTab() {
             if (I18n::setLanguage(I18n::Language::Spanish)) {
                 UserSettings::setLanguage(I18n::Language::Spanish);
                 UserSettings::save();
+                m_changedSinceOpen = true;  // F3H24
             }
         }
         if (isEs) ImGui::SetItemDefaultFocus();
@@ -146,6 +158,7 @@ void UserPreferencesPanel::drawGeneralTab() {
             if (I18n::setLanguage(I18n::Language::English)) {
                 UserSettings::setLanguage(I18n::Language::English);
                 UserSettings::save();
+                m_changedSinceOpen = true;  // F3H24
             }
         }
         if (isEn) ImGui::SetItemDefaultFocus();
@@ -367,8 +380,50 @@ void UserPreferencesPanel::drawEditorTab() {
         saveNow = true;
     }
 
+    // F3H24: section de toasts (enabled + lifetime). Gemelo del stats
+    // overlay block — un section header + 1 checkbox + 1 slider.
+    ImGui::Spacing();
+    ImGui::SeparatorText(
+        I18n::T("editor.user_preferences.editor.toasts.section").c_str());
+
+    if (ImGui::Checkbox(
+            (I18n::T("editor.user_preferences.editor.toasts.enabled") +
+             "##user_pref_toasts_enabled").c_str(),
+            &cfg.toastsEnabled)) {
+        dirty = true;
+        saveNow = true;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.user_preferences.editor.toasts.enabled.tooltip").c_str());
+    }
+
+    ImGui::TextUnformatted(
+        I18n::T("editor.user_preferences.editor.toasts.lifetime_ms").c_str());
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.user_preferences.editor.toasts.lifetime_ms.tooltip").c_str());
+    }
+    ImGui::SameLine(kLabelColumnWidth);
+    ImGui::SetNextItemWidth(kControlWidth);
+    if (ImGui::SliderInt("##user_pref_toasts_lifetime",
+                          &cfg.toastsLifetimeMs, 500, 10000, "%d ms")) {
+        dirty = true;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) saveNow = true;
+    if (resetButton("toasts_lifetime",
+                     cfg.toastsLifetimeMs,
+                     defaults.toastsLifetimeMs)) {
+        dirty = true;
+        saveNow = true;
+    }
+
     if (dirty)   UserSettings::setEditor(cfg);
     if (saveNow) UserSettings::save();
+    // F3H24: trackear cambios discretos (saveNow se setea solo en
+    // acciones "soltar slider" / toggle / reset, no en cada frame del
+    // drag). Suma para el toast de "Preferences saved" al cerrar.
+    if (saveNow) m_changedSinceOpen = true;
 
     ImGui::Spacing();
     ImGui::TextDisabled("%s",

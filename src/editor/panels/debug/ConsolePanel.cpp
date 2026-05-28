@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "core/LogRingSink.h"
+#include "core/Toasts.h"  // F3H24: toast tras "Copy as bug report"
 #include "core/Types.h"  // F2H23: usize
 #include "editor/ui/IconsFontAwesome6.h"  // F2H37: icons por nivel
 #include "core/i18n/I18n.h"  // F2H43
@@ -9,7 +10,18 @@
 #include <imgui.h>
 
 #include <algorithm>     // F2H23: std::max
+#include <cctype>
 #include <cstring>
+#include <sstream>
+#include <string>
+
+#if defined(_WIN32)
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  include <windows.h>
+#  include <shellapi.h>  // F3H24: ShellExecuteA para abrir .lua:N en editor externo
+#endif
 
 namespace Mood {
 
@@ -167,14 +179,29 @@ void ConsolePanel::onImGuiRender() {
     ImGui::TextDisabled("|");
     ImGui::SameLine();
 
-    // Input de filtro: 40% del ancho disponible, minimo 140px.
+    // F3H24: input de filtro por MENSAJE (case-insensitive). Reemplaza
+    // el viejo filtro por channel — el dev encuentra entries por
+    // keyword del bug ("vehicle", "shader", "missing texture") sin
+    // saber en qué channel del logger se emitio.
     const float filterWidth =
-        std::max(140.0f, ImGui::GetContentRegionAvail().x * 0.40f);
+        std::max(140.0f, ImGui::GetContentRegionAvail().x * 0.32f);
     ImGui::SetNextItemWidth(filterWidth);
-    ImGui::InputTextWithHint("##channel",
-                                I18n::T("editor.panel.console.filter_hint").c_str(),
-                                m_channelFilter.data(),
-                                m_channelFilter.size());
+    ImGui::InputTextWithHint("##msg_filter",
+                                I18n::T("editor.panel.console.search_hint").c_str(),
+                                m_messageFilter.data(),
+                                m_messageFilter.size());
+
+    // F3H24: boton "Copy as bug report" — formatea los entries filtrados
+    // (mismas reglas de visibilidad que el render) y los copia al
+    // clipboard del SO. Util para pegar en issues / Discord / etc.
+    ImGui::SameLine();
+    const std::string copyBtnLabel = std::string(ICON_FA_PASTE " ") +
+        I18n::T("editor.panel.console.copy_bug_report");
+    const bool copyClicked = ImGui::Button(copyBtnLabel.c_str());
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.panel.console.copy_bug_report.tooltip").c_str());
+    }
 
     ImGui::SameLine();
     ImGui::TextDisabled("(?)");
@@ -198,10 +225,73 @@ void ConsolePanel::onImGuiRender() {
     ImGui::Separator();
 
     const auto entries = sink->snapshot();
-    const char* filter = m_channelFilter.data();
+    const char* filter = m_messageFilter.data();
     const bool hasFilter = filter[0] != '\0';
     const auto totalCount = entries.size();
     usize visibleCount = 0;
+
+    // F3H24: case-insensitive substring match. Lower-case del filter una
+    // vez fuera del loop (el haystack se cae per-entry).
+    std::string filterLower;
+    if (hasFilter) {
+        filterLower = std::string(filter);
+        for (auto& c : filterLower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    auto matchFilter = [&](const std::string& text, const std::string& channel) {
+        if (!hasFilter) return true;
+        std::string hay;
+        hay.reserve(text.size() + channel.size() + 1);
+        hay = text;
+        hay.push_back(' ');
+        hay.append(channel);
+        for (auto& c : hay) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return hay.find(filterLower) != std::string::npos;
+    };
+
+    // F3H24: detector simple de path `.lua:N` (o `.lua` sin línea) para
+    // el botón "ir" — encuentra el inicio del path desde la primera
+    // posición del .lua hacia atrás hasta un whitespace / inicio. No es
+    // un regex completo; basta para los mensajes típicos del Lua VM.
+    auto findLuaPath = [](const std::string& text) -> std::string {
+        const auto pos = text.find(".lua");
+        if (pos == std::string::npos) return {};
+        // Walk hacia atrás hasta espacio / `(` / `[` / `'` / `"` / inicio.
+        usize start = pos;
+        while (start > 0) {
+            const char c = text[start - 1];
+            if (c == ' ' || c == '\t' || c == '(' || c == '[' ||
+                c == '\'' || c == '"' || c == '<') break;
+            --start;
+        }
+        // Walk hacia adelante hasta `:N` / whitespace / cerrar paréntesis.
+        usize end = pos + 4;  // después de ".lua"
+        if (end < text.size() && text[end] == ':') {
+            ++end;
+            while (end < text.size() && std::isdigit(static_cast<unsigned char>(text[end]))) ++end;
+        }
+        return text.substr(start, end - start);
+    };
+
+    // F3H24: handler Copy as bug report. Recolecta los entries que se
+    // VAN a renderizar (mismas reglas que el render) y los copia al
+    // clipboard formateados con tag de nivel + channel + text.
+    if (copyClicked) {
+        std::ostringstream oss;
+        oss << "MoodEngine — Console export (" << totalCount << " total entries)\n";
+        oss << "---\n";
+        usize copied = 0;
+        for (const auto& e : entries) {
+            const int idx = indexFromLevel(e.level);
+            if (!m_levelEnabled[idx]) continue;
+            if (!matchFilter(e.text, e.channel)) continue;
+            oss << "[" << levelTag(e.level) << "] [" << e.channel << "] "
+                << e.text << "\n";
+            ++copied;
+        }
+        ImGui::SetClipboardText(oss.str().c_str());
+        Toasts::pushSuccess(
+            I18n::T("editor.toast.console_copied", static_cast<int>(copied)));
+    }
 
     if (ImGui::BeginChild("##log", ImVec2(0, 0), false,
                           ImGuiWindowFlags_HorizontalScrollbar)) {
@@ -210,7 +300,8 @@ void ConsolePanel::onImGuiRender() {
             // entry esta off, skipear sin contar como visible.
             const int idx = indexFromLevel(e.level);
             if (!m_levelEnabled[idx]) continue;
-            if (hasFilter && e.channel.find(filter) == std::string::npos) continue;
+            // F3H24: filtro por mensaje (case-insensitive).
+            if (!matchFilter(e.text, e.channel)) continue;
             ++visibleCount;
             ImGui::PushStyleColor(ImGuiCol_Text, colorForLevel(e.level));
             // F2H37: prefijo icon FA antes del tag de 3 chars. Tag se
@@ -220,6 +311,42 @@ void ConsolePanel::onImGuiRender() {
                         levelTag(e.level), e.channel.c_str(),
                         e.text.c_str());
             ImGui::PopStyleColor();
+
+            // F3H24: si el entry menciona un `.lua` path, agregar boton
+            // chico "[ir]" al lado para abrirlo con el editor default
+            // del SO (ShellExecute "open"). Out-of-scope: paths que no
+            // sean `.lua` (.material/.lua-mod/etc) — hito propio si
+            // emerge demanda.
+#if defined(_WIN32)
+            const std::string luaPath = findLuaPath(e.text);
+            if (!luaPath.empty()) {
+                ImGui::SameLine();
+                const std::string btnId = std::string(ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE)
+                                            + "##go_" + std::to_string(visibleCount);
+                if (ImGui::SmallButton(btnId.c_str())) {
+                    // Separar path real de `:N` (ShellExecute no acepta `:N`).
+                    std::string fileOnly = luaPath;
+                    const auto colon = fileOnly.find(".lua:");
+                    if (colon != std::string::npos) {
+                        fileOnly = fileOnly.substr(0, colon + 4);  // incluye ".lua"
+                    }
+                    const HINSTANCE r = ShellExecuteA(
+                        nullptr, "open", fileOnly.c_str(),
+                        nullptr, nullptr, SW_SHOWNORMAL);
+                    if (reinterpret_cast<INT_PTR>(r) <= 32) {
+                        Log::editor()->warn(
+                            "[console] no se pudo abrir '{}' (ShellExecute code {})",
+                            fileOnly,
+                            static_cast<int>(reinterpret_cast<INT_PTR>(r)));
+                    }
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s\n%s",
+                        I18n::T("editor.panel.console.open_lua").c_str(),
+                        luaPath.c_str());
+                }
+            }
+#endif
         }
         if (m_autoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f) {
             ImGui::SetScrollHereY(1.0f);

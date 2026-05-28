@@ -146,6 +146,10 @@ nlohmann::json editorSettingsToJson(const EditorSettings& s) {
     if (!soJson.empty()) j["stats_overlay"] = std::move(soJson);
 
     if (s.profilerFrameCount != defaults.profilerFrameCount) j["profiler_frame_count"] = s.profilerFrameCount;
+
+    // F3H24
+    if (s.toastsEnabled    != defaults.toastsEnabled)    j["toasts_enabled"]     = s.toastsEnabled;
+    if (s.toastsLifetimeMs != defaults.toastsLifetimeMs) j["toasts_lifetime_ms"] = s.toastsLifetimeMs;
     return j;
 }
 
@@ -232,6 +236,15 @@ EditorSettings editorSettingsFromJson(const nlohmann::json& j) {
     if (j.contains("profiler_frame_count") && j.at("profiler_frame_count").is_number_integer()) {
         const int v = j.at("profiler_frame_count").get<int>();
         s.profilerFrameCount = std::clamp(v, 60, 1200);
+    }
+
+    // F3H24
+    if (j.contains("toasts_enabled") && j.at("toasts_enabled").is_boolean()) {
+        s.toastsEnabled = j.at("toasts_enabled").get<bool>();
+    }
+    if (j.contains("toasts_lifetime_ms") && j.at("toasts_lifetime_ms").is_number_integer()) {
+        const int v = j.at("toasts_lifetime_ms").get<int>();
+        s.toastsLifetimeMs = std::clamp(v, 500, 10000);
     }
     return s;
 }

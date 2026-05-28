@@ -24,6 +24,7 @@
 #include "core/Log.h"
 #include "core/MemoryStats.h"  // F3H23: getRssBytes para stats overlay
 #include "core/Profiler.h"
+#include "core/Toasts.h"        // F3H24: tick aging del overlay
 #include "core/UserSettings.h"  // F3H14: thumbnailResolution change detect
 #include "engine/render/preview/MaterialPreviewRenderer.h"  // F3H15: recreacion en vivo
 #include "engine/render/preview/MeshThumbnailRenderer.h"  // F3H14: recreacion en vivo
@@ -225,6 +226,9 @@ void EditorApplication::tickFrameMetrics(f32 dt, f64 dtD) {
     profilerBuffer().resize(
         static_cast<u32>(UserSettings::editor().profilerFrameCount));
     profilerBuffer().endFrame();
+
+    // F3H24: aging de los toasts. El dt del frame ya viene en dtD (segundos).
+    Toasts::tick(static_cast<f32>(dtD * 1000.0));
 
     // F2H42: aplicar toggle VSync si el dev clickeo el checkbox.
     bool vsyncRequested = true;

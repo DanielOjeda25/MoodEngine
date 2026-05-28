@@ -31,6 +31,13 @@ public:
 private:
     void drawGeneralTab();
     void drawEditorTab();  // F3H7
+
+    /// F3H24: tracking de cambios entre apertura y cierre del panel.
+    /// Setea true cualquier setter que muta UserSettings; al detectar
+    /// `visible` transición true→false, si hay cambios emite un toast
+    /// "Preferencias guardadas" y resetea el flag.
+    bool m_changedSinceOpen = false;
+    bool m_wasVisibleLastFrame = false;
 };
 
 } // namespace Mood

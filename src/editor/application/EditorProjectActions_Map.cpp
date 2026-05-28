@@ -6,6 +6,8 @@
 #include "editor/application/EditorApplication.h"
 
 #include "core/Log.h"
+#include "core/Toasts.h"  // F3H24: emisiones automaticas open/new map
+#include "core/i18n/I18n.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/scene/serialization/SceneLoader.h"
@@ -110,6 +112,8 @@ void EditorApplication::handleSaveMapAs() {
     syncMapsSnapshot();
     m_ui.setStatusMessage("Mapa guardado como: " + outPath.filename().generic_string());
     Log::editor()->info("Mapa guardado como: {}", outPath.generic_string());
+    Toasts::pushSuccess(  // F3H24
+        I18n::T("editor.toast.map_saved", outPath.filename().generic_string()));
 }
 
 void EditorApplication::handleNewMap() {
@@ -199,6 +203,8 @@ void EditorApplication::handleOpenMap(const std::filesystem::path& mapPath) {
     syncMapsSnapshot();
     m_ui.setStatusMessage("Mapa abierto: " + mapPath.filename().generic_string());
     Log::editor()->info("Mapa abierto: {}", mapPath.generic_string());
+    Toasts::pushInfo(  // F3H24
+        I18n::T("editor.toast.map_opened", mapPath.filename().generic_string()));
 }
 
 void EditorApplication::handleSetCurrentMapAsDefault() {

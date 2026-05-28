@@ -73,6 +73,7 @@ inline constexpr unsigned short k_FontAwesomeRange[] = { 0xE005, 0xF8FF, 0 };
 #define ICON_FA_TRASH_CAN                           "\xef\x8b\xad" // 0xF2ED quitar componente (F2H81)
 #define ICON_FA_COPY                                "\xef\x83\x85" // 0xF0C5 copy values (F3H9)
 #define ICON_FA_PASTE                               "\xef\x83\xaa" // 0xF0EA paste values (F3H9)
+#define ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE          "\xef\x82\x8e" // 0xF08E external link (F3H24: abrir .lua)
 
 // --- Asset types (AssetBrowserPanel tabs + rows) ---
 #define ICON_FA_IMAGE                               "\xef\x80\xbe" // 0xF03E texture

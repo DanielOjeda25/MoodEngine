@@ -338,3 +338,63 @@ TEST_CASE("F3H23: stats_overlay fromJson ignora claves de tipo equivocado") {
     // Debe quedar en default (true) porque la clave es invalida.
     CHECK(s.statsOverlay.showFps == true);
 }
+
+// =====================================================================
+// F3H24: toasts settings (enabled + lifetime ms)
+// =====================================================================
+
+TEST_CASE("F3H24: Toasts defaults — enabled ON, lifetime 3000 ms") {
+    EditorSettings s;
+    CHECK(s.toastsEnabled == true);
+    CHECK(s.toastsLifetimeMs == 3000);
+}
+
+TEST_CASE("F3H24: toJson omite toasts si todo igual al default") {
+    EditorSettings s;
+    const auto j = editorSettingsToJson(s);
+    CHECK_FALSE(j.contains("toasts_enabled"));
+    CHECK_FALSE(j.contains("toasts_lifetime_ms"));
+}
+
+TEST_CASE("F3H24: toJson incluye solo los toasts fields que difieren") {
+    EditorSettings s;
+    s.toastsEnabled = false;
+    const auto j = editorSettingsToJson(s);
+    REQUIRE(j.contains("toasts_enabled"));
+    CHECK(j.at("toasts_enabled") == false);
+    CHECK_FALSE(j.contains("toasts_lifetime_ms"));
+}
+
+TEST_CASE("F3H24: Toasts roundtrip enabled + lifetime") {
+    EditorSettings before;
+    before.toastsEnabled    = false;
+    before.toastsLifetimeMs = 5000;
+    const auto j = editorSettingsToJson(before);
+    const auto after = editorSettingsFromJson(j);
+    CHECK(after.toastsEnabled    == false);
+    CHECK(after.toastsLifetimeMs == 5000);
+}
+
+TEST_CASE("F3H24: toastsLifetimeMs sanitize clamp [500, 10000]") {
+    {
+        nlohmann::json j;
+        j["toasts_lifetime_ms"] = 100;  // debajo
+        CHECK(editorSettingsFromJson(j).toastsLifetimeMs == 500);
+    }
+    {
+        nlohmann::json j;
+        j["toasts_lifetime_ms"] = 50000;  // encima
+        CHECK(editorSettingsFromJson(j).toastsLifetimeMs == 10000);
+    }
+    {
+        nlohmann::json j;
+        j["toasts_lifetime_ms"] = 2500;  // valido
+        CHECK(editorSettingsFromJson(j).toastsLifetimeMs == 2500);
+    }
+}
+
+TEST_CASE("F3H24: toasts_enabled fromJson ignora tipo no-bool") {
+    nlohmann::json j;
+    j["toasts_enabled"] = "true";  // string
+    CHECK(editorSettingsFromJson(j).toastsEnabled == true);  // default
+}

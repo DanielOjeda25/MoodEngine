@@ -334,6 +334,7 @@ add_library(mood_engine_lib STATIC
     src/core/LogRingSink.cpp
     src/core/MemoryStats.cpp  # F3H23: RSS del proceso para stats overlay
     src/core/Time.cpp
+    src/core/Toasts.cpp  # F3H24
     src/core/UserSettings.cpp  # F2H43
 
     src/platform/Window.cpp
@@ -592,6 +593,7 @@ add_executable(MoodEditor
     src/editor/ui/EditorThemes.cpp  # F2H76
     src/editor/ui/MenuBar.cpp
     src/editor/ui/StatusBar.cpp
+    src/editor/ui/ToastsOverlay.cpp  # F3H24
     src/editor/ui/Dockspace.cpp
     src/editor/ui/Toolbar.cpp
     src/editor/ui/MapEditorTopBar.cpp

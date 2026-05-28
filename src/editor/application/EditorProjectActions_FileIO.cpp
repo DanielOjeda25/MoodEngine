@@ -8,6 +8,8 @@
 #include "editor/application/EditorApplication.h"
 
 #include "core/Log.h"
+#include "core/Toasts.h"  // F3H24: emisiones automaticas save
+#include "core/i18n/I18n.h"  // F3H24: i18n de los mensajes
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/preview/MaterialPreviewRenderer.h"  // F3H15: setDiskCacheRoot
 #include "engine/render/preview/MeshThumbnailRenderer.h"  // F3H14: setDiskCacheRoot
@@ -262,6 +264,8 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
 
     m_ui.setStatusMessage("Proyecto abierto: " + m_project->name);
     Log::editor()->info("Proyecto abierto: {}", m_project->name);
+    Toasts::pushInfo(  // F3H24
+        I18n::T("editor.toast.project_opened", m_project->name));
     return true;
 }
 
@@ -303,10 +307,16 @@ void EditorApplication::handleSave() {
         m_ui.setStatusMessage("Guardado: " + m_project->name);
         Log::editor()->info("Proyecto guardado ({}): {}",
             m_project->name, mapPath.generic_string());
+        // F3H24: toast de éxito (Save = 1 de las 4 emisiones automáticas).
+        Toasts::pushSuccess(
+            I18n::T("editor.toast.project_saved", m_project->name));
     } catch (const std::exception& e) {
         Log::editor()->warn("Guardar fallo: {}", e.what());
         pfd::message("MoodEngine", std::string("Error al guardar: ") + e.what(),
                      pfd::choice::ok, pfd::icon::error);
+        // F3H24: toast de error con el motivo.
+        Toasts::pushError(
+            I18n::T("editor.toast.project_save_error", std::string(e.what())));
     }
 }
 

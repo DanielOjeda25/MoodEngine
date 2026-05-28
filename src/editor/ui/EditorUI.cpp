@@ -378,6 +378,11 @@ void EditorUI::draw(bool& requestQuit) {
     if (!m_hasProject) {
         drawWelcomeModal();
     }
+
+    // F3H24: toasts overlay — por encima de todo el chrome (después
+    // del Welcome modal). No-op si la cola está vacía o
+    // `toastsEnabled` está OFF.
+    m_toastsOverlay.draw();
 }
 
 void EditorUI::drawWelcomeModal() {

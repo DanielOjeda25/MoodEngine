@@ -142,6 +142,19 @@ struct EditorSettings {
     /// 60fps). Clamp `[60, 1200]` — debajo no hay suficiente data para
     /// detectar spikes, encima la memoria del ring se infla sin upside.
     int profilerFrameCount = 240;
+
+    /// F3H24: toasts no-modales en la esquina inferior derecha (estilo
+    /// VSCode). Default ON — el dev los apaga si quiere modo "headless".
+    /// Cuando off, `Toasts::push` es no-op silencioso (los logs del
+    /// LogRingSink siguen capturando todo, solo se omite el chip visual).
+    bool toastsEnabled = true;
+
+    /// F3H24: lifetime default de los toasts en milisegundos. Default
+    /// 3000 ms (3 segundos — VSCode usa ~5s, Unity ~3s; 3s sentí más
+    /// natural para mensajes de "Guardado" / "Asset importado"). Clamp
+    /// `[500, 10000]`: debajo de 500 ms es subliminal; encima de 10s
+    /// los toasts se acumulan visualmente.
+    int toastsLifetimeMs = 3000;
 };
 
 /// @brief Lee `settings.json` del disco. Si no existe o tiene parse

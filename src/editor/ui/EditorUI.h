@@ -22,6 +22,7 @@
 #include "editor/panels/debug/NodeGraphSandboxPanel.h"  // F2H46
 #include "editor/panels/debug/PerformanceHudPanel.h"
 #include "editor/panels/debug/ProfilerPanel.h"  // F3H23
+#include "editor/ui/ToastsOverlay.h"  // F3H24
 #include "editor/panels/narrative/NarrativeIntroPanel.h"  // F2H46
 #include "editor/panels/narrative/DialogBrowserPanel.h"    // F2H47
 #include "editor/panels/narrative/DialogEditorPanel.h"     // F2H47
@@ -366,6 +367,7 @@ private:
     Dockspace m_dockspace;
     MenuBar m_menuBar;
     StatusBar m_statusBar;
+    ToastsOverlay m_toastsOverlay;  // F3H24
 
     ViewportPanel m_viewport;
     HierarchyPanel m_hierarchy;
