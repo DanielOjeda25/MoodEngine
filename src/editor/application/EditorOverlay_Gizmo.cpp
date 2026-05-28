@@ -350,27 +350,23 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
             }
         }
 
-        // F3H20: floating text del delta durante translate drag. Estilo
-        // Hammer/Unreal: muestra cuanto te moviste en world units + el
-        // step actual si el grid snap esta activo. Asi el dev sabe si
-        // movio 1.5m o 0.05m sin tener que mirar el Inspector.
-        if (m_gizmo.active && effectiveMode == GizmoMode::Translate
+        // F3H20: floating text del delta durante translate drag. Muestra
+        // cuanto te moviste + el step actual. F3H21 polish: gateado al
+        // snap grid activo — sin snap, el texto era ruido visual segun el
+        // dev. Con snap activo cobra sentido porque el dev quiere ver el
+        // multiplo del step que esta aplicando.
+        const bool gridOn = m_project
+            && m_project->settings.snap.snapGridEnabled;
+        if (gridOn && m_gizmo.active && effectiveMode == GizmoMode::Translate
             && m_gizmo.axis >= 0 && m_gizmo.axis < 3) {
             const glm::vec3 totalDelta = tform.position - m_gizmo.startValue;
             const f32 axisDelta = totalDelta[m_gizmo.axis];
             const char axisChar = (m_gizmo.axis == 0) ? 'X'
                                 : (m_gizmo.axis == 1) ? 'Y' : 'Z';
+            const f32 step = m_project->settings.snap.snapGridStep;
             char readout[64];
-            const bool gridOn = m_project
-                && m_project->settings.snap.snapGridEnabled;
-            if (gridOn) {
-                const f32 step = m_project->settings.snap.snapGridStep;
-                std::snprintf(readout, sizeof(readout),
-                               "%c %+.3f  (grid %.3f)", axisChar, axisDelta, step);
-            } else {
-                std::snprintf(readout, sizeof(readout),
-                               "%c %+.3f", axisChar, axisDelta);
-            }
+            std::snprintf(readout, sizeof(readout),
+                           "%c %+.3f  (grid %.3f)", axisChar, axisDelta, step);
             // Posicion: 18 px debajo del origen del gizmo, con sombra
             // negra para legibilidad sobre fondos claros.
             const ImVec2 textPos(osx + 14.0f, osy + 14.0f);

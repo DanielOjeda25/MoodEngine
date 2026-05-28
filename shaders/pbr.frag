@@ -41,6 +41,9 @@ uniform sampler2D uAoMap;              // unit 3
 uniform int   uHasAlbedoMap;
 uniform int   uHasMetallicRoughness;
 uniform int   uHasAoMap;
+// F3H21: Solid mode del viewport del editor — gris flat con diffuse
+// direccional simple. Skipea texturas + lighting completo + PBR loop.
+uniform int   uSolidShading;
 uniform vec3  uAlbedoTint;
 uniform float uMetallicMult;
 uniform float uRoughnessMult;
@@ -319,6 +322,26 @@ layout(location = 0) out vec4 FragColor;
 layout(location = 1) out vec4 NormalRT;
 
 void main() {
+    // F3H21 Solid mode: gris flat con diffuse direccional simple (estilo
+    // Blender Solid). Skipea todo el PBR loop + texturas + lighting
+    // completo. Util para iterar geometria sin distraccion de materiales.
+    if (uSolidShading == 1) {
+        vec3 N = normalize(vWorldNormal);
+        // Light hardcoded top-front-right para que las caras se distingan
+        // sin depender de la directional de la escena.
+        vec3 L = normalize(vec3(0.5, 1.0, 0.3));
+        float NdotL = max(dot(N, L), 0.0);
+        float ambient = 0.35;
+        // Gris claro Blender-ish (~0.65) con sombra suave por NdotL.
+        vec3 col = vec3(0.65) * (ambient + NdotL * 0.65);
+        FragColor = vec4(col, 1.0);
+        // Marcar este pixel como "no PBR" para que SSR lo descarte
+        // (alpha < 0.5 = skip). Sin esto, los reflejos del Solid serian
+        // basura porque no hay normal valido para ray-trace.
+        NormalRT = vec4(0.0);
+        return;
+    }
+
     // --- Sample del material ---
     vec3 albedo = uAlbedoTint;
     if (uHasAlbedoMap == 1) {

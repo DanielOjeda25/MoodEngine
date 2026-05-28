@@ -191,6 +191,25 @@ public:
     OpenGLCubemapTexture* iblPrefilter() const  { return m_iblPrefilter.get(); }
     ITexture*             iblBrdfLut() const    { return m_iblBrdfLut.get(); }
 
+    /// @brief F3H21: viewport render mode flags. El caller setea per-frame
+    ///        antes de `renderScene` segun `UserSettings.editor`.
+    ///        - wireframe=true => glPolygonMode(GL_LINE) durante el scene
+    ///          draw. Restaurado a FILL antes de `endFrame` para que debug
+    ///          overlays se vean normales.
+    ///        - skipPostPasses=true => salta SSAO + SSR + Bloom + Color
+    ///          Grading en `endFrame` (Wireframe / Solid).
+    ///        - forcePostPasses=true => ignora los flags del Environment
+    ///          (m_bloomEnabled, etc.) y fuerza TODOS los post passes ON.
+    ///          Modo "Rendered" del viewport — pipeline maximo visual
+    ///          aunque la escena tenga effects OFF para Play mode.
+    void setWireframeMode(bool on) { m_wireframeMode = on; }
+    void setSkipPostPasses(bool on) { m_skipPostPasses = on; }
+    void setForcePostPasses(bool on) { m_forcePostPasses = on; }
+    /// @brief F3H21: Solid mode del viewport — el PBR shader usa gris
+    ///        flat + diffuse direccional simple (Blender Solid style).
+    void setSolidShading(bool on) { m_solidShading = on; }
+    bool solidShading() const { return m_solidShading; }
+
 private:
     std::unique_ptr<IRenderer> m_renderer;
     std::unique_ptr<OpenGLFramebuffer> m_sceneFb;     // HDR RGBA16F
@@ -295,6 +314,14 @@ private:
     f32  m_ssrThickness = 0.5f;
     f32  m_ssrStepSize  = 0.2f;
     f32  m_ssrIntensity = 0.5f;
+
+    // F3H21: viewport render mode flags. El caller (EditorRenderPass) los
+    // setea per-frame desde UserSettings. Defaults false equivalen al
+    // comportamiento pre-F3H21 (MaterialPreview).
+    bool m_wireframeMode = false;
+    bool m_skipPostPasses = false;
+    bool m_forcePostPasses = false;  // Rendered: ignora flags del Environment
+    bool m_solidShading = false;     // Solid: gris flat en el PBR shader
 
     // F2H58: Color Grading params (poblados por applyEnvironmentFromScene).
     bool        m_colorGradingEnabled   = false;

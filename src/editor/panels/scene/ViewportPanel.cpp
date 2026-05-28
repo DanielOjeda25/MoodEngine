@@ -216,6 +216,76 @@ void drawViewportSnapStatusBar(EditorUI* ui, ImVec2 imageMin,
     ImGui::PopStyleVar();
 }
 
+// F3H21: 4 botones para cambiar el viewport render mode (Wireframe /
+// Solid / Material Preview / Rendered). Estilo Blender — top-right del
+// viewport, siempre visibles. El boton activo se destaca con background
+// cyan; click muta UserSettings + save al disco + log.
+void drawViewportRenderModeBar(ImVec2 imageMin, ImVec2 imageSize) {
+    constexpr float kTopOffset = 8.0f;
+    constexpr float kRightOffset = 8.0f;
+    // Pivot (1.0, 0.0) ancla la sub-window a su esquina superior derecha
+    // → posicion ABSOLUTA refiere a esa esquina del overlay.
+    ImGui::SetNextWindowPos(
+        ImVec2(imageMin.x + imageSize.x - kRightOffset,
+                imageMin.y + kTopOffset),
+        ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+    ImGui::SetNextWindowBgAlpha(0.55f);
+    constexpr ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoDocking |
+        ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoFocusOnAppearing |
+        ImGuiWindowFlags_NoNav;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 4.0f));
+    if (!ImGui::Begin("##viewport_render_mode_bar", nullptr, flags)) {
+        ImGui::End();
+        ImGui::PopStyleVar();
+        return;
+    }
+
+    using Mode = UserSettings::ViewportRenderMode;
+    const auto current = UserSettings::editor().viewportRenderMode;
+    const ImU32 kActiveBg = IM_COL32(60, 140, 200, 255);  // cyan Blender-like
+
+    auto modeButton = [&](Mode m, const char* label,
+                          const char* tooltipKey) {
+        const bool isActive = (m == current);
+        if (isActive) {
+            ImGui::PushStyleColor(ImGuiCol_Button,        kActiveBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kActiveBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  kActiveBg);
+        }
+        if (ImGui::SmallButton(label)) {
+            auto ed = UserSettings::editor();
+            ed.viewportRenderMode = m;
+            UserSettings::setEditor(ed);
+            UserSettings::save();
+        }
+        if (isActive) ImGui::PopStyleColor(3);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", I18n::T(tooltipKey).c_str());
+        }
+    };
+
+    modeButton(Mode::Wireframe,       ICON_FA_BORDER_NONE,
+               "editor.viewport.render_mode.wireframe.tooltip");
+    ImGui::SameLine(0.0f, 2.0f);
+    modeButton(Mode::Solid,           ICON_FA_CIRCLE,
+               "editor.viewport.render_mode.solid.tooltip");
+    ImGui::SameLine(0.0f, 2.0f);
+    modeButton(Mode::MaterialPreview, ICON_FA_CUBE,
+               "editor.viewport.render_mode.material.tooltip");
+    ImGui::SameLine(0.0f, 2.0f);
+    modeButton(Mode::Rendered,        ICON_FA_GLOBE,
+               "editor.viewport.render_mode.rendered.tooltip");
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+
 } // namespace
 
 void ViewportPanel::onImGuiRender() {
@@ -290,6 +360,9 @@ void ViewportPanel::onImGuiRender() {
             // F3H20 iter 6: status bar arriba del viewport mostrando los
             // steps de cada snap activo (Grid/Angle/Scale). Estilo Blender.
             drawViewportSnapStatusBar(m_editorUi, imageMin, imageSize);
+            // F3H21: 4 botones (Wireframe/Solid/Material/Rendered) top-right
+            // del viewport, estilo Blender. Persiste en UserSettings.editor.
+            drawViewportRenderModeBar(imageMin, imageSize);
 
             // Helper local: pos del cursor -> NDC dentro de la imagen.
             auto mousePosToNdc = [&imageMin, &imageSize](ImVec2 mp, float& ndcX, float& ndcY) {

@@ -9,6 +9,7 @@
 #include "editor/application/EditorOverlay_Internal.h"
 
 #include "core/Log.h"
+#include "core/UserSettings.h"  // F3H21
 #include "editor/commands/EditTransformCommand.h"
 #include "editor/commands/MultiEditTransformCommand.h"  // F2H23 iter 5
 #include "editor/selection/SelectionSet.h"
@@ -419,10 +420,10 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
             m_gizmoKeyTap.lastKey = 'R';
             m_gizmoKeyTap.lastPressTime = now;
         }
-        // F2H17 + F2H30: teclas 1/2/3 toggle sub-modo Vertex/Edge/Face.
-        // Esc vuelve a Object. ImGuiKey_N es la fila superior;
-        // ImGuiKey_KeypadN es numpad. Aceptamos ambas para no fallar
-        // segun el layout.
+        // F2H17 + F2H30: teclas 1/2/3 (fila superior) toggle sub-modo
+        // Vertex/Edge/Face. Esc vuelve a Object.
+        // F3H21: numpad reservado para views (1=front, 3=right, 7=top).
+        // Convencion Blender: top-row = sub-modes, numpad = views.
         auto toggleSubMode = [&](EditorSubMode target) {
             m_subMode = (m_subMode == target)
                 ? EditorSubMode::Object
@@ -439,18 +440,13 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
             }
             Log::editor()->info("Sub-mode: {}", label);
         };
-        // F2H30: tecla 1 -> Vertex Mode.
-        const bool key1 = ImGui::IsKeyPressed(ImGuiKey_1, false) ||
-                            ImGui::IsKeyPressed(ImGuiKey_Keypad1, false);
-        if (key1) toggleSubMode(EditorSubMode::Vertex);
+        // F2H30: tecla 1 (fila superior) -> Vertex Mode. F3H21: numpad
+        // reservado para Front view, ya no dispara sub-mode.
+        if (ImGui::IsKeyPressed(ImGuiKey_1, false)) toggleSubMode(EditorSubMode::Vertex);
         // F2H30: tecla 2 -> Edge Mode.
-        const bool key2 = ImGui::IsKeyPressed(ImGuiKey_2, false) ||
-                            ImGui::IsKeyPressed(ImGuiKey_Keypad2, false);
-        if (key2) toggleSubMode(EditorSubMode::Edge);
-        // F2H17: tecla 3 -> Face Mode.
-        const bool key3 = ImGui::IsKeyPressed(ImGuiKey_3, false) ||
-                            ImGui::IsKeyPressed(ImGuiKey_Keypad3, false);
-        if (key3) toggleSubMode(EditorSubMode::Face);
+        if (ImGui::IsKeyPressed(ImGuiKey_2, false)) toggleSubMode(EditorSubMode::Edge);
+        // F2H17: tecla 3 -> Face Mode. F3H21: numpad 3 = Right view.
+        if (ImGui::IsKeyPressed(ImGuiKey_3, false)) toggleSubMode(EditorSubMode::Face);
         // F2H30 Bloque C: tecla B toggle pincel poligonal. Solo
         // activo en workspace "Editor de mapas" (atajo seria
         // confuso en otros).
@@ -514,6 +510,100 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
                 ? glm::length(tf.scale) * 0.6f
                 : 1.0f;
             m_editorCamera.focusOn(tf.position, std::max(r, 0.3f));
+        }
+
+        // F3H21: tecla Z cicla el viewport render mode (Blender convention).
+        // Wireframe -> Solid -> MaterialPreview -> Rendered -> Wireframe.
+        // Mute UserSettings.editor y guarda al disco (settings.json) para
+        // persistir per-instalacion. Solo en Editor mode + workspaces
+        // perspectivos — Z en map_editor reservado por si emerge uso CSG.
+        if (ImGui::IsKeyPressed(ImGuiKey_Z, false) &&
+            m_ui.workspaceManager().activeWorkspace().name != "map_editor") {
+            auto ed = UserSettings::editor();
+            const int cur = static_cast<int>(ed.viewportRenderMode);
+            ed.viewportRenderMode =
+                static_cast<UserSettings::ViewportRenderMode>((cur + 1) % 4);
+            UserSettings::setEditor(ed);
+            UserSettings::save();
+            const char* label = "?";
+            switch (ed.viewportRenderMode) {
+                using Mode = UserSettings::ViewportRenderMode;
+                case Mode::Wireframe:       label = "Wireframe";        break;
+                case Mode::Solid:           label = "Solid";            break;
+                case Mode::MaterialPreview: label = "Material Preview"; break;
+                case Mode::Rendered:        label = "Rendered";         break;
+            }
+            Log::editor()->info("[viewport] render mode: {}", label);
+        }
+
+        // F3H21: numpad views estilo Blender. Solo activos en workspaces
+        // perspectivos (NO map_editor, que tiene viewports orto dedicados
+        // Top/Front/Side propios via OrthoCamera). El target world default
+        // es el target actual de la camara — el dev "rota alrededor de lo
+        // que esta mirando" en vez de saltar al origen.
+        const bool numpadActive =
+            m_ui.workspaceManager().activeWorkspace().name != "map_editor";
+        if (numpadActive) {
+            const auto& ed = UserSettings::editor();
+            const int durMs = ed.smoothViewEnabled ? ed.smoothViewDurationMs : 0;
+            const bool ctrl = ImGui::GetIO().KeyCtrl;
+            const float r = m_editorCamera.radius();
+            const glm::vec3 t = m_editorCamera.target();
+
+            // Yaw/pitch convencion del EditorCamera (Y-up):
+            //   yaw=0,  pitch=0  -> camara en +Z mirando hacia -Z (look at origin).
+            //   yaw=90, pitch=0  -> camara en +X mirando -X (vista desde la derecha).
+            //   yaw=*,  pitch=90 -> camara arriba mirando hacia abajo.
+            // Numpad 1 = front (mirar -Z) -> yaw=0, pitch=0; Ctrl+1 = back (yaw=180).
+            // Numpad 3 = right (mirar +X) -> yaw=90; Ctrl+3 = left (yaw=-90).
+            // Numpad 7 = top (mirar -Y) -> pitch=89 (clamp del editor cam).
+            //   Ctrl+7 = bottom -> pitch=-89.
+            if (ImGui::IsKeyPressed(ImGuiKey_Keypad1, false)) {
+                const float yaw = ctrl ? 180.0f : 0.0f;
+                m_editorCamera.beginLerpTo(yaw, 0.0f, r, t, durMs);
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_Keypad3, false)) {
+                const float yaw = ctrl ? -90.0f : 90.0f;
+                m_editorCamera.beginLerpTo(yaw, 0.0f, r, t, durMs);
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_Keypad7, false)) {
+                const float pitch = ctrl ? -89.0f : 89.0f;
+                m_editorCamera.beginLerpTo(m_editorCamera.yawDeg(), pitch, r, t, durMs);
+            }
+            // Numpad 9: invertir vista actual (yaw += 180, pitch *= -1).
+            if (ImGui::IsKeyPressed(ImGuiKey_Keypad9, false)) {
+                const float yaw = m_editorCamera.yawDeg() + 180.0f;
+                const float pitch = -m_editorCamera.pitchDeg();
+                m_editorCamera.beginLerpTo(yaw, pitch, r, t, durMs);
+            }
+            // Numpad 0: pose a la primera entidad con CameraComponent
+            // (decision D3 del plan F3H21). Si no hay camara, no-op + log.
+            if (ImGui::IsKeyPressed(ImGuiKey_Keypad0, false)) {
+                Entity foundCam{};
+                m_scene->forEach<CameraComponent, TransformComponent>(
+                    [&](Entity e, CameraComponent&, TransformComponent&) {
+                        if (!foundCam) foundCam = e;
+                    });
+                if (foundCam) {
+                    const auto& tf = foundCam.getComponent<TransformComponent>();
+                    // Convertir TransformComponent.rotationEuler a yaw/pitch del
+                    // EditorCamera (Y-up). El sign del yaw es invertido por la
+                    // convencion del orbit cam vs Euler de la entidad. Target a
+                    // 5m frente a la camara para que el editor cam tenga un
+                    // punto de orbit usable.
+                    const float yawCam = -tf.rotationEuler.y;
+                    const float pitchCam = std::clamp(tf.rotationEuler.x, -89.0f, 89.0f);
+                    const glm::vec3 fwd = glm::vec3(
+                        std::sin(glm::radians(tf.rotationEuler.y)),
+                        -std::sin(glm::radians(tf.rotationEuler.x)),
+                        std::cos(glm::radians(tf.rotationEuler.y))
+                    );
+                    const glm::vec3 target = tf.position + glm::normalize(fwd) * 5.0f;
+                    m_editorCamera.beginLerpTo(yawCam, pitchCam, 5.0f, target, durMs);
+                } else {
+                    Log::editor()->info("[numpad 0] no hay CameraComponent en la escena");
+                }
+            }
         }
     }
     // La tecla Delete/Backspace se procesa via evento SDL en

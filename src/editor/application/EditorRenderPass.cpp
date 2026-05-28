@@ -16,6 +16,7 @@
 
 #include "editor/application/EditorApplication.h"
 
+#include "core/UserSettings.h"  // F3H21: viewport render mode flags
 #include "core/math/AABB.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/resources/MeshAsset.h"  // F2H44: AABB del mesh para outline
@@ -62,6 +63,30 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
     }
 
     if (!m_scene) return;
+
+    // F3H21: traducir viewport render mode (UserSettings.editor) a los
+    // dos flags del SceneRenderer. Solo se aplica en Editor mode — en
+    // Play mode dejamos siempre MaterialPreview-equivalente (default
+    // flags=false) para que el dev pruebe el game-feel real.
+    if (m_mode == EditorMode::Editor) {
+        const auto mode = UserSettings::editor().viewportRenderMode;
+        using Mode = UserSettings::ViewportRenderMode;
+        const bool wireframe = (mode == Mode::Wireframe);
+        const bool skipPost = (mode == Mode::Wireframe || mode == Mode::Solid);
+        const bool forcePost = (mode == Mode::Rendered);
+        const bool solid = (mode == Mode::Solid);
+        m_sceneRenderer->setWireframeMode(wireframe);
+        m_sceneRenderer->setSkipPostPasses(skipPost);
+        m_sceneRenderer->setForcePostPasses(forcePost);
+        m_sceneRenderer->setSolidShading(solid);
+    } else {
+        // Play mode: respetar el Environment de la escena, sin overrides.
+        m_sceneRenderer->setWireframeMode(false);
+        m_sceneRenderer->setSkipPostPasses(false);
+        m_sceneRenderer->setForcePostPasses(false);
+        m_sceneRenderer->setSolidShading(false);
+    }
+
     m_sceneRenderer->renderScene(*m_scene, *m_assetManager,
                                   view, projection, aspect, cameraPos,
                                   panelW, panelH);

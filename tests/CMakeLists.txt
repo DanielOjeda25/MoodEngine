@@ -19,7 +19,8 @@ add_executable(mood_tests
     test_ray.cpp                                # AUDIT-3 (pickRayFromNdc)
     test_project_serializer.cpp
     test_project_settings.cpp                  # F3H1
-    test_user_settings_editor.cpp              # F3H7
+    test_user_settings_editor.cpp              # F3H7 (+F3H21 fields)
+    test_editor_camera_lerp.cpp                # F3H21
     test_scene.cpp
     test_lua.cpp
     test_lua_bindings.cpp

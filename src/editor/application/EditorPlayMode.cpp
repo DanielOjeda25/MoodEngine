@@ -154,7 +154,7 @@ void EditorApplication::exitPlayMode() {
 // (modo, input bloqueado, mounted/on-foot) cubiertas por el caller.
 void EditorApplication::updateCameras(f32 dt) {
     if (m_mode == EditorMode::Editor) {
-        updateEditorCamera();
+        updateEditorCamera(dt);
         return;
     }
 
@@ -206,7 +206,14 @@ void EditorApplication::updateCameras(f32 dt) {
 // break-B3: editor mode camera. Lee input del panel Viewport (drag /
 // pan / wheel) y aplica al `m_editorCamera`. Solo se llama en
 // EditorMode::Editor.
-void EditorApplication::updateEditorCamera() {
+// F3H21: avanza el lerp numpad (si hay) ANTES del input — y mientras
+// hay lerp activo ignoramos rotate/pan/wheel para no cortar el viaje
+// (convencion Blender Smooth View). El dev recupera control al
+// terminar la transicion ~200 ms despues.
+void EditorApplication::updateEditorCamera(f32 dt) {
+    m_editorCamera.tick(dt);
+    if (m_editorCamera.isLerping()) return;
+
     const float dx = m_ui.viewport().cameraRotateDx();
     const float dy = m_ui.viewport().cameraRotateDy();
     const float panDx = m_ui.viewport().cameraPanDx();

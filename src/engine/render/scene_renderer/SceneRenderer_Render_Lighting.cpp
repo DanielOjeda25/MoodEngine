@@ -171,6 +171,10 @@ void SceneRenderer::applySceneShaderUniforms(IShader& sh,
     sh.setFloat("uFogDensity", m_fog.density);
     sh.setFloat("uFogStart",   m_fog.linearStart);
     sh.setFloat("uFogEnd",     m_fog.linearEnd);
+
+    // F3H21: Solid mode -- el shader branch al inicio devuelve gris flat
+    // saltando TODO el PBR loop. Default 0 = pipeline normal.
+    sh.setInt  ("uSolidShading", m_solidShading ? 1 : 0);
 }
 
 } // namespace Mood

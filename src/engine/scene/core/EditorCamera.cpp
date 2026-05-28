@@ -88,4 +88,70 @@ glm::mat4 EditorCamera::projectionMatrix(float aspectRatio) const {
     return glm::perspective(glm::radians(m_fovDeg), aspectRatio, m_near, m_far);
 }
 
+void EditorCamera::setPose(float yawDeg, float pitchDeg, float radius,
+                            const glm::vec3& target) {
+    m_yawDeg   = yawDeg;
+    m_pitchDeg = std::clamp(pitchDeg, k_minPitch, k_maxPitch);
+    m_radius   = std::clamp(radius, k_minRadius, k_maxRadius);
+    m_target   = target;
+    // cancelar lerp en curso — el setPose es teleport explicito
+    m_lerpRemainingSec = 0.0f;
+}
+
+void EditorCamera::beginLerpTo(float yawDeg, float pitchDeg, float radius,
+                                const glm::vec3& target, int durationMs) {
+    // Duracion <= 0: teleport (equivalente al toggle smoothViewEnabled=false).
+    if (durationMs <= 0) {
+        setPose(yawDeg, pitchDeg, radius, target);
+        return;
+    }
+
+    // Snapshot del start desde la pose actual.
+    m_lerpStart_yaw    = m_yawDeg;
+    m_lerpStart_pitch  = m_pitchDeg;
+    m_lerpStart_radius = m_radius;
+    m_lerpStart_target = m_target;
+
+    // Yaw shortest-path: ajustar end al delta minimo desde start.
+    // Sin esto, ir de 350 a 10 grados haria el camino largo (-340).
+    float dy = yawDeg - m_yawDeg;
+    while (dy > 180.0f)  dy -= 360.0f;
+    while (dy < -180.0f) dy += 360.0f;
+
+    m_lerpEnd_yaw    = m_yawDeg + dy;
+    m_lerpEnd_pitch  = std::clamp(pitchDeg, k_minPitch, k_maxPitch);
+    m_lerpEnd_radius = std::clamp(radius, k_minRadius, k_maxRadius);
+    m_lerpEnd_target = target;
+
+    m_lerpDurationSec  = static_cast<float>(durationMs) / 1000.0f;
+    m_lerpRemainingSec = m_lerpDurationSec;
+}
+
+void EditorCamera::tick(float dtSeconds) {
+    if (m_lerpRemainingSec <= 0.0f) return;
+
+    m_lerpRemainingSec -= dtSeconds;
+
+    if (m_lerpRemainingSec <= 0.0f) {
+        // Llegamos: setear el end exacto y apagar el lerp.
+        m_yawDeg   = m_lerpEnd_yaw;
+        m_pitchDeg = m_lerpEnd_pitch;
+        m_radius   = m_lerpEnd_radius;
+        m_target   = m_lerpEnd_target;
+        m_lerpRemainingSec = 0.0f;
+        return;
+    }
+
+    // t en [0..1] desde el start. Easing smoothstep cubico: 3t^2 - 2t^3.
+    // Velocidad cero en ambos extremos -> sensacion natural sin overshoot.
+    const float elapsed = m_lerpDurationSec - m_lerpRemainingSec;
+    const float tLin = std::clamp(elapsed / m_lerpDurationSec, 0.0f, 1.0f);
+    const float t = tLin * tLin * (3.0f - 2.0f * tLin);
+
+    m_yawDeg   = m_lerpStart_yaw    + (m_lerpEnd_yaw    - m_lerpStart_yaw)    * t;
+    m_pitchDeg = m_lerpStart_pitch  + (m_lerpEnd_pitch  - m_lerpStart_pitch)  * t;
+    m_radius   = m_lerpStart_radius + (m_lerpEnd_radius - m_lerpStart_radius) * t;
+    m_target   = m_lerpStart_target + (m_lerpEnd_target - m_lerpStart_target) * t;
+}
+
 } // namespace Mood

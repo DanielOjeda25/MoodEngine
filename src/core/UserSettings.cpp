@@ -127,6 +127,9 @@ nlohmann::json editorSettingsToJson(const EditorSettings& s) {
     if (s.clickDragThresholdPx    != defaults.clickDragThresholdPx)    j["click_drag_threshold_px"]   = s.clickDragThresholdPx;
     if (s.thumbnailResolution     != defaults.thumbnailResolution)     j["thumbnail_resolution"]      = s.thumbnailResolution;
     if (s.hoverPreviewDelayMs     != defaults.hoverPreviewDelayMs)     j["hover_preview_delay_ms"]    = s.hoverPreviewDelayMs;
+    if (s.viewportRenderMode      != defaults.viewportRenderMode)      j["viewport_render_mode"]      = static_cast<int>(s.viewportRenderMode);
+    if (s.smoothViewEnabled       != defaults.smoothViewEnabled)       j["smooth_view_enabled"]       = s.smoothViewEnabled;
+    if (s.smoothViewDurationMs    != defaults.smoothViewDurationMs)    j["smooth_view_duration_ms"]   = s.smoothViewDurationMs;
     return j;
 }
 
@@ -165,6 +168,21 @@ EditorSettings editorSettingsFromJson(const nlohmann::json& j) {
     if (j.contains("hover_preview_delay_ms") && j.at("hover_preview_delay_ms").is_number_integer()) {
         const int v = j.at("hover_preview_delay_ms").get<int>();
         s.hoverPreviewDelayMs = std::clamp(v, 0, 3000);
+    }
+    if (j.contains("viewport_render_mode") && j.at("viewport_render_mode").is_number_integer()) {
+        const int v = j.at("viewport_render_mode").get<int>();
+        // Clamp al rango del enum (0..3). Valor invalido cae a default
+        // (MaterialPreview) sin log — mismo patron que el resto.
+        if (v >= 0 && v <= 3) {
+            s.viewportRenderMode = static_cast<ViewportRenderMode>(v);
+        }
+    }
+    if (j.contains("smooth_view_enabled") && j.at("smooth_view_enabled").is_boolean()) {
+        s.smoothViewEnabled = j.at("smooth_view_enabled").get<bool>();
+    }
+    if (j.contains("smooth_view_duration_ms") && j.at("smooth_view_duration_ms").is_number_integer()) {
+        const int v = j.at("smooth_view_duration_ms").get<int>();
+        s.smoothViewDurationMs = std::clamp(v, 0, 1000);
     }
     return s;
 }

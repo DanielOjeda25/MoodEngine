@@ -606,6 +606,14 @@ bool SceneRenderer::blitSceneToBackbufferCopy() {
 
 void SceneRenderer::endFrame() {
     MOOD_PROFILE_FUNCTION();
+    // F3H21: restaurar GL_FILL ANTES de los debug overlays — gizmos /
+    // AABBs / handles del editor deben verse llenos aunque el scene este
+    // wireframe. Si no estuvieramos en wireframe, este call es no-op
+    // (GL_FILL es el default).
+    if (m_wireframeMode) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+
     // Si el caller acumulo geometria de debug entre `renderScene` y
     // `endFrame`, la flusheamos aqui usando las matrices del frame.
     // Cuando no hay debug pendiente el flush es no-op (el renderer no
@@ -622,8 +630,18 @@ void SceneRenderer::endFrame() {
     // m_ssaoOutFb (= color * AO factor). Si esta apagado o el src no
     // tiene depth texture (modo LDR), se skipea sin tocar el flow.
     OpenGLFramebuffer* afterSsao = m_sceneFb.get();
-    const bool runSsao = m_ssaoEnabled
-                      && m_ssaoIntensity > 0.0f
+    const bool ssaoOn = m_ssaoEnabled || m_forcePostPasses;  // F3H21 Rendered
+    // F3H21: cuando forcePost, garantizar intensidad minima visible. Si el
+    // Environment tiene intensity=0, el pass corre con ese valor y no se
+    // nota — el dev quiere ver el efecto del modo Rendered, asi que
+    // subimos a defaults sensatos.
+    const f32 effSsaoIntensity = (m_forcePostPasses && m_ssaoIntensity <= 0.0f)
+        ? 1.0f : m_ssaoIntensity;
+    const f32 effSsaoRadius = (m_forcePostPasses && m_ssaoRadius <= 0.0f)
+        ? 0.5f : m_ssaoRadius;
+    const bool runSsao = ssaoOn
+                      && !m_skipPostPasses  // F3H21: Wireframe/Solid saltean post
+                      && effSsaoIntensity > 0.0f
                       && m_ssaoPass
                       && m_ssaoOutFb
                       && m_sceneFb;
@@ -633,7 +651,7 @@ void SceneRenderer::endFrame() {
         const bool ssaoApplied = m_ssaoPass->apply(
             *m_sceneFb, *m_ssaoOutFb,
             m_lastProjection, invProj,
-            m_ssaoRadius, m_ssaoIntensity);
+            effSsaoRadius, effSsaoIntensity);
         if (ssaoApplied) {
             afterSsao = m_ssaoOutFb.get();
         }
@@ -644,7 +662,13 @@ void SceneRenderer::endFrame() {
     // Escribe a m_ssrFb el color + reflejo aditivo. Si esta off, sin
     // gbuffer, o intensity 0, se skipea y bloom lee de afterSsao directo.
     OpenGLFramebuffer* afterSsr = afterSsao;
+    // F3H21: SSR NO se fuerza en Rendered — requiere normal RT poblado +
+    // step/thickness calibrados a la escala de la escena. Sin tuning, los
+    // rayos escapan del FB y generan artifacts (bandas verticales en el
+    // cielo, ghost reflections). El dev activa SSR en Environment con
+    // tuning propio si quiere — Rendered respeta esa decision.
     const bool runSsr = m_ssrEnabled
+                     && !m_skipPostPasses
                      && m_ssrIntensity > 0.0f
                      && m_ssrPass
                      && m_ssrFb
@@ -673,8 +697,19 @@ void SceneRenderer::endFrame() {
     // off) y post-process. Si esta apagado o intensity = 0, o el bloom
     // no pudo correr, se skipea y el post-process lee directo del FB
     // anterior. Cero regresion respecto a pre-F2H55.
-    const bool runBloom = m_bloomEnabled
-                       && m_bloomIntensity > 0.0f
+    const bool bloomOn = m_bloomEnabled || m_forcePostPasses;  // F3H21 Rendered
+    const f32 effBloomIntensity = (m_forcePostPasses && m_bloomIntensity <= 0.0f)
+        ? 0.6f : m_bloomIntensity;
+    // F3H21: threshold conservador (1.5) cuando forzamos bloom — evita
+    // overbright agresivo con cielos claros / paredes blancas (artifact
+    // visto con threshold=1.0 en escenas no tuneadas).
+    const f32 effBloomThreshold = (m_forcePostPasses && m_bloomThreshold <= 0.0f)
+        ? 1.5f : m_bloomThreshold;
+    const f32 effBloomRadius = (m_forcePostPasses && m_bloomRadius <= 0.0f)
+        ? 1.0f : m_bloomRadius;
+    const bool runBloom = bloomOn
+                       && !m_skipPostPasses  // F3H21
+                       && effBloomIntensity > 0.0f
                        && m_bloomPass
                        && m_bloomFb
                        && afterSsr;
@@ -683,7 +718,7 @@ void SceneRenderer::endFrame() {
         MOOD_PROFILE_SCOPE("BloomPass::apply");
         const bool bloomApplied = m_bloomPass->apply(
             *afterSsr, *m_bloomFb,
-            m_bloomThreshold, m_bloomIntensity, m_bloomRadius);
+            effBloomThreshold, effBloomIntensity, effBloomRadius);
         if (bloomApplied) {
             postProcessSrc = m_bloomFb.get();
         }
@@ -693,6 +728,7 @@ void SceneRenderer::endFrame() {
     // intensity = 0 o LUT no resuelta, skip. El pass internamente
     // chequea size del dst FB (resize-on-bind por dst.bind()).
     const bool runColorGrading = m_colorGradingEnabled
+                               && !m_skipPostPasses  // F3H21
                                && m_colorGradingIntensity > 0.0f
                                && m_colorGradingPass
                                && m_colorGradingFb

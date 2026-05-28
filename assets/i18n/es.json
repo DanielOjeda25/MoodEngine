@@ -907,6 +907,10 @@
   "editor.panel.toolbar.snap_angle_step_tooltip": "Step actual del angle snap (grados). Click cicla 5 → 10 → 15 → 30 → 45 → 90.",
   "editor.panel.toolbar.snap_angle": "Ángulo",
   "editor.panel.toolbar.snap_angle_tooltip": "Snap a ángulos múltiplos del incremento durante rotate",
+  "editor.viewport.render_mode.wireframe.tooltip": "Wireframe — solo aristas, sin texturas ni postprocess. Útil para ver topología y detectar caras flipeadas.",
+  "editor.viewport.render_mode.solid.tooltip": "Solid — geometría llena, sin bloom / SSAO / SSR. Look limpio para editar sin distracciones de post-FX.",
+  "editor.viewport.render_mode.material.tooltip": "Material Preview — texturas + iluminación simple, sin shadows pesadas. Default — equivalente al pre-F3H21.",
+  "editor.viewport.render_mode.rendered.tooltip": "Rendered — pipeline completo (shadows + SSAO + SSR + bloom + color grading) igual que Play mode.",
 
   "editor.panel.map_tools.no_ui": "EditorUI no inyectado",
   "editor.panel.map_tools.tool": "Herramienta",

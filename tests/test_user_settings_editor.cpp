@@ -118,3 +118,70 @@ TEST_CASE("EditorSettings fromJson ignora keys que el codigo no conoce") {
     CHECK(s.orthoInitialZoom == doctest::Approx(48.0f));
     // sin crash, sin warn — forward-compat.
 }
+
+// ---------------------------------------------------------------------------
+// F3H21 — viewportRenderMode + smoothViewEnabled + smoothViewDurationMs.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("F3H21: defaults son MaterialPreview + lerp ON 200ms") {
+    const EditorSettings defaults;
+    CHECK(defaults.viewportRenderMode == UserSettings::ViewportRenderMode::MaterialPreview);
+    CHECK(defaults.smoothViewEnabled == true);
+    CHECK(defaults.smoothViewDurationMs == 200);
+}
+
+TEST_CASE("F3H21: roundtrip preserva los 3 fields nuevos") {
+    EditorSettings before;
+    before.viewportRenderMode    = UserSettings::ViewportRenderMode::Wireframe;
+    before.smoothViewEnabled     = false;
+    before.smoothViewDurationMs  = 350;
+
+    const auto j = editorSettingsToJson(before);
+    const auto after = editorSettingsFromJson(j);
+
+    CHECK(after.viewportRenderMode   == UserSettings::ViewportRenderMode::Wireframe);
+    CHECK(after.smoothViewEnabled    == false);
+    CHECK(after.smoothViewDurationMs == 350);
+}
+
+TEST_CASE("F3H21: toJson omite los 3 fields cuando son default") {
+    EditorSettings s;  // todos defaults
+    const auto j = editorSettingsToJson(s);
+    CHECK_FALSE(j.contains("viewport_render_mode"));
+    CHECK_FALSE(j.contains("smooth_view_enabled"));
+    CHECK_FALSE(j.contains("smooth_view_duration_ms"));
+}
+
+TEST_CASE("F3H21: fromJson valor invalido del enum (negativo) cae a default") {
+    nlohmann::json j;
+    j["viewport_render_mode"] = -1;  // fuera del rango 0-3
+    const auto s = editorSettingsFromJson(j);
+    CHECK(s.viewportRenderMode == UserSettings::ViewportRenderMode::MaterialPreview);
+}
+
+TEST_CASE("F3H21: fromJson valor invalido del enum (>3) cae a default") {
+    nlohmann::json j;
+    j["viewport_render_mode"] = 99;
+    const auto s = editorSettingsFromJson(j);
+    CHECK(s.viewportRenderMode == UserSettings::ViewportRenderMode::MaterialPreview);
+}
+
+TEST_CASE("F3H21: fromJson clampea smooth_view_duration_ms fuera de rango") {
+    nlohmann::json j1, j2;
+    j1["smooth_view_duration_ms"] = -50;
+    j2["smooth_view_duration_ms"] = 5000;
+    CHECK(editorSettingsFromJson(j1).smoothViewDurationMs == 0);
+    CHECK(editorSettingsFromJson(j2).smoothViewDurationMs == 1000);
+}
+
+TEST_CASE("F3H21: fromJson acepta los 4 valores validos del enum") {
+    nlohmann::json j;
+    j["viewport_render_mode"] = 0;
+    CHECK(editorSettingsFromJson(j).viewportRenderMode == UserSettings::ViewportRenderMode::Wireframe);
+    j["viewport_render_mode"] = 1;
+    CHECK(editorSettingsFromJson(j).viewportRenderMode == UserSettings::ViewportRenderMode::Solid);
+    j["viewport_render_mode"] = 2;
+    CHECK(editorSettingsFromJson(j).viewportRenderMode == UserSettings::ViewportRenderMode::MaterialPreview);
+    j["viewport_render_mode"] = 3;
+    CHECK(editorSettingsFromJson(j).viewportRenderMode == UserSettings::ViewportRenderMode::Rendered);
+}

@@ -120,7 +120,8 @@ private:
 
     // break-B3: sub-pasos de updateCameras separados por contexto.
     // Cada uno asume que el caller ya verifico el modo + early-returns.
-    void updateEditorCamera();
+    // F3H21: recibe dt para alimentar el lerp animator del EditorCamera.
+    void updateEditorCamera(f32 dt);
     void processMountDismountToggle();
     void updateVehicleChaseCamera(f32 dt);
     void updateMountPromptHint();

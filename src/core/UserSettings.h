@@ -21,6 +21,17 @@
 
 namespace Mood::UserSettings {
 
+/// F3H21: modos de visualizacion del viewport perspectivo del editor.
+/// Convencion Blender (Z dropdown) / Unreal (Alt+1/2/3/4) / Unity
+/// (Shaded/Wireframe/Shaded+Wireframe). MaterialPreview es el default
+/// — equivalente a "Solid" de Blender pero con texturas.
+enum class ViewportRenderMode : int {
+    Wireframe       = 0,  ///< Solo edges, sin texturas.
+    Solid           = 1,  ///< Flat shading, sin texturas (albedo plano).
+    MaterialPreview = 2,  ///< Como ahora (texturas + ilum simple, sin shadows/SSR/bloom).
+    Rendered        = 3,  ///< Full pipeline (==Play mode visual).
+};
+
 /// F3H7: preferencias del editor per-instalacion. Sensibilidades de
 /// camara orto + tamano de gizmo + umbral click-vs-drag. NO viven en
 /// `.moodproj` porque son ergonomia del dev (notebook touchpad vs mouse
@@ -68,6 +79,26 @@ struct EditorSettings {
     /// Subir si el dev encuentra el tooltip intrusivo; bajar a 200 si
     /// quiere previews instantaneas. Clamp `[0, 3000]`.
     int hoverPreviewDelayMs = 500;
+
+    /// F3H21: modo de visualizacion del viewport perspectivo (Wireframe /
+    /// Solid / MaterialPreview / Rendered). Default MaterialPreview —
+    /// equivalente al comportamiento pre-F3H21. Persistido per-instalacion
+    /// porque es preferencia ergonomica (el dev que quiere ver wireframe
+    /// siempre lo quiere asi, no por proyecto).
+    ViewportRenderMode viewportRenderMode = ViewportRenderMode::MaterialPreview;
+
+    /// F3H21: ON = transicion lerp al cambiar de vista numpad (Blender
+    /// Smooth View); OFF = teleport instantaneo (Unity/Unreal). Default
+    /// ON — el lerp evita la desorientacion al saltar entre vistas
+    /// ortogonales. Si el dev prefiere instantaneo (mouse-heavy workflow
+    /// o trackpad lento), apagar.
+    bool smoothViewEnabled = true;
+
+    /// F3H21: duracion del lerp numpad en milisegundos. Default 200 ms
+    /// (Blender Smooth View timer). Clamp `[0, 1000]` — 0 = teleport
+    /// (equivalente a smoothViewEnabled=false), 1000 = casi medio segundo
+    /// (demasiado lento para uso frecuente).
+    int smoothViewDurationMs = 200;
 };
 
 /// @brief Lee `settings.json` del disco. Si no existe o tiene parse

@@ -119,6 +119,13 @@ void SceneRenderer::renderScene(Scene& scene,
     // El render de la escena (sky + lit + fog + debug) escribe al HDR.
     m_sceneFb->bind();
 
+    // F3H21: en modo Wireframe pintamos toda la geometria del scene con
+    // GL_LINE. La restauracion a GL_FILL vive en endFrame() ANTES del
+    // debug flush — asi gizmos/AABBs/handles del editor se ven normales.
+    if (m_wireframeMode) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+
     ClearValues clear{};
     clear.color = {0.07f, 0.12f, 0.22f, 1.0f};
     m_renderer->beginFrame(clear);
