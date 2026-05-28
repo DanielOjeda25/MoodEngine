@@ -398,3 +398,48 @@ TEST_CASE("F3H24: toasts_enabled fromJson ignora tipo no-bool") {
     j["toasts_enabled"] = "true";  // string
     CHECK(editorSettingsFromJson(j).toastsEnabled == true);  // default
 }
+
+// =====================================================================
+// F3H25: autosave settings (enabled + interval min)
+// =====================================================================
+
+TEST_CASE("F3H25: Autosave defaults — enabled ON, interval 5 min") {
+    EditorSettings s;
+    CHECK(s.autosaveEnabled == true);
+    CHECK(s.autosaveIntervalMin == 5);
+}
+
+TEST_CASE("F3H25: toJson omite autosave si todo igual al default") {
+    EditorSettings s;
+    const auto j = editorSettingsToJson(s);
+    CHECK_FALSE(j.contains("autosave_enabled"));
+    CHECK_FALSE(j.contains("autosave_interval_min"));
+}
+
+TEST_CASE("F3H25: Autosave roundtrip enabled + interval") {
+    EditorSettings before;
+    before.autosaveEnabled     = false;
+    before.autosaveIntervalMin = 15;
+    const auto j = editorSettingsToJson(before);
+    const auto after = editorSettingsFromJson(j);
+    CHECK(after.autosaveEnabled     == false);
+    CHECK(after.autosaveIntervalMin == 15);
+}
+
+TEST_CASE("F3H25: autosaveIntervalMin sanitize clamp [1, 60]") {
+    {
+        nlohmann::json j;
+        j["autosave_interval_min"] = 0;  // debajo
+        CHECK(editorSettingsFromJson(j).autosaveIntervalMin == 1);
+    }
+    {
+        nlohmann::json j;
+        j["autosave_interval_min"] = 999;  // encima
+        CHECK(editorSettingsFromJson(j).autosaveIntervalMin == 60);
+    }
+    {
+        nlohmann::json j;
+        j["autosave_interval_min"] = 10;  // valido
+        CHECK(editorSettingsFromJson(j).autosaveIntervalMin == 10);
+    }
+}

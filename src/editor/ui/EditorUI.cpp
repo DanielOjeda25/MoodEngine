@@ -572,9 +572,12 @@ void EditorUI::drawBooleanOpMenu() {
     if (ImGui::MenuItem(I18n::T("editor.menu.boolean.subtract").c_str())) {
         requestBooleanOp(BooleanOpRequestKind::Subtract);
     }
-    if (ImGui::MenuItem(I18n::T("editor.menu.boolean.union").c_str())) {
-        requestBooleanOp(BooleanOpRequestKind::Union);
-    }
+    // F3H26: Union removida del UI. Razón: con CSG convex-only, A ∪ B con
+    // overlap parcial NO es convexo y se descompone en N piezas (problema
+    // matemático, no bug del algoritmo). Hammer/Source nunca ofrecieron
+    // Union por el mismo motivo. Para "juntar" 2 brushes el dev los deja
+    // hermanos (visualmente quedan adyacentes); el código `Csg::unionOp`
+    // queda intacto por si emerge demanda con otro modelo de geometría.
     if (ImGui::MenuItem(I18n::T("editor.menu.boolean.intersect").c_str())) {
         requestBooleanOp(BooleanOpRequestKind::Intersect);
     }

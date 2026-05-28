@@ -561,13 +561,16 @@ add_executable(MoodEditor
     src/main.cpp
 
     src/editor/application/DemoSpawners.cpp
+    src/editor/application/Autosave.cpp  # F3H25
     src/editor/application/EditorApplication.cpp
     src/editor/application/EditorOverlay.cpp
     src/editor/application/EditorPlayMode.cpp
     src/editor/application/EditorOverlay_Gizmo.cpp
     src/editor/application/EditorOverlay_Modal.cpp
     src/editor/application/EditorApplication_Init.cpp
+    src/editor/application/EditorApplication_RecoveryModal.cpp  # F3H25
     src/editor/application/EditorApplication_Run.cpp
+    src/editor/application/LockFile.cpp  # F3H25
     src/editor/application/EditorApplication_RunInteractions.cpp  # AUDIT-1 split
     src/editor/application/EditorApplication_RunInteractions_ToolModes.cpp  # AUDIT-2 sub-split
     src/editor/application/EditorApplication_Snap.cpp

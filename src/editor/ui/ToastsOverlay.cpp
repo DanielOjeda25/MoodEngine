@@ -115,9 +115,14 @@ void ToastsOverlay::draw() {
                                    ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(alpha);
 
-        // ID único por puntero al toast (estable durante el frame).
+        // F3H26: ID basado en Toast::id (monótono, persistente entre
+        // frames). El bug pre-F3H26 usaba `&t` que apunta al vector
+        // temporal de snapshot() — cada frame ImGui veía un ID distinto,
+        // recreaba la ventana sin cache del size del frame previo, y
+        // AlwaysAutoResize necesitaba 2 frames para estabilizar → flicker.
         char id[64];
-        std::snprintf(id, sizeof(id), "##toast_%p", static_cast<const void*>(&t));
+        std::snprintf(id, sizeof(id), "##toast_%llu",
+                      static_cast<unsigned long long>(t.id));
 
         const ImU32 bg = bgColorFor(t.severity);
         // Aplicar alpha al bg color

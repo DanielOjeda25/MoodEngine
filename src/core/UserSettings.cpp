@@ -150,6 +150,10 @@ nlohmann::json editorSettingsToJson(const EditorSettings& s) {
     // F3H24
     if (s.toastsEnabled    != defaults.toastsEnabled)    j["toasts_enabled"]     = s.toastsEnabled;
     if (s.toastsLifetimeMs != defaults.toastsLifetimeMs) j["toasts_lifetime_ms"] = s.toastsLifetimeMs;
+
+    // F3H25
+    if (s.autosaveEnabled     != defaults.autosaveEnabled)     j["autosave_enabled"]      = s.autosaveEnabled;
+    if (s.autosaveIntervalMin != defaults.autosaveIntervalMin) j["autosave_interval_min"] = s.autosaveIntervalMin;
     return j;
 }
 
@@ -245,6 +249,15 @@ EditorSettings editorSettingsFromJson(const nlohmann::json& j) {
     if (j.contains("toasts_lifetime_ms") && j.at("toasts_lifetime_ms").is_number_integer()) {
         const int v = j.at("toasts_lifetime_ms").get<int>();
         s.toastsLifetimeMs = std::clamp(v, 500, 10000);
+    }
+
+    // F3H25
+    if (j.contains("autosave_enabled") && j.at("autosave_enabled").is_boolean()) {
+        s.autosaveEnabled = j.at("autosave_enabled").get<bool>();
+    }
+    if (j.contains("autosave_interval_min") && j.at("autosave_interval_min").is_number_integer()) {
+        const int v = j.at("autosave_interval_min").get<int>();
+        s.autosaveIntervalMin = std::clamp(v, 1, 60);
     }
     return s;
 }

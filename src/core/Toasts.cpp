@@ -14,6 +14,7 @@ namespace {
 // thread). Hoy todo en main thread, pero cubrimos defensivamente.
 std::mutex s_mutex;
 std::vector<Toast> s_queue;
+u64 s_nextId = 1;  // F3H26: counter monótono para asignar Toast::id
 
 f32 resolveLifetimeMs(f32 explicitLifetimeMs) {
     if (explicitLifetimeMs > 0.0f) return explicitLifetimeMs;
@@ -38,6 +39,7 @@ void push(Severity sev, std::string message, f32 lifetimeMs) {
     t.totalMs     = lt;
 
     std::lock_guard<std::mutex> lock(s_mutex);
+    t.id = s_nextId++;
     s_queue.push_back(std::move(t));
 }
 

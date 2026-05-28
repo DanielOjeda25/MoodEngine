@@ -517,7 +517,13 @@ void EditorApplication::drawEditorOverlay(ImDrawList* dl,
         // Mute UserSettings.editor y guarda al disco (settings.json) para
         // persistir per-instalacion. Solo en Editor mode + workspaces
         // perspectivos — Z en map_editor reservado por si emerge uso CSG.
-        if (ImGui::IsKeyPressed(ImGuiKey_Z, false) &&
+        // F3H26: gate por modificadores. Sin esto, Ctrl+Z (undo) disparaba
+        // ambos handlers — el undo aplicaba pero también ciclaba el render
+        // mode. El dev solo quiere "Z desnuda" para ciclar.
+        const ImGuiIO& zModIo = ImGui::GetIO();
+        const bool zNoMods = !zModIo.KeyCtrl && !zModIo.KeyShift && !zModIo.KeyAlt;
+        if (zNoMods &&
+            ImGui::IsKeyPressed(ImGuiKey_Z, false) &&
             m_ui.workspaceManager().activeWorkspace().name != "map_editor") {
             auto ed = UserSettings::editor();
             const int cur = static_cast<int>(ed.viewportRenderMode);

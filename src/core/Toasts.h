@@ -41,6 +41,11 @@ struct Toast {
     /// Lifetime inicial — útil para el overlay (calcular % vida → alpha
     /// del fade-out final).
     f32 totalMs = 3000.0f;
+    /// F3H26: ID estable y monótonamente creciente asignado en `push`.
+    /// El overlay lo usa como ID de la ventana ImGui (sin esto, ImGui ve
+    /// un ID diferente por frame y recrea la ventana sin cache de size,
+    /// causando flicker en el primer frame de aparición).
+    u64 id = 0;
 };
 
 /// @brief Push un toast a la cola. Lifetime 0 = usa el default de

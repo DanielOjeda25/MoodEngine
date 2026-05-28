@@ -230,6 +230,11 @@ void EditorApplication::tickFrameMetrics(f32 dt, f64 dtD) {
     // F3H24: aging de los toasts. El dt del frame ya viene en dtD (segundos).
     Toasts::tick(static_cast<f32>(dtD * 1000.0));
 
+    // F3H25: timer del autosave del mapa actual. tick es no-op si
+    // setup() no se llamó (sin proyecto activo) o si el dev apagó la
+    // pref. Sólo escribe a disco si dirty + N min.
+    m_autosave.tick(static_cast<f32>(dtD * 1000.0));
+
     // F2H42: aplicar toggle VSync si el dev clickeo el checkbox.
     bool vsyncRequested = true;
     if (m_ui.performanceHud().consumeVsyncToggleRequest(vsyncRequested)) {
@@ -244,6 +249,11 @@ void EditorApplication::tickFrameMetrics(f32 dt, f64 dtD) {
 // break-B3: consume todas las requests de la UI (Play/Stop, Toolbar,
 // Project actions, Welcome modals, Open Map, Boolean Op, Recents).
 void EditorApplication::pumpUiRequests() {
+    // F3H25: modal de recuperación si se detectó crash huérfano al abrir
+    // este proyecto. Si el dev elige restaurar, carga el autosave; si
+    // descarta, borra el autosave. El flag se consume dentro.
+    processRecoveryModal();
+
     // F3H18: refresh del Asset Issues panel + consumir go-to a entity.
     // El refresh es on-demand (al abrir proyecto o cuando el dev clickea
     // Refresh en el panel) — el scan no corre por frame.

@@ -23,6 +23,7 @@ add_executable(mood_tests
     test_editor_camera_lerp.cpp                # F3H21
     test_profiler_buffer.cpp                   # F3H23
     test_toasts.cpp                            # F3H24
+    test_lock_file.cpp                         # F3H25
     test_scene.cpp
     test_lua.cpp
     test_lua_bindings.cpp
@@ -222,6 +223,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/core/i18n/I18n.cpp  # F2H43 (movido a core en AUDIT-3)
     ${CMAKE_SOURCE_DIR}/src/core/Toasts.cpp  # F3H24
     ${CMAKE_SOURCE_DIR}/src/core/UserSettings.cpp  # F2H43
+    ${CMAKE_SOURCE_DIR}/src/editor/application/LockFile.cpp  # F3H25
     ${CMAKE_SOURCE_DIR}/src/engine/profile/ProfilerBuffer.cpp  # F3H23
     ${CMAKE_SOURCE_DIR}/src/engine/nodegraph/Graph.cpp  # F2H46
     ${CMAKE_SOURCE_DIR}/src/engine/shader_graph/ShaderGraphAsset.cpp     # F2H62

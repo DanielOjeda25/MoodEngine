@@ -10,6 +10,7 @@
 #include "core/Log.h"
 #include "core/Toasts.h"  // F3H24: emisiones automaticas save
 #include "core/i18n/I18n.h"  // F3H24: i18n de los mensajes
+#include "editor/application/LockFile.h"  // F3H25: lock huerfano + acquire/release
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/render/preview/MaterialPreviewRenderer.h"  // F3H15: setDiskCacheRoot
 #include "engine/render/preview/MeshThumbnailRenderer.h"  // F3H14: setDiskCacheRoot
@@ -266,6 +267,37 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
     Log::editor()->info("Proyecto abierto: {}", m_project->name);
     Toasts::pushInfo(  // F3H24
         I18n::T("editor.toast.project_opened", m_project->name));
+
+    // F3H25: chequear lock huérfano + autosave reciente ANTES de
+    // acquire. Si el chequeo dispara recovery, el modal aparece en
+    // pumpUiRequests y el dev decide. El lock se acquire en este turno
+    // igualmente (la sesión ya empezó); si el dev elige "restaurar", el
+    // autosave reemplaza el contenido en memoria pero el lock sigue
+    // siendo del proceso actual.
+    const auto lockStatus = LockFile::check(m_project->root);
+    LockFile::acquire(m_project->root);
+    m_autosave.setup(
+        m_project->root,
+        m_currentMapPath,
+        [this](const std::filesystem::path& targetPath) {
+            // Captura el snapshot actual del map + scene + workspace.
+            std::filesystem::create_directories(targetPath.parent_path());
+            auto compiledMesh = buildSavedCompiledMeshFromScene(*m_scene, *m_assetManager);
+            SceneSerializer::save(
+                m_map, m_currentMapPath.stem().generic_string(),
+                m_scene.get(), *m_assetManager, targetPath,
+                &compiledMesh);
+        },
+        [this]() { return m_projectDirty; });
+    if (lockStatus == LockFile::Status::Orphaned
+        && m_autosave.autosaveMoreRecentThanCanonical()) {
+        m_recoveryModalPending = true;
+        m_recoveryAutosavePath = m_autosave.targetPath();
+    } else {
+        // No hay recovery candidate: descartar autosave viejo (si existe)
+        // para que no quede como ghost de una sesión previa.
+        m_autosave.clearOnDisk();
+    }
     return true;
 }
 
@@ -310,6 +342,10 @@ void EditorApplication::handleSave() {
         // F3H24: toast de éxito (Save = 1 de las 4 emisiones automáticas).
         Toasts::pushSuccess(
             I18n::T("editor.toast.project_saved", m_project->name));
+        // F3H25: el .moodmap canónico ahora tiene la data — el autosave
+        // ya no aporta nada y debe borrarse para que un crash post-save
+        // no muestre "recuperar última sesión" sobre data ya safe.
+        m_autosave.clearOnDisk();
     } catch (const std::exception& e) {
         Log::editor()->warn("Guardar fallo: {}", e.what());
         pfd::message("MoodEngine", std::string("Error al guardar: ") + e.what(),
@@ -333,6 +369,12 @@ void EditorApplication::handleCloseProject() {
     if (!confirmDiscardChanges()) return;
 
     Log::editor()->info("Cerrando proyecto: {}", m_project->name);
+    // F3H25: cierre limpio → release del lock + cleanup del autosave
+    // (la data segura está en el .moodmap canónico tras el
+    // confirmDiscardChanges previo).
+    LockFile::release(m_project->root);
+    m_autosave.clearOnDisk();
+    m_autosave.teardown();
     m_project.reset();
     m_currentMapPath.clear();
     m_projectDirty = false;

@@ -11,6 +11,7 @@
 #include "core/i18n/I18n.h"  // F2H43
 #include "engine/assets/manager/AssetManager.h"  // F3H9: serializeComponent
 #include "engine/scene/VisGroup.h"  // F2H33: gray-out hidden entities
+#include "engine/scene/components/BrushComponent.h"  // F3H26: gate del context menu boolean
 #include "engine/scene/components/Components.h"  // F3H9 Stage 8: TagComponent
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
@@ -295,6 +296,14 @@ void HierarchyPanel::onImGuiRender() {
                             }
                         }
                     }
+                }
+                // F3H26: operaciones booleanas — solo aparecen cuando la
+                // entidad clickeada es un brush CSG. Pre-F3H26 vivían en
+                // el top-level "Brush" del MenuBar; movidas acá porque
+                // sólo aplican a brushes (UX contextual estilo Maya).
+                if (e.hasComponent<BrushComponent>()) {
+                    ImGui::Separator();
+                    m_ui->drawBooleanOpMenu();
                 }
                 ImGui::Separator();
                 if (ImGui::MenuItem(

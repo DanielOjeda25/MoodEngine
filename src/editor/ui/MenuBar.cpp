@@ -71,8 +71,54 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             ImGui::EndMenu();
         }
 
+        // F3H26: orden estándar VSCode/Unity — Editar antes que Mapa.
+        if (ImGui::BeginMenu((std::string(ICON_FA_PEN_TO_SQUARE " ") + I18n::T("editor.menu.edit")).c_str())) {
+            // Hito 27: cableado a HistoryStack inyectado por EditorApplication.
+            // Hasta que el ctor termine, m_history puede ser nullptr — evitamos
+            // crash deshabilitando los items.
+            HistoryStack* h = ui.historyStack();
+            const bool canUndo = (h != nullptr && h->canUndo());
+            const bool canRedo = (h != nullptr && h->canRedo());
+            const std::string undoLabel = canUndo
+                ? I18n::T("editor.menu.edit.undo_named", h->undoName())
+                : I18n::T("editor.menu.edit.undo");
+            const std::string redoLabel = canRedo
+                ? I18n::T("editor.menu.edit.redo_named", h->redoName())
+                : I18n::T("editor.menu.edit.redo");
+            if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, canUndo)) {
+                h->undo();
+            }
+            if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, canRedo)) {
+                h->redo();
+            }
+            ImGui::Separator();
+            // F3H2: Preferencias (tema + idioma) — abre panel flotante
+            // (estilo Unity Preferences). Mismo patron que Project Settings
+            // (F3H1): el panel vive en EditorUI, mutamos su flag visible
+            // sin pasar por request/consume.
+            if (ImGui::MenuItem(I18n::T("editor.menu.edit.preferences").c_str())) {
+                ui.requestShowUserPreferences();
+            }
+            // F3H1: Project Settings — togglea la visibilidad del panel
+            // dockeable. Disabled si no hay proyecto activo (el panel
+            // tampoco renderea fields sin Project, pero el toggle es mas
+            // claro para el dev cuando esta deshabilitado a nivel menu).
+            if (ImGui::MenuItem(
+                    I18n::T("editor.menu.edit.project_settings").c_str(),
+                    nullptr, false, ui.hasProject())) {
+                ui.requestShowProjectSettings();
+            }
+            // F3H26: operaciones de brush (booleanas) movidas al context
+            // menu del Outliner (right-click sobre un brush). Pre-F3H26
+            // estuvieron en el top-level "Brush" del MenuBar y brevemente
+            // en "Editar > Brushes (booleanas)" — ambos sacaban espacio
+            // del menú principal para una acción que sólo aplica a brushes.
+            ImGui::EndMenu();
+        }
+
         // F2H18: top-level "Mapa". Antes era Archivo > Mapa. File ops
         // del mapa actual del proyecto activo (multi-mapa de F2H8).
+        // F3H26: movido al 3er lugar (Archivo > Editar > Mapa).
         if (ImGui::BeginMenu((std::string(ICON_FA_MAP " ") + I18n::T("editor.menu.map")).c_str(), ui.hasProject())) {
             if (ImGui::MenuItem(I18n::T("editor.menu.map.new").c_str())) {
                 ui.requestProjectAction(ProjectAction::NewMap);
@@ -121,60 +167,6 @@ void MenuBar::draw(EditorUI& ui, bool& requestQuit) {
             }
             if (ImGui::MenuItem(I18n::T("editor.menu.map.export_obj").c_str())) {
                 ui.requestProjectAction(ProjectAction::ExportObj);
-            }
-            ImGui::EndMenu();
-        }
-
-        // F2H18: top-level "Brush". Geometria (primitivas + booleanos).
-        // Antes vivia anidada como Archivo > Mapa > {Anadir Brush, Boolean}.
-        // F2H59: submenu "Anadir" removido -- las primitivas ahora viven
-        // en el modal "+ Crear Entidad" del panel Escena (tab "Primitivas").
-        // Workflow Hammer/SFM: un solo punto de entrada para spawnear
-        // geometria, sea mesh importado o primitiva procedural. Si emerge
-        // demanda de "agregar primitiva sin abrir modal", re-evaluar.
-        if (ImGui::BeginMenu((std::string(ICON_FA_CUBES_STACKED " ") + I18n::T("editor.menu.brush")).c_str(), ui.hasProject())) {
-            // F2H12: operaciones booleanas entre brushes.
-            // A = entidad seleccionada (debe tener BrushComponent);
-            // B se elige del submenu listando los demas brushes.
-            ui.drawBooleanOpMenu();
-            ImGui::EndMenu();
-        }
-
-        if (ImGui::BeginMenu((std::string(ICON_FA_PEN_TO_SQUARE " ") + I18n::T("editor.menu.edit")).c_str())) {
-            // Hito 27: cableado a HistoryStack inyectado por EditorApplication.
-            // Hasta que el ctor termine, m_history puede ser nullptr — evitamos
-            // crash deshabilitando los items.
-            HistoryStack* h = ui.historyStack();
-            const bool canUndo = (h != nullptr && h->canUndo());
-            const bool canRedo = (h != nullptr && h->canRedo());
-            const std::string undoLabel = canUndo
-                ? I18n::T("editor.menu.edit.undo_named", h->undoName())
-                : I18n::T("editor.menu.edit.undo");
-            const std::string redoLabel = canRedo
-                ? I18n::T("editor.menu.edit.redo_named", h->redoName())
-                : I18n::T("editor.menu.edit.redo");
-            if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, canUndo)) {
-                h->undo();
-            }
-            if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, canRedo)) {
-                h->redo();
-            }
-            ImGui::Separator();
-            // F3H2: Preferencias (tema + idioma) — abre panel flotante
-            // (estilo Unity Preferences). Mismo patron que Project Settings
-            // (F3H1): el panel vive en EditorUI, mutamos su flag visible
-            // sin pasar por request/consume.
-            if (ImGui::MenuItem(I18n::T("editor.menu.edit.preferences").c_str())) {
-                ui.requestShowUserPreferences();
-            }
-            // F3H1: Project Settings — togglea la visibilidad del panel
-            // dockeable. Disabled si no hay proyecto activo (el panel
-            // tampoco renderea fields sin Project, pero el toggle es mas
-            // claro para el dev cuando esta deshabilitado a nivel menu).
-            if (ImGui::MenuItem(
-                    I18n::T("editor.menu.edit.project_settings").c_str(),
-                    nullptr, false, ui.hasProject())) {
-                ui.requestShowProjectSettings();
             }
             ImGui::EndMenu();
         }

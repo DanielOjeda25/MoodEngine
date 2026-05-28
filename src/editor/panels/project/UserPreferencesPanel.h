@@ -16,6 +16,7 @@
 // persiste al disco via `UserSettings::save()` — sin boton OK/Cancel
 // (settings.json es chico, UX estilo Unity).
 
+#include "core/UserSettings.h"
 #include "editor/panels/IPanel.h"
 
 namespace Mood {
@@ -29,8 +30,35 @@ public:
     const char* category() const override { return "Project"; }
 
 private:
-    void drawGeneralTab();
-    void drawEditorTab();  // F3H7
+    /// F3H26: categorías del sidebar tipo Blender. Cada item del lateral
+    /// renderea una vista distinta a la derecha — más legible que el
+    /// TabBar horizontal previo que tenía 2 tabs gigantes.
+    enum class Category {
+        General       = 0,  ///< Tema + idioma (per-instalación).
+        Viewport      = 1,  ///< Ortho zoom + gizmos + click/drag threshold + smooth view + render mode.
+        Assets        = 2,  ///< Thumbnail resolution + hover preview delay + inspector category.
+        Performance   = 3,  ///< Stats overlay + profiler ring buffer.
+        Notifications = 4,  ///< Toasts + autosave del mapa.
+    };
+
+    /// F3H26: helpers para cada sección. `cfg`, `dirty`, `saveNow` los
+    /// comparten todos — son refs a locales de onImGuiRender.
+    void drawSidebar();
+    void drawGeneral();
+    void drawViewport(UserSettings::EditorSettings& cfg,
+                      const UserSettings::EditorSettings& defaults,
+                      bool& dirty, bool& saveNow);
+    void drawAssets(UserSettings::EditorSettings& cfg,
+                    const UserSettings::EditorSettings& defaults,
+                    bool& dirty, bool& saveNow);
+    void drawPerformance(UserSettings::EditorSettings& cfg,
+                         const UserSettings::EditorSettings& defaults,
+                         bool& dirty, bool& saveNow);
+    void drawNotifications(UserSettings::EditorSettings& cfg,
+                           const UserSettings::EditorSettings& defaults,
+                           bool& dirty, bool& saveNow);
+
+    Category m_activeCategory = Category::General;
 
     /// F3H24: tracking de cambios entre apertura y cierre del panel.
     /// Setea true cualquier setter que muta UserSettings; al detectar

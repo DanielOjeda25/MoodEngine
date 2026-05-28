@@ -155,6 +155,17 @@ struct EditorSettings {
     /// `[500, 10000]`: debajo de 500 ms es subliminal; encima de 10s
     /// los toasts se acumulan visualmente.
     int toastsLifetimeMs = 3000;
+
+    /// F3H25: autosave del mapa actual. Default ON — el dev lo apaga si
+    /// trabaja sobre filesystems lentos o no quiere I/O periódico. Cuando
+    /// off, el timer no dispara writes (el flujo de save manual sigue OK).
+    bool autosaveEnabled = true;
+
+    /// F3H25: intervalo del autosave en minutos. Default 5 min — Unity
+    /// usa 5, Unreal usa 5 (configurable), Blender usa 2. Clamp `[1, 60]`.
+    /// El autosave sólo dispara si el mapa actual está dirty
+    /// (`m_projectDirty=true`); si no, skip silencioso para ahorrar I/O.
+    int autosaveIntervalMin = 5;
 };
 
 /// @brief Lee `settings.json` del disco. Si no existe o tiene parse

@@ -114,6 +114,19 @@ void EditorApplication::handleSaveMapAs() {
     Log::editor()->info("Mapa guardado como: {}", outPath.generic_string());
     Toasts::pushSuccess(  // F3H24
         I18n::T("editor.toast.map_saved", outPath.filename().generic_string()));
+    // F3H25: el mapPath cambió → el autosave debe apuntar al nuevo nombre.
+    m_autosave.clearOnDisk();
+    m_autosave.setup(
+        m_project->root, m_currentMapPath,
+        [this](const std::filesystem::path& targetPath) {
+            std::filesystem::create_directories(targetPath.parent_path());
+            auto compiledMesh = buildSavedCompiledMeshFromScene(*m_scene, *m_assetManager);
+            SceneSerializer::save(
+                m_map, m_currentMapPath.stem().generic_string(),
+                m_scene.get(), *m_assetManager, targetPath,
+                &compiledMesh);
+        },
+        [this]() { return m_projectDirty; });
 }
 
 void EditorApplication::handleNewMap() {
@@ -205,6 +218,21 @@ void EditorApplication::handleOpenMap(const std::filesystem::path& mapPath) {
     Log::editor()->info("Mapa abierto: {}", mapPath.generic_string());
     Toasts::pushInfo(  // F3H24
         I18n::T("editor.toast.map_opened", mapPath.filename().generic_string()));
+    // F3H25: cambio de mapa dentro del mismo proyecto → re-setup del
+    // autosave con el nuevo currentMapPath. El autosave previo del mapa
+    // viejo se borra (data segura: lo acabamos de cargar del .moodmap).
+    m_autosave.clearOnDisk();
+    m_autosave.setup(
+        m_project->root, m_currentMapPath,
+        [this](const std::filesystem::path& targetPath) {
+            std::filesystem::create_directories(targetPath.parent_path());
+            auto compiledMesh = buildSavedCompiledMeshFromScene(*m_scene, *m_assetManager);
+            SceneSerializer::save(
+                m_map, m_currentMapPath.stem().generic_string(),
+                m_scene.get(), *m_assetManager, targetPath,
+                &compiledMesh);
+        },
+        [this]() { return m_projectDirty; });
 }
 
 void EditorApplication::handleSetCurrentMapAsDefault() {

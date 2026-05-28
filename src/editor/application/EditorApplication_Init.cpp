@@ -9,6 +9,7 @@
 
 #include "core/Log.h"
 #include "core/UserSettings.h"  // F2H43
+#include "editor/application/LockFile.h"  // F3H25
 #include "editor/ui/EditorThemes.h"  // F2H76
 #include "engine/audio/device/AudioDevice.h"
 #include "engine/dialog/DialogScriptHost.h"  // F2H48.1
@@ -125,7 +126,7 @@ EditorApplication::EditorApplication() {
     }
 
     WindowSpec spec{};
-    spec.title = "MoodEngine Editor - v0.4.0-dev (Hito 4)";
+    spec.title = "MoodEngine Editor";
     // F2H35: arrancar a la resolucion real del escritorio (no 1280x720
     // + maximize). Razon: SDL_WINDOW_MAXIMIZED solo encola el resize y
     // el primer SDL_GetWindowSize (que ImGui usa en NewFrame) devolvia
@@ -415,6 +416,16 @@ EditorApplication::~EditorApplication() {
     // samente si no puede escribir — no queremos que un shutdown explote por
     // un archivo de estado corrupto.
     saveEditorState();
+
+    // F3H25: release del lock file del proyecto activo. Cierre limpio
+    // → si reabrimos el proyecto en otra sesión, no detectaremos crash
+    // huérfano. Si llegamos a ~EditorApplication sin pasar por
+    // handleCloseProject (alt+F4, panel close), igual queda limpio.
+    if (m_project.has_value()) {
+        LockFile::release(m_project->root);
+        m_autosave.clearOnDisk();  // cierre limpio → autosave ya no aporta
+        m_autosave.teardown();
+    }
 
     // F2H53: limpiar hooks globales ANTES de destruir el ScriptSystem.
     // Los hooks (Quest evaluator/executor/on_start/etc + Inventory pickup/

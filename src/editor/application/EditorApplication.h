@@ -7,6 +7,7 @@
 #include "core/Time.h"
 #include "core/Types.h"
 #include "core/math/Plane.h"  // F2H30 Bloque B: snapshot pre/post de planos
+#include "editor/application/Autosave.h"
 #include "editor/application/EditorMode.h"
 #include "editor/ui/EditorUI.h"
 #include "editor/commands/HistoryStack.h"
@@ -84,6 +85,13 @@ private:
     void handleClipToolClicks();
     void handleOrthoClickSelect();
     void handleOrthoDragEdit();
+
+    /// F3H25: dibuja el modal one-shot "¿Recuperar última sesión?" si
+    ///        `m_recoveryModalPending=true`. Botones: Restaurar (carga el
+    ///        autosave + marca dirty), Descartar (borra el autosave).
+    ///        En ambos casos resetea el flag para que el modal no
+    ///        reaparezca en el frame siguiente.
+    void processRecoveryModal();
 
     // break-B3: fases de run() extraidas (560 LOC -> dispatcher + 5 fases).
     // Cada fase asume las precondiciones documentadas en el caller. dt
@@ -749,6 +757,18 @@ private:
 
     Timer m_deltaTimer;
     FpsCounter m_fpsCounter;
+
+    // F3H25: autosave timer + escritura atómica al `.autosave/`. setup()
+    // se llama en tryOpenProjectPath/handleNewProject; teardown() en
+    // handleCloseProject. clearOnDisk() tras un handleSave manual.
+    Autosave m_autosave;
+    // F3H25: flag latched para mostrar el modal de recuperación en el
+    // próximo frame. Lo seteamos al detectar lock huérfano + autosave
+    // más reciente que el .moodmap canónico. Se consume en pumpUiRequests.
+    bool m_recoveryModalPending = false;
+    // F3H25: path al `.autosave/<map>.moodmap` que el modal ofrece restaurar.
+    // Vacío si no hay recovery activa.
+    std::filesystem::path m_recoveryAutosavePath;
 
     bool m_running = true;
 };

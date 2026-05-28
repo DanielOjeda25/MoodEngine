@@ -21,6 +21,9 @@ namespace {
 // pisaban la columna del slider con el valor anterior.
 constexpr float kLabelColumnWidth = 240.0f;
 constexpr float kControlWidth     = 200.0f;
+// F3H26: ancho de la sidebar de categorías. Calibrado para los labels
+// más largos en español ("Notificaciones") sin overflow.
+constexpr float kSidebarWidth     = 150.0f;
 
 // F3H7: mismo helper que ProjectSettingsPanel — boton ↺ chiquito a la
 // derecha del control que solo aparece si el valor difiere del default.
@@ -58,14 +61,14 @@ void UserPreferencesPanel::onImGuiRender() {
         return;
     }
 
-    // Ventana flotante centrada + tamano fijo, no dockeable, sin resize/
-    // collapse — espejo de ProjectSettingsPanel (consistencia UX).
+    // F3H26: ventana más grande para acomodar sidebar + content. Antes
+    // 540x360 con TabBar horizontal; ahora 720x480 con split vertical.
     const ImGuiIO& io = ImGui::GetIO();
     ImGui::SetNextWindowPos(
         ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
         ImGuiCond_Appearing,
         ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(540.0f, 360.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(720.0f, 480.0f), ImGuiCond_Always);
 
     constexpr ImGuiWindowFlags kFlags =
         ImGuiWindowFlags_NoResize
@@ -77,32 +80,73 @@ void UserPreferencesPanel::onImGuiRender() {
         return;
     }
 
-    ImGui::Spacing();
+    // F3H26: layout split = sidebar (categorías) + content (vista activa).
+    // Estilo Blender Preferences. La sidebar es BeginChild con border;
+    // el content es BeginChild sin border + scroll para que cualquier
+    // sección que exceda el alto se navegue con la rueda.
+    ImGui::BeginChild("##user_pref_sidebar",
+                      ImVec2(kSidebarWidth, 0.0f),
+                      /*border=*/true);
+    drawSidebar();
+    ImGui::EndChild();
 
-    // F3H7: TabBar con General (tema + idioma de F3H2) + Editor
-    // (sensibilidades nuevas). Mismo patron que ProjectSettingsPanel.
-    if (ImGui::BeginTabBar("##user_pref_tabs")) {
-        if (ImGui::BeginTabItem(
-                I18n::T("editor.user_preferences.tab.general").c_str())) {
-            ImGui::Spacing();
-            drawGeneralTab();
-            ImGui::EndTabItem();
+    ImGui::SameLine();
+
+    ImGui::BeginChild("##user_pref_content",
+                      ImVec2(0.0f, 0.0f),
+                      /*border=*/false,
+                      ImGuiWindowFlags_AlwaysVerticalScrollbar);
+    ImGui::Indent();
+    switch (m_activeCategory) {
+        case Category::General:
+            drawGeneral();
+            break;
+        case Category::Viewport:
+        case Category::Assets:
+        case Category::Performance:
+        case Category::Notifications: {
+            UserSettings::EditorSettings cfg = UserSettings::editor();
+            const UserSettings::EditorSettings defaults;
+            bool dirty   = false;
+            bool saveNow = false;
+            if (m_activeCategory == Category::Viewport)      drawViewport(cfg, defaults, dirty, saveNow);
+            if (m_activeCategory == Category::Assets)        drawAssets(cfg, defaults, dirty, saveNow);
+            if (m_activeCategory == Category::Performance)   drawPerformance(cfg, defaults, dirty, saveNow);
+            if (m_activeCategory == Category::Notifications) drawNotifications(cfg, defaults, dirty, saveNow);
+            if (dirty)   UserSettings::setEditor(cfg);
+            if (saveNow) UserSettings::save();
+            if (saveNow) m_changedSinceOpen = true;
+            break;
         }
-        if (ImGui::BeginTabItem(
-                I18n::T("editor.user_preferences.tab.editor").c_str())) {
-            ImGui::Spacing();
-            drawEditorTab();
-            ImGui::EndTabItem();
-        }
-        ImGui::EndTabBar();
     }
+    ImGui::Unindent();
+    ImGui::EndChild();
 
     ImGui::End();
 }
 
-void UserPreferencesPanel::drawGeneralTab() {
-    ImGui::Indent();
+void UserPreferencesPanel::drawSidebar() {
+    struct Entry { Category cat; const char* labelKey; };
+    static const Entry kEntries[] = {
+        {Category::General,       "editor.user_preferences.category.general"},
+        {Category::Viewport,      "editor.user_preferences.category.viewport"},
+        {Category::Assets,        "editor.user_preferences.category.assets"},
+        {Category::Performance,   "editor.user_preferences.category.performance"},
+        {Category::Notifications, "editor.user_preferences.category.notifications"},
+    };
+    ImGui::Spacing();
+    for (const auto& e : kEntries) {
+        const std::string label = I18n::T(e.labelKey);
+        const bool selected = (m_activeCategory == e.cat);
+        if (ImGui::Selectable(label.c_str(), selected,
+                              ImGuiSelectableFlags_None,
+                              ImVec2(0.0f, 24.0f))) {
+            m_activeCategory = e.cat;
+        }
+    }
+}
 
+void UserPreferencesPanel::drawGeneral() {
     // === Tema ===
     const auto& themes = EditorThemes::available();
     const std::string& curThemeId = UserSettings::theme();
@@ -168,26 +212,11 @@ void UserPreferencesPanel::drawGeneralTab() {
     ImGui::Spacing();
     ImGui::TextDisabled("%s",
         I18n::T("editor.user_preferences.live_apply_hint").c_str());
-
-    ImGui::Unindent();
 }
 
-void UserPreferencesPanel::drawEditorTab() {
-    ImGui::Indent();
-
-    // F3H7: trabajamos sobre una copia + flags dirty/saveNow para
-    // separar 2 cosas:
-    //  - `dirty`: el dev movio algo este frame -> `setEditor(cfg)` para
-    //    que el live read en los call-sites refleje el cambio.
-    //  - `saveNow`: el dev solto el slider (o clickeo reset) -> `save()`
-    //    al disco. Asi el JSON se escribe una vez al soltar, no 60 fps
-    //    mientras se arrastra el slider.
-    UserSettings::EditorSettings cfg = UserSettings::editor();
-    const UserSettings::EditorSettings defaults;
-    bool dirty   = false;
-    bool saveNow = false;
-
-    // Helper local para SliderFloat + reset button + tooltip.
+void UserPreferencesPanel::drawViewport(UserSettings::EditorSettings& cfg,
+                                         const UserSettings::EditorSettings& defaults,
+                                         bool& dirty, bool& saveNow) {
     auto drawSliderF = [&](const char* labelKey, const char* hintKey,
                             const char* idSuffix,
                             f32& field, f32 fieldDefault,
@@ -205,39 +234,38 @@ void UserPreferencesPanel::drawEditorTab() {
         if (ImGui::IsItemDeactivatedAfterEdit()) saveNow = true;
         if (resetButton(idSuffix, field, fieldDefault)) {
             dirty = true;
-            saveNow = true;  // click es commit instantaneo
+            saveNow = true;
         }
     };
 
+    ImGui::SeparatorText(
+        I18n::T("editor.user_preferences.section.ortho_cam").c_str());
     drawSliderF("editor.user_preferences.editor.ortho_initial_zoom",
                 "editor.user_preferences.editor.ortho_initial_zoom_hint",
                 "ortho_initial_zoom",
                 cfg.orthoInitialZoom, defaults.orthoInitialZoom,
                 4.0f, 256.0f, "%.0f");
-
     drawSliderF("editor.user_preferences.editor.ortho_zoom_factor",
                 "editor.user_preferences.editor.ortho_zoom_factor_hint",
                 "ortho_zoom_factor",
                 cfg.orthoZoomFactor, defaults.orthoZoomFactor,
                 1.05f, 1.5f, "%.2fx");
 
-    ImGui::Spacing();
-
+    ImGui::SeparatorText(
+        I18n::T("editor.user_preferences.section.gizmos").c_str());
     drawSliderF("editor.user_preferences.editor.gizmo_arm_length",
                 "editor.user_preferences.editor.gizmo_arm_length_hint",
                 "gizmo_arm_length",
                 cfg.gizmoArmLengthPx, defaults.gizmoArmLengthPx,
                 30.0f, 120.0f, "%.0f px");
-
     drawSliderF("editor.user_preferences.editor.gizmo_rotate_ring",
                 "editor.user_preferences.editor.gizmo_rotate_ring_hint",
                 "gizmo_rotate_ring",
                 cfg.gizmoRotateRingPx, defaults.gizmoRotateRingPx,
                 30.0f, 140.0f, "%.0f px");
 
-    ImGui::Spacing();
-
-    // Click/drag threshold como int — SliderInt.
+    ImGui::SeparatorText(
+        I18n::T("editor.user_preferences.section.interaction").c_str());
     ImGui::TextUnformatted(
         I18n::T("editor.user_preferences.editor.click_drag_threshold").c_str());
     if (ImGui::IsItemHovered()) {
@@ -259,10 +287,16 @@ void UserPreferencesPanel::drawEditorTab() {
     }
 
     ImGui::Spacing();
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.user_preferences.editor.live_apply_hint").c_str());
+}
 
-    // F3H14: thumbnail resolution del Asset Browser (mesh thumbs). Cambiar
-    // este valor en vivo recrea el renderer + invalida cache memoria; la
-    // cache disco persiste con el size viejo en el filename.
+void UserPreferencesPanel::drawAssets(UserSettings::EditorSettings& cfg,
+                                       const UserSettings::EditorSettings& defaults,
+                                       bool& dirty, bool& saveNow) {
+    ImGui::SeparatorText(
+        I18n::T("editor.user_preferences.section.asset_browser").c_str());
+
     ImGui::TextUnformatted(
         I18n::T("editor.user_preferences.editor.thumbnail_resolution").c_str());
     if (ImGui::IsItemHovered()) {
@@ -283,9 +317,6 @@ void UserPreferencesPanel::drawEditorTab() {
         saveNow = true;
     }
 
-    // F3H16: hover preview delay (ms) del Asset Browser. Tiempo que el
-    // dev tiene que dejar el cursor quieto sobre un thumb antes de que
-    // aparezca el tooltip ampliado.
     ImGui::TextUnformatted(
         I18n::T("editor.user_preferences.editor.hover_preview_delay").c_str());
     if (ImGui::IsItemHovered()) {
@@ -306,11 +337,14 @@ void UserPreferencesPanel::drawEditorTab() {
         saveNow = true;
     }
 
-    // F3H23: Stats overlay del viewport (Unity-style bottom bar). Cada
-    // checkbox controla un widget independiente — el dev arma su HUD
-    // según lo que quiera monitorear. Defaults: FPS + Draws + Tris ON
-    // (las 3 más usadas day-to-day); memoria/lights/entities OFF.
     ImGui::Spacing();
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.user_preferences.editor.live_apply_hint").c_str());
+}
+
+void UserPreferencesPanel::drawPerformance(UserSettings::EditorSettings& cfg,
+                                            const UserSettings::EditorSettings& defaults,
+                                            bool& dirty, bool& saveNow) {
     ImGui::SeparatorText(
         I18n::T("editor.user_preferences.editor.stats_overlay.section").c_str());
 
@@ -324,7 +358,6 @@ void UserPreferencesPanel::drawEditorTab() {
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", I18n::T(tooltipKey).c_str());
         }
-        // Reset inline a la derecha si el valor difiere del default.
         if (value != defaultVal) {
             ImGui::SameLine();
             if (resetButton((std::string("stats_") + idSuffix).c_str(),
@@ -357,9 +390,8 @@ void UserPreferencesPanel::drawEditorTab() {
                    "editor.user_preferences.editor.stats_overlay.entities.tooltip",
                    cfg.statsOverlay.showEntities, defaults.statsOverlay.showEntities);
 
-    // F3H23: ring buffer size del profiler (frames de historia para
-    // avg/min/max + histograma).
-    ImGui::Spacing();
+    ImGui::SeparatorText(
+        I18n::T("editor.user_preferences.section.profiler").c_str());
     ImGui::TextUnformatted(
         I18n::T("editor.user_preferences.editor.profiler_frame_count").c_str());
     if (ImGui::IsItemHovered()) {
@@ -380,9 +412,14 @@ void UserPreferencesPanel::drawEditorTab() {
         saveNow = true;
     }
 
-    // F3H24: section de toasts (enabled + lifetime). Gemelo del stats
-    // overlay block — un section header + 1 checkbox + 1 slider.
     ImGui::Spacing();
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.user_preferences.editor.live_apply_hint").c_str());
+}
+
+void UserPreferencesPanel::drawNotifications(UserSettings::EditorSettings& cfg,
+                                              const UserSettings::EditorSettings& defaults,
+                                              bool& dirty, bool& saveNow) {
     ImGui::SeparatorText(
         I18n::T("editor.user_preferences.editor.toasts.section").c_str());
 
@@ -418,18 +455,44 @@ void UserPreferencesPanel::drawEditorTab() {
         saveNow = true;
     }
 
-    if (dirty)   UserSettings::setEditor(cfg);
-    if (saveNow) UserSettings::save();
-    // F3H24: trackear cambios discretos (saveNow se setea solo en
-    // acciones "soltar slider" / toggle / reset, no en cada frame del
-    // drag). Suma para el toast de "Preferences saved" al cerrar.
-    if (saveNow) m_changedSinceOpen = true;
+    ImGui::SeparatorText(
+        I18n::T("editor.user_preferences.editor.autosave.section").c_str());
+
+    if (ImGui::Checkbox(
+            (I18n::T("editor.user_preferences.editor.autosave.enabled") +
+             "##user_pref_autosave_enabled").c_str(),
+            &cfg.autosaveEnabled)) {
+        dirty = true;
+        saveNow = true;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.user_preferences.editor.autosave.enabled.tooltip").c_str());
+    }
+
+    ImGui::TextUnformatted(
+        I18n::T("editor.user_preferences.editor.autosave.interval_min").c_str());
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.user_preferences.editor.autosave.interval_min.tooltip").c_str());
+    }
+    ImGui::SameLine(kLabelColumnWidth);
+    ImGui::SetNextItemWidth(kControlWidth);
+    if (ImGui::SliderInt("##user_pref_autosave_interval",
+                          &cfg.autosaveIntervalMin, 1, 60, "%d min")) {
+        dirty = true;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) saveNow = true;
+    if (resetButton("autosave_interval",
+                     cfg.autosaveIntervalMin,
+                     defaults.autosaveIntervalMin)) {
+        dirty = true;
+        saveNow = true;
+    }
 
     ImGui::Spacing();
     ImGui::TextDisabled("%s",
         I18n::T("editor.user_preferences.editor.live_apply_hint").c_str());
-
-    ImGui::Unindent();
 }
 
 } // namespace Mood
