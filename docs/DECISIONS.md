@@ -11,6 +11,35 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-28: F3H23 cierre — Performance feedback (Profiler + Stats overlay)
+
+**Contexto:** Cuarto hito de Sub-fase 3.4. Consolidado del plan original ex-F3H23 Profiler + ex-F3H24 Stats overlay (mismas métricas runtime FPS/drawcalls/tris/mem). El dev confirmó al arrancar 2 decisiones críticas (estilo + orden), las otras 4 quedaron como sub-decisiones de implementación. Implementación en 2 pasos validados visualmente (StatusBar primero, luego ProfilerBuffer + Panel) con 2 ajustes reactivos.
+
+**D1 — Stats overlay = StatusBar global del editor (Unity-style bottom bar).** Validado por el dev al arrancar (vs `Quake r_speeds` multiline / Unreal chips numéricos). El primer iter dibujaba un single-line overlay al pie del viewport image — el dev rechazó visualmente al ver superposición con el header del Asset Browser cuando los paneles compartían fila. **Refactor reactivo**: mover los chips a la `StatusBar` global (la barra que ya tenía FPS + Modo + Proyecto sin guardar). Beneficio adicional: la StatusBar es global (no per-viewport), siempre visible aunque el dev cierre el viewport principal o cambie de workspace.
+
+**D2 — Toggleable per-widget (no all-or-nothing global key).** Cada chip tiene su propio bool en `UserSettings.editor.statsOverlay.show<X>` (7 flags). Defaults: `showFps`/`showDrawcalls`/`showTris` = true; `showMemGpu`/`showMemCpu`/`showLights`/`showEntities` = false. El dev arma su HUD desde Preferences > Editor. Alternativa descartada (key F11 togglea todo el HUD): menos flexible — el dev típicamente quiere "FPS siempre, drawcalls al optimizar, RSS al cazar leak", no un on/off binario.
+
+**D3 — Profiler ring buffer single-thread (no per-thread map).** Tracy ya maneja per-thread internamente vía `ZoneScopedN`. El ring in-engine de F3H23 vive en el main thread del editor — donde corren TODOS los `MOOD_PROFILE_SCOPE` existentes (~50 call-sites en SceneRenderer/AssetManager/Editor). Single-thread elimina contención de locks en hot path (push del scope ocurre miles de veces por frame). Si emerge demanda (futuro worker thread del asset import o physics async), se agrega `std::unordered_map<std::thread::id, ProfilerBuffer>` en hito propio.
+
+**D4 — Hook al ring vía RAII en `MOOD_PROFILE_SCOPE` existente (no macro nueva).** La macro emite ahora Tracy zone (`ZoneScopedN`, cuando `TRACY_ENABLE`) **+** RAII `Mood::detail::ScopeTimer` declarado en `core/Profiler.h` con dtor out-of-line en `ProfilerBuffer.cpp` (chrono::steady_clock + pushScope al global). Beneficio masivo: los ~50 scopes ya instrumentados desde F2H2 alimentan el ProfilerPanel automáticamente sin tocar call-sites. Alternativa descartada (`MOOD_PROFILE_SCOPE_RING` macro paralela): requeriría agregar 1 línea en cada call-site existente. Cuando Tracy está OFF, el ring sigue corriendo (el panel funciona sin Tracy build); cuando `MOOD_PROFILE=OFF` en CMake, ambas macros caen a no-op total — cero overhead en release sin profiling.
+
+**D5 — GPU markers `glBeginQuery(GL_TIME_ELAPSED)` OUT-OF-SCOPE en F3H23.** El ProfilerPanel muestra CPU time únicamente. GL_TIME_ELAPSED per-pass requiere driver sync que tira FPS ~5%+ sin throttling (medir 1/30 frames). Cuando el dev quiera optimizar shadow / SSAO / SSR de verdad, se agrega como toggle en Preferences "GPU markers (cuesta FPS)" en hito propio. Tracy + RenderDoc cubren este caso hoy si el dev tiene Tracy build prendido.
+
+**D6 — VRAM NVIDIA-only via `GL_NVX_gpu_memory_info`.** El helper devuelve `(TOTAL_AVAILABLE - CURRENT_AVAILABLE) * 1024` bytes consumidos por el proceso. Sin la extensión (drivers AMD/Intel/Mesa), `GLAD_GL_NVX_gpu_memory_info` es 0 → return 0 → UI muestra "—" sin fallar. AMD tiene `GL_ATI_meminfo` (semántica distinta: reporta tamaño del pool libre por heap); se agrega al helper cuando un dev con AMD reporte el "—" en VRAM. Para Mac/Linux: equivalentes futuros con `MTLDevice.currentAllocatedSize` / DRI3 query.
+
+**Ajuste reactivo A — Overlay del viewport → StatusBar inferior.** Documentado en D1.
+
+**Ajuste reactivo B — `kLabelColumnWidth` 160→240 px en `UserPreferencesPanel`.** Los labels largos en español ("Tamaño gizmo (mover/escalar)" ≈ 200 px, "Retraso preview al pasar el cursor" ≈ 230 px) pisaban la columna del slider con el ancho original. Subido a 240; cabe holgado en el modal de 540 px de ancho (240 label + 200 control + 30 reset = 470). Sin restricción de scrollbar horizontal. Polish menor, registrado acá porque se descubrió al agregar los toggles + slider de F3H23.
+
+**Backlog del hito:**
+- **GPU markers** vía `glBeginQuery(GL_TIME_ELAPSED)` con throttling (1/30 frames default). Toggle en Preferences "GPU markers (cuesta FPS)". Cuando el dev quiera optimizar el render pipeline a fondo.
+- **VRAM AMD** via `GL_ATI_meminfo` — trivial ~10 LOC en `vramUsedBytes()` con preferencia a NVX si está disponible. Diferido hasta que un dev con AMD reporte "—".
+- **Per-scope histograma** en el ProfilerPanel — hoy el histograma muestra el último frame agregado. Hover sobre row → mini-chart de los últimos N samples de ese scope individual. Hito propio si el dev quiere tendencias visuales por scope.
+- **Export CSV del Profiler** — gemelo del PerformanceHud snapshot existente (F2H2 Bloque G). Botón "Export" → `<project>/.cache/profiler/snapshot_<timestamp>.csv` con scope/avg/min/max/hits por frame.
+- **Markers de eventos** (asset load, scene save, dev acciona play, etc) overlay sobre el histograma para correlacionar spikes con acciones.
+
+---
+
 ## 2026-05-27: F3H22 cierre — Properties Editor con icons laterales (Blender style)
 
 **Contexto:** Tercer hito de Sub-fase 3.4. Inspector reescrito de "lista plana scrollable" a "categorías filtradas por icons laterales" estilo Blender Properties Editor. El plan llegó con 6 decisiones cerradas (D1-D6 con investigación industrial Blender/Unreal/Unity); la implementación + 5 rondas de validación visual con el dev forzaron 6 ajustes reactivos que sobreescriben parcialmente esas decisiones. Documento solo los **finales post-ajuste**.
