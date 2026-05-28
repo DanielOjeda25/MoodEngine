@@ -102,4 +102,118 @@ void Scene::removeVisGroup(u64 id) {
     }
 }
 
+// --- F3H27: helpers de jerarquia parent/child ---
+
+glm::mat4 Scene::worldMatrixOf(entt::entity handle) const {
+    if (handle == entt::null) return glm::mat4(1.0f);
+    if (!m_registry.valid(handle)) return glm::mat4(1.0f);
+    if (!m_registry.all_of<TransformComponent>(handle)) return glm::mat4(1.0f);
+
+    // Walk iterativo desde la entity hacia el root acumulando local matrices
+    // en stack. Multiplicamos del root hacia abajo al final. Iterativo para
+    // evitar stack overflow con cadenas profundas (32+ niveles); el clamp
+    // tambien protege ante ciclos accidentales (parent → ... → handle).
+    constexpr int kMaxDepth = 32;
+    glm::mat4 chain[kMaxDepth];
+    int count = 0;
+    entt::entity cur = handle;
+    while (cur != entt::null && count < kMaxDepth) {
+        if (!m_registry.valid(cur)) break;
+        if (!m_registry.all_of<TransformComponent>(cur)) break;
+        const auto& tc = m_registry.get<TransformComponent>(cur);
+        chain[count++] = tc.worldMatrix();
+        // Mismo entity como padre = ciclo trivial, abortar.
+        if (tc.parent == cur) break;
+        cur = tc.parent;
+    }
+    // Multiplicar desde el root (chain[count-1]) hacia el entity (chain[0]).
+    // El padre transforma al hijo: world = parent_world * child_local.
+    glm::mat4 m(1.0f);
+    for (int i = count - 1; i >= 0; --i) {
+        m = m * chain[i];
+    }
+    return m;
+}
+
+std::vector<entt::entity> Scene::descendantsOf(entt::entity root) const {
+    std::vector<entt::entity> out;
+    if (root == entt::null) return out;
+    if (!m_registry.valid(root)) return out;
+
+    // DFS pre-order. Snapshot del view porque destruir children invalida
+    // iteradores — el caller (cascade delete) borra despues de copiar.
+    std::vector<entt::entity> stack{root};
+    while (!stack.empty()) {
+        const entt::entity cur = stack.back();
+        stack.pop_back();
+        // Buscar todos los entities cuyo parent == cur.
+        auto view = m_registry.view<const TransformComponent>();
+        for (auto h : view) {
+            if (h == cur) continue;
+            if (view.get<const TransformComponent>(h).parent == cur) {
+                out.push_back(h);
+                stack.push_back(h);
+            }
+        }
+    }
+    return out;
+}
+
+std::vector<entt::entity> Scene::topLevelAncestors(
+    const std::vector<entt::entity>& selected) const {
+
+    if (selected.empty()) return {};
+    // Set de selectos para lookup O(1).
+    std::vector<entt::entity> selectedSorted = selected;
+    // Helper: handle X es "top-level del set" si NINGUN ancestro suyo
+    // (parent, grandparent, ...) tambien esta en el set.
+    auto inSet = [&](entt::entity h) {
+        for (entt::entity s : selectedSorted) {
+            if (s == h) return true;
+        }
+        return false;
+    };
+    std::vector<entt::entity> out;
+    out.reserve(selected.size());
+    for (entt::entity h : selected) {
+        if (h == entt::null || !m_registry.valid(h)) continue;
+        if (!m_registry.all_of<TransformComponent>(h)) {
+            out.push_back(h);
+            continue;
+        }
+        // Walk arriba hasta root o hasta encontrar un ancestro en el set.
+        constexpr int kMaxDepth = 32;
+        entt::entity cur = m_registry.get<TransformComponent>(h).parent;
+        bool hasAncestorInSet = false;
+        int depth = 0;
+        while (cur != entt::null && depth++ < kMaxDepth) {
+            if (!m_registry.valid(cur)) break;
+            if (inSet(cur)) { hasAncestorInSet = true; break; }
+            if (!m_registry.all_of<TransformComponent>(cur)) break;
+            cur = m_registry.get<TransformComponent>(cur).parent;
+        }
+        if (!hasAncestorInSet) out.push_back(h);
+    }
+    return out;
+}
+
+bool Scene::isAncestorOf(entt::entity ancestor, entt::entity descendant) const {
+    if (ancestor == entt::null || descendant == entt::null) return false;
+    if (ancestor == descendant) return false;
+    if (!m_registry.valid(descendant)) return false;
+
+    constexpr int kMaxDepth = 32;
+    entt::entity cur = descendant;
+    int depth = 0;
+    while (cur != entt::null && depth++ < kMaxDepth) {
+        if (!m_registry.valid(cur)) return false;
+        if (!m_registry.all_of<TransformComponent>(cur)) return false;
+        const auto& tc = m_registry.get<TransformComponent>(cur);
+        if (tc.parent == ancestor) return true;
+        if (tc.parent == cur) return false;  // ciclo trivial
+        cur = tc.parent;
+    }
+    return false;
+}
+
 } // namespace Mood

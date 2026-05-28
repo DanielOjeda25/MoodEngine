@@ -14,6 +14,7 @@
 
 #include <entt/entt.hpp>
 
+#include <unordered_set>
 #include <vector>
 
 namespace Mood {
@@ -26,16 +27,26 @@ struct TagComponent;
 /// @brief Una fila del Hierarchy: entidad + puntero al tag para evitar
 ///        un `getComponent` dentro del clipper (el get es barato pero
 ///        se llama por entry visible, no acumula).
+///        F3H27: añadidos `depth` (profundidad en la jerarquia parent/
+///        child, 0 = root) + `hasChildren` (true si tiene al menos 1
+///        hijo, para render del arrow expand/collapse).
 struct HierarchyEntry {
     entt::entity handle{entt::null};
     const TagComponent* tag{nullptr};
+    int depth{0};
+    bool hasChildren{false};
 };
 
 /// @brief Recolecta las entidades con TagComponent en `out`. PURO: no
 ///        toca ImGui. `out` se limpia con `clear()` antes de rellenar
 ///        — el caller puede pasar el mismo vector entre frames para
 ///        reusar la capacidad.
-void collectHierarchyEntries(Scene& scene, std::vector<HierarchyEntry>& out);
+///        F3H27: emite en DFS pre-order (padre antes que hijos), respeta
+///        `collapsed` (handles cuyas subtrees se ocultan). depth=0 para
+///        roots. Las entries derivadas (VehicleWheelMarker, Environment)
+///        se siguen ocultando.
+void collectHierarchyEntries(Scene& scene, std::vector<HierarchyEntry>& out,
+                              const std::unordered_set<entt::entity>& collapsed = {});
 
 class HierarchyPanel : public IPanel {
 public:
@@ -64,6 +75,10 @@ private:
     /// Cache de la lista de entries. Se rellena al inicio de cada
     /// `onImGuiRender` y se reusa el storage entre frames.
     std::vector<HierarchyEntry> m_entries;
+    /// F3H27: handles cuya subtree esta colapsada (no se muestran sus
+    /// hijos). Persistido en memoria mientras el panel viva — no se
+    /// serializa.
+    std::unordered_set<entt::entity> m_collapsed;
 };
 
 } // namespace Mood

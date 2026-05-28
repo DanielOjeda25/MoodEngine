@@ -141,16 +141,35 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
             // F2H23 iter 5: helper interno para popular otherStarts
             // (snapshot de las entidades extra del SelectionSet) al
             // iniciar cualquier drag. Usado por los 3 modos.
+            // F3H27 D2: filtra a top-level del set — si el padre Y el
+            // hijo estan ambos selectos, solo el padre recibe el delta
+            // (el hijo lo hereda via worldMatrix recursivo). Sin filtro,
+            // el hijo se mueve 2x (delta propio + delta heredado).
             auto populateOtherStarts =
                 [&](EditTransformCommand::Field f) {
                 m_gizmo.otherStarts.clear();
                 const SelectionSet& set = m_ui.selectionSet();
                 if (set.selected.size() <= 1u) return;
+
+                // Compute top-level ancestors del set.
+                std::vector<entt::entity> raw;
+                raw.reserve(set.selected.size());
+                for (const Entity& e : set.selected) raw.push_back(e.handle());
+                const auto topLevel = m_scene->topLevelAncestors(raw);
+                auto isTopLevel = [&](entt::entity h) {
+                    for (entt::entity t : topLevel) {
+                        if (t == h) return true;
+                    }
+                    return false;
+                };
+
                 m_gizmo.otherStarts.reserve(set.selected.size() - 1);
                 for (const Entity& other : set.selected) {
                     if (other.handle() == selected.handle()) continue;
                     if (!m_scene->registry().valid(other.handle())) continue;
                     if (!other.hasComponent<TransformComponent>()) continue;
+                    // F3H27 D2: skip hijos cuyo ancestor tambien esta selecto.
+                    if (!isTopLevel(other.handle())) continue;
                     Entity oCopy = other;
                     const auto& ot = oCopy.getComponent<TransformComponent>();
                     glm::vec3 sv;

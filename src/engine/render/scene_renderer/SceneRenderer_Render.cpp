@@ -342,9 +342,9 @@ void SceneRenderer::renderScene(Scene& scene,
         for (Entity e : batching.nonBatchable) {
             if (!e.hasComponent<TransformComponent>() ||
                 !e.hasComponent<MeshRendererComponent>()) continue;
-            auto& t = e.getComponent<TransformComponent>();
             auto& mr = e.getComponent<MeshRendererComponent>();
-            const glm::mat4 model = t.worldMatrix();
+            // F3H27: world recursivo (acumula padre si lo hay).
+            const glm::mat4 model = scene.worldMatrixOf(e.handle());
             m_pbrShader->setMat4("uModel", model);
             drawMeshRenderer(*m_pbrShader, mr, model);
         }
@@ -369,7 +369,8 @@ void SceneRenderer::renderScene(Scene& scene,
             [&](Entity e, TransformComponent& t, MeshRendererComponent& mr,
                 SkeletonComponent& sk) {
                 if (isEntityHiddenByVisGroup(scene, e)) return;  // F2H33
-                const glm::mat4 model = t.worldMatrix();
+                (void)t;  // F3H27: world recursivo via scene helper
+                const glm::mat4 model = scene.worldMatrixOf(e.handle());
                 m_pbrSkinnedShader->setMat4("uModel", model);
                 const usize n = sk.skinningMatrices.size();
                 if (n == 0) return;
@@ -409,7 +410,8 @@ void SceneRenderer::renderScene(Scene& scene,
             scene.forEach<TransformComponent, BrushComponent>(
                 [&](Entity e, TransformComponent& t, BrushComponent& bc) {
                     if (isEntityHiddenByVisGroup(scene, e)) return;  // F2H33
-                    const glm::mat4 worldMatrix = t.worldMatrix();
+                    (void)t;  // F3H27: world recursivo via scene helper
+                    const glm::mat4 worldMatrix = scene.worldMatrixOf(e.handle());
                     // F2H15: si alguna cara tiene lockToWorld=true,
                     // el rebuild de mesh debe hacerse cada vez que
                     // el transform cambia (las UVs world dependen
@@ -634,9 +636,9 @@ void SceneRenderer::renderScene(Scene& scene,
             Entity e = td.entity;
             if (!e.hasComponent<TransformComponent>() ||
                 !e.hasComponent<MeshRendererComponent>()) continue;
-            auto& t  = e.getComponent<TransformComponent>();
             auto& mr = e.getComponent<MeshRendererComponent>();
-            const glm::mat4 model = t.worldMatrix();
+            // F3H27: world recursivo (acumula padre si lo hay).
+            const glm::mat4 model = scene.worldMatrixOf(e.handle());
             m_pbrShader->setMat4("uModel", model);
             drawMeshRenderer(*m_pbrShader, mr, model);
         }

@@ -9,6 +9,7 @@
 #include "engine/scene/VisGroup.h"  // F2H33
 
 #include <entt/entt.hpp>
+#include <glm/mat4x4.hpp>  // F3H27: worldMatrixOf helper
 
 #include <string>
 #include <string_view>
@@ -87,6 +88,40 @@ public:
     ///        Entity falsy si el handle no esta vivo en el registry.
     ///        Util para JointComponent.targetEntity → Entity B.
     Entity entityFromHandle(entt::entity handle);
+
+    // --- F3H27: helpers de jerarquia parent/child ---
+
+    /// @brief World matrix recursiva de `e`. Si tiene `parent != null`,
+    ///        retorna `worldMatrixOf(parent) * e.transform.worldMatrix()`;
+    ///        sin padre devuelve `worldMatrix()` local pura. Usar desde
+    ///        render path (SceneRenderer / ShadowPass / etc) para que los
+    ///        hijos de un padre movido se muevan junto.
+    ///
+    ///        Sistemas fisicos / picking / editor tools NO la usan (asumen
+    ///        local-as-world por las 50+ callsites historicos) — trade-off
+    ///        agendizado a F3H28+ si emerge.
+    ///
+    ///        Resistente a ciclos: limit de 32 niveles de recursion, si
+    ///        excede devuelve la local sin walkear (clamp + warning).
+    glm::mat4 worldMatrixOf(entt::entity handle) const;
+
+    /// @brief Lista todos los descendientes de `root` en DFS pre-order
+    ///        (hijos antes que nietos). NO incluye `root`. Vacio si root
+    ///        no tiene hijos o no es valido. Usado por cascade delete.
+    std::vector<entt::entity> descendantsOf(entt::entity root) const;
+
+    /// @brief Filtro para multi-edit del gizmo: dado un set de entities
+    ///        selectos, devuelve solo los "top-level" del set — entities
+    ///        que NO tienen un ancestro tambien selecto. Asi un padre + sus
+    ///        hijos selectos se mueven solo via el padre (sin doble delta).
+    ///        Preserva el orden del input.
+    std::vector<entt::entity> topLevelAncestors(
+        const std::vector<entt::entity>& selected) const;
+
+    /// @brief Devuelve true si `ancestor` aparece en la cadena parent de
+    ///        `descendant` (recursivo hasta root o ciclo). Util para
+    ///        validar reparent sin crear ciclos.
+    bool isAncestorOf(entt::entity ancestor, entt::entity descendant) const;
 
 private:
     Entity makeEntity(entt::entity handle);

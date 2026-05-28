@@ -10,7 +10,9 @@
 
 #include <glm/vec3.hpp>
 
+#include <cmath>
 #include <string>
+#include <vector>
 
 using namespace Mood;
 
@@ -107,4 +109,115 @@ TEST_CASE("Entity: TransformComponent worldMatrix aplica trans/scale correctamen
     CHECK(m[0][0] == doctest::Approx(2.0f));
     CHECK(m[1][1] == doctest::Approx(2.0f));
     CHECK(m[2][2] == doctest::Approx(2.0f));
+}
+
+// ============================================================
+// F3H27: helpers de jerarquia parent/child
+// ============================================================
+
+TEST_CASE("F3H27 Scene::worldMatrixOf sin parent devuelve local") {
+    Scene scene;
+    Entity e = scene.createEntity("root");
+    auto& t = e.getComponent<TransformComponent>();
+    t.position = glm::vec3(3.0f, 0.0f, 0.0f);
+    t.scale = glm::vec3(2.0f);
+    const auto local = t.worldMatrix();
+    const auto world = scene.worldMatrixOf(e.handle());
+    // Sin parent, world == local.
+    for (int c = 0; c < 4; ++c)
+        for (int r = 0; r < 4; ++r)
+            CHECK(world[c][r] == doctest::Approx(local[c][r]));
+}
+
+TEST_CASE("F3H27 Scene::worldMatrixOf con parent acumula world") {
+    Scene scene;
+    Entity parent = scene.createEntity("parent");
+    parent.getComponent<TransformComponent>().position =
+        glm::vec3(10.0f, 0.0f, 0.0f);
+    Entity child = scene.createEntity("child");
+    auto& tc = child.getComponent<TransformComponent>();
+    tc.parent = parent.handle();
+    tc.position = glm::vec3(2.0f, 0.0f, 0.0f);  // local al padre
+
+    const auto world = scene.worldMatrixOf(child.handle());
+    // El child queda en world (10 + 2) = 12 en X.
+    CHECK(world[3][0] == doctest::Approx(12.0f));
+}
+
+TEST_CASE("F3H27 Scene::descendantsOf devuelve DFS pre-order") {
+    Scene scene;
+    Entity root = scene.createEntity("root");
+    Entity a = scene.createEntity("a");
+    Entity b = scene.createEntity("b");
+    Entity ab = scene.createEntity("ab");
+    a.getComponent<TransformComponent>().parent = root.handle();
+    b.getComponent<TransformComponent>().parent = root.handle();
+    ab.getComponent<TransformComponent>().parent = a.handle();
+
+    const auto desc = scene.descendantsOf(root.handle());
+    // root tiene 3 descendants: a, b, ab.
+    CHECK(desc.size() == 3u);
+    bool foundA = false, foundB = false, foundAb = false;
+    for (auto h : desc) {
+        if (h == a.handle()) foundA = true;
+        if (h == b.handle()) foundB = true;
+        if (h == ab.handle()) foundAb = true;
+    }
+    CHECK(foundA);
+    CHECK(foundB);
+    CHECK(foundAb);
+}
+
+TEST_CASE("F3H27 Scene::topLevelAncestors filtra hijos del set") {
+    Scene scene;
+    Entity p = scene.createEntity("p");
+    Entity c1 = scene.createEntity("c1");
+    Entity c2 = scene.createEntity("c2");
+    Entity orphan = scene.createEntity("orphan");
+    c1.getComponent<TransformComponent>().parent = p.handle();
+    c2.getComponent<TransformComponent>().parent = p.handle();
+
+    // Set = { p, c1, c2, orphan }. Top-level deberia ser { p, orphan }
+    // (c1 y c2 tienen ancestor p en el set).
+    std::vector<entt::entity> set{p.handle(), c1.handle(),
+                                    c2.handle(), orphan.handle()};
+    const auto top = scene.topLevelAncestors(set);
+    CHECK(top.size() == 2u);
+    bool foundP = false, foundOrphan = false;
+    for (auto h : top) {
+        if (h == p.handle()) foundP = true;
+        if (h == orphan.handle()) foundOrphan = true;
+    }
+    CHECK(foundP);
+    CHECK(foundOrphan);
+}
+
+TEST_CASE("F3H27 Scene::isAncestorOf detecta cadenas correctamente") {
+    Scene scene;
+    Entity gp = scene.createEntity("gp");
+    Entity p = scene.createEntity("p");
+    Entity c = scene.createEntity("c");
+    Entity other = scene.createEntity("other");
+    p.getComponent<TransformComponent>().parent = gp.handle();
+    c.getComponent<TransformComponent>().parent = p.handle();
+
+    CHECK(scene.isAncestorOf(gp.handle(), c.handle()));  // grandparent → grandchild
+    CHECK(scene.isAncestorOf(p.handle(), c.handle()));   // parent → child
+    CHECK(scene.isAncestorOf(gp.handle(), p.handle()));  // direct
+    CHECK_FALSE(scene.isAncestorOf(c.handle(), gp.handle()));  // reverso
+    CHECK_FALSE(scene.isAncestorOf(other.handle(), c.handle()));  // sin relacion
+    CHECK_FALSE(scene.isAncestorOf(c.handle(), c.handle()));  // self
+}
+
+TEST_CASE("F3H27 Scene::worldMatrixOf resiste ciclos triviales (entity = self.parent)") {
+    Scene scene;
+    Entity e = scene.createEntity("self-cycle");
+    auto& t = e.getComponent<TransformComponent>();
+    t.parent = e.handle();  // ciclo trivial
+    t.position = glm::vec3(7.0f, 0.0f, 0.0f);
+    // No debe colgar; clamp 32-niveles maneja el ciclo.
+    const auto m = scene.worldMatrixOf(e.handle());
+    // El resultado puede ser arbitrario (acumula 32 veces el local antes
+    // de cortar), pero NO debe ser NaN ni infinito.
+    CHECK(std::isfinite(m[3][0]));
 }

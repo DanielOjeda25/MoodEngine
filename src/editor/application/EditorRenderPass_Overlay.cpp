@@ -203,6 +203,56 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
             static_cast<bool>(set.active) &&
             !set.selectedFaceIndices.empty();
 
+        // F3H27: helper local — AABB world-space de la geometria propia
+        // (brush/mesh) de un handle, transformado por world recursivo.
+        // Devuelve isValid()==false si la entity no tiene geometria.
+        auto computeOwnGeomAabbWorld = [&](entt::entity h) -> AABB {
+            auto& reg = m_scene->registry();
+            AABB invalid{glm::vec3(1.0f), glm::vec3(0.0f)};  // sentinel
+            if (!reg.valid(h)) return invalid;
+            if (!reg.all_of<TransformComponent>(h)) return invalid;
+            glm::vec3 localMin(0.0f), localMax(0.0f);
+            bool hasGeom = false;
+            if (reg.all_of<BrushComponent>(h)) {
+                const auto& bc = reg.get<BrushComponent>(h);
+                if (bc.brush.localAabb.isValid()) {
+                    localMin = bc.brush.localAabb.min;
+                    localMax = bc.brush.localAabb.max;
+                    hasGeom = true;
+                }
+            } else if (reg.all_of<MeshRendererComponent>(h) && m_assetManager) {
+                const auto& mr = reg.get<MeshRendererComponent>(h);
+                if (const MeshAsset* asset = m_assetManager->getMesh(mr.mesh)) {
+                    if (asset->aabbMin.x <= asset->aabbMax.x &&
+                        asset->aabbMin.y <= asset->aabbMax.y &&
+                        asset->aabbMin.z <= asset->aabbMax.z) {
+                        localMin = asset->aabbMin;
+                        localMax = asset->aabbMax;
+                        hasGeom = true;
+                    }
+                }
+            }
+            if (!hasGeom) return invalid;
+            const glm::mat4 world = m_scene->worldMatrixOf(h);
+            const glm::vec3 lc[8] = {
+                {localMin.x, localMin.y, localMin.z},
+                {localMax.x, localMin.y, localMin.z},
+                {localMax.x, localMax.y, localMin.z},
+                {localMin.x, localMax.y, localMin.z},
+                {localMin.x, localMin.y, localMax.z},
+                {localMax.x, localMin.y, localMax.z},
+                {localMax.x, localMax.y, localMax.z},
+                {localMin.x, localMax.y, localMax.z}};
+            glm::vec3 wMin( std::numeric_limits<f32>::max());
+            glm::vec3 wMax(-std::numeric_limits<f32>::max());
+            for (int i = 0; i < 8; ++i) {
+                const glm::vec4 w = world * glm::vec4(lc[i], 1.0f);
+                wMin = glm::min(wMin, glm::vec3(w));
+                wMax = glm::max(wMax, glm::vec3(w));
+            }
+            return AABB{wMin, wMax};
+        };
+
         for (const Entity& sel : set.selected) {
             if (!sel || !sel.hasComponent<TransformComponent>()) continue;
             const bool isActive = static_cast<bool>(set.active)
@@ -211,7 +261,47 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
             // en Face Mode.
             if (isActive && faceModeWithSelectedFace) continue;
             const auto& tf = sel.getComponent<TransformComponent>();
-            const glm::mat4 model = tf.worldMatrix();
+            (void)tf;
+            const glm::vec3& color = isActive ? activeColor : selColor;
+
+            // F3H27: si la entity tiene descendientes, dibujar el AABB
+            // axis-aligned COMBINADO de su geometria propia + la de todos
+            // sus descendientes. Asi el outline de un Group envuelve a sus
+            // hijos como en Blender/Unity. Sin descendientes geometricos
+            // (Empty solo o point entity), caer al OBB orientado original.
+            const auto descendants = m_scene->descendantsOf(sel.handle());
+            if (!descendants.empty()) {
+                AABB combined{
+                    glm::vec3( std::numeric_limits<f32>::max()),
+                    glm::vec3(-std::numeric_limits<f32>::max())};
+                bool any = false;
+                auto add = [&](entt::entity h) {
+                    const AABB a = computeOwnGeomAabbWorld(h);
+                    if (!a.isValid()) return;
+                    combined = merge(combined, a);
+                    any = true;
+                };
+                add(sel.handle());
+                for (entt::entity h : descendants) add(h);
+                if (any) {
+                    const glm::vec3 mn = combined.min;
+                    const glm::vec3 mx = combined.max;
+                    const glm::vec3 c8[8] = {
+                        {mn.x, mn.y, mn.z}, {mx.x, mn.y, mn.z},
+                        {mx.x, mx.y, mn.z}, {mn.x, mx.y, mn.z},
+                        {mn.x, mn.y, mx.z}, {mx.x, mn.y, mx.z},
+                        {mx.x, mx.y, mx.z}, {mn.x, mx.y, mx.z}};
+                    for (const auto& e : kEdges) {
+                        dbg.drawLine(c8[e[0]], c8[e[1]], color);
+                    }
+                    continue;
+                }
+                // Si ningun nodo tiene geometria (Empty con Empty children),
+                // cae al fallback de point marker abajo.
+            }
+
+            // F3H27: world recursivo para que el outline siga al padre.
+            const glm::mat4 model = m_scene->worldMatrixOf(sel.handle());
 
             // Corners locales: para brush = AABB local del brush
             // (F2H11 ya lo computa); para mesh = AABB real del
@@ -260,7 +350,6 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                 w[i] = glm::vec3(p);
             }
 
-            const glm::vec3& color = isActive ? activeColor : selColor;
             for (const auto& e : kEdges) {
                 dbg.drawLine(w[e[0]], w[e[1]], color);
             }
@@ -282,12 +371,14 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
             !set.selectedFaceIndices.empty()) {
             const auto& bc = set.active.getComponent<BrushComponent>();
             const auto& tf = set.active.getComponent<TransformComponent>();
+            (void)tf;
             const i32 activeIdx = set.activeFaceIndex();
             // F2H17: la capa rellena solo se dibuja cuando el dev
             // NO esta editando UV params — durante un drag de slider
             // la capa tapa la textura. Outline siempre.
             const bool editingUV = m_ui.inspector().isEditingBrushUV();
-            const glm::mat4 worldMat = tf.worldMatrix();
+            // F3H27: world recursivo (sigue al padre si lo hay).
+            const glm::mat4 worldMat = m_scene->worldMatrixOf(set.active.handle());
             for (i32 faceIdxSigned : set.selectedFaceIndices) {
                 if (faceIdxSigned < 0) continue;
                 const u32 faceIdx = static_cast<u32>(faceIdxSigned);
@@ -341,13 +432,17 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                     hoverHit.entity.getComponent<BrushComponent>();
                 const auto& tf =
                     hoverHit.entity.getComponent<TransformComponent>();
+                (void)tf;
+                // F3H27: world recursivo (sigue al padre si lo hay).
+                const glm::mat4 hoverWM =
+                    m_scene->worldMatrixOf(hoverHit.entity.handle());
                 // Reconstruir el rayo desde la cam (mismo flow del
                 // click handler).
                 const glm::mat4 invVP = glm::inverse(projection * view);
                 if (const auto ray = pickRayFromNdc(invVP, ndcX, ndcY)) {
                     const auto faceHit = Csg::pickFace(
                         bc.brush, ray->origin, ray->direction,
-                        tf.worldMatrix());
+                        hoverWM);
                     if (faceHit.has_value()) {
                         const i32 idx = static_cast<i32>(*faceHit);
                         // Skip si la cara hovered ya esta en el set
@@ -361,7 +456,7 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
                         if (!alreadySelected) {
                             const auto poly = Csg::collectFaceWorldPolygon(
                                 bc.brush, static_cast<u32>(idx),
-                                tf.worldMatrix());
+                                hoverWM);
                             const usize n = poly.size();
                             if (n >= 3) {
                                 // F2H35 fix: cyan saturado para que se
@@ -451,7 +546,9 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
             set.active.hasComponent<TransformComponent>()) {
             const auto& bc = set.active.getComponent<BrushComponent>();
             const auto& tf = set.active.getComponent<TransformComponent>();
-            const glm::mat4 wm = tf.worldMatrix();
+            (void)tf;
+            // F3H27: world recursivo (sigue al padre si lo hay).
+            const glm::mat4 wm = m_scene->worldMatrixOf(set.active.handle());
             const auto verts = Csg::enumerateBrushVertices(bc.brush);
             const f32 snap = static_cast<f32>(m_hammerSnapStep);
             const glm::vec3 markerColor(1.0f, 1.0f, 1.0f);  // blanco

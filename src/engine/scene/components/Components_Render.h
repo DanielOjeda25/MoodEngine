@@ -9,6 +9,8 @@
 #include "engine/assets/manager/AssetManager.h" // TextureAssetId, AudioAssetId, MeshAssetId
 #include "engine/scene/entity_type/EntityType.h"  // F3H9
 
+#include <entt/entt.hpp>  // F3H27: entt::entity para TransformComponent::parent
+
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp> // F2H70: glm::quat para sync sin gimbal
 #include <glm/mat4x4.hpp>
@@ -95,15 +97,34 @@ struct TransformComponent {
     // luego la R del dev orienta el chasis en el mundo.
     f32 pivotYawOffsetDeg = 0.0f;
 
+    // F3H27: handle del padre en la jerarquia de transforms. `entt::null`
+    // = top-level (root, sin padre). Si != null, position/rotation/scale
+    // pasan a ser LOCAL al padre — `worldMatrix()` SIGUE devolviendo la
+    // local pura (sin walkear arriba) por dos razones: (a) no romper los
+    // 50+ callsites de sistemas fisicos/picking/edit tools que asumen
+    // local-as-world, (b) acoplar el TC a la Scene requeriria pasar
+    // Scene& a worldMatrix() y romper la pureza del componente.
+    //
+    // Para obtener la WORLD matrix con jerarquia recursiva, usar el
+    // helper `Scene::worldMatrixOf(Entity)` que acumula desde el root.
+    // Solo el render path (SceneRenderer + ShadowPass + EditorRenderPass
+    // + ParticleRenderer + RenderBatching) usa el world recursivo;
+    // sistemas como Jolt physics / ScenePick siguen leyendo local (un
+    // brush con padre = body Jolt al local pos del brush, no del padre —
+    // honest trade-off, agendizable a F3H28+ si emerge).
+    entt::entity parent = entt::null;
+
     TransformComponent() = default;
     TransformComponent(glm::vec3 p, glm::vec3 s = glm::vec3(1.0f))
         : position(p), scale(s) {}
 
-    /// @brief Matriz de modelo en coords de mundo. Orden: T * R * S.
+    /// @brief Matriz local del transform (sin parenting). Orden: T * R * S.
     ///        Con `useQuaternion=false` (default): R = Ry * Rx * Rz
     ///        (yaw-pitch-roll; convencion FPS).
     ///        Con `useQuaternion=true`: R = mat4_cast(rotation) — sin gimbal.
     ///        F2H70: `pivotYOffset` se suma a `position.y` antes de translate.
+    ///        F3H27: para obtener la WORLD matrix con jerarquia, usar
+    ///        `Scene::worldMatrixOf(Entity)`. Esta funcion ignora `parent`.
     glm::mat4 worldMatrix() const {
         glm::vec3 effectivePos = position;
         effectivePos.y += pivotYOffset;

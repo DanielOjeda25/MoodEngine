@@ -363,8 +363,9 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
                     set.active.hasComponent<BrushComponent>() &&
                     set.active.hasComponent<TransformComponent>()) {
                     const auto& bc = set.active.getComponent<BrushComponent>();
-                    const auto& tf = set.active.getComponent<TransformComponent>();
-                    const glm::mat4 wm = tf.worldMatrix();
+                    // F3H27: world recursivo via scene helper (overlay debug
+                    // de vertex/edge edit del brush — refleja parenting).
+                    const glm::mat4 wm = m_scene->worldMatrixOf(set.active.handle());
                     const auto verts = Csg::enumerateBrushVertices(bc.brush);
                     const f32 snap = static_cast<f32>(m_hammerSnapStep);
                     const glm::vec3 markerColor(1.0f, 1.0f, 1.0f);

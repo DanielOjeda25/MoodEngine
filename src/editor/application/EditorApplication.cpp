@@ -167,6 +167,26 @@ void EditorApplication::processEvents() {
             // evita borrar la entidad mientras el usuario edita un campo.
             deleteSelectedEntity();
         } else if (ev.type == SDL_KEYDOWN &&
+                   ev.key.keysym.sym == SDLK_g &&
+                   (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
+                   (ev.key.keysym.mod & KMOD_SHIFT) != 0 &&
+                   ev.key.repeat == 0 &&
+                   m_mode == EditorMode::Editor &&
+                   !ImGui::GetIO().WantTextInput) {
+            // F3H27: Shift+Ctrl+G des-agrupa selección. Convencion Blender.
+            ungroupSelectedEntities();
+        } else if (ev.type == SDL_KEYDOWN &&
+                   ev.key.keysym.sym == SDLK_g &&
+                   (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
+                   (ev.key.keysym.mod & KMOD_SHIFT) == 0 &&
+                   ev.key.repeat == 0 &&
+                   m_mode == EditorMode::Editor &&
+                   !ImGui::GetIO().WantTextInput) {
+            // F3H27: Ctrl+G agrupa selección bajo un Empty padre nuevo.
+            // Convencion Blender (G de "group"). Sin selección o con 1
+            // entity → no-op (logueado).
+            groupSelectedEntities();
+        } else if (ev.type == SDL_KEYDOWN &&
                    ev.key.keysym.sym == SDLK_z &&
                    (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
                    (ev.key.keysym.mod & KMOD_SHIFT) == 0 &&

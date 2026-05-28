@@ -40,7 +40,9 @@ BatchingResult groupByBatch(Scene& scene,
             // Frustum cull: AABB world-space del mesh. Si esta fuera, no
             // entra a ningun lado (ni batch ni non-batchable ni translucent).
             const AABB localAabb{asset->aabbMin, asset->aabbMax};
-            const glm::mat4 worldMat = t.worldMatrix();
+            // F3H27: world recursivo (acumula padre si lo hay).
+            (void)t;
+            const glm::mat4 worldMat = scene.worldMatrixOf(e.handle());
             if (localAabb.isValid()) {
                 const AABB worldBox = worldAabb(localAabb, worldMat);
                 if (!aabbVisible(worldBox, frustum)) {

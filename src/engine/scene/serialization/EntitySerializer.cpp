@@ -510,6 +510,16 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
     jt["rotationEuler"] = t.rotationEuler;
     jt["scale"]         = t.scale;
     je["transform"] = jt;
+    // F3H27: serializar `parent_tag` solo si la entity tiene padre. El
+    // tag del padre es resistente a remap de handles (vs serializar
+    // raw entt handle que cambia entre saves). Resolucion en 2-pass en
+    // SceneLoader::applyEntities.
+    if (t.parent != entt::null && entity.scene() != nullptr) {
+        Entity parentE(t.parent, entity.scene());
+        if (parentE && parentE.hasComponent<TagComponent>()) {
+            je["parent_tag"] = parentE.getComponent<TagComponent>().name;
+        }
+    }
 
     if (entity.hasComponent<MeshRendererComponent>())
         writeMeshRenderer(je, entity.getComponent<MeshRendererComponent>(), assets);

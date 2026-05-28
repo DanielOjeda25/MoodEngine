@@ -2,7 +2,9 @@
 
 #include "core/Log.h"
 #include "editor/commands/DeleteEntityCommand.h"
+#include "editor/commands/GroupSelectionCommand.h"    // F3H27: Ctrl+G
 #include "editor/commands/SetTileCommand.h"  // F2H62 polish: delete tile -> Empty
+#include "editor/commands/UngroupSelectionCommand.h"  // F3H27: Shift+Ctrl+G
 #include "editor/selection/SelectionSet.h"   // F2H85: duplicate -> select copies
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/physics/world/PhysicsWorld.h"
@@ -498,12 +500,91 @@ void EditorApplication::deleteSelectedEntity() {
         constraintCleanup = [pw](u32 cid) { pw->destroyConstraint(cid); };  // F2H65
         ragdollCleanup = [pw](u32 rid) { pw->destroyRagdoll(rid); };        // F2H66
     }
+    // F3H27 D1: cascade delete — si la entity tiene hijos en la jerarquia
+    // parent/child, destruirlos PRIMERO (orden hijos→padre). Cada delete
+    // se pushea como comando individual al history, asi Ctrl+Z deshace
+    // de a una (price honesto — un CompoundDeleteCommand atomico se
+    // agendiza a F3H28+ si emerge demanda). Si no hay hijos, single delete
+    // (mismo flow pre-F3H27).
+    const auto descendants = m_scene->descendantsOf(selected.handle());
+    // descendantsOf devuelve DFS pre-order (padre antes que hijo). Para
+    // destruir hijos primero, iteramos en reverse.
+    for (auto it = descendants.rbegin(); it != descendants.rend(); ++it) {
+        Entity child(*it, m_scene.get());
+        if (!child) continue;
+        DeleteEntityCommand::BodyCleanup ch_cleanup;
+        DeleteEntityCommand::ConstraintCleanup ch_constraintCleanup;
+        DeleteEntityCommand::RagdollCleanup ch_ragdollCleanup;
+        if (m_physicsWorld) {
+            PhysicsWorld* pw = m_physicsWorld.get();
+            ch_cleanup = [pw](u32 bodyId) { pw->destroyBody(bodyId); };
+            ch_constraintCleanup = [pw](u32 cid) { pw->destroyConstraint(cid); };
+            ch_ragdollCleanup = [pw](u32 rid) { pw->destroyRagdoll(rid); };
+        }
+        auto childCmd = std::make_unique<DeleteEntityCommand>(
+            child, m_scene.get(), m_assetManager.get(),
+            std::move(ch_cleanup), &m_history,
+            std::move(ch_constraintCleanup),
+            std::move(ch_ragdollCleanup));
+        m_history.push(std::move(childCmd));
+    }
     auto cmd = std::make_unique<DeleteEntityCommand>(
         selected, m_scene.get(), m_assetManager.get(),
         std::move(cleanup),
         &m_history,  // Hito 32: para remap de handles post-undo
         std::move(constraintCleanup),  // F2H65
         std::move(ragdollCleanup));    // F2H66
+    m_history.push(std::move(cmd));
+    if (!descendants.empty()) {
+        Log::editor()->info(
+            "[delete] cascade: '{}' + {} hijos destruidos",
+            tagName, descendants.size());
+    }
+    markDirty();
+}
+
+void EditorApplication::groupSelectedEntities() {
+    if (!m_scene) return;
+    const SelectionSet& set = m_ui.selectionSet();
+    if (set.selected.size() < 2u) {
+        Log::editor()->info("[group] selección < 2 — no-op");
+        return;
+    }
+    // F3H27 D2: para no agrupar redundantemente padre+hijo, filtrar a
+    // top-level del set. Si el dev selecciona padre + hijos, solo el
+    // padre va al grupo nuevo (los hijos lo siguen automáticamente).
+    std::vector<entt::entity> raw;
+    raw.reserve(set.selected.size());
+    for (const Entity& e : set.selected) raw.push_back(e.handle());
+    const auto topLevel = m_scene->topLevelAncestors(raw);
+    if (topLevel.size() < 2u) {
+        Log::editor()->info(
+            "[group] top-level del set < 2 — no-op (¿selección ya bajo un padre común?)");
+        return;
+    }
+    auto cmd = std::make_unique<GroupSelectionCommand>(
+        m_scene.get(), m_assetManager.get(), topLevel);
+    if (cmd->isNoOp()) {
+        Log::editor()->info("[group] cmd no-op");
+        return;
+    }
+    m_history.push(std::move(cmd));
+    markDirty();
+}
+
+void EditorApplication::ungroupSelectedEntities() {
+    if (!m_scene) return;
+    const SelectionSet& set = m_ui.selectionSet();
+    if (set.selected.empty()) return;
+    std::vector<entt::entity> raw;
+    raw.reserve(set.selected.size());
+    for (const Entity& e : set.selected) raw.push_back(e.handle());
+    auto cmd = std::make_unique<UngroupSelectionCommand>(
+        m_scene.get(), std::move(raw));
+    if (cmd->isNoOp()) {
+        Log::editor()->info("[ungroup] ningún selecto tiene padre — no-op");
+        return;
+    }
     m_history.push(std::move(cmd));
     markDirty();
 }

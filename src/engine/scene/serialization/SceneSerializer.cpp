@@ -253,9 +253,22 @@ void SceneSerializer::save(const GridMap& map, const std::string& name,
             // F2H75: una tela es una entity standalone (su mesh lo genera el
             // ClothSystem dinamicamente; no tiene MeshRendererComponent).
             const bool hasCloth = e.hasComponent<ClothComponent>();
+            // F3H27: Empty padre tambien se persiste — sin esto la
+            // jerarquia se destruye al guardar (el Group_<N> creado por
+            // Ctrl+G no tiene ningun componente "serializable" propio,
+            // pero borrarlo deja a los hijos huerfanos al cargar). Un
+            // Empty sin geometria pero referenciado como parent por
+            // alguien sigue siendo significativo.
+            bool isParent = false;
+            mutableScene->registry().view<TransformComponent>().each(
+                [&](entt::entity h, TransformComponent& tc) {
+                    if (isParent) return;
+                    if (tc.parent == e.handle()) isParent = true;
+                    (void)h;
+                });
             if (!hasMr && !hasLi && !hasRb && !hasEnv && !hasScript
                 && !hasPe && !hasInv && !hasVeh && !hasFF && !hasTrig
-                && !hasCloth) return;
+                && !hasCloth && !isParent) return;
             j["entities"].push_back(serializeEntity(e, assets));
         });
     }

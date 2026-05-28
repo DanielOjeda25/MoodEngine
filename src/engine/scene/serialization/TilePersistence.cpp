@@ -54,6 +54,16 @@ bool isTileModified(Entity tile, const GridMap& map, const AssetManager& assets)
         if (!sc.path.empty()) return true;
     }
 
+    // F3H27: tile agrupado (con parent != null) es modificado. Sin esto
+    // el persist se rompe: el tile no se guarda → al cargar se regenera
+    // del grid como root → el Group queda huerfano. Cualquier parent
+    // (Empty grupo o otro tile) lo marca modificado.
+    if (tile.hasComponent<TransformComponent>()) {
+        if (tile.getComponent<TransformComponent>().parent != entt::null) {
+            return true;
+        }
+    }
+
     // Transform.scale: tile default = (tileSize, tileSize, tileSize).
     // Comparación exacta — el editor cambia el scale en pasos discretos
     // (drag de gizmo o input numérico). Si emerge ruido de coma flotante,

@@ -412,6 +412,13 @@ struct SavedEntity {
     ///        Vacio = pre-F3H9 (back-compat): el SceneLoader infiere de
     ///        los componentes presentes. F3H9+ siempre lo persiste.
     std::string entityType;
+    /// @brief F3H27: tag del padre en la jerarquia parent/child. Vacio =
+    ///        root (sin padre). Resolucion en 2-pass en SceneLoader: tras
+    ///        materializar todas las entities, busca el handle del padre
+    ///        por tag y setea `TransformComponent.parent`. Si el tag no
+    ///        existe (entity huerfana — padre borrado entre saves), el
+    ///        loader la deja como root + log warn.
+    std::string parentTag;
 };
 
 /// @brief F2H11+F2H15: copia persistida de una BrushFace. Guarda el

@@ -11,6 +11,77 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-28: F3H27 cierre — Parenting jerárquico de transforms
+
+Splitted del stub original F3H27 (4 items → 4 hitos separados): F3H27 hoy = parenting-only; F3H28-F3H30 = Grupos+Tools / Mundo grande / HDRI dinámico. 4 decisiones pre-implementación + 5 ajustes reactivos post-validación visual.
+
+**D1 — Delete sobre padre = cascada destructiva (vs detach hijos + borrar solo padre).** Convención Unity/Unreal/Blender: borrar padre borra hijos. Mental model "scene graph" — un sub-tree es una unidad lógica del nivel. Alternativa "detach + borrar padre" rompe el principio de menor sorpresa: el dev espera que Delete sobre "el edificio" borre el edificio entero, no que aparezcan 6 cubos sueltos en root del Outliner. Implementación simple: N `DeleteEntityCommand` individuales (children → parent, DFS reverse order) pushed al `m_history`. Trade-off honesto: Ctrl+Z deshace de a uno (el dev hace N undos para recuperar el sub-tree completo). Compound atomic delete (1 comando con snapshot de todo el sub-tree) queda en backlog F3H28+.
+
+Alternativas descartadas:
+- **Detach + borrar solo padre** — sorpresa. El edificio no se va, solo se descompone visualmente. Anti-mental-model.
+- **Modal de confirmación "borrar N hijos también?"** — interrumpe el flow del level designer. Unity/Unreal no lo hacen.
+- **Compound atomic delete en F3H27** — scope inflation. El dev cierra ya parenting básico, compound delete = optimización si emerge demanda.
+
+**D2 — Multi-select gizmo con padre + hijo selected: filtro top-level (hijos se ignoran).** Convención Blender/Maya/Unity. Si el dev seleccionó padre + hijo y mueve el gizmo, aplicar delta a ambos por separado duplica el movimiento del hijo (recibiría delta del padre — que la jerarquía propaga — + delta propio aplicado por el gizmo). Filtro: `Scene::topLevelAncestors(selected)` devuelve solo entities cuyo ancestor NO está también en el set. Aplicado en `EditorOverlay_Gizmo::populateOtherStarts` para que los "otros" del multi-drag (todos menos el active) skipen hijos cuyo padre/abuelo está selected.
+
+Edge case documentado: si el `active` (primary del SelectionSet) es UN HIJO con su padre también selected, el active igual recibe delta del gizmo y el padre lo propaga → doble movimiento del hijo. Aceptado por simplicidad. Si emerge demanda, filtrar también el active.
+
+Alternativas descartadas:
+- **No filtrar (cada selected recibe delta)** — duplica movimiento de hijos. Bug visible.
+- **Detectar conflicto y modal "querías mover solo padre?"** — interrumpe. Ningún editor lo hace.
+- **Filtrar al construir el SelectionSet** — pierde la información de qué seleccionó el dev. El SelectionSet es UX-puro; filtros van en los consumidores (gizmo, comandos).
+
+**D3 — Posición del Empty al agrupar: centroide del AABB combinado.** Calculado vía `brushAabbWorld` (brushes) / `meshAabbWorld` (meshes) / pivot position (point entities como Light/Audio). Es lo que hace Blender (Object > Set Origin > Origin to Geometry, default al crear empty parent) y Unity (Create Empty Parent al seleccionar N — Unity 2020+).
+
+Alternativas descartadas:
+- **Origen del mundo (0,0,0)** — disruptivo. Si los hijos estaban a (100, 0, 0), tras agrupar quedan con offsets enormes; mover el padre = los hijos se separan del world origin. Mental model roto.
+- **Pivot del primer seleccionado** — sesga hacia el orden de selección. Si Shift+click en orden A, B, C, el centroide queda en A — no es predictible.
+- **Centroide de pivots (no AABB)** — sesga hacia objetos con pivot off-center. Un brush con pivot en una esquina daría centroide mal posicionado vs la "masa visual" del set.
+
+**D4 — Serialización: `parent_tag` (string) vs `parent_handle` (u32 raw del registry).** Tags son estables entre saves; handles del `entt::registry` cambian arbitrariamente (orden de creación, undo/redo que recrea entities con handles distintos, rebuildSceneFromMap). Patrón gemelo a F2H65 (Joint targetEntity usa tag, no handle).
+
+2-pass resolve en `SceneLoader::applyEntitiesToScene` post-Joint resolution: itera saved entities → busca child por tag → busca parent por tag → setea `tc.parent`. Si el padre fue borrado entre saves (parent_tag apunta a tag inexistente), child queda root + log warn. Si hay 2 entities con el mismo tag (caso patológico), first match wins (mismo patrón que el resolve del Joint).
+
+Alternativas descartadas:
+- **`parent_handle: u32`** — handles cambian entre saves. Bug garantizado.
+- **UUID per-entity** — overkill para un campo que ya tenemos (tag). Schema bump, migration de proyectos viejos, no aporta nada nuevo sobre tag.
+- **Path-like "/Group_1/Tile_4_5"** — si renombrás el padre, todos los paths quedan stale. Tag es 1 reescritura; path-like serían N (cubierto por F3H19 rename pero más fricción).
+
+---
+
+**Ajustes reactivos post-validación visual.**
+
+**(R1) Icon del Group en Outliner — tofu `?`.** Primer intento usaba `ICON_FA_OBJECT_GROUP` (0xF247, "object mode" en FA6 — icon canónico para grupos). El dev reportó tofu `?` al ver el `Group_1` en el Outliner. Investigamos: el range del atlas FA es `0xE005-0xF8FF` (cubre 0xF247), pero el TTF `fa-solid-900.ttf` del proyecto no rasteriza ese glyph específico (subset free solid posiblemente reducido). Fallback final: `ICON_FA_FOLDER` (📁, 0xF07B) — garantizado en el atlas porque lo usa el MenuBar "Archivo" todos los días. Semántica "carpeta = contenedor de hijos" es Unity GameObject empty / Hammer group estándar. Trade-off: el icon no comunica "agrupación de transforms" tan literalmente como object-group, pero al ser un glyph confirmado, evita tofu y mantiene la semántica honesta.
+
+**(R2) Arrows ▶/▼ del expand/collapse — tofu `?`.** Usábamos `\xE2\x96\xB6` (U+25B6 BLACK RIGHT-POINTING TRIANGLE) + `\xE2\x96\xBC` (U+25BC BLACK DOWN-POINTING TRIANGLE). El font Lato del proyecto cubre Basic Latin + Latin-1 + General Punctuation (0x2010-0x2027), NO Geometric Shapes (0x25A0-0x25FF). Tofu garantizado. Fix: macros nuevas `ICON_FA_CARET_DOWN` (0xF0D7, "\xef\x83\x97") + `ICON_FA_CARET_RIGHT` (0xF0DA, "\xef\x83\x9a") en `IconsFontAwesome6.h` + usar en `HierarchyPanel.cpp`. Convención Hammer/Unreal/Maya para tree expand: caret triangular sólido. Beneficio adicional: caret es visualmente más liviano que black triangle, encaja mejor con el resto de los icons FA del Outliner.
+
+**(R3) Outline del Group no envolvía a los hijos.** Al seleccionar el Empty `Group_1`, el outline dibujaba un cubito de 0.5m centrado en el centroide (point marker fallback para entities sin BrushComponent/MeshRenderer). El dev pidió que envolviera ambos cubos hijos (mental model "selecciono el grupo, veo el grupo entero highlighteado"). Fix en `EditorRenderPass_Overlay.cpp::drawEditorScene3DOverlay`: si la entity selected tiene descendants (`Scene::descendantsOf` no vacío), computar el AABB axis-aligned combinado de su geometría propia + la de todos sus descendientes vía helper local `computeOwnGeomAabbWorld(handle)` (transforma el AABB local del brush/mesh por `worldMatrixOf` recursivo y proyecta los 8 corners a world axis-aligned). Sin descendants → OBB orientado original (mantiene el comportamiento pre-F3H27 para meshes rotados, donde el OBB es visualmente más informativo que un AABB envolvente).
+
+Trade-off: para meshes rotados con hijos, el outline pasa de OBB orientado (visualmente preciso al objeto) a AABB axis-aligned (envuelve más espacio del estrictamente necesario). Aceptado porque cuando hay hijos el dev típicamente está manipulando "el grupo entero" como unidad, no inspeccionando la orientación del padre.
+
+**(R4) Persistencia rota: Group_1 + tiles agrupados no se guardaban.** Después de Ctrl+G → save → reopen, el Group_1 desaparecía y los Tile_4_5/Tile_4_2 volvían a ser roots. Dos bugs encadenados:
+
+1. `SceneSerializer.cpp:256-258` filtraba entities que no tuvieran ≥1 componente "serializable" (MeshRenderer/Light/RigidBody/Environment/Script/ParticleEmitter/Inventory/Vehicle/ForceField/Trigger/Cloth). El Empty `Group_1` (solo Tag + Transform por createEntity default) cae fuera del filtro → no se escribe al `.moodmap`.
+
+2. `TilePersistence::isTileModified` no chequeaba `tc.parent`. Tiles agrupados con scale (1m, 1m, 1m) + material default (textura del grid) se consideraban "no modificados" → no se persisten → al cargar, `rebuildSceneFromMap` los regenera del grid como roots SIN parent → 3-pass resolve del parent_tag falla porque los tiles SÍ tienen parent_tag en el .moodmap (de cuando se guardó la subtree), pero el resolve busca tag en `saved.entities` — y los tiles no están ahí.
+
+Fix dual:
+- En `SceneSerializer`, post checks de componentes "serializables", agregar check `isParent` via `mutableScene->registry().view<TransformComponent>().each([&](h, tc){ if (tc.parent == e.handle()) isParent = true; })`. Persistir si `isParent` aunque no tenga componentes propios. Empty Group_1 ahora se persiste cuando es referenciado.
+- En `TilePersistence::isTileModified`, agregar `if (tile.getComponent<TransformComponent>().parent != entt::null) return true`. Cualquier parent (Empty grupo o otro tile) marca el tile como modificado y fuerza su persistencia con position local + parent_tag.
+
+Cobertura del fix: agrupar tiles default (caso del bug original), agrupar mezcla tiles + meshes (los meshes ya se persisten por filtro de MeshRenderer), agrupar mezcla con luces / triggers (todos cubiertos).
+
+**(R5) Modal welcome decía "Versión 2.25.0 — Fase 3 cerrada".** Mientras debugueaba persist, el dev pidió sacar "Fase 3". Aplicando memoria `feedback_no_internal_milestone_refs_in_ui`. Cambio: `editor.modal.about.version` "Versión 2.25.0 — Fase 3 cerrada" → "Versión 2.27.0" (es) / "Version 2.27.0" (en). Cubre tanto el welcome modal (`EditorUI.cpp:425`) como el About modal del MenuBar (`MenuBar.cpp:354`) — comparten la misma i18n key.
+
+**Backlog del hito (no cerrado en F3H27).**
+- **Compound atomic delete** — 1 `CascadeDeleteCommand` que snapshot todo el sub-tree y Ctrl+Z lo restaura en 1 step (vs N hoy).
+- **Auto-borrar Empty huérfano post-ungroup** — opt-in en User Preferences. Hoy el Shift+Ctrl+G deja el Empty vacío, anti-sorpresa.
+- **Inspector parent display** — campo "Parent" readonly en el body del Inspector con click → seleccionar el padre. Hoy se ve solo por indent del Outliner.
+- **Top-level filter del active del multi-select** — si el active es hijo con padre selected, evitar doble delta. Aceptado como edge case en D2.
+- **Migrar physics/picking/editor tools a `worldMatrixOf`** — 54 callsites de `TransformComponent::worldMatrix()` no migrados (local-as-world). Si parents tienen rotación/scale no-identity, el picking de hijos puede ser impreciso. Agendizar si el dev nota fricción.
+
+---
+
 ## 2026-05-28: F3H26 cierre — Polish UX del editor (post-F3H25)
 
 Hito insertado tras validación visual de F3H25. 7 items pequeños + 1 decisión arquitectónica (Union CSG) cerrados en una pasada.

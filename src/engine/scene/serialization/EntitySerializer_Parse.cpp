@@ -39,6 +39,9 @@ SavedEntity parseEntityFromJson(const json& j) {
     // F3H9: entity_type opcional. Vacio = pre-F3H9 (back-compat); el
     // SceneLoader inferira de los componentes presentes.
     se.entityType = j.value("entity_type", std::string{});
+    // F3H27: parent_tag opcional. Vacio = root (sin padre); resolucion
+    // en 2-pass en SceneLoader::applyEntities tras materializar todo.
+    se.parentTag = j.value("parent_tag", std::string{});
     if (j.contains("transform")) {
         const auto& jt = j.at("transform");
         se.position      = jt.value("position",      glm::vec3{0.0f});

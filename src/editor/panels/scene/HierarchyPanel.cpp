@@ -3,6 +3,7 @@
 #include "core/Log.h"  // F2H23: log de selection
 #include "editor/commands/HistoryStack.h"  // F3H9: push del PasteComponentCommand
 #include "editor/commands/PasteComponentCommand.h"  // F3H9
+#include "editor/commands/SetParentCommand.h"  // F3H27: drag-drop reparent
 #include "editor/components/ComponentClipboard.h"   // F3H9
 #include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/ui/EditorUI.h"
@@ -52,7 +53,9 @@ void HierarchyPanel::onImGuiRender() {
     // F2H5: cache de entries por frame. Reusa storage entre frames —
     // `clear()` no reduce capacity, asi que tras la primera escena
     // grande el vector mantiene la capacidad maxima observada.
-    collectHierarchyEntries(*m_scene, m_entries);
+    // F3H27: pasa el set de subtrees colapsadas para que el helper
+    // skipee hijos de nodos plegados (entry padre sigue emitido).
+    collectHierarchyEntries(*m_scene, m_entries, m_collapsed);
 
     if (m_entries.empty()) {
         ImGui::TextDisabled("%s", I18n::T("editor.panel.hierarchy.empty").c_str());
@@ -125,7 +128,8 @@ void HierarchyPanel::onImGuiRender() {
             // nombres tipicos son <50 chars + 1 codepoint UTF-8 + " ".
             char labelBuf[88];
             std::snprintf(labelBuf, sizeof(labelBuf), "%s %s",
-                            iconForEntity(e), entry.tag->name.c_str());
+                            iconForEntity(e, entry.hasChildren),
+                            entry.tag->name.c_str());
             // F2H33: si la entidad pertenece a un VisGroup hidden, mostrar
             // el label en gris claro para que el dev sepa que esta oculta
             // en viewport (sino se sorprende: "click en X y no la veo
@@ -135,6 +139,33 @@ void HierarchyPanel::onImGuiRender() {
             if (grayedHidden) {
                 ImGui::PushStyleColor(ImGuiCol_Text,
                     ImVec4(0.55f, 0.55f, 0.55f, 1.0f));
+            }
+            // F3H27: indent proporcional a depth + arrow expand/collapse
+            // si hasChildren. El arrow es un SmallButton clickeable que
+            // togglea m_collapsed para este handle. Sin children, gap
+            // visual equivalente para alinear los labels.
+            constexpr float kIndentPerLevel = 14.0f;
+            const float indentPx = entry.depth * kIndentPerLevel;
+            if (indentPx > 0.0f) ImGui::Indent(indentPx);
+            const bool isCollapsed = m_collapsed.count(entry.handle) > 0;
+            if (entry.hasChildren) {
+                // F3H27 fix: CARET-DOWN / CARET-RIGHT del atlas FA. Pre-fix
+                // usabamos U+25BC / U+25B6 (geometric shapes Unicode) pero
+                // esos codepoints NO estan en el rango del font Lato (Basic
+                // Latin + Latin-1 + Punctuation) y salian tofu "?".
+                const char* arrow = isCollapsed ? ICON_FA_CARET_RIGHT
+                                                 : ICON_FA_CARET_DOWN;
+                ImGui::PushID("##arrow");
+                if (ImGui::SmallButton(arrow)) {
+                    if (isCollapsed) m_collapsed.erase(entry.handle);
+                    else m_collapsed.insert(entry.handle);
+                }
+                ImGui::PopID();
+                ImGui::SameLine(0.0f, 4.0f);
+            } else {
+                // Gap visual para alinear con padres que tienen arrow.
+                ImGui::Dummy(ImVec2(14.0f, 0.0f));
+                ImGui::SameLine(0.0f, 4.0f);
             }
             if (ImGui::Selectable(labelBuf, isInSelection,
                                     ImGuiSelectableFlags_AllowDoubleClick)) {
@@ -171,8 +202,39 @@ void HierarchyPanel::onImGuiRender() {
                 const entt::entity handlePayload = entry.handle;
                 ImGui::SetDragDropPayload("MOOD_ENTITY", &handlePayload,
                                             sizeof(handlePayload));
-                ImGui::Text("%s %s", iconForEntity(e), entry.tag->name.c_str());
+                ImGui::Text("%s %s", iconForEntity(e, entry.hasChildren),
+                            entry.tag->name.c_str());
                 ImGui::EndDragDropSource();
+            }
+            // F3H27: drop target — arrastrar otra entity sobre esta la
+            // reparenta como hijo, preservando world-space. Guarda contra
+            // ciclos (no reparent si la source es ancestor del target) y
+            // no-op si source == target.
+            if (ImGui::BeginDragDropTarget()) {
+                const ImGuiPayload* payload =
+                    ImGui::AcceptDragDropPayload("MOOD_ENTITY");
+                if (payload != nullptr &&
+                    payload->DataSize == sizeof(entt::entity)) {
+                    const entt::entity src =
+                        *static_cast<const entt::entity*>(payload->Data);
+                    const entt::entity dst = entry.handle;
+                    if (src != dst && src != entt::null &&
+                        m_scene->registry().valid(src) &&
+                        !m_scene->isAncestorOf(src, dst)) {
+                        auto cmd = std::make_unique<SetParentCommand>(
+                            m_scene, src, dst);
+                        if (!cmd->isNoOp()) {
+                            HistoryStack* h = m_ui->historyStack();
+                            if (h != nullptr) h->push(std::move(cmd));
+                            else cmd->execute();
+                            Log::editor()->info(
+                                "[parent] drag-drop reparent: {} -> {}",
+                                static_cast<u32>(src),
+                                static_cast<u32>(dst));
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
             }
 
             // F2H57 Bloque C: menu contextual con click derecho sobre
@@ -318,6 +380,13 @@ void HierarchyPanel::onImGuiRender() {
             }
             if (pushedColor) {
                 ImGui::PopStyleColor(3);
+            }
+            // F3H27: pop del indent aplicado al inicio (proporcional al
+            // depth). Sin esto se acumula entre rows.
+            {
+                constexpr float kIndentPerLevel = 14.0f;
+                const float indentPx = entry.depth * kIndentPerLevel;
+                if (indentPx > 0.0f) ImGui::Unindent(indentPx);
             }
             ImGui::PopID();
         }

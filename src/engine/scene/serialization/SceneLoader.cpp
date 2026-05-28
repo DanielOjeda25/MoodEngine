@@ -612,6 +612,42 @@ void applyEntitiesToScene(const SavedMap& saved,
         }
     }
 
+    // F3H27: tercera pasada — resolver parent_tag → handle. Pre-F3H27 las
+    // entities se serializaban sin jerarquia; F3H27 agrega `parent_tag`
+    // opcional. Tras materializar TODAS las entities, buscamos el handle
+    // del padre por tag y seteamos TransformComponent.parent. Si el tag
+    // no existe (padre borrado entre saves), la entity queda como root
+    // + log warn. Tags duplicados: primer match wins (mismo patron que
+    // el resolve del Joint).
+    for (const auto& se : saved.entities) {
+        if (se.parentTag.empty()) continue;
+        Entity child;
+        scene.forEach<TagComponent>(
+            [&](Entity ex, TagComponent& tag) {
+                if (static_cast<bool>(child)) return;
+                if (tag.name == se.tag) child = ex;
+            });
+        if (!static_cast<bool>(child)) continue;
+        if (!child.hasComponent<TransformComponent>()) continue;
+        Entity parent;
+        scene.forEach<TagComponent>(
+            [&](Entity ex, TagComponent& tag) {
+                if (static_cast<bool>(parent)) return;
+                if (tag.name == se.parentTag &&
+                    ex.handle() != child.handle()) {
+                    parent = ex;
+                }
+            });
+        if (static_cast<bool>(parent)) {
+            child.getComponent<TransformComponent>().parent = parent.handle();
+        } else {
+            Log::engine()->warn(
+                "SceneLoader: parent_tag '{}' de entity '{}' no existe — "
+                "la entity queda como root.",
+                se.parentTag, se.tag);
+        }
+    }
+
     // F2H26: si el caller pidio usar la mesh compilada Y el savedMap la
     // tiene, crear UNA entity "WorldCompiledMesh" con
     // CompiledMeshComponent y SKIPEAR el spawn de brushes individuales.

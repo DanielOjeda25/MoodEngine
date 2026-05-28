@@ -144,7 +144,7 @@ void OpenGLParticleRenderer::render(Scene& scene,
     glBindVertexArray(m_vao);
 
     scene.forEach<TransformComponent, ParticleEmitterComponent>(
-        [&](Entity, TransformComponent& tf, ParticleEmitterComponent& em) {
+        [&](Entity e, TransformComponent& tf, ParticleEmitterComponent& em) {
         if (em.aliveCount == 0) return;
         if (em.alive.empty())   return; // pool no inicializada
 
@@ -157,8 +157,10 @@ void OpenGLParticleRenderer::render(Scene& scene,
         // world. Scale del entity tambien aplica al spawn pos (no al
         // size del billboard — el size sigue siendo metros directos).
         // Si !localSpace, identidad (positions ya estan en world).
+        // F3H27: world recursivo (acumula padre si el emisor lo tiene).
+        (void)tf;
         const glm::mat4 emitterMat = em.localSpace
-            ? tf.worldMatrix()
+            ? scene.worldMatrixOf(e.handle())
             : glm::mat4(1.0f);
 
         // Compactar particulas vivas en m_cpu con size/color interpolados.

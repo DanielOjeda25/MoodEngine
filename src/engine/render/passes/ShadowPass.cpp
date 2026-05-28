@@ -229,14 +229,15 @@ void ShadowPass::recordCsm(Scene& scene,
         //     sub-pase tinted abajo). Additive: skipeado completamente
         //     (no tiene sentido fisico como shadow caster).
         scene.forEach<TransformComponent, MeshRendererComponent>(
-            [&](Entity, TransformComponent& t, MeshRendererComponent& mr) {
+            [&](Entity e, TransformComponent& t, MeshRendererComponent& mr) {
                 MeshAsset* asset = assets.getMesh(mr.mesh);
                 if (asset == nullptr) return;
                 const MaterialAsset* mat = materialOfMesh(mr);
                 if (mat != nullptr && mat->blendMode != BlendMode::Opaque) {
                     return;  // F2H64: Translucent/Additive NO escriben depth
                 }
-                m_shader->setMat4("uModel", t.worldMatrix());
+                (void)t;  // F3H27: world recursivo via scene helper
+                m_shader->setMat4("uModel", scene.worldMatrixOf(e.handle()));
                 for (const auto& sub : asset->submeshes) {
                     if (sub.mesh == nullptr) continue;
                     renderer.drawMesh(*sub.mesh, *m_shader);
@@ -259,12 +260,13 @@ void ShadowPass::recordCsm(Scene& scene,
         //     map -> la sombra del cubo se quedaba clavada en (0,0,0)
         //     y al bajar el cubo encima parecia "desaparecer".
         scene.forEach<TransformComponent, BrushComponent>(
-            [&](Entity, TransformComponent& t, BrushComponent& bc) {
+            [&](Entity e, TransformComponent& t, BrushComponent& bc) {
                 if (bc.meshCache.empty()) {
                     if (i == 0) ++brushesNoCache;
                     return;
                 }
-                m_shader->setMat4("uModel", t.worldMatrix());
+                (void)t;  // F3H27: world recursivo via scene helper
+                m_shader->setMat4("uModel", scene.worldMatrixOf(e.handle()));
                 for (auto& mesh : bc.meshCache) {
                     if (!mesh) continue;
                     renderer.drawMesh(*mesh, *m_shader);
@@ -304,7 +306,7 @@ void ShadowPass::recordCsm(Scene& scene,
             m_tintedShader->bind();
             m_tintedShader->setMat4("uLightSpace", sm.lightSpace);
             scene.forEach<TransformComponent, MeshRendererComponent>(
-                [&](Entity, TransformComponent& t, MeshRendererComponent& mr) {
+                [&](Entity e, TransformComponent& t, MeshRendererComponent& mr) {
                     MeshAsset* asset = assets.getMesh(mr.mesh);
                     if (asset == nullptr) return;
                     const MaterialAsset* mat = materialOfMesh(mr);
@@ -312,7 +314,8 @@ void ShadowPass::recordCsm(Scene& scene,
                     if (mat->blendMode != BlendMode::Translucent) return;
                     if (!mat->castTranslucentShadow) return;
 
-                    m_tintedShader->setMat4("uModel", t.worldMatrix());
+                    (void)t;  // F3H27: world recursivo via scene helper
+                    m_tintedShader->setMat4("uModel", scene.worldMatrixOf(e.handle()));
                     m_tintedShader->setVec3("uAlbedoTint", mat->albedoTint);
                     m_tintedShader->setFloat("uOpacity", mat->opacity);
                     for (const auto& sub : asset->submeshes) {

@@ -173,7 +173,9 @@ void SceneRenderer::renderOrthoView(Scene& scene,
                 const glm::vec3 col = entityIsSelected(e, selectedEntities)
                     ? k_selectedColor
                     : wireframeColorForEntity(scene, e);  // F2H35 Bloque C
-                m_wireframeOrthoShader->setMat4("uModel", t.worldMatrix());
+                // F3H27: world recursivo (acumula padre si lo hay).
+                (void)t;
+                m_wireframeOrthoShader->setMat4("uModel", scene.worldMatrixOf(e.handle()));
                 m_wireframeOrthoShader->setVec3("uColor", col);
                 for (auto& mesh : bc.meshCache) {
                     if (!mesh) continue;
@@ -194,7 +196,9 @@ void SceneRenderer::renderOrthoView(Scene& scene,
                 const glm::vec3 col = entityIsSelected(e, selectedEntities)
                     ? k_selectedColor
                     : wireframeColorForEntity(scene, e);  // F2H35 Bloque C
-                m_wireframeOrthoShader->setMat4("uModel", t.worldMatrix());
+                // F3H27: world recursivo (acumula padre si lo hay).
+                (void)t;
+                m_wireframeOrthoShader->setMat4("uModel", scene.worldMatrixOf(e.handle()));
                 m_wireframeOrthoShader->setVec3("uColor", col);
                 for (const auto& sub : asset->submeshes) {
                     if (sub.mesh == nullptr) continue;

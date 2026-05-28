@@ -214,7 +214,7 @@
   "editor.menu.boolean.intersect": "Intersect (A & B) en cascada",
 
   "editor.modal.about.title": "Acerca de MoodEngine",
-  "editor.modal.about.version": "Versión 2.25.0 — Fase 3 cerrada",
+  "editor.modal.about.version": "Versión 2.27.0",
   "editor.modal.about.description": "Motor gráfico 3D propio con editor integrado.",
   "editor.modal.about.repo": "Repositorio: https://github.com/DanielOjeda25/MoodEngine",
   "editor.modal.notimpl.title": "No implementado",

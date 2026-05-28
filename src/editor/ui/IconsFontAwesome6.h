@@ -91,6 +91,14 @@ inline constexpr unsigned short k_FontAwesomeRange[] = { 0xE005, 0xF8FF, 0 };
 #define ICON_FA_LINK_SLASH                          "\xef\x84\xa7" // 0xF127 broken ref (F3H18)
 #define ICON_FA_CIRCLE_CHECK                        "\xef\x81\x98" // 0xF058 ok / all clear (F3H18)
 
+// --- Tree expand/collapse (HierarchyPanel F3H27) ---
+// CARET en lugar de los geometric shapes Unicode ▶/▼ (U+25B6/U+25BC) que NO
+// estan en el rango de Lato (Basic Latin + Latin-1 + Punctuation), causando
+// tofu. CARET vive en el atlas FA y es la convencion Hammer/Unreal para
+// tree expand.
+#define ICON_FA_CARET_DOWN                          "\xef\x83\x97" // 0xF0D7
+#define ICON_FA_CARET_RIGHT                         "\xef\x83\x9a" // 0xF0DA
+
 // --- MenuBar (top-level menus) ---
 #define ICON_FA_FOLDER                              "\xef\x81\xbb" // 0xF07B Archivo
 #define ICON_FA_PEN_TO_SQUARE                       "\xef\x81\x84" // 0xF044 Editar

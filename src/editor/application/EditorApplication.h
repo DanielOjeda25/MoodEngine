@@ -448,6 +448,17 @@ private:
     ///        desde el handler Shift+D en `processEvents`.
     void duplicateSelectedEntities();
 
+    /// @brief F3H27: Ctrl+G estilo Blender. Toma el SelectionSet y crea
+    ///        un Empty `Group_<N>` centrado en el centroide del AABB
+    ///        combinado de los selectos; los reparenta como hijos
+    ///        preservando world-space. No-op si selección < 2.
+    void groupSelectedEntities();
+
+    /// @brief F3H27: Shift+Ctrl+G estilo Blender. Para cada selecto que
+    ///        tenga padre, lo des-parenta (parent=null) preservando
+    ///        world-space. No-op si ningún selecto tiene padre.
+    void ungroupSelectedEntities();
+
     /// @brief Editor-side overlay 3D que se dibuja DENTRO del scene FB
     ///        entre `SceneRenderer::renderScene` y `endFrame`. Usa el
     ///        debug renderer del SceneRenderer para acumular: tile

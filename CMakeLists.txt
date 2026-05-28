@@ -617,6 +617,9 @@ add_executable(MoodEditor
     src/editor/commands/NodeGraphCommand.cpp  # F2H46
     src/editor/commands/PasteComponentCommand.cpp  # F3H9
     src/editor/commands/RenameAssetCommand.cpp     # F3H19
+    src/editor/commands/SetParentCommand.cpp       # F3H27
+    src/editor/commands/GroupSelectionCommand.cpp  # F3H27
+    src/editor/commands/UngroupSelectionCommand.cpp # F3H27
     src/editor/components/ComponentClipboard.cpp   # F3H9
     src/editor/panels/scene/ViewportPanel.cpp
     src/editor/panels/scene/OrthoViewportPanel.cpp  # F2H28
