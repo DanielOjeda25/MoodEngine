@@ -82,8 +82,8 @@ Cuatro sub-fases ordenadas por **dependencia** (no por importancia). La 3.1 es p
 ```
 Sub-fase 3.1 — El editor te respeta (defaults configurables)   F3H1  - F3H7    🏁
 Sub-fase 3.2 — Inspector + Hierarchy pulidos                   F3H8  - F3H13   🏁
-Sub-fase 3.3 — Asset Browser de verdad                         F3H14 - F3H19
-Sub-fase 3.4 — Viewport pro + Performance + Feedback           F3H20 - F3H24
+Sub-fase 3.3 — Asset Browser de verdad                         F3H14 - F3H19   🏁
+Sub-fase 3.4 — Viewport pro + Inspector pro + Feedback         F3H20 - F3H25
 ```
 
 > **Consolidación post-F3H18 (2026-05-26):** la Sub-fase 3.4 original tenía 8 hitos (F3H20-F3H27). Tras revisar oportunidades de unir hitos que comparten infraestructura, el dev autorizó **consolidación agresiva a 5 hitos**:
@@ -92,7 +92,15 @@ Sub-fase 3.4 — Viewport pro + Performance + Feedback           F3H20 - F3H24
 > - F3H23 = ex-F3H25 (Console mejorada) + ex-F3H26 (Toasts) → "Comunicación al dev".
 > - F3H24 = ex-F3H27 (Crash recovery + autosave) sin cambios.
 >
-> La numeración bumpa: F3H20 (Snapping) queda; F3H21 (Viewport pro); F3H22 (Performance feedback); F3H23 (Comunicación al dev); F3H24 (Crash recovery). Total Fase 3 = 24 hitos (era 27).
+> Total Fase 3 = 24 hitos (era 27).
+
+> **Reorden post-F3H21 (2026-05-27):** el dev pidió al cerrar F3H21 *"hacer un cambio importante, como lo hace blender, que tiene un panel con los iconos"* — promover el rediseño del Inspector con icons laterales (anotado como follow-up en `backlog-ux-gaps-editor`) a hito propio. **Insertado como F3H22** "Properties Editor con icons (Blender style)"; los hitos siguientes bumpean:
+> - F3H22 = **NUEVO** — Properties Editor con icons laterales (Blender style).
+> - F3H23 = ex-F3H22 — Performance feedback (Profiler + Stats overlay).
+> - F3H24 = ex-F3H23 — Comunicación al dev (Console + Toasts).
+> - F3H25 = ex-F3H24 — Crash recovery + autosave (cierra Fase 3).
+>
+> Total Fase 3 = 25 hitos (era 24).
 
 **Por qué ese orden:** 3.1 construye la infraestructura de Project Settings + User Preferences. Las sub-fases 3.2-3.4 *consumen* esa infraestructura: cuando 3.2 quiera agregar "hot reload de shaders" debe respetar la pref "auto-reload on save" del usuario; cuando 3.4 agregue snapping, los snap defaults viven en Project Settings.
 
