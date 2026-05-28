@@ -11,6 +11,39 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-27: F3H22 cierre — Properties Editor con icons laterales (Blender style)
+
+**Contexto:** Tercer hito de Sub-fase 3.4. Inspector reescrito de "lista plana scrollable" a "categorías filtradas por icons laterales" estilo Blender Properties Editor. El plan llegó con 6 decisiones cerradas (D1-D6 con investigación industrial Blender/Unreal/Unity); la implementación + 5 rondas de validación visual con el dev forzaron 6 ajustes reactivos que sobreescriben parcialmente esas decisiones. Documento solo los **finales post-ajuste**.
+
+**D1 — Single categoría activa, SIN botón "All".** Click cycle entre categorías; nunca hay "modo todo apilado" (legacy). Razón post-ajuste: el plan inicial incluía "All" al final de la barra como escape al modo legacy; el dev rechazó al validar (*"el all solo confunde, prefiero separar"*) — con 7 categorías y default colapsado, el modo todo-en-uno perdía valor y agregaba ruido cognitivo. Alternativa descartada (Unreal Details Panel single-scroll): rompía el mental model Blender que el dev pidió explícitamente.
+
+**D2 — Barra vertical lateral izquierda, NO horizontal.** 36px ancho × altura del Inspector, botones 28×28 uno por línea. Razón post-ajuste: primera implementación usó barra horizontal arriba del Inspector; el dev rechazó al validar (*"prefiero que se mas en vertical un minipanel vertical"*) — Blender Properties Editor es vertical (Navigation Bar), Unreal Details Panel no tiene barra (sin referencia). Vertical aprovecha que el Inspector es **tall + narrow** (los componentes ocupan ancho útil); una columna lateral suma sin restar. Default a la izquierda; flippable a la derecha sería follow-up Blender-like.
+
+**D3 — Categorías sin componentes se ocultan (Blender pattern).** Solo aparece un icon si la entity tiene ≥1 componente de esa categoría. **Object siempre presente** (toda entity tiene Transform). Razón: reducir ruido visual (un cubo con solo Transform+MeshRenderer ve 2 icons, no 7 grises). Blender oculta dinámicamente las tabs irrelevantes al tipo del objeto. Alternativa descartada (Unreal: mostrar todas las categorías declaradas siempre): convención que el dev no usa.
+
+**D4 — Environment es scene-wide implícito (auto-spawn + oculto del Outliner).** El plan inicial trataba EnvironmentComponent como cualquier otro componente per-entity ("singleton" pero requería seleccionar la entity portadora). El dev pidió pattern Blender estricto (*"hay que tirar mas a blender, en blender es automatico, ya esta en el rendeer view"*). Implementación final:
+- **Auto-spawn** `ensureEnvironmentExists()` silent variant llamado post-load (`loadProject` + `openMap`) — todo proyecto tiene Environment desde el arranque.
+- **Categoría Environment siempre visible** (scene-wide) — accesible sin selección, busca el singleton en cualquier entity de la scene.
+- **Delete bloqueado** en `EditorScene::deleteSelectedEntity` (singleton inviolable + status message i18n).
+- **Removido del menú "Add Entity"** (no tiene sentido crear uno cuando ya existe — el card de Environment del array `kLights[]` del PickModal eliminado).
+- **Oculto del Outliner** (filtro en `HierarchyCollect` igual que `VehicleWheelMarker`) — el dev nunca ve Environment como entity selectable, solo como categoría del Inspector.
+
+Mental model **Blender World Properties**: el "mundo" es scene-wide implícito, no una entity más en la jerarquía. Alternativa descartada (manual create + selectable + deletable como otras entities): el dev pidió ocultar la mecánica de la entity y mostrar solo la propiedad scene-wide.
+
+**D5 — Rendered NO fuerza post passes (respeta Environment).** El plan inicial de F3H21 (D4) decidía "Rendered fuerza bloom + SSAO con defaults conservadores; SSR opt-in". El dev rechazó al validar F3H22 (*"estas forzando alguna configuracion en el render preview, que luego le quita al usuario el poder de activar o no, como el AO"*). Implementación final: **removido `m_forcePostPasses`** del `SceneRenderer`. Material vs Rendered se diferencia **solo** por `skipPostPasses` (Material salta TODO el post; Rendered respeta los flags del Environment). El dev controla AO/Bloom/SSR/Color Grading desde el EnvironmentComponent — pattern Blender (el World Properties tiene los toggles, los viewport shading modes solo cambian si los aplican o no). Sobreescribe parcialmente la decisión F3H21-D4 — registrado acá porque el cambio se aplicó en F3H22.
+
+**D6 — Default colapsado en `beginComponentSection` + eliminar toolbar "Plegar/Expandir todo".** Razón: con categorías filtrando (cada vista muestra pocos componentes), la toolbar global de F2H81 perdía valor. El dev lo confirmó al validar (*"el de plegar todo o expandir no me interesa, ese sacalo, por defecto deben estar colapsados"*). Removido el `ImGuiTreeNodeFlags_DefaultOpen` + el método `renderSectionToolbar()` + miembro `m_forceSectionState`. Alternativa descartada (mantener toolbar como toggle global): UI clutter sin upside.
+
+**D7 — Botones del viewport render mode bar: cuadrados 28×28 + transparente + tooltips de una palabra.** El dev pidió en esta tanda (*"el fondo negro no me gusta, sacalo que sea transparente"*, *"podes hacer que los iconos de wireframe, sean mas cuadrados, ademas hay mucho texto, prefiero que diga 'wireframe' 'solid', 'material' 'render'"*). Implementación: `SetNextWindowBgAlpha(0.0)` + `ImGuiWindowFlags_NoBackground`; `Button(label, ImVec2(28, 28))` (no `SmallButton`); `FramePadding=(0,0)` + `ButtonTextAlign=(0.5, 0.5)` explícito para centrar glyphs FontAwesome con metrics dispares (sin esto, el círculo y el cubo aparecen a alturas distintas). Tooltips simplificados de descripción larga a una palabra (Wireframe/Solid/Material/Render). Sobreescribe el comportamiento UX de F3H21 (que usaba `SmallButton` con tooltips largos descriptivos). Registrado acá porque la pulida se aplicó en F3H22.
+
+**Backlog del hito (no cerrado en F3H22):**
+- Soporte para flippear la barra de categorías a la derecha (Blender-like, pref de UserSettings).
+- "+ Add Component" per-categoría (Render → +Mesh / +Light; Physics → +Collider; etc.) — hoy es popup unificado, podría filtrar por categoría activa.
+- Filtro de texto del Inspector (Unreal-like search bar) — out-of-scope D6 del plan original, mantener como hito propio si emerge demanda.
+- Color-coding tipo Blender (Render=blanco, Material=fuchsia, Physics=azul) — requeriría pack de iconos custom, diferido a Fase 4.
+
+---
+
 ## 2026-05-27: F3H21 cierre — Viewport pro (numpad views + render modes)
 
 **Contexto:** Segundo hito de Sub-fase 3.4. Plan tenía 4 decisiones cerradas pre-implementación (D1-D4 con investigación industrial Blender/Unreal/Unity); durante la implementación + validación visual con el dev emergieron 2 más (D5-D6).

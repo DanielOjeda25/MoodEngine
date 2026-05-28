@@ -1,6 +1,6 @@
 # PLAN F3H22 — Properties Editor con icons laterales (Blender style)
 
-**Estado:** **A DEFINIR** (arrancar tras F3H21).
+**Estado:** ✅ **CERRADO** (2026-05-27) — tag `v2.22.0-fase3-hito22`. Implementación + 5 rondas de polish reactivo con el dev (ver §Cierre + ajustes).
 **Predecesor:** F3H21 (viewport pro — numpad views + render modes).
 **Origen:** insertado en reorden 2026-05-27 a pedido del dev al cerrar F3H21:
 > *"creo que debemos hacer un cambio importante, como lo hace blender, que tiene un panel con los iconos, y ahi el icono de cada seccion, sea el de materiales, scripts, etc, esto se que es un hito mas grande pero podriamos mejorar exponencialmente esto"*
@@ -83,13 +83,133 @@ Cada icon necesita tooltip claro que explique qué edita:
 
 ---
 
-## Decisiones a tomar al arrancar
+## Decisiones cerradas (investigación industrial 2026-05-27)
 
-1. **Single categoría vs multi-pin** — Blender = single (un icon activo a la vez). Unreal Details = scroll con todo + filtro de texto. **Recomendación inicial: single + botón "All" opcional.**
-2. **Iconos: FontAwesome existentes vs pack custom** — FontAwesome ya en el repo. **Recomendación: usar FA, los 7 icons propuestos ya existen en el codebase.**
-3. **Posición de la barra: izquierda (Blender) vs arriba (Unity tabs)** — **Recomendación: izquierda en columna** (Blender), usa el lateral sin reducir ancho útil del panel.
-4. **Big-bang vs incremental** — implementar los 7 de una vez o por bloques. **Recomendación: big-bang** porque el framework de categorías es 1 sola pieza; agregar categorías una a una requeriría refactor del wrapper cada vez.
-5. **Filtro de texto opcional** en la barra (estilo Unreal "Search Details") — **out-of-scope F3H22** (deja para hito propio si emerge demanda).
+### D1 — Single categoría activa + botón "All" opcional
+
+**Decisión:** un solo icon activo a la vez (Blender pattern). **Botón "All"** al final de la barra para volver al modo legacy (todo apilado scrollable).
+
+**Referencias:**
+- **Blender Properties Editor:** vertical list of icons en la Navigation Bar, **un solo tab activo a la vez** (single-select).
+- **Unreal Details Panel:** scroll vertical con foldouts colapsables — no tabs. Tiene "Favorites" section para promover props muy usadas al tope.
+- **Unity Inspector:** foldouts colapsables, no tabs.
+
+**Por qué Blender:** el dev pidió explícitamente *"como lo hace blender, que tiene un panel con los iconos"* — su mental model es Blender, no Unreal/Unity. Single con "All" da escape al modo legacy si necesita ver todo de una.
+
+### D2 — Iconos FontAwesome existentes (no pack custom)
+
+**Decisión:** usar los 7 icons FontAwesome ya en el repo (`IconsFontAwesome6.h`).
+
+**Referencias:**
+- **Blender:** usa pack propio Blender Icons — diseñado for purpose, color-coded por función (white=scene/render, fuchsia=material, blue=modifications).
+- **Unreal/Unity:** usan packs propios también.
+
+**Por qué FA en lugar de pack custom:** trabajo de arte sin upside claro para F3H22; los icons FA son universalmente reconocidos. Si el dev quiere color-coding tipo Blender, polish reactivo en otro hito.
+
+### D3 — Categorías sin componentes se OCULTAN (no se ven grises)
+
+**Decisión:** un icon SOLO aparece en la barra si la entity tiene ≥1 componente de esa categoría. **Object siempre presente** (toda entity tiene Transform).
+
+**Referencias:**
+- **Blender:** *"Tabs related to the active object are displayed, with some only shown for certain object types"* — Blender oculta dinámicamente las tabs irrelevantes al tipo del objeto activo.
+- **Unreal:** muestra categorías declaradas en código siempre (sus props pueden estar vacíos pero la categoría se ve).
+
+**Por qué Blender:** reducir ruido visual. Si una entity es solo Mesh+Transform, ver 4 icons grises (Audio/Physics/Animation/Gameplay) es ruido. Convención Blender pura.
+
+**Fallback:** si la entity nueva no tiene la categoría activa → auto-switch a **Object** (siempre presente).
+
+### D4 — Barra de icons a la izquierda en columna
+
+**Decisión:** barra vertical en el **lateral izquierdo** del panel Inspector. Ancho fijo ~32 px (icon + padding).
+
+**Referencias:**
+- **Blender:** Navigation Bar vertical, default a la derecha pero **flippable a izquierda con RMB > Flip to Left/Right** — el dev elige.
+- **Unreal:** scroll vertical único (sin barra lateral).
+- **Unity:** flat list (sin barra lateral).
+
+**Por qué izquierda + columna:** Blender es la referencia que el dev mencionó. Lateral izquierdo usa el espacio sin reducir el ancho útil del Inspector body (los contenidos del Inspector son tall + narrow, una columna lateral suma sin restar).
+
+**Follow-up posible:** soporte para flippear a derecha (Blender-like) como pref del UserSettings.
+
+### D5 — Big-bang (los 7 de una vez, no incremental)
+
+**Decisión:** implementar el wrapper + las 7 categorías en una sola sesión.
+
+**Razón:** el framework de categorías es **1 sola pieza arquitectural** (un dispatcher que decide qué `InspectorPanel_*.cpp` invocar según categoría activa). Agregar categorías incrementalmente requeriría refactor del wrapper cada vez. Big-bang permite testing visual completo (validar las 7 categorías + transiciones + fallback) en una sola validación con el dev.
+
+**Trade-off:** el commit final será grande (~15+ archivos del Inspector tocados + UI + UserSettings field + tests + i18n). Aceptable porque cada archivo se modifica MÍNIMAMENTE — solo se agrega la "tag de categoría" a cada `InspectorPanel_*::draw()`. La lógica vive en el dispatcher central.
+
+### D6 (out-of-scope) — Filtro de texto en la barra
+
+**Decisión:** **NO incluir** filtro de texto estilo Unreal "Search Details" en F3H22. Si emerge demanda, hito propio.
+
+**Razón:** scope creep — el filtro de texto es feature ortogonal a la categorización por icons. Blender no lo tiene en Properties Editor; Unreal sí pero como feature aparte del scroll.
+
+---
+
+## Fuentes consultadas
+
+- [Properties Editor — Blender 5.1 Manual](https://docs.blender.org/manual/en/latest/editors/properties_editor.html)
+- [Details Panel Customizations — Unreal Engine 5.7](https://dev.epicgames.com/documentation/en-us/unreal-engine/details-panel-customizations-in-unreal-engine)
+- [Level Editor Details Panel — Unreal Engine 5.7](https://dev.epicgames.com/documentation/unreal-engine/level-editor-details-panel-in-unreal-engine)
+- [Unity Foldout — UI Toolkit](https://www.foundations.unity.com/components/foldout)
+- [Blender Properties UI — Blender Studio](https://studio.blender.org/tools/addons/cloudrig/properties-ui)
+
+---
+
+## Cierre + ajustes reactivos (2026-05-27)
+
+La implementación inicial siguió las 6 decisiones, pero el dev pidió 5 ajustes durante la validación visual. Los registramos acá porque sobreescriben parcialmente las decisiones originales.
+
+### Ajuste A — Barra vertical (no horizontal) y eliminar botón "All"
+El primer intento usó barra horizontal con botón "All" al final. El dev rechazó ambos:
+> *"prefiero que se mas en vertical un minipanel vertical que al clickear renderize esa seccion... el all solo confunde, prefiero separar"*
+
+→ Barra movida al lateral izquierdo, vertical (28×28 botones). Botón "All" eliminado (y el modo "legacy todo apilado" con él) — siempre hay una categoría única activa. La decisión D1 queda actualizada: single-select sin escape al modo legacy.
+
+### Ajuste B — Environment como singleton implícito (auto-spawn + oculto del Outliner)
+Inicialmente Environment requería: a) seleccionar la entity portadora del componente, b) crearla manualmente desde el menú "Add Entity". El dev quiso pattern Blender estricto:
+> *"hay que tirar mas a blender... en blender es automatico, ya esta en el rendeer view"*
+
+Cambios encadenados:
+1. **Categoría Environment siempre visible** (scene-wide) — accesible sin selección, busca el singleton en la scene.
+2. **Auto-spawn `ensureEnvironmentExists()`** llamado tras `loadProject` y `openMap` — todo proyecto tiene Environment desde el arranque.
+3. **Bloqueado el delete** en `EditorScene::deleteSelectedEntity` (singleton inviolable).
+4. **Removido del menú "Add Entity"** (no tiene sentido crear uno cuando ya existe).
+5. **Oculto del Outliner** (`HierarchyCollect`) — listarlo como entity confunde al dev (no se borra, no se duplica). La única forma de editarlo es vía la categoría Environment del Inspector.
+
+→ Environment es ahora **completamente implícito**: el dev nunca lo ve como entity selectable, solo como categoría del Inspector. Mismo mental model que **World Properties** de Blender.
+
+### Ajuste C — Components colapsados por defecto + eliminar toolbar "Plegar/Expandir todo"
+Con categorías filtrando, la toolbar global ya no agrega valor:
+> *"el de plegar todo o expandir no me interesa, ese sacalo, por defecto deben estar colapsados"*
+
+→ Removido `ImGuiTreeNodeFlags_DefaultOpen` de `beginComponentSection`. Removido `renderSectionToolbar()` + miembro `m_forceSectionState`.
+
+### Ajuste D — Environment al tope de la barra (no al final)
+La barra inicial listaba Object al tope. El dev pidió Environment primero:
+> *"que enviroment este arriba del todo"*
+
+→ Reordenado en `renderCategoryBar`. Justificación: Environment es scene-wide (siempre accesible) y conceptualmente "el mundo entero" → arriba.
+
+### Ajuste E — Bar del viewport render mode: transparente + cuadrado + tooltips cortos
+La bar del modo de render (F3H21) también se ajustó en esta tanda:
+> *"el fondo negro no me gusta, sacalo que sea transparente"*
+> *"podes hacer que los iconos de wireframe, sean mas cuadrados, ademas hay mucho texto, prefiero que diga 'wireframe' 'solid', 'material' 'render'"*
+
+→ `WindowBgAlpha=0.0` + `ImGuiWindowFlags_NoBackground`. Botones cuadrados 28×28 con `Button` (no `SmallButton`). `FramePadding=(0,0)` + `ButtonTextAlign=(0.5, 0.5)` explícito para centrar glyphs FA. Tooltips reducidos a una palabra (Wireframe/Solid/Material/Render).
+
+### Ajuste F — Rendered ya NO fuerza SSAO/Bloom
+La D-implicit del plan inicial fue: "Rendered fuerza todos los post passes". El dev objetó:
+> *"estas forzando alguna configuracion en el render preview, que luego le quita al usuario el poder de activar o no, como el AO"*
+
+→ Removido `m_forcePostPasses` del `SceneRenderer`. Material vs Rendered se diferencia ahora **solo** por `skipPostPasses` (Material salta; Rendered respeta los flags del Environment). Si el dev quiere AO/Bloom en Rendered, los activa desde el EnvironmentComponent — igual que Blender.
+
+### Métricas finales (post-ajustes)
+- 7 categorías efectivas (Environment + Object + Render + Animation + Audio + Physics + Gameplay).
+- `UserSettings.editor.inspectorActiveCategory` (default `"object"`, 7 IDs válidos — sin `"all"`).
+- 13 test cases / 26 asserts F3H21+F3H22 (test_user_settings_editor.cpp + test_editor_camera_lerp.cpp).
+- Build limpio + 1236/1236 tests pasaron.
 
 ---
 
