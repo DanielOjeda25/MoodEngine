@@ -83,7 +83,7 @@ Cuatro sub-fases ordenadas por **dependencia** (no por importancia). La 3.1 es p
 Sub-fase 3.1 — El editor te respeta (defaults configurables)   F3H1  - F3H7    🏁
 Sub-fase 3.2 — Inspector + Hierarchy pulidos                   F3H8  - F3H13   🏁
 Sub-fase 3.3 — Asset Browser de verdad                         F3H14 - F3H19   🏁
-Sub-fase 3.4 — Viewport pro + Inspector pro + Feedback         F3H20 - F3H25
+Sub-fase 3.4 — Viewport pro + Inspector pro + Feedback         F3H20 - F3H27
 ```
 
 > **Consolidación post-F3H18 (2026-05-26):** la Sub-fase 3.4 original tenía 8 hitos (F3H20-F3H27). Tras revisar oportunidades de unir hitos que comparten infraestructura, el dev autorizó **consolidación agresiva a 5 hitos**:
@@ -101,6 +101,12 @@ Sub-fase 3.4 — Viewport pro + Inspector pro + Feedback         F3H20 - F3H25
 > - F3H25 = ex-F3H24 — Crash recovery + autosave (cierra Fase 3).
 >
 > Total Fase 3 = 25 hitos (era 24).
+
+> **Insertados post-F3H25 (2026-05-28):** al cerrar F3H25, el dev validó visualmente el editor y pidió pulir 5 detalles de UX (modal "Hito 3" desactualizado, MenuBar reorden, toast flicker, Brush ops top-level, Preferences sin categorizar) + 1 conflict de hotkey (Ctrl+Z) + decidir el modelo de Union CSG. La conversación abrió 4 gaps estructurales (grupos/tools integrados, parenting jerárquico, mundo grande, HDRI dinámico) que el dev quiere antes de Fase 4. Insertamos 2 hitos:
+> - **F3H26 — Polish UX del editor** (post-F3H25): 7 items pequeños cerrados en una pasada.
+> - **F3H27 — Polish UX restante / gaps de interacción** (cierra Fase 3): 4 items estructurales.
+>
+> Total Fase 3 = 27 hitos.
 
 **Por qué ese orden:** 3.1 construye la infraestructura de Project Settings + User Preferences. Las sub-fases 3.2-3.4 *consumen* esa infraestructura: cuando 3.2 quiera agregar "hot reload de shaders" debe respetar la pref "auto-reload on save" del usuario; cuando 3.4 agregue snapping, los snap defaults viven en Project Settings.
 
@@ -199,6 +205,17 @@ Grid snap (existe parcial), vertex snap (existe: F2H31C), ángulo snap (15°/45�
 
 **F3H24 — Crash recovery + autosave.**
 Autosave del `.moodmap` cada N minutos (configurable en Preferences, default 5). On crash, al reabrir el proyecto → modal "Recuperar última sesión?". Lock file que detecta crashes.
+
+**F3H26 — Polish UX del editor (post-F3H25).**
+*(Hito insertado tras feedback del dev al validar F3H25 — 7 items pequeños de interacción.)*
+Modal "About" + window title actualizados; MenuBar reorden Archivo > Editar > Mapa > Ver > Debug > Ayuda; Brush top-level removido (booleanas migran a context menu del Outliner); UserPreferences con sidebar de categorías estilo Blender (General / Viewport / Assets / Performance / Notificaciones); fix flicker del toast en frame de aparición (ID estable); fix Ctrl+Z disparando cycle render mode; Union CSG removida del UI (Hammer-style — no representa convex, descomponía en N piezas).
+
+**F3H27 — Polish UX restante (gaps de interacción).**
+*(Cierra Fase 3 — 4 items estructurales que el dev quiere antes de empezar Fase 4.)*
+- Grupos + Map Tools integrados como categorías del Properties Editor (no más paneles flotantes separados).
+- Parenting jerárquico de transforms + Ctrl+G para agrupar / Shift+Ctrl+G para desagrupar.
+- Camera limits para mapas grandes (orbit/orto far plane configurable, World scale en Project Settings).
+- HDRI dinámico + ciclo día/noche (skybox swap runtime + Time of Day animable).
 
 ---
 

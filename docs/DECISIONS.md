@@ -11,6 +11,107 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-28: F3H26 cierre — Polish UX del editor (post-F3H25)
+
+Hito insertado tras validación visual de F3H25. 7 items pequeños + 1 decisión arquitectónica (Union CSG) cerrados en una pasada.
+
+**D1 — Sacar "Hito 3" del modal About + "(Hito 4)" del window title.** Strings desactualizados desde Fase 1/Hito 4. Confirmado al revisar UI: `editor.modal.about.version` "Versión 0.3.0 (Hito 3)" → "Versión 2.25.0 — Fase 3 cerrada"; `spec.title` "MoodEngine Editor - v0.4.0-dev (Hito 4)" → "MoodEngine Editor". Razón: nueva memoria `feedback_no_internal_milestone_refs_in_ui` aplicada a strings que no se mostraban directo al dev pero seguían apareciendo en el About.
+
+**D2 — MenuBar reorden: Archivo > Editar > Mapa > Ver > Debug > Ayuda.** El dev: *"arriba dice archivo y luego mapa, usualmente es archivo luego editar"*. Estándar VSCode/Unity/Office: Editar segundo. Cambio físico mínimo (mover bloque del Editar antes del Mapa).
+
+**D3 — Brush top-level removido → context menu del Outliner (right-click sobre brush).** El dev: *"el de brush solo tiene las operaciones booleans no se como eso no esta como algun modificador como los de blender o algo en lugar de ocupar una seccion arriba"*. Investigamos 4 patrones de la industria (Blender modifier no-destructivo, Hammer Carve simple, Unreal Modeling Mode dedicado, Maya submenu contextual) + 3 propuestas (Inspector, right-click Outliner, Modifier component). El dev eligió right-click Outliner. Iteración intermedia "Editar > Brushes (booleanas)" rejected post-validación. Gate por `e.hasComponent<BrushComponent>()` en `HierarchyPanel.cpp:299`. `EditorUI::drawBooleanOpMenu` reusado tal cual (ya es un `BeginMenu` con sus items, validación interna `>= 2 brushes` se preserva).
+
+**D4 — Union CSG removida del UI (Hammer-style).** El dev al probar: *"he dado click en el mas chico y luego el mas grande y hago union, pero asi funciona la union den hammer? porque me termino creando 4 piezas separadas, es raro"*. Investigación del comportamiento: `Csg::unionOp(A, B)` con overlap parcial retorna `(A \ B) ∪ {B}` porque `A ∪ B` matemáticamente NO es convexo. El motor solo soporta brushes convexos (necesario para colisión Jolt, BSP, plane-clips) — descomponer en N convexos es la ÚNICA opción correcta. No es bug del algoritmo.
+
+Estado de la industria:
+- **Hammer (Source)**: NO ofrece Union — exactamente por esta razón. Solo Carve (substract) + meshes externos para geometría no-convex.
+- **Unreal Modeling Mode**: Sí Union, también descompone en piezas convexas (mismo problema).
+- **Blender**: Modifier Union es no-destructivo con representación BMesh no-convex. Otro modelo de geometría que el motor NO usa.
+
+3 opciones presentadas al dev: (A) quitar Union del UI; (B) toast explicativo "Union creó N piezas convexas (CSG convex-only)"; (C) agrupar piezas en entidad padre. Dev eligió **A: quitar**. Junto con explicación del workflow brush-based: para "juntar" 2 brushes (ej. base + torre) NO se hace Union — quedan como entidades hermanas visualmente adyacentes; el render los pinta juntos. Las booleanas son para CORTES (ventana en pared, arco en columna). El `Csg::unionOp` en `engine/world/csg/BrushOps.cpp` **se mantiene intacto** — código sin uso pero correcto, forward-compat con modelo no-convex futuro (mesh editing real, BMesh-style). i18n key `editor.menu.boolean.union` se preserva por back-compat (sin uso UI hoy).
+
+**D5 — UserPreferences sidebar de categorías estilo Blender.** El dev: *"algo que no me gusta de mi panel es que lo veo poco categorizado, te pongo el de blender alado para que veas que esta mas organizado"*. Reemplazo de `TabBar` horizontal (2 tabs: General + Editor) por split **sidebar (150px, border, Selectable list) + content (scroll vertical)**. 5 categorías: General / Viewport / Assets / Performance / Notificaciones. Window 540×360 → 720×480. `drawEditorTab` viejo refactorizado en 4 métodos por categoría (`drawViewport` / `drawAssets` / `drawPerformance` / `drawNotifications`) que comparten `cfg`/`defaults`/`dirty`/`saveNow` por ref desde el `switch (m_activeCategory)` del onImGuiRender. Sub-secciones internas con `SeparatorText` (Viewport tiene 3: "Cámara ortográfica" / "Gizmos" / "Interacción"; Performance tiene 2: stats overlay + "Profiler"). Sin cambios al storage (`UserSettings::EditorSettings` igual).
+
+Razón: el TabBar horizontal con 2 tabs gigantes era difícil de scanear; al crecer (F3H23 stats + F3H24 toasts + F3H25 autosave) el "Editor tab" se volvió un dump de 4-5 sub-secciones internas. El sidebar de Blender Preferences (8+ categorías) es el patrón natural cuando hay > 4 secciones.
+
+**D6 — Toast parpadeo en el frame de aparición — ID estable.** El dev: *"el toast a veces en lo que aparece, parpadea multiples veces rapidamente"*. Diagnóstico: `ToastsOverlay::draw` usaba `&t` (dirección del Toast en el snapshot temporal del vector) como ID de la ventana ImGui. Cada `Toasts::snapshot()` retorna un `std::vector<Toast>` NUEVO por valor → las direcciones de los elementos cambian frame a frame → ImGui veía un ID distinto cada frame → recreaba la ventana SIN cache de size del frame anterior → `AlwaysAutoResize` requería 2 frames para estabilizar el size → flicker visible en el frame de aparición (1er frame con size=0, 2do frame con size correcto).
+
+Fix: `Toasts::Toast` gana `u64 id` monótonamente creciente asignado en `push()` bajo el mutex (counter `s_nextId` global en `Toasts.cpp`). `ToastsOverlay::draw` usa `##toast_<id>` estable. ImGui mantiene el cache de size correctamente y el primer frame de aparición ya tiene el tamaño calculado del primer Begin (consecutivo con el frame anterior que tenía el mismo ID).
+
+**D7 — Ctrl+Z gateado por modificadores en cycle render mode.** El dev: *"si doy ctrl + z, me esta cambiando entre tipos de render, entiendo que el z cambia pero choca una cosa con otra"*. Diagnóstico: `EditorOverlay.cpp:520` usaba `ImGui::IsKeyPressed(ImGuiKey_Z, false)` sin chequear modificadores; el handler de undo en `EditorApplication.cpp` (que sí chequea KMOD_CTRL) Y el de cycle render mode disparaban juntos con Ctrl+Z — el undo aplicaba pero también ciclaba el modo.
+
+Fix: gate por `!io.KeyCtrl && !io.KeyShift && !io.KeyAlt` antes del `IsKeyPressed(Z)`. "Z desnuda" sigue ciclando; Ctrl+Z solo deshace. Patrón aplicable a otros hotkeys de una sola tecla si aparecen colisiones similares.
+
+**Ajuste reactivo**: `ImGuiChildFlags_Border` no compila en la versión de ImGui del proyecto (docking branch ~1.92). Fix trivial: usar overload `BeginChild(id, size, /*border=*/true, flags)` que sí está disponible.
+
+**Backlog del hito (no cerrado en F3H26):**
+- Iteración del context menu para que el right-click cuando hay 1 solo brush brush ofrezca un menú diferente (hoy queda disabled con tooltip implícito de drawBooleanOpMenu).
+- Csg::unionOp código sin usar — se mantiene; si Fase 4 confirma que no se reactiva (no hay modelo no-convex), candidato a borrar.
+- Window title sigue mostrando el nombre del proyecto + " *" si dirty (sin cambios).
+
+---
+
+## 2026-05-28: F3H25 cierre — Crash recovery + autosave
+
+Cierra el plan original de Sub-fase 3.4 (luego F3H26/F3H27 insertados post-validación). 4 decisiones cerradas pre-implementación vía AskUserQuestion.
+
+**D1 — Ubicación del autosave: subcarpeta oculta `.autosave/` dentro del proyecto.** Confirmado por el dev (vs sufijo `level1.moodmap.autosave` al lado del original / `%LOCALAPPDATA%/MoodEngine/autosave/<hash>/`). Path: `<projectRoot>/.autosave/<mapname>.moodmap`. Ventajas:
+- No contamina la lista de mapas del proyecto (los path-globs de `project.maps` no incluyen `.autosave/`).
+- Fácil de `.gitignore` con una sola línea.
+- Acompaña al proyecto si se mueve a otra máquina (no como `LOCALAPPDATA` que requiere hash del project path para identificar).
+- Patrón estándar (Unity `Library/AutoSave/`, JetBrains `.idea/`, VSCode `.vscode/`).
+
+Atomic write: `.autosave/<map>.moodmap.tmp` + `std::filesystem::rename(tmp, final)`. En Windows el rename es atómico si origen y destino están en el mismo volumen (siempre cierto acá — ambos en `<projectRoot>`).
+
+**D2 — Trigger: solo si dirty + N min.** Confirmado (vs "cada N min siempre" / "dirty + N min de idle"). Lógica:
+```
+tick(dtMs):
+  if !prefs.autosaveEnabled return
+  timerMs += dtMs
+  if timerMs < intervalMin * 60_000 return
+  if !dirtyFn():     // skip silencioso sin spamear el check
+    timerMs = 0
+    return
+  writeFn(tmpPath) + rename(tmp, final)
+  timerMs = 0
+```
+
+Razón: el caso común es el dev editando activamente y guardando manualmente cada N min. El autosave es safety net. Si NO hubo cambios desde el último write (manual o auto), no tiene sentido reescribir bytes idénticos. El reset del timer al detectar `dirty=false` evita evaluar dirtyFn cada frame tras cumplir N min.
+
+Sin idle tracking (overkill para v1). El "dirty + idle de M segundos" se evalúa si emerge demanda — hoy el dev no reportó molestias por writes mientras edita.
+
+**D3 — Recovery UX: modal blocking al abrir proyecto.** Confirmado (vs toast persistente con botón "Recuperar" / auto-cargar autosave sin preguntar). Razón: el aviso no se debe perder accidentalmente — un toast con autoclose podría desaparecer mientras el dev está mirando otra cosa, perdiendo la oportunidad de recuperar. El auto-cargar silente fue rechazado porque el dev pierde control (qué pasa si el autosave estaba corrupto a medias).
+
+Implementación: `EditorApplication_RecoveryModal.cpp` (sigue split pattern de `_Init`/`_Run`/`_FileIO`). 440×auto-resize centrado, `ImGuiWindowFlags_AlwaysAutoResize | NoSavedSettings`. Botones "Restaurar" (carga via SceneSerializer + marca dirty porque canónico stale) / "Descartar" (borra autosave). Flag `m_recoveryModalPending` consumido en `pumpUiRequests` primera línea.
+
+**D4 — Lock file format: JSON con PID + timestamp + engine_version.** Confirmado (vs touch del archivo / solo PID en plain text). Estructura:
+```json
+{"pid": 12345, "started_at": "2026-05-28T15:32:10Z", "engine_version": "v2.24.x"}
+```
+
+Razón: la info adicional (`started_at`, `engine_version`) ayuda al debugging si el dev reporta crashes — al ver el lock huérfano sabemos qué versión del editor crasheó y cuándo. El overhead de parse JSON es trivial (lock se lee 1 vez al abrir).
+
+Detección de PID huérfano:
+- Windows: `OpenProcess(SYNCHRONIZE, FALSE, pid)` + `WaitForSingleObject(handle, 0)`. SYNCHRONIZE basta para chequear existencia (sin requerir PROCESS_QUERY_INFORMATION que falla cross-session). WaitForSingleObject distingue PID libre (OpenProcess=NULL) de PID zombie (handle válido + WAIT_OBJECT_0 inmediato).
+- POSIX: `kill(pid, 0)` no envía señal, solo chequea permisos + existencia. `errno=ESRCH` es el único "muerto definitivo"; otros errnos (EPERM = otro user) ambiguos pero asumimos vivo.
+
+PID propio (caso raro: misma sesión reabriendo el proyecto sin cerrarlo limpiamente) → tratado como Clean. Razón: no queremos auto-disparar recovery sobre nosotros mismos.
+
+`Status::InUse` (lock con PID vivo de OTRO proceso) → hoy se trata como Clean (overwrite del lock). El soporte real de 2 editores abriendo el mismo proyecto en paralelo (warning, lock compartido, sync) queda como hito propio. La consecuencia: si dos instancias abren el mismo proyecto, la 2da pisa el lock y la 1ra ya no podrá detectar crash propio. Aceptable para v1.
+
+**Ajuste reactivo post-implementación**: crash silencioso del editor con `Fatal: <garbage>` (1 char distinto cada run) al lanzar tras F3H25. Diagnóstico largo (debug logs binary-search entre OpenGL init y loop start) → causa real fuera de F3H25: shaders `thumbnail_bg.vert/frag` (necesarios por `MaterialPreviewRenderer` ctor) NO deployados en `build/.../shaders/` porque `cmake --build --target MoodEditor` no ejecuta el target `mood_runtime_files ALL`. El ctor lanzaba `runtime_error` al fallar `OpenGLShader("shaders/thumbnail_bg.vert", ...)`; el `e.what()` retornaba string corrupta tipo "Fatal: 7" / "Fatal: d" (stack-use-after-free pattern del runtime al stringificar el path no abierto).
+
+Fix: rebuild explícito de `mood_runtime_files`. Sin cambios de código. **Lección documentada**: al validar visualmente tras agregar nuevos shaders/assets, usar siempre `--target mood_runtime_files` (no solo `MoodEditor`). Si solo se modificó código C++ sin nuevos assets, `--target MoodEditor` alcanza.
+
+**Backlog del hito (no cerrado en F3H25):**
+- Concurrent-editors warning (hoy `Status::InUse` se trata como Clean).
+- Asset import + shader compile toasts (herencia F3H24).
+- Autosave incremental para mapas grandes (hoy reescribe completo cada N min).
+- Recovery modal con preview/diff de "última sesión vs canónico".
+- Lock con file lock OS (`flock` / `LockFileEx`) además del PID file.
+
+---
+
 ## 2026-05-28: F3H24 cierre — Comunicación al dev (Console mejorada + Toasts)
 
 **Contexto:** Quinto hito de Sub-fase 3.4. Implementación lineal en una sola tanda con las 4 decisiones cerradas pre-implementación vía AskUserQuestion al arrancar el hito (estilo overlay + click `.lua` + emisiones automáticas + search Console). Sin ajustes reactivos post-validación — el dev confirmó al cerrar con "todo ok".
