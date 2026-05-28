@@ -99,6 +99,19 @@ struct EditorSettings {
     /// (equivalente a smoothViewEnabled=false), 1000 = casi medio segundo
     /// (demasiado lento para uso frecuente).
     int smoothViewDurationMs = 200;
+
+    /// F3H22: categoria activa del Inspector con icons laterales (estilo
+    /// Properties Editor de Blender). IDs validos:
+    ///   "object"      — Transform + Tag + VisGroup
+    ///   "render"      — MeshRenderer + Brush + Light + Camera + Particles
+    ///   "animation"   — Animator
+    ///   "audio"       — AudioSource + Listener
+    ///   "physics"     — RigidBody + Collider + Joint + Ragdoll + Cloth + Trigger + ForceField
+    ///   "gameplay"    — Script + Inventory + ItemPickup + Dialog + Vehicle + Quest
+    ///   "environment" — EnvironmentComponent (singleton scene-wide, accesible sin selección)
+    /// Default "object" — siempre presente (toda entity tiene Transform).
+    /// Sanitize: ID desconocido cae a "object" silencioso (sin log).
+    std::string inspectorActiveCategory = "object";
 };
 
 /// @brief Lee `settings.json` del disco. Si no existe o tiene parse

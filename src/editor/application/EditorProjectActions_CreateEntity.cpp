@@ -661,4 +661,31 @@ void EditorApplication::handleAddEnvironment() {
     pushCreatedEntities({e}, std::string("Crear environment '") + name + "'");
 }
 
+// F3H22: variante silenciosa de handleAddEnvironment. Garantiza el
+// singleton SIN push al history y SIN markDirty — el auto-spawn no es
+// accion del dev, no debe ensuciar el dirty flag ni aparecer en undo.
+// Llamado al cargar proyecto o crear scene nueva. Blender World Properties
+// pattern: el World siempre existe aunque el dev no lo configure.
+void EditorApplication::ensureEnvironmentExists() {
+    if (!m_scene) return;
+
+    bool alreadyExists = false;
+    m_scene->forEach<EnvironmentComponent>(
+        [&](Entity, EnvironmentComponent&) { alreadyExists = true; });
+    if (alreadyExists) return;  // singleton ya presente
+
+    const std::string name = uniqueEntityName(*m_scene, "Environment");
+    Entity e = m_scene->createEntity(name);
+    auto& t = e.getComponent<TransformComponent>();
+    t.position = glm::vec3(0.0f);
+    e.addComponent<EnvironmentComponent>(EnvironmentComponent{});
+    e.getComponent<TagComponent>().entityType = EntityType::Environment;
+    Log::editor()->info(
+        "[ensure_environment] Auto-spawned '{}' (proyecto sin Environment).",
+        name);
+    // NOTA: NO replaceWithSingle, NO pushCreatedEntities, NO markDirty.
+    // El dev no clickeo nada — si guarda manualmente, el Environment se
+    // persiste; si NO guarda, queda solo runtime hasta el proximo load.
+}
+
 } // namespace Mood

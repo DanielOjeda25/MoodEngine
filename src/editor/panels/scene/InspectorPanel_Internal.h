@@ -756,14 +756,12 @@ inline const char* componentKeyForT() {
 template<typename T>
 bool InspectorPanel::beginComponentSection(Entity e, const char* label,
                                             bool removable) {
-    // Orden de "plegar/expandir todo" de este frame (botones del toolbar).
-    if (m_forceSectionState > 0) {
-        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
-    } else if (m_forceSectionState < 0) {
-        ImGui::SetNextItemOpen(false, ImGuiCond_Always);
-    }
-
-    const bool open = ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen);
+    // F3H22 polish: default colapsado (sin ImGuiTreeNodeFlags_DefaultOpen).
+    // El dev expande las secciones que quiere ver — entities con muchos
+    // componentes ya no muestran todo abierto al seleccionar.
+    // Toolbar Plegar/Expandir todo eliminado (F2H81 ya no aplica con
+    // categorías F3H22 — cada categoría tiene pocos componentes visibles).
+    const bool open = ImGui::CollapsingHeader(label);
 
     // Menu contextual (clic derecho sobre el header): quitar componente
     // + F3H9 copy/paste de valores + lock de base-component segun

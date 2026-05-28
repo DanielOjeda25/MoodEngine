@@ -237,6 +237,13 @@ private:
     ///        Guard: si ya existe un Environment en la escena, no-op + log.
     void handleAddEnvironment();
 
+    /// @brief F3H22: garantiza que la scene tenga el singleton Environment.
+    ///        Si no existe, lo crea con defaults SIN push history ni
+    ///        markDirty (auto-spawn, no es accion explicita del dev).
+    ///        Llamado tras cargar proyecto o crear scene nueva — Blender
+    ///        World Properties pattern.
+    void ensureEnvironmentExists();
+
     /// @brief F2H20: compila los brushes del mapa actual a una mesh
     ///        estatica unificada (weld + cull caras internas + merge
     ///        por material) y muestra dialog con stats.

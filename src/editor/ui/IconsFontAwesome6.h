@@ -65,6 +65,8 @@ inline constexpr unsigned short k_FontAwesomeRange[] = { 0xE005, 0xF8FF, 0 };
 
 // --- Inspector component headers (extra mas alla de entity types) ---
 #define ICON_FA_WEIGHT_HANGING                      "\xef\x97\x8d" // 0xF5CD rigidbody (physics)
+#define ICON_FA_BOLT                                "\xef\x83\xa7" // 0xF0E7 physics (F3H22 category bar)
+#define ICON_FA_GAMEPAD                             "\xef\x84\x9b" // 0xF11B gameplay (F3H22 category bar)
 #define ICON_FA_PERSON_RUNNING                      "\xef\x9c\x8c" // 0xF70C animator
 #define ICON_FA_TREE                                "\xef\x86\xbb" // 0xF1BB environment
 #define ICON_FA_LINK                                "\xef\x83\x81" // 0xF0C1 joint (F2H65)

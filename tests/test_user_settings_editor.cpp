@@ -185,3 +185,56 @@ TEST_CASE("F3H21: fromJson acepta los 4 valores validos del enum") {
     j["viewport_render_mode"] = 3;
     CHECK(editorSettingsFromJson(j).viewportRenderMode == UserSettings::ViewportRenderMode::Rendered);
 }
+
+// ---------------------------------------------------------------------------
+// F3H22 — inspectorActiveCategory (Inspector con icons laterales).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("F3H22: default es 'object'") {
+    const EditorSettings defaults;
+    CHECK(defaults.inspectorActiveCategory == "object");
+}
+
+TEST_CASE("F3H22: roundtrip preserva category id") {
+    EditorSettings before;
+    before.inspectorActiveCategory = "physics";
+    const auto j = editorSettingsToJson(before);
+    const auto after = editorSettingsFromJson(j);
+    CHECK(after.inspectorActiveCategory == "physics");
+}
+
+TEST_CASE("F3H22: toJson omite category cuando es default 'object'") {
+    EditorSettings s;
+    const auto j = editorSettingsToJson(s);
+    CHECK_FALSE(j.contains("inspector_active_category"));
+}
+
+TEST_CASE("F3H22: fromJson acepta los 7 IDs validos (sin 'all' tras feedback dev)") {
+    const char* validIds[] = {
+        "object", "render", "animation", "audio",
+        "physics", "gameplay", "environment"
+    };
+    for (const char* id : validIds) {
+        nlohmann::json j;
+        j["inspector_active_category"] = id;
+        CHECK(editorSettingsFromJson(j).inspectorActiveCategory == std::string(id));
+    }
+}
+
+TEST_CASE("F3H22: 'all' del stub inicial migra silenciosamente a 'object'") {
+    nlohmann::json j;
+    j["inspector_active_category"] = "all";
+    CHECK(editorSettingsFromJson(j).inspectorActiveCategory == "object");
+}
+
+TEST_CASE("F3H22: fromJson ID desconocido cae a default 'object'") {
+    nlohmann::json j;
+    j["inspector_active_category"] = "unknown_category";
+    CHECK(editorSettingsFromJson(j).inspectorActiveCategory == "object");
+}
+
+TEST_CASE("F3H22: fromJson type incorrecto (int) cae a default 'object'") {
+    nlohmann::json j;
+    j["inspector_active_category"] = 42;  // no es string
+    CHECK(editorSettingsFromJson(j).inspectorActiveCategory == "object");
+}

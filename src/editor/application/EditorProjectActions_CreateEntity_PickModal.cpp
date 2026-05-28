@@ -261,21 +261,14 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
         // F2H80: cards con ícono (una luz no tiene modelo 3D que renderizar —
         // el estándar de los engines es un ícono claro: sol = direccional,
         // foco = puntual).
-        // F2H86: Environment (config global) tambien vive aca como tercera
-        // card. Sigue el patron Unity Volume / Unreal PostProcessVolume /
-        // Godot WorldEnvironment. Disabled si la escena ya tiene un
-        // EnvironmentComponent (unico por escena — applyEnvironmentFromScene
-        // del SceneRenderer solo usa el primero).
+        // F3H22: la card "Environment" del modal Add Entity fue removida —
+        // el Environment ahora es auto-spawn al cargar/crear scene (Blender
+        // World Properties pattern) y no se puede borrar. Ofrecer "Crear
+        // Environment" en este modal era confuso (siempre disabled).
         struct LightSpec { const char* labelKey; const char* icon; ProjectAction action; bool disabled; };
-        bool hasEnvironment = false;
-        if (m_scene != nullptr) {
-            m_scene->forEach<EnvironmentComponent>(
-                [&](Entity, EnvironmentComponent&) { hasEnvironment = true; });
-        }
         LightSpec kLights[] = {
-            { "editor.menu.light.directional", ICON_FA_SUN,       ProjectAction::AddDirectionalLight, false           },
-            { "editor.menu.light.point",       ICON_FA_LIGHTBULB, ProjectAction::AddPointLight,       false           },
-            { "editor.menu.world.environment", ICON_FA_GLOBE,     ProjectAction::AddEnvironment,      hasEnvironment },
+            { "editor.menu.light.directional", ICON_FA_SUN,       ProjectAction::AddDirectionalLight, false },
+            { "editor.menu.light.point",       ICON_FA_LIGHTBULB, ProjectAction::AddPointLight,       false },
         };
         constexpr int kLightCount = static_cast<int>(sizeof(kLights) / sizeof(kLights[0]));
         constexpr float kCard = 96.0f;

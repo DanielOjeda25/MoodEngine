@@ -416,6 +416,19 @@ void EditorApplication::deleteSelectedEntity() {
             ? selected.getComponent<TagComponent>().name
             : std::string{"(sin tag)"};
 
+    // F3H22: el singleton de Environment es scene-wide y se auto-spawn al
+    // cargar (Blender World Properties pattern). Borrarlo dejaria la
+    // escena sin Environment hasta el proximo reload — confuso. Bloqueamos
+    // el delete + status message para que el dev sepa que no es deletable.
+    if (selected.hasComponent<EnvironmentComponent>()) {
+        m_ui.setStatusMessage(
+            I18n::T("editor.delete.environment_blocked"));
+        Log::editor()->info(
+            "[delete] '{}' tiene EnvironmentComponent — bloqueado (singleton scene-wide).",
+            tagName);
+        return;
+    }
+
     // F2H62 polish: tiles del mapa (Tag "Tile_X_Y") son rendereados como
     // entidades pero el "source of truth" es m_map (GridMap). Si el dev
     // pide "Eliminar" sobre un tile, lo natural es que la celda quede

@@ -186,6 +186,9 @@ void EditorApplication::handleOpenMap(const std::filesystem::path& mapPath) {
     if (m_scene) {
         SceneLoader::applyEntitiesToScene(*saved, *m_scene, *m_assetManager);
     }
+    // F3H22: garantizar Environment singleton tras cargar/cambiar de mapa
+    // (Blender World Properties pattern — siempre existe).
+    ensureEnvironmentExists();
     if (m_scene && m_sceneRenderer) {
         m_sceneRenderer->applyEnvironmentFromScene(*m_scene);
     }

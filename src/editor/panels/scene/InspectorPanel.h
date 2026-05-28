@@ -83,9 +83,14 @@ private:
     template<typename T>
     bool beginComponentSection(Entity e, const char* label, bool removable = true);
 
-    /// F2H81: barra "Plegar / Expandir todo" arriba del dispatch. Setea
-    /// `m_forceSectionState` el frame en que se apreta.
-    void renderSectionToolbar();
+    /// F3H22: barra de icons laterales estilo Properties Editor de Blender.
+    /// 7 botones (Object/Render/Animation/Audio/Physics/Gameplay/Environment)
+    /// + botón "All" para volver al modo legacy. Cada icon solo se muestra
+    /// si la entity tiene >=1 componente de esa categoría (decisión D3 del
+    /// plan F3H22 — Blender oculta tabs irrelevantes). Object siempre
+    /// visible. La categoría activa se persiste en
+    /// `UserSettings.editor.inspectorActiveCategory`.
+    void renderCategoryBar(Entity e);
 
     EditorUI* m_ui = nullptr;
     AssetManager* m_assets = nullptr;
@@ -118,12 +123,6 @@ private:
 
     /// F2H44 Bloque A: buffer del search input del popup Add Component.
     char m_addComponentSearch[64]{};
-
-    /// F2H81: orden de plegar/expandir TODAS las secciones este frame.
-    /// 0 = ninguno, +1 = expandir, -1 = colapsar. Lo setea
-    /// `renderSectionToolbar` y lo consume cada `beginComponentSection`
-    /// (via `SetNextItemOpen`); se resetea al final de `onImGuiRender`.
-    int m_forceSectionState = 0;
 
     /// F3H9 Stage 9: slot de material seleccionado en el inspector
     /// MeshRenderer (UI Blender-style: lista compacta arriba + panel del

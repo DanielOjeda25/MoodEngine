@@ -229,7 +229,10 @@ void drawViewportRenderModeBar(ImVec2 imageMin, ImVec2 imageSize) {
         ImVec2(imageMin.x + imageSize.x - kRightOffset,
                 imageMin.y + kTopOffset),
         ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-    ImGui::SetNextWindowBgAlpha(0.55f);
+    // F3H22: fondo transparente — sin caja oscura rodeando los icons
+    // (igual que el header bar del viewport en Blender). Solo el botón
+    // activo se destaca con su propio background cyan.
+    ImGui::SetNextWindowBgAlpha(0.0f);
     constexpr ImGuiWindowFlags flags =
         ImGuiWindowFlags_NoDecoration |
         ImGuiWindowFlags_NoMove |
@@ -237,7 +240,8 @@ void drawViewportRenderModeBar(ImVec2 imageMin, ImVec2 imageSize) {
         ImGuiWindowFlags_AlwaysAutoResize |
         ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoFocusOnAppearing |
-        ImGuiWindowFlags_NoNav;
+        ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoBackground;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 4.0f));
     if (!ImGui::Begin("##viewport_render_mode_bar", nullptr, flags)) {
@@ -249,6 +253,15 @@ void drawViewportRenderModeBar(ImVec2 imageMin, ImVec2 imageSize) {
     using Mode = UserSettings::ViewportRenderMode;
     const auto current = UserSettings::editor().viewportRenderMode;
     const ImU32 kActiveBg = IM_COL32(60, 140, 200, 255);  // cyan Blender-like
+    constexpr float kBtnSize = 28.0f;  // F3H22: botón cuadrado (icon-only)
+
+    // F3H22: centrar texto/icon explícitamente. Los glyphs FontAwesome
+    // tienen metrics distintos (ascent/descent) — con el default
+    // ButtonTextAlign (0.5, 0.5) ImGui usa la baseline de la fuente, lo
+    // que hace que los icons se vean a alturas distintas. Forzar el
+    // centrado en el bounding box del botón da consistencia visual.
+    ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.5f, 0.5f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
 
     auto modeButton = [&](Mode m, const char* label,
                           const char* tooltipKey) {
@@ -258,7 +271,7 @@ void drawViewportRenderModeBar(ImVec2 imageMin, ImVec2 imageSize) {
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kActiveBg);
             ImGui::PushStyleColor(ImGuiCol_ButtonActive,  kActiveBg);
         }
-        if (ImGui::SmallButton(label)) {
+        if (ImGui::Button(label, ImVec2(kBtnSize, kBtnSize))) {
             auto ed = UserSettings::editor();
             ed.viewportRenderMode = m;
             UserSettings::setEditor(ed);
@@ -270,20 +283,23 @@ void drawViewportRenderModeBar(ImVec2 imageMin, ImVec2 imageSize) {
         }
     };
 
+    constexpr float kBtnGap = 6.0f;  // F3H22: separación entre icons
     modeButton(Mode::Wireframe,       ICON_FA_BORDER_NONE,
                "editor.viewport.render_mode.wireframe.tooltip");
-    ImGui::SameLine(0.0f, 2.0f);
+    ImGui::SameLine(0.0f, kBtnGap);
     modeButton(Mode::Solid,           ICON_FA_CIRCLE,
                "editor.viewport.render_mode.solid.tooltip");
-    ImGui::SameLine(0.0f, 2.0f);
+    ImGui::SameLine(0.0f, kBtnGap);
     modeButton(Mode::MaterialPreview, ICON_FA_CUBE,
                "editor.viewport.render_mode.material.tooltip");
-    ImGui::SameLine(0.0f, 2.0f);
+    ImGui::SameLine(0.0f, kBtnGap);
     modeButton(Mode::Rendered,        ICON_FA_GLOBE,
                "editor.viewport.render_mode.rendered.tooltip");
 
+    ImGui::PopStyleVar(2);  // ButtonTextAlign + FramePadding
+
     ImGui::End();
-    ImGui::PopStyleVar();
+    ImGui::PopStyleVar();  // WindowPadding (push antes de Begin)
 }
 
 } // namespace

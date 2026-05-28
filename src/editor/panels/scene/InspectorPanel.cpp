@@ -8,6 +8,7 @@
 #include "editor/ui/EditorUI.h"
 #include "editor/ui/IconsFontAwesome6.h"              // F3H9: ICON_FA_PASTE
 #include "engine/scene/entity_type/EntityTypeTable.h"  // F3H9: type label
+#include "core/UserSettings.h"  // F3H22: inspectorActiveCategory
 #include "core/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/BrushComponent.h"  // F2H11
 #include "engine/scene/components/Components.h"
@@ -37,6 +38,54 @@ bool fuzzyMatch(const std::string& haystack, const char* needle) {
     return a.find(b) != std::string::npos;
 }
 
+// F3H22: mapeo componente → categoría del Inspector. Decisión D3 del
+// plan F3H22: Render absorbe Light/Camera/Particles; Physics absorbe
+// Trigger/ForceField; Gameplay absorbe Inventory/Dialog/Vehicle/Quest.
+// El helper retorna true si la categoría activa coincide con la
+// declarada del componente. El modo "all" fue eliminado en revisión
+// reactiva del dev (confundía) — siempre hay una categoría única activa.
+bool catActive(const std::string& active, const char* expected) {
+    return active == expected;
+}
+
+// F3H22: ¿la entity activa tiene al menos un componente de la categoría?
+// Usado por la barra de icons del Inspector para mostrar solo categorías
+// con contenido (no spammear icons grises). Object siempre devuelve true
+// (toda entity tiene Transform).
+bool entityHasCategory(Entity e, const char* category) {
+    if (std::strcmp(category, "object") == 0) return true;
+    if (std::strcmp(category, "render") == 0) {
+        return e.hasComponent<MeshRendererComponent>()
+            || e.hasComponent<BrushComponent>()
+            || e.hasComponent<LightComponent>()
+            || e.hasComponent<CameraComponent>()
+            || e.hasComponent<ParticleEmitterComponent>();
+    }
+    if (std::strcmp(category, "animation") == 0) {
+        return e.hasComponent<AnimatorComponent>();
+    }
+    if (std::strcmp(category, "audio") == 0) {
+        return e.hasComponent<AudioSourceComponent>();
+    }
+    if (std::strcmp(category, "physics") == 0) {
+        return e.hasComponent<RigidBodyComponent>()
+            || e.hasComponent<JointComponent>()
+            || e.hasComponent<RagdollComponent>()
+            || e.hasComponent<ClothComponent>()
+            || e.hasComponent<TriggerComponent>()
+            || e.hasComponent<ForceFieldComponent>();
+    }
+    if (std::strcmp(category, "gameplay") == 0) {
+        return e.hasComponent<ScriptComponent>()
+            || e.hasComponent<VehicleComponent>()
+            || e.hasComponent<InventoryComponent>();
+    }
+    if (std::strcmp(category, "environment") == 0) {
+        return e.hasComponent<EnvironmentComponent>();
+    }
+    return false;
+}
+
 } // namespace
 
 // F2H24: nucleo del Inspector. El cuerpo de cada componente vive en
@@ -63,19 +112,77 @@ void InspectorPanel::onImGuiRender() {
         return;
     }
 
+    const std::string activeCat = UserSettings::editor().inspectorActiveCategory;
+    // F3H22: Environment es scene-wide — accesible sin seleccionar la
+    // entity portadora (mismo pattern que Blender World Properties).
+    // Si la categoría activa es "environment", buscamos el singleton
+    // en la scene en vez de requerir selección.
+    const bool isSceneWideCat = (activeCat == "environment");
+
     Entity e = m_ui->selectedEntity();
-    if (!e) {
+
+    // F3H22: buscar la entity portadora del EnvironmentComponent para
+    // las categorías scene-wide. Si no hay (escena nueva sin Env), `eForRender`
+    // queda invalid y el dispatcher muestra el mensaje vacío.
+    Entity eForRender = e;
+    if (isSceneWideCat) {
+        Entity foundEnv{};
+        if (m_ui->scene() != nullptr) {
+            m_ui->scene()->forEach<EnvironmentComponent>(
+                [&](Entity en, EnvironmentComponent&) {
+                    if (!foundEnv) foundEnv = en;
+                });
+        }
+        eForRender = foundEnv;
+    }
+
+    // Si NO es scene-wide y no hay selección, mostrar hint clásico — pero
+    // dejar la category bar visible para que el dev pueda saltar a una
+    // categoría scene-wide (Environment).
+    const bool needsSelection = !isSceneWideCat && !e;
+
+    // F3H22: layout en dos columnas — barra de icons vertical a la
+    // izquierda + body del Inspector a la derecha.
+    constexpr float kCategoryBarWidth = 36.0f;
+    ImGui::BeginChild("##inspector_category_bar",
+                       ImVec2(kCategoryBarWidth, 0.0f),
+                       false /* border */,
+                       ImGuiWindowFlags_NoScrollbar);
+    renderCategoryBar(e);
+    ImGui::EndChild();
+
+    ImGui::SameLine(0.0f, 4.0f);
+
+    ImGui::BeginChild("##inspector_body",
+                       ImVec2(0.0f, 0.0f),
+                       false,
+                       ImGuiWindowFlags_HorizontalScrollbar);
+
+    if (needsSelection) {
         ImGui::TextDisabled("%s", I18n::T("editor.panel.inspector.no_selection").c_str());
         ImGui::TextDisabled("%s", I18n::T("editor.panel.inspector.no_selection_hint").c_str());
+        ImGui::EndChild();
         ImGui::End();
         return;
     }
 
+    if (isSceneWideCat && !eForRender) {
+        // Categoría scene-wide pero la escena no tiene el singleton.
+        // Mensaje + sugerencia (botón "Crear Environment" sería follow-up).
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.no_environment").c_str());
+        ImGui::EndChild();
+        ImGui::End();
+        return;
+    }
+
+    Entity dispatchEntity = isSceneWideCat ? eForRender : e;
+
     // F3H9: type label (Blender Object Type / Hammer entity class) en
-    // el header del Inspector. Muestra "Tipo: Luz" / "Type: Light" para
-    // que el dev sepa de un vistazo que es la entity seleccionada.
-    if (e.hasComponent<TagComponent>()) {
-        const auto& tag = e.getComponent<TagComponent>();
+    // el header del Inspector. Solo cuando NO es scene-wide (el singleton
+    // de Environment tiene su propio header).
+    if (!isSceneWideCat && dispatchEntity.hasComponent<TagComponent>()) {
+        const auto& tag = dispatchEntity.getComponent<TagComponent>();
         const std::string typeLabel = I18n::T(
             EntityTypeTable::i18nKey(tag.entityType));
         ImGui::TextDisabled("%s",
@@ -85,8 +192,8 @@ void InspectorPanel::onImGuiRender() {
 
     // F2H13: header "+N adicionales" cuando hay multi-seleccion.
     // Inspector solo edita la `active`; multi-edit es diferido (excepto
-    // Transform — ver renderTransformSection).
-    {
+    // Transform — ver renderTransformSection). Solo cuando NO scene-wide.
+    if (!isSceneWideCat) {
         const SelectionSet& set = m_ui->selectionSet();
         if (set.selected.size() > 1) {
             ImGui::TextDisabled("%s",
@@ -96,58 +203,152 @@ void InspectorPanel::onImGuiRender() {
         }
     }
 
-    // F2H81: barra de plegar/expandir todo (setea m_forceSectionState
-    // para este frame; cada beginComponentSection lo consume).
-    renderSectionToolbar();
+    // F3H22: barra "Plegar/Expandir todo" (F2H81) eliminada — con
+    // categorías filtrando, cada vista tiene pocos componentes y la
+    // toolbar ya no aporta. Default colapsado en beginComponentSection.
 
-    // Dispatch por componente. El orden es el mismo que tenia
-    // `onImGuiRender` antes del split (F2H23+).
-    if (e.hasComponent<TagComponent>())              renderTagSection(e);
-    if (e.hasComponent<TransformComponent>())        renderTransformSection(e);
-    if (e.hasComponent<MeshRendererComponent>())     renderMeshRendererSection(e);
-    if (e.hasComponent<CameraComponent>())           renderCameraSection(e);
-    if (e.hasComponent<LightComponent>())            renderLightSection(e);
-    if (e.hasComponent<EnvironmentComponent>())      renderEnvironmentSection(e);
-    if (e.hasComponent<ScriptComponent>())           renderScriptSection(e);
-    if (e.hasComponent<RigidBodyComponent>())        renderRigidBodySection(e);
-    if (e.hasComponent<JointComponent>())            renderJointSection(e);  // F2H65
-    if (e.hasComponent<RagdollComponent>())          renderRagdollSection(e);  // break-A4
-    if (e.hasComponent<VehicleComponent>())          renderVehicleSection(e);  // F2H67
-    if (e.hasComponent<AudioSourceComponent>())      renderAudioSourceSection(e);
-    if (e.hasComponent<AnimatorComponent>())         renderAnimatorSection(e);
-    if (e.hasComponent<ParticleEmitterComponent>())  renderParticleEmitterSection(e);
-    if (e.hasComponent<TriggerComponent>())          renderTriggerSection(e);
-    if (e.hasComponent<ForceFieldComponent>())       renderForceFieldSection(e);  // F2H72
-    if (e.hasComponent<ClothComponent>())            renderClothSection(e);  // F2H75
-    if (e.hasComponent<BrushComponent>())            renderBrushSection(e);
-    if (e.hasComponent<InventoryComponent>())        renderInventorySection(e);  // F2H51
+    // Dispatch por componente. F3H22: gateado por categoría activa.
+    if (catActive(activeCat, "object")) {
+        if (dispatchEntity.hasComponent<TagComponent>())          renderTagSection(dispatchEntity);
+        if (dispatchEntity.hasComponent<TransformComponent>())    renderTransformSection(dispatchEntity);
+    }
+    if (catActive(activeCat, "render")) {
+        if (dispatchEntity.hasComponent<MeshRendererComponent>())     renderMeshRendererSection(dispatchEntity);
+        if (dispatchEntity.hasComponent<CameraComponent>())           renderCameraSection(dispatchEntity);
+        if (dispatchEntity.hasComponent<LightComponent>())            renderLightSection(dispatchEntity);
+        if (dispatchEntity.hasComponent<ParticleEmitterComponent>())  renderParticleEmitterSection(dispatchEntity);
+        if (dispatchEntity.hasComponent<BrushComponent>())            renderBrushSection(dispatchEntity);
+    }
+    if (catActive(activeCat, "environment")) {
+        if (dispatchEntity.hasComponent<EnvironmentComponent>())  renderEnvironmentSection(dispatchEntity);
+    }
+    if (catActive(activeCat, "gameplay")) {
+        if (dispatchEntity.hasComponent<ScriptComponent>())       renderScriptSection(dispatchEntity);
+        if (dispatchEntity.hasComponent<VehicleComponent>())      renderVehicleSection(dispatchEntity);  // F2H67
+        if (dispatchEntity.hasComponent<InventoryComponent>())    renderInventorySection(dispatchEntity);  // F2H51
+    }
+    if (catActive(activeCat, "physics")) {
+        if (dispatchEntity.hasComponent<RigidBodyComponent>())    renderRigidBodySection(dispatchEntity);
+        if (dispatchEntity.hasComponent<JointComponent>())        renderJointSection(dispatchEntity);  // F2H65
+        if (dispatchEntity.hasComponent<RagdollComponent>())      renderRagdollSection(dispatchEntity);  // break-A4
+        if (dispatchEntity.hasComponent<TriggerComponent>())      renderTriggerSection(dispatchEntity);
+        if (dispatchEntity.hasComponent<ForceFieldComponent>())   renderForceFieldSection(dispatchEntity);  // F2H72
+        if (dispatchEntity.hasComponent<ClothComponent>())        renderClothSection(dispatchEntity);  // F2H75
+    }
+    if (catActive(activeCat, "audio")) {
+        if (dispatchEntity.hasComponent<AudioSourceComponent>())  renderAudioSourceSection(dispatchEntity);
+    }
+    if (catActive(activeCat, "animation")) {
+        if (dispatchEntity.hasComponent<AnimatorComponent>())     renderAnimatorSection(dispatchEntity);
+    }
 
-    // F2H44 Bloque A: boton "+ Add Component" + popup. Al final del
-    // dispatch para no interrumpir el flow de lectura de los componentes
-    // existentes.
-    renderAddComponentSection(e);
+    // F2H44 Bloque A: boton "+ Add Component" — solo cuando NO es
+    // scene-wide (no tiene sentido agregar components al singleton de
+    // Environment desde ahí).
+    if (!isSceneWideCat) {
+        renderAddComponentSection(dispatchEntity);
+    }
 
-    // F2H81: la orden de plegar/expandir vale solo el frame en que se
-    // apreta el boton — reset para no forzar el estado el frame siguiente
-    // (asi el dev puede volver a plegar/expandir secciones a mano).
-    m_forceSectionState = 0;
-
+    ImGui::EndChild();
     ImGui::End();
 }
 
-// F2H81: barra compacta arriba del dispatch con dos botones que pliegan
-// o expanden todas las tarjetas de componente de una. No-op visual si la
-// entidad tiene una sola seccion, pero la dejamos siempre por consistencia.
-void InspectorPanel::renderSectionToolbar() {
-    if (ImGui::SmallButton(I18n::T("editor.panel.inspector.collapse_all").c_str())) {
-        m_forceSectionState = -1;
+// F3H22: barra de icons VERTICAL estilo Properties Editor de Blender.
+// Columna lateral izquierda del Inspector. Cada icon solo se muestra si
+// la entity tiene componentes de esa categoría — Object siempre presente
+// (toda entity tiene Transform). Environment es scene-wide: siempre
+// visible aunque la entity actual no tenga el componente — buscando el
+// singleton en otra entity de la scene (mismo pattern que Blender World
+// Properties). Categoría activa con background cyan (mismo lenguaje
+// visual que el viewport render mode bar de F3H21).
+void InspectorPanel::renderCategoryBar(Entity e) {
+    const std::string activeCat = UserSettings::editor().inspectorActiveCategory;
+    const ImU32 kActiveBg = IM_COL32(60, 140, 200, 255);
+    constexpr float kBtnSize = 28.0f;  // botón cuadrado para layout vertical
+
+    auto categoryButton = [&](const char* id, const char* icon,
+                                const char* labelKey, const char* tooltipKey,
+                                bool sceneWide) {
+        // Visibilidad de cada icon:
+        //   - scene-wide (Environment) SIEMPRE visible (Blender pattern —
+        //     World Properties está incluso sin scene setup). Sin singleton,
+        //     el body muestra mensaje "crear Environment".
+        //   - Object requiere selección.
+        //   - Otras categorías per-entity requieren selección + componente.
+        bool visible;
+        if (sceneWide) {
+            visible = true;
+        } else if (std::strcmp(id, "object") == 0) {
+            visible = static_cast<bool>(e);
+        } else {
+            visible = e && entityHasCategory(e, id);
+        }
+        if (!visible) return;
+
+        const bool isActive = (activeCat == id);
+        if (isActive) {
+            ImGui::PushStyleColor(ImGuiCol_Button,        kActiveBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kActiveBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  kActiveBg);
+        }
+        // Label invisible único por id para evitar colisiones de ImGui.
+        const std::string btnLabel = std::string(icon) + "##cat_" + id;
+        if (ImGui::Button(btnLabel.c_str(), ImVec2(kBtnSize, kBtnSize))) {
+            auto ed = UserSettings::editor();
+            ed.inspectorActiveCategory = id;
+            UserSettings::setEditor(ed);
+            UserSettings::save();
+        }
+        if (isActive) ImGui::PopStyleColor(3);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s\n%s",
+                I18n::T(labelKey).c_str(),
+                I18n::T(tooltipKey).c_str());
+        }
+        // Layout vertical: SIN SameLine — cada botón en su línea.
+    };
+
+    // 7 categorías en columna. Environment va al tope — es scene-wide y
+    // siempre visible, igual que World Properties en Blender (siempre
+    // accesible aunque no haya selección).
+    categoryButton("environment", ICON_FA_GLOBE,
+                    "editor.inspector.category.environment",
+                    "editor.inspector.category.environment.tooltip", true);
+    categoryButton("object",      ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT,
+                    "editor.inspector.category.object",
+                    "editor.inspector.category.object.tooltip", false);
+    categoryButton("render",      ICON_FA_CUBE,
+                    "editor.inspector.category.render",
+                    "editor.inspector.category.render.tooltip", false);
+    categoryButton("animation",   ICON_FA_PERSON_RUNNING,
+                    "editor.inspector.category.animation",
+                    "editor.inspector.category.animation.tooltip", false);
+    categoryButton("audio",       ICON_FA_VOLUME_HIGH,
+                    "editor.inspector.category.audio",
+                    "editor.inspector.category.audio.tooltip", false);
+    categoryButton("physics",     ICON_FA_BOLT,
+                    "editor.inspector.category.physics",
+                    "editor.inspector.category.physics.tooltip", false);
+    categoryButton("gameplay",    ICON_FA_GAMEPAD,
+                    "editor.inspector.category.gameplay",
+                    "editor.inspector.category.gameplay.tooltip", false);
+
+    // Fallback: si la categoría activa NO está disponible y NO es
+    // scene-wide, auto-switch a "object" silencioso. Solo cuando hay
+    // entity seleccionada (sin selección, dejamos la activa para que el
+    // dev pueda ver el hint de "selecciona algo").
+    if (e && activeCat != "environment" &&
+        !entityHasCategory(e, activeCat.c_str())) {
+        auto ed = UserSettings::editor();
+        ed.inspectorActiveCategory = "object";
+        UserSettings::setEditor(ed);
+        // NO llamamos save() — auto-switch transitorio.
     }
-    ImGui::SameLine();
-    if (ImGui::SmallButton(I18n::T("editor.panel.inspector.expand_all").c_str())) {
-        m_forceSectionState = 1;
-    }
-    ImGui::Spacing();
 }
+
+// F2H81 → eliminado en F3H22: la barra "Plegar/Expandir todo" pierde
+// sentido con categorías (cada categoría muestra pocos componentes,
+// default colapsado en beginComponentSection).
 
 void InspectorPanel::renderAddComponentSection(Entity e) {
     ImGui::Spacing();

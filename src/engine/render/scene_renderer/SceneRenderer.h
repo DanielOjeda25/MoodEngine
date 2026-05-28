@@ -198,13 +198,13 @@ public:
     ///          overlays se vean normales.
     ///        - skipPostPasses=true => salta SSAO + SSR + Bloom + Color
     ///          Grading en `endFrame` (Wireframe / Solid).
-    ///        - forcePostPasses=true => ignora los flags del Environment
-    ///          (m_bloomEnabled, etc.) y fuerza TODOS los post passes ON.
-    ///          Modo "Rendered" del viewport — pipeline maximo visual
-    ///          aunque la escena tenga effects OFF para Play mode.
+    ///        F3H22: "Rendered" ya NO fuerza post passes — respeta los
+    ///        flags del Environment (el dev controla AO/Bloom/SSR desde
+    ///        ahí, igual que en Blender). La diferencia Material→Rendered
+    ///        es exclusivamente `skipPostPasses` (Material salta; Rendered
+    ///        no).
     void setWireframeMode(bool on) { m_wireframeMode = on; }
     void setSkipPostPasses(bool on) { m_skipPostPasses = on; }
-    void setForcePostPasses(bool on) { m_forcePostPasses = on; }
     /// @brief F3H21: Solid mode del viewport — el PBR shader usa gris
     ///        flat + diffuse direccional simple (Blender Solid style).
     void setSolidShading(bool on) { m_solidShading = on; }
@@ -320,7 +320,6 @@ private:
     // comportamiento pre-F3H21 (MaterialPreview).
     bool m_wireframeMode = false;
     bool m_skipPostPasses = false;
-    bool m_forcePostPasses = false;  // Rendered: ignora flags del Environment
     bool m_solidShading = false;     // Solid: gris flat en el PBR shader
 
     // F2H58: Color Grading params (poblados por applyEnvironmentFromScene).

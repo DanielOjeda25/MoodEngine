@@ -172,6 +172,12 @@ bool EditorApplication::tryOpenProjectPath(const std::filesystem::path& moodproj
     if (m_scene) {
         SceneLoader::applyEntitiesToScene(*savedMap, *m_scene, *m_assetManager);
     }
+    // F3H22: garantizar que la scene tenga un Environment singleton (Blender
+    // World Properties pattern — siempre existe aunque el dev no lo configuro).
+    // Si el proyecto cargado NO tiene Environment, agregamos uno con defaults
+    // SIN markDirty (no es accion explicita del dev, no debe pedir "guardar").
+    ensureEnvironmentExists();
+
     // Hito 15: aplicar el Environment del proyecto recien cargado YA, en
     // lugar de esperar al primer renderSceneToViewport. Asi la primera frame
     // muestra el fog/exposure/tonemap guardados, sin un flash a defaults.

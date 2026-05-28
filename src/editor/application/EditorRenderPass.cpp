@@ -64,26 +64,27 @@ void EditorApplication::renderSceneToViewport(f32 dt) {
 
     if (!m_scene) return;
 
-    // F3H21: traducir viewport render mode (UserSettings.editor) a los
-    // dos flags del SceneRenderer. Solo se aplica en Editor mode — en
-    // Play mode dejamos siempre MaterialPreview-equivalente (default
-    // flags=false) para que el dev pruebe el game-feel real.
+    // F3H21/F3H22: traducir viewport render mode (UserSettings.editor) a
+    // los flags del SceneRenderer. Solo se aplica en Editor mode — Play
+    // mode usa flags=false (MaterialPreview-equivalente) para que el dev
+    // pruebe el game-feel real.
+    //
+    // F3H22: Rendered ya NO fuerza post passes — respeta los flags del
+    // Environment. Material vs Rendered se diferencia solo por
+    // `skipPostPasses` (Material salta; Rendered no).
     if (m_mode == EditorMode::Editor) {
         const auto mode = UserSettings::editor().viewportRenderMode;
         using Mode = UserSettings::ViewportRenderMode;
         const bool wireframe = (mode == Mode::Wireframe);
         const bool skipPost = (mode == Mode::Wireframe || mode == Mode::Solid);
-        const bool forcePost = (mode == Mode::Rendered);
         const bool solid = (mode == Mode::Solid);
         m_sceneRenderer->setWireframeMode(wireframe);
         m_sceneRenderer->setSkipPostPasses(skipPost);
-        m_sceneRenderer->setForcePostPasses(forcePost);
         m_sceneRenderer->setSolidShading(solid);
     } else {
         // Play mode: respetar el Environment de la escena, sin overrides.
         m_sceneRenderer->setWireframeMode(false);
         m_sceneRenderer->setSkipPostPasses(false);
-        m_sceneRenderer->setForcePostPasses(false);
         m_sceneRenderer->setSolidShading(false);
     }
 

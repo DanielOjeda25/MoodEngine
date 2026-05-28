@@ -130,6 +130,7 @@ nlohmann::json editorSettingsToJson(const EditorSettings& s) {
     if (s.viewportRenderMode      != defaults.viewportRenderMode)      j["viewport_render_mode"]      = static_cast<int>(s.viewportRenderMode);
     if (s.smoothViewEnabled       != defaults.smoothViewEnabled)       j["smooth_view_enabled"]       = s.smoothViewEnabled;
     if (s.smoothViewDurationMs    != defaults.smoothViewDurationMs)    j["smooth_view_duration_ms"]   = s.smoothViewDurationMs;
+    if (s.inspectorActiveCategory != defaults.inspectorActiveCategory) j["inspector_active_category"] = s.inspectorActiveCategory;
     return j;
 }
 
@@ -183,6 +184,18 @@ EditorSettings editorSettingsFromJson(const nlohmann::json& j) {
     if (j.contains("smooth_view_duration_ms") && j.at("smooth_view_duration_ms").is_number_integer()) {
         const int v = j.at("smooth_view_duration_ms").get<int>();
         s.smoothViewDurationMs = std::clamp(v, 0, 1000);
+    }
+    if (j.contains("inspector_active_category") && j.at("inspector_active_category").is_string()) {
+        const std::string v = j.at("inspector_active_category").get<std::string>();
+        // Sanitize: 7 IDs validos (categorias unicas). El "all" del stub
+        // inicial fue eliminado por feedback del dev — el modo legacy
+        // confundia. Si el settings.json del dev tiene "all" persistido,
+        // migra silenciosamente a "object".
+        if (v == "object" || v == "render" || v == "animation" ||
+            v == "audio" || v == "physics" || v == "gameplay" ||
+            v == "environment") {
+            s.inspectorActiveCategory = v;
+        }
     }
     return s;
 }

@@ -20,6 +20,12 @@ void collectHierarchyEntries(Scene& scene,
         // F2H82: marker en vez de check por nombre (autos importados tienen
         // ruedas con nombres arbitrarios).
         if (e.hasComponent<VehicleWheelMarker>()) return;
+        // F3H22: Environment es un singleton implícito del proyecto — auto-
+        // spawn al cargar/crear escena, accesible vía la categoría
+        // "Environment" del Inspector (Blender World Properties pattern).
+        // No tiene sentido listarlo en el Outliner como entidad selectable:
+        // confunde al dev (no se borra, no se duplica). Se oculta.
+        if (e.hasComponent<EnvironmentComponent>()) return;
         out.push_back(HierarchyEntry{e.handle(), &tag});
     });
 }
