@@ -34,52 +34,62 @@ F3H25 –  — Crash recovery + autosave (cierra Fase 3)
 
 ## Scope candidato
 
-### Categorías
+### Categorías (7 fijas — afinado 2026-05-27)
 
-Mapping inicial (a ajustar según los componentes reales del engine):
+Tras revisión con el dev: muchas de las categorías iniciales (Material/Dialog/Quest/Vehicle/Mesh propios) eran **assets** que ya viven en el AssetBrowser. El Inspector solo necesita categorías de **componentes** que el dev edita per-entity. Resultado: **7 categorías** (Blender tiene ~10, Unity ~6 — 7 es buen punto medio).
 
-| Icon | Categoría | Componentes que muestra |
-|---|---|---|
-| `ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT` | **Object** | TransformComponent, TagComponent, VisGroupMembership |
-| `ICON_FA_CUBE` | **Mesh** | MeshRendererComponent, BrushComponent |
-| `ICON_FA_PALETTE` | **Materials** | Materials del MeshRenderer (vista expandida) |
-| `ICON_FA_LIGHTBULB` | **Light** | LightComponent |
-| `ICON_FA_PERSON_RUNNING` | **Animation** | AnimatorComponent |
-| `ICON_FA_VOLUME_HIGH` | **Audio** | AudioSourceComponent, ListenerComponent |
-| `ICON_FA_BOLT` | **Physics** | RigidBodyComponent, ColliderComponent, JointComponent, RagdollComponent, ClothComponent |
-| `ICON_FA_WIND` | **VFX** | ParticleEmitterComponent, ForceFieldComponent, TriggerComponent |
-| `ICON_FA_CODE` | **Script** | ScriptComponent, exposed properties |
-| `ICON_FA_BOX_OPEN` | **Inventory** | InventoryComponent, ItemPickupComponent |
-| `ICON_FA_CAR` | **Vehicle** | VehicleComponent |
-| `ICON_FA_COMMENT` | **Dialog** | DialogComponent |
-| `ICON_FA_LIST_CHECK` | **Quest** | QuestComponent |
-| `ICON_FA_GLOBE` | **Environment** | EnvironmentComponent (singleton de la escena) |
-| `ICON_FA_VIDEO` | **Camera** | CameraComponent |
+| ID | Icon | Label | Componentes que agrupa |
+|---|---|---|---|
+| `object` | `ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT` | **Object** | Transform + Tag + VisGroupMembership. Posición/rotación/escala + nombre + grupo de visibilidad. Lo que define "dónde y qué es" la entity. |
+| `render` | `ICON_FA_CUBE` | **Render** | MeshRenderer + Brush + Light + Camera + ParticleEmitter. Todo lo que **se ve** en el viewport: geometría, luces, cámaras, partículas. Light/Camera/Particles entran acá porque son singles que no merecen tab propio. |
+| `animation` | `ICON_FA_PERSON_RUNNING` | **Animation** | Animator. Skeletal animation + clips + state machine + blending. Categoría propia porque tiene state complejo (current clip, blend weights, animation events). |
+| `audio` | `ICON_FA_VOLUME_HIGH` | **Audio** | AudioSource + Listener. Fuentes de sonido + el listener (cámara que oye). Pocos campos pero conceptualmente distintos del render visual. |
+| `physics` | `ICON_FA_BOLT` | **Physics** | RigidBody + Collider + Joint + Ragdoll + Cloth + Trigger + ForceField. Todo sistema físico (Jolt-backed). Trigger/ForceField caen acá porque comparten layer/mask del physics world. |
+| `gameplay` | `ICON_FA_GAMEPAD` | **Gameplay** | Script + Inventory + ItemPickup + Dialog + Vehicle + Quest. Logic + state que define **el juego en sí**. Patrón común: componente que apunta a un asset (.lua/.mooditem/.mooddialog/.moodvehicle/.moodquest) + state per-instance. |
+| `environment` | `ICON_FA_GLOBE` | **Environment** | EnvironmentComponent (singleton de la escena). Skybox + fog + tonemap + bloom + SSAO + SSR + CSM + color grading. Solo visible si la entity actual es la portadora del singleton. |
 
-15 categorías. Cada una visible en la barra SOLO si la entity tiene al menos 1 componente de esa categoría (no spammear icons grises sin contenido).
+### Reglas de visibilidad
+
+- Cada icon solo aparece en la barra si la entity tiene **≥1 componente** de esa categoría. Un cubo con solo Transform+MeshRenderer ve solo **Object** y **Render** (no spammear icons grises).
+- **Object** siempre visible (toda entity tiene Transform).
+- Categoría activa destacada con background cyan (mismo patrón visual que el viewport render mode bar de F3H21).
+- Si la entity nueva no tiene la categoría activa → fallback automático a **Object** (siempre presente).
 
 ### Persistencia + UX
 
-- `UserSettings.editor.inspectorActiveCategory` (string id de categoría, default "object").
-- La categoría seleccionada se preserva al cambiar de entity (sticky).
-- Si la entity nueva no tiene la categoría activa → fallback a la primera disponible.
-- Botón "All" en la barra para volver al modo legacy (todo en una lista scrollable) — opt-in si el dev lo prefiere.
+- `UserSettings.editor.inspectorActiveCategory` (string id, default `"object"`). Acepta los 7 IDs de la tabla.
+- La categoría seleccionada se preserva al cambiar de entity (sticky entre selecciones).
+- Si la entity nueva no tiene la categoría activa → fallback a **Object** (siempre presente).
+- Botón **"All"** opcional al final de la barra → modo legacy (todo apilado scrollable como hoy). Opt-in para devs que prefieren la vista flat.
+
+### Tooltips i18n por categoría
+
+Cada icon necesita tooltip claro que explique qué edita:
+
+- **Object** — `"Posición, rotación, escala. Nombre y grupo de visibilidad."`
+- **Render** — `"Geometría, materiales, luces, cámaras, partículas. Todo lo visible en el viewport."`
+- **Animation** — `"Animaciones del esqueleto: clips, blending, state machine, eventos."`
+- **Audio** — `"Fuentes de sonido + listener (la cámara que oye)."`
+- **Physics** — `"Cuerpos rígidos, colliders, joints, ragdoll, cloth, triggers y fuerzas."`
+- **Gameplay** — `"Scripts, inventario, diálogos, misiones, vehículos. La lógica del juego."`
+- **Environment** — `"Skybox, niebla, bloom, SSAO, SSR, color grading. Render global de la escena."`
 
 ### Tests
 
-- Categoría persistida roundtrip.
-- Filtrado por categoría: dada una entity con N componentes, validar que solo los de la categoría activa se renderizan.
-- Fallback al cambiar de entity (categoría activa no presente → primera disponible).
+- Categoría persistida roundtrip (`inspectorActiveCategory` toJson/fromJson).
+- Filtrado: entity con N componentes en M categorías → solo se renderizan los de la categoría activa.
+- Fallback al cambiar de entity (categoría activa no presente → "object").
+- Validación de los 7 IDs aceptados; ID desconocido → fallback "object".
 
 ---
 
 ## Decisiones a tomar al arrancar
 
-1. **¿Single categoría a la vez o multi-pin?** Blender = single (un icon activo). Unreal Details Panel = scroll vertical con todo abierto + filtro de texto. Opción intermedia: single con botón "All" para volver al modo legacy.
-2. **¿Iconos FontAwesome existentes o pack custom?** FontAwesome ya está en el repo (15+ candidatos en `IconsFontAwesome6.h`). Custom pack sería trabajo extra de arte sin upside claro.
-3. **¿Mostrar icons grises (categoría sin componentes) o ocultarlos?** Blender los muestra grises (icon visible pero deshabilitado). Unreal solo muestra los activos. Decisión UX.
-4. **¿Posición de la barra de icons? Izquierda (Blender) o arriba (Unity / tabs)?** Blender es izquierda en columna; Unity es arriba en fila. Izquierda usa el lateral del panel sin reducir ancho útil del Inspector.
-5. **¿Promover las 15+ categorías de una o por bloques?** Big-bang vs incremental. Big-bang permite testing completo en una sesión; incremental (5-7 categorías primero) reduce riesgo si algo se rompe.
+1. **Single categoría vs multi-pin** — Blender = single (un icon activo a la vez). Unreal Details = scroll con todo + filtro de texto. **Recomendación inicial: single + botón "All" opcional.**
+2. **Iconos: FontAwesome existentes vs pack custom** — FontAwesome ya en el repo. **Recomendación: usar FA, los 7 icons propuestos ya existen en el codebase.**
+3. **Posición de la barra: izquierda (Blender) vs arriba (Unity tabs)** — **Recomendación: izquierda en columna** (Blender), usa el lateral sin reducir ancho útil del panel.
+4. **Big-bang vs incremental** — implementar los 7 de una vez o por bloques. **Recomendación: big-bang** porque el framework de categorías es 1 sola pieza; agregar categorías una a una requeriría refactor del wrapper cada vez.
+5. **Filtro de texto opcional** en la barra (estilo Unreal "Search Details") — **out-of-scope F3H22** (deja para hito propio si emerge demanda).
 
 ---
 
