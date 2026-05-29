@@ -49,6 +49,13 @@ public:
         const std::vector<std::array<std::string, 6>>& mips,
         bool sRgb = true);
 
+    /// @brief F3H31: adopta un handle GL existente (producido por GPU bake,
+    ///        ej. IBLBaker). El handle pasa a ser propiedad de la instancia
+    ///        y se libera en el destructor con glDeleteTextures.
+    struct AdoptHandleTag {};
+    static constexpr AdoptHandleTag k_adoptHandle{};
+    OpenGLCubemapTexture(AdoptHandleTag, GLuint handle, u32 mipLevels);
+
     ~OpenGLCubemapTexture();
 
     OpenGLCubemapTexture(const OpenGLCubemapTexture&) = delete;

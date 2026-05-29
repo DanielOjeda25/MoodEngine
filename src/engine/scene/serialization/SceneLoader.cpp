@@ -238,6 +238,14 @@ Entity applyOneEntity(const SavedEntity& se,
             env.ssrThickness = s.ssrThickness;
             env.ssrStepSize  = s.ssrStepSize;
             env.ssrIntensity = s.ssrIntensity;
+            // F3H31: sky procedural Hosek-Wilkie.
+            env.skyboxSource = (s.skyboxSource == "procedural")
+                ? EnvironmentComponent::SkyboxSource::Procedural
+                : EnvironmentComponent::SkyboxSource::HDRI;
+            env.timeOfDay    = s.timeOfDay;
+            env.turbidity    = s.turbidity;
+            env.groundAlbedo = s.groundAlbedo;
+            env.skyDirty     = true;  // forzar re-bake al cargar
             e.addComponent<EnvironmentComponent>(env);
         }
 

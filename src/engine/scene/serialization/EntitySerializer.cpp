@@ -163,6 +163,16 @@ void writeEnvironment(json& je, const EnvironmentComponent& env) {
     if (env.ssrThickness != 0.5f)  je2["ssr_thickness"] = env.ssrThickness;
     if (env.ssrStepSize  != 0.2f)  je2["ssr_step_size"] = env.ssrStepSize;
     if (env.ssrIntensity != 0.5f)  je2["ssr_intensity"] = env.ssrIntensity;
+    // F3H31: sky procedural. Aditivo — solo persiste si difiere del default
+    // (que es HDRI legacy + params neutros). Maps pre-F3H31 cargan como HDRI.
+    if (env.skyboxSource == EnvironmentComponent::SkyboxSource::Procedural) {
+        je2["skybox_source"] = "procedural";
+    }
+    if (env.timeOfDay != 12.0f)        je2["time_of_day"]   = env.timeOfDay;
+    if (env.turbidity != 2.5f)         je2["turbidity"]     = env.turbidity;
+    if (env.groundAlbedo != glm::vec3(0.3f, 0.3f, 0.3f)) {
+        je2["ground_albedo"] = env.groundAlbedo;
+    }
     je["environment"] = je2;
 }
 

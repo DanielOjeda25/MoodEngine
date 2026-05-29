@@ -27,6 +27,7 @@
 #include "editor/commands/Command.h"
 #include "editor/commands/HistoryStack.h"
 #include "editor/ui/EditorUI.h"
+#include "editor/ui/IconsFontAwesome6.h"  // F3H31 polish: ICON_FA_ROTATE_LEFT
 #include "core/i18n/I18n.h"
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
@@ -144,102 +145,295 @@ void drawSectionDivider() {
 // editedFlag) — `editedFlag` es referencia al `m_editedThisFrame` del
 // panel para que los edits in-place propaguen igual que antes.
 
-void drawEnvSkyAndFog(EnvironmentComponent& env, InspectorEditTracker& tracker,
-                      EditorUI* ui, Entity e, bool& editedFlag) {
+// F3H31 polish: header "Cielo" propio — antes vivia bajo "Niebla" por
+// accidente del refactor F3H31 inicial. Convencion Unity Lighting /
+// Unreal Sky & Atmosphere: sky es su propia seccion top-level del
+// Environment, separada de Fog/Post.
+void drawEnvSky(EnvironmentComponent& env, InspectorEditTracker& /*tracker*/,
+                EditorUI* ui, Entity e, bool& editedFlag) {
+    if (!ImGui::CollapsingHeader(
+            I18n::T("editor.panel.inspector.environment.sky").c_str(),
+            ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    // F3H31 polish: mini-reset button al final de un slider individual
+    // — patron del UV reset (F3H30, InspectorPanel_Brush.cpp:409). Cada
+    // boton resetea SU campo al default de fabrica con undo (atomic edit).
+    // El reset global de la seccion ("Restablecer" al final) sigue
+    // existiendo y revierte todos los campos a la vez.
+    auto skyResetFloat = [&](const char* widgetId, f32 currentVal, f32 defaultVal,
+                              auto&& applyFn, const char* undoLabel) {
+        ImGui::SameLine();
+        const std::string btn = std::string(ICON_FA_ROTATE_LEFT) + "##" + widgetId;
+        if (ImGui::SmallButton(btn.c_str())) {
+            detail::pushAtomicEdit<f32>(ui, e, currentVal, defaultVal,
+                std::forward<decltype(applyFn)>(applyFn), undoLabel);
+            editedFlag = true;
+        }
+    };
+    auto skyResetVec3 = [&](const char* widgetId, glm::vec3 currentVal,
+                             glm::vec3 defaultVal, auto&& applyFn,
+                             const char* undoLabel) {
+        ImGui::SameLine();
+        const std::string btn = std::string(ICON_FA_ROTATE_LEFT) + "##" + widgetId;
+        if (ImGui::SmallButton(btn.c_str())) {
+            detail::pushAtomicEdit<glm::vec3>(ui, e, currentVal, defaultVal,
+                std::forward<decltype(applyFn)>(applyFn), undoLabel);
+            editedFlag = true;
+        }
+    };
+
+    // F3H31: dropdown "Skybox source" — HDRI legacy (default) o
+    // Procedural Hosek-Wilkie (cielo dinamico con time-of-day). Si
+    // Procedural, los params (timeOfDay/turbidity/groundAlbedo) reemplazan
+    // al file picker HDRI.
+    //
+    // F3H31 polish-fix: mismo bug de lifetime documentado en el LUT preview
+    // (lineas ~779-790 de este archivo). `I18n::T(...).c_str()` devuelve
+    // puntero a un `std::string` temporal — al cerrar el array initializer
+    // ambos temporales se destruyen y los punteros quedan colgantes, lo
+    // que renderiza "?????????" en el dropdown. Fix: capturar los strings
+    // en variables locales con lifetime largo antes de pasar `.c_str()`.
+    {
+        const std::string lblHdri =
+            I18n::T("editor.panel.inspector.environment.sky_source_hdri");
+        const std::string lblProc =
+            I18n::T("editor.panel.inspector.environment.sky_source_procedural");
+        const char* sourceLabels[] = { lblHdri.c_str(), lblProc.c_str() };
+        int sourceIdx = static_cast<int>(env.skyboxSource);
+        const std::string sourceLabel =
+            I18n::T("editor.panel.inspector.environment.sky_source") + "##envsrc";
+        if (ImGui::Combo(sourceLabel.c_str(), &sourceIdx, sourceLabels, 2)) {
+            const auto newSource = static_cast<EnvironmentComponent::SkyboxSource>(sourceIdx);
+            detail::pushAtomicEdit<u32>(ui, e,
+                static_cast<u32>(env.skyboxSource),
+                static_cast<u32>(newSource),
+                [](Entity& en, const u32& v) {
+                    if (!en.hasComponent<EnvironmentComponent>()) return;
+                    auto& ec = en.getComponent<EnvironmentComponent>();
+                    ec.skyboxSource = static_cast<EnvironmentComponent::SkyboxSource>(v);
+                    ec.skyDirty = true;  // trigger re-bake
+                },
+                "Cambiar skybox source");
+            editedFlag = true;
+        }
+    }
+
+    // F3H31: si es Procedural, mostrar sliders de time-of-day/turbidity/
+    // ground albedo. Saltamos el resto del UI HDRI legacy.
+    if (env.skyboxSource == EnvironmentComponent::SkyboxSource::Procedural) {
+        // Time of day (0-24h).
+        {
+            f32 tod = env.timeOfDay;
+            const std::string label =
+                I18n::T("editor.panel.inspector.environment.time_of_day") + "##envtod";
+            if (ImGui::SliderFloat(label.c_str(), &tod, 0.0f, 24.0f, "%.2f h")) {
+                detail::pushAtomicEdit<f32>(ui, e, env.timeOfDay, tod,
+                    [](Entity& en, const f32& v) {
+                        if (!en.hasComponent<EnvironmentComponent>()) return;
+                        auto& ec = en.getComponent<EnvironmentComponent>();
+                        ec.timeOfDay = v;
+                        ec.skyDirty = true;
+                    },
+                    "Editar time of day");
+                editedFlag = true;
+            }
+            skyResetFloat("rst_tod", env.timeOfDay, kEnvDefaults.timeOfDay,
+                [](Entity& en, const f32& v) {
+                    if (!en.hasComponent<EnvironmentComponent>()) return;
+                    auto& ec = en.getComponent<EnvironmentComponent>();
+                    ec.timeOfDay = v;
+                    ec.skyDirty = true;
+                },
+                "Reset time of day");
+        }
+        // Turbidity (1-10).
+        {
+            f32 t = env.turbidity;
+            const std::string label =
+                I18n::T("editor.panel.inspector.environment.turbidity") + "##envturb";
+            if (ImGui::SliderFloat(label.c_str(), &t, 1.0f, 10.0f, "%.2f")) {
+                detail::pushAtomicEdit<f32>(ui, e, env.turbidity, t,
+                    [](Entity& en, const f32& v) {
+                        if (!en.hasComponent<EnvironmentComponent>()) return;
+                        auto& ec = en.getComponent<EnvironmentComponent>();
+                        ec.turbidity = v;
+                        ec.skyDirty = true;
+                    },
+                    "Editar turbidity");
+                editedFlag = true;
+            }
+            skyResetFloat("rst_turb", env.turbidity, kEnvDefaults.turbidity,
+                [](Entity& en, const f32& v) {
+                    if (!en.hasComponent<EnvironmentComponent>()) return;
+                    auto& ec = en.getComponent<EnvironmentComponent>();
+                    ec.turbidity = v;
+                    ec.skyDirty = true;
+                },
+                "Reset turbidity");
+        }
+        // Ground albedo (vec3).
+        {
+            glm::vec3 g = env.groundAlbedo;
+            const std::string label =
+                I18n::T("editor.panel.inspector.environment.ground_albedo") + "##envground";
+            if (ImGui::ColorEdit3(label.c_str(), &g.x)) {
+                detail::pushAtomicEdit<glm::vec3>(ui, e, env.groundAlbedo, g,
+                    [](Entity& en, const glm::vec3& v) {
+                        if (!en.hasComponent<EnvironmentComponent>()) return;
+                        auto& ec = en.getComponent<EnvironmentComponent>();
+                        ec.groundAlbedo = v;
+                        ec.skyDirty = true;
+                    },
+                    "Editar ground albedo");
+                editedFlag = true;
+            }
+            skyResetVec3("rst_ground", env.groundAlbedo, kEnvDefaults.groundAlbedo,
+                [](Entity& en, const glm::vec3& v) {
+                    if (!en.hasComponent<EnvironmentComponent>()) return;
+                    auto& ec = en.getComponent<EnvironmentComponent>();
+                    ec.groundAlbedo = v;
+                    ec.skyDirty = true;
+                },
+                "Reset ground albedo");
+        }
+    } else {
+        // Modo HDRI legacy — file picker con presets + "Personalizado...".
+        // Mismo patron que el dropdown de Color Grading LUT (F2H58 Bloque H).
+        // El SceneRenderer detecta el cambio en applyEnvironmentFromScene y
+        // hace swap del skybox + IBL bakeado. Si el HDRI custom no tiene
+        // bake, el shader cae a ambient escalar (skybox sigue visible).
+        struct SkyPreset { const char* labelKey; const char* path; };
+        constexpr SkyPreset kSkyPresets[] = {
+            { "editor.panel.inspector.environment.skybox_preset_kloofendal", "skyboxes/sky_kloofendal" },
+            { "editor.panel.inspector.environment.skybox_preset_day",        "skyboxes/sky_day"        },
+        };
+        constexpr int kSkyPresetCount = static_cast<int>(sizeof(kSkyPresets) / sizeof(kSkyPresets[0]));
+        constexpr int kSkyCustomIndex = kSkyPresetCount;
+
+        int currentSkyIdx = kSkyCustomIndex;
+        for (int i = 0; i < kSkyPresetCount; ++i) {
+            if (env.skyboxPath == kSkyPresets[i].path) {
+                currentSkyIdx = i;
+                break;
+            }
+        }
+        std::string skyPreviewStr;
+        if (currentSkyIdx == kSkyCustomIndex) {
+            namespace fs = std::filesystem;
+            const std::string fname =
+                fs::path(env.skyboxPath).filename().generic_string();
+            skyPreviewStr = I18n::T(
+                "editor.panel.inspector.environment.skybox_preset_custom_active",
+                fname);
+        } else {
+            skyPreviewStr = I18n::T(kSkyPresets[currentSkyIdx].labelKey);
+        }
+
+        const std::string skyComboLabel =
+            I18n::T("editor.panel.inspector.environment.skybox_preset") + "##envsky";
+        if (ImGui::BeginCombo(skyComboLabel.c_str(), skyPreviewStr.c_str())) {
+            for (int i = 0; i < kSkyPresetCount; ++i) {
+                const bool selected = (currentSkyIdx == i);
+                const std::string itemLabel = I18n::T(kSkyPresets[i].labelKey);
+                if (ImGui::Selectable(itemLabel.c_str(), selected)) {
+                    detail::pushAtomicEdit<std::string>(ui, e,
+                        env.skyboxPath, std::string(kSkyPresets[i].path),
+                        [](Entity& en, const std::string& v) {
+                            if (!en.hasComponent<EnvironmentComponent>()) return;
+                            en.getComponent<EnvironmentComponent>().skyboxPath = v;
+                        },
+                        "Cambiar skybox preset");
+                    editedFlag = true;
+                }
+                if (selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::Separator();
+            const std::string customItem = I18n::T(
+                "editor.panel.inspector.environment.skybox_preset_custom");
+            if (ImGui::Selectable(customItem.c_str(), false)) {
+                namespace fs = std::filesystem;
+                const fs::path skyboxesDir = fs::current_path() / "assets" / "skyboxes";
+                const std::string startDir = fs::exists(skyboxesDir)
+                    ? skyboxesDir.generic_string()
+                    : (fs::current_path() / "assets").generic_string();
+                const std::string filterPng = I18n::T(
+                    "editor.panel.inspector.environment.skybox_filter");
+                const auto picked = pfd::open_file(
+                    I18n::T("editor.panel.inspector.environment.skybox_pick"),
+                    startDir,
+                    { filterPng, "*.png" }).result();
+                if (!picked.empty()) {
+                    fs::path abs(picked[0]);
+                    const fs::path assetsRoot = fs::current_path() / "assets";
+                    std::error_code ec;
+                    fs::path rel = fs::relative(abs, assetsRoot, ec);
+                    std::string newPath = (!ec && !rel.empty())
+                        ? rel.generic_string()
+                        : abs.generic_string();
+                    detail::pushAtomicEdit<std::string>(ui, e,
+                        env.skyboxPath, std::move(newPath),
+                        [](Entity& en, const std::string& v) {
+                            if (!en.hasComponent<EnvironmentComponent>()) return;
+                            en.getComponent<EnvironmentComponent>().skyboxPath = v;
+                        },
+                        "Cambiar skybox custom");
+                    editedFlag = true;
+                }
+            }
+            ImGui::EndCombo();
+        }
+    }
+
+    // Reset de toda la seccion Sky (3 sky params + skyboxSource + skyboxPath).
+    drawSectionResetButton("sky", [&]() {
+        HistoryStack* h = ui ? ui->historyStack() : nullptr;
+        const u32         b_skyboxSource = static_cast<u32>(env.skyboxSource);
+        const std::string b_skyboxPath   = env.skyboxPath;
+        const f32         b_timeOfDay    = env.timeOfDay;
+        const f32         b_turbidity    = env.turbidity;
+        const glm::vec3   b_groundAlbedo = env.groundAlbedo;
+        if (h != nullptr) {
+            auto cmd = std::make_unique<EditEnvironmentSubsetCommand>(
+                e,
+                [=](EnvironmentComponent& c) {
+                    c.skyboxSource = static_cast<EnvironmentComponent::SkyboxSource>(b_skyboxSource);
+                    c.skyboxPath   = b_skyboxPath;
+                    c.timeOfDay    = b_timeOfDay;
+                    c.turbidity    = b_turbidity;
+                    c.groundAlbedo = b_groundAlbedo;
+                    c.skyDirty     = true;
+                },
+                [](EnvironmentComponent& c) {
+                    c.skyboxSource = kEnvDefaults.skyboxSource;
+                    c.skyboxPath   = kEnvDefaults.skyboxPath;
+                    c.timeOfDay    = kEnvDefaults.timeOfDay;
+                    c.turbidity    = kEnvDefaults.turbidity;
+                    c.groundAlbedo = kEnvDefaults.groundAlbedo;
+                    c.skyDirty     = true;
+                },
+                "Restablecer sky");
+            h->push(std::move(cmd));
+        } else {
+            env.skyboxSource = kEnvDefaults.skyboxSource;
+            env.skyboxPath   = kEnvDefaults.skyboxPath;
+            env.timeOfDay    = kEnvDefaults.timeOfDay;
+            env.turbidity    = kEnvDefaults.turbidity;
+            env.groundAlbedo = kEnvDefaults.groundAlbedo;
+            env.skyDirty     = true;
+        }
+        editedFlag = true;
+    });
+}
+
+void drawEnvFog(EnvironmentComponent& env, InspectorEditTracker& tracker,
+                EditorUI* ui, Entity e, bool& editedFlag) {
     if (!ImGui::CollapsingHeader(
             I18n::T("editor.panel.inspector.environment.fog").c_str(),
             ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
-
-    // F2H86: dropdown de skybox/HDRI con presets + "Personalizado...".
-    // Mismo patron que el dropdown de Color Grading LUT (F2H58 Bloque H).
-    // El SceneRenderer detecta el cambio en applyEnvironmentFromScene y
-    // hace swap del skybox + IBL bakeado. Si el HDRI custom no tiene
-    // bake, el shader cae a ambient escalar (skybox sigue visible).
-    struct SkyPreset { const char* labelKey; const char* path; };
-    constexpr SkyPreset kSkyPresets[] = {
-        { "editor.panel.inspector.environment.skybox_preset_kloofendal", "skyboxes/sky_kloofendal" },
-        { "editor.panel.inspector.environment.skybox_preset_day",        "skyboxes/sky_day"        },
-    };
-    constexpr int kSkyPresetCount = static_cast<int>(sizeof(kSkyPresets) / sizeof(kSkyPresets[0]));
-    constexpr int kSkyCustomIndex = kSkyPresetCount;
-
-    int currentSkyIdx = kSkyCustomIndex;
-    for (int i = 0; i < kSkyPresetCount; ++i) {
-        if (env.skyboxPath == kSkyPresets[i].path) {
-            currentSkyIdx = i;
-            break;
-        }
-    }
-    std::string skyPreviewStr;
-    if (currentSkyIdx == kSkyCustomIndex) {
-        namespace fs = std::filesystem;
-        const std::string fname =
-            fs::path(env.skyboxPath).filename().generic_string();
-        skyPreviewStr = I18n::T(
-            "editor.panel.inspector.environment.skybox_preset_custom_active",
-            fname);
-    } else {
-        skyPreviewStr = I18n::T(kSkyPresets[currentSkyIdx].labelKey);
-    }
-
-    const std::string skyComboLabel =
-        I18n::T("editor.panel.inspector.environment.skybox_preset") + "##envsky";
-    if (ImGui::BeginCombo(skyComboLabel.c_str(), skyPreviewStr.c_str())) {
-        for (int i = 0; i < kSkyPresetCount; ++i) {
-            const bool selected = (currentSkyIdx == i);
-            const std::string itemLabel = I18n::T(kSkyPresets[i].labelKey);
-            if (ImGui::Selectable(itemLabel.c_str(), selected)) {
-                // F3H12: undo del cambio de skybox preset.
-                detail::pushAtomicEdit<std::string>(ui, e,
-                    env.skyboxPath, std::string(kSkyPresets[i].path),
-                    [](Entity& en, const std::string& v) {
-                        if (!en.hasComponent<EnvironmentComponent>()) return;
-                        en.getComponent<EnvironmentComponent>().skyboxPath = v;
-                    },
-                    "Cambiar skybox preset");
-                editedFlag = true;
-            }
-            if (selected) ImGui::SetItemDefaultFocus();
-        }
-        ImGui::Separator();
-        const std::string customItem = I18n::T(
-            "editor.panel.inspector.environment.skybox_preset_custom");
-        if (ImGui::Selectable(customItem.c_str(), false)) {
-            namespace fs = std::filesystem;
-            const fs::path skyboxesDir = fs::current_path() / "assets" / "skyboxes";
-            const std::string startDir = fs::exists(skyboxesDir)
-                ? skyboxesDir.generic_string()
-                : (fs::current_path() / "assets").generic_string();
-            const std::string filterPng = I18n::T(
-                "editor.panel.inspector.environment.skybox_filter");
-            const auto picked = pfd::open_file(
-                I18n::T("editor.panel.inspector.environment.skybox_pick"),
-                startDir,
-                { filterPng, "*.png" }).result();
-            if (!picked.empty()) {
-                fs::path abs(picked[0]);
-                const fs::path assetsRoot = fs::current_path() / "assets";
-                std::error_code ec;
-                fs::path rel = fs::relative(abs, assetsRoot, ec);
-                std::string newPath = (!ec && !rel.empty())
-                    ? rel.generic_string()
-                    : abs.generic_string();
-                // F3H12: undo del custom skybox path (file picker).
-                detail::pushAtomicEdit<std::string>(ui, e,
-                    env.skyboxPath, std::move(newPath),
-                    [](Entity& en, const std::string& v) {
-                        if (!en.hasComponent<EnvironmentComponent>()) return;
-                        en.getComponent<EnvironmentComponent>().skyboxPath = v;
-                    },
-                    "Cambiar skybox custom");
-                editedFlag = true;
-            }
-        }
-        ImGui::EndCombo();
-    }
-    // F3H29 polish: hint "skybox_hint" eliminado (texto colgado).
 
     // F3H12: fog mode combo con undo (atomico, sin tracker drag).
     static const char* fogModes[] = {"Off", "Linear", "Exp", "Exp2"};
@@ -922,7 +1116,9 @@ void InspectorPanel::renderEnvironmentSection(Entity e) {
     auto& env = e.getComponent<EnvironmentComponent>();
     if (!beginComponentSection<EnvironmentComponent>(e, ICON_FA_TREE " Environment")) return;
 
-    drawEnvSkyAndFog(env, m_editTracker, m_ui, e, m_editedThisFrame);
+    drawEnvSky(env, m_editTracker, m_ui, e, m_editedThisFrame);
+    drawSectionDivider();
+    drawEnvFog(env, m_editTracker, m_ui, e, m_editedThisFrame);
     drawSectionDivider();
 
     // F2H58 Bloque I: Post-Process consolidado. Wrapper header top-level

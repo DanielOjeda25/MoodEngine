@@ -81,6 +81,30 @@ SkyboxRenderer::SkyboxRenderer(Equirect, const std::string& equirectPngFs) {
                          equirectPngFs, m_vertexCount);
 }
 
+SkyboxRenderer::SkyboxRenderer(ExternalCubemapTag, GLuint externalCubemap) {
+    // F3H31: modo procedural — no owning, solo binding. Shader cubemap
+    // estandar (mismo que el modo cubemap legacy), porque el cubemap
+    // procedural Hosek-Wilkie es un GL_TEXTURE_CUBE_MAP nativo.
+    m_isExternal = true;
+    m_externalCubemap = externalCubemap;
+
+    m_shader = std::make_unique<OpenGLShader>(
+        "shaders/skybox.vert", "shaders/skybox.frag");
+
+    initCubeBuffers();
+    Log::render()->info(
+        "SkyboxRenderer inicializado (procedural cubemap GL={}, {} verts)",
+        externalCubemap, m_vertexCount);
+}
+
+void SkyboxRenderer::setExternalCubemap(GLuint handle) {
+    // Solo aplica al modo procedural. Si se llama en modo cubemap o
+    // equirect, lo ignoramos (el cubemap propio sigue valido).
+    if (m_isExternal) {
+        m_externalCubemap = handle;
+    }
+}
+
 void SkyboxRenderer::initCubeBuffers() {
     glGenVertexArrays(1, &m_vao);
     glGenBuffers(1, &m_vbo);
@@ -110,6 +134,10 @@ void SkyboxRenderer::draw(const glm::mat4& view, const glm::mat4& projection) {
     m_shader->setInt("uSkybox", 0);
     if (m_isEquirect) {
         m_equirect->bind(0);
+    } else if (m_isExternal) {
+        // F3H31: bind manual del cubemap externo (sin OpenGLCubemapTexture).
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, m_externalCubemap);
     } else {
         m_cubemap->bind(0);
     }

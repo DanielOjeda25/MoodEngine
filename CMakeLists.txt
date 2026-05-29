@@ -460,6 +460,10 @@ add_library(mood_engine_lib STATIC
     src/systems/physics/TriggerSystem.cpp
     src/systems/physics/ForceFieldSystem.cpp    # F2H72
     src/engine/render/passes/SkyboxRenderer.cpp
+    # F3H31: sky procedural Hosek-Wilkie + GPU IBL bake runtime.
+    src/engine/render/sky/HosekWilkie.cpp
+    src/engine/render/sky/ProceduralSkyRenderer.cpp
+    src/engine/render/sky/IBLBaker.cpp
 
     src/engine/scripting/exposed/ExposedProperty.cpp
     src/engine/scripting/bindings/LuaBindings.cpp

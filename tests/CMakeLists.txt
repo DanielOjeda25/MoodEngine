@@ -20,6 +20,7 @@ add_executable(mood_tests
     test_project_serializer.cpp
     test_project_settings.cpp                  # F3H1
     test_user_settings_editor.cpp              # F3H7 (+F3H21/F3H22/F3H23 fields)
+    test_hosek_wilkie.cpp                      # F3H31
     test_editor_camera_lerp.cpp                # F3H21
     test_profiler_buffer.cpp                   # F3H23
     test_toasts.cpp                            # F3H24
@@ -139,6 +140,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/editor/project/MapsManager.cpp
 
     ${CMAKE_SOURCE_DIR}/src/engine/render/scene_renderer/RenderBatching.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/render/sky/HosekWilkie.cpp  # F3H31
     ${CMAKE_SOURCE_DIR}/src/editor/panels/scene/HierarchyCollect.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/workspace/WorkspaceManager.cpp
 

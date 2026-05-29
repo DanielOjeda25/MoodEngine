@@ -47,9 +47,13 @@
 #include "engine/render/passes/ColorGradingPass.h"
 #include "engine/render/passes/PostProcessPass.h"
 #include "engine/render/passes/SSAOPass.h"
+// F3H31: sky procedural + GPU IBL bake.
+#include "engine/render/sky/HosekWilkie.h"
+#include "engine/render/sky/IBLBaker.h"
+#include "engine/render/sky/ProceduralSkyRenderer.h"
+#include "engine/render/passes/SkyboxRenderer.h"
 #include "engine/render/passes/SSRPass.h"  // F2H61
 #include "engine/render/passes/ShadowPass.h"
-#include "engine/render/passes/SkyboxRenderer.h"
 
 #include <glm/gtc/matrix_inverse.hpp>
 
@@ -462,11 +466,26 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
 
     bool envFound = false;
     std::string envSkyboxPath; // F2H86: capturar para swap fuera del lambda.
+    // F3H31: capturar params del sky procedural para procesar fuera del
+    // forEach (re-render + re-bake del IBL si cambiaron).
+    EnvironmentComponent::SkyboxSource envSkyboxSource =
+        EnvironmentComponent::SkyboxSource::HDRI;
+    f32 envTimeOfDay = 12.0f;
+    f32 envTurbidity = 2.5f;
+    glm::vec3 envGroundAlbedo{0.3f};
+    bool envSkyDirty = false;
+    EnvironmentComponent* envPtr = nullptr;
     scene.forEach<EnvironmentComponent>(
         [&](Entity, EnvironmentComponent& env) {
             if (envFound) return; // primer Environment gana
             envFound = true;
             envSkyboxPath     = env.skyboxPath;
+            envSkyboxSource   = env.skyboxSource;
+            envTimeOfDay      = env.timeOfDay;
+            envTurbidity      = env.turbidity;
+            envGroundAlbedo   = env.groundAlbedo;
+            envSkyDirty       = env.skyDirty;
+            envPtr            = &env;
             m_fog.mode        = static_cast<FogMode>(env.fogMode);
             m_fog.color       = env.fogColor;
             m_fog.density     = env.fogDensity;
@@ -504,8 +523,90 @@ void SceneRenderer::applyEnvironmentFromScene(Scene& scene) {
     // si base == m_currentSkyboxBase, asi que llamar cada frame es OK.
     // Si la escena no tiene Environment, el skybox queda como lo dejo
     // el ultimo proyecto (defaults del SceneRenderer en su init).
-    if (envFound && !envSkyboxPath.empty()) {
+    // F3H31: solo aplica al modo HDRI legacy. Procedural se procesa abajo.
+    if (envFound &&
+        envSkyboxSource == EnvironmentComponent::SkyboxSource::HDRI &&
+        !envSkyboxPath.empty()) {
         loadSkyboxAndIblFromBase(envSkyboxPath);
+    }
+
+    // F3H31: si el Environment esta en modo Procedural, re-render del sky
+    // cubemap + re-bake del IBL en GPU si los params cambiaron o si es la
+    // primera vez (lazy init de los componentes). El re-bake corre fuera
+    // del frame de render (antes del shadow pass) — costo tipico ~50-150ms,
+    // pero solo cuando el slider del editor se mueve.
+    if (envFound &&
+        envSkyboxSource == EnvironmentComponent::SkyboxSource::Procedural) {
+        const bool firstTime = (m_proceduralSky == nullptr);
+        const bool paramsChanged =
+            envSkyDirty ||
+            firstTime ||
+            std::fabs(envTimeOfDay - m_lastProceduralTimeOfDay) > 1e-4f ||
+            std::fabs(envTurbidity - m_lastProceduralTurbidity) > 1e-4f ||
+            glm::length(envGroundAlbedo - m_lastProceduralGround) > 1e-4f;
+
+        if (paramsChanged) {
+            // Lazy init.
+            if (m_proceduralSky == nullptr) {
+                m_proceduralSky = std::make_unique<ProceduralSkyRenderer>();
+            }
+            if (m_iblBaker == nullptr) {
+                m_iblBaker = std::make_unique<IBLBaker>();
+            }
+
+            // 1) Sun direction del time-of-day.
+            const glm::vec3 sunDir = Sky::sunDirectionFromTimeOfDay(envTimeOfDay);
+
+            // 2) Render sky a cubemap procedural.
+            const bool skyOk = m_proceduralSky->render(
+                sunDir, envTurbidity, envGroundAlbedo);
+
+            if (skyOk) {
+                // 3) Bake IBL (irradiance + prefilter) del cubemap procedural.
+                const auto baked = m_iblBaker->bake(m_proceduralSky->cubemap());
+                if (baked.irradiance != 0) {
+                    m_iblIrradiance = std::make_unique<OpenGLCubemapTexture>(
+                        OpenGLCubemapTexture::k_adoptHandle, baked.irradiance, 1u);
+                }
+                if (baked.prefilter != 0) {
+                    m_iblPrefilter = std::make_unique<OpenGLCubemapTexture>(
+                        OpenGLCubemapTexture::k_adoptHandle, baked.prefilter, 5u);
+                }
+
+                // 4) Skybox renderer apunta al cubemap procedural (no-owning).
+                m_skyboxRenderer = std::make_unique<SkyboxRenderer>(
+                    SkyboxRenderer::ExternalCubemapTag{},
+                    m_proceduralSky->cubemap());
+
+                // 5) Cache + clear dirty.
+                m_lastProceduralTimeOfDay = envTimeOfDay;
+                m_lastProceduralTurbidity = envTurbidity;
+                m_lastProceduralGround    = envGroundAlbedo;
+                m_currentSkyboxBase = "<procedural>";  // sentinel
+                if (envPtr != nullptr) {
+                    envPtr->skyDirty = false;
+                }
+
+                Log::render()->info(
+                    "[sky-procedural] re-bake OK (time={:.1f}h, T={:.1f}, ground=[{:.2f},{:.2f},{:.2f}])",
+                    envTimeOfDay, envTurbidity,
+                    envGroundAlbedo.r, envGroundAlbedo.g, envGroundAlbedo.b);
+            }
+        }
+
+        // F3H31 sync: si hay un Directional Light con bindToSky=true,
+        // sobrescribimos su direccion con la del sol del time-of-day.
+        // El light system lee la direccion en su tick.
+        const glm::vec3 sunDir = Sky::sunDirectionFromTimeOfDay(envTimeOfDay);
+        scene.forEach<LightComponent>(
+            [&](Entity, LightComponent& light) {
+                if (light.type == LightComponent::Type::Directional &&
+                    light.bindToSky) {
+                    // direction es "hacia donde apunta la luz", el sol
+                    // arriba significa luz bajando -> direction = -sunDir.
+                    light.direction = -sunDir;
+                }
+            });
     }
 
     // F2H60 polish iter5: diagnostico. Loguea cuando los valores del
@@ -628,14 +729,15 @@ void SceneRenderer::endFrame() {
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
 
-    // Si el caller acumulo geometria de debug entre `renderScene` y
-    // `endFrame`, la flusheamos aqui usando las matrices del frame.
-    // Cuando no hay debug pendiente el flush es no-op (el renderer no
-    // ejecuta vertex array vacio).
-    {
-        MOOD_PROFILE_SCOPE("DebugRenderer::flush");
-        m_debugRenderer->flush(m_lastView, m_lastProjection);
-    }
+    // F3H31 fix bug: el flush del debugRenderer se hace DESPUES del
+    // post-process (SSAO/SSR/Bloom/Tonemap), no aqui. Antes este flush
+    // dibujaba outlines/AABBs/gizmos al m_sceneFb y los post-process
+    // los reflejaban (SSR), blooming (Bloom) o oscurecian (SSAO) —
+    // produciendo el "outline fantasma" que el dev reporto.
+    //
+    // Mover el flush al final, contra m_viewportFb con depth blittado
+    // del m_sceneFb, hace que los overlays se dibujen sobre la imagen
+    // final tonemapeada sin afectar el pipeline PBR.
 
     m_renderer->endFrame();
     m_sceneFb->unbind();
@@ -758,6 +860,33 @@ void SceneRenderer::endFrame() {
         MOOD_PROFILE_SCOPE("PostProcess::apply");
         m_postProcess->apply(*postProcessSrc, *m_viewportFb,
                               m_exposure, m_tonemap);
+        // No hacer unbind aqui — necesitamos m_viewportFb bound para el
+        // flush del debugRenderer abajo.
+    }
+
+    // F3H31 fix: flush del debugRenderer al m_viewportFb DESPUES del
+    // post-process — outlines/AABBs/gizmos se dibujan sobre la imagen
+    // final tonemapeada, sin pasar por SSR/Bloom/AO. Antes del flush
+    // copiamos el depth de m_sceneFb (donde vive el z de la geometry)
+    // al depth renderbuffer de m_viewportFb, para que el z-test del
+    // debug shader funcione correctamente vs la geometry.
+    if (m_viewportFb && m_sceneFb) {
+        MOOD_PROFILE_SCOPE("DebugRenderer::flush");
+
+        // Blit depth scene -> viewport. glBlitFramebuffer requiere
+        // bindings READ + DRAW separados.
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, m_sceneFb->glHandle());
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_viewportFb->glHandle());
+        const GLint w = static_cast<GLint>(m_viewportFb->width());
+        const GLint h = static_cast<GLint>(m_viewportFb->height());
+        glBlitFramebuffer(0, 0, w, h, 0, 0, w, h,
+                          GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+
+        // Bind m_viewportFb como destino + flush.
+        m_viewportFb->bind();
+        m_debugRenderer->flush(m_lastView, m_lastProjection);
+        m_viewportFb->unbind();
+    } else if (m_viewportFb) {
         m_viewportFb->unbind();
     }
 }

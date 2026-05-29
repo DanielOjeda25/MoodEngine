@@ -109,6 +109,13 @@ OpenGLCubemapTexture::OpenGLCubemapTexture(
     m_mipLevels = static_cast<u32>(mips.size());
 }
 
+OpenGLCubemapTexture::OpenGLCubemapTexture(AdoptHandleTag, GLuint handle, u32 mipLevels)
+    : m_id(handle), m_mipLevels(mipLevels) {
+    // F3H31: adopta un handle GL existente (producido por GPU bake en
+    // IBLBaker). No mas init — el caller ya lo configuro (tex storage,
+    // params, filter). El destructor lo libera con glDeleteTextures.
+}
+
 OpenGLCubemapTexture::~OpenGLCubemapTexture() {
     if (m_id != 0) {
         glDeleteTextures(1, &m_id);

@@ -143,6 +143,13 @@ struct SavedEnvironment {
     f32  ssrThickness = 0.5f;
     f32  ssrStepSize  = 0.2f;
     f32  ssrIntensity = 0.5f;
+
+    // F3H31: sky procedural Hosek-Wilkie. Default = HDRI legacy.
+    // skyboxSource como string para estabilidad ante renumeraciones del enum.
+    std::string skyboxSource{"hdri"};       // "hdri" | "procedural"
+    f32         timeOfDay    = 12.0f;       // 0..24 (12 = mediodia)
+    f32         turbidity    = 2.5f;        // 1..10 (2.5 = clear sky)
+    glm::vec3   groundAlbedo{0.3f, 0.3f, 0.3f};
 };
 
 /// @brief Copia persistida de un ScriptComponent (Hito 24). Persiste el

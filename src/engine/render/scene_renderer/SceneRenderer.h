@@ -286,6 +286,17 @@ private:
     std::unique_ptr<OpenGLCubemapTexture> m_iblPrefilter;
     std::unique_ptr<ITexture>             m_iblBrdfLut;
 
+    // F3H31: Sky procedural Hosek-Wilkie + GPU IBL bake runtime. Solo
+    // se crean cuando un EnvironmentComponent en modo Procedural activa
+    // la primera vez — lazy init para no pagar el costo si no se usa.
+    std::unique_ptr<class ProceduralSkyRenderer> m_proceduralSky;
+    std::unique_ptr<class IBLBaker>              m_iblBaker;
+    // Cache de los ultimos params del sky procedural — usado para evitar
+    // re-bakear si nada cambio (alternativa al skyDirty flag, mas robusto).
+    f32       m_lastProceduralTimeOfDay = -1.0f;
+    f32       m_lastProceduralTurbidity = -1.0f;
+    glm::vec3 m_lastProceduralGround{-1.0f};
+
     // Estado del frame actual (escrito por renderScene, leido por el
     // caller antes/durante endFrame).
     glm::mat4 m_lastView{1.0f};

@@ -122,6 +122,12 @@ SavedEntity parseEntityFromJson(const json& j) {
         se2.ssrThickness = je.value("ssr_thickness", 0.5f);
         se2.ssrStepSize  = je.value("ssr_step_size", 0.2f);
         se2.ssrIntensity = je.value("ssr_intensity", 0.5f);
+        // F3H31: sky procedural. Defaults para mapas pre-F3H31 = HDRI
+        // legacy + params neutros (12h, turbidity 2.5, ground 0.3 grey).
+        se2.skyboxSource = je.value("skybox_source", std::string{"hdri"});
+        se2.timeOfDay    = je.value("time_of_day",   12.0f);
+        se2.turbidity    = je.value("turbidity",     2.5f);
+        se2.groundAlbedo = je.value("ground_albedo", glm::vec3(0.3f, 0.3f, 0.3f));
         se.environment = std::move(se2);
     }
     if (j.contains("particle_emitter")) {

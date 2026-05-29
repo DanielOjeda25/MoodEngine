@@ -42,6 +42,12 @@ public:
     ///        para no filtrar el tipo concreto del backend.
     GLuint glColorTextureId() const { return m_colorTexture; }
 
+    /// @brief F3H31: GLuint del propio FBO. Util para glBlitFramebuffer
+    ///        cuando el flow requiere bindings READ/DRAW separados (ej.
+    ///        copiar depth de scene FB a viewport FB para que los debug
+    ///        overlays z-tested se dibujen post-tonemap).
+    GLuint glHandle() const { return m_fbo; }
+
     /// @brief F2H56: GLuint del depth attachment cuando es textura (modo HDR).
     ///        Devuelve 0 si el depth es renderbuffer (modo LDR). Usado por
     ///        SSAOPass para samplear depth del scene FB.

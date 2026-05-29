@@ -46,6 +46,18 @@ public:
     ///        `"assets/skyboxes/sky_kloofendal.png"`).
     SkyboxRenderer(Equirect, const std::string& equirectPngFs);
 
+    /// @brief F3H31: modo procedural — el cubemap se renderiza en GPU por
+    ///        un `ProceduralSkyRenderer` externo, y aca SOLO consumimos
+    ///        su GL handle (sin owning). Permite re-render del cubemap
+    ///        en runtime sin tocar este SkyboxRenderer.
+    struct ExternalCubemapTag {};
+    SkyboxRenderer(ExternalCubemapTag, GLuint externalCubemap);
+
+    /// @brief F3H31: actualiza el GL handle del cubemap externo (sin
+    ///        owning). El handle anterior NO se libera. Solo aplica si
+    ///        el SkyboxRenderer fue construido con `ExternalCubemapTag`.
+    void setExternalCubemap(GLuint handle);
+
     ~SkyboxRenderer();
 
     SkyboxRenderer(const SkyboxRenderer&) = delete;
@@ -67,6 +79,10 @@ private:
     GLuint m_vbo = 0;
     u32 m_vertexCount = 0;
     bool m_isEquirect = false;
+    // F3H31: modo procedural — handle GL externo (sin owning). El cubemap
+    // lo posee ProceduralSkyRenderer y aca solo bindeamos en draw().
+    GLuint m_externalCubemap = 0;
+    bool m_isExternal = false;
 };
 
 } // namespace Mood

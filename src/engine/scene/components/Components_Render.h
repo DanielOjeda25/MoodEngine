@@ -239,6 +239,13 @@ struct LightComponent {
     glm::vec3 direction{0.0f, -1.0f, 0.0f};  // solo Directional, normalizada
     bool enabled = true;
     bool castShadows = false;                // solo Directional (Hito 16)
+
+    // F3H31: opt-in para sincronizar la direccion con el sol del
+    // sky procedural. Solo aplica a Directional. Si true:
+    //   direction = -sunDirection (sol arriba => luz baja, etc.)
+    // El EnvironmentComponent::timeOfDay maneja la posicion del sol.
+    // Si false (default), la direccion sigue siendo manual editable.
+    bool bindToSky = false;
 };
 
 /// @brief Configuracion del entorno de render (Hito 15 Bloque 4):
@@ -259,10 +266,39 @@ struct LightComponent {
 ///        Si el bake no existe, IBL se desactiva y el shader cae a
 ///        ambient escalar (skybox sigue visible).
 struct EnvironmentComponent {
-    // Skybox: path relativo a `assets/`. Default kloofendal (mismo cielo
-    // que F2H86 inicializa en SceneRenderer). Cambiar via Inspector ->
+    // F3H31: fuente del cielo. HDRI = path tradicional al PNG bakeado;
+    // Procedural = sky generado en runtime con Hosek-Wilkie 2012 (sin
+    // dependencia de archivos externos). El IBL se re-bakea en GPU
+    // cuando los params del procedural cambian.
+    enum class SkyboxSource : u32 {
+        HDRI       = 0,   // Default / legacy. Usa skyboxPath + bake offline.
+        Procedural = 1,   // Hosek-Wilkie. Usa timeOfDay/turbidity/groundAlbedo.
+    };
+    SkyboxSource skyboxSource = SkyboxSource::HDRI;
+
+    // Skybox HDRI: path relativo a `assets/`. Default kloofendal (mismo
+    // cielo que F2H86 inicializa en SceneRenderer). Solo se usa cuando
+    // skyboxSource == HDRI. Cambiar via Inspector ->
     // applyEnvironmentFromScene dispara swap.
     std::string skyboxPath{"skyboxes/sky_kloofendal"};
+
+    // F3H31: parametros del sky procedural (Hosek-Wilkie). Solo aplican
+    // cuando skyboxSource == Procedural.
+    //   timeOfDay  : 0..24h. Sun direction se calcula arco N-S simple,
+    //                12 = zenit, 6/18 = horizonte, 0/24 = nadir.
+    //   turbidity  : 1..10. Cantidad de aerosoles + humedad. 2.5 = clear
+    //                sky default. Valores altos = atardecer mas naranja
+    //                pero atmosfera mas hazy.
+    //   groundAlbedo: albedo del suelo. Afecta el aporte de luz reflejada
+    //                al cielo. 0.3 gris medio = default neutro.
+    float     timeOfDay    = 12.0f;
+    float     turbidity    = 2.5f;
+    glm::vec3 groundAlbedo{0.3f, 0.3f, 0.3f};
+
+    // F3H31: dirty flag transient — marca cuando los params del sky
+    // procedural cambiaron y el SceneRenderer debe re-renderear sky +
+    // re-bakear IBL. NO se serializa (es solo un trigger entre frames).
+    bool skyDirty = true;
 
     // Fog
     u32 fogMode = 0;                    // 0=Off, 1=Linear, 2=Exp, 3=Exp2
