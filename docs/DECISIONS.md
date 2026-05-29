@@ -11,6 +11,121 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-29: F3H29 cierre — Camera limits + polish play mode + audit traducciones
+
+Décimo hito de Sub-fase 3.4. Arrancó como split del item 3 del stub original F3H27 ("Mundo grande"). **Scope expandido mid-hito** tras validación visual del Play mode: el dev pidió integrar 3 polish issues no relacionados al far plane en el mismo hito (decisión literal *"perdemos tiempo si separamos en otro [hito]"*) en lugar de abrir F3H30 separado. 7 decisiones — 4 cerradas pre-implementación (D1-D4) + 3 reactivas post-validación (D5-D7).
+
+**D1 — Storage de camera limits: `UserSettings::EditorSettings` (per-instalación), no `.moodproj > World`.** El dev seleccionó literalmente ".moodproj > World" en el AskUserQuestion inicial pero clarificó verbalmente *"es no por un tema de jugabilidad, solo de desarrollo, he testeado crear un brush enorme y no llego a verlo, o alejarme para trabajar en los detalles"*. La justificación apunta a **preferencia ergonómica del dev** (per-instalación), no decisión arquitectónica del proyecto. Implementación efectiva: 2 fields nuevos en `EditorSettings` (`editorCameraFarPlane`, `editorCameraMaxOrbitRadius`).
+
+Alternativas descartadas:
+- **`.moodproj > World` (per-proyecto)**: tendría sentido si la escala del mundo fuera decisión arquitectónica del proyecto (un FPS de pasillos vs open-world). Pero el dev fue explícito en que no — es preferencia del dev (cuánto quiere ver), no del proyecto.
+
+**D2 — Defaults conservadores 10×.** `editorCameraFarPlane = 1000.0f` (era 100), `editorCameraMaxOrbitRadius = 500.0f` (era 50). Cubre mapas urbanos / arenas medianas estilo HL2 (500-1000m). Z-precision OK con 24-bit depth buffer + near=0.1 (granularidad ~10cm a 1km). Compatible con engines sin reverse-Z.
+
+Alternativas descartadas:
+- **Agresivo 100× (far=10000, orbit=5000)**: cubre open-world GTA-style. Z-precision degrada cerca del far plane (z-fighting > 5km). El dev eligió conservador.
+- **Extremo 1000× (far=100km)**: flight-sim. Fuera del scope MoodEngine.
+
+**D3 — `CameraComponent::farPlane` default sube a 1000m también (no solo el EditorCamera).** Coherencia visual: lo que ves moviendo la cámara del editor = lo que ves por una cámara gameplay nueva sin tunear. El campo sigue editable en el Inspector (slider 1-10000). Override por entity preservado via `value("farPlane", 1000.0f)` en el parse — proyectos pre-F3H29 que persistieron `farPlane=100` lo mantienen.
+
+Alternativas descartadas:
+- **`gameCameraFarPlane` separado**: campo distinto del editor far. Más complejo de mantener en sync, valor agregado marginal.
+- **No tocar (default 100m queda)**: cada gameplay camera se ajusta a mano. Default desfasado del workflow del editor.
+
+**D4 — Reverse-Z infinito: out-of-scope.** Reverse-Z resuelve precision Z a cualquier distancia (perfecta en near, degradada-pero-aceptable hacia far). Requiere tocar TODOS los shaders (depth comparisons `< → >`), pipeline state (`glDepthFunc`, `glClearDepth`, `glDepthRange`), debug overlays, shadow passes. ~3-4 días de trabajo, hito propio si emerge demanda (mapas ≥ 5km con z-fighting reportado). F3H29 resuelve 90% del bug con D2 sin tocar shaders.
+
+**D5 — Overlays del editor ocultos en Play mode (REACTIVA).** Detectado durante validación visual del Play mode: la barra cyan de viewport render modes (top-right), el tools overlay (top-left), y el snap status bar seguían visibles en Play mode pese a que el render del Play ignora el `viewportRenderMode` (decisión F3H21/F3H22 — Play=MaterialPreview-equivalente para game-feel real). Pedido literal del dev: *"en play mode no debe mostrar nada externo solo el HUD del juego, los modos de viewport solo en el editor no en play mode"*. Implementación: en `ViewportPanel::onImGuiRender`, las 3 sub-windows skipean su render si `m_editorUi->mode() == EditorMode::Play`.
+
+Alternativas descartadas:
+- **Disable + grayed-out**: dejar los botones visibles pero deshabilitados. El dev fue explícito en que NADA externo debe verse en Play. Hide gana.
+- **Cambiar el shading mode del Play para respetar la barra**: rompería el "test del game-feel real" — el dev quiere que Play se vea como el juego empacado, no como el preview del editor.
+
+**D6 — Botón cerrar explícito en popovers de configuración (REACTIVA).** Pedido del dev: *"falta el botón de cerrar"* en el popover de Ajustes del snap. ImGui `BeginPopup` cierra solo con click-afuera por default — el dev espera el patrón estándar de ventana con "X" arriba derecha. Implementación: `SmallButton("X")` + `CloseCurrentPopup()` en el header del popover (`InspectorPanel_MapTools.cpp:146-167`). Pattern reutilizable si emergen más popovers con scroll o contenido extenso.
+
+Alternativas descartadas:
+- **Solo "click afuera"** (default ImGui): no es obvio para devs que vienen de Hammer/Blender (que sí tienen X explícita en popovers persistentes).
+
+**D7 — Keys i18n compartidas para acciones comunes (REACTIVA).** Audit detectó 25+ strings hardcoded en español/inglés + un valor ES en inglés en `es.json`. Para no terminar con `editor.foo.cancel` / `editor.bar.cancel` / `editor.baz.cancel`, se introdujo namespace `editor.modal.common.*` con 8 keys reutilizables (`cancel`, `save`, `save_as`, `delete`, `edit`, `new`, `no_scene`, `no_scene_assets`). Fija el vocabulario UI del editor (Guardar/Cancelar/Eliminar/Editar/Nuevo) en un solo lugar; cambiar la traducción de "Cancelar" toca 1 string, no N. Para strings no-comunes (tooltips de tuning vehicular, mensajes de error contextuales) se crearon namespaces específicos (`editor.shader_graph.*`, `editor.inspector.vehicle.*`, `editor.import_vehicle.*`).
+
+Alternativas descartadas:
+- **Una key por sitio de uso**: lleva a inconsistencias ("Cancelar" en un sitio, "Anular" en otro, "Cancela" en un tercero). El namespace común previene el drift.
+- **Migrar TODOS los hardcoded restantes** (incluyendo los ~10 tooltips de tuning fino de import vehicle): bajo impacto (solo se ven al importar un .glb), backlog.
+
+Lección: cuando una validación visual detecta polish issues no relacionados al núcleo del hito, expandir el hito en lugar de abrir uno nuevo SI el dev lo pide explícitamente y el alcance se mantiene contenido. Si supera ~5 issues, abrir hito polish dedicado. Esta vez F3H29 cerró con 1 feature core + 3 polish + 1 audit — sigue contenido.
+
+**(Edit post-cierre 2026-05-29): la lección no aguantó la prueba.** Después de cerrar D7 hubo **un segundo round de validación visual** del Inspector que abrió 7 nuevas issues (D8-D14). El dev volvió a decir *"perdemos tiempo si separamos en otro [hito]"*. Resultado: F3H29 final = 1 feature core + 13 polish/bugfixes. **Lección revisada**: cuando el dev pide expansión explícita, expandir. La regla "≤5 issues" no es regla — es estimación inicial. Lo importante es que cada expansión venga con: (a) pedido literal del dev, (b) razón temporal explícita (vs. dejarlo flotando), (c) actualización inmediata del plan. Si el hito termina con 14 decisiones eso es OK; lo que NO es OK es expandir sin actualizar docs en el camino.
+
+---
+
+## 2026-05-29: F3H29 polish round-2 — Inspector UX Blender-style + sweep textos + bug fixes brush + mundo vacío + texture drop sin tile-grid
+
+Segunda expansión de scope F3H29 tras un segundo round de validación visual del Inspector. 7 decisiones nuevas (D8-D14). El dev volvió a pedir *"perdemos tiempo si separamos en otro [hito]"*.
+
+**D8 — Inspector UX Blender-style.** Pedido del dev: *"en object esta agregar component, en render tambien, confunde... la parte de materiales me parece muy confusa entre mesh y brushes, no se enseñan bien, veo mas texto que lugares de edicion, te dije que me gustaria que sea mas como blender, donde agrupa los materiales en una lista y cada uno tiene su nivel de edicion"*. Cambios:
+- **`+ Agregar Componente` solo en categoría Object** (no se repite en Render/Materials/etc).
+- **Materiales unificados Blender-style** (MeshRenderer + Brush): ListBox vertical de slots + panel de edición del slot seleccionado. Helpers compartidos `drawPbrMultipliers/drawShaderGraph/drawBlending` en archivo nuevo `InspectorPanel_Materials.cpp/.h`.
+- **Colapsables defaults**: Surface/Shader/Blending/UV/Info colapsados por default (antes abiertos = ruido visual).
+- **Reset buttons (↺)**: en cada slider PBR.
+- **Menos texto**: removidos status hints `albedo:0 MR:0`, `(graphs en assets/shaders/graphs/...)`, IOR presets, `Slot N — material asignado`, `(id N)`, `UV (Brush)`.
+- **Info colapsable del brush eliminado** (dev: *"eso me parece innecesario"*).
+
+Alternativas descartadas:
+- **Mantener UI separada MeshRenderer vs Brush**: redundancia visual + mantenimiento doble. Unificación con helpers compartidos ahorra ambos.
+- **Dejar colapsables abiertos por default**: el dev fue explícito *"mientras haya menos texto posible mejor"* — colapsado por default empuja al usuario a abrir solo lo que necesita.
+
+**D9 — Sweep textos colgados.** Pedido del dev: *"ahora quiero que vayas por cada panel y revises si hay textos asi de molestos e innecesarios y los elimines"*. Cleanup:
+- `InspectorPanel_Environment.cpp`: 3 hints debug (skybox_hint, csm_hint, ssr_hint).
+- `InspectorPanel_Physics.cpp`: body_id_hint (RigidBody) + ragdoll state_hint.
+- `InspectorPanel_Joint.cpp`: fixed_help (párrafo informativo) + constraint_id_hint.
+- `UserPreferencesPanel.cpp`: 4× live_apply_hint duplicado (`"Los cambios se aplican al soltar el slider"` por sub-sección).
+
+Criterio mantenido: status text **funcional** se preserva (alive_count en particles, no_scene errors). Lo que se borra es text **decorativo o debug** (IDs internos, párrafos explicativos que duplican docs).
+
+**D10 — Persistencia materiales Brush + Undo delete brush (bug fixes).** Reportados por el dev: *"le acabo de poner 2 materiales a un brush, guardé, cerré el proyecto y volví a abrir no persistió los materiales / borré un brush y no apreté ctrl+z y no volvió"*.
+
+Bug 1 — persistencia rota: `BrushComponent.materials` guarda material wrappers con path `__runtime_tex#N` (cuando el dev dropea una textura en una cara, se crea un wrapper material in-memory que apunta a la textura). Al serializar, ese path se guardaba como-is. Al reload, `loadMaterial("__runtime_tex#42")` no resuelve (el path no es un .material en disco) → wrapper desaparece. Fix:
+- `SceneSerializer::serializeBrush` ahora resuelve paths runtime al path real de la textura del wrapper (`MaterialAsset.albedo`).
+- `SceneLoader::applyBrushFromSaved` detecta si el path termina en `.png/.jpg/.jpeg/.tga/.dds` → usa `loadTexture + createMaterialFromTexture`; si termina en `.material` → usa `loadMaterial`.
+
+Bug 2 — undo delete brush vacío: `serializeEntityToJson` skipea brushes porque la serialización viaja por `serializeBrush` separado (BrushComponent no entra en el JSON estándar de entity). `DeleteEntityCommand` capturaba un SavedEntity sin info de BrushComponent → al undo, el brush volvía como un Empty sin geometría. Fix: capturar también un `SavedBrush` paralelo en el ctor (`serializeBrush + parseBrush`) + aplicar via `SceneLoader::applyBrushFromSaved` en `undo()`.
+
+Alternativas descartadas:
+- **Unificar serialización en `serializeEntityToJson` y dropear `serializeBrush`**: refactor grande, riesgo alto, no necesario para fix puntual.
+- **Persistir paths runtime como-is + resolver en load**: opaco, el .moodmap quedaría con paths que no significan nada fuera del editor.
+
+**D11 — Material Preview sin fog.** Reportado por el dev: *"porque en material preview si alejo la camara comienza a ponerse blanco?"*. Root cause: la fog se computa en el lighting pass (uniform `uFogMode` aplicado por fragment shader cuando el pixel pasa lighting), NO en post-process. Por lo tanto `m_skipPostPasses = true` (que apaga bloom/SSR/etc en Material/Solid/Wireframe modes, F3H22) NO desactivaba la fog. El "blanco a la distancia" era fog en el uniform. Fix: `uFogMode = m_skipPostPasses ? 0 : static_cast<int>(m_fog.mode)` en `SceneRenderer_Render_Lighting.cpp`. Fog visible **solo** en modo Rendered (que es lo que pidió el dev: *"el fog es cosa solo del render preview"*).
+
+Alternativa descartada:
+- **Mover fog a un post-process stage**: refactor del pipeline, riesgo alto, valor agregado nulo (el comportamiento actual con el fix ya es correcto).
+
+**D12 — Environment singleton auto-recover (Blender World Properties pattern).** Pedido del dev: *"porque otra vez dice que debo agregar el componente enviroment? no se supone que venía incrustado automáticamente... COMO BLENDER, para que debería agregar el componente si es obvio que al final del día lo agregarán debe estar implícito"*. Cambios:
+- `handleNewProject` ahora llama `ensureEnvironmentExists()` después de `rebuildSceneFromMap()` (gap del flow nuevo-proyecto: el Environment se generaba al cargar un .moodmap pero no al crear uno desde cero).
+- **Inspector auto-recover**: si el dev entra a categoría 🌍 Environment y el singleton no existe, se auto-crea silenciosamente — request/consume pattern (`EditorUI::requestEnsureEnvironment()` + `EditorApplication_Run::pumpUiRequests()` lo consume con `ensureEnvironmentExists()`).
+
+Cubre: proyectos pre-F3H22 sin Environment serializado, dev hace delete del singleton (Ctrl+Z no aplica al singleton), scene reset. Pattern Blender World Properties: no se puede "no tener world".
+
+Alternativa descartada:
+- **Mostrar botón "Crear Environment" en el Inspector** (lo que existía pre-D12): obvio que el dev lo va a apretar siempre → fricción innecesaria. Auto-crear es Pareto-correcto.
+
+**D13 — Mundo vacío default (Floor entity eliminado).** Pedido del dev: *"este es el mesh que se importa automáticamente en cada mapa por defecto, en los programas industriales, comienza el mundo vacío no?"* (con screenshot de Floor 8×8 grid tablero). Pre-F3H29 cada mapa nuevo arrancaba con un cubo Floor 12×0.1×12m con `grid.png` como albedo simulando un tablero de tiles. Fix: bloque de generación del Floor eliminado de `EditorScene::rebuildSceneFromMap`. Industria estándar: Unity / Unreal / Hammer / Godot arrancan sin floor pre-spawneado — el dev arma su piso con un Box Brush.
+
+Trade-off documentado: en Play mode sin piso los objetos físicos caen al vacío — comportamiento estándar de los engines mencionados. El grid del viewport (helper visual) sigue presente, así que el dev tiene referencia espacial.
+
+Alternativa descartada:
+- **Mantener Floor opcional via UserSettings**: setting más, friction más. Si el dev quiere un piso por default, lo crea con un Box Brush + lo persiste en su template de proyecto.
+
+**D14 — Texture drop sin tile-grid legacy.** Reportado por el dev: *"yo arrastro esta textura, pero paso de cierto límite, y se desaparece es como que el tile no tiene lugar, las texturas no deberían ser cubos, deberían ser opciones válidas para a futuro construir algo usando brushes"*. Root cause: `processViewportTextureDrop` tenía un fallback a `pickTile` del tile-grid legacy de Fase 1 — si la textura no caía sobre un brush, pintaba un cubo-pared (`SetTileCommand` con `TileType::SolidWall`). Si pasaba el límite del grid, `pickTile` no hacía hit y la textura "desaparecía". Fix:
+- Eliminado fallback al tile-grid legacy + include de `SetTileCommand` huérfano.
+- **Drop sobre MeshRenderer (nuevo)**: la textura se aplica al slot 0 del mesh via wrapper material — simétrico al `processViewportMaterialDrop`. Cubre el caso natural "tirar textura a un `.glb`".
+- **Drop sobre nada**: log silencioso (`"Drop textura id={}: sin brush/mesh bajo el cursor — drop ignorado"`), no se crea entidad.
+
+Las primitivas del **modal de entidades** (Cube/Sphere/Plane/etc) siguen spawneables — el dev clarificó: *"las primitivas están bien"*.
+
+Alternativa descartada:
+- **Mantener el tile-grid como fallback opcional**: legacy de Fase 1 (gameplay 2D-grid retro). Hoy MoodEngine es 3D-first, el tile-grid sigue solo por compat con mapas viejos. El comportamiento de "pintar tile-cubo desde el browser" no se alinea con el modelo mental del dev (texturas = recursos para construir, no entidades).
+
+---
+
 ## 2026-05-29: F3H28 cierre — Grupos + Map Tools como categorías del Properties Editor
 
 Octava decisión: integrar Empty Group_<N> de F3H27 + reemplazar MapEditorTopBar por categorías del Inspector chasis F3H22. Hallazgo crítico pre-implementación cambió scope: el stub asumía paneles flotantes "Grupos" (en realidad VisGroupsPanel/F2H33, sistema visibility-toggle) y "Map Tools" (en realidad MapEditorTopBar/F2H30, toolbar como panel ImGui-dockable), y "toolbar lateral persistente" que no existía. 8 decisiones efectivas — 4 pre-implementación vía AskUserQuestion + 4 reactivas (post-research / mid-implementación).
