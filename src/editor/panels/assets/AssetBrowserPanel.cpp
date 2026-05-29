@@ -112,8 +112,11 @@ void AssetBrowserPanel::rescan() {
     if (m_thumbnails != nullptr) m_thumbnails->clear();
     if (m_matPreview != nullptr) m_matPreview->clearThumbnailCache();
 
+    // F3H30: recursive para que assets/textures/library/*.png aparezcan
+    // (mismo patron que meshes desde F2H26). displayName usa path
+    // relativo ("library/concrete_wall.png") para distinguir sub-packs.
     std::error_code ec;
-    auto it = std::filesystem::directory_iterator(k_textureDir, ec);
+    auto it = std::filesystem::recursive_directory_iterator(k_textureDir, ec);
     if (ec) {
         Log::assets()->warn("AssetBrowserPanel: no pude listar '{}': {}",
                             k_textureDir, ec.message());
@@ -122,7 +125,8 @@ void AssetBrowserPanel::rescan() {
     for (const auto& entry : it) {
         if (!entry.is_regular_file() || !isPng(entry.path())) continue;
         Entry e;
-        e.displayName = entry.path().filename().string();
+        const auto rel = std::filesystem::relative(entry.path(), k_textureDir);
+        e.displayName = rel.generic_string();
         e.logicalPath = std::string(k_logicalPrefix) + e.displayName;
         e.id = m_assetManager->loadTexture(e.logicalPath);
         m_entries.push_back(std::move(e));
@@ -349,16 +353,17 @@ void AssetBrowserPanel::onImGuiRender() {
 
     if (!m_scanned) rescan();
 
-    // F2H23 polish: header compacto — boton chico "R" (recargar) a la
+    // F2H23 polish: header compacto — boton chico icon (recargar) a la
     // derecha en lugar de un boton grande "Recargar" que se comia una
     // linea entera. Tooltip explicativo al hover.
+    // F3H30 polish: "R" -> ICON_FA_ROTATE (icono universal de reload).
     {
         const float rightOffset =
             ImGui::GetContentRegionAvail().x - 30.0f;
         if (rightOffset > 0.0f) {
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + rightOffset);
         }
-        if (ImGui::SmallButton("R")) {
+        if (ImGui::SmallButton(ICON_FA_ROTATE "##reload_assets")) {
             rescan();
             // El reupload a GPU de las texturas cambiadas lo maneja
             // EditorApplication entre frames para no borrar un GLuint

@@ -15,6 +15,7 @@
 #include "core/Log.h"
 #include "editor/commands/EditBrushUVCommand.h"  // BrushUVSnapshot
 #include "editor/ui/EditorUI.h"
+#include "editor/ui/IconsFontAwesome6.h"  // F3H30: ICON_FA_ROTATE_LEFT reset
 #include "engine/assets/manager/AssetManager.h"
 #include "core/i18n/I18n.h"  // F2H43
 #include "engine/render/resources/MaterialAsset.h"  // F3H29
@@ -402,6 +403,37 @@ void InspectorPanel::renderBrushSection(Entity e) {
             m_uvSnapshotValid = false;
         };
 
+        // F3H30 polish: reset buttons inline (rotate-ccw) para cada UV
+        // widget. Captura snapshot pre-reset, aplica default, pushea
+        // command — undoable como cualquier edit manual.
+        auto uvResetButton = [&](const char* widgetId,
+                                  const std::string& undoLabel,
+                                  auto&& applyDefault) {
+            ImGui::SameLine();
+            const std::string btn = std::string(ICON_FA_ROTATE_LEFT) + "##" + widgetId;
+            if (ImGui::SmallButton(btn.c_str())) {
+                BrushUVSnapshot pre = captureBrushUV(bc.brush);
+                applyToScope(std::forward<decltype(applyDefault)>(applyDefault));
+                bc.dirty = true;
+                if (m_ui != nullptr && m_ui->scene() != nullptr) {
+                    if (HistoryStack* h = m_ui->historyStack()) {
+                        BrushUVSnapshot post = captureBrushUV(bc.brush);
+                        if (!snapshotsEqual(pre, post)) {
+                            h->push(std::make_unique<EditBrushUVCommand>(
+                                m_ui->scene(), entityTag,
+                                std::move(pre), std::move(post),
+                                undoLabel));
+                        }
+                    }
+                }
+                m_editedThisFrame = true;
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s",
+                    I18n::T("editor.common.reset_default").c_str());
+            }
+        };
+
         glm::vec2 uvScale = faceRef.uvScale;
         const std::string uvScaleLabel = I18n::T("editor.panel.inspector.brush.uv_scale") + "##uvbrush";
         if (ImGui::DragFloat2(uvScaleLabel.c_str(), &uvScale.x,
@@ -415,6 +447,8 @@ void InspectorPanel::renderBrushSection(Entity e) {
             multiFace ? "Editar UV scale (N caras)"
                       : (faceMode ? "Editar UV scale (cara)"
                                    : "Editar UV scale"));
+        uvResetButton("reset_uv_scale", "Reset UV scale",
+            [](auto& f) { f.uvScale = glm::vec2(1.0f); });
 
         f32 uvRotDeg = glm::degrees(faceRef.uvRotation);
         const std::string uvRotLabel = I18n::T("editor.panel.inspector.brush.uv_rotation") + "##uvbrush";
@@ -430,6 +464,8 @@ void InspectorPanel::renderBrushSection(Entity e) {
             multiFace ? "Editar UV rotation (N caras)"
                       : (faceMode ? "Editar UV rotation (cara)"
                                    : "Editar UV rotation"));
+        uvResetButton("reset_uv_rot", "Reset UV rotation",
+            [](auto& f) { f.uvRotation = 0.0f; });
 
         glm::vec2 uvOffset = faceRef.uvOffset;
         const std::string uvOffsetLabel = I18n::T("editor.panel.inspector.brush.uv_offset") + "##uvbrush";
@@ -444,6 +480,8 @@ void InspectorPanel::renderBrushSection(Entity e) {
             multiFace ? "Editar UV offset (N caras)"
                       : (faceMode ? "Editar UV offset (cara)"
                                    : "Editar UV offset"));
+        uvResetButton("reset_uv_offset", "Reset UV offset",
+            [](auto& f) { f.uvOffset = glm::vec2(0.0f); });
 
         // Checkbox: instantaneo. Capturar pre + post al click + push.
         bool lockToWorld = faceRef.lockToWorld;
