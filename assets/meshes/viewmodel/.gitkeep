@@ -1,0 +1,5 @@
+# Carpeta reservada para el viewmodel FPS (brazos + arma) de la Fase 4 (PANDEMONIUM).
+# Acá van los .glb de brazos y arma. Instrucciones de descarga + licencias:
+#   docs/assets/FASE4_VIEWMODEL_ASSETS.md
+# Vacía a propósito hasta que se bajen los assets (no se pueden versionar binarios
+# de terceros sin antes confirmar la licencia — todos los recomendados son CC0).

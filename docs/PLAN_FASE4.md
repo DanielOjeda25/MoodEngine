@@ -204,6 +204,15 @@ forma de aplicarle daño. Mantener la suite verde. Tag `v3.1.0-fase4-hito1`.
   ya tenés construido.
 - **Animación de enemigos**: usar el importador Mixamo + skeletal animation ya hechos. Idle /
   walk / attack / pain como mínimo.
+- **Arquitectura del viewmodel (decisión clave para escalar armas):** los **brazos son UN solo
+  mesh riggeado compartido**; NO se hornean brazos+arma juntos por arma (eso duplicaría las
+  manos y no escala). Cada arma es un **modelo separado** que se engancha a un hueso de la mano
+  (bone socket / attachment). Agregar un arma nueva = modelo `.glb` del arma + su set de
+  animaciones (idle/fire/reload sobre el esqueleto de brazos compartido) + un `.moodweapon` con
+  stats. **Los brazos no se tocan.** Las animaciones son por-arma (cada arma se sostiene/opera
+  distinto) pero animan el mismo esqueleto. *Implicación de tech:* hace falta **bone attachment**
+  (pegar la entidad-arma a la transform del hueso de la mano cada frame) — probablemente no
+  existe aún; sumarlo temprano (F4H2/F4H3) antes de modelar varias armas.
 
 ---
 
@@ -247,3 +256,62 @@ forma de aplicarle daño. Mantener la suite verde. Tag `v3.1.0-fase4-hito1`.
 2. Recién entonces, pasarle al agente la instrucción de arranque de F4H1 (sección 6).
 3. Tras cada hito, volver a charlar el siguiente — sobre todo en la **compuerta F4H16**, donde
    se decide en serio si el juego es divertido antes de escalar.
+
+---
+
+## 12. Riesgos conocidos y mitigaciones
+
+> Ordenados por probabilidad de golpear, dado el perfil del dev: **flojo en modelado/arte,
+> relativamente bueno en animación.** No son razones para no hacer el juego — son las cosas a
+> atacar temprano para que no descarrilen la fase.
+
+### Tier 1 — Contenido artístico (lo más probable que duela)
+
+- **[ALTO] Volumen de arte.** 3-5 niveles necesitan muchos modelos (enemigos, armas, props,
+  pickups) + texturas coherentes entre sí. El dev no modela.
+  *Mitigación (decisión de fase):* **comprometerse con dirección de arte retro/PSX low-poly.**
+  Es indulgente con la calidad, hay abundancia de assets **CC0** gratis, y es la estética del
+  género. Reúso despiadado de assets + kitbashing modular. La restricción se vuelve el estilo.
+- **[ALTO] Enemigos riggeados.** Modelar+riggear criaturas es la parte de arte más dura.
+  *Mitigación:* **enemigos humanoides vía Mixamo** (modelo auto-riggeado + animaciones gratis).
+  Aprovecha la fortaleza del dev: sobre un humanoide riggeado, él puede crear/retocar
+  animaciones (fire/pain/attack). Evitar criaturas custom al inicio. CC0 rigged: Quaternius.
+- **[ALTO] Audio.** El pilar #1 (game feel) depende ~50% del sonido (armas con peso, impactos,
+  enemigos, música). El dev tampoco es audio.
+  *Mitigación:* planificarlo explícito (no como afterthought). CC0: freesound.org, packs gratis
+  de Sonniss GDC, OpenGameArt. Presupuestar tiempo real en F4H5 y F4H25.
+
+### Tier 2 — Gaps técnicos del motor
+
+- **[MEDIO] Navegación 2D.** El pathfinding actual es **grilla 2D plana** (`Pathfinding`/`GridMap`
+  estilo Wolfenstein, `TileCoord {x,y}`, eje Y constante, 4-vecindad). Sirve para arenas planas
+  (Doom/Serious Sam son mayormente 2.5D), pero **verticalidad real** (plataformas, multi-piso)
+  necesitaría un navmesh = laburo grande.
+  *Mitigación:* diseñar arenas mayormente planas (además es más fácil para el dev). Si más
+  adelante se quiere verticalidad, es un hito dedicado de navmesh, no improvisar.
+- **[MEDIO] Performance con hordas.** Serious Sam = muchos enemigos simultáneos, cada uno con
+  IA + animación skinned + física + render. La GTX 1660 tiene techo.
+  *Mitigación:* instancing, **LOD (ya hay meshoptimizer)**, culling de animación/IA a distancia,
+  **tope de enemigos activos**, colisión por capsule simplificada (no contra el mesh skinned).
+  Medir con Tracy (ya existe) desde F4H10.
+- **[MEDIO] Ragdolls simultáneos.** Una horda muriendo a la vez = picos de física + memoria.
+  *Mitigación:* cap de ragdolls activos, limpiar/desvanecer cadáveres tras N segundos, "congelar"
+  ragdolls ya asentados.
+- **[MEDIO] Bone attachment (arma→mano).** Pegar la entidad-arma a la transform del hueso de la
+  mano del esqueleto de brazos. Probablemente no existe aún. *Mitigación:* sumarlo en F4H2/F4H3,
+  antes de modelar varias armas.
+- **[BAJO] Hit detection.** El hitscan debe pegar contra **proxies de colisión** (capsules de
+  los enemigos), no contra el mesh visual animado. El motor ya tiene shapes capsule — usarlas.
+
+### Tier 3 — Diseño e intangibles
+
+- **[ALTO] "¿Es divertido?"** Ningún asset arregla encounter design, balance de armas y ritmo.
+  *Mitigación:* la **compuerta del vertical slice (F4H16)** — probar diversión en 1 nivel antes
+  de construir 5.
+- **[MEDIO] Diseño de niveles.** Tener el editor CSG no garantiza arenas divertidas (sightlines,
+  cobertura, flujo, colocación de enemigos es un oficio). *Mitigación:* whitebox primero,
+  iterar, playtestear (F4H27).
+- **[MEDIO] Riesgo psicológico: refugiarse en el motor.** La tentación de volver al trabajo de
+  motor (cómodo, conocido) en vez del arte/diseño/contenido (incómodo). *Mitigación:* recordar
+  que la meta de la Fase 4 es **el juego**, no el motor. Los guardarraíles de §8 ayudan.
+
