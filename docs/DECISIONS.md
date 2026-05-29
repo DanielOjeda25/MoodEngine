@@ -11,7 +11,88 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
-## 2026-05-29: F3H30 cierre — Texture pack HL1-style procedural + AssetBrowser recursivo + reset UV brush (Sub-fase 3.4 CERRADA 🏁)
+## 2026-05-29: F3H31 cierre — Sky Atmosphere Hosek-Wilkie + GPU IBL bake runtime (Sub-fase 3.4 CIERRE REAL 12/12 🏁)
+
+Duodécimo y último hito de Sub-fase 3.4 — re-cierre 12/12. Sub-fase 3.4 estaba cerrada 11/11 con F3H30 (texturas), pero el dev pidió retomar el stub original "HDRI dinámico + ciclo día/noche" con scope más ambicioso: *"quiero algo útil y profesional como el del Unreal"* + *"me gusta lo del bake en real time, en runtime, mientras sea procedural"*. **7 decisiones** + **4 ajustes reactivos** post-validación visual.
+
+**D1 — Hosek-Wilkie 2012 (analítico) vs Hillaire 2020 (LUT-based).** Elegido HW por simplicidad de port + 95% del look. Hillaire requiere 4 LUTs precomputadas (transmittance, multiscattering, sky-view, aerial perspective) — overkill para use case actual de juego de pasillos HL1-style.
+
+Alternativas descartadas:
+- **Hillaire 2020 completo** — multi-scattering correcto + aerial perspective + paneles atmosféricos coherentes. Costo: 4 shaders LUT + tabla de transmittance bilineal + sky-view por frame. Use case del juego (arenas chicas) no lo aprovecha.
+- **Preetham 1999** — predecesor de HW, más simple pero look menos pulido al horizonte. Si fuéramos por simplicidad iríamos directo a Preetham; HW es el punto dulce.
+
+**D2 — GPU IBL bake runtime (no offline).** Pedido literal del dev. Trigger: cuando `EnvironmentComponent` con `skyboxSource=Procedural` cambia params (timeOfDay/turbidity/groundAlbedo), marca `skyDirty=true`. En `tickFrame`, si dirty + procedural → re-render sky cubemap + re-bake IBL (irradiance + prefilter). Auto, no manual.
+
+Alternativas descartadas:
+- **Bake offline a `.cubemap` files** — único pre-bake al inicio, sin runtime. Pierde el feature del time-of-day dinámico que es el norte del hito.
+- **Bake runtime async/job-system** — complejidad de threading sin beneficio claro: el budget ~150ms es aceptable porque corre out-of-frame solo en transitions del slider, no every-frame.
+
+**D3 — Stack: diharaw/sky-models (MIT) + escrito desde cero el IBL bake.** El IBL bake de Khronos `glTF-IBL-Sampler` (Apache-2.0) es monolítico y diseñado para Vulkan MRT — para nuestro stack OpenGL 4.3 con patrón face-by-face que ya existe, escribimos 2 shaders simples (irradiance.frag + prefilter.frag, ~80 LOC c/u) desde el paper de Epic UE4 "Real Shading" (concepto público, no copia de código NC).
+
+**LearnOpenGL DESCARTADO** por licencia CC BY-NC (no comercial). Aunque el proyecto hoy es personal, la licencia NC contamina el header del shader si lo copiáramos — preferimos cero ambigüedad. El paper UE4 es enseñable, no licenciable: la implementación es nuestra.
+
+Alternativas descartadas:
+- **glTF-IBL-Sampler (Apache-2.0)** — bake correcto pero Vulkan multi-render-target; portar a OpenGL 4.3 cuesta más que escribir 2 shaders desde el paper.
+- **LearnOpenGL IBL chapter** — código de referencia super claro pero CC BY-NC. Inutilizable.
+- **Bake con CPU computado** — orders of magnitude más lento, descartado por D2.
+
+**D4 — `skyboxSource` enum extiende `EnvironmentComponent`, NO reemplaza.** Back-compat: maps pre-F3H31 con `skyboxPath` siguen cargando como `skyboxSource=HDRI`. JSON `skybox_source` opcional con default `"hdri"`. `skyboxPath` se preserva (HDRI sigue siendo modo válido). El dev elige source via dropdown del Inspector; los params del otro modo se mantienen escondidos pero persistidos (toggle entre HDRI/Procedural NO destruye config).
+
+Alternativas descartadas:
+- **Reemplazar `skyboxPath` por un union** — rompe maps existentes + invalida feature HDRI presets cargados.
+- **Componente separado `ProceduralSkyComponent`** — duplica el rol del Environment, dev no entiende cuál usa.
+
+**D5 — Sun direction calculada del time-of-day, opt-in sync con LightComponent.** Arco N-S simple: `azimuth = π` (sur), `elevation = sin((timeOfDay - 6) * π / 12) * π/2`. Si hay un `LightComponent` directional con flag nuevo `bindToSky=true`, su `direction` se override del time-of-day. Sin lat/long astronómica real (over-engineering para juego de pasillos).
+
+Alternativas descartadas:
+- **Posición astronómica real con lat/long** — pedido sería "este nivel ocurre a 40°N en marzo 14:00 UTC". Use case marginal HL1-style.
+- **Sun direction independiente de timeOfDay** — el dev configura el sol en un sitio y el time-of-day en otro; desincronización garantizada. El opt-in `bindToSky=true` da control si lo querés desacoplar.
+
+**D6 — Cubemap procedural en GPU: 256×6 RGBA16F.** Match con resolución de los IBL prefilter mip0. Costo GPU: ~1.5MB por cubemap. Re-render ~3-5ms.
+
+Alternativas descartadas:
+- **128×6** — IBL prefilter mip0 también caería a 128 → irradiance pierde detalle en specular highlight.
+- **512×6** — 4× más memoria + 4× más cost render sin mejora visible a la resolución de game pantalla.
+- **RGBA32F** — float32 innecesario (rango HW estable con 16F + no hay overflow en sky luminance típica).
+
+**D7 — Re-bake cost budget: ~150ms total.** Irradiance 32×32×6 + Prefilter 5 mips (128/64/32/16/8) × 6 faces × 1024 samples GGX = ~100-150ms en GPU mid-range. Re-bake corre OUT OF FRAME (no every-frame), solo en transitions de slider time-of-day.
+
+Trade-off honesto: durante el drag del slider time-of-day en el Inspector, el editor puede stuttear ~150ms por update. Aceptado porque (a) no es path crítico (el dev tunea sky en sesión de iluminación, no en gameplay loop), (b) el feel es similar a Unity/Unreal cuando hacés bake de lighting, (c) la alternativa (re-bake cada frame mientras drageas) caería FPS a 6-10.
+
+Alternativas descartadas:
+- **Re-bake cada frame durante drag** — FPS unplayable.
+- **Re-bake deferred hasta soltar slider** — UX raro (cielo no responde durante drag).
+- **Bake incremental por mip** — complejidad de threading sin beneficio claro al budget.
+
+---
+
+**Ajustes reactivos post-validación visual.**
+
+**(R1) Outline amarillo reflejado/blooming/oscurecido.** El dev reportó (con luz puntual + SSR/Bloom/AO activos) que el outline amarillo del cubo seleccionado aparecía "fantasma" reflejado en el piso (SSR), con halo (Bloom) y oscurecido (SSAO). Causa diagnosticada: `debugRenderer->flush()` (dibuja outlines/AABBs/gizmos) se ejecutaba al INICIO de `endFrame()` sobre el `m_sceneFb` HDR — los pases SSR/Bloom/SSAO leían ese FB con los overlays dentro, tratándolos como geometría legítima.
+
+Fix: mover el flush al FINAL de `endFrame()` (post-tonemap) bindeando `m_viewportFb` LDR + blit del depth de `m_sceneFb` (para que el z-test del debug shader funcione vs la geometría real). `OpenGLFramebuffer` gana `GLuint glHandle()` getter para `glBlitFramebuffer` con bindings READ/DRAW separados.
+
+**(R2) Dropdown "Origen del cielo" mostraba "????".** Bug de lifetime en C++ — `I18n::T(...).c_str()` devuelve puntero al `std::string` temporal; el array initializer `const char* sourceLabels[] = { I18n::T(...).c_str(), ... }` quedaba con punteros a memoria liberada apenas cerrado el bloque. **Idéntico al bug documentado en líneas ~779-790 del mismo archivo (`InspectorPanel_Environment.cpp`)** para el preview del LUT preset de Color Grading.
+
+Fix: capturar `lblHdri` / `lblProc` como `std::string` locales con lifetime que cubre el `ImGui::Combo`. Patrón a sweep en el resto del Inspector si emergen "????" similares — el patrón `I18n::T(...).c_str()` en array initializer es fragile y debe evitarse.
+
+**(R3) Header "Origen del cielo" vivía bajo "Niebla".** Tras fix R2, el dev pidió separar visualmente — convención Unity Lighting / Unreal Sky & Atmosphere: sky es su propia sección top-level del Environment, no sub-header de fog. Refactor `drawEnvSkyAndFog` → `drawEnvSky` + `drawEnvFog` con headers independientes.
+
+Reset global por sección preservado, ahora resetea sky-only (skyboxSource + skyboxPath + 3 params procedural) o fog-only. Beneficio adicional: el dev puede resetear sky sin perder tuning del fog (caso común al iterar look).
+
+**(R4) Mini-reset (↺) por slider individual.** Pedido del dev: *"falta los botones de reset al final de cada slider"* — patrón ya establecido en F3H30 UV reset (`InspectorPanel_Brush.cpp`). Helper lambda `skyResetFloat` / `skyResetVec3` inline en `drawEnvSky`: `SameLine + SmallButton(ICON_FA_ROTATE_LEFT)` que pushea `pushAtomicEdit<T>` con el default de `kEnvDefaults`. Cada mini-reset es undoable como cualquier edit manual; coexiste con el reset global de la sección (que sigue restaurando todos los fields a la vez).
+
+**Backlog del hito (no cerrado en F3H31).**
+- **F3H32** — Volumetric clouds raymarched (CaptainProton42 o portar Schneider HZD), ~15-18h.
+- **F3H33** — Weather presets (clear/overcast/storm/sunset) + auto-cycle día/noche en gameplay runtime, ~6-10h.
+- **Hillaire 2020 upgrade** — si emerge demanda de aerial perspective o atardeceres ultra-saturados, portar `JolifantoBambla/webgpu-sky-atmosphere`. Backlog.
+- **Sun disc visible** — hoy el sol es solo punto de iluminación, no disco renderizado. Agregable con `step(cos(M_PI/360), dot(dir, sun_dir))` en el sky shader.
+- **Stars de noche** — cuando sol Y<-0.1, fade-in de starfield. Hito propio.
+- **Latitud/longitud astronómicas** — sun rota arco N-S simple. Lat/long real es backlog (use case marginal).
+
+---
+
+## 2026-05-29: F3H30 cierre — Texture pack HL1-style procedural + AssetBrowser recursivo + reset UV brush
 
 Undécimo y último hito de Sub-fase 3.4 → cierre 11/11. El stub original era "HDRI dinámico + ciclo día/noche" pero el dev pivoteó tras F3H29 (*"creo que lo de las texturas es más rápido, vamos por eso"*) porque las 4 texturas legacy de Fase 1 (`brick.png`, `grid.png`, `missing.png`, `particle_fire.png`) no alcanzaban para construir un mapa real. **6 decisiones cerradas**.
 
