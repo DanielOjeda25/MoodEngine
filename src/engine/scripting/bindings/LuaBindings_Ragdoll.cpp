@@ -21,6 +21,7 @@
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
+#include "engine/scripting/bindings/BindingsCommon.h"  // F4H1.5: findEntityByTag compartido
 
 #include <glm/vec3.hpp>
 
@@ -30,15 +31,10 @@ namespace Mood {
 
 namespace {
 
-// Busca la entity con el tag dado. Primera match gana — convencion
-// "tags unicos" del editor (Hammer-style). Si no encuentra retorna falsy.
-Entity findByTag(Scene& scene, const std::string& tag) {
-    Entity out;
-    scene.forEach<TagComponent>([&](Entity e, TagComponent& t) {
-        if (out) return;
-        if (t.name == tag) out = e;
-    });
-    return out;
+using bindings::findEntityByTag;  // F4H1.5: helper compartido (BindingsCommon.h)
+inline Entity findByTag(Scene& scene, const std::string& tag) {
+    // Alias local — mantener call-sites internos sin tocar (back-compat).
+    return findEntityByTag(scene, tag);
 }
 
 // Aplicacion comun: setea state + spawn impulse + dirty=true. No-op si

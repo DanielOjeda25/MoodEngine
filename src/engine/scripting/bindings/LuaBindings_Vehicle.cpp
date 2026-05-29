@@ -21,6 +21,7 @@
 // por tag (primer match gana), warn + retorno default si no se encuentra.
 
 #include "engine/scripting/bindings/LuaBindings.h"
+#include "engine/scripting/bindings/BindingsCommon.h"  // F4H1.5: findEntityByTag compartido
 
 #include "core/Log.h"
 #include "engine/physics/world/PhysicsWorld.h"
@@ -38,13 +39,9 @@ namespace Mood {
 
 namespace {
 
-Entity findByTag(Scene& scene, const std::string& tag) {
-    Entity out;
-    scene.forEach<TagComponent>([&](Entity e, TagComponent& t) {
-        if (out) return;
-        if (t.name == tag) out = e;
-    });
-    return out;
+using bindings::findEntityByTag;  // F4H1.5: helper compartido (BindingsCommon.h)
+inline Entity findByTag(Scene& scene, const std::string& tag) {
+    return findEntityByTag(scene, tag);  // alias local
 }
 
 VehicleComponent* findVehicleByTag(Scene& scene, const std::string& tag,

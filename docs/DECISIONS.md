@@ -11,6 +11,87 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-29: F4H1.5 cierre — Code audit pre-F4H2 + fixes priorizados
+
+Sub-hito reactivo tras feedback del dev al cerrar F4H1: *"creo que previamente deberiamos hacer una auditoria de codigo, porque vamos a escribir mucho codigo, y lo ideal es no tener archivos enormes, que no pasen de 500 lineas, codigo spaguetti repetitivo, deadcode"*. Quick audit estilo F3H3 sobre 3 buckets (LOC + duplicación + deadcode), output `docs/CODE_AUDIT_F4_PRE.md`. **4 decisiones** + **3 fixes aplicados** + **1 fix agendizado**.
+
+**D1 — Scope: quick audit (top-15 LOC + duplicación evidente + deadcode flagrant).** Dev eligió quick over full vía AskUserQuestion. Razón: pre-audit no sabemos cuánta deuda hay. Si quick revela mucha, escala a F4H1.6/F4H1.7. Full audit estilo F3H3 (sweep paralelo de 250+ archivos) se justificaría si la quick hubiera mostrado deuda > 20 items significativos.
+
+Alternativas descartadas:
+- **Full audit estilo F3H3** — ~3-4h trabajo. Overhead alto si la deuda es chica (que resultó ser el caso).
+- **Solo LOC + deadcode** — pierde el sweep de duplicación que era una de las preocupaciones del dev.
+
+**D2 — Estructura: hito separado F4H1.5 con fixes reactivos.** Dev eligió aplicar fixes en este hito vs solo escribir el audit standalone. Razón: standalone deja el código igual, dilute el norte del audit. F4H1.5 cierra con código limpio antes de arrancar F4H2.
+
+Alternativas descartadas:
+- **Audit standalone sin fixes** — pierde el momentum del audit.
+- **Pausar F4 y abrir Sub-fase 3.5 de polish** — overkill para la deuda detectada (3 splits + 1 extract). Reabrir Fase 3 sería trauma de versioning + Tag.
+
+**D3 (reactivo) — `DemoSpawners_Drop.cpp` NO es deadcode.** Sospecha inicial del audit al ver nombre + 759 LOC; verificación reveló que es el handler de drops del viewport (textura/mesh/material/script → área 3D del editor, F2H24 + F3H17). El nombre "Demo" es histórico — el módulo se renombró internamente pero el archivo conservó el prefix por costo de cambios cruzados. NO TOCAR.
+
+**D4 (reactivo) — Split `InspectorPanel_Environment.cpp` 1149 LOC AGENDIZADO a F4H1.6.** Tras analizar el archivo, el split requiere extraer ~180 LOC de infraestructura común (`kEnvDefaults` + `EditEnvironmentSubsetCommand` class + `drawSectionResetButton` template + `drawSectionDivider`) a un header dedicado `_Environment_Internal.h`. El riesgo de break en el refactor (forward decls, namespace nombrado para drawEnvX, visibility cross-cpp) es mayor que el beneficio inmediato: F4H2-F4H11 no tocan ese archivo (es Inspector de Environment, no combate). Sub-hito propio con plan dedicado donde el dev pueda elegir si parte en 2 o 3 archivos.
+
+Alternativas descartadas en el momento:
+- **Hacerlo en F4H1.5** — agrega ~30-60 min de trabajo de refactor con riesgo de break.
+- **Diferir indefinidamente** — el archivo igual cruza el hard cap; mejor agendado con plan que sin.
+
+---
+
+**Fixes aplicados en F4H1.5:**
+
+1. **Split `InspectorPanel_Internal.h` 885 → 412 + 506.** Multi-edit helpers (`allMatch` + 5 templates `multiEdit{Color3,DragFloat,Checkbox,Combo,Color4}`) extraídos a `InspectorPanel_Internal_MultiEdit.h`. Include desde `_Internal.h` para mantener API back-compat (todos los callsites compilan sin cambio). Single-edit helpers (`pushEditIfDone`, `pushAtomicEdit`, `inspectorResetButton`, `inspectorBrokenRefBorder`, `helpMarker`, `isDragActiveOfType`, `fieldDragFloat3/DragFloat/ColorEdit3`, `nearlyEqualVec3/F32`) + `componentKeyForT` + `beginComponentSection` quedan en `_Internal.h`. Sin cambios funcionales.
+
+2. **Extract `SceneRenderer.cpp` 894 → 554 + 298.** `loadSkyboxAndIblFromBase` + `applyEnvironmentFromScene` movidos a `SceneRenderer_Environment.cpp` (~285 LOC body + ~13 LOC header). Includes simétricos con el core para minimizar drift. CMake actualizado.
+
+3. **Extract `findEntityByTag` a `BindingsCommon.h`.** 3 copias inline anonymous-namespace del helper en `LuaBindings_Health/Ragdoll/Vehicle.cpp` reemplazadas por `using bindings::findEntityByTag` + alias local `findByTag` donde existían call-sites internos (back-compat call-site sin tocar el cuerpo de las funciones que lo invocan). Beneficio futuro: F4H2 weapons + F4H6 enemies van a sumar `LuaBindings_Weapon.cpp` + `_Enemy.cpp` que pueden reusar el helper sin re-implementar. Si cambia la convención de tags (ej. tags duplicados con escenarios, fuzzy match) toca 1 archivo en lugar de N.
+
+**Verificación:** suite full `1309/11931` verde post-refactors. Build verde MoodEditor + MoodPlayer.
+
+**LOC residual sobre hard cap 800** (2 archivos restantes, ambos con razón documentada):
+- `InspectorPanel_Environment.cpp` 1149 → F4H1.6 (plan dedicado).
+- `SceneLoader.cpp` 819 (solo 1 LOC sobre cap, marginal) → F4H6 cuando enemy serialization lo empuje sobre 850.
+
+**Backlog post-F4H1.5:**
+- **F4H1.6** — Split `InspectorPanel_Environment.cpp` 1149 → 3 archivos por familia (Sky+Fog / PostFX (Tonemap+Bloom+SSAO+SSR) / Visual (Shadows+ColorGrading)). Plan necesita header `_Environment_Internal.h` con forward decls + helpers comunes (`kEnvDefaults`, `EditEnvironmentSubsetCommand`, `drawSectionResetButton`, `drawSectionDivider`) como inlines/templates.
+- **F4H1.7** (opcional) — Audit hardcoded post-F3H29 si emerge demanda (extender F3H3 con valores agregados en sub-fases 3.3/3.4).
+
+---
+
+## 2026-05-29: F4H1 cierre — Sistema de salud/daño + maniquí de testing (cimiento combate Fase 4)
+
+Primer hito de Fase 4. 3 decisiones cerradas vía AskUserQuestion + 1 decisión arquitectónica de la regla "nada hardcodeado" de Fase 3.
+
+**D1 — Feedback visual al recibir daño: flash blanco breve (~80ms).** Convención Half-Life / Quake / Doom — el jugador ve impacto contundente per-hit. **F4H1 backend-only**: el `HealthComponent.hitFlashTimer` se setea correctamente (0.08s on-hit, 0.25s al morir) y el sistema lo decae cada tick — pero el shader render del flash queda agendizado al backlog (require edit de `pbr.frag` + uniform per-draw; el feedback del daño mientras tanto vive en Console log + Inspector + cae con física al morir). Implementable cuando emerja necesidad de polish visual (F4H5 game feel pass).
+
+Alternativas descartadas:
+- **Color shift gradual a rojo** — útil para combate largo pero no marca cada hit. Mala fit para hitscan donde cada disparo cuenta.
+- **Ambos (flash + tinte gradual)** — más código, beneficio marginal en F4H1. Agendizable.
+
+**D2 — Muerte: cae con física.** Convención FPS arcade. Implementación: el sistema Health detecta `dead && !RigidBodyComponent` y agrega Dynamic; en el próximo frame `EditorApplication::updateRigidBodies` (que ya existe) materializa el body Jolt y la gravedad actúa. Aprovecha infraestructura existente sin tocar physics.
+
+Alternativas descartadas:
+- **Desactivar invisible** — sin feedback, anti-satisfacción.
+- **Fijo + cambio a gris** — útil para testing del Inspector pero rompe el feel de combate.
+- **Ragdoll real** — agendizado a F4H9 (cuando enemigos sean humanoides riggeados). F4H1 = cubos simples.
+
+**D3 — Spawn via "+ Crear Entidad" tab nueva "Gameplay" > Maniquí.** Convención del editor existente (modal pick con TabBar). Tab "Gameplay" creada para futuros items (enemigos de prueba F4H6+, pickups F4H3+).
+
+Alternativas descartadas:
+- **Botón temporal en MenuBar > Debug** — se vuelve scaffolding muerto en F4H2 cuando hay armas reales.
+- **Solo Lua `scene.spawn_dummy(pos)`** — más fricción para iterar el feel del combate.
+
+**D4 — Defaults en `Project Settings > Gameplay`, NO hardcoded.** Convención "nada hardcodeado" de Fase 3 explícita en `PLAN_FASE4.md §6`. `GameplaySettings` ya existía (F3H4 con walk/crouch/jump); F4H1 agrega `maxHealthDefault = 100.0f` con sanitize clamp `[1, 10000]`. Project Settings panel tab Gameplay gana 1 slider + tooltip i18n + reset.
+
+**Backlog post-F4H1:**
+- Shader flash render del `hitFlashTimer` (uniform `uHitFlash` per-draw en `pbr.frag`). Agendizable a F4H5 game feel pass.
+- Inspector reset max usa default canónico 100 — wirear lectura live de `Project Settings.gameplay.maxHealthDefault` desde EditorUI (F4H1.5+).
+- Event bus OnDamage / OnDeath para callbacks Lua per-entity.
+- Sound on damage / sound on death (F4H5 game feel pass).
+- Headshot multiplier (F4H2+ si el raycast retorna parte del cuerpo).
+- Resistencias por tipo de daño (fuego, eléctrico, etc.) — solo si el diseño del juego lo pide.
+
+---
+
 ## 2026-05-29: F3H31 cierre — Sky Atmosphere Hosek-Wilkie + GPU IBL bake runtime (Sub-fase 3.4 CIERRE REAL 12/12 🏁)
 
 Duodécimo y último hito de Sub-fase 3.4 — re-cierre 12/12. Sub-fase 3.4 estaba cerrada 11/11 con F3H30 (texturas), pero el dev pidió retomar el stub original "HDRI dinámico + ciclo día/noche" con scope más ambicioso: *"quiero algo útil y profesional como el del Unreal"* + *"me gusta lo del bake en real time, en runtime, mientras sea procedural"*. **7 decisiones** + **4 ajustes reactivos** post-validación visual.

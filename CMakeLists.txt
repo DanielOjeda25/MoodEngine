@@ -464,6 +464,7 @@ add_library(mood_engine_lib STATIC
     src/engine/render/sky/HosekWilkie.cpp
     src/engine/render/sky/ProceduralSkyRenderer.cpp
     src/engine/render/sky/IBLBaker.cpp
+    src/engine/render/scene_renderer/SceneRenderer_Environment.cpp  # F4H1.5 split
 
     src/engine/scripting/exposed/ExposedProperty.cpp
     src/engine/scripting/bindings/LuaBindings.cpp
