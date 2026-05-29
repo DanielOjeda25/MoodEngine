@@ -11,6 +11,63 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-29: F3H28 cierre — Grupos + Map Tools como categorías del Properties Editor
+
+Octava decisión: integrar Empty Group_<N> de F3H27 + reemplazar MapEditorTopBar por categorías del Inspector chasis F3H22. Hallazgo crítico pre-implementación cambió scope: el stub asumía paneles flotantes "Grupos" (en realidad VisGroupsPanel/F2H33, sistema visibility-toggle) y "Map Tools" (en realidad MapEditorTopBar/F2H30, toolbar como panel ImGui-dockable), y "toolbar lateral persistente" que no existía. 8 decisiones efectivas — 4 pre-implementación vía AskUserQuestion + 4 reactivas (post-research / mid-implementación).
+
+**D1 — A1+A2: "toolbar lateral" + "top bar separada" no existen como entidades distintas.** El stub asumía 2 superficies pero el research reveló que ambas se mapeaban al mismo `MapEditorTopBar` (panel ImGui-dockable que aparecía como tab "Map Tools" en el dock derecho del workspace map_editor). Decisión: las preguntas A1 y A2 del stub se respondieron implícitamente al confirmar D5 (eliminar MapEditorTopBar). Atajos teclado (1/2/3, V, W/E/R, Ctrl+G) preservados intactos — eran ortogonales al panel.
+
+Alternativas descartadas:
+- **Inventar una "toolbar lateral" nueva** desde cero — scope inflation. El dev confirmó que su mental model era "los maptools que estén más insertados en menús" — sin demanda explícita de tener AMBOS (toolbar + categoría).
+- **Mantener MapEditorTopBar como redundancia** — decisión C1 lo descartó: eliminar.
+
+**D2 — A3: Boolean ops quedan SOLO en context menu del Outliner (no migrar a categoría Map Tools).** Confirmado vía AskUserQuestion: el dev validó esa ubicación en F3H26 ("me gusta como esta"). Migrar a la categoría agrega redundancia sem ántica (context = "sobre el seleccionado", categoría = "global del editor") sin valor agregado. Pattern Blender: las Modifier Stack operan sobre el activo, no en una categoría global de "tools".
+
+Alternativas descartadas:
+- **Duplicado en ambos lugares** (Blender modifiers pattern). Más descubrible para devs nuevos pero ruido para devs experimentados que ya saben dónde está.
+- **Migrar exclusivamente a categoría** (eliminar del context menu). Pierde el acceso contextual rápido del right-click.
+
+**D3 — B1: Backend de categoría "Grupos" = Empty-as-parent de F3H27 (no sistema paralelo).** Reusar lo implementado: lista de Empty Group_<N> del mapa con descendants, acciones via `GroupSelectionCommand` / `UngroupSelectionCommand` existentes. Cero código nuevo de backend; UI puro. Memoria `feedback_no_reinventar_rueda` aplicada. Implica B2 (categoría lista TODOS los Empty con descendants — mismo filtro que el marker XYZ del overlay F3H27 R7) y B3 (NO multi-membership porque Empty es single-parent por definición).
+
+Alternativas descartadas:
+- **VisGroup paralelo (Source SDK style)** — visibility-toggle sin parent transform. Útil para "esconder todo el 2do piso" sin mover. Backlog si emerge demanda (hito propio).
+- **Híbrido: Empty + flag VisGroup** — agregar bit de visibility al Empty. Combina ambos pero rompe la separación de conceptos.
+
+**D4 — C1: MapEditorTopBar ELIMINADO (no ocultar).** Decisión reactiva del dev tras research que aclaró la confusión semántica: el panel "Map Tools" del dock NO era una toolbar fija de F2H30 — era un panel flotante completo. Decisión: borrar archivos `MapEditorTopBar.h/cpp`, quitar del registry de `EditorUI`, quitar de `CMakeLists.txt`. Para no perder funcionalidad: el popover `drawSnapPopoverContent` (F3H6) se extrae a `SnapPopoverContent.{h,cpp}` como helper compartido reusable + la categoría Map Tools incluye Clip tool + botón Ajustes con el popover migrado.
+
+Alternativas descartadas:
+- **Ocultar por default (hiddenByDefault)** — el panel queda como código muerto. El dev fue explícito: eliminar.
+- **Mantener ambos visibles** (coexistencia indefinida) — el dev quiere reducir clutter, no agregar.
+
+**D5 — C2: VisGroupsPanel "Grupos" → "Visibilidad" (rename, no eliminar).** Decisión reactiva tras la colisión de nombres descubierta: VisGroupsPanel y la nueva categoría del Inspector ambos se llamaban "Grupos" pero son conceptos distintos (VisGroup = visibility-toggle de capas; Group = Empty-as-parent transform). Solución mínima: cambiar el `name() const` del VisGroupsPanel a "Visibilidad". Backend de VisGroups (F2H33) intacto — solo el label visible cambia.
+
+Alternativas descartadas:
+- **Ocultar también el VisGroupsPanel** — perderíamos la UI del sistema VisGroups sin reemplazo. El dev rechazó la opción.
+- **Migrar VisGroups también a categoría del Inspector** — scope inflation (3 categorías nuevas en un hito). Queda como backlog si emerge demanda.
+
+**D6 — D1: Workspace map_editor reorganizado, Viewport 3D en top-left.** Pedido reactivo del dev mid-implementación: *"en el editor de mapas, me gustaría que el 3D este primero, de todos"*. Pre-F3H28 el Viewport 3D estaba en top-right (top-left era el orto Top XZ, convención Hammer). Cambio mínimo: intercambiar Viewport ↔ Top XZ; ortos Front+Side quedan abajo. Adicionalmente: el `dockRightBar` (10% → 22%) ahora aloja Inspector + Visibilidad como tabs (antes eran "Map Tools" + "Grupos" que ya no existen como nombres). Inspector pasa de oculto-by-default a visible en este workspace para que las nuevas categorías sean accesibles.
+
+Implica bump `imgui_layout_v8.ini` → `v9.ini` (patrón establecido del proyecto cuando cambia el dock layout de un workspace).
+
+Alternativas descartadas:
+- **3D protagonista grande, ortos chicos a la derecha** — más espacio para el 3D pero el dev eligió cambio mínimo (mantener 2x2).
+- **Solo el 3D con ortos como tabs apilables** — pierde vista simultánea de los 3 ortos (anti Hammer-style).
+- **No tocar el layout** — pero el dev pidió explícito que el 3D esté primero.
+
+**D7 — Sin tests UI nuevos.** Las 2 categorías son UI puro sobre comandos backend ya testeados (F3H27 tiene tests de `GroupSelectionCommand` / `UngroupSelectionCommand` / `SetParentCommand` + parenting state). El chasis F3H22 del Inspector no tiene tests UI directos por convención del proyecto. Suite **1283/11841 verde** post-F3H28 confirma sin regresión.
+
+Alternativas descartadas:
+- **Tests de integración via ImGui test engine** — overhead alto, F3H22 no los tiene, no agregar como precedente sin demanda explícita.
+- **Tests del state de la categoría activa** (UserSettings.editor.inspectorActiveCategory acepta "groups"/"maptools") — el campo es un std::string libre; agregar tests del enum value sería over-engineering.
+
+**D8 — Backend de requests group/ungroup sigue el patrón `requestX/consumeX`.** Decisión arquitectónica menor: en lugar de que la categoría Inspector construya el `GroupSelectionCommand` y lo empuje al history directamente (patrón VisGroupsPanel), agregamos 2 nuevos request/consume en EditorUI (`requestGroupSelection` / `requestUngroupSelection`). Razón: paralelismo con `requestToggleSnapToVertex` / `requestCarve` / etc. El handler en `EditorApplication_Run.cpp` ya tiene el contexto (Scene + AssetManager + SelectionSet + history) — más fácil delegar a `groupSelectedEntities()` que duplicar la lógica de `topLevelAncestors` + `GroupSelectionCommand` ctor en el panel.
+
+Alternativas descartadas:
+- **Panel construye el command directo** (patrón VisGroupsPanel). Funciona pero duplica la lógica del filtro top-level. El handler de EditorApplication la centraliza.
+- **Atajo de teclado expone un slot que el panel emite** — más complejidad sin upside.
+
+---
+
 ## 2026-05-28: F3H27 cierre — Parenting jerárquico de transforms
 
 Splitted del stub original F3H27 (4 items → 4 hitos separados): F3H27 hoy = parenting-only; F3H28-F3H30 = Grupos+Tools / Mundo grande / HDRI dinámico. 4 decisiones pre-implementación + 5 ajustes reactivos post-validación visual.
