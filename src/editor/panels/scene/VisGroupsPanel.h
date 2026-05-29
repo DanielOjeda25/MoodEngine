@@ -26,7 +26,11 @@ class HistoryStack;
 class VisGroupsPanel : public IPanel {
 public:
     void onImGuiRender() override;
-    const char* name() const override { return "Grupos"; }
+    // F3H28: rename "Grupos" -> "Visibilidad" para distinguir del
+    // sistema de Empty-as-parent de F3H27 (que tiene su propia categoría
+    // "Grupos" en el Inspector). VisGroups = visibility-toggle de capas,
+    // concepto distinto.
+    const char* name() const override { return "Visibilidad"; }
 
     void setScene(Scene* s) { m_scene = s; }
     void setEditorUi(EditorUI* ui) { m_ui = ui; }

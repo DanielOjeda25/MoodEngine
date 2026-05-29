@@ -70,20 +70,18 @@ EditorUI::EditorUI() {
                 // Arrancan ocultos; se hacen visibles via
                 // applyDefaultVisibilityForWorkspace.
                 &m_orthoTop, &m_orthoFront, &m_orthoSide,
-                // F2H30 Bloque C: top toolbar del mismo workspace.
-                &m_mapEditorTopBar,
+                // F3H28: MapEditorTopBar eliminado — su contenido vive
+                // ahora en la categoria "Map Tools" del Inspector.
                 // F2H33: panel de VisGroups del mismo workspace.
                 &m_visGroupsPanel};
     m_orthoTop.visible = false;
     m_orthoFront.visible = false;
     m_orthoSide.visible = false;
-    m_mapEditorTopBar.visible = false;
     m_visGroupsPanel.visible = false;  // F2H33
     // F2H59: Toolbar como panel independiente queda inactivo (no en m_panels).
     // El ViewportPanel pinta las herramientas overlay sobre la imagen del
     // viewport directamente; recibe el puntero a UI aca.
     m_viewport.setEditorUi(this);
-    m_mapEditorTopBar.setEditorUi(this);  // F2H30 Bloque C
     m_visGroupsPanel.setEditorUi(this);  // F2H33
     m_nodeGraphSandbox.setEditorUi(this);  // F2H46
     m_dialogBrowser.setEditorUi(this);     // F2H47
@@ -202,7 +200,7 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         setVisible("Top (XZ)",   false);
         setVisible("Front (XY)", false);
         setVisible("Side (ZY)",  false);
-        setVisible("Map Tools",  false);  // F2H30 Bloque C: top toolbar
+        // F3H28: panel "Map Tools" (MapEditorTopBar) eliminado.
         setVisible("Grupos",     false);  // F2H33: VisGroups panel
     };
     // F2H46: en cualquier workspace que NO sea "narrative", ocultamos
@@ -296,19 +294,19 @@ void EditorUI::applyDefaultVisibilityForWorkspace(const std::string& name) {
         hideNarrativePanels();
     } else if (name == "map_editor") {
         // F2H28: workspace 4-viewport inspirado en Valve Hammer Editor.
-        // Viewport (perspectiva en top-right) + 3 ortos. Inspector y
-        // Escena ocultos por default — el dev los abre flotantes desde
-        // menu Ver si los necesita.
-        // F2H30 Bloque C: + top toolbar "Map Tools" con sub-modo
-        // buttons (Objeto/Vertex/Edge/Cara/Pincel).
+        // Viewport (perspectiva en top-right) + 3 ortos. Escena oculta
+        // por default — el dev la abre flotante desde menu Ver.
+        // F3H28: el viejo panel "Map Tools" (MapEditorTopBar) fue
+        // eliminado — su contenido vive ahora como categoría del
+        // Inspector. Inspector pasa a visible por default en este
+        // workspace para que la categoría "Map Tools" esté accesible.
         setVisible("Viewport",        true);
         setVisible("Top (XZ)",        true);
         setVisible("Front (XY)",      true);
         setVisible("Side (ZY)",       true);
-        setVisible("Map Tools",       true);
-        setVisible("Grupos",          true);  // F2H33: VisGroups panel
+        setVisible("Grupos",          true);  // F2H33: VisGroups panel (rename "Visibilidad" en F3H28)
         setVisible("Escena",          false);
-        setVisible("Inspector",       false);
+        setVisible("Inspector",       true);  // F3H28: para acceder a categorías Map Tools + Grupos
         setVisible("Asset Browser",   false);
         setVisible("Console",         false);
         setVisible("Lua API",         false);

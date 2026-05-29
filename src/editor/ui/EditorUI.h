@@ -41,7 +41,6 @@
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28
 #include "editor/panels/scene/ViewportPanel.h"
 #include "editor/panels/scene/VisGroupsPanel.h"  // F2H33
-#include "editor/ui/MapEditorTopBar.h"  // F2H30 Bloque C
 #include "editor/selection/SelectionSet.h"  // F2H13
 #include "editor/workspace/WorkspaceManager.h"
 #include "engine/scene/core/Entity.h"
@@ -102,7 +101,6 @@ public:
     OrthoViewportPanel& orthoFront() { return m_orthoFront; } // F2H28
     OrthoViewportPanel& orthoSide()  { return m_orthoSide; }  // F2H28
     Dockspace& dockspace() { return m_dockspace; }
-    MapEditorTopBar& mapEditorTopBar() { return m_mapEditorTopBar; }      // F2H30
     VisGroupsPanel& visGroupsPanel()   { return m_visGroupsPanel; }       // F2H33
     AssetBrowserPanel& assetBrowser()  { return m_assetBrowser; }
     HierarchyPanel& hierarchy()        { return m_hierarchy; }
@@ -188,6 +186,17 @@ public:
     /// @brief F2H32 Bloque C: carve (Hammer-style boolean subtract).
     void requestCarve();
     bool consumeCarveRequest();
+
+    /// @brief F3H28: agrupar/desagrupar selección desde la categoría
+    ///        "Grupos" del Inspector. Atajos de teclado existentes
+    ///        (Ctrl+G / Shift+Ctrl+G) viven en EditorOverlay y llaman
+    ///        directo a `EditorApplication::groupSelectedEntities` /
+    ///        `ungroupSelectedEntities`. Estos request/consume son la
+    ///        ruta paralela desde la UI sin teclado.
+    void requestGroupSelection();
+    bool consumeGroupSelectionRequest();
+    void requestUngroupSelection();
+    bool consumeUngroupSelectionRequest();
 
     // ============================================================
     // State setters / queries (Scene + History + Selection + Mode).
@@ -393,7 +402,6 @@ private:
     UserPreferencesPanel m_userPreferences;  // F3H2
     AssetIssuesPanel     m_assetIssues;       // F3H18
     Toolbar m_toolbar;  // F2H22
-    MapEditorTopBar m_mapEditorTopBar;  // F2H30
     VisGroupsPanel m_visGroupsPanel;  // F2H33
     // F2H28: 3 paneles orto. Inician invisibles; los hace visibles
     // applyDefaultVisibilityForWorkspace al activar el workspace de mapas.
@@ -469,6 +477,13 @@ private:
     // F2H35 Bloque E: labels point entities.
     bool m_toggleEntityLabelsRequested = false;
     bool m_showEntityLabels = true;
+
+    // F3H28: requests de agrupar/desagrupar disparados por la categoría
+    // "Grupos" del Inspector. EditorApplication consume y delega a
+    // groupSelectedEntities / ungroupSelectedEntities (mismas funciones
+    // que los atajos Ctrl+G / Shift+Ctrl+G).
+    bool m_groupSelectionRequested = false;
+    bool m_ungroupSelectionRequested = false;
 
     // F3H9: clipboard interno para copy/paste de componentes entre
     // entidades del mismo proyecto. Se invalida al cerrar proyecto

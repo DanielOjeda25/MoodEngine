@@ -118,6 +118,9 @@ void InspectorPanel::onImGuiRender() {
     // Si la categoría activa es "environment", buscamos el singleton
     // en la scene en vez de requerir selección.
     const bool isSceneWideCat = (activeCat == "environment");
+    // F3H28: categorias scene-global (Grupos + Map Tools) no requieren
+    // ni selección ni singleton. Listan/configuran state global del mapa.
+    const bool isGlobalCat = (activeCat == "groups" || activeCat == "maptools");
 
     Entity e = m_ui->selectedEntity();
 
@@ -138,8 +141,8 @@ void InspectorPanel::onImGuiRender() {
 
     // Si NO es scene-wide y no hay selección, mostrar hint clásico — pero
     // dejar la category bar visible para que el dev pueda saltar a una
-    // categoría scene-wide (Environment).
-    const bool needsSelection = !isSceneWideCat && !e;
+    // categoría scene-wide (Environment / Grupos / Map Tools).
+    const bool needsSelection = !isSceneWideCat && !isGlobalCat && !e;
 
     // F3H22: layout en dos columnas — barra de icons vertical a la
     // izquierda + body del Inspector a la derecha.
@@ -157,6 +160,16 @@ void InspectorPanel::onImGuiRender() {
                        ImVec2(0.0f, 0.0f),
                        false,
                        ImGuiWindowFlags_HorizontalScrollbar);
+
+    // F3H28: categorias globales se dibujan directo y salen — no entran al
+    // dispatch per-entity ni muestran "no selection" / "+Add Component".
+    if (isGlobalCat) {
+        if (activeCat == "groups")        renderGroupsSection();
+        else if (activeCat == "maptools") renderMapToolsSection();
+        ImGui::EndChild();
+        ImGui::End();
+        return;
+    }
 
     if (needsSelection) {
         ImGui::TextDisabled("%s", I18n::T("editor.panel.inspector.no_selection").c_str());
@@ -332,12 +345,22 @@ void InspectorPanel::renderCategoryBar(Entity e) {
     categoryButton("gameplay",    ICON_FA_GAMEPAD,
                     "editor.inspector.category.gameplay",
                     "editor.inspector.category.gameplay.tooltip", false);
+    // F3H28: 2 categorías scene-global nuevas. Siempre visibles (sceneWide=true),
+    // no requieren selección ni singleton — sirven incluso en escena vacía
+    // para configurar tools / crear grupos.
+    categoryButton("groups",      ICON_FA_LAYER_GROUP,
+                    "editor.inspector.category.groups",
+                    "editor.inspector.category.groups.tooltip", true);
+    categoryButton("maptools",    ICON_FA_SCREWDRIVER_WRENCH,
+                    "editor.inspector.category.maptools",
+                    "editor.inspector.category.maptools.tooltip", true);
 
     // Fallback: si la categoría activa NO está disponible y NO es
-    // scene-wide, auto-switch a "object" silencioso. Solo cuando hay
-    // entity seleccionada (sin selección, dejamos la activa para que el
-    // dev pueda ver el hint de "selecciona algo").
+    // scene-wide ni global, auto-switch a "object" silencioso. Solo
+    // cuando hay entity seleccionada (sin selección, dejamos la activa
+    // para que el dev pueda ver el hint de "selecciona algo").
     if (e && activeCat != "environment" &&
+        activeCat != "groups" && activeCat != "maptools" &&
         !entityHasCategory(e, activeCat.c_str())) {
         auto ed = UserSettings::editor();
         ed.inspectorActiveCategory = "object";

@@ -599,7 +599,7 @@ add_executable(MoodEditor
     src/editor/ui/ToastsOverlay.cpp  # F3H24
     src/editor/ui/Dockspace.cpp
     src/editor/ui/Toolbar.cpp
-    src/editor/ui/MapEditorTopBar.cpp
+    src/editor/ui/SnapPopoverContent.cpp                # F3H28 (extraido del extinto MapEditorTopBar)
     src/editor/commands/HistoryStack.cpp
     src/editor/commands/EditTransformCommand.cpp
     src/editor/commands/MultiEditTransformCommand.cpp
@@ -638,6 +638,8 @@ add_executable(MoodEditor
     src/editor/panels/scene/InspectorPanel_Particles.cpp
     src/editor/panels/scene/InspectorPanel_Brush.cpp
     src/editor/panels/scene/InspectorPanel_Inventory.cpp   # F2H51
+    src/editor/panels/scene/InspectorPanel_Groups.cpp      # F3H28
+    src/editor/panels/scene/InspectorPanel_MapTools.cpp    # F3H28
     src/editor/panels/assets/AssetBrowserPanel.cpp
     src/editor/panels/assets/AssetBrowserPanel_Tabs.cpp   # F2H81 auditoría (split)
     src/editor/panels/assets/AssetBrowserPanel_ImportVehicle.cpp  # F2H82 modal

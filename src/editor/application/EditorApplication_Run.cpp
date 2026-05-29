@@ -399,6 +399,14 @@ void EditorApplication::pumpUiRequests() {
     if (m_ui.consumeCarveRequest()) {
         handleCarve();
     }
+    // F3H28: agrupar/desagrupar desde la categoría Grupos del Inspector.
+    // Mismas funciones que los atajos Ctrl+G / Shift+Ctrl+G.
+    if (m_ui.consumeGroupSelectionRequest()) {
+        groupSelectedEntities();
+    }
+    if (m_ui.consumeUngroupSelectionRequest()) {
+        ungroupSelectedEntities();
+    }
     // F2H35 Bloque E: toggle labels point entities (boton "Nombres" del
     // toolbar). Estado vive en EditorUI (default ON).
     if (m_ui.consumeToggleEntityLabelsRequest()) {

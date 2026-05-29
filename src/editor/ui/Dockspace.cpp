@@ -102,12 +102,12 @@ void buildMaterialsWorkspace(ImGuiID dockspaceId) {
 ///        necesidad real.
 void buildMapEditorWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockMain = dockspaceId;
-    // F2H30 Bloque C: columna lateral derecha (~10%) para "Map Tools"
-    // — botones verticales tipo Hammer/Blender. Antes era top bar pero
-    // los botones se aplastaban (issue del dev: "prefiero columna lado
-    // derecho").
+    // F3H28: columna lateral derecha (~22%) para el Inspector. Reemplaza
+    // al difunto panel "Map Tools" — su contenido vive ahora como
+    // categoría del Inspector + el panel "Visibilidad" (ex-VisGroups)
+    // como tab al lado.
     ImGuiID dockRightBar = ImGui::DockBuilderSplitNode(
-        dockMain, ImGuiDir_Right, 0.10f, nullptr, &dockMain);
+        dockMain, ImGuiDir_Right, 0.22f, nullptr, &dockMain);
     // 1) Split horizontal: arriba (dockMain) / abajo (dockBottom).
     ImGuiID dockBottom = ImGui::DockBuilderSplitNode(
         dockMain, ImGuiDir_Down, 0.50f, nullptr, &dockMain);
@@ -118,16 +118,16 @@ void buildMapEditorWorkspace(ImGuiID dockspaceId) {
     ImGuiID dockBottomRight = ImGui::DockBuilderSplitNode(
         dockBottom, ImGuiDir_Right, 0.50f, nullptr, &dockBottom);
 
-    // F2H28: nombres alineados con la convencion Y-up de MoodEngine:
-    // Top muestra el plano XZ (cama mira -Y), Front el plano XY
-    // (cam mira -Z), Side el plano ZY (cam mira -X).
-    // F2H33: panel "Grupos" en la columna lateral derecha como tab al
-    // lado de "Map Tools" — el dev alterna entre tools y la lista de
-    // VisGroups sin cambiar el layout 4-viewport.
-    ImGui::DockBuilderDockWindow("Map Tools",   dockRightBar);     // F2H30
-    ImGui::DockBuilderDockWindow("Grupos",      dockRightBar);     // F2H33: tab al lado
-    ImGui::DockBuilderDockWindow("Top (XZ)",    dockMain);         // top-left
-    ImGui::DockBuilderDockWindow("Viewport",    dockTopRight);     // top-right
+    // F3H28: layout reordenado — Viewport 3D en top-left (primera
+    // posición leyendo izq-der, arriba-abajo). Pedido del dev: "que el
+    // 3D esté primero, de todos". Pre-F3H28 estaba en top-right; los
+    // ortos roteados un cuadrante.
+    // F3H28: panel "Visibilidad" (ex-Grupos / VisGroupsPanel) en la
+    // columna lateral derecha como tab al lado del Inspector.
+    ImGui::DockBuilderDockWindow("Inspector",   dockRightBar);     // F3H28
+    ImGui::DockBuilderDockWindow("Visibilidad", dockRightBar);     // F3H28 (rename de "Grupos")
+    ImGui::DockBuilderDockWindow("Viewport",    dockMain);         // top-left (3D primero)
+    ImGui::DockBuilderDockWindow("Top (XZ)",    dockTopRight);     // top-right
     ImGui::DockBuilderDockWindow("Front (XY)",  dockBottom);       // bottom-left
     ImGui::DockBuilderDockWindow("Side (ZY)",   dockBottomRight);  // bottom-right
 }

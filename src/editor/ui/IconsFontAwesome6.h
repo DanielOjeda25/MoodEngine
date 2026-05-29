@@ -91,6 +91,10 @@ inline constexpr unsigned short k_FontAwesomeRange[] = { 0xE005, 0xF8FF, 0 };
 #define ICON_FA_LINK_SLASH                          "\xef\x84\xa7" // 0xF127 broken ref (F3H18)
 #define ICON_FA_CIRCLE_CHECK                        "\xef\x81\x98" // 0xF058 ok / all clear (F3H18)
 
+// --- Inspector category bar F3H28 (Grupos + Map Tools) ---
+#define ICON_FA_LAYER_GROUP                         "\xef\x97\xbd" // 0xF5FD grupos del mapa (Inspector category)
+#define ICON_FA_SCREWDRIVER_WRENCH                  "\xef\x9f\x99" // 0xF7D9 map tools (Inspector category)
+
 // --- Tree expand/collapse (HierarchyPanel F3H27) ---
 // CARET en lugar de los geometric shapes Unicode ▶/▼ (U+25B6/U+25BC) que NO
 // estan en el rango de Lato (Basic Latin + Latin-1 + Punctuation), causando

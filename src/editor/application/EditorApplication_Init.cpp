@@ -219,7 +219,14 @@ EditorApplication::EditorApplication() {
     // columnas (Item Browser / Viewport / Property Editor / Inspector).
     // Inspector ahora al costado del Property Editor en lugar de abajo
     // — ambos importantes y siempre visibles.
-    io.IniFilename = "imgui_layout_v8.ini";
+    // F3H28: bump v8 -> v9. Workspace map_editor reorganizado: panel
+    // "Map Tools" eliminado (su contenido ahora vive como categoría del
+    // Inspector); panel "Grupos" renombrado a "Visibilidad"; Viewport 3D
+    // movido a top-left (era top-right) por pedido del dev; Inspector
+    // ahora dockeado a la derecha en este workspace. Layouts v8 mostrarían
+    // "Map Tools" como ventana fantasma y dejarían los panels nuevos
+    // flotantes.
+    io.IniFilename = "imgui_layout_v9.ini";
 
     // F2H76: aplicar el tema persistido (default "dark"). El selector vive en
     // Editar -> Preferencias.

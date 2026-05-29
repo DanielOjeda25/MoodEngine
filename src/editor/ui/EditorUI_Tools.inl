@@ -76,4 +76,18 @@ inline bool EditorUI::consumeTogglePlayRequest() {
     return r;
 }
 
+// F3H28: agrupar/desagrupar selección desde categoría Grupos del Inspector.
+inline void EditorUI::requestGroupSelection() { m_groupSelectionRequested = true; }
+inline bool EditorUI::consumeGroupSelectionRequest() {
+    const bool r = m_groupSelectionRequested;
+    m_groupSelectionRequested = false;
+    return r;
+}
+inline void EditorUI::requestUngroupSelection() { m_ungroupSelectionRequested = true; }
+inline bool EditorUI::consumeUngroupSelectionRequest() {
+    const bool r = m_ungroupSelectionRequested;
+    m_ungroupSelectionRequested = false;
+    return r;
+}
+
 } // namespace Mood

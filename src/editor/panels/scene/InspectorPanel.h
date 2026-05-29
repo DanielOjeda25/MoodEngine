@@ -66,6 +66,16 @@ private:
     void renderBrushSection(Entity e);
     void renderInventorySection(Entity e);  // F2H51
 
+    /// @brief F3H28: categorias scene-wide nuevas del Inspector.
+    /// `renderGroupsSection` lista los Empty Group_<N> del mapa (backend
+    /// F3H27: SetParentCommand / GroupSelectionCommand). `renderMapToolsSection`
+    /// concentra configuracion global del workspace Editor de Mapas
+    /// (snap-to-vertex, snap grid, labels, sub-modes Object/V/E/F,
+    /// MapTool actual). Ninguna depende de Entity seleccionada — el
+    /// dispatch las invoca cuando `activeCat == "groups" | "maptools"`.
+    void renderGroupsSection();
+    void renderMapToolsSection();
+
     /// F2H44 Bloque A: boton "+ Add Component" + popup con lista
     /// agrupada por categoria + search. Solo lista los componentes que
     /// `e` NO tiene aun.
