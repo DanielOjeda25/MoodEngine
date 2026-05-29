@@ -38,9 +38,13 @@ void EditorApplication::drawEditorOverlayGizmo(ImDrawList* dl,
     // F2H14: tanto MeshRenderer como BrushComponent tienen geometria
     // visible que se beneficia de rotate/scale. Light/Audio puros
     // (sin mesh ni brush) caen a Translate.
+    // F3H27 follow-up: un Empty padre de un sub-tree (Group_<N>) tambien
+    // acepta rotate/scale — los hijos heredan via worldMatrixOf, asi que
+    // rotar el padre rota el sub-tree alrededor del pivot del Empty.
     const bool hasGeometry =
         selected.hasComponent<MeshRendererComponent>() ||
-        selected.hasComponent<BrushComponent>();
+        selected.hasComponent<BrushComponent>() ||
+        !m_scene->descendantsOf(selected.handle()).empty();
 
     GizmoMode effectiveMode = m_gizmoMode;
     if (!hasGeometry && effectiveMode != GizmoMode::Translate) {

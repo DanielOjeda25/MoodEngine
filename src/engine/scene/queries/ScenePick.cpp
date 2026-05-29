@@ -144,6 +144,14 @@ ScenePickResult pickEntityFromRay(Scene& scene,
                                    const AssetManager* assets) {
     ScenePickResult best{};
     f32 bestT = std::numeric_limits<f32>::max();
+    // F3H27 R7: track separado para Empty icons (Group_<N>). Tienen
+    // prioridad sobre la geometria de fondo — patron Blender/Unity: el
+    // icono del Empty es overlay editor y siempre gana al click cuando
+    // el rayo lo pega, aunque haya un brush hijo entre la camara y el
+    // pivot. Sin prioridad, el dev no podia seleccionar un Group si los
+    // hijos cubrian el pivot world-space.
+    ScenePickResult bestEmpty{};
+    f32 bestEmptyT = std::numeric_limits<f32>::max();
 
     scene.forEach<TransformComponent>([&](Entity e, TransformComponent& t) {
         // F2H33: skipear entities en VisGroups hidden — no son pickables
@@ -181,6 +189,25 @@ ScenePickResult pickEntityFromRay(Scene& scene,
             // workspace Layout para seleccionarlos. Ahora todos usan
             // la misma sphere pickable de radio k_iconPickRadius.
             t_hit = raySphere(origin, dir, t.position, k_iconPickRadius);
+        } else if (!scene.descendantsOf(e.handle()).empty()) {
+            // F3H27 R7: Empty (Group_<N>) usado como padre de un sub-tree
+            // tambien es pickable desde el viewport 3D. Pre-fix el Empty
+            // solo se seleccionaba via Outliner — el dev no podia clickear
+            // el pivot en el 3D. Usamos la misma esfera del icono que el
+            // resto de point entities; el outline englobador (R3+R6)
+            // sigue dibujando el OBB del sub-tree.
+            //
+            // PRIORIDAD: este branch trackea en bestEmpty separado para
+            // ganarle a cualquier geometria de fondo (brush/mesh hijo).
+            // Patron Blender/Unity: el icono del Empty es overlay editor.
+            const f32 emptyHit = raySphere(origin, dir, t.position, k_iconPickRadius);
+            if (emptyHit >= 0.0f && emptyHit < bestEmptyT) {
+                bestEmptyT = emptyHit;
+                bestEmpty.entity = e;
+                bestEmpty.distance = emptyHit;
+                bestEmpty.worldPoint = origin + dir * emptyHit;
+            }
+            return; // no participa del bestT general
         } else {
             return; // entidad sin target pickable
         }
@@ -191,6 +218,8 @@ ScenePickResult pickEntityFromRay(Scene& scene,
         best.worldPoint = origin + dir * t_hit;
     });
 
+    // Empty icon gana siempre si fue hiteado (priority overlay).
+    if (bestEmpty.entity) return bestEmpty;
     return best;
 }
 

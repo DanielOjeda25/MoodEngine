@@ -264,35 +264,83 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
             (void)tf;
             const glm::vec3& color = isActive ? activeColor : selColor;
 
-            // F3H27: si la entity tiene descendientes, dibujar el AABB
-            // axis-aligned COMBINADO de su geometria propia + la de todos
-            // sus descendientes. Asi el outline de un Group envuelve a sus
-            // hijos como en Blender/Unity. Sin descendientes geometricos
-            // (Empty solo o point entity), caer al OBB orientado original.
+            // F3H27: si la entity tiene descendientes, dibujar el OBB
+            // COMBINADO de su geometria propia + la de todos sus
+            // descendientes. Asi el outline de un Group envuelve a sus
+            // hijos como en Blender/Unity.
+            // F3H27 R6: el AABB se computa en el ESPACIO LOCAL DEL PADRE
+            // (parentWorldInv * childWorld * localCorner) y se dibuja
+            // proyectando 8 corners por parentWorld. Esto hace que el
+            // outline ROTE/ESCALE con el padre — pre-fix usabamos AABB
+            // world-axis-aligned, asi que al rotar el padre la caja se
+            // "re-adaptaba" axis-aligned cada frame en vez de rotar.
+            // Sin descendientes geometricos (Empty solo o point entity),
+            // caer al OBB orientado original.
             const auto descendants = m_scene->descendantsOf(sel.handle());
             if (!descendants.empty()) {
-                AABB combined{
+                const glm::mat4 parentWorld = m_scene->worldMatrixOf(sel.handle());
+                const glm::mat4 parentWorldInv = glm::inverse(parentWorld);
+                AABB combinedLocal{
                     glm::vec3( std::numeric_limits<f32>::max()),
                     glm::vec3(-std::numeric_limits<f32>::max())};
                 bool any = false;
-                auto add = [&](entt::entity h) {
-                    const AABB a = computeOwnGeomAabbWorld(h);
-                    if (!a.isValid()) return;
-                    combined = merge(combined, a);
+                auto addInParentLocal = [&](entt::entity h) {
+                    auto& reg = m_scene->registry();
+                    if (!reg.valid(h)) return;
+                    if (!reg.all_of<TransformComponent>(h)) return;
+                    glm::vec3 lMin(0.0f), lMax(0.0f);
+                    bool hasGeom = false;
+                    if (reg.all_of<BrushComponent>(h)) {
+                        const auto& bc = reg.get<BrushComponent>(h);
+                        if (bc.brush.localAabb.isValid()) {
+                            lMin = bc.brush.localAabb.min;
+                            lMax = bc.brush.localAabb.max;
+                            hasGeom = true;
+                        }
+                    } else if (reg.all_of<MeshRendererComponent>(h) && m_assetManager) {
+                        const auto& mr = reg.get<MeshRendererComponent>(h);
+                        if (const MeshAsset* asset = m_assetManager->getMesh(mr.mesh)) {
+                            if (asset->aabbMin.x <= asset->aabbMax.x &&
+                                asset->aabbMin.y <= asset->aabbMax.y &&
+                                asset->aabbMin.z <= asset->aabbMax.z) {
+                                lMin = asset->aabbMin;
+                                lMax = asset->aabbMax;
+                                hasGeom = true;
+                            }
+                        }
+                    }
+                    if (!hasGeom) return;
+                    // 8 corners locales del descendant -> parent-local
+                    const glm::mat4 childToParent =
+                        parentWorldInv * m_scene->worldMatrixOf(h);
+                    const glm::vec3 lc[8] = {
+                        {lMin.x, lMin.y, lMin.z}, {lMax.x, lMin.y, lMin.z},
+                        {lMax.x, lMax.y, lMin.z}, {lMin.x, lMax.y, lMin.z},
+                        {lMin.x, lMin.y, lMax.z}, {lMax.x, lMin.y, lMax.z},
+                        {lMax.x, lMax.y, lMax.z}, {lMin.x, lMax.y, lMax.z}};
+                    for (int i = 0; i < 8; ++i) {
+                        const glm::vec4 pl = childToParent * glm::vec4(lc[i], 1.0f);
+                        combinedLocal.min = glm::min(combinedLocal.min, glm::vec3(pl));
+                        combinedLocal.max = glm::max(combinedLocal.max, glm::vec3(pl));
+                    }
                     any = true;
                 };
-                add(sel.handle());
-                for (entt::entity h : descendants) add(h);
+                addInParentLocal(sel.handle());
+                for (entt::entity h : descendants) addInParentLocal(h);
                 if (any) {
-                    const glm::vec3 mn = combined.min;
-                    const glm::vec3 mx = combined.max;
-                    const glm::vec3 c8[8] = {
+                    const glm::vec3 mn = combinedLocal.min;
+                    const glm::vec3 mx = combinedLocal.max;
+                    const glm::vec3 lc8[8] = {
                         {mn.x, mn.y, mn.z}, {mx.x, mn.y, mn.z},
                         {mx.x, mx.y, mn.z}, {mn.x, mx.y, mn.z},
                         {mn.x, mn.y, mx.z}, {mx.x, mn.y, mx.z},
                         {mx.x, mx.y, mx.z}, {mn.x, mx.y, mx.z}};
+                    glm::vec3 wc8[8];
+                    for (int i = 0; i < 8; ++i) {
+                        wc8[i] = glm::vec3(parentWorld * glm::vec4(lc8[i], 1.0f));
+                    }
                     for (const auto& e : kEdges) {
-                        dbg.drawLine(c8[e[0]], c8[e[1]], color);
+                        dbg.drawLine(wc8[e[0]], wc8[e[1]], color);
                     }
                     continue;
                 }
@@ -353,6 +401,42 @@ void EditorApplication::drawEditorScene3DOverlay(const glm::mat4& view,
             for (const auto& e : kEdges) {
                 dbg.drawLine(w[e[0]], w[e[1]], color);
             }
+        }
+
+        // F3H27 R7: marker XYZ axes (estilo Blender Empty) en CADA
+        // Empty/Group del mapa — siempre visible, no solo cuando esta
+        // selected. Necesario porque el Empty no tiene geometria propia
+        // y sin marker el dev no sabia donde clickear para seleccionar
+        // un Group desde el viewport 3D (el outline englobador solo
+        // aparece tras seleccionarlo via Outliner).
+        // Solo dibujamos para Empties que son padres de algo (descendants
+        // != empty); los Empties huerfanos no aportan click target util.
+        {
+            const glm::vec3 emptyColor(0.55f, 0.55f, 0.55f); // gris medio, no compite con outlines
+            const f32 axisLen = 0.30f; // 30 cm, ligeramente menor que k_iconPickRadius=0.6
+            m_scene->forEach<TransformComponent>(
+                [&](Entity e, TransformComponent& /*tf*/) {
+                    if (e.hasComponent<BrushComponent>())             return;
+                    if (e.hasComponent<MeshRendererComponent>())      return;
+                    if (e.hasComponent<LightComponent>())             return;
+                    if (e.hasComponent<AudioSourceComponent>())       return;
+                    if (e.hasComponent<TriggerComponent>())           return;
+                    if (e.hasComponent<CameraComponent>())            return;
+                    if (e.hasComponent<ParticleEmitterComponent>())   return;
+                    if (m_scene->descendantsOf(e.handle()).empty())   return;
+                    const glm::mat4 wm = m_scene->worldMatrixOf(e.handle());
+                    const glm::vec3 o  = glm::vec3(wm * glm::vec4(0,0,0,1));
+                    const glm::vec3 px = glm::vec3(wm * glm::vec4(axisLen,0,0,1));
+                    const glm::vec3 nx = glm::vec3(wm * glm::vec4(-axisLen,0,0,1));
+                    const glm::vec3 py = glm::vec3(wm * glm::vec4(0,axisLen,0,1));
+                    const glm::vec3 ny = glm::vec3(wm * glm::vec4(0,-axisLen,0,1));
+                    const glm::vec3 pz = glm::vec3(wm * glm::vec4(0,0,axisLen,1));
+                    const glm::vec3 nz = glm::vec3(wm * glm::vec4(0,0,-axisLen,1));
+                    dbg.drawLine(nx, px, emptyColor);
+                    dbg.drawLine(ny, py, emptyColor);
+                    dbg.drawLine(nz, pz, emptyColor);
+                    (void)o;
+                });
         }
 
         // F2H17 + F2H33: highlight de cara(s) seleccionada(s) en
