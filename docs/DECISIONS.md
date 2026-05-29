@@ -11,6 +11,33 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-29: F4H2 Bloque A cierre — Primera arma hitscan data-driven
+
+**Contexto:** Dev pidió arrancar F4H2 (primera arma hitscan) tras F4H1.5. Antes de planificar, hizo decisión arquitectónica firme: *"no quiero nada hardcodeado, que pueda ser dinamico para reutilizar a futuro en otro juego"*. Fase 4 entera se construye engine-generic — el motor provee sistemas, el juego provee data. Memoria persistente: `project_fase4_engine_generic`.
+
+**Decisiones tomadas con AskUserQuestion:**
+
+- **D1 — Arma inicial: escopeta (8 pellets + 6° spread).** Más visceral, expone dispersión cónica desde día 1. Pistola descartada (mismo schema con `pellets=1` la cubre — F4H3 si emerge). Alternativa "ambas" descartada por scope.
+- **D2 — Feedback al impactar pared/piso: sonido + partícula siempre.** Decal NO entra (DecalComponent no existe en engine; agendizado a F4H2.1 post-F4H2). Solo-sonido descartado (menos satisfactorio); debug-sphere descartado (ruido en escena).
+- **D3 — UX agregar arma: slot vacío + drag-drop.** + Crear Entidad → tab Gameplay → "Arma (vacía)" emplaza WeaponComponent con `weaponAssetId=0`; dev drag-drop `.moodweapon` al slot en Inspector. Prefab armado descartado (menos flexible); ambos descartado por scope (Bloque B puede agregar prefab si el dev pide).
+- **D4 — Keybinding "fire": data-driven desde día 1.** UserSettings.input.keybindings.fire = "mouse_left". Hardcoded mouse-left en C++ descartado (incoherente con el norte "nada hardcodeado"); UI rebindable descartado por scope (Bloque B implementa el JSON + binding Lua `Input.is_action_pressed`, UI rebindable a post-F4H2).
+
+**Ajustes reactivos durante la implementación:**
+
+- **R1 — Schema `.moodweapon` engine-generic.** `category` (string libre) en lugar de enum hardcodeado. El motor entiende solo `category=="hitscan"` en F4H2; `projectile`/`melee` son no-op forward-compat. Permite que F4H3+ agregue tipos sin cambiar el schema.
+- **R2 — `pellets=1` cubre pistola.** Un solo sistema cubre escopeta (N pellets + spread) y pistola (1 pellet + 0° spread). Sin ramificación en el código.
+- **R3 — Particle burst one-shot via componente transient.** `ParticleBurstComponent{ttl}` adicional al `ParticleEmitterComponent`. WeaponSystem::tickSystem decae TTL + destruye al expirar. Evita leak de entidades efímeras. NO se serializa (run-time only).
+- **R4 — Tests engine-side sin Jolt/Audio.** 14 tests cubren equipWeapon + state machine canFire/ammoLeft/reload + tickSystem timers. El test E2E de fire() requiere setup pesado (Jolt physics + audio device + colliders) — validación manual en editor.
+- **R5 — Lua bindings: audio=nullptr placeholder.** Wireado completo de AudioDevice requiere extender la cadena ScriptSystem → setupLuaBindings (cascada de N callers). Sonido del disparo se saltea silenciosamente; raycast + damage + particle funcionan. Cascada agendizada a Bloque B.
+
+**Scope split Bloque A → Bloque B:** Al cerrar el código de Sub-tareas 1-4 + Inspector + demo data, las Sub-tareas 5 (input bridge data-driven UserSettings keybindings), 6.b (AssetBrowser tab "Weapons"), 7 (Crear Entidad UX) y la cascada AudioDevice requieren wiring transversal sustancial. Decisión del dev: shipping Bloque A ahora con tag dedicado (`v3.2.0-fase4-hito2-A`) para preservar la infraestructura como cimiento limpio; Bloque B en plan separado [`PLAN_HITO_F4H2_B.md`](PLAN_HITO_F4H2_B.md) cierra F4H2 completo con tag `v3.2.0-fase4-hito2`. Standalone Bloque A es testeable hoy vía Lua manual.
+
+**Tests F4H2 Bloque A**: 32 nuevos / 105 asserts verdes. Suite full **1342/12036** (+33 vs F4H1.5). Cero regresión.
+
+**Backlog post-F4H2 completo**: F4H2.1 decals; F4H2.2 `.moodvfx` asset type; F4H2.3 reload animation; F4H2.4 recoil + camera shake; F4H2.5 bullet tracer; F4H3 segunda arma + swap.
+
+---
+
 ## 2026-05-29: F4H1.5 cierre — Code audit pre-F4H2 + fixes priorizados
 
 Sub-hito reactivo tras feedback del dev al cerrar F4H1: *"creo que previamente deberiamos hacer una auditoria de codigo, porque vamos a escribir mucho codigo, y lo ideal es no tener archivos enormes, que no pasen de 500 lineas, codigo spaguetti repetitivo, deadcode"*. Quick audit estilo F3H3 sobre 3 buckets (LOC + duplicación + deadcode), output `docs/CODE_AUDIT_F4_PRE.md`. **4 decisiones** + **3 fixes aplicados** + **1 fix agendizado**.

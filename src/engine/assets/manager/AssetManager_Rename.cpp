@@ -131,6 +131,14 @@ bool AssetManager::renameLogicalPath(const std::string& oldPath,
         return m_vehicleConfigs.rename(id, newPath);
     }
 
+    // Weapon spec (F4H2).
+    if (ext == ".moodweapon") {
+        if (!m_weapons.contains(oldPath)) return false;
+        const WeaponAssetId id = m_weapons.findByPath(oldPath);
+        if (id == 0) return false;
+        return m_weapons.rename(id, newPath);
+    }
+
     // .lua: scripts NO se cachean en el AssetManager — viven solo como
     // string en ScriptComponent.path. RenameAssetCommand reescribe los
     // componentes directo; aquí no hay nada que hacer.

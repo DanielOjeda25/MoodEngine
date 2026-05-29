@@ -1,0 +1,19 @@
+{
+  "_version": 1,
+  "displayName": "Escopeta",
+  "category": "hitscan",
+  "damage": 15.0,
+  "range": 25.0,
+  "pellets": 8,
+  "spreadDeg": 6.0,
+  "fireRatePerSec": 1.5,
+  "magazineSize": 6,
+  "reloadTimeSec": 1.8,
+  "viewmodelMesh": "",
+  "viewmodelMaterial": "",
+  "fireSound": "",
+  "impactSound": "",
+  "muzzleVfx": "",
+  "impactVfx": "",
+  "ignoreOwner": true
+}

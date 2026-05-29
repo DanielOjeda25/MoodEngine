@@ -22,6 +22,8 @@ add_executable(mood_tests
     test_user_settings_editor.cpp              # F3H7 (+F3H21/F3H22/F3H23 fields)
     test_hosek_wilkie.cpp                      # F3H31
     test_health.cpp                            # F4H1
+    test_weapon_asset.cpp                      # F4H2
+    test_weapon_system.cpp                     # F4H2
     test_editor_camera_lerp.cpp                # F3H21
     test_profiler_buffer.cpp                   # F3H23
     test_toasts.cpp                            # F3H24
@@ -181,6 +183,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Item.cpp  # F2H51
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Quest.cpp # F2H53 Bloque B
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Vehicle.cpp # F2H67 Polish 2
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Weapon.cpp  # F4H2
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Rename.cpp  # F3H19
     ${CMAKE_SOURCE_DIR}/src/engine/quest/QuestAsset.cpp                  # F2H53 Bloque A
     ${CMAKE_SOURCE_DIR}/src/engine/quest/QuestSystem.cpp                 # F2H53 Bloque C
@@ -244,8 +247,11 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Ragdoll.cpp # F2H66 E
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Vehicle.cpp # F2H67 E
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Health.cpp # F4H1
+    ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Weapon.cpp # F4H2
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogScriptHost.cpp # F2H48.1
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/Health.cpp # F4H1
+    ${CMAKE_SOURCE_DIR}/src/engine/gameplay/weapon/WeaponSpec.cpp   # F4H2
+    ${CMAKE_SOURCE_DIR}/src/engine/gameplay/weapon/WeaponSystem.cpp # F4H2
 )
 
 # AssetManager.cpp usa spdlog (via core/Log). JsonHelpers requiere nlohmann_json.

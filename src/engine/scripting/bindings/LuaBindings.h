@@ -76,6 +76,25 @@ void setupRagdollBindings(sol::state& lua, class Scene* scene);
 ///        get / is_alive). Cimiento del combate Fase 4.
 void setupHealthBindings(sol::state& lua, class Scene* scene);
 
+/// @brief F4H2 — tabla `weapon` para los scripts Lua. Engine-generic:
+///        orquesta `WeaponSystem` sobre la entidad referenciada por tag.
+///        Requiere scene + physicsWorld + audioDevice + assetManager
+///        para ejecutar el disparo. Si alguno es nullptr (tests headless),
+///        los bindings loggean warn y devuelven defaults.
+///        API:
+///          weapon.equip(tag, "weapons/shotgun.moodweapon") -> bool
+///          weapon.fire(tag, {origin_x=,y=,z=, dir_x=,y=,z=}) -> bool
+///          weapon.reload(tag) -> bool
+///          weapon.can_fire(tag) -> bool
+///          weapon.ammo(tag) -> int
+///          weapon.spec(tag) -> {displayName, damage, range, pellets,
+///                              fireRate, magazineSize, reloadTime} | nil
+class AudioDevice;
+void setupWeaponBindings(sol::state& lua, class Scene* scene,
+                          class PhysicsWorld* physicsWorld,
+                          AudioDevice* audioDevice,
+                          AssetManager* assetManager);
+
 /// @brief F2H67 Bloque E: registra la tabla `vehicle` en `lua`.
 ///        Implementado en LuaBindings_Vehicle.cpp. Requiere `scene` y
 ///        `physicsWorld` para escribir el input del componente y leer

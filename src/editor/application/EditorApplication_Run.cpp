@@ -41,6 +41,7 @@
 #include "engine/dialog/DialogInteractSystem.h"  // F2H48
 #include "engine/dialog/DialogSystem.h"          // F2H48
 #include "engine/gameplay/Health.h"              // F4H1
+#include "engine/gameplay/weapon/WeaponSystem.h" // F4H2
 #include "engine/game/state/GameState.h"         // F2H52 H: Tab toggle inventory_panel
 #include "engine/inventory/ItemPickupSystem.h"   // F2H52 Bloque C
 #include "engine/profile/ProfilerBuffer.h"        // F3H23: ring buffer endFrame + resize
@@ -591,6 +592,15 @@ void EditorApplication::tickSystems(f32 dt) {
     if (m_scene && m_mode == EditorMode::Play) {
         MOOD_PROFILE_SCOPE("Health::tickSystem");
         Health::tickSystem(*m_scene, dt);
+    }
+
+    // F4H2: tick del WeaponSystem — decae fireTimer/reloadTimer de las
+    // armas equipadas, completa reloads, cleanup de particle bursts
+    // efimeros del impacto. Solo Play mode; el sistema es engine-generic
+    // (no asume PANDEMONIUM).
+    if (m_scene && m_assetManager && m_mode == EditorMode::Play) {
+        MOOD_PROFILE_SCOPE("Weapon::tickSystem");
+        Weapon::tickSystem(*m_scene, dt, *m_assetManager);
     }
 
     // 3.4) Fisica (Jolt, Hito 12): materializa bodies nuevos siempre y

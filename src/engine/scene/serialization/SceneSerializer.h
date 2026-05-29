@@ -170,6 +170,15 @@ struct SavedHealth {
     bool dead    = false;
 };
 
+/// @brief F4H2 — Copia persistida de WeaponComponent. Solo `weaponPath`
+///        (path logico del .moodweapon equipado) + `currentAmmo`. Los
+///        timers (fireTimer, reloadTimer, firing) son transients runtime
+///        y se reinician al cargar.
+struct SavedWeapon {
+    std::string weaponPath;       // vacio = sin arma equipada
+    int         currentAmmo = -1; // -1 = auto-inicializar al equipar
+};
+
 /// @brief Copia persistida de un TriggerComponent (Hito 33).
 ///        Solo `halfExtents`; el flag runtime `playerInside` se reinicia
 ///        al cargar (la AABB-test del primer frame redetectara estado).
@@ -420,6 +429,7 @@ struct SavedEntity {
     std::optional<SavedAudio>      audio;                 // F3H11
     std::optional<SavedCamera>     camera;                // F3H11
     std::optional<SavedHealth>     health;                // F4H1
+    std::optional<SavedWeapon>     weapon;                // F4H2
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.

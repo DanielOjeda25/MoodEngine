@@ -385,6 +385,16 @@ void setupLuaBindings(sol::state& lua, Entity self,
     // Lua del editor en Play mode.
     setupHealthBindings(lua, self.scene());
 
+    // F4H2 — tabla `weapon`. equip / fire / reload / can_fire / ammo /
+    // spec. Engine-generic: orquesta el WeaponSystem sobre la entidad
+    // referenciada por tag. audio=nullptr aca: el sonido del disparo se
+    // saltea silenciosamente; el raycast + damage + particle se ejecutan
+    // igual. El wireado del AudioDevice via ScriptSystem queda agendizado
+    // a F4H2 bloque B (extender ScriptSystem::update con AudioDevice*).
+    setupWeaponBindings(lua, self.scene(), physics,
+                         /* audio  */ nullptr,
+                         /* assets */ assets);
+
     // F2H67 Bloque E — tabla `vehicle`. Input + queries de speed/gear/rpm
     // + respawn. set_input solo escribe al componente; el VehicleSystem
     // pushea al physics en el siguiente tick.

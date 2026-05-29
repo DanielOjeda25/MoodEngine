@@ -290,4 +290,41 @@ struct HealthComponent {
     f32  hitFlashTimer  = 0.0f;
 };
 
+/// @brief F4H2 — Entidad efimera de particula one-shot (impact burst).
+///        Usado por el WeaponSystem para los puffs de impacto. El
+///        WeaponSystem::tickSystem decrementa `ttl` y destruye la
+///        entidad cuando llega a 0. No se serializa (es transient).
+struct ParticleBurstComponent {
+    f32 ttl = 1.0f;
+};
+
+/// @brief F4H2 — Arma equipada por una entidad (engine-generic).
+///        Plain data: solo `weaponAssetId` (ref al `.moodweapon` cargado
+///        en `AssetManager`) + `currentAmmo` + timers. El motor NO
+///        guarda los stats — vienen del Spec via `AssetManager::getWeapon`.
+///        Cambiar de arma = cambiar `weaponAssetId`.
+///        `weaponAssetId == 0` significa "sin arma equipada" — el
+///        `WeaponSystem::fire` lo trata como no-op.
+struct WeaponComponent {
+    /// @brief Id del WeaponSpec equipado. 0 = sin arma. Resuelto por
+    ///        el AssetManager desde el path logico al cargar la escena.
+    u32  weaponAssetId  = 0;
+
+    /// @brief Munición actual en el mag. Inicializado a `spec.magazineSize`
+    ///        al equipar el arma por primera vez. -1 = "todavía no
+    ///        inicializado" (auto-fill al primer fire/Inspector view).
+    int  currentAmmo    = -1;
+
+    /// Transients (no serializar):
+    /// @brief Cooldown del proximo disparo (segundos). Reset al firing
+    ///        rate del Spec al disparar. WeaponSystem::tick lo decae.
+    f32  fireTimer      = 0.0f;
+    /// @brief Tiempo restante del reload (segundos). > 0 = reloading.
+    f32  reloadTimer    = 0.0f;
+    /// @brief Bandera del frame: true si el input de fire esta sostenido.
+    ///        El bridge de input la setea cada frame; WeaponSystem la lee.
+    ///        Auto-clear al final del tick para evitar arrastre.
+    bool firing         = false;
+};
+
 } // namespace Mood

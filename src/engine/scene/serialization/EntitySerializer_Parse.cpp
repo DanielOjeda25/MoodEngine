@@ -336,6 +336,17 @@ SavedEntity parseEntityFromJson(const json& j) {
         se.health = sh;
     }
 
+    // F4H2: weapon opcional. Mapas pre-F4H2 sin el campo se leen igual
+    // (la entidad queda sin WeaponComponent). El path se resuelve al
+    // cargar en SceneLoader via AssetManager::loadWeapon.
+    if (j.contains("weapon")) {
+        const auto& jw = j.at("weapon");
+        SavedWeapon sw;
+        sw.weaponPath  = jw.value("path",        std::string{});
+        sw.currentAmmo = jw.value("currentAmmo", -1);
+        se.weapon = sw;
+    }
+
     // F2H65: joint. Aditivo — mapas pre-F2H65 sin el campo se leen igual
     // (la entidad queda sin JointComponent).
     if (j.contains("joint")) {

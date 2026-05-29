@@ -66,6 +66,7 @@ private:
     void renderBrushSection(Entity e);
     void renderInventorySection(Entity e);  // F2H51
     void renderHealthSection(Entity e);     // F4H1
+    void renderWeaponSection(Entity e);     // F4H2
 
     /// @brief F3H28: categorias scene-wide nuevas del Inspector.
     /// `renderGroupsSection` lista los Empty Group_<N> del mapa (backend

@@ -502,6 +502,21 @@ void writeHealth(json& je, const HealthComponent& h) {
     je["health"] = jh;
 }
 
+// F4H2: persistir WeaponComponent. weaponPath se reconstruye desde
+// `weaponAssetId` via `AssetManager::weaponPathOf`. Si el path es
+// sentinela vacio ("__empty_weapon") no se persiste — equivale a
+// "sin arma". Timers son transients.
+void writeWeapon(json& je, const WeaponComponent& w,
+                  const AssetManager& assets) {
+    if (w.weaponAssetId == 0) return; // sin arma equipada
+    const std::string path = assets.weaponPathOf(w.weaponAssetId);
+    if (path.empty() || path == "__empty_weapon") return;
+    json jw;
+    jw["path"]        = path;
+    jw["currentAmmo"] = w.currentAmmo;
+    je["weapon"] = jw;
+}
+
 // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la
 // entidad tiene un `PrefabLinkComponent`. Sin propagacion bidireccional
 // por ahora; es solo un breadcrumb para futuras features ("revertir a
@@ -582,6 +597,8 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         writeCamera(je, entity.getComponent<CameraComponent>());
     if (entity.hasComponent<HealthComponent>())           // F4H1
         writeHealth(je, entity.getComponent<HealthComponent>());
+    if (entity.hasComponent<WeaponComponent>())           // F4H2
+        writeWeapon(je, entity.getComponent<WeaponComponent>(), assets);
     if (entity.hasComponent<PrefabLinkComponent>())
         writePrefabLink(je, entity.getComponent<PrefabLinkComponent>());
 

@@ -504,6 +504,22 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<HealthComponent>(hc);
         }
 
+        // F4H2: WeaponComponent. El weaponPath se resuelve via
+        // AssetManager::loadWeapon — si el .moodweapon no existe, el
+        // AssetManager devuelve missingWeaponId() (slot 0) y loguea warn.
+        // Asi la entidad queda con WeaponComponent pero sin arma efectiva.
+        // Timers son transients (0). Mapas pre-F4H2 sin el campo no
+        // añaden el componente.
+        if (se.weapon.has_value()) {
+            const auto& sw = *se.weapon;
+            WeaponComponent wc{};
+            if (!sw.weaponPath.empty()) {
+                wc.weaponAssetId = assets.loadWeapon(sw.weaponPath);
+            }
+            wc.currentAmmo = sw.currentAmmo;
+            e.addComponent<WeaponComponent>(wc);
+        }
+
         // F2H65: JointComponent. El targetEntity (raw handle) se resuelve
         // desde el tag persistido — handles no son estables entre
         // sesiones. Eager lookup primero (sirve para undo de un single

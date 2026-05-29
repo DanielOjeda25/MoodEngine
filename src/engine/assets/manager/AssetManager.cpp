@@ -23,6 +23,7 @@
 #include "engine/dialog/DialogAsset.h"  // F2H48
 #include "engine/inventory/ItemAsset.h" // F2H51
 #include "engine/quest/QuestAsset.h"    // F2H53
+#include "engine/gameplay/weapon/WeaponSpec.h"  // F4H2
 #include "engine/render/rhi/IMesh.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MaterialAsset.h"
@@ -54,6 +55,8 @@ constexpr const char* k_emptyAnimClipPath  = "__empty_clip";
 constexpr const char* k_emptyItemPath      = "__empty_item";
 // F2H53: sentinela del Quest fallback (slot 0). Asset con id "", sin objectives.
 constexpr const char* k_emptyQuestPath     = "__empty_quest";
+// F4H2: sentinela del Weapon fallback (slot 0). Spec con defaults.
+constexpr const char* k_emptyWeaponPath    = "__empty_weapon";
 // Sentinela del material fallback (slot 0). Albedo blanco, mate medio.
 constexpr const char* k_defaultMaterialPath = "__default_material";
 
@@ -261,6 +264,18 @@ AssetManager::AssetManager(std::string rootDir,
         m_quests.initFallback(std::move(empty), k_emptyQuestPath);
     }
     Log::assets()->info("AssetManager: quest 'vacio' generado en slot 0");
+
+    // ---- Slot 0 Weapon (F4H2): spec vacio con defaults sanos. El
+    //      WeaponSystem trata weaponAssetId==0 como "sin arma equipada"
+    //      antes de leer el spec, asi que este slot existe solo para que
+    //      `getWeapon(0)` no sea null y los serializers tengan un path
+    //      de referencia (`"__empty_weapon"`).
+    {
+        auto empty = std::make_unique<Weapon::Spec>();
+        empty->displayName = "(empty)";
+        m_weapons.initFallback(std::move(empty), k_emptyWeaponPath);
+    }
+    Log::assets()->info("AssetManager: weapon 'vacio' generado en slot 0");
 }
 
 AssetManager::~AssetManager() = default;

@@ -38,6 +38,7 @@ namespace Dialog { class Asset; }     // F2H48
 namespace Inventory { class Asset; }  // F2H51
 namespace Quest { class Asset; }      // F2H53
 namespace vehicle { struct VehicleConfig; }  // F2H67
+namespace Weapon { class Spec; }      // F4H2
 
 /// @brief Identificador estable de una textura dentro de un `AssetManager`.
 ///        Valor 0 se reserva para la textura "missing": pedir `getTexture(0)`
@@ -95,6 +96,12 @@ using QuestAssetId = u32;
 ///        que asegura `getVehicleConfig(0)` nunca null. Loadeo lazy + cache
 ///        por path logico, mismo patron que Dialog/Item/Quest.
 using VehicleConfigAssetId = u32;
+
+/// @brief F4H2: Identificador estable de un WeaponSpec (.moodweapon).
+///        Valor 0 reservado para un spec vacio (defaults: 10 dano, 50m range,
+///        1 pellet, no asset refs) que asegura `getWeapon(0)` nunca null.
+///        Loadeo lazy + cache por path logico, mismo patron que Vehicle.
+using WeaponAssetId = u32;
 
 class AssetManager {
 public:
@@ -481,6 +488,28 @@ public:
     /// @brief Cantidad de configs cacheados (incluye slot 0).
     usize vehicleConfigCount() const;
 
+    // ---- Weapon (F4H2) ----
+
+    /// @brief Carga (o devuelve cacheado) un weapon spec por path logico
+    ///        (p.ej. "weapons/shotgun.moodweapon"). En fallo devuelve
+    ///        `missingWeaponId()` (spec vacio con defaults sanos) y loguea
+    ///        warn al canal `assets`. Mismo patron que `loadVehicleConfig`.
+    WeaponAssetId loadWeapon(std::string_view logicalPath);
+
+    /// @brief Devuelve el Spec del id. Nunca null: ids invalidos caen al
+    ///        slot 0 (spec vacio con defaults).
+    const Weapon::Spec* getWeapon(WeaponAssetId id) const;
+
+    /// @brief Id del weapon vacio (slot 0). Spec con defaults.
+    WeaponAssetId missingWeaponId() const { return 0; }
+
+    /// @brief Path logico con el que se cargo el weapon. Slot 0 devuelve
+    ///        el sentinela `"__empty_weapon"`.
+    std::string weaponPathOf(WeaponAssetId id) const;
+
+    /// @brief Cantidad de weapons cacheados (incluye slot 0).
+    usize weaponCount() const;
+
     // ---- Rename de path lógico (F3H19) ----
 
     /// @brief F3H19: actualiza el path lógico asociado a un asset cacheado.
@@ -540,6 +569,9 @@ private:
 
     // VehicleConfig (F2H67). [0] = fallback generico (makeFallbackGenericSedan).
     AssetRegistry<vehicle::VehicleConfig> m_vehicleConfigs;
+
+    // Weapon (F4H2). [0] = spec vacio (defaults: 10 dano, 50m, 1 pellet).
+    AssetRegistry<Weapon::Spec> m_weapons;
 };
 
 } // namespace Mood
