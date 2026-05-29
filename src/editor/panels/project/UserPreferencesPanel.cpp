@@ -286,9 +286,57 @@ void UserPreferencesPanel::drawViewport(UserSettings::EditorSettings& cfg,
         saveNow = true;
     }
 
-    ImGui::Spacing();
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.user_preferences.editor.live_apply_hint").c_str());
+    // F3H29: section "Mundo" — far plane + max orbit radius. Logarithmic
+    // porque el rango [100, 100000] / [10, 50000] no se navega bien lineal
+    // (el dev quiere granularidad fina en 100-2000 y poca en 10000+).
+    ImGui::SeparatorText(
+        I18n::T("editor.user_preferences.section.world").c_str());
+
+    ImGui::TextUnformatted(
+        I18n::T("editor.user_preferences.editor.camera_far_plane").c_str());
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.user_preferences.editor.camera_far_plane.tooltip").c_str());
+    }
+    ImGui::SameLine(kLabelColumnWidth);
+    ImGui::SetNextItemWidth(kControlWidth);
+    if (ImGui::SliderFloat("##user_pref_camera_far_plane",
+                            &cfg.editorCameraFarPlane, 100.0f, 100000.0f,
+                            "%.0f m", ImGuiSliderFlags_Logarithmic)) {
+        dirty = true;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) saveNow = true;
+    if (resetButton("camera_far_plane",
+                     cfg.editorCameraFarPlane,
+                     defaults.editorCameraFarPlane)) {
+        dirty = true;
+        saveNow = true;
+    }
+
+    ImGui::TextUnformatted(
+        I18n::T("editor.user_preferences.editor.camera_max_orbit_radius").c_str());
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.user_preferences.editor.camera_max_orbit_radius.tooltip").c_str());
+    }
+    ImGui::SameLine(kLabelColumnWidth);
+    ImGui::SetNextItemWidth(kControlWidth);
+    if (ImGui::SliderFloat("##user_pref_camera_max_orbit",
+                            &cfg.editorCameraMaxOrbitRadius, 10.0f, 50000.0f,
+                            "%.0f m", ImGuiSliderFlags_Logarithmic)) {
+        dirty = true;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) saveNow = true;
+    if (resetButton("camera_max_orbit",
+                     cfg.editorCameraMaxOrbitRadius,
+                     defaults.editorCameraMaxOrbitRadius)) {
+        dirty = true;
+        saveNow = true;
+    }
+
+    // F3H29 polish: hint "Los cambios se aplican al soltar el slider..."
+    // eliminado de cada sub-sección (era 4× redundante). El
+    // comportamiento es el estándar de cualquier Preferences pane.
 }
 
 void UserPreferencesPanel::drawAssets(UserSettings::EditorSettings& cfg,
@@ -337,9 +385,9 @@ void UserPreferencesPanel::drawAssets(UserSettings::EditorSettings& cfg,
         saveNow = true;
     }
 
-    ImGui::Spacing();
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.user_preferences.editor.live_apply_hint").c_str());
+    // F3H29 polish: hint "Los cambios se aplican al soltar el slider..."
+    // eliminado de cada sub-sección (era 4× redundante). El
+    // comportamiento es el estándar de cualquier Preferences pane.
 }
 
 void UserPreferencesPanel::drawPerformance(UserSettings::EditorSettings& cfg,
@@ -412,9 +460,9 @@ void UserPreferencesPanel::drawPerformance(UserSettings::EditorSettings& cfg,
         saveNow = true;
     }
 
-    ImGui::Spacing();
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.user_preferences.editor.live_apply_hint").c_str());
+    // F3H29 polish: hint "Los cambios se aplican al soltar el slider..."
+    // eliminado de cada sub-sección (era 4× redundante). El
+    // comportamiento es el estándar de cualquier Preferences pane.
 }
 
 void UserPreferencesPanel::drawNotifications(UserSettings::EditorSettings& cfg,
@@ -490,9 +538,9 @@ void UserPreferencesPanel::drawNotifications(UserSettings::EditorSettings& cfg,
         saveNow = true;
     }
 
-    ImGui::Spacing();
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.user_preferences.editor.live_apply_hint").c_str());
+    // F3H29 polish: hint "Los cambios se aplican al soltar el slider..."
+    // eliminado de cada sub-sección (era 4× redundante). El
+    // comportamiento es el estándar de cualquier Preferences pane.
 }
 
 } // namespace Mood

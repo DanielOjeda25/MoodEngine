@@ -283,8 +283,9 @@ void EditorApplication::renderConvertEntityModal() {
     }
 
     if (m_scene == nullptr) {
-        ImGui::TextUnformatted("Sin escena activa.");
-        if (ImGui::Button("Cerrar")) {
+        ImGui::TextUnformatted(
+            I18n::T("editor.convert_modal.no_scene").c_str());
+        if (ImGui::Button(I18n::T("editor.modal.common.close").c_str())) {
             m_convertModalActiveTarget = entt::null;
             ImGui::CloseCurrentPopup();
         }

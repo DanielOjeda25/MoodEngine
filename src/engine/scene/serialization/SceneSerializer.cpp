@@ -2,6 +2,7 @@
 
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/render/resources/MaterialAsset.h"  // F3H29: resolve runtime tex paths
 #include "engine/scene/VisGroup.h"  // F2H33: visgroupIdOf
 #include "engine/scene/components/BrushComponent.h"  // F2H11
 #include "engine/scene/components/Components.h"
@@ -67,17 +68,37 @@ json serializeBrush(Entity e, const AssetManager& assets) {
     // Back-compat v11: si solo hay 1 slot escribimos tambien el
     // campo legacy "material" (string) para que readers v11 puedan
     // leerlo. v12 readers prefieren "materials".
+    //
+    // F3H29 bugfix: materiales auto-generados desde una textura
+    // (`__runtime_tex#N` o `__tex#N`) se persistían tal cual como path
+    // sentinela. Al cargar, `loadMaterial("__runtime_tex#42")` fallaba
+    // y el slot quedaba blank — los materiales que el dev dropeó sobre
+    // las caras del brush se perdían tras guardar+cerrar+reabrir. El
+    // MeshRenderer ya tenía esta resolución (EntitySerializer.cpp:57-70);
+    // ahora el Brush la replica: persistir el path de la textura
+    // subyacente, que el loader sabe convertir a material runtime.
+    auto resolveMaterialPathForSave = [&](MaterialAssetId mid) -> std::string {
+        if (mid == 0) return std::string{};
+        std::string matPath = assets.materialPathOf(mid);
+        const bool isTexWrapper =
+            matPath.rfind("__tex#", 0) == 0 ||
+            matPath.rfind("__runtime_tex#", 0) == 0;
+        if (isTexWrapper) {
+            const MaterialAsset* m = assets.getMaterial(mid);
+            return (m != nullptr) ? assets.pathOf(m->albedo) : std::string{};
+        }
+        if (matPath.rfind("__", 0) == 0) return std::string{};  // otro sentinel
+        return matPath;
+    };
     json materialsArr = json::array();
     for (MaterialAssetId mid : bc.materials) {
-        materialsArr.push_back(
-            (mid == 0) ? std::string{} : assets.materialPathOf(mid));
+        materialsArr.push_back(resolveMaterialPathForSave(mid));
     }
     out["materials"] = std::move(materialsArr);
     // Compat v11: tambien escribir "material" como path del slot 0
     // (puede ayudar a herramientas externas que lean v11).
     const MaterialAssetId mat0 = bc.materials.empty() ? 0u : bc.materials[0];
-    out["material"] = (mat0 == 0)
-        ? std::string{} : assets.materialPathOf(mat0);
+    out["material"] = resolveMaterialPathForSave(mat0);
 
     out["faces"] = json::array();
     for (const auto& face : bc.brush.faces) {

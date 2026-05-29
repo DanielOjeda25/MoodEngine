@@ -88,35 +88,18 @@ void EditorApplication::rebuildSceneFromMap() {
     const glm::vec3 origin = mapWorldOrigin();
     const f32 tileSize = m_map.tileSize();
 
-    // Piso plano que cubre toda el area del mapa. Es un cubo escalado
-    // muy fino — alto 0.1m, posicion Y = -0.05 para que la cara
-    // superior quede al ras del piso (y=0). Sin este piso el player
-    // camina sobre el plano implicito y los demos se sienten flotando.
-    {
-        const f32 mapW = static_cast<f32>(m_map.width())  * tileSize;
-        const f32 mapH = static_cast<f32>(m_map.height()) * tileSize;
-        Entity floor = m_scene->createEntity("Floor");
-        auto& tf = floor.getComponent<TransformComponent>();
-        tf.position = glm::vec3(
-            origin.x + mapW * 0.5f,
-            origin.y - 0.05f,
-            origin.z + mapH * 0.5f);
-        tf.scale = glm::vec3(mapW, 0.1f, mapH);
-        // Material instance unico por entidad: editar el albedoTint del
-        // piso desde el Inspector NO debe contagiar a los tiles ni a otras
-        // entidades que usen la misma textura.
-        const MaterialAssetId floorMat =
-            m_assetManager->createMaterialFromTexture(m_wallTextureId);
-        floor.addComponent<MeshRendererComponent>(
-            m_assetManager->missingMeshId(), floorMat);
-        // Static body para que dynamics caigan sobre el piso (Jolt).
-        floor.addComponent<RigidBodyComponent>(
-            RigidBodyComponent::Type::Static,
-            RigidBodyComponent::Shape::Box,
-            glm::vec3(mapW * 0.5f, 0.05f, mapH * 0.5f),
-            0.0f);
-        floor.getComponent<TagComponent>().entityType = EntityType::Tile;  // F3H9
-    }
+    // F3H29 polish: Floor entity auto-generado ELIMINADO. Pre-F3H29 cada
+    // mapa arrancaba con un cubo escalado 12×0.1×12 m con `grid.png`
+    // como albedo, simulando un tablero de tiles. El dev pidió alinear
+    // con la industria (*"en los programas industriales, comienza el
+    // mundo vacío"* — Unity / Unreal / Hammer / Godot arrancan sin
+    // floor pre-spawneado). El dev arma su piso con un Box Brush
+    // cuando lo necesita.
+    //
+    // Trade-off: en Play mode sin piso los objetos físicos caen al
+    // vacío — comportamiento estándar de los engines mencionados.
+    // El grid del viewport (helper visual) sigue presente, así que
+    // el dev tiene referencia espacial.
 
     for (u32 y = 0; y < m_map.height(); ++y) {
         for (u32 x = 0; x < m_map.width(); ++x) {

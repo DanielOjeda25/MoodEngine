@@ -10,12 +10,14 @@
 
 #include "editor/panels/scene/InspectorPanel.h"
 #include "editor/panels/scene/InspectorPanel_Internal.h"
+#include "editor/panels/scene/InspectorPanel_Materials.h"  // F3H29: helpers PBR/Shader/Blending
 
 #include "core/Log.h"
 #include "editor/commands/EditBrushUVCommand.h"  // BrushUVSnapshot
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "core/i18n/I18n.h"  // F2H43
+#include "engine/render/resources/MaterialAsset.h"  // F3H29
 #include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/Components.h"
 #include "engine/world/csg/BrushOps.h"  // F2H33: alignment helpers
@@ -23,7 +25,9 @@
 #include <glm/geometric.hpp>  // F2H33: glm::dot
 #include <imgui.h>
 
-#include <cmath>  // F2H33: std::fabs
+#include <cfloat>  // F3H29: FLT_MIN para BeginListBox width=fill
+#include <cmath>   // F2H33: std::fabs
+#include <cstdio>  // F3H29
 #include <memory>
 #include <string>
 #include <utility>
@@ -32,43 +36,91 @@ namespace Mood {
 
 namespace {
 
-// Bloque de info read-only del brush: número de caras, AABB local, slots
-// de material, estado del cache, dirty flag.
-void drawBrushHeaderInfo(BrushComponent& bc, AssetManager* assets) {
+// F3H29 polish: bloque "Info" eliminado (era un CollapsingHeader con
+// caras/AABB/mesh_cache/dirty). El dev lo consideró innecesario:
+// *"para mí en render, el colapsable de info, eliminalo eso me parece
+// innecesario"*. Si emerge demanda de debug, el Debug panel ya muestra
+// estas stats globalmente.
+
+// F3H29: UI Blender-style para los slots de material del brush.
+// Espejo del patrón F3H9 Stage 9 del MeshRenderer: ListBox compacto
+// arriba (4 rows visibles) + panel del slot seleccionado abajo con los
+// helpers compartidos PBR / Shader / Blending. No incluye drop target
+// porque los materiales del brush se asignan vía drag-drop sobre la
+// cara en el viewport (F2H17), no desde el inspector.
+void drawBrushMaterialsList(BrushComponent& bc, AssetManager* assets,
+                              int& selectedSlot,
+                              InspectorEditTracker& tracker,
+                              EditorUI* ui, Entity e, bool& editedFlag) {
+    const int slotCount = static_cast<int>(bc.materials.size());
+    ImGui::Separator();
     ImGui::Text("%s",
-        I18n::T("editor.panel.inspector.brush.faces",
-                static_cast<u32>(bc.brush.faces.size())).c_str());
+        I18n::T("editor.panel.inspector.materials.list_header").c_str());
 
-    const glm::vec3 size = bc.brush.localAabb.size();
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.panel.inspector.brush.local_aabb",
-                static_cast<double>(size.x),
-                static_cast<double>(size.y),
-                static_cast<double>(size.z)).c_str());
+    if (slotCount == 0) {
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.materials.no_slots").c_str());
+        return;
+    }
 
-    if (assets != nullptr) {
-        // F2H17: el brush tiene N slots de material (uno por
-        // material distinto entre las caras). Mostrar todos.
-        ImGui::Text("%s",
-            I18n::T("editor.panel.inspector.brush.materials_slots",
-                    static_cast<u32>(bc.materials.size())).c_str());
-        for (u32 i = 0; i < bc.materials.size(); ++i) {
-            const MaterialAssetId mid = bc.materials[i];
-            const std::string matPath = (mid == 0)
-                ? I18n::T("editor.panel.inspector.brush.blank_look")
-                : assets->materialPathOf(mid);
-            ImGui::TextDisabled("  [%u] %s (id %u)", i,
-                                   matPath.c_str(),
-                                   static_cast<unsigned>(mid));
+    if (selectedSlot >= slotCount) selectedSlot = 0;
+    if (selectedSlot < 0)          selectedSlot = 0;
+
+    // (1) Lista compacta. Alto: max 4 filas visibles.
+    {
+        const float lineH = ImGui::GetTextLineHeightWithSpacing();
+        const int   visibleRows = (slotCount < 4) ? slotCount : 4;
+        const float listH = lineH * static_cast<float>(visibleRows)
+                          + ImGui::GetStyle().FramePadding.y * 2.0f;
+        if (ImGui::BeginListBox("##brush_mat_slot_list",
+                                 ImVec2(-FLT_MIN, listH))) {
+            for (int i = 0; i < slotCount; ++i) {
+                const MaterialAssetId matId = bc.materials[i];
+                std::string matPath;
+                if (matId == 0) {
+                    matPath = I18n::T(
+                        "editor.panel.inspector.brush.blank_look");
+                } else if (assets != nullptr) {
+                    matPath = assets->materialPathOf(matId);
+                }
+                const bool selected = (i == selectedSlot);
+                ImGui::PushID(i);
+                char label[256];
+                std::snprintf(label, sizeof(label), "%d  %s", i,
+                              matPath.empty()
+                                ? I18n::T("editor.panel.inspector.materials.no_material").c_str()
+                                : matPath.c_str());
+                if (ImGui::Selectable(label, selected)) {
+                    selectedSlot = i;
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndListBox();
         }
     }
 
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.panel.inspector.brush.mesh_cache",
-                static_cast<u32>(bc.meshCache.size())).c_str());
-    ImGui::TextDisabled("%s",
-        I18n::T(bc.dirty ? "editor.panel.inspector.brush.dirty_yes"
-                          : "editor.panel.inspector.brush.dirty_no").c_str());
+    // (2) Panel del slot seleccionado — Surface + Shader + Blending,
+    // todos colapsables y plegados por default (Blender-style).
+    const usize i = static_cast<usize>(selectedSlot);
+    const MaterialAssetId matId = bc.materials[i];
+    ImGui::PushID(static_cast<int>(i));
+
+    MaterialAsset* mat = (assets != nullptr && matId != 0)
+        ? assets->getMaterial(matId) : nullptr;
+    if (mat != nullptr) {
+        // Brush nunca es skinned/instanced — pasar false a ambos.
+        InspectorMaterials::drawPbrMultipliers(
+            mat, assets, matId, tracker, ui, e, editedFlag);
+        InspectorMaterials::drawShaderGraph(
+            mat, assets, matId, ui,
+            /*isSkinned=*/false, /*isInstanced=*/false, editedFlag);
+        InspectorMaterials::drawBlending(
+            mat, assets, matId, tracker, ui, e, editedFlag);
+    } else {
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.panel.inspector.materials.no_material").c_str());
+    }
+    ImGui::PopID();
 }
 
 // F2H33 Bloque D: texture alignment. Solo aplica en Face Mode. Botones operan
@@ -251,9 +303,21 @@ void InspectorPanel::renderBrushSection(Entity e) {
     auto& bc = e.getComponent<BrushComponent>();
     if (!beginComponentSection<BrushComponent>(e, ICON_FA_CUBES_STACKED " Brush (CSG)")) return;
 
-    drawBrushHeaderInfo(bc, m_assets);
+    // F3H29: lista Blender-style de materiales del brush (slot
+    // seleccionable + panel PBR/Shader/Blending). Antes era una lista
+    // TextDisabled read-only sin edición posible — la UI quedaba muy
+    // asimétrica vs MeshRenderer.
+    drawBrushMaterialsList(bc, m_assets, m_selectedMaterialSlot,
+                            m_editTracker, m_ui, e, m_editedThisFrame);
 
-    ImGui::Separator();
+    // F3H29 polish: UV editor envuelto en CollapsingHeader colapsado por
+    // default. Antes los 4 widgets de UV (scale/rotation/offset/lock)
+    // ocupaban espacio fijo al fondo del Inspector aunque el dev no
+    // estuviera tocando UVs. Ahora el dev opt-in.
+    if (!ImGui::CollapsingHeader(
+            I18n::T("editor.panel.inspector.brush.uv").c_str())) {
+        return;
+    }
 
     // --- F2H15 + F2H17 + F2H33: UV editor ---
     // F2H17: si Face Mode + activeFaceIndex >= 0, los widgets editan
@@ -275,6 +339,9 @@ void InspectorPanel::renderBrushSection(Entity e) {
         ? selSet->selectedFaceIndices.size() : 0;
     const bool multiFace = (selectedFaceCount > 1);
 
+    // F3H29 polish: el hint "UV (Brush)" redundante fue eliminado del
+    // modo object. En face mode sí se muestra cuántas caras están en
+    // edición (info funcional, no decorativa).
     if (multiFace) {
         ImGui::TextDisabled("%s",
             I18n::T("editor.panel.inspector.brush.uv_multi",
@@ -282,9 +349,6 @@ void InspectorPanel::renderBrushSection(Entity e) {
     } else if (faceMode) {
         ImGui::TextDisabled("%s",
             I18n::T("editor.panel.inspector.brush.uv_face", faceIdx).c_str());
-    } else {
-        ImGui::TextDisabled("%s",
-            I18n::T("editor.panel.inspector.brush.uv_brush").c_str());
     }
 
     if (!bc.brush.faces.empty()) {

@@ -1,6 +1,7 @@
 #include "editor/panels/assets/ShaderGraphEditorPanel.h"
 
 #include "core/Log.h"
+#include "core/i18n/I18n.h"  // F3H29: keys editor.shader_graph.*
 #include "editor/commands/HistoryStack.h"
 #include "editor/commands/NodeGraphCommand.h"
 #include "editor/ui/EditorUI.h"
@@ -215,21 +216,27 @@ void ShaderGraphEditorPanel::onImGuiRender() {
     // puede fallar silencioso). Garantiza poder guardar siempre con
     // un InputText + boton.
     if (m_showSaveAsModal) {
-        ImGui::OpenPopup("Guardar shader graph");
+        ImGui::OpenPopup(I18n::T("editor.shader_graph.save_modal.title").c_str());
         m_showSaveAsModal = false;
     }
-    if (ImGui::BeginPopupModal("Guardar shader graph", nullptr,
+    if (ImGui::BeginPopupModal(I18n::T("editor.shader_graph.save_modal.title").c_str(),
+                                  nullptr,
                                   ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::TextDisabled("Se guardara en: assets/shaders/graphs/");
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.shader_graph.save_modal.dir_hint").c_str());
         ImGui::Separator();
-        ImGui::InputText("Nombre", m_saveAsNameBuf, sizeof(m_saveAsNameBuf));
+        ImGui::InputText(
+            I18n::T("editor.shader_graph.save_modal.name_label").c_str(),
+            m_saveAsNameBuf, sizeof(m_saveAsNameBuf));
         ImGui::Spacing();
         const bool nameOk = std::strlen(m_saveAsNameBuf) > 0;
         if (!nameOk) ImGui::BeginDisabled();
-        const bool clickSave = ImGui::Button("Guardar", ImVec2(120, 0));
+        const bool clickSave = ImGui::Button(
+            I18n::T("editor.modal.common.save").c_str(), ImVec2(120, 0));
         if (!nameOk) ImGui::EndDisabled();
         ImGui::SameLine();
-        const bool clickCancel = ImGui::Button("Cancelar", ImVec2(120, 0));
+        const bool clickCancel = ImGui::Button(
+            I18n::T("editor.modal.common.cancel").c_str(), ImVec2(120, 0));
         if (clickSave && nameOk) {
             // Construir path absoluto al subdir del proyecto + crear dir
             // si falta.
@@ -337,13 +344,13 @@ void ShaderGraphEditorPanel::drawToolbar() {
         Log::editor()->info("[ShaderGraphEditor] abriendo modal de Save As (ImGui)");
     };
 
-    if (ImGui::Button("Guardar")) {
+    if (ImGui::Button(I18n::T("editor.modal.common.save").c_str())) {
         triggerSave();
     }
     ImGui::SameLine();
     // "Guardar como..." sigue intentando el dialog nativo (mejor UX cuando
     // anda); si falla, el dev tiene el modal de "Guardar" como fallback.
-    if (ImGui::Button("Guardar como...")) {
+    if (ImGui::Button(I18n::T("editor.modal.common.save_as").c_str())) {
         if (!openSaveAsDialog()) {
             // pfd cancelado o fallido -> caer al modal ImGui.
             triggerSave();
@@ -364,11 +371,12 @@ void ShaderGraphEditorPanel::drawToolbar() {
     if (m_saveFlashFrames > 0) {
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0.13f, 0.83f, 0.43f, 1.0f),
-                            " Guardado!");
+                            "%s",
+                            I18n::T("editor.shader_graph.save_flash").c_str());
         m_saveFlashFrames--;
     }
     ImGui::SameLine();
-    if (ImGui::Button("Nuevo")) {
+    if (ImGui::Button(I18n::T("editor.modal.common.new").c_str())) {
         if (m_dirty) {
             Log::editor()->warn("[ShaderGraphEditor] descartar cambios sin guardar al crear nuevo");
         }

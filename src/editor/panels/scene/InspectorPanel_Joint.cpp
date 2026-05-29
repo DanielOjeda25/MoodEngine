@@ -288,14 +288,11 @@ void InspectorPanel::renderJointSection(Entity e) {
             I18n::T("editor.panel.inspector.joint.slider_limit_help").c_str());
     } else if (joint.type == JointComponent::Type::Fixed) {
         // Fixed: auto-detect de la pose relativa, sin campos editables.
-        ImGui::TextWrapped("%s",
-            I18n::T("editor.panel.inspector.joint.fixed_help").c_str());
+        // F3H29 polish: párrafo `fixed_help` eliminado — el dev infiere
+        // de la ausencia de campos editables que es auto-detect.
     }
     // Point: sin campos extra — los 3 ejes rotacion son libres por defecto.
-
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.panel.inspector.joint.constraint_id_hint",
-                joint.constraintId).c_str());
+    // F3H29 polish: hint `constraint_id_hint` eliminado (debug interno).
     ImGui::Separator();
 }
 

@@ -627,6 +627,7 @@ add_executable(MoodEditor
     src/editor/panels/scene/InspectorPanel_Misc.cpp
     src/editor/panels/scene/InspectorPanel_Transform.cpp
     src/editor/panels/scene/InspectorPanel_MeshRenderer.cpp
+    src/editor/panels/scene/InspectorPanel_Materials.cpp  # F3H29 helpers compartidos
     src/editor/panels/scene/InspectorPanel_Light.cpp
     src/editor/panels/scene/InspectorPanel_Environment.cpp  # F2H58 Bloque A
     src/editor/panels/scene/InspectorPanel_Script.cpp

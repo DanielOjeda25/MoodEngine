@@ -100,6 +100,23 @@ struct EditorSettings {
     /// (demasiado lento para uso frecuente).
     int smoothViewDurationMs = 200;
 
+    /// F3H29: far plane de la EditorCamera + FpsCamera (Play mode) en
+    /// world units. Default 1000.0 (era 100.0 hardcoded en F2H17). Para
+    /// mapas urbanos / arenas medianas; subir a 10000+ para open-world.
+    /// Clamp `[100, 100000]` en sanitize — bajo de 100 el dev pierde la
+    /// vista interior, encima de 100km la precision Z degrada al punto
+    /// de z-fighting masivo (Reverse-Z queda como hito propio si emerge).
+    /// El default que CameraComponent gana al spawnearse desde el editor
+    /// tambien lee este valor (D3 — coherencia editor/gameplay default).
+    f32 editorCameraFarPlane = 1000.0f;
+
+    /// F3H29: radius maximo de la EditorCamera orbital (clamp upper de
+    /// `m_radius`). Default 500.0 (era 50.0 hardcoded). Permite alejarse
+    /// para ver mapas grandes / brushes enormes. Clamp `[10, 50000]` en
+    /// sanitize. No afecta zoom min (sigue 0.5 hardcoded, no tiene
+    /// sentido alejarlo).
+    f32 editorCameraMaxOrbitRadius = 500.0f;
+
     /// F3H22: categoria activa del Inspector con icons laterales (estilo
     /// Properties Editor de Blender). IDs validos:
     ///   "object"      — Transform + Tag + VisGroup

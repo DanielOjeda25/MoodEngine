@@ -180,10 +180,14 @@ void InspectorPanel::onImGuiRender() {
     }
 
     if (isSceneWideCat && !eForRender) {
-        // Categoría scene-wide pero la escena no tiene el singleton.
-        // Mensaje + sugerencia (botón "Crear Environment" sería follow-up).
-        ImGui::TextDisabled("%s",
-            I18n::T("editor.panel.inspector.no_environment").c_str());
+        // F3H29: Blender World Properties pattern — el singleton de
+        // Environment SIEMPRE existe. Si por algún flow no se creó
+        // (proyectos pre-F3H22, mapas viejos, dev borró la entity con
+        // delete forzado), lo recreamos en el momento que el dev entra
+        // a la categoría. El próximo frame ya verá el panel completo.
+        if (m_ui != nullptr && activeCat == "environment") {
+            m_ui->requestEnsureEnvironment();
+        }
         ImGui::EndChild();
         ImGui::End();
         return;
@@ -255,10 +259,13 @@ void InspectorPanel::onImGuiRender() {
         if (dispatchEntity.hasComponent<AnimatorComponent>())     renderAnimatorSection(dispatchEntity);
     }
 
-    // F2H44 Bloque A: boton "+ Add Component" — solo cuando NO es
-    // scene-wide (no tiene sentido agregar components al singleton de
-    // Environment desde ahí).
-    if (!isSceneWideCat) {
+    // F2H44 Bloque A + F3H29 polish: boton "+ Add Component" — solo en la
+    // categoría "object" (home natural de cualquier entity, equivalente al
+    // panel general de Unity). Antes aparecía al final de TODA categoría
+    // no-scene-wide; el dev lo veía repetido en Object/Render/Physics/etc.
+    // y se confundía. Con un único punto de entrada el mental model queda
+    // claro: para sumar capacidades a una entity, voy a Object → "+".
+    if (catActive(activeCat, "object")) {
         renderAddComponentSection(dispatchEntity);
     }
 

@@ -15,7 +15,9 @@ constexpr float k_zoomStep = 0.4f;      // unidades por "tick" de rueda
 constexpr float k_minPitch = -89.0f;
 constexpr float k_maxPitch = 89.0f;
 constexpr float k_minRadius = 0.5f;
-constexpr float k_maxRadius = 50.0f;
+// F3H29: m_maxRadius eliminado del namespace anónimo — pasa a member
+// `m_maxRadius` configurable runtime via setMaxOrbitRadius() (default 50.0
+// preserva el comportamiento pre-F3H29 si nadie inyecta UserSettings).
 } // namespace
 
 EditorCamera::EditorCamera(float yawDeg, float pitchDeg, float radius)
@@ -32,7 +34,7 @@ void EditorCamera::applyWheel(float deltaSteps) {
     const float factor = (deltaSteps > 0.0f)
         ? (1.0f - k_zoomStep * deltaSteps)
         : (1.0f - k_zoomStep * deltaSteps); // misma formula; signo importa
-    m_radius = std::clamp(m_radius * factor, k_minRadius, k_maxRadius);
+    m_radius = std::clamp(m_radius * factor, k_minRadius, m_maxRadius);
 }
 
 void EditorCamera::applyPan(float dxPixels, float dyPixels) {
@@ -78,7 +80,7 @@ void EditorCamera::focusOn(const glm::vec3& worldPos, float objectRadius) {
     // para dejar margen visual, sin que el objeto ocupe toda la pantalla.
     const float halfFov = glm::radians(m_fovDeg * 0.5f);
     const float minDist = objectRadius / std::max(std::sin(halfFov), 1e-3f);
-    m_radius = std::clamp(minDist * 1.6f, k_minRadius, k_maxRadius);
+    m_radius = std::clamp(minDist * 1.6f, k_minRadius, m_maxRadius);
 }
 
 glm::mat4 EditorCamera::projectionMatrix(float aspectRatio) const {
@@ -92,7 +94,7 @@ void EditorCamera::setPose(float yawDeg, float pitchDeg, float radius,
                             const glm::vec3& target) {
     m_yawDeg   = yawDeg;
     m_pitchDeg = std::clamp(pitchDeg, k_minPitch, k_maxPitch);
-    m_radius   = std::clamp(radius, k_minRadius, k_maxRadius);
+    m_radius   = std::clamp(radius, k_minRadius, m_maxRadius);
     m_target   = target;
     // cancelar lerp en curso — el setPose es teleport explicito
     m_lerpRemainingSec = 0.0f;
@@ -120,7 +122,7 @@ void EditorCamera::beginLerpTo(float yawDeg, float pitchDeg, float radius,
 
     m_lerpEnd_yaw    = m_yawDeg + dy;
     m_lerpEnd_pitch  = std::clamp(pitchDeg, k_minPitch, k_maxPitch);
-    m_lerpEnd_radius = std::clamp(radius, k_minRadius, k_maxRadius);
+    m_lerpEnd_radius = std::clamp(radius, k_minRadius, m_maxRadius);
     m_lerpEnd_target = target;
 
     m_lerpDurationSec  = static_cast<float>(durationMs) / 1000.0f;

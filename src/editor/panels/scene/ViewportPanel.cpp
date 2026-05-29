@@ -372,13 +372,18 @@ void ViewportPanel::onImGuiRender() {
             // del viewport. Reemplaza al panel Toolbar separado pre-F2H59.
             // El overlay aparece DESPUES del drawlist callback para que
             // los iconos no queden ocultos por gizmos / outlines.
-            drawViewportToolsOverlay(m_editorUi, imageMin);
-            // F3H20 iter 6: status bar arriba del viewport mostrando los
-            // steps de cada snap activo (Grid/Angle/Scale). Estilo Blender.
-            drawViewportSnapStatusBar(m_editorUi, imageMin, imageSize);
-            // F3H21: 4 botones (Wireframe/Solid/Material/Rendered) top-right
-            // del viewport, estilo Blender. Persiste en UserSettings.editor.
-            drawViewportRenderModeBar(imageMin, imageSize);
+            //
+            // F3H29: en Play mode skipeamos TODOS los overlays auxiliares
+            // del editor (tools, snap status, render mode bar). El dev
+            // pidió "solo el HUD del juego, nada externo" — los overlays
+            // del editor compiten con el HUD por la atención del usuario
+            // y además no son funcionales con el mouse capturado.
+            if (m_editorUi != nullptr
+                && m_editorUi->mode() != EditorMode::Play) {
+                drawViewportToolsOverlay(m_editorUi, imageMin);
+                drawViewportSnapStatusBar(m_editorUi, imageMin, imageSize);
+                drawViewportRenderModeBar(imageMin, imageSize);
+            }
 
             // Helper local: pos del cursor -> NDC dentro de la imagen.
             auto mousePosToNdc = [&imageMin, &imageSize](ImVec2 mp, float& ndcX, float& ndcY) {

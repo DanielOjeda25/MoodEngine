@@ -80,6 +80,14 @@ private:
     RagdollCleanup    m_ragdollCleanup;     // F2H66
     HistoryStack*     m_history;       // Hito 32: para disparar remap post-undo
     SavedEntity       m_snapshot;
+    // F3H29 bugfix: las entities con BrushComponent NO se serializan via
+    // `serializeEntityToJson` (el dispatcher las saltea — los brushes
+    // viven en `serializeBrush` aparte, persistidos en otro array del
+    // .moodmap). Sin esto el snapshot del delete quedaba sin geometría
+    // y el undo recreaba una entity vacía. Capturamos SavedBrush en
+    // paralelo y, en undo, lo aplicamos sobre la entity recreada.
+    bool              m_hasBrush = false;
+    SavedBrush        m_brushSnapshot;
     Entity            m_alive;          // valida tras ctor; vaciada tras execute(); rellenada por undo().
     entt::entity      m_originalHandle; // handle pre-delete; usado para el remap
 };

@@ -131,6 +131,9 @@ nlohmann::json editorSettingsToJson(const EditorSettings& s) {
     if (s.smoothViewEnabled       != defaults.smoothViewEnabled)       j["smooth_view_enabled"]       = s.smoothViewEnabled;
     if (s.smoothViewDurationMs    != defaults.smoothViewDurationMs)    j["smooth_view_duration_ms"]   = s.smoothViewDurationMs;
     if (s.inspectorActiveCategory != defaults.inspectorActiveCategory) j["inspector_active_category"] = s.inspectorActiveCategory;
+    // F3H29: camera limits
+    if (s.editorCameraFarPlane       != defaults.editorCameraFarPlane)       j["editor_camera_far_plane"]        = s.editorCameraFarPlane;
+    if (s.editorCameraMaxOrbitRadius != defaults.editorCameraMaxOrbitRadius) j["editor_camera_max_orbit_radius"] = s.editorCameraMaxOrbitRadius;
 
     // F3H23: stats overlay (subobject opcional — solo si difiere del default).
     const auto& so = s.statsOverlay;
@@ -219,6 +222,15 @@ EditorSettings editorSettingsFromJson(const nlohmann::json& j) {
             v == "environment") {
             s.inspectorActiveCategory = v;
         }
+    }
+    // F3H29: camera limits sanitize. far plane [100, 100000], radius [10, 50000].
+    if (j.contains("editor_camera_far_plane") && j.at("editor_camera_far_plane").is_number()) {
+        const f32 v = j.at("editor_camera_far_plane").get<f32>();
+        s.editorCameraFarPlane = std::clamp(v, 100.0f, 100000.0f);
+    }
+    if (j.contains("editor_camera_max_orbit_radius") && j.at("editor_camera_max_orbit_radius").is_number()) {
+        const f32 v = j.at("editor_camera_max_orbit_radius").get<f32>();
+        s.editorCameraMaxOrbitRadius = std::clamp(v, 10.0f, 50000.0f);
     }
 
     // F3H23: stats overlay subobject. Cada bool independiente — flag

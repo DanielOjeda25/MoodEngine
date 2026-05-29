@@ -235,6 +235,16 @@ void EditorApplication::tickFrameMetrics(f32 dt, f64 dtD) {
     // pref. Sólo escribe a disco si dirty + N min.
     m_autosave.tick(static_cast<f32>(dtD * 1000.0));
 
+    // F3H29: sync runtime de los camera limits con UserSettings — el
+    // dev mueve los sliders en Preferences y el cambio se ve sin reload.
+    // Cheap (2 floats per frame); idempotente (setter sin side-effects
+    // si el value no cambió).
+    {
+        const auto& ed = UserSettings::editor();
+        m_editorCamera.setFarPlane(ed.editorCameraFarPlane);
+        m_editorCamera.setMaxOrbitRadius(ed.editorCameraMaxOrbitRadius);
+    }
+
     // F2H42: aplicar toggle VSync si el dev clickeo el checkbox.
     bool vsyncRequested = true;
     if (m_ui.performanceHud().consumeVsyncToggleRequest(vsyncRequested)) {
@@ -406,6 +416,14 @@ void EditorApplication::pumpUiRequests() {
     }
     if (m_ui.consumeUngroupSelectionRequest()) {
         ungroupSelectedEntities();
+    }
+    // F3H29: auto-recover del singleton Environment cuando el dev entra
+    // a la categoría Environment del Inspector y no lo encuentra
+    // (Blender World Properties pattern). Cubre flows que se perdieron
+    // ensureEnvironmentExists (mapas pre-F3H22, scene reset manual,
+    // dev borró la entity con override de delete).
+    if (m_ui.consumeEnsureEnvironmentRequest()) {
+        ensureEnvironmentExists();
     }
     // F2H35 Bloque E: toggle labels point entities (boton "Nombres" del
     // toolbar). Estado vive en EditorUI (default ON).

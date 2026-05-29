@@ -752,11 +752,30 @@ void applyBrushFromSaved(const SavedBrush& sb,
     // Material por path logico. "" significa "sin material" (slot 0 =
     // look blank gris). F2H17: cargar todos los slots desde
     // materialPaths. Si esta vacio (mapas v10 puros), crear 1 slot 0.
+    //
+    // F3H29 bugfix: detectar si el path apunta a una textura (no .material)
+    // y, en ese caso, crear un MaterialAsset runtime a partir de la
+    // textura (mismo patrón que `MeshRenderer` en este archivo línea ~98).
+    // Sin esto, materiales que el dev dropeó sobre caras del brush y
+    // luego guardó perdían el slot al recargar (intentaba `loadMaterial`
+    // sobre un path tipo "textures/foo.png" y fallaba silencioso).
     bc.materials.clear();
     for (const auto& path : sb.materialPaths) {
-        const MaterialAssetId id = path.empty()
-            ? 0u : assets.loadMaterial(path);
-        bc.materials.push_back(id);
+        if (path.empty()) {
+            bc.materials.push_back(0);
+            continue;
+        }
+        const bool isMaterial =
+            path.size() >= 9 &&
+            path.compare(path.size() - 9, 9, ".material") == 0;
+        if (isMaterial) {
+            bc.materials.push_back(assets.loadMaterial(path));
+        } else {
+            // Path de textura: crear material runtime (instance único
+            // per-brush) usando la textura como albedo.
+            const TextureAssetId tex = assets.loadTexture(path);
+            bc.materials.push_back(assets.createMaterialFromTexture(tex));
+        }
     }
     if (bc.materials.empty()) {
         bc.materials.push_back(0);

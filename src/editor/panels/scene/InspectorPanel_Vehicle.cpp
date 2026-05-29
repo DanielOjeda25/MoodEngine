@@ -180,7 +180,12 @@ void InspectorPanel::renderVehicleSection(Entity e) {
     // drag), asi que usamos un boton dedicado como zona de drop — mismo patron
     // que InspectorPanel_Animation. Arrastrar un `.moodvehicle` asigna su path
     // al config + marca dirty para que el VehicleSystem rematerialice.
-    ImGui::Button("Soltar .moodvehicle aqui##vehicle_drop", ImVec2(-1.0f, 28.0f));
+    {
+        const std::string dropLbl =
+            I18n::T("editor.inspector.vehicle.drop_target")
+            + "##vehicle_drop";
+        ImGui::Button(dropLbl.c_str(), ImVec2(-1.0f, 28.0f));
+    }
     // F3H17: halo durante drag activo de vehicle.
     if (DragDropFeedback::isDragActiveOfType("MOOD_VEHICLE_ASSET")) {
         DragDropFeedback::drawItemDropHalo(ImGui::IsItemHovered());
@@ -207,11 +212,11 @@ void InspectorPanel::renderVehicleSection(Entity e) {
     }
     ImGui::TextDisabled(
         "%s",
-        "Vacio = fallback generico (warn). Arrastra un .moodvehicle al boton "
-        "de arriba o edita + Enter para rematerializar.");
+        I18n::T("editor.inspector.vehicle.drop_hint").c_str());
 
     ImGui::Spacing();
-    ImGui::TextDisabled("Runtime (read-only):");
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.inspector.vehicle.runtime_readonly").c_str());
     ImGui::Text("vehicleId: %u", veh.vehicleId);
     ImGui::Text("wheelEntities: [%u, %u, %u, %u]",
         veh.wheelEntities[0], veh.wheelEntities[1],
@@ -221,12 +226,18 @@ void InspectorPanel::renderVehicleSection(Entity e) {
         veh.inputSteer, veh.inputHandbrake);
 
     ImGui::Spacing();
-    if (ImGui::Button("Rematerializar (dirty=true)##vehicle")) {
-        veh.dirty = true;
-        // Limpiamos handles para que el VehicleSystem destruya el viejo
-        // y arme uno nuevo desde cero. VehicleId queda con el handle que
-        // tenia (el system lo destruira y reseteara antes del create).
-        m_editedThisFrame = true;
+    {
+        const std::string rematLbl =
+            I18n::T("editor.inspector.vehicle.rematerialize")
+            + "##vehicle";
+        if (ImGui::Button(rematLbl.c_str())) {
+            veh.dirty = true;
+            // Limpiamos handles para que el VehicleSystem destruya el
+            // viejo y arme uno nuevo desde cero. VehicleId queda con el
+            // handle que tenia (el system lo destruira y reseteara
+            // antes del create).
+            m_editedThisFrame = true;
+        }
     }
 
     // F2H82: live tuning del VehicleConfig en memoria. Mutar + dirty=true

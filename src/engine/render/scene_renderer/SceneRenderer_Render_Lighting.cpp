@@ -166,7 +166,17 @@ void SceneRenderer::applySceneShaderUniforms(IShader& sh,
                 : 0.0f);
     }
 
-    sh.setInt  ("uFogMode",    static_cast<int>(m_fog.mode));
+    // F3H29 polish: en Material Preview / Solid / Wireframe el fog se
+    // fuerza off. Antes la imagen se desvanecía a blanco al alejar la
+    // cámara incluso en Material (donde el dev espera ver el material
+    // puro, sin atmósfera del map). El fog sigue activo en Rendered —
+    // único modo que pinta "como se ve el juego". Decisión coherente
+    // con F3H22 (SSAO/SSR/Bloom skipean si skipPostPasses=true, ahora
+    // fog también). Si emerge demanda de "ver Material CON fog del
+    // map", se hace un toggle separado en UserSettings.
+    sh.setInt  ("uFogMode",    m_skipPostPasses
+                                  ? 0
+                                  : static_cast<int>(m_fog.mode));
     sh.setVec3 ("uFogColor",   m_fog.color);
     sh.setFloat("uFogDensity", m_fog.density);
     sh.setFloat("uFogStart",   m_fog.linearStart);

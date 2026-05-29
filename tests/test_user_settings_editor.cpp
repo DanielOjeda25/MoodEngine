@@ -443,3 +443,66 @@ TEST_CASE("F3H25: autosaveIntervalMin sanitize clamp [1, 60]") {
         CHECK(editorSettingsFromJson(j).autosaveIntervalMin == 10);
     }
 }
+
+// =====================================================================
+// F3H29: camera limits (far plane + max orbit radius)
+// =====================================================================
+
+TEST_CASE("F3H29: Camera limits defaults — far 1000, max orbit 500") {
+    EditorSettings s;
+    CHECK(s.editorCameraFarPlane == doctest::Approx(1000.0f));
+    CHECK(s.editorCameraMaxOrbitRadius == doctest::Approx(500.0f));
+}
+
+TEST_CASE("F3H29: toJson omite camera limits si todo igual al default") {
+    EditorSettings s;
+    const auto j = editorSettingsToJson(s);
+    CHECK_FALSE(j.contains("editor_camera_far_plane"));
+    CHECK_FALSE(j.contains("editor_camera_max_orbit_radius"));
+}
+
+TEST_CASE("F3H29: Camera limits roundtrip") {
+    EditorSettings before;
+    before.editorCameraFarPlane = 5000.0f;
+    before.editorCameraMaxOrbitRadius = 2500.0f;
+    const auto j = editorSettingsToJson(before);
+    const auto after = editorSettingsFromJson(j);
+    CHECK(after.editorCameraFarPlane == doctest::Approx(5000.0f));
+    CHECK(after.editorCameraMaxOrbitRadius == doctest::Approx(2500.0f));
+}
+
+TEST_CASE("F3H29: editorCameraFarPlane sanitize clamp [100, 100000]") {
+    {
+        nlohmann::json j;
+        j["editor_camera_far_plane"] = 10.0f;  // muy bajo
+        CHECK(editorSettingsFromJson(j).editorCameraFarPlane == doctest::Approx(100.0f));
+    }
+    {
+        nlohmann::json j;
+        j["editor_camera_far_plane"] = 1000000.0f;  // muy alto
+        CHECK(editorSettingsFromJson(j).editorCameraFarPlane == doctest::Approx(100000.0f));
+    }
+    {
+        nlohmann::json j;
+        j["editor_camera_far_plane"] = 3000.0f;  // valido
+        CHECK(editorSettingsFromJson(j).editorCameraFarPlane == doctest::Approx(3000.0f));
+    }
+}
+
+TEST_CASE("F3H29: editorCameraMaxOrbitRadius sanitize clamp [10, 50000]") {
+    {
+        nlohmann::json j;
+        j["editor_camera_max_orbit_radius"] = 1.0f;  // muy bajo
+        CHECK(editorSettingsFromJson(j).editorCameraMaxOrbitRadius == doctest::Approx(10.0f));
+    }
+    {
+        nlohmann::json j;
+        j["editor_camera_max_orbit_radius"] = 999999.0f;  // muy alto
+        CHECK(editorSettingsFromJson(j).editorCameraMaxOrbitRadius == doctest::Approx(50000.0f));
+    }
+    {
+        nlohmann::json j;
+        j["editor_camera_max_orbit_radius"] = 2000.0f;  // valido
+        CHECK(editorSettingsFromJson(j).editorCameraMaxOrbitRadius == doctest::Approx(2000.0f));
+    }
+}

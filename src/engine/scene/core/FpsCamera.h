@@ -53,6 +53,12 @@ public:
 
     float fovDeg() const { return m_fovDeg; }
 
+    /// F3H29: far plane configurable runtime. Default 100.0 = comportamiento
+    /// pre-F3H29 si nadie inyecta. EditorApplication lo sincroniza con
+    /// `UserSettings::editor().editorCameraFarPlane` al entrar Play mode.
+    void setFarPlane(float v) { m_far = v; }
+    float farPlane() const { return m_far; }
+
 private:
     glm::vec3 m_position;
     float m_yawDeg;

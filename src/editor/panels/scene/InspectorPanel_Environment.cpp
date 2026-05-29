@@ -239,8 +239,7 @@ void drawEnvSkyAndFog(EnvironmentComponent& env, InspectorEditTracker& tracker,
         }
         ImGui::EndCombo();
     }
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.panel.inspector.environment.skybox_hint").c_str());
+    // F3H29 polish: hint "skybox_hint" eliminado (texto colgado).
 
     // F3H12: fog mode combo con undo (atomico, sin tracker drag).
     static const char* fogModes[] = {"Off", "Linear", "Exp", "Exp2"};
@@ -582,8 +581,7 @@ void drawEnvCsmShadows(EnvironmentComponent& env, InspectorEditTracker& tracker,
             ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.panel.inspector.environment.csm_hint").c_str());
+    // F3H29 polish: hint "csm_hint" eliminado (texto colgado).
     // Cascadas: 1..4. Slider int.
     int cascades = static_cast<int>(env.csmCascadeCount);
     const std::string csmCascLabel =
@@ -812,8 +810,7 @@ void drawEnvSsr(EnvironmentComponent& env, InspectorEditTracker& tracker,
             ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.panel.inspector.environment.ssr_hint").c_str());
+    // F3H29 polish: hint "ssr_hint" eliminado (texto colgado).
 
     // F3H12: ssrEnabled con undo.
     const std::string ssrEnabledLabel =

@@ -91,7 +91,8 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
     }
 
     if (!(m_scene && m_assetManager)) {
-        ImGui::TextUnformatted("Sin escena/assets.");
+        ImGui::TextUnformatted(
+            I18n::T("editor.modal.common.no_scene_assets").c_str());
         ImGui::EndPopup();
         return;
     }

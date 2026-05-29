@@ -19,6 +19,7 @@
 #include "editor/panels/assets/AssetBrowserPanel.h"
 
 #include "core/Log.h"
+#include "core/i18n/I18n.h"  // F3H29: keys editor.import_vehicle.*
 #include "engine/physics/vehicle/VehicleConfig.h"        // WheelCount, WheelFL...
 #include "engine/physics/vehicle/VehicleConfigWriter.h"
 
@@ -275,11 +276,13 @@ void AssetBrowserPanel::drawImportVehicleModal() {
 
     if (!m_importAnalysis.ok) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.30f, 0.30f, 1.0f));
-        ImGui::TextWrapped("Error analizando el modelo: %s",
-                            m_importAnalysis.error.c_str());
+        ImGui::TextWrapped("%s",
+            I18n::T("editor.import_vehicle.error_analyzing",
+                     m_importAnalysis.error).c_str());
         ImGui::PopStyleColor();
         ImGui::Separator();
-        if (ImGui::Button("Cerrar", ImVec2(120.0f, 0.0f))) {
+        if (ImGui::Button(I18n::T("editor.modal.common.close").c_str(),
+                           ImVec2(120.0f, 0.0f))) {
             m_importModalOpen = false;
             ImGui::CloseCurrentPopup();
         }
@@ -376,8 +379,8 @@ void AssetBrowserPanel::drawImportVehicleModal() {
                 m_importAnalysis.wheels[vehicle::WheelRR].role = vehicle::WheelRole::RR;
             }
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Si el auto sale al reves (yendo de espaldas) o las "
-                    "ruedas estan mal asignadas, probar estos swaps.");
+                ImGui::SetTooltip("%s",
+                    I18n::T("editor.import_vehicle.swap_tooltip").c_str());
             }
         }
 
@@ -388,7 +391,8 @@ void AssetBrowserPanel::drawImportVehicleModal() {
         ImGui::BulletText("Radio rueda promedio: %.2f m", m_importAnalysis.wheelRadius);
         if (m_importAnalysis.wheelsFound < 4) {
             ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.20f, 1.0f),
-                "Aviso: no se detectaron las 4 ruedas. Revisa el modelo.");
+                "%s",
+                I18n::T("editor.import_vehicle.aviso_wheels").c_str());
         }
     }
 
@@ -454,13 +458,16 @@ void AssetBrowserPanel::drawImportVehicleModal() {
             "FWD (delantera)", "RWD (trasera)", "AWD (4x4)"
         };
         int dtIdx = static_cast<int>(m_importPreset.drivetrain);
-        if (ImGui::Combo("Tren motriz##m_dt", &dtIdx,
+        const std::string dtLbl =
+            I18n::T("editor.import_vehicle.drivetrain") + "##m_dt";
+        if (ImGui::Combo(dtLbl.c_str(), &dtIdx,
                           kDrivetrainLabels.data(),
                           static_cast<int>(kDrivetrainLabels.size()))) {
             m_importPreset.drivetrain = static_cast<vehicle::Drivetrain>(dtIdx);
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Que ruedas reciben fuerza. AWD = mejor agarre; RWD = mas derrape.");
+            ImGui::SetTooltip("%s",
+                I18n::T("editor.import_vehicle.drivetrain_tooltip").c_str());
         }
     }
 
@@ -522,7 +529,9 @@ void AssetBrowserPanel::drawImportVehicleModal() {
     if (!m_importSaveError.empty()) {
         ImGui::Spacing();
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.30f, 0.30f, 1.0f));
-        ImGui::TextWrapped("Error al guardar: %s", m_importSaveError.c_str());
+        ImGui::TextWrapped("%s",
+            I18n::T("editor.import_vehicle.save_error",
+                     m_importSaveError).c_str());
         ImGui::PopStyleColor();
     }
 
@@ -530,7 +539,8 @@ void AssetBrowserPanel::drawImportVehicleModal() {
 
     // --- Footer fijo: Guardar / Cancelar (siempre visible) ---
     ImGui::Separator();
-    if (ImGui::Button("Guardar", ImVec2(140.0f, 0.0f))) {
+    if (ImGui::Button(I18n::T("editor.modal.common.save").c_str(),
+                       ImVec2(140.0f, 0.0f))) {
         std::string err;
         if (saveImportedVehicle(err)) {
             m_importModalOpen = false;
@@ -541,7 +551,8 @@ void AssetBrowserPanel::drawImportVehicleModal() {
         }
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancelar", ImVec2(140.0f, 0.0f))) {
+    if (ImGui::Button(I18n::T("editor.modal.common.cancel").c_str(),
+                       ImVec2(140.0f, 0.0f))) {
         m_importModalOpen = false;
         ImGui::CloseCurrentPopup();
     }
@@ -655,10 +666,14 @@ void AssetBrowserPanel::confirmAndDeleteVehicle() {
     if (ImGui::BeginPopupModal(title.c_str(), nullptr,
                                   ImGuiWindowFlags_AlwaysAutoResize |
                                   ImGuiWindowFlags_NoResize)) {
-        ImGui::TextWrapped("Borrar '%s' del proyecto?", m_pendingDeleteVehicle.c_str());
-        ImGui::TextDisabled("Se elimina solo el archivo .moodvehicle. El .glb del modelo se mantiene por si lo usas en otro vehiculo.");
+        ImGui::TextWrapped("%s",
+            I18n::T("editor.import_vehicle.delete_confirm",
+                     m_pendingDeleteVehicle).c_str());
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.import_vehicle.delete_hint").c_str());
         ImGui::Separator();
-        if (ImGui::Button("Eliminar", ImVec2(120.0f, 0.0f))) {
+        if (ImGui::Button(I18n::T("editor.modal.common.delete").c_str(),
+                           ImVec2(120.0f, 0.0f))) {
             if (m_assetManager != nullptr) {
                 const fs::path fp =
                     m_assetManager->resolvePath(m_pendingDeleteVehicle);
@@ -679,7 +694,8 @@ void AssetBrowserPanel::confirmAndDeleteVehicle() {
             m_reloadRequested = true;
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancelar", ImVec2(120.0f, 0.0f))) {
+        if (ImGui::Button(I18n::T("editor.modal.common.cancel").c_str(),
+                           ImVec2(120.0f, 0.0f))) {
             m_pendingDeleteVehicle.clear();
             ImGui::CloseCurrentPopup();
         }

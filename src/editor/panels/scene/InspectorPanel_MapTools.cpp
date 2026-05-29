@@ -144,7 +144,20 @@ void InspectorPanel::renderMapToolsSection() {
         ImGui::OpenPopup("##snap_settings_popup");
     }
     if (ImGui::BeginPopup("##snap_settings_popup")) {
+        // F3H29: header con título + botón cerrar a la derecha. El dev
+        // reportó que el modal sólo cerraba clickeando afuera — falta el
+        // botón explícito. Pattern estilo Hammer/Blender popovers.
         ImGui::TextUnformatted(I18n::T("editor.map_tools.snap.popup_title").c_str());
+        const float closeBtnW = ImGui::CalcTextSize("X").x
+                                 + ImGui::GetStyle().FramePadding.x * 2.0f;
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x - closeBtnW);
+        if (ImGui::SmallButton("X##snap_popup_close")) {
+            ImGui::CloseCurrentPopup();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s",
+                I18n::T("editor.modal.common.close").c_str());
+        }
         ImGui::Separator();
         drawSnapPopoverContent(m_ui, m_ui->currentProject());
         ImGui::EndPopup();

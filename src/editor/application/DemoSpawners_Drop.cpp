@@ -11,7 +11,6 @@
 #include "editor/commands/EditMeshRendererMaterialCommand.h"
 #include "editor/commands/EditScriptComponentCommand.h"
 #include "editor/commands/HistoryStack.h"
-#include "editor/commands/SetTileCommand.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "engine/inventory/ItemAsset.h"   // F2H52 Bloque D
 #include "engine/physics/vehicle/VehicleConfig.h" // F2H70.3 Bloque F
@@ -269,30 +268,50 @@ void EditorApplication::processViewportTextureDrop() {
         }
     }
 
-    const TilePickResult hit = pickTile(m_map, mapWorldOrigin(), view, projection,
-                                        glm::vec2(drop.ndcX, drop.ndcY));
-    if (!hit.hit) return;
+    // F3H29 polish: si la entidad bajo el cursor tiene MeshRenderer,
+    // asignar la textura (wrapper material) al slot 0 — simétrico al
+    // flow de drop de material. Esto reemplaza el fallback legacy al
+    // tile-grid de Fase 1 que generaba un cubo-pared con la textura
+    // ("tile-cubo aparece al pasar cierto límite" del usuario).
+    //
+    // Texturas en el asset browser son recursos para construir, no
+    // entidades spawneables. Si no caen sobre brush/mesh, no pasa
+    // nada (mismo contrato que material-drop).
+    if (m_scene && m_assetManager) {
+        ScenePickResult meshHit = pickEntity(*m_scene, view, projection,
+            glm::vec2(drop.ndcX, drop.ndcY),
+            m_assetManager.get());
+        if (meshHit && meshHit.entity.hasComponent<MeshRendererComponent>()) {
+            const MaterialAssetId newMat =
+                m_assetManager->createMaterialFromTexture(texId);
+            auto& mr = meshHit.entity.getComponent<MeshRendererComponent>();
+            const std::string tag =
+                meshHit.entity.hasComponent<TagComponent>()
+                    ? meshHit.entity.getComponent<TagComponent>().name
+                    : std::string{"(sin tag)"};
 
-    // F2H16: snapshot pre-mutacion + push command.
-    const TileType oldType = m_map.tileAt(hit.tileX, hit.tileY);
-    const TextureAssetId oldTex = m_map.tileTextureAt(hit.tileX, hit.tileY);
+            const MaterialAssetId oldMat = mr.materials.empty()
+                ? 0u : mr.materials[0];
+            if (mr.materials.empty()) {
+                mr.materials.push_back(newMat);
+            } else {
+                mr.materials[0] = newMat;
+            }
+            m_history.push(std::make_unique<EditMeshRendererMaterialCommand>(
+                m_scene.get(), tag, 0, oldMat, newMat,
+                "Asignar textura a mesh"));
+            m_ui.setSelectedEntity(meshHit.entity);
+            Log::editor()->info(
+                "Drop textura id={} -> mesh '{}' (material {})",
+                drop.textureId, tag, newMat);
+            markDirty();
+            return;
+        }
+    }
 
-    auto sync = [this](u32 tx, u32 ty, TextureAssetId tex) {
-        updateTileEntity(tx, ty, tex);
-    };
-
-    // Aplicar y push.
-    m_map.setTile(hit.tileX, hit.tileY, TileType::SolidWall, texId);
-    updateTileEntity(hit.tileX, hit.tileY, texId);
-    m_history.push(std::make_unique<SetTileCommand>(
-        &m_map, std::move(sync), hit.tileX, hit.tileY,
-        oldType, oldTex,
-        TileType::SolidWall, texId,
-        "Pintar tile"));
-
-    Log::editor()->info("Drop textura id={} -> tile ({}, {})",
-                         drop.textureId, hit.tileX, hit.tileY);
-    markDirty();
+    Log::editor()->info(
+        "Drop textura id={}: sin brush/mesh bajo el cursor — drop ignorado",
+        drop.textureId);
 }
 
 void EditorApplication::processViewportMeshDrop() {

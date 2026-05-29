@@ -70,6 +70,14 @@ public:
     /// para no romper el "viaje" — convencion Blender.
     bool isLerping() const { return m_lerpRemainingSec > 0.0f; }
 
+    /// F3H29: limits configurables runtime. El caller (EditorApplication)
+    /// los lee de `UserSettings::editor()` cada frame y los inyecta acá.
+    /// Default 100/50 = comportamiento pre-F3H29 si nadie llama setters.
+    void setFarPlane(float v) { m_far = v; }
+    void setMaxOrbitRadius(float v) { m_maxRadius = v; }
+    float farPlane() const { return m_far; }
+    float maxOrbitRadius() const { return m_maxRadius; }
+
 private:
     float m_yawDeg;
     float m_pitchDeg;
@@ -77,7 +85,11 @@ private:
     glm::vec3 m_target{0.0f};
     float m_fovDeg = 60.0f;
     float m_near = 0.1f;
+    /// F3H29: defaults preservan comportamiento pre-F3H29 si el caller
+    /// no inyecta `UserSettings::editor()`. EditorApplication sí los
+    /// inyecta cada frame con valores hoy 1000.0 / 500.0.
     float m_far = 100.0f;
+    float m_maxRadius = 50.0f;
 
     // F3H21: state del lerp numpad (Blender Smooth View). Si
     // m_lerpRemainingSec > 0, tick(dt) interpola yaw/pitch/radius/target

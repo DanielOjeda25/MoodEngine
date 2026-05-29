@@ -198,6 +198,15 @@ public:
     void requestUngroupSelection();
     bool consumeUngroupSelectionRequest();
 
+    /// @brief F3H29: garantizar el singleton de Environment en la scene
+    ///        activa. El Inspector lo dispara cuando el dev entra a la
+    ///        categoría Environment y el singleton no existe (Blender
+    ///        World Properties pattern — el panel no debería pedirle al
+    ///        dev "agregalo manualmente"). EditorApplication consume el
+    ///        request y llama `ensureEnvironmentExists()`.
+    void requestEnsureEnvironment();
+    bool consumeEnsureEnvironmentRequest();
+
     // ============================================================
     // State setters / queries (Scene + History + Selection + Mode).
     // ============================================================
@@ -484,6 +493,9 @@ private:
     // que los atajos Ctrl+G / Shift+Ctrl+G).
     bool m_groupSelectionRequested = false;
     bool m_ungroupSelectionRequested = false;
+    // F3H29: request del Inspector cuando entra en categoría Environment
+    // y el singleton no existe (auto-recovery — Blender pattern).
+    bool m_ensureEnvironmentRequested = false;
 
     // F3H9: clipboard interno para copy/paste de componentes entre
     // entidades del mismo proyecto. Se invalida al cerrar proyecto

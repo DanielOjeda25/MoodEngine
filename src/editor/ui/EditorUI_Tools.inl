@@ -90,4 +90,13 @@ inline bool EditorUI::consumeUngroupSelectionRequest() {
     return r;
 }
 
+// F3H29: auto-spawn del singleton Environment cuando el Inspector entra
+// en la categoría y no lo encuentra. Blender World Properties pattern.
+inline void EditorUI::requestEnsureEnvironment() { m_ensureEnvironmentRequested = true; }
+inline bool EditorUI::consumeEnsureEnvironmentRequest() {
+    const bool r = m_ensureEnvironmentRequested;
+    m_ensureEnvironmentRequested = false;
+    return r;
+}
+
 } // namespace Mood

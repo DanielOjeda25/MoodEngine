@@ -311,7 +311,12 @@ SavedEntity parseEntityFromJson(const json& j) {
         SavedCamera sc;
         sc.fovDeg    = jc.value("fovDeg",    60.0f);
         sc.nearPlane = jc.value("nearPlane",  0.1f);
-        sc.farPlane  = jc.value("farPlane",  100.0f);
+        // F3H29: default 1000 (era 100). Mapas pre-F3H29 que persistieron
+        // explícitamente farPlane=100 lo preservan; mapas que NO escribieron
+        // el campo heredan el nuevo default 1000 (raro: el componente
+        // serializa siempre el campo, así que en practica casi todos los
+        // mapas tienen un valor explícito).
+        sc.farPlane  = jc.value("farPlane",  1000.0f);
         se.camera = std::move(sc);
     }
 

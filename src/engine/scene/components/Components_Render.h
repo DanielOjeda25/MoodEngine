@@ -215,7 +215,12 @@ struct MeshRendererComponent {
 struct CameraComponent {
     float fovDeg = 60.0f;
     float nearPlane = 0.1f;
-    float farPlane = 100.0f;
+    // F3H29: default 1000 (era 100 hardcoded pre-F3H29). Coherencia con
+    // EditorCamera.m_far para que lo que el dev ve moviendo la cam del
+    // editor = lo que ve por una cam gameplay sin tunear. Sigue editable
+    // en el Inspector hasta 10000 (slider). .moodmaps pre-F3H29 que
+    // persistieron 100 lo preservan via JSON value-or-default.
+    float farPlane = 1000.0f;
 };
 
 /// @brief Luz. Activada en Hito 11 (Blinn-Phong forward).

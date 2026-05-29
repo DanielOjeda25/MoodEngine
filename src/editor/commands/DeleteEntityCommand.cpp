@@ -3,10 +3,12 @@
 #include "core/Log.h"
 #include "editor/commands/HistoryStack.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/scene/components/BrushComponent.h"  // F3H29: snapshot del brush
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Scene.h"
 #include "engine/scene/serialization/EntitySerializer.h"
 #include "engine/scene/serialization/SceneLoader.h"
+#include "engine/scene/serialization/SceneSerializer.h"  // F3H29: serializeBrush/parseBrush
 
 namespace Mood {
 
@@ -30,6 +32,17 @@ DeleteEntityCommand::DeleteEntityCommand(Entity entity,
     if (m_assets != nullptr && static_cast<bool>(m_alive)) {
         const auto json = serializeEntityToJson(m_alive, *m_assets);
         m_snapshot = parseEntityFromJson(json);
+        // F3H29 bugfix: serializeEntityToJson NO incluye BrushComponent
+        // (los brushes se persisten en otro array del .moodmap via
+        // serializeBrush). Si la entity es un brush, capturamos el
+        // SavedBrush en paralelo — el undo lo aplicará sobre la entity
+        // recreada. Sin esto, el dev borraba un brush, hacía Ctrl+Z y
+        // recuperaba la entity vacía sin caras.
+        if (m_alive.hasComponent<BrushComponent>()) {
+            const auto brushJson = serializeBrush(m_alive, *m_assets);
+            m_brushSnapshot = parseBrush(brushJson);
+            m_hasBrush = true;
+        }
     }
 }
 
@@ -45,6 +58,14 @@ void DeleteEntityCommand::undo() {
     // Recrea desde el snapshot. El handle EnTT NUEVO no coincide con el
     // viejo — por eso m_alive se reasigna.
     m_alive = SceneLoader::applyOneEntity(m_snapshot, *m_scene, *m_assets);
+    // F3H29 bugfix: si era un brush, restaurar la geometría CSG +
+    // materiales encima de la entity recreada. applyBrushFromSaved
+    // detecta que el BrushComponent no existe aún y lo agrega.
+    if (m_hasBrush && static_cast<bool>(m_alive)) {
+        SceneLoader::applyBrushFromSaved(
+            m_brushSnapshot, m_alive, *m_assets,
+            /*applyVisGroupMembership=*/true);
+    }
     Log::editor()->info("Recreada entidad '{}' (undo de delete).", m_snapshot.tag);
 
     // Hito 32: notificar al history stack del cambio de handle. Comandos

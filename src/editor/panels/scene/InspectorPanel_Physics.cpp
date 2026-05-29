@@ -176,9 +176,8 @@ void InspectorPanel::renderRigidBodySection(Entity e) {
             "Reset RigidBody isSensor")) {
         m_editedThisFrame = true;
     }
-
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.panel.inspector.physics.body_id_hint", rb.bodyId).c_str());
+    // F3H29 polish: hint `body_id_hint` eliminado (debug ID interno —
+    // el dev casual no lo necesita, debug panel ya muestra physics state).
     ImGui::Separator();
 }
 
@@ -238,10 +237,8 @@ void InspectorPanel::renderRagdollSection(Entity e) {
             "Editar ragdoll spawnImpulse", 0.5f, -100.0f, 100.0f)) {
         m_editedThisFrame = true;
     }
-
-    ImGui::TextDisabled("%s",
-        I18n::T("editor.panel.inspector.ragdoll.state_hint",
-                static_cast<int>(rd.state), rd.ragdollId).c_str());
+    // F3H29 polish: hint `state_hint` eliminado (debug interno: state +
+    // ragdollId no aportan al dev casual).
     ImGui::Separator();
 }
 

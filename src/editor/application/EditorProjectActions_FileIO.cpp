@@ -89,6 +89,14 @@ void EditorApplication::handleNewProject() {
     // Nuevo proyecto -> contenido inicial = mapa de prueba (template).
     buildInitialTestMap();
     rebuildSceneFromMap();
+    // F3H29 polish: garantizar el singleton de Environment también en
+    // proyectos recién creados. Antes `handleNewProject` saltaba la
+    // llamada (solo se hacía en `tryOpenProjectPath` y `handleOpenMap`),
+    // así que el dev arrancaba un proyecto nuevo y la categoría
+    // Environment del Inspector decía "no hay Environment" — el dev no
+    // entendía por qué tenía que agregarlo manualmente cuando "es obvio
+    // que al final del día lo agregaran" (Blender World Properties).
+    ensureEnvironmentExists();
 
     const auto mapPath = created->root / created->defaultMap;
     std::filesystem::create_directories(mapPath.parent_path());
