@@ -325,6 +325,16 @@ SavedEntity parseEntityFromJson(const json& j) {
         sc.farPlane  = jc.value("farPlane",  1000.0f);
         se.camera = std::move(sc);
     }
+    // F4H1: health opcional. Mapas pre-F4H1 sin el campo se leen igual
+    // (la entidad queda sin HealthComponent).
+    if (j.contains("health")) {
+        const auto& jh = j.at("health");
+        SavedHealth sh;
+        sh.current = jh.value("current", 100.0f);
+        sh.max     = jh.value("max",     100.0f);
+        sh.dead    = jh.value("dead",    false);
+        se.health = sh;
+    }
 
     // F2H65: joint. Aditivo — mapas pre-F2H65 sin el campo se leen igual
     // (la entidad queda sin JointComponent).

@@ -324,6 +324,43 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
         ImGui::EndTabItem();
     }
 
+    // F4H1: tab "Gameplay". Items con HealthComponent / componentes de
+    // combate. Hoy: solo Maniquí. Futuros (F4H6+): enemigos data-driven.
+    if (ImGui::BeginTabItem(I18n::T("editor.pick_mesh_modal.tab_gameplay").c_str())) {
+        ImGui::BeginChild("##gameplay_grid", ImVec2(0.0f, kTabContentHeight), false);
+        ImGui::TextDisabled("%s",
+            I18n::T("editor.pick_mesh_modal.gameplay_hint").c_str());
+        ImGui::Spacing();
+
+        constexpr float kCard = 96.0f;
+        const std::string dummyLabel = I18n::T("editor.menu.gameplay.dummy");
+        ImGui::PushID("##dummy_card");
+        ImGui::BeginGroup();
+        ImGui::SetWindowFontScale(2.6f);
+        const bool clicked = ImGui::Button(ICON_FA_GAMEPAD, ImVec2(kCard, kCard));
+        ImGui::SetWindowFontScale(1.0f);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s",
+                I18n::T("editor.menu.gameplay.dummy.tooltip").c_str());
+        }
+        ImGui::TextUnformatted(dummyLabel.c_str());
+        ImGui::EndGroup();
+        ImGui::PopID();
+
+        if (clicked) {
+            m_ui.requestProjectAction(ProjectAction::AddDummy);
+            m_pickMeshModalActive = false;
+            ImGui::CloseCurrentPopup();
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+            ImGui::EndTabBar();
+            ImGui::EndPopup();
+            return;
+        }
+        ImGui::EndChild();
+        ImGui::EndTabItem();
+    }
+
     // F2H59: tab "Primitivas". Cada boton dispara el ProjectAction
     // correspondiente y cierra el modal. Grid 3-columns para que entren
     // las 11 primitivas sin scroll.

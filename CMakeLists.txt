@@ -471,6 +471,9 @@ add_library(mood_engine_lib STATIC
     src/engine/scripting/bindings/LuaBindings_Quest.cpp      # F2H53 Bloque E
     src/engine/scripting/bindings/LuaBindings_Ragdoll.cpp    # F2H66 Bloque E
     src/engine/scripting/bindings/LuaBindings_Vehicle.cpp    # F2H67 Bloque E
+    src/engine/scripting/bindings/LuaBindings_Health.cpp     # F4H1
+
+    src/engine/gameplay/Health.cpp                            # F4H1
 
     src/engine/render/backend/opengl/OpenGLMesh.cpp
     src/engine/render/backend/opengl/OpenGLShader.cpp
@@ -645,6 +648,7 @@ add_executable(MoodEditor
     src/editor/panels/scene/InspectorPanel_Inventory.cpp   # F2H51
     src/editor/panels/scene/InspectorPanel_Groups.cpp      # F3H28
     src/editor/panels/scene/InspectorPanel_MapTools.cpp    # F3H28
+    src/editor/panels/scene/InspectorPanel_Health.cpp      # F4H1
     src/editor/panels/assets/AssetBrowserPanel.cpp
     src/editor/panels/assets/AssetBrowserPanel_Tabs.cpp   # F2H81 auditoría (split)
     src/editor/panels/assets/AssetBrowserPanel_ImportVehicle.cpp  # F2H82 modal

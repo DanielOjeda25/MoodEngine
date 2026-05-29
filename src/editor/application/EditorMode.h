@@ -105,6 +105,11 @@ enum class ProjectAction {
     // no geometria). Convencion Unity Render Settings / Unreal Post
     // Process Volume / Godot WorldEnvironment.
     AddEnvironment,
+    // F4H1: maniqui de testing — cubo con HealthComponent + cubo Box mesh.
+    // Cimiento del combate de Fase 4: aplicale daño desde la consola Lua
+    // (`health.damage('Dummy_1', 25)`) y observa current bajar + log en
+    // Console + cae con física al morir.
+    AddDummy,
     // F2H20: compilacion brush -> mesh estatica + export OBJ.
     CompileMap,
     ExportObj,

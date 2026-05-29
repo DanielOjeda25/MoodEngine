@@ -144,6 +144,12 @@ struct GameplaySettings {
     /// Cooldown entre saltos en segundos. Defaults 0.2 — evita doble-
     /// salto por mantener la tecla apretada.
     f32 jumpCooldownSec = 0.2f;
+
+    /// F4H1: salud maxima por defecto de entidades con HealthComponent
+    /// recien creadas (maniqui, futuros enemigos). Inspector y spawn
+    /// usan este valor como base; el dev puede overridearlo per-entity.
+    /// Sanitize clamp `[1, 10000]` en `fromJson`.
+    f32 maxHealthDefault = 100.0f;
 };
 
 struct ProjectSettings {

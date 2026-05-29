@@ -380,6 +380,11 @@ void setupLuaBindings(sol::state& lua, Entity self,
     // `ragdoll.enable("NPC", {x=0, y=200, z=-300})` para flopping fisico.
     setupRagdollBindings(lua, self.scene());
 
+    // F4H1 — tabla `health`. Cimiento del combate Fase 4: damage / heal /
+    // get / is_alive. Permite probar el sistema de salud desde la consola
+    // Lua del editor en Play mode.
+    setupHealthBindings(lua, self.scene());
+
     // F2H67 Bloque E — tabla `vehicle`. Input + queries de speed/gear/rpm
     // + respawn. set_input solo escribe al componente; el VehicleSystem
     // pushea al physics en el siguiente tick.

@@ -40,6 +40,7 @@
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28 Bloque F: click-select desde ortos
 #include "engine/dialog/DialogInteractSystem.h"  // F2H48
 #include "engine/dialog/DialogSystem.h"          // F2H48
+#include "engine/gameplay/Health.h"              // F4H1
 #include "engine/game/state/GameState.h"         // F2H52 H: Tab toggle inventory_panel
 #include "engine/inventory/ItemPickupSystem.h"   // F2H52 Bloque C
 #include "engine/profile/ProfilerBuffer.h"        // F3H23: ring buffer endFrame + resize
@@ -470,6 +471,8 @@ void EditorApplication::pumpUiRequests() {
         case ProjectAction::AddPointLight:           handleAddPointLight();            break;
         // F2H86: Environment como entidad de primera clase (sin mesh placeholder).
         case ProjectAction::AddEnvironment:          handleAddEnvironment();           break;
+        // F4H1: maniqui de testing — cubo + HealthComponent.
+        case ProjectAction::AddDummy:                handleAddDummy();                 break;
         // F2H20: compilacion brush -> mesh estatica + export OBJ.
         case ProjectAction::CompileMap:              handleCompileMap();               break;
         case ProjectAction::ExportObj:               handleExportObj();                break;
@@ -579,6 +582,15 @@ void EditorApplication::tickSystems(f32 dt) {
     if (m_scene && m_physicsWorld && m_mode == EditorMode::Play) {
         MOOD_PROFILE_SCOPE("ForceFieldSystem::update");
         m_forceFieldSystem.update(*m_scene, *m_physicsWorld, dt);
+    }
+
+    // F4H1: tick del sistema de salud en Play mode — decae el flash on-hit
+    // de cada HealthComponent y agrega RigidBody Dynamic a los recién
+    // muertos (D2: cae con física). Corre ANTES de updateRigidBodies para
+    // que el body Dynamic recién agregado se materialice este mismo frame.
+    if (m_scene && m_mode == EditorMode::Play) {
+        MOOD_PROFILE_SCOPE("Health::tickSystem");
+        Health::tickSystem(*m_scene, dt);
     }
 
     // 3.4) Fisica (Jolt, Hito 12): materializa bodies nuevos siempre y

@@ -689,4 +689,47 @@ void EditorApplication::ensureEnvironmentExists() {
     // persiste; si NO guarda, queda solo runtime hasta el proximo load.
 }
 
+// ============================================================================
+// F4H1: maniquí de testing.
+//
+// Spawnea un cubo (mesh = primitiva default) con HealthComponent. El dev
+// puede aplicarle daño desde la consola Lua en Play mode:
+//   health.damage("Dummy_1", 25)
+// Al llegar a 0 vida, el cubo cae con física (RigidBody Dynamic auto-add
+// del HealthSystem). NO añade RigidBody mientras vive — se queda quieto.
+// ============================================================================
+
+void EditorApplication::handleAddDummy() {
+    if (!m_scene) return;
+    const std::string name = uniqueEntityName(*m_scene, "Dummy");
+    Entity e = m_scene->createEntity(name);
+
+    auto& t = e.getComponent<TransformComponent>();
+    t.position = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    // Cubo primitiva default (slot 0 del AssetManager = missing mesh = cubo
+    // unitario). Sin material custom: hereda el missing.png magenta hasta
+    // que el dev le asigne uno — útil para distinguirlo visualmente del
+    // entorno final.
+    if (m_assetManager) {
+        e.addComponent<MeshRendererComponent>(
+            m_assetManager->missingMeshId(),
+            MaterialAssetId{0});
+    }
+
+    // F4H1: HealthComponent con defaults Project Settings (regla nada
+    // hardcodeado). Si no hay project settings cargados, fallback a 100.
+    HealthComponent hc{};
+    hc.current = 100.0f;
+    hc.max     = 100.0f;
+    e.addComponent<HealthComponent>(hc);
+
+    Log::editor()->info(
+        "[create_dummy] Spawned '{}' (cubo + HealthComponent {}/{})",
+        name, hc.current, hc.max);
+
+    replaceWithSingle(m_ui.selectionSet(), e);
+    pushCreatedEntities({e}, std::string("Crear maniquí '") + name + "'");
+}
+
 } // namespace Mood

@@ -72,6 +72,10 @@ void setupQuestBindings(sol::state& lua, AssetManager* assets);
 ///        al siguiente frame.
 void setupRagdollBindings(sol::state& lua, class Scene* scene);
 
+/// @brief F4H1 — tabla `health` para los scripts Lua (damage / heal /
+///        get / is_alive). Cimiento del combate Fase 4.
+void setupHealthBindings(sol::state& lua, class Scene* scene);
+
 /// @brief F2H67 Bloque E: registra la tabla `vehicle` en `lua`.
 ///        Implementado en LuaBindings_Vehicle.cpp. Requiere `scene` y
 ///        `physicsWorld` para escribir el input del componente y leer

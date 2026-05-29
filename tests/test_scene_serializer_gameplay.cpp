@@ -522,3 +522,68 @@ TEST_CASE("SceneSerializer: round-trip de TriggerComponent avanzado (F2H73)") {
 
     std::filesystem::remove(path);
 }
+
+// ============================================================
+// F4H1: HealthComponent round-trip
+// ============================================================
+
+TEST_CASE("F4H1 SceneSerializer: round-trip de HealthComponent") {
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    {
+        Entity dummy = scene.createEntity("Dummy_1");
+        HealthComponent hc{};
+        hc.current = 75.5f;
+        hc.max     = 150.0f;
+        hc.dead    = false;
+        dummy.addComponent<HealthComponent>(hc);
+        dummy.addComponent<MeshRendererComponent>(
+            MeshAssetId{0}, std::vector<MaterialAssetId>{0});
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("health_roundtrip.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1u);
+    const auto& se = loaded->entities[0];
+    CHECK(se.tag == "Dummy_1");
+    REQUIRE(se.health.has_value());
+    CHECK(se.health->current == doctest::Approx(75.5f));
+    CHECK(se.health->max     == doctest::Approx(150.0f));
+    CHECK_FALSE(se.health->dead);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("F4H1 SceneSerializer: dead=true se persiste") {
+    AssetManager assets("assets", nullFactory());
+
+    Scene scene;
+    {
+        Entity dummy = scene.createEntity("Dummy_dead");
+        HealthComponent hc{};
+        hc.current = 0.0f;
+        hc.max     = 100.0f;
+        hc.dead    = true;
+        dummy.addComponent<HealthComponent>(hc);
+        dummy.addComponent<MeshRendererComponent>(
+            MeshAssetId{0}, std::vector<MaterialAssetId>{0});
+    }
+
+    GridMap empty(1u, 1u, 1.0f);
+    const auto path = tempPath("health_dead.moodmap");
+    SceneSerializer::save(empty, "demo", &scene, assets, path);
+
+    const auto loaded = SceneSerializer::load(path, assets);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->entities.size() == 1u);
+    REQUIRE(loaded->entities[0].health.has_value());
+    CHECK(loaded->entities[0].health->dead);
+    CHECK(loaded->entities[0].health->current == doctest::Approx(0.0f));
+
+    std::filesystem::remove(path);
+}

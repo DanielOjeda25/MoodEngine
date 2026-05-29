@@ -92,20 +92,45 @@ TEST_CASE("Gameplay non-default: subobjeto incluido con solo los fields cambiado
     CHECK(!j.at("gameplay").contains("crouch_speed"));
 }
 
-TEST_CASE("Gameplay roundtrip preserva los 4 fields") {
+TEST_CASE("Gameplay roundtrip preserva los 5 fields") {
     ProjectSettings before;
-    before.gameplay.walkSpeed       = 6.5f;
-    before.gameplay.crouchSpeed     = 2.5f;
-    before.gameplay.jumpVelocity    = 7.0f;
-    before.gameplay.jumpCooldownSec = 0.35f;
+    before.gameplay.walkSpeed        = 6.5f;
+    before.gameplay.crouchSpeed      = 2.5f;
+    before.gameplay.jumpVelocity     = 7.0f;
+    before.gameplay.jumpCooldownSec  = 0.35f;
+    before.gameplay.maxHealthDefault = 150.0f;  // F4H1
 
     const auto j = toJson(before);
     const auto after = projectSettingsFromJson(j);
 
-    CHECK(after.gameplay.walkSpeed       == doctest::Approx(6.5f));
-    CHECK(after.gameplay.crouchSpeed     == doctest::Approx(2.5f));
-    CHECK(after.gameplay.jumpVelocity    == doctest::Approx(7.0f));
-    CHECK(after.gameplay.jumpCooldownSec == doctest::Approx(0.35f));
+    CHECK(after.gameplay.walkSpeed        == doctest::Approx(6.5f));
+    CHECK(after.gameplay.crouchSpeed      == doctest::Approx(2.5f));
+    CHECK(after.gameplay.jumpVelocity     == doctest::Approx(7.0f));
+    CHECK(after.gameplay.jumpCooldownSec  == doctest::Approx(0.35f));
+    CHECK(after.gameplay.maxHealthDefault == doctest::Approx(150.0f));
+}
+
+TEST_CASE("F4H1: maxHealthDefault clamp [1, 10000] en fromJson") {
+    // Defensivo: dev edita .moodproj a mano y mete valor invalido.
+    nlohmann::json j;
+    j["gameplay"]["max_health_default"] = 0.0f;  // invalido: <1
+    auto s = projectSettingsFromJson(j);
+    CHECK(s.gameplay.maxHealthDefault == doctest::Approx(1.0f));
+
+    j["gameplay"]["max_health_default"] = 50000.0f;  // invalido: >10000
+    s = projectSettingsFromJson(j);
+    CHECK(s.gameplay.maxHealthDefault == doctest::Approx(10000.0f));
+
+    j["gameplay"]["max_health_default"] = 250.0f;  // valido
+    s = projectSettingsFromJson(j);
+    CHECK(s.gameplay.maxHealthDefault == doctest::Approx(250.0f));
+}
+
+TEST_CASE("F4H1: maxHealthDefault default (no-key en JSON) = 100") {
+    nlohmann::json j;
+    j["gameplay"] = nlohmann::json::object();  // gameplay vacio
+    const auto s = projectSettingsFromJson(j);
+    CHECK(s.gameplay.maxHealthDefault == doctest::Approx(100.0f));
 }
 
 TEST_CASE("Gameplay back-compat: .moodproj pre-F3H4 (sin gameplay subkey) carga con defaults") {
@@ -117,6 +142,7 @@ TEST_CASE("Gameplay back-compat: .moodproj pre-F3H4 (sin gameplay subkey) carga 
     CHECK(s.gameplay.crouchSpeed      == doctest::Approx(3.0f));
     CHECK(s.gameplay.jumpVelocity     == doctest::Approx(5.5f));
     CHECK(s.gameplay.jumpCooldownSec  == doctest::Approx(0.2f));
+    CHECK(s.gameplay.maxHealthDefault == doctest::Approx(100.0f));  // F4H1 default
 }
 
 TEST_CASE("Gameplay malformed: subkey no-object devuelve defaults silencioso") {

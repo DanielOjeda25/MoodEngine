@@ -276,4 +276,18 @@ struct ItemPickupComponent {
     u32         cachedItemId = 0;
 };
 
+/// @brief F4H1 — Salud de una entidad (cimiento del combate de Fase 4).
+///        Plain data: `current`/`max` en hit points (`current==0 && dead`).
+///        `lastDamageTime` (segundos desde Play mode start) y
+///        `hitFlashTimer` (segundos restantes del flash blanco on-hit)
+///        son transients runtime — no se serializan.
+struct HealthComponent {
+    f32  current        = 100.0f;
+    f32  max            = 100.0f;
+    bool dead           = false;
+    /// Transients (no serializar):
+    f32  lastDamageTime = -1.0f;
+    f32  hitFlashTimer  = 0.0f;
+};
+
 } // namespace Mood

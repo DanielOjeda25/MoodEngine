@@ -18,6 +18,7 @@ nlohmann::json gameplayToJson(const GameplaySettings& g) {
     if (g.crouchSpeed     != defaults.crouchSpeed)     j["crouch_speed"]      = g.crouchSpeed;
     if (g.jumpVelocity    != defaults.jumpVelocity)    j["jump_velocity"]     = g.jumpVelocity;
     if (g.jumpCooldownSec != defaults.jumpCooldownSec) j["jump_cooldown_sec"] = g.jumpCooldownSec;
+    if (g.maxHealthDefault != defaults.maxHealthDefault) j["max_health_default"] = g.maxHealthDefault;
     return j;
 }
 
@@ -28,6 +29,11 @@ GameplaySettings gameplayFromJson(const nlohmann::json& j) {
     if (j.contains("crouch_speed")      && j.at("crouch_speed").is_number())      g.crouchSpeed      = j.at("crouch_speed").get<f32>();
     if (j.contains("jump_velocity")     && j.at("jump_velocity").is_number())     g.jumpVelocity     = j.at("jump_velocity").get<f32>();
     if (j.contains("jump_cooldown_sec") && j.at("jump_cooldown_sec").is_number()) g.jumpCooldownSec  = j.at("jump_cooldown_sec").get<f32>();
+    if (j.contains("max_health_default") && j.at("max_health_default").is_number()) {
+        // F4H1: clamp [1, 10000] — protege defaults absurdos (0 = sin vida, >10k inutil).
+        const f32 raw = j.at("max_health_default").get<f32>();
+        g.maxHealthDefault = std::clamp(raw, 1.0f, 10000.0f);
+    }
     return g;
 }
 

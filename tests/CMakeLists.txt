@@ -21,6 +21,7 @@ add_executable(mood_tests
     test_project_settings.cpp                  # F3H1
     test_user_settings_editor.cpp              # F3H7 (+F3H21/F3H22/F3H23 fields)
     test_hosek_wilkie.cpp                      # F3H31
+    test_health.cpp                            # F4H1
     test_editor_camera_lerp.cpp                # F3H21
     test_profiler_buffer.cpp                   # F3H23
     test_toasts.cpp                            # F3H24
@@ -242,7 +243,9 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Quest.cpp # F2H53 E
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Ragdoll.cpp # F2H66 E
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Vehicle.cpp # F2H67 E
+    ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Health.cpp # F4H1
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogScriptHost.cpp # F2H48.1
+    ${CMAKE_SOURCE_DIR}/src/engine/gameplay/Health.cpp # F4H1
 )
 
 # AssetManager.cpp usa spdlog (via core/Log). JsonHelpers requiere nlohmann_json.

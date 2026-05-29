@@ -253,6 +253,13 @@ void ProjectSettingsPanel::drawGameplaySection(ProjectSettings& settings) {
                settings.gameplay.jumpCooldownSec, defaults.jumpCooldownSec,
                0.0f, 1.0f, "%.2f s");
 
+    // F4H1: salud maxima por defecto para entities con HealthComponent.
+    drawSlider("editor.project_settings.gameplay.max_health_default",
+               "editor.project_settings.gameplay.max_health_default_hint",
+               "##max_health_default", "max_health_default",
+               settings.gameplay.maxHealthDefault, defaults.maxHealthDefault,
+               1.0f, 1000.0f, "%.0f HP");
+
     ImGui::Unindent();
 }
 

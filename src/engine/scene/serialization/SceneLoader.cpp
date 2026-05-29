@@ -492,6 +492,17 @@ Entity applyOneEntity(const SavedEntity& se,
             cc.farPlane  = sc.farPlane;
             e.addComponent<CameraComponent>(cc);
         }
+        // F4H1: HealthComponent. lastDamageTime/hitFlashTimer son transients
+        // → arrancan en defaults (0). Mapas pre-F4H1 sin el campo no añaden
+        // el componente.
+        if (se.health.has_value()) {
+            const auto& sh = *se.health;
+            HealthComponent hc{};
+            hc.current = sh.current;
+            hc.max     = sh.max;
+            hc.dead    = sh.dead;
+            e.addComponent<HealthComponent>(hc);
+        }
 
         // F2H65: JointComponent. El targetEntity (raw handle) se resuelve
         // desde el tag persistido — handles no son estables entre

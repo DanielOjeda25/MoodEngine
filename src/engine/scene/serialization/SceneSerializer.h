@@ -162,6 +162,14 @@ struct SavedScript {
     std::unordered_map<std::string, ExposedValue> overrides;
 };
 
+/// @brief F4H1 — Copia persistida de HealthComponent. Solo current/max/dead;
+///        lastDamageTime y hitFlashTimer son transients (no se persisten).
+struct SavedHealth {
+    f32  current = 100.0f;
+    f32  max     = 100.0f;
+    bool dead    = false;
+};
+
 /// @brief Copia persistida de un TriggerComponent (Hito 33).
 ///        Solo `halfExtents`; el flag runtime `playerInside` se reinicia
 ///        al cargar (la AABB-test del primer frame redetectara estado).
@@ -411,6 +419,7 @@ struct SavedEntity {
     std::optional<SavedVehicleSeat> vehicleSeat;          // F2H67
     std::optional<SavedAudio>      audio;                 // F3H11
     std::optional<SavedCamera>     camera;                // F3H11
+    std::optional<SavedHealth>     health;                // F4H1
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.

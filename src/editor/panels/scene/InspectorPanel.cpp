@@ -78,7 +78,8 @@ bool entityHasCategory(Entity e, const char* category) {
     if (std::strcmp(category, "gameplay") == 0) {
         return e.hasComponent<ScriptComponent>()
             || e.hasComponent<VehicleComponent>()
-            || e.hasComponent<InventoryComponent>();
+            || e.hasComponent<InventoryComponent>()
+            || e.hasComponent<HealthComponent>();   // F4H1
     }
     if (std::strcmp(category, "environment") == 0) {
         return e.hasComponent<EnvironmentComponent>();
@@ -243,6 +244,7 @@ void InspectorPanel::onImGuiRender() {
         if (dispatchEntity.hasComponent<ScriptComponent>())       renderScriptSection(dispatchEntity);
         if (dispatchEntity.hasComponent<VehicleComponent>())      renderVehicleSection(dispatchEntity);  // F2H67
         if (dispatchEntity.hasComponent<InventoryComponent>())    renderInventorySection(dispatchEntity);  // F2H51
+        if (dispatchEntity.hasComponent<HealthComponent>())       renderHealthSection(dispatchEntity);    // F4H1
     }
     if (catActive(activeCat, "physics")) {
         if (dispatchEntity.hasComponent<RigidBodyComponent>())    renderRigidBodySection(dispatchEntity);

@@ -239,6 +239,7 @@ private:
     // Tag + Transform + LightComponent del tipo correspondiente.
     void handleAddDirectionalLight(); // dir=(-0.3,-1.0,-0.2), castShadows=true.
     void handleAddPointLight();       // pos=(0,1,0), radius=10m, color calido.
+    void handleAddDummy();            // F4H1: cubo + HealthComponent.
 
     /// @brief F2H86: spawn entidad con `Tag + Transform + EnvironmentComponent`
     ///        (sin MeshRenderer — es config global de escena, no geometria).

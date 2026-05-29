@@ -492,6 +492,16 @@ void writeCamera(json& je, const CameraComponent& c) {
     je["camera"] = jc;
 }
 
+// F4H1: persistir HealthComponent. lastDamageTime/hitFlashTimer son
+// transients runtime (no se guardan).
+void writeHealth(json& je, const HealthComponent& h) {
+    json jh;
+    jh["current"] = h.current;
+    jh["max"]     = h.max;
+    jh["dead"]    = h.dead;
+    je["health"] = jh;
+}
+
 // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la
 // entidad tiene un `PrefabLinkComponent`. Sin propagacion bidireccional
 // por ahora; es solo un breadcrumb para futuras features ("revertir a
@@ -570,6 +580,8 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         writeAudio(je, entity.getComponent<AudioSourceComponent>(), assets);
     if (entity.hasComponent<CameraComponent>())
         writeCamera(je, entity.getComponent<CameraComponent>());
+    if (entity.hasComponent<HealthComponent>())           // F4H1
+        writeHealth(je, entity.getComponent<HealthComponent>());
     if (entity.hasComponent<PrefabLinkComponent>())
         writePrefabLink(je, entity.getComponent<PrefabLinkComponent>());
 
