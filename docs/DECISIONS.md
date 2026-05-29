@@ -11,6 +11,55 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-29: F3H30 cierre — Texture pack HL1-style procedural + AssetBrowser recursivo + reset UV brush (Sub-fase 3.4 CERRADA 🏁)
+
+Undécimo y último hito de Sub-fase 3.4 → cierre 11/11. El stub original era "HDRI dinámico + ciclo día/noche" pero el dev pivoteó tras F3H29 (*"creo que lo de las texturas es más rápido, vamos por eso"*) porque las 4 texturas legacy de Fase 1 (`brick.png`, `grid.png`, `missing.png`, `particle_fire.png`) no alcanzaban para construir un mapa real. **6 decisiones cerradas**.
+
+**D1 — Set mínimo de 5 texturas (no 8).** Pedido del dev: *"necesito las necesarias para crear un mapa"*. Pensando como mapper Hammer/HL1, con 5 materiales se cubre 80% de cualquier mapa básico (interior + exterior). Set elegido: `concrete_wall` (paredes interiores #1), `concrete_floor` (piso interior, variante más clara), `dirt_ground` (exterior universal), `metal_panel` (puertas/paneles/detalles), `brick_old` (variación de pared, alt al concrete). Descartadas (wood_planks, gravel, tile_floor, lab_panel) son sustituibles por variantes — agregables como F3H31+ si emerge demanda.
+
+Alternativa descartada:
+- **8 texturas (set propuesto inicial)**: el dev fue explícito en mínimo viable; +3 más era scope creep para *"cerremos definitivamente"*.
+
+**D2 — Stack Pillow + numpy puro (sin opensimplex, sin scipy).** El look HL1 se logra con: (a) ruido gaussiano cuantizado, (b) paleta indexed 16-32 colores, (c) patches manuales con `ImageDraw`. Pillow + numpy cubren todo — ambas ya disponibles en el entorno del repo (mismo stack que `gen_brick_texture.py` de F2H5). Sin deps nuevas.
+
+Alternativa descartada:
+- **opensimplex / scipy**: noise más sofisticado pero deps nuevas. Si emerge demanda de perlin/simplex/curl noise (materiales orgánicos tipo rock con vetas, mud con flow), agregar después.
+- **Pack CC0 downscaleado** (Kenney, AmbientCG): el dev quería look HL1 indexed específico — los packs CC0 modernos son PBR realistas, no calzan out-of-the-box. Habría requerido pipeline de "downscale + cuantizar + recolorear" igual de costoso que generar from scratch.
+
+**D3 — Sub-carpeta `assets/textures/library/` + AssetBrowser recursivo.** Las 4 legacy quedan en `assets/textures/` flat por compat con paths persistidos en .moodmap viejos (`textures/brick.png`). Las nuevas viven en `assets/textures/library/` → logicalPath `textures/library/concrete_wall.png`. AssetBrowserPanel migrado de `directory_iterator` a `recursive_directory_iterator` (mismo patrón que meshes desde F2H26). El `displayName` usa path relativo (`library/concrete_wall.png`) para distinguir sub-packs.
+
+Alternativa descartada:
+- **Flat en `assets/textures/`**: el dev tendría 9 PNGs mezclados sin agrupación. Sub-carpeta da semántica clara "esto es el pack base de F3H30 reproducible".
+
+**D4 — Tileable via blend lineal de bordes opuestos.** En `tools/_texture_lib.py::make_tileable(img, blend=N)`: para cada par (`col[i]`, `col[w-1-i]`) y análogo filas, se calcula `mix = 0.5 * (1.0 - i/blend)` y se reemplazan ambos bordes por `pixel * (1-mix) + opuesto * mix`. En `i=0` (borde mismo) ambos pixels devuelven el promedio (matchan exactamente, costura invisible); en `i=blend` vuelven al original (`mix=0`). Función reusable para los 5 materiales con `blend` ajustable por material (concrete=24-32 suave, brick=6 nítido, metal=12 medio).
+
+Alternativa descartada:
+- **Offset + blend del Photoshop Offset Filter**: `np.roll(w/2, h/2)` mueve costuras al centro, smooth franja central, rotar de vuelta. Implementación inicial tenía bug en el blend (convex combination mal calculada con doble multiplicación). El approach actual es más simple, más robusto, y permite control fino del width del blend.
+- **`np.tile` + crop centrado**: pierde variedad porque la imagen se vuelve simétrica.
+
+**D5 — Reset buttons del UV brush undoable.** Pedido del dev: *"a la parte de UV le falta los botones de reset"*. Gap del F3H29 round-2 que solo agregó reset buttons (↺) a sliders PBR de materiales — los del editor UV del brush (uv scale / uv rotation / uv offset) quedaron sin ellos. Implementación: helper lambda `uvResetButton` inline en `InspectorPanel_Brush.cpp` (~25 LOC) que (i) captura `BrushUVSnapshot` pre, (ii) aplica default via `applyToScope` (`uvScale=(1.0, 1.0)`, `uvRotation=0.0`, `uvOffset=(0.0, 0.0)`), (iii) pushea `EditBrushUVCommand` con snapshot post (undoable como cualquier edit manual). Tooltip `editor.common.reset_default` reutilizado. El checkbox `lockToWorld` no lleva reset (boolean — destildar = "default").
+
+Alternativa descartada:
+- **`detail::inspectorResetButton<T>`** (helper genérico): asume target per-entity con setter `(Entity, T)`. El UV brush es per-face / multi-face con `applyToScope` (que maneja Object Mode vs Face Mode + N caras seleccionadas) — necesita lógica custom que el helper genérico no cubre. Crear un overload sería over-engineering para 3 invocaciones.
+
+**D6 — Botón header AssetBrowser: "R" → ícono FA rotate.** Pedido del dev: *"el botón de recargar podemos cambiarlo por un botón de reload"*. Cambio puntual: `SmallButton("R")` → `SmallButton(ICON_FA_ROTATE "##reload_assets")`. Consistente con el resto del editor que usa iconos FA (gizmos, snap, reset). Tooltip preservado (`editor.panel.assets.reload_tooltip`). Misma macro que ya se usa en Toolbar, InspectorPanel_Environment, ShaderGraph rotate ops.
+
+---
+
+**Lección del cierre de Sub-fase 3.4**: la sub-fase arrancó (F3H20) con un audit grande "11 issues de UX del editor" y cerró 11 hitos después. **5 de los 11 hitos cerraron con scope expandido mid-hito** (F3H22 chasis Properties Editor expandido 3 veces; F3H26 polish UX absorbió 5 issues paralelos; F3H27 parenting con 4 reactivos post-validación; F3H28 grupos+tools cambió 4 decisiones por research previo; F3H29 expandido 2× — 14 decisiones finales). La regla "expandir solo si el dev pide explícitamente + razón temporal explícita + plan actualizado" del cierre F3H29 se sostuvo en F3H30 también (el pivote del stub HDRI→texturas fue pedido explícito, no inferencia mía).
+
+Backlog que NO se llegó a cerrar en Sub-fase 3.4 (priorizado para Sub-fase 3.5 o Fase 4):
+- **HDRI dinámico + ciclo día/noche** (stub original F3H30, pivoteado a texturas).
+- **Reverse-Z infinito** (F3H29 D4).
+- **OrthoCamera eye dist 1024 hardcoded** (F3H29 backlog).
+- **Welcome modal title** "MoodEngine - bienvenida" ID interno mixto ES/EN.
+- **Tooltips tuning fino import vehicle** (~10 keys de bajo impacto).
+- **Migrar physics/picking/editor tools a `worldMatrixOf`** (F3H27 backlog).
+- **Compound atomic delete** del padre + descendants en 1 undo step (F3H27 backlog).
+- **Asset pack expansion** (F3H30 backlog): wood_planks, gravel, tile_floor, lab_panel + normal maps procedurales.
+
+---
+
 ## 2026-05-29: F3H29 cierre — Camera limits + polish play mode + audit traducciones
 
 Décimo hito de Sub-fase 3.4. Arrancó como split del item 3 del stub original F3H27 ("Mundo grande"). **Scope expandido mid-hito** tras validación visual del Play mode: el dev pidió integrar 3 polish issues no relacionados al far plane en el mismo hito (decisión literal *"perdemos tiempo si separamos en otro [hito]"*) en lugar de abrir F3H30 separado. 7 decisiones — 4 cerradas pre-implementación (D1-D4) + 3 reactivas post-validación (D5-D7).
