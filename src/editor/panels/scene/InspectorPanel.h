@@ -136,6 +136,14 @@ private:
     /// F2H44 Bloque A: buffer del search input del popup Add Component.
     char m_addComponentSearch[64]{};
 
+    /// F4H2 Bloque B: posición target del popup "Componentes disponibles".
+    /// Capturada justo después del click sobre `+ Agregar Componente` —
+    /// bottom-left del botón + 2px gap. Sin esto, ImGui auto-flippeaba
+    /// el popup hacia arriba cuando había poco espacio debajo, tapando el
+    /// botón que lo abrió. Aplicado con `SetNextWindowPos` en el primer
+    /// frame del popup (`ImGuiCond_Appearing`).
+    ImVec2 m_addCompPopupPos{0.0f, 0.0f};
+
     /// F3H9 Stage 9: slot de material seleccionado en el inspector
     /// MeshRenderer (UI Blender-style: lista compacta arriba + panel del
     /// seleccionado debajo). Sticky entre frames; se clampea contra

@@ -191,9 +191,20 @@ void EditorApplication::processEvents() {
                    (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
                    (ev.key.keysym.mod & KMOD_SHIFT) == 0 &&
                    ev.key.repeat == 0 &&
-                   m_mode == EditorMode::Editor &&
-                   !ImGui::GetIO().WantTextInput) {
+                   m_mode == EditorMode::Editor) {
             // Hito 27: Ctrl+Z deshace el ultimo comando del history.
+            // F4H2 Bloque B fix iter2: gate completamente eliminado.
+            // La gate previa (`!WantTextInput` y luego `!IsAnyItemActive`)
+            // bloqueaba undo cuando un DragFloat del Inspector retenía
+            // focus por un frame post-Enter. ImGui maneja su propio
+            // Ctrl+Z LOCAL en text inputs (deshacer typing dentro del
+            // campo) — no le afecta el handler global del editor.
+            // Diagnóstico: log explícito de pre/post size para que el
+            // dev vea si el HistoryStack está vacío vs si el undo no
+            // tiene efecto visible.
+            Log::editor()->info(
+                "[ctrl+z] undo solicitado — historia: {} comandos antes (canUndo={})",
+                m_history.undoCount(), m_history.canUndo());
             m_history.undo();
         } else if (ev.type == SDL_KEYDOWN &&
                    ((ev.key.keysym.sym == SDLK_y &&
@@ -202,9 +213,12 @@ void EditorApplication::processEvents() {
                      (ev.key.keysym.mod & KMOD_CTRL) != 0 &&
                      (ev.key.keysym.mod & KMOD_SHIFT) != 0)) &&
                    ev.key.repeat == 0 &&
-                   m_mode == EditorMode::Editor &&
-                   !ImGui::GetIO().WantTextInput) {
+                   m_mode == EditorMode::Editor) {
             // Hito 27: Ctrl+Y o Ctrl+Shift+Z rehace.
+            // F4H2 Bloque B fix iter2: gate eliminado (misma razón que undo).
+            Log::editor()->info(
+                "[ctrl+y/shift+z] redo solicitado — historia: {} comandos",
+                m_history.redoCount());
             m_history.redo();
         } else if (ev.type == SDL_KEYDOWN &&
                    (ev.key.keysym.mod & KMOD_CTRL) != 0 &&

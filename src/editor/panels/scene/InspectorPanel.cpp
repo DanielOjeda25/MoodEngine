@@ -400,6 +400,14 @@ void InspectorPanel::renderAddComponentSection(Entity e) {
     }
     if (ImGui::Button(label.c_str(), ImVec2(btnW, 0.0f))) {
         m_addComponentSearch[0] = '\0';  // reset search cada vez
+        // F4H2 Bloque B: capturar la posición target del popup ANTES de
+        // abrirlo. Sin esto, ImGui auto-flippeaba el popup arriba del
+        // botón cuando el Inspector estaba cerca del fondo del panel,
+        // tapando el `+ Agregar Componente` que lo invocó. Anclamos al
+        // bottom-left del botón + 2px gap → siempre debajo.
+        const ImVec2 btnMin = ImGui::GetItemRectMin();
+        const ImVec2 btnMax = ImGui::GetItemRectMax();
+        m_addCompPopupPos = ImVec2(btnMin.x, btnMax.y + 2.0f);
         ImGui::OpenPopup("##add_component_popup");
     }
 
@@ -408,6 +416,11 @@ void InspectorPanel::renderAddComponentSection(Entity e) {
 
 void InspectorPanel::drawAddComponentPopup(Entity e) {
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
+    // F4H2 Bloque B: forzar posición del popup bajo el botón (capturada
+    // arriba en `renderAddComponentSection`). `Appearing` aplica solo al
+    // primer frame del popup; los siguientes mantienen la posición que
+    // ImGui ya seteó (pero auto-clamped al viewport para no salirse).
+    ImGui::SetNextWindowPos(m_addCompPopupPos, ImGuiCond_Appearing);
     if (!ImGui::BeginPopup("##add_component_popup", flags)) return;
 
     ImGui::TextDisabled("%s",

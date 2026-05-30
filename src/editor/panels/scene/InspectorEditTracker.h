@@ -35,6 +35,7 @@
 //       },
 //       "Mover entidad");
 
+#include "core/Log.h"  // F4H2 Bloque B: diag log de push edit
 #include "core/Types.h"
 #include "editor/commands/EditPropertyCommand.h"
 #include "editor/commands/HistoryStack.h"
@@ -99,6 +100,15 @@ void trackPropertyEdit(InspectorEditTracker& tracker,
                 setter(entity, before);
                 auto cmd = std::make_unique<EditPropertyCommand<T>>(
                     entity, before, after, std::move(setter), label);
+                // F4H2 Bloque B: diag log para confirmar que el commit
+                // llega al HistoryStack (issue del Ctrl+Z reportado por
+                // el dev). Si NO ves este log al editar un campo del
+                // Inspector, el problema es que `IsItemDeactivatedAfterEdit`
+                // no dispara → bug de ImGui state. Si SÍ ves el log pero
+                // Ctrl+Z no revierte → bug del handler de Ctrl+Z.
+                Log::editor()->info(
+                    "[inspector] commit '{}' al HistoryStack (1 comando)",
+                    label);
                 history.push(std::move(cmd));
             }
         }

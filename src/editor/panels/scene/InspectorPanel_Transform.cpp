@@ -4,8 +4,11 @@
 #include "editor/panels/scene/InspectorPanel_Internal.h"
 
 #include "core/Log.h"
+#include "editor/commands/Command.h"        // F4H2 Bloque B: ICommand para reset
+#include "editor/commands/HistoryStack.h"   // F4H2 Bloque B
 #include "editor/selection/SelectionSet.h"
 #include "editor/ui/EditorUI.h"
+#include "editor/ui/IconsFontAwesome6.h"    // F4H2 Bloque B: ICON_FA_ROTATE
 #include "core/i18n/I18n.h"  // F2H43
 #include "engine/scene/components/BrushComponent.h"
 #include "engine/scene/components/Components.h"
@@ -16,8 +19,84 @@
 #include <glm/trigonometric.hpp>
 
 #include <algorithm>
+#include <functional>
+#include <memory>
+#include <utility>
 
 namespace Mood {
+
+namespace {
+
+// F4H2 Bloque B: comando custom para el "Restablecer" del Transform.
+// Patrón gemelo de `EditEnvironmentSubsetCommand` (F3H12) — snapshot del
+// before, lambdas execute/undo. Un Ctrl+Z revierte los 3 campos
+// (position/rotationEuler/scale) atómicamente.
+class EditTransformResetCommand : public ICommand {
+public:
+    struct Snapshot {
+        glm::vec3 position{0.0f};
+        glm::vec3 rotationEuler{0.0f};
+        glm::vec3 scale{1.0f};
+        bool      useQuaternion = false;
+    };
+
+    EditTransformResetCommand(Entity entity, Snapshot before, Snapshot after,
+                                std::string label)
+        : m_entity(entity), m_before(before), m_after(after),
+          m_label(std::move(label)) {}
+
+    void execute() override { apply(m_after); }
+    void undo()    override { apply(m_before); }
+    std::string name() const override { return m_label; }
+
+    void onEntityRemap(entt::entity oldH, entt::entity newH) override {
+        if (m_entity.handle() == oldH) {
+            m_entity = Entity(newH, m_entity.scene());
+        }
+    }
+
+private:
+    void apply(const Snapshot& s) {
+        if (!m_entity.scene() ||
+            !m_entity.scene()->registry().valid(m_entity.handle()) ||
+            !m_entity.hasComponent<TransformComponent>()) return;
+        auto& t = m_entity.getComponent<TransformComponent>();
+        t.position      = s.position;
+        t.rotationEuler = s.rotationEuler;
+        t.scale         = s.scale;
+        t.useQuaternion = s.useQuaternion;
+    }
+
+    Entity      m_entity;
+    Snapshot    m_before;
+    Snapshot    m_after;
+    std::string m_label;
+};
+
+// Pequeño botón "Restablecer" a la derecha, mismo patrón que el de
+// Environment (F3H12). Llama `apply` si el dev clickea.
+template<typename ApplyFn>
+void drawTransformResetButton(ApplyFn&& apply) {
+    ImGui::Spacing();
+    const std::string visibleLabel = std::string(ICON_FA_ROTATE " ") +
+        I18n::T("editor.panel.inspector.transform.reset");
+    const std::string buttonId = visibleLabel + "##trreset";
+    const float btnW = ImGui::CalcTextSize(visibleLabel.c_str()).x +
+        ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float avail = ImGui::GetContentRegionAvail().x;
+    if (avail > btnW) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - btnW));
+    }
+    if (ImGui::SmallButton(buttonId.c_str())) {
+        apply();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s",
+            I18n::T("editor.panel.inspector.transform.reset_tooltip").c_str());
+    }
+}
+
+} // namespace
 
 // TransformComponent
 // Scale + rotation solo tienen efecto visible si hay MeshRenderer
@@ -78,12 +157,17 @@ void InspectorPanel::renderTransformSection(Entity e) {
             [](TransformComponent& tc, const glm::vec3& v) { tc.position = v; },
             "position");
     }
-    detail::helpMarker(I18n::T("editor.panel.inspector.transform.position_help").c_str());
+    // F4H2 Bloque B fix: `pushEditIfDone` lee `ImGui::GetItemID()` / `IsItem*`
+    // del ULTIMO widget — y `helpMarker` (SameLine + TextDisabled "(?)") pisa
+    // ese item. Sin este reordenado el tracker rastreaba el `(?)` y JAMAS
+    // commiteaba el edit del DragFloat3 → Ctrl+Z no tenia nada que revertir
+    // (bug reportado por el dev tras F4H2 Bloque B). Push ANTES de helpMarker.
     detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.position,
         [](Entity& en, const glm::vec3& v) {
             en.getComponent<TransformComponent>().position = v;
         },
         "Mover entidad (Inspector)");
+    detail::helpMarker(I18n::T("editor.panel.inspector.transform.position_help").c_str());
 
     // Rotation + scale: visibles si la entidad tiene geometria
     // visible (MeshRenderer / BrushComponent) o TriggerComponent
@@ -118,12 +202,13 @@ void InspectorPanel::renderTransformSection(Entity e) {
                 [](TransformComponent& tc, const glm::vec3& v) { tc.rotationEuler = v; },
                 "rotation");
         }
-        detail::helpMarker(I18n::T("editor.panel.inspector.transform.rotation_help").c_str());
+        // F4H2 Bloque B fix: push ANTES de helpMarker (ver comentario en pos).
         detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.rotationEuler,
             [](Entity& en, const glm::vec3& v) {
                 en.getComponent<TransformComponent>().rotationEuler = v;
             },
             "Rotar entidad (Inspector)");
+        detail::helpMarker(I18n::T("editor.panel.inspector.transform.rotation_help").c_str());
 
         // --- scale ---
         const glm::vec3 preScale = t.scale;
@@ -141,15 +226,37 @@ void InspectorPanel::renderTransformSection(Entity e) {
                 },
                 "scale");
         }
-        detail::helpMarker(I18n::T("editor.panel.inspector.transform.scale_help").c_str());
+        // F4H2 Bloque B fix: push ANTES de helpMarker (ver comentario en pos).
         detail::pushEditIfDone<glm::vec3>(m_editTracker, m_ui, e, t.scale,
             [](Entity& en, const glm::vec3& v) {
                 en.getComponent<TransformComponent>().scale = v;
             },
             "Escalar entidad (Inspector)");
+        detail::helpMarker(I18n::T("editor.panel.inspector.transform.scale_help").c_str());
     }
 
     ImGui::PopStyleVar();  // FramePadding
+
+    // F4H2 Bloque B: botón "Restablecer" para resetear los 3 campos
+    // (position/rotation/scale) a los defaults en 1 sola acción undoable.
+    drawTransformResetButton([&]() {
+        HistoryStack* h = m_ui ? m_ui->historyStack() : nullptr;
+        EditTransformResetCommand::Snapshot before{
+            t.position, t.rotationEuler, t.scale, t.useQuaternion };
+        EditTransformResetCommand::Snapshot after{
+            glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), false };
+        if (h != nullptr) {
+            auto cmd = std::make_unique<EditTransformResetCommand>(
+                e, before, after, "Restablecer transform");
+            h->push(std::move(cmd));
+        } else {
+            t.position      = after.position;
+            t.rotationEuler = after.rotationEuler;
+            t.scale         = after.scale;
+            t.useQuaternion = false;
+        }
+        m_editedThisFrame = true;
+    });
 
     // F2H23: hint de multi-seleccion. Solo aparece cuando hay >1.
     const SelectionSet& set = m_ui->selectionSet();
