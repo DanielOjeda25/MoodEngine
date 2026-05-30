@@ -19,6 +19,7 @@
 #include "editor/ui/EditorUI.h"
 #include "engine/assets/manager/AssetManager.h"
 #include "core/i18n/I18n.h"
+#include "engine/gameplay/weapon/WeaponSpec.h"  // F4H2 Bloque B: handleAddPlayer auto-asigna arma
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/BrushComponent.h"  // F3H10: kit brush (no esta en Components.h)
 #include "engine/scene/components/Components.h"
@@ -730,6 +731,73 @@ void EditorApplication::handleAddDummy() {
 
     replaceWithSingle(m_ui.selectionSet(), e);
     pushCreatedEntities({e}, std::string("Crear maniquí '") + name + "'");
+}
+
+// ============================================================================
+// F4H2 Bloque B — handleAddPlayer
+//
+// Spawnea una entity con tag literal "player" + WeaponComponent. Es el
+// shooter del e2e: el input bridge en `EditorApplication::tickFrame` busca
+// entities con tag=="player" + WeaponComponent, setea `wc.firing` según
+// `Input.is_action_pressed("fire")` y llama `Weapon::fire(...)` con
+// origin/dir del `m_playCamera` cuando puede disparar.
+//
+// F4H2 Bloque B follow-up (pedido del dev "que aparezca ya el arma, no
+// arrastrar"): auto-asigna la primera arma del catalogo (orden alfa, hoy
+// = shotgun) + currentAmmo=magazineSize. Si no hay armas, queda con
+// weaponAssetId=0 (no-op fire) + warn en log.
+//
+// Guardia: si ya existe un "player" en la escena, abortamos con log
+// (Single-player implícito; multi-player es hito futuro propio).
+// ============================================================================
+
+void EditorApplication::handleAddPlayer() {
+    if (!m_scene) return;
+
+    bool alreadyExists = false;
+    m_scene->forEach<TagComponent>(
+        [&](Entity, TagComponent& tag) {
+            if (tag.name == "player") alreadyExists = true;
+        });
+    if (alreadyExists) {
+        Log::editor()->warn(
+            "[create_player] ya existe una entity con tag 'player' — abortado");
+        return;
+    }
+
+    Entity e = m_scene->createEntity("player");
+    auto& t = e.getComponent<TransformComponent>();
+    t.position = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    // WeaponComponent con la primera arma del catálogo auto-asignada
+    // (UX pedido por dev: que el player pueda disparar al instante sin
+    // tener que arrastrar arma del AssetBrowser).
+    WeaponComponent wc{};
+    if (m_assetManager) {
+        auto weapons = m_assetManager->enumerateWeapons(/*rescanFromDisk=*/true);
+        if (!weapons.empty()) {
+            const auto& first = weapons.front();
+            wc.weaponAssetId = first.id;
+            if (const Weapon::Spec* spec = m_assetManager->getWeapon(first.id)) {
+                wc.currentAmmo = static_cast<int>(spec->magazineSize);
+            }
+            Log::editor()->info(
+                "[create_player] arma auto-asignada: '{}' (id={}, path={})",
+                first.displayName, first.id, first.logicalPath);
+        } else {
+            Log::editor()->warn(
+                "[create_player] no hay .moodweapon en assets/weapons/ — "
+                "player queda sin arma. Agregá uno y reabrí Inspector.");
+        }
+    }
+    e.addComponent<WeaponComponent>(wc);
+
+    Log::editor()->info(
+        "[create_player] Spawned 'player' (Tag + Transform + WeaponComponent). "
+        "Clic izquierdo en Play para disparar, R para recargar.");
+
+    replaceWithSingle(m_ui.selectionSet(), e);
+    pushCreatedEntities({e}, "Crear player");
 }
 
 } // namespace Mood

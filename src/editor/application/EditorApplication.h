@@ -240,6 +240,7 @@ private:
     void handleAddDirectionalLight(); // dir=(-0.3,-1.0,-0.2), castShadows=true.
     void handleAddPointLight();       // pos=(0,1,0), radius=10m, color calido.
     void handleAddDummy();            // F4H1: cubo + HealthComponent.
+    void handleAddPlayer();           // F4H2 Bloque B: Tag=player + WeaponComponent auto.
 
     /// @brief F2H86: spawn entidad con `Tag + Transform + EnvironmentComponent`
     ///        (sin MeshRenderer — es config global de escena, no geometria).

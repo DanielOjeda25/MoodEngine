@@ -27,6 +27,7 @@
 namespace Mood {
 
 class AssetManager;
+class AudioDevice;
 class PhysicsWorld;
 class Scene;
 
@@ -42,8 +43,13 @@ public:
     ///        llamar `dialog.start("path")`. Si nullptr, dialog.start
     ///        loggea warn y retorna false (resto de la API dialog
     ///        funciona igual — el state es global).
+    /// @param audio F4H2 Bloque B: opcional. Si presente, el binding
+    ///        `weapon.fire` reproduce el sonido del disparo via el
+    ///        WeaponSystem. Si nullptr (tests headless), el sonido se
+    ///        saltea silenciosamente.
     void update(Scene& scene, f32 dt, PhysicsWorld* physics = nullptr,
-                 AssetManager* assets = nullptr);
+                 AssetManager* assets = nullptr,
+                 AudioDevice* audio = nullptr);
 
     /// @brief Tira todos los sol::state. Se llama desde
     ///        `EditorApplication::rebuildSceneFromMap` porque al hacer

@@ -42,6 +42,7 @@
 #include "engine/dialog/DialogSystem.h"          // F2H48
 #include "engine/gameplay/Health.h"              // F4H1
 #include "engine/gameplay/weapon/WeaponSystem.h" // F4H2
+#include "engine/input/InputActions.h"           // F4H2 Bloque B
 #include "engine/game/state/GameState.h"         // F2H52 H: Tab toggle inventory_panel
 #include "engine/inventory/ItemPickupSystem.h"   // F2H52 Bloque C
 #include "engine/profile/ProfilerBuffer.h"        // F3H23: ring buffer endFrame + resize
@@ -474,6 +475,7 @@ void EditorApplication::pumpUiRequests() {
         case ProjectAction::AddEnvironment:          handleAddEnvironment();           break;
         // F4H1: maniqui de testing — cubo + HealthComponent.
         case ProjectAction::AddDummy:                handleAddDummy();                 break;
+        case ProjectAction::AddPlayer:               handleAddPlayer();                break;
         // F2H20: compilacion brush -> mesh estatica + export OBJ.
         case ProjectAction::CompileMap:              handleCompileMap();               break;
         case ProjectAction::ExportObj:               handleExportObj();                break;
@@ -594,6 +596,36 @@ void EditorApplication::tickSystems(f32 dt) {
         Health::tickSystem(*m_scene, dt);
     }
 
+    // F4H2 Bloque B: input bridge — busca entity tag "player" + WeaponComponent.
+    // Setea `wc.firing` (para que sistemas secundarios sepan el input) y dispara
+    // / reload directamente con origin/dir de la PlayCamera. Engine-controlado
+    // out-of-the-box: click izquierdo dispara sin que el dev escriba un script.
+    // Si el dev quiere lógica custom (charge-up, single-tap), puede sobreescribir
+    // en un ScriptComponent via `Input.is_action_pressed` + `weapon.fire`.
+    if (m_scene && m_assetManager && m_physicsWorld && m_audioDevice
+        && m_mode == EditorMode::Play) {
+        MOOD_PROFILE_SCOPE("Weapon::inputBridge");
+        const bool firePressed   = InputActions::isActionPressed("fire");
+        const bool reloadPressed = InputActions::isActionPressed("reload");
+
+        m_scene->forEach<TagComponent, WeaponComponent>(
+            [&](Entity e, TagComponent& tag, WeaponComponent& wc) {
+                if (tag.name != "player") return;
+                wc.firing = firePressed;
+                if (firePressed && Weapon::canFire(*m_scene, e, *m_assetManager)) {
+                    Weapon::FireParams fp;
+                    fp.origin        = m_playCamera.position();
+                    fp.direction     = m_playCamera.forward();
+                    fp.ignoredBodyId = 0;  // CharacterVirtual no expone body raycastable
+                    Weapon::fire(*m_scene, e, fp,
+                                  *m_physicsWorld, *m_audioDevice, *m_assetManager);
+                }
+                if (reloadPressed) {
+                    Weapon::reload(*m_scene, e, *m_assetManager);
+                }
+            });
+    }
+
     // F4H2: tick del WeaponSystem — decae fireTimer/reloadTimer de las
     // armas equipadas, completa reloads, cleanup de particle bursts
     // efimeros del impacto. Solo Play mode; el sistema es engine-generic
@@ -617,7 +649,8 @@ void EditorApplication::tickSystems(f32 dt) {
     if (m_scene && m_scriptSystem) {
         MOOD_PROFILE_SCOPE("ScriptSystem::update");
         m_scriptSystem->update(*m_scene, dt, m_physicsWorld.get(),
-                                m_assetManager.get());  // F2H48: dialog bindings
+                                m_assetManager.get(),  // F2H48: dialog bindings
+                                m_audioDevice.get());  // F4H2 Bloque B: weapon SFX
     }
 
     // Hito 33: triggers detectan al player char entrando/saliendo y

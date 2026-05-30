@@ -24,6 +24,7 @@ add_executable(mood_tests
     test_health.cpp                            # F4H1
     test_weapon_asset.cpp                      # F4H2
     test_weapon_system.cpp                     # F4H2
+    test_input_keybindings.cpp                 # F4H2 Bloque B
     test_editor_camera_lerp.cpp                # F3H21
     test_profiler_buffer.cpp                   # F3H23
     test_toasts.cpp                            # F3H24
@@ -144,6 +145,7 @@ add_executable(mood_tests
 
     ${CMAKE_SOURCE_DIR}/src/engine/render/scene_renderer/RenderBatching.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/render/sky/HosekWilkie.cpp  # F3H31
+    ${CMAKE_SOURCE_DIR}/src/engine/input/InputActions.cpp      # F4H2 Bloque B
     ${CMAKE_SOURCE_DIR}/src/editor/panels/scene/HierarchyCollect.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/workspace/WorkspaceManager.cpp
 
@@ -248,6 +250,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Vehicle.cpp # F2H67 E
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Health.cpp # F4H1
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Weapon.cpp # F4H2
+    ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Input.cpp  # F4H2 Bloque B
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogScriptHost.cpp # F2H48.1
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/Health.cpp # F4H1
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/weapon/WeaponSpec.cpp   # F4H2
@@ -272,6 +275,7 @@ target_include_directories(mood_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(mood_tests PRIVATE
     doctest::doctest
     glm::glm
+    SDL2::SDL2  # F4H2 Bloque B: InputActions usa SDL_GetKeyboardState/SDL_GetMouseState + scancodes
 )
 
 # WORKING_DIRECTORY = root del repo: los tests que tocan el disco (ej.

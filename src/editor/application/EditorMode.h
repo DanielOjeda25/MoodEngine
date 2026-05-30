@@ -110,6 +110,14 @@ enum class ProjectAction {
     // (`health.damage('Dummy_1', 25)`) y observa current bajar + log en
     // Console + cae con física al morir.
     AddDummy,
+    // F4H2 Bloque B: player — Tag="player" + Transform + WeaponComponent
+    // con la primera arma del catálogo auto-asignada. El bridge de input
+    // (EditorApplication::tick) busca esta tag para setear `wc.firing` y
+    // disparar con la cámara de Play. Es el shooter del e2e "click
+    // izquierdo → mata maniquí". Pickups de arma (`WeaponPickup` con mesh
+    // 3D + trigger) son hito futuro F4H4 — la card vieja "Weapon empty"
+    // del Gameplay tab fue removida porque no aportaba valor sin pickup.
+    AddPlayer,
     // F2H20: compilacion brush -> mesh estatica + export OBJ.
     CompileMap,
     ExportObj,

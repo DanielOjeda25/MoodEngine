@@ -475,10 +475,12 @@ add_library(mood_engine_lib STATIC
     src/engine/scripting/bindings/LuaBindings_Vehicle.cpp    # F2H67 Bloque E
     src/engine/scripting/bindings/LuaBindings_Health.cpp     # F4H1
     src/engine/scripting/bindings/LuaBindings_Weapon.cpp     # F4H2
+    src/engine/scripting/bindings/LuaBindings_Input.cpp      # F4H2 Bloque B
 
     src/engine/gameplay/Health.cpp                            # F4H1
     src/engine/gameplay/weapon/WeaponSpec.cpp                 # F4H2
     src/engine/gameplay/weapon/WeaponSystem.cpp               # F4H2
+    src/engine/input/InputActions.cpp                         # F4H2 Bloque B
 
     src/engine/render/backend/opengl/OpenGLMesh.cpp
     src/engine/render/backend/opengl/OpenGLShader.cpp

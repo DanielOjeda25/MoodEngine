@@ -492,7 +492,8 @@ int PlayerApplication::run() {
         // global en pausa.
         if (gameUpdating && m_scene && m_scriptSystem) {
             m_scriptSystem->update(*m_scene, dt, m_physicsWorld.get(),
-                                    m_assetManager.get());  // F2H48: dialog bindings
+                                    m_assetManager.get(),  // F2H48: dialog bindings
+                                    m_audioDevice.get());  // F4H2 Bloque B: weapon SFX
         }
         // Hito 33: triggers — solo cuando el char del player ya existe.
         if (gameUpdating && m_scene && m_scriptSystem && m_physicsWorld

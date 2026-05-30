@@ -15,6 +15,7 @@ namespace {
 I18n::Language s_language = I18n::Language::Spanish;
 std::string s_theme = "dark";  // F2H76: default dark
 EditorSettings s_editor{};     // F3H7: editor prefs (default-constructed)
+InputSettings  s_input{};      // F4H2 Bloque B: input keybindings
 std::filesystem::path s_path;
 
 std::filesystem::path computePath() {
@@ -34,6 +35,7 @@ void init() {
     s_language = I18n::Language::Spanish;  // default si no hay archivo
     s_theme = "dark";
     s_editor = EditorSettings{};
+    s_input  = InputSettings{};
 
     std::ifstream in(s_path);
     if (!in.is_open()) {
@@ -59,6 +61,9 @@ void init() {
     }
     if (j.contains("editor")) {
         s_editor = editorSettingsFromJson(j.at("editor"));
+    }
+    if (j.contains("input")) {
+        s_input = inputSettingsFromJson(j.at("input"));
     }
     Log::engine()->info("[settings] cargado '{}' (language={}, theme={})",
                          s_path.generic_string(),
@@ -91,6 +96,8 @@ bool save() {
     // default (settings.json limpio cuando todo es default).
     const auto editorJson = editorSettingsToJson(s_editor);
     if (!editorJson.empty()) j["editor"] = editorJson;
+    const auto inputJson = inputSettingsToJson(s_input);
+    if (!inputJson.empty()) j["input"] = inputJson;
     out << j.dump(2) << "\n";
     Log::engine()->info("[settings] guardado '{}' (language={}, theme={})",
                          s_path.generic_string(),
@@ -109,6 +116,10 @@ void setTheme(const std::string& id) { s_theme = id; }
 const EditorSettings& editor() { return s_editor; }
 
 void setEditor(const EditorSettings& s) { s_editor = s; }
+
+const InputSettings& input() { return s_input; }
+
+void setInput(const InputSettings& s) { s_input = s; }
 
 std::filesystem::path settingsPath() {
     if (s_path.empty()) return computePath();
@@ -270,6 +281,36 @@ EditorSettings editorSettingsFromJson(const nlohmann::json& j) {
     if (j.contains("autosave_interval_min") && j.at("autosave_interval_min").is_number_integer()) {
         const int v = j.at("autosave_interval_min").get<int>();
         s.autosaveIntervalMin = std::clamp(v, 1, 60);
+    }
+    return s;
+}
+
+// F4H2 Bloque B: input keybindings JSON roundtrip. Sólo emite los
+// bindings que difieren del default — mantiene settings.json minimal
+// para devs que no rebindean.
+nlohmann::json inputSettingsToJson(const InputSettings& s) {
+    nlohmann::json j = nlohmann::json::object();
+    const InputSettings defaults;
+    nlohmann::json kb = nlohmann::json::object();
+    for (const auto& [action, binding] : s.keybindings) {
+        auto it = defaults.keybindings.find(action);
+        if (it == defaults.keybindings.end() || it->second != binding) {
+            kb[action] = binding;
+        }
+    }
+    if (!kb.empty()) j["keybindings"] = std::move(kb);
+    return j;
+}
+
+InputSettings inputSettingsFromJson(const nlohmann::json& j) {
+    InputSettings s;  // arranca con defaults
+    if (!j.is_object()) return s;
+    if (j.contains("keybindings") && j.at("keybindings").is_object()) {
+        for (auto it = j.at("keybindings").begin();
+             it != j.at("keybindings").end(); ++it) {
+            if (!it.value().is_string()) continue;
+            s.keybindings[it.key()] = it.value().get<std::string>();
+        }
     }
     return s;
 }

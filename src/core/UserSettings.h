@@ -18,6 +18,7 @@
 
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 
 namespace Mood::UserSettings {
 
@@ -185,6 +186,28 @@ struct EditorSettings {
     int autosaveIntervalMin = 5;
 };
 
+/// F4H2 Bloque B: keybindings data-driven del player. Mapa
+/// nombre-de-acción → identificador del binding (string portable: nombre
+/// de tecla en lowercase o `mouse_left/right/middle`). El binding se
+/// resuelve a SDL scancode / mouse button con `InputActions::resolveBinding`.
+///
+/// Defaults: `fire="mouse_left"`, `reload="r"`. El dev puede agregar más
+/// (interact, jump, etc) editando `settings.json` o futuro UI rebindable.
+///
+/// Ejemplo de keybindings válidos:
+///   "mouse_left" / "mouse_right" / "mouse_middle"
+///   "r" / "e" / "space" / "lshift" / "lctrl"
+struct InputSettings {
+    /// Mapa acción → binding. Los lookups en `InputActions::isActionPressed`
+    /// son case-insensitive sobre el binding (no sobre la acción).
+    std::unordered_map<std::string, std::string> keybindings;
+
+    InputSettings() {
+        keybindings["fire"]   = "mouse_left";
+        keybindings["reload"] = "r";
+    }
+};
+
 /// @brief Lee `settings.json` del disco. Si no existe o tiene parse
 ///        error, usa defaults (idioma=Spanish) y NO crea el archivo
 ///        (se creara en el primer `save()`). Llamar UNA vez al arrancar
@@ -238,5 +261,20 @@ nlohmann::json editorSettingsToJson(const EditorSettings& s);
 ///        Valores fuera de rango sano se clampean (zoom factor > 1.0,
 ///        thresholds >= 1, sizes > 0). JSON no-object → defaults.
 EditorSettings editorSettingsFromJson(const nlohmann::json& j);
+
+/// @brief F4H2 Bloque B: input keybindings del player (per-instalación).
+const InputSettings& input();
+
+/// @brief F4H2 Bloque B: marca el input nuevo en memoria. NO escribe al
+///        disco — el caller llama `save()` cuando corresponde.
+void setInput(const InputSettings& s);
+
+/// @brief F4H2 Bloque B: serializa el struct a JSON. Sólo emite el mapa
+///        `keybindings` si difiere del default (fire=mouse_left, reload=r).
+nlohmann::json inputSettingsToJson(const InputSettings& s);
+
+/// @brief F4H2 Bloque B: lee + sanitize. JSON no-object → defaults. Keys
+///        no-string del mapa se ignoran silenciosamente.
+InputSettings inputSettingsFromJson(const nlohmann::json& j);
 
 } // namespace Mood::UserSettings

@@ -510,6 +510,28 @@ public:
     /// @brief Cantidad de weapons cacheados (incluye slot 0).
     usize weaponCount() const;
 
+    /// @brief F4H2 Bloque B: entry simplificado del catalogo de armas
+    ///        cargadas. Usado por el Inspector (combo dropdown) y por
+    ///        `handleAddPlayer` (auto-asignar la primera).
+    struct WeaponListEntry {
+        WeaponAssetId id;
+        std::string   logicalPath;   // ej. "weapons/shotgun.moodweapon"
+        std::string   displayName;   // del Spec; fallback al stem del path
+    };
+
+    /// @brief F4H2 Bloque B: enumera las armas cacheadas (slot >= 1) +
+    ///        opcionalmente escanea `assets/weapons/*.moodweapon` y carga
+    ///        las que falten en cache. Devuelto ordenado por displayName
+    ///        case-insensitive. Slot 0 (vacio) NUNCA se incluye.
+    ///
+    ///        `rescanFromDisk=true` es el modo defensivo: garantiza que el
+    ///        catalogo refleja el filesystem aunque el AssetBrowser no
+    ///        haya corrido su scan inicial. Costo O(N) por entrada en el
+    ///        directorio — usar puntualmente (init de Inspector, spawn
+    ///        de Player), no por frame.
+    std::vector<WeaponListEntry> enumerateWeapons(
+        bool rescanFromDisk = true);
+
     // ---- Rename de path lógico (F3H19) ----
 
     /// @brief F3H19: actualiza el path lógico asociado a un asset cacheado.

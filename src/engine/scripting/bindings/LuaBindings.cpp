@@ -20,7 +20,8 @@ namespace Mood {
 void setupLuaBindings(sol::state& lua, Entity self,
                        ScriptComponent* scriptComponent,
                        PhysicsWorld* physics,
-                       AssetManager* assets) {
+                       AssetManager* assets,
+                       AudioDevice* audio) {
     // Libs basicas. `io`/`os` quedan fuera: los scripts no deberian hacer
     // I/O al FS ni ejecutar procesos. `package` tampoco (sin require).
     lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string);
@@ -387,18 +388,21 @@ void setupLuaBindings(sol::state& lua, Entity self,
 
     // F4H2 — tabla `weapon`. equip / fire / reload / can_fire / ammo /
     // spec. Engine-generic: orquesta el WeaponSystem sobre la entidad
-    // referenciada por tag. audio=nullptr aca: el sonido del disparo se
-    // saltea silenciosamente; el raycast + damage + particle se ejecutan
-    // igual. El wireado del AudioDevice via ScriptSystem queda agendizado
-    // a F4H2 bloque B (extender ScriptSystem::update con AudioDevice*).
-    setupWeaponBindings(lua, self.scene(), physics,
-                         /* audio  */ nullptr,
-                         /* assets */ assets);
+    // referenciada por tag. F4H2 Bloque B: el AudioDevice ya llega via
+    // cascade (ScriptSystem::update → setupLuaBindings). Si es nullptr
+    // (tests headless), el sonido se saltea silenciosamente y el raycast
+    // + damage + particle se ejecutan igual.
+    setupWeaponBindings(lua, self.scene(), physics, audio, assets);
 
     // F2H67 Bloque E — tabla `vehicle`. Input + queries de speed/gear/rpm
     // + respawn. set_input solo escribe al componente; el VehicleSystem
     // pushea al physics en el siguiente tick.
     setupVehicleBindings(lua, self.scene(), physics);
+
+    // F4H2 Bloque B — tabla `Input`. is_action_pressed(action_name) consulta
+    // SDL state via UserSettings.input.keybindings. Disponible para scripts
+    // que quieran handlers custom de input (single-tap, charge-up, etc).
+    setupInputBindings(lua);
 
     // self como global.
     lua["self"] = self;

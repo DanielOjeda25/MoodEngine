@@ -13,6 +13,7 @@
 namespace Mood {
 
 class AssetManager;
+class AudioDevice;
 class Entity;
 class PhysicsWorld;
 struct ScriptComponent;
@@ -33,10 +34,16 @@ struct ScriptComponent;
 ///        headless sin AssetManager pueden pasar nullptr y usar las
 ///        funciones que no dependen de assets (set_var/get_var/isActive/
 ///        advance/continueNext/stop).
+/// @param audio F4H2 Bloque B: si presente, el binding `weapon.fire` pasa
+///        el device al `WeaponSystem` para reproducir el sonido del
+///        disparo (loaded desde el WeaponSpec). Si nullptr, el raycast +
+///        damage + particle se ejecutan igual y el sonido se saltea
+///        silenciosamente.
 void setupLuaBindings(sol::state& lua, Entity self,
                        ScriptComponent* scriptComponent = nullptr,
                        PhysicsWorld* physics = nullptr,
-                       AssetManager* assets = nullptr);
+                       AssetManager* assets = nullptr,
+                       AudioDevice* audio = nullptr);
 
 /// @brief F2H52 Bloque E: registra la tabla `inventory` en `lua`.
 ///        Implementado en LuaBindings_Inventory.cpp (split por tamaño del
@@ -76,6 +83,12 @@ void setupRagdollBindings(sol::state& lua, class Scene* scene);
 ///        get / is_alive). Cimiento del combate Fase 4.
 void setupHealthBindings(sol::state& lua, class Scene* scene);
 
+/// @brief F4H2 Bloque B — tabla `Input` para los scripts Lua.
+///        API: `Input.is_action_pressed(action_name) -> bool`. Lookup
+///        data-driven contra `UserSettings::input().keybindings`.
+///        Implementado en `LuaBindings_Input.cpp`.
+void setupInputBindings(sol::state& lua);
+
 /// @brief F4H2 — tabla `weapon` para los scripts Lua. Engine-generic:
 ///        orquesta `WeaponSystem` sobre la entidad referenciada por tag.
 ///        Requiere scene + physicsWorld + audioDevice + assetManager
@@ -89,7 +102,6 @@ void setupHealthBindings(sol::state& lua, class Scene* scene);
 ///          weapon.ammo(tag) -> int
 ///          weapon.spec(tag) -> {displayName, damage, range, pellets,
 ///                              fireRate, magazineSize, reloadTime} | nil
-class AudioDevice;
 void setupWeaponBindings(sol::state& lua, class Scene* scene,
                           class PhysicsWorld* physicsWorld,
                           AudioDevice* audioDevice,

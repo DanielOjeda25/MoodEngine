@@ -324,8 +324,9 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
         ImGui::EndTabItem();
     }
 
-    // F4H1: tab "Gameplay". Items con HealthComponent / componentes de
-    // combate. Hoy: solo Maniquí. Futuros (F4H6+): enemigos data-driven.
+    // F4H1+B: tab "Gameplay". Items con HealthComponent / componentes de
+    // combate. Maniquí (F4H1) + Arma vacía (F4H2 Bloque B). Futuros (F4H6+):
+    // enemigos data-driven.
     if (ImGui::BeginTabItem(I18n::T("editor.pick_mesh_modal.tab_gameplay").c_str())) {
         ImGui::BeginChild("##gameplay_grid", ImVec2(0.0f, kTabContentHeight), false);
         ImGui::TextDisabled("%s",
@@ -333,22 +334,45 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
         ImGui::Spacing();
 
         constexpr float kCard = 96.0f;
-        const std::string dummyLabel = I18n::T("editor.menu.gameplay.dummy");
-        ImGui::PushID("##dummy_card");
-        ImGui::BeginGroup();
-        ImGui::SetWindowFontScale(2.6f);
-        const bool clicked = ImGui::Button(ICON_FA_GAMEPAD, ImVec2(kCard, kCard));
-        ImGui::SetWindowFontScale(1.0f);
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("%s",
-                I18n::T("editor.menu.gameplay.dummy.tooltip").c_str());
-        }
-        ImGui::TextUnformatted(dummyLabel.c_str());
-        ImGui::EndGroup();
-        ImGui::PopID();
 
-        if (clicked) {
-            m_ui.requestProjectAction(ProjectAction::AddDummy);
+        struct GameplayCard {
+            const char*   labelKey;
+            const char*   tooltipKey;
+            const char*   icon;
+            ProjectAction action;
+            const char*   pushId;
+        };
+        // F4H2 Bloque B follow-up: card "Weapon empty" removida — el Player
+        // ya viene con arma auto-asignada. Pickups con mesh+trigger son F4H4.
+        const GameplayCard kCards[] = {
+            { "editor.menu.gameplay.player", "editor.menu.gameplay.player.tooltip",
+              ICON_FA_USER,                    ProjectAction::AddPlayer, "##player_card" },
+            { "editor.menu.gameplay.dummy",  "editor.menu.gameplay.dummy.tooltip",
+              ICON_FA_GAMEPAD,                 ProjectAction::AddDummy,  "##dummy_card"  },
+        };
+        constexpr int kCardCount = static_cast<int>(sizeof(kCards) / sizeof(kCards[0]));
+
+        ProjectAction pendingAction = static_cast<ProjectAction>(-1);
+        bool actionPicked = false;
+        for (int i = 0; i < kCardCount; ++i) {
+            if (i > 0) ImGui::SameLine();
+            const std::string label = I18n::T(kCards[i].labelKey);
+            ImGui::PushID(kCards[i].pushId);
+            ImGui::BeginGroup();
+            ImGui::SetWindowFontScale(2.6f);
+            const bool clicked = ImGui::Button(kCards[i].icon, ImVec2(kCard, kCard));
+            ImGui::SetWindowFontScale(1.0f);
+            if (clicked) { pendingAction = kCards[i].action; actionPicked = true; }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", I18n::T(kCards[i].tooltipKey).c_str());
+            }
+            ImGui::TextUnformatted(label.c_str());
+            ImGui::EndGroup();
+            ImGui::PopID();
+        }
+
+        if (actionPicked) {
+            m_ui.requestProjectAction(pendingAction);
             m_pickMeshModalActive = false;
             ImGui::CloseCurrentPopup();
             ImGui::EndChild();
