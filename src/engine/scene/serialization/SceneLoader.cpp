@@ -830,6 +830,35 @@ void applyBrushFromSaved(const SavedBrush& sb,
             e.addComponent<VisGroupMembershipComponent>(sb.visgroupId);
         }
     }
+
+    // F4H2 Bloque B follow-up: RigidBody del brush. Antes los brushes
+    // quedaban sin colision tras save/reload (bug Plane atravesable). Si
+    // el .moodmap es nuevo (con bloque rigidBody) usamos exactamente lo
+    // que el dev configuró. Si es viejo (sin el bloque), aplicamos
+    // fallback de convención Hammer: Static Box halfExtents = scale * 0.5.
+    if (!e.hasComponent<RigidBodyComponent>()) {
+        RigidBodyComponent rb;
+        if (sb.hasRigidBody) {
+            rb.type = static_cast<RigidBodyComponent::Type>(
+                std::clamp(sb.rigidBodyType, 0, 2));
+            rb.shape = static_cast<RigidBodyComponent::Shape>(
+                std::clamp(sb.rigidBodyShape, 0, 2));
+            rb.halfExtents = sb.rigidBodyHalfExt;
+            rb.mass        = sb.rigidBodyMass;
+            rb.friction    = sb.rigidBodyFriction;
+            rb.isSensor    = sb.rigidBodyIsSensor;
+        } else {
+            // Fallback para mapas pre-fix: Static Box derivado del scale
+            // visible. Mismo patrón que `spawnBrushEntity`.
+            rb.type        = RigidBodyComponent::Type::Static;
+            rb.shape       = RigidBodyComponent::Shape::Box;
+            rb.halfExtents = sb.scale * 0.5f;
+            rb.mass        = 0.0f;
+            rb.friction    = 0.5f;
+            rb.isSensor    = false;
+        }
+        e.addComponent<RigidBodyComponent>(rb);
+    }
 }
 
 } // namespace Mood::SceneLoader

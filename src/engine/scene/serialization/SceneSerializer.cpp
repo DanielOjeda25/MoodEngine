@@ -124,6 +124,22 @@ json serializeBrush(Entity e, const AssetManager& assets) {
     if (vgId != 0) {
         out["visgroupId"] = vgId;
     }
+    // F4H2 Bloque B follow-up: persistir RigidBody del brush. Antes los
+    // brushes se cargaban sin colisión post-reload (Plane atravesable
+    // tras save/close/open). Si el brush no tiene RigidBodyComponent, el
+    // saver omite la sección; el loader aplica fallback Static Box para
+    // mantener convención Hammer.
+    if (e.hasComponent<RigidBodyComponent>()) {
+        const auto& rb = e.getComponent<RigidBodyComponent>();
+        out["rigidBody"] = {
+            {"type",        static_cast<i32>(rb.type)},
+            {"shape",       static_cast<i32>(rb.shape)},
+            {"halfExtents", rb.halfExtents},
+            {"mass",        rb.mass},
+            {"friction",    rb.friction},
+            {"isSensor",    rb.isSensor},
+        };
+    }
     return out;
 }
 
@@ -197,6 +213,19 @@ SavedBrush parseBrush(const json& j) {
     }
     // F2H33 (v14): visgroupId opcional, default 0 (sin grupo).
     sb.visgroupId = j.value("visgroupId", u64{0});
+    // F4H2 Bloque B follow-up: bloque rigidBody opcional. Mapas viejos
+    // (sin esta sección) caen al fallback default que applyBrushFromSaved
+    // aplica al cargar (Static Box halfExtents = scale * 0.5).
+    if (j.contains("rigidBody") && j.at("rigidBody").is_object()) {
+        const auto& jr = j.at("rigidBody");
+        sb.hasRigidBody      = true;
+        sb.rigidBodyType     = jr.value("type",     i32{0});
+        sb.rigidBodyShape    = jr.value("shape",    i32{0});
+        sb.rigidBodyHalfExt  = jr.value("halfExtents", glm::vec3(0.5f));
+        sb.rigidBodyMass     = jr.value("mass",     0.0f);
+        sb.rigidBodyFriction = jr.value("friction", 0.5f);
+        sb.rigidBodyIsSensor = jr.value("isSensor", false);
+    }
     return sb;
 }
 

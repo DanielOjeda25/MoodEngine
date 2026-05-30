@@ -25,10 +25,22 @@ namespace {
 ///        Crea entidad con tag unico (`Brush_<prefix>_NN`),
 ///        TransformComponent en (0, 1, 0), BrushComponent con la
 ///        Csg::Brush ya construida. Push al HistoryStack para undo.
+///
+/// F4H2 Bloque B fix (brush atravesable): los handlers que invocan este
+/// helper deben pasar el brush CSG en LOCAL UNITARIO (sin scale baked-in
+/// en la matriz pasada a `makeBoxBrush(...)` etc.) y declarar el scale
+/// visible via `initialScale`. La línea 211 de `EditorScene::updateRigidBodies`
+/// deriva `halfExtents = t.scale * 0.5f`; si el CSG trae scale baked-in y
+/// `t.scale=(1,1,1)`, la colisión queda en (0.5,0.5,0.5) (caja 1m³) aunque
+/// el visual sea 10×0.05×10 (caso reportado del brush Plane atravesable).
+/// El render (`buildBrushMesh` + shader `uModel=worldMatrix`) aplica
+/// `t.scale` al visual, así que el visual queda idéntico al path "baked-in"
+/// pero la colisión coincide.
 Entity spawnBrushEntity(Scene& scene,
                          Csg::Brush brush,
                          const char* tagPrefix,
-                         const char* opLabel) {
+                         const char* opLabel,
+                         const glm::vec3& initialScale = glm::vec3(1.0f)) {
     int suffix = 1;
     std::string tagName;
     while (true) {
@@ -47,7 +59,7 @@ Entity spawnBrushEntity(Scene& scene,
     Entity e = scene.createEntity(tagName);
     auto& t = e.getComponent<TransformComponent>();
     t.position = glm::vec3(0.0f, 1.0f, 0.0f);
-    t.scale    = glm::vec3(1.0f);
+    t.scale    = initialScale;
 
     BrushComponent bc;
     bc.brush = std::move(brush);
@@ -56,7 +68,23 @@ Entity spawnBrushEntity(Scene& scene,
     e.addComponent<BrushComponent>(std::move(bc));
     e.getComponent<TagComponent>().entityType = EntityType::Brush;  // F3H9
 
-    Log::editor()->info("{} '{}' en (0, 1, 0)", opLabel, tagName);
+    // F4H2 Bloque B: brushes con colisión por defecto — convención Hammer/
+    // Source/Trenchbroom (un brush ES la geometría de colisión del mapa).
+    // RigidBody Static halfExtents = scale*0.5 — `updateRigidBodies` lo
+    // recalcula cada frame desde `t.scale`. El dev puede borrar el
+    // componente si quiere geometría visual sin colisión (decoración /
+    // detail-mesh), o cambiarlo a Dynamic para físicas reactivas.
+    RigidBodyComponent rb;
+    rb.type = RigidBodyComponent::Type::Static;
+    rb.shape = RigidBodyComponent::Shape::Box;
+    rb.halfExtents = initialScale * 0.5f;
+    e.addComponent<RigidBodyComponent>(rb);
+
+    Log::editor()->info("{} '{}' en (0, 1, 0) scale=({:.2f},{:.2f},{:.2f}) "
+                          "(+RigidBody Static halfExt=({:.2f},{:.2f},{:.2f}))",
+                          opLabel, tagName,
+                          initialScale.x, initialScale.y, initialScale.z,
+                          rb.halfExtents.x, rb.halfExtents.y, rb.halfExtents.z);
     return e;
 }
 
@@ -190,10 +218,13 @@ void EditorApplication::spawnBoxBrushAt(const glm::mat4& transform) {
         glm::length(glm::vec3(transform[0])),
         glm::length(glm::vec3(transform[1])),
         glm::length(glm::vec3(transform[2])));
-    const glm::mat4 localScale = glm::scale(glm::mat4(1.0f), dims);
+    // F4H2 Bloque B fix: CSG unitario + Transform.scale = dims (en lugar de
+    // bakear el scale en el CSG). Mantiene visual y permite que el RigidBody
+    // Box auto-sincronice halfExtents = scale*0.5 correctamente.
     Entity e = spawnBrushEntity(*m_scene,
-        Csg::makeBoxBrush(localScale),
-        "Box", "Block tool Box Brush:");
+        Csg::makeBoxBrush(glm::mat4(1.0f)),
+        "Box", "Block tool Box Brush:",
+        dims);
     auto& tf = e.getComponent<TransformComponent>();
     tf.position = center;
     pushCreatedEntities({e}, "Block tool Box Brush");
@@ -254,11 +285,11 @@ void EditorApplication::handleAddPlaneBrush() {
     // Plane / Unreal Plane / Godot PlaneMesh. Internamente sigue siendo
     // un Box CSG estandar -- el dev lo edita con el mismo gizmo y se
     // serializa al .moodmap igual que cualquier otro brush.
-    const glm::mat4 scale = glm::scale(glm::mat4(1.0f),
-                                         glm::vec3(10.0f, 0.05f, 10.0f));
+    // F4H2 Bloque B fix: CSG unitario + Transform.scale (no bakear).
     Entity e = spawnBrushEntity(*m_scene,
-        Csg::makeBoxBrush(scale),
-        "Plane", "Anadir Plane Brush:");
+        Csg::makeBoxBrush(glm::mat4(1.0f)),
+        "Plane", "Anadir Plane Brush:",
+        glm::vec3(10.0f, 0.05f, 10.0f));
     pushCreatedEntities({e}, "Anadir Plane Brush");
 }
 
@@ -266,11 +297,11 @@ void EditorApplication::handleAddQuadBrush() {
     if (!m_scene) return;
     // F2H59: "quad" = version chica del plano (1x0.05x1). Util como
     // billboard / sprite proxy o como base de pickup items.
-    const glm::mat4 scale = glm::scale(glm::mat4(1.0f),
-                                         glm::vec3(1.0f, 0.05f, 1.0f));
+    // F4H2 Bloque B fix: CSG unitario + Transform.scale (no bakear).
     Entity e = spawnBrushEntity(*m_scene,
-        Csg::makeBoxBrush(scale),
-        "Quad", "Anadir Quad Brush:");
+        Csg::makeBoxBrush(glm::mat4(1.0f)),
+        "Quad", "Anadir Quad Brush:",
+        glm::vec3(1.0f, 0.05f, 1.0f));
     pushCreatedEntities({e}, "Anadir Quad Brush");
 }
 
@@ -290,11 +321,11 @@ void EditorApplication::handleAddCapsuleBrush() {
     // proxy" / "pildora" / "pilar redondeado". Si emerge necesidad
     // de capsula precisa (paredes laterales rectas), follow-up con
     // makeCapsuleBrush() real (cilindro central + hemisferios).
-    const glm::mat4 scale = glm::scale(glm::mat4(1.0f),
-                                         glm::vec3(1.0f, 2.0f, 1.0f));
+    // F4H2 Bloque B fix: CSG unitario + Transform.scale (no bakear).
     Entity e = spawnBrushEntity(*m_scene,
-        Csg::makeSphereBrush(scale),
-        "Cap", "Anadir Capsule Brush:");
+        Csg::makeSphereBrush(glm::mat4(1.0f)),
+        "Cap", "Anadir Capsule Brush:",
+        glm::vec3(1.0f, 2.0f, 1.0f));
     pushCreatedEntities({e}, "Anadir Capsule Brush");
 }
 

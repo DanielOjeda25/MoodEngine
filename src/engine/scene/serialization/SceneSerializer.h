@@ -490,6 +490,24 @@ struct SavedBrush {
     /// @brief F2H33 (v14): id del VisGroup al que pertenece el brush.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.
     u64 visgroupId = 0;
+    /// @brief F4H2 Bloque B follow-up: persistencia del RigidBodyComponent
+    ///        del brush. Antes el serializer NUNCA escribia esto y al
+    ///        recargar los brushes quedaban sin colision (bug atravesable
+    ///        post save/reload). `hasRigidBody=false` (default) = brush
+    ///        decorativo sin colision; al cargar un mapa viejo sin estos
+    ///        campos, el loader aplica fallback de convencion Hammer
+    ///        (Static Box halfExtents = scale * 0.5) para que mapas
+    ///        existentes no se rompan al reabrir.
+    ///        Tipos:
+    ///          rigidBodyType  : 0=Static 1=Kinematic 2=Dynamic
+    ///          rigidBodyShape : 0=Box 1=Sphere 2=Capsule
+    bool       hasRigidBody       = false;
+    i32        rigidBodyType      = 0;
+    i32        rigidBodyShape     = 0;
+    glm::vec3  rigidBodyHalfExt   = glm::vec3(0.5f);
+    f32        rigidBodyMass      = 0.0f;
+    f32        rigidBodyFriction  = 0.5f;
+    bool       rigidBodyIsSensor  = false;
 };
 
 /// @brief F2H26: submesh de la mesh estatica precompilada del mapa.
