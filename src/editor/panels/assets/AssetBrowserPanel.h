@@ -98,6 +98,7 @@ private:
     void renderMaterialsTab();
     void renderScriptsTab();
     void renderAudioTab();
+    void renderWeaponsTab();           // F4H2 Bloque B
 
     // F2H82: modal de "Importar vehiculo". File picker → analyzer → form de
     // preset (clase + ajuste fino) → writer .moodvehicle + rescan. Cuerpo en
@@ -207,6 +208,17 @@ private:
     // en cm/mm; default 1.0 = ya esta en metros). El modal sugiere x100 / x1000
     // si las dimensiones detectadas son sospechosas.
     float m_importMeshScale = 1.0f;
+
+    // F4H2 Bloque B: armas `.moodweapon`. Scan plano de `assets/weapons/`.
+    // El AssetManager las carga con `loadWeapon` (lee JSON + cachea); el id
+    // se usa para resolver getWeapon(id) que devuelve la `Weapon::Spec`.
+    struct WeaponEntry {
+        std::string   logicalPath; // "weapons/shotgun.moodweapon"
+        std::string   displayName; // "shotgun.moodweapon"
+        std::string   weaponName;  // Spec::displayName (legible)
+        WeaponAssetId id = 0;
+    };
+    std::vector<WeaponEntry> m_weaponEntries;
 
     // F2H82: borrado de vehiculos via right-click. La accion abre un modal de
     // confirmacion (no se borra al toque). `m_pendingDeleteVehicle` guarda el

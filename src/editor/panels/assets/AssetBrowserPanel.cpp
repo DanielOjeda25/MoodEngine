@@ -12,6 +12,7 @@
 #include "engine/render/preview/MaterialPreviewRenderer.h"  // F2H81
 #include "engine/physics/vehicle/VehicleConfig.h"  // F2H81: meshPath del vehículo
 #include "engine/render/resources/MaterialAsset.h"  // F2H81: getMaterial
+#include "engine/gameplay/weapon/WeaponSpec.h"      // F4H2 Bloque B
 
 #include <imgui.h>
 #include <nlohmann/json.hpp>  // F2H70.3: parse metadata del .moodvehicle
@@ -38,6 +39,7 @@ constexpr const char* k_prefabDir     = "assets/prefabs";
 constexpr const char* k_materialDir   = "assets/materials";
 constexpr const char* k_scriptDir     = "assets/scripts";
 constexpr const char* k_vehicleDir    = "assets/vehicles";  // F2H70.3
+constexpr const char* k_weaponDir     = "assets/weapons";   // F4H2 Bloque B
 constexpr float k_thumbSize = 64.0f;
 constexpr const char* k_logicalPrefix           = "textures/";
 constexpr const char* k_audioLogicalPrefix      = "audio/";
@@ -47,6 +49,7 @@ constexpr const char* k_prefabLogicalPrefix     = "prefabs/";
 constexpr const char* k_materialLogicalPrefix   = "materials/";
 constexpr const char* k_scriptLogicalPrefix     = "scripts/";
 constexpr const char* k_vehicleLogicalPrefix    = "vehicles/";  // F2H70.3
+constexpr const char* k_weaponLogicalPrefix     = "weapons/";   // F4H2 Bloque B
 
 // F2H81 (auditoría): los helpers visuales de card (bigIconButton, cardLabel,
 // cardGridCols) viven en AssetBrowserPanel_Internal.h — los usan los
@@ -85,6 +88,8 @@ bool isAnimClip(const std::filesystem::path& p) {
 }
 
 bool isPrefab(const std::filesystem::path& p) { return lowerExt(p) == ".moodprefab"; }
+
+bool isMoodWeapon(const std::filesystem::path& p) { return lowerExt(p) == ".moodweapon"; }  // F4H2 Bloque B
 bool isMaterial(const std::filesystem::path& p) { return lowerExt(p) == ".material"; }
 bool isLuaScript(const std::filesystem::path& p) { return lowerExt(p) == ".lua"; }
 bool isMoodVehicle(const std::filesystem::path& p) { return lowerExt(p) == ".moodvehicle"; }
@@ -326,14 +331,40 @@ void AssetBrowserPanel::rescan() {
                   });
     }
 
+    // F4H2 Bloque B: armas `.moodweapon`. Scan plano de assets/weapons/.
+    // Las especificaciones se cargan via AssetManager::loadWeapon (parse
+    // JSON + cachea); si falla cae al missingWeaponId con safe defaults.
+    m_weaponEntries.clear();
+    std::error_code wpn_ec;
+    auto wpn_it = std::filesystem::directory_iterator(k_weaponDir, wpn_ec);
+    if (!wpn_ec) {
+        for (const auto& entry : wpn_it) {
+            if (!entry.is_regular_file() || !isMoodWeapon(entry.path())) continue;
+            WeaponEntry we;
+            we.displayName = entry.path().filename().string();
+            we.logicalPath = std::string(k_weaponLogicalPrefix) + we.displayName;
+            we.id = m_assetManager->loadWeapon(we.logicalPath);
+            we.weaponName = entry.path().stem().string();  // fallback
+            if (const Weapon::Spec* spec = m_assetManager->getWeapon(we.id)) {
+                if (!spec->displayName.empty()) we.weaponName = spec->displayName;
+            }
+            m_weaponEntries.push_back(std::move(we));
+        }
+        std::sort(m_weaponEntries.begin(), m_weaponEntries.end(),
+                  [](const WeaponEntry& a, const WeaponEntry& b) {
+                      return a.displayName < b.displayName;
+                  });
+    }
+
     m_scanned = true;
     Log::assets()->info(
         "AssetBrowserPanel: {} texturas, {} audios, {} meshes, {} prefabs, "
-        "{} materiales, {} scripts, {} clips de animacion, {} vehiculos listados",
+        "{} materiales, {} scripts, {} clips de animacion, {} vehiculos, "
+        "{} armas listados",
         m_entries.size(), m_audioEntries.size(), m_meshEntries.size(),
         m_prefabEntries.size(), m_materialEntries.size(),
         m_scriptEntries.size(), m_animClipEntries.size(),
-        m_vehicleEntries.size());
+        m_vehicleEntries.size(), m_weaponEntries.size());
 }
 
 void AssetBrowserPanel::onImGuiRender() {
@@ -391,6 +422,7 @@ void AssetBrowserPanel::onImGuiRender() {
         renderMaterialsTab();
         renderScriptsTab();
         renderAudioTab();
+        renderWeaponsTab();             // F4H2 Bloque B
         ImGui::EndTabBar();
     }
 

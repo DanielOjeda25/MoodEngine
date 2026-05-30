@@ -570,6 +570,53 @@ void AssetBrowserPanel::renderScriptsTab() {
 }
 
 // ============================================================
+// TAB: Weapons (.moodweapon) — F4H2 Bloque B
+// ============================================================
+//
+// Lista los `.moodweapon` de `assets/weapons/`. Cada card es un drag
+// source con payload `MOOD_WEAPON_ASSET` (cstring del logical path)
+// que el Inspector del WeaponComponent acepta para equipar.
+void AssetBrowserPanel::renderWeaponsTab() {
+    const std::string label = std::string(ICON_FA_CROSSHAIRS " ") +
+        I18n::T("editor.panel.assets.tab.weapons");
+    if (!ImGui::BeginTabItem(label.c_str())) return;
+
+    ImGui::TextDisabled("%s",
+        I18n::T("editor.panel.assets.count.weapons", m_weaponEntries.size()).c_str());
+    ImGui::BeginChild("##weapons_scroll", ImVec2(0.0f, 0.0f), false);
+    constexpr float kCard = 96.0f;
+    const int cols = cardGridCols(kCard);
+    int drawn = 0;
+    for (const auto& we : m_weaponEntries) {
+        ImGui::PushID(we.logicalPath.c_str());
+        ImGui::BeginGroup();
+        bigIconButton(ICON_FA_CROSSHAIRS, kCard);
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+            constexpr int kPayloadBufSize = 256;
+            char buf[kPayloadBufSize] = {0};
+            const auto n = std::min(we.logicalPath.size(),
+                                      static_cast<size_t>(kPayloadBufSize - 1));
+            std::memcpy(buf, we.logicalPath.data(), n);
+            ImGui::SetDragDropPayload("MOOD_WEAPON_ASSET", buf, kPayloadBufSize);
+            ImGui::TextUnformatted(we.weaponName.c_str());
+            ImGui::EndDragDropSource();
+        }
+        addRenameContextMenu(we.logicalPath);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s\n%s", we.weaponName.c_str(),
+                                we.logicalPath.c_str());
+        }
+        cardLabel(we.weaponName, kCard);
+        ImGui::EndGroup();
+        ImGui::PopID();
+        if (static_cast<int>((drawn + 1) % cols) != 0) ImGui::SameLine();
+        ++drawn;
+    }
+    ImGui::EndChild();
+    ImGui::EndTabItem();
+}
+
+// ============================================================
 // TAB: Audio
 // ============================================================
 void AssetBrowserPanel::renderAudioTab() {
