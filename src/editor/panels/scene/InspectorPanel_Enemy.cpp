@@ -135,6 +135,17 @@ void InspectorPanel::renderEnemySection(Entity e) {
             ImGui::Text("%s %.1f / %.2f s",
                 I18n::T("editor.panel.inspector.enemy.pain").c_str(),
                 spec->painThreshold, spec->painDuration);
+            // F4H9: attack kind + wind-up + projectile weapon (si ranged).
+            ImGui::Text("%s %s  (%s %.2f s)",
+                I18n::T("editor.panel.inspector.enemy.attack_kind").c_str(),
+                spec->attackKind.c_str(),
+                I18n::T("editor.panel.inspector.enemy.wind_up").c_str(),
+                spec->windUpSec);
+            if (spec->attackKind == "projectile" && !spec->projectileWeapon.empty()) {
+                ImGui::Text("%s %s",
+                    I18n::T("editor.panel.inspector.enemy.projectile_weapon").c_str(),
+                    spec->projectileWeapon.c_str());
+            }
         }
     }
 
@@ -166,6 +177,19 @@ void InspectorPanel::renderEnemySection(Entity e) {
     ImGui::Text("%s %d",
         I18n::T("editor.panel.inspector.enemy.pains_total").c_str(),
         ec.painsTotal);
+    // F4H9 runtime timers (debug del wind-up + cooldown del ataque).
+    if (ec.state == EnemyState::Attack) {
+        if (ec.windUpTimer > 0.0f) {
+            ImGui::Text("%s %.2f s",
+                I18n::T("editor.panel.inspector.enemy.wind_up_timer").c_str(),
+                ec.windUpTimer);
+        }
+        if (ec.attackCooldownTimer > 0.0f) {
+            ImGui::Text("%s %.2f s",
+                I18n::T("editor.panel.inspector.enemy.attack_cooldown_timer").c_str(),
+                ec.attackCooldownTimer);
+        }
+    }
 }
 
 } // namespace Mood

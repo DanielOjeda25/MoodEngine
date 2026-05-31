@@ -1,0 +1,31 @@
+{
+  "_version": 1,
+  "displayName": "Imp Fireball",
+  "category": "projectile",
+  "damage": 0.0,
+  "range": 0.0,
+  "pellets": 1,
+  "spreadDeg": 0.0,
+  "fireRatePerSec": 1.0,
+  "magazineSize": 99,
+  "reloadTimeSec": 0.0,
+  "viewmodelMesh": "",
+  "viewmodelMaterial": "",
+  "fireSound": "",
+  "impactSound": "",
+  "muzzleVfx": "",
+  "impactVfx": "",
+  "ignoreOwner": true,
+  "projectile": {
+    "meshPath": "",
+    "materialPath": "",
+    "speed": 12.0,
+    "gravity": 0.0,
+    "bounceCount": 0,
+    "bounceFactor": 0.0,
+    "lifetimeSec": 4.0,
+    "directDamage": 18.0,
+    "splashRadius": 1.5,
+    "splashDamage": 12.0
+  }
+}

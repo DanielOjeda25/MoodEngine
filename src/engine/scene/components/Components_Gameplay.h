@@ -455,9 +455,15 @@ struct EnemyComponent {
     /// @brief Entity raw del target (player). `k_noTarget` = sin target.
     ///        Forward decl-friendly (mismo patron ProjectileComponent.owner).
     u32 targetEntity = k_noTarget;
-    /// @brief Cooldown del proximo ataque (Attack state). Reset al cooldown
-    ///        del spec al atacar. F4H9 traera el daño.
-    f32 lastAttackTime = -1.0f;
+    /// @brief F4H9: cooldown del proximo ataque (decrementa cada frame en
+    ///        Attack state). 0 = listo para golpear (post wind-up). Reset
+    ///        a `spec.attackCooldown` al aplicar damage.
+    f32 attackCooldownTimer = 0.0f;
+    /// @brief F4H9: wind-up del ataque (decrementa cada frame en Attack
+    ///        state). Mientras > 0, NO se aplica damage — el enemy se esta
+    ///        "preparando" para el golpe. Reset a `spec.windUpSec` al
+    ///        entrar Attack state y tras cada golpe (D7 — re-arm).
+    f32 windUpTimer = 0.0f;
     /// @brief Conteo de hits que recibio el enemigo. Para metrica + debug
     ///        ("aguanta N hits"). NO confundir con `painsTotal` del player.
     int painsTotal = 0;

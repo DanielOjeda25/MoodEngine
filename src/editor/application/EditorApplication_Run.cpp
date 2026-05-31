@@ -733,10 +733,14 @@ void EditorApplication::tickSystems(f32 dt) {
         // F4H7: tick de la state machine de los enemigos. Polling de
         // hitFlashTimer del Health para detectar Pain transitions
         // (mismo patron R4 F4H4 para mantener engine/game decoupled).
+        // F4H9: physics pointer para enemy projectile attacks (Imp fireball
+        // etc) que reusan Weapon::fire. Si attackKind=melee, physics es
+        // ignorado.
         {
             MOOD_PROFILE_SCOPE("Enemy::tickSystem");
             Enemy::tickSystem(*m_scene, dt, playerEntity,
-                                m_audioDevice.get(), *m_assetManager);
+                                m_audioDevice.get(), *m_assetManager,
+                                m_physicsWorld.get());
         }
 
         // F4H5: tick de los proyectiles (rocket/plasma/granada). Mueve

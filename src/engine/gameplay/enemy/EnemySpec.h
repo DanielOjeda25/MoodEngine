@@ -86,6 +86,24 @@ public:
     f32 painThreshold  = 10.0f;          // dmg minimo para entrar Pain
     f32 painDuration   = 0.3f;           // segundos del stagger
 
+    // ----- F4H9: Ataques -----
+
+    /// @brief Tipo de ataque: "melee" (cuerpo a cuerpo, instant on hit) o
+    ///        "projectile" (dispara un .moodweapon hacia el player).
+    ///        Default melee. Valores desconocidos clamp a "melee" + warn.
+    std::string attackKind = "melee";
+
+    /// @brief Wind-up del ataque: tiempo entre que el enemy entra al
+    ///        Attack state y el primer golpe. Convencion Doom/Quake da
+    ///        ventana al player para esquivar. Default 0.3s.
+    f32 windUpSec = 0.3f;
+
+    /// @brief Path logico al .moodweapon que el enemy dispara cuando
+    ///        `attackKind=="projectile"`. Reusa el sistema F4H5 — el
+    ///        enemy se vuelve el "shooter" del weapon (ignoreOwner=true
+    ///        evita self-splash). Vacio = no dispara (no-op silent).
+    std::string projectileWeapon;
+
     // Asset refs (paths logicos; vacio = no asset)
     std::string viewmodelMesh;           // mesh del enemigo (Sub-fase 4.3)
     std::string hitSound;                // sonido on damage

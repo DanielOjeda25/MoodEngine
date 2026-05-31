@@ -24,6 +24,7 @@ class Scene;
 class Entity;
 class AudioDevice;
 class AssetManager;
+class PhysicsWorld;
 
 namespace Enemy {
 
@@ -33,8 +34,12 @@ namespace Enemy {
 ///        invalida, los enemies se quedan en Idle (sin target).
 /// @param audio Opcional: si nullptr, se omiten hit/death sounds.
 /// @param assets Necesario para resolver `enemyAssetId` → `EnemySpec`.
+/// @param physics F4H9: nullable. Si null y un enemy quiere disparar
+///        projectile (`spec.attackKind=="projectile"`), no-op silent.
+///        Para melee no es necesario.
 void tickSystem(Scene& scene, f32 dt, Entity playerEntity,
-                AudioDevice* audio, const AssetManager& assets);
+                AudioDevice* audio, AssetManager& assets,
+                PhysicsWorld* physics = nullptr);
 
 } // namespace Enemy
 } // namespace Mood

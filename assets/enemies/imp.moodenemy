@@ -1,0 +1,18 @@
+{
+  "_version": 1,
+  "displayName": "Imp",
+  "health": 30.0,
+  "aggroRange": 18.0,
+  "attackRange": 10.0,
+  "moveSpeed": 3.5,
+  "damage": 0.0,
+  "attackCooldown": 1.5,
+  "painThreshold": 8.0,
+  "painDuration": 0.4,
+  "attackKind": "projectile",
+  "windUpSec": 0.5,
+  "projectileWeapon": "weapons/imp_fireball.moodweapon",
+  "viewmodelMesh": "",
+  "hitSound": "",
+  "deathSound": ""
+}

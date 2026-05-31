@@ -2,11 +2,16 @@
 
 #include "core/Log.h"
 #include "engine/assets/manager/AssetManager.h"
+#include "engine/gameplay/Health.h"                 // F4H9: applyDamage al player en melee
 #include "engine/gameplay/enemy/EnemySpec.h"
+#include "engine/gameplay/weapon/WeaponSpec.h"      // F4H9: spec del weapon disparado
+#include "engine/gameplay/weapon/WeaponSystem.h"    // F4H9: Weapon::fire para projectile
 #include "engine/scene/components/Components.h"
 #include "engine/scene/core/Entity.h"
 #include "engine/scene/core/Scene.h"
 
+#include <glm/geometric.hpp>
+#include <algorithm>
 #include <cmath>
 
 namespace Mood {
@@ -33,12 +38,18 @@ inline f32 horizontalDistance(const glm::vec3& a, const glm::vec3& b) {
 }
 
 void transitionTo(EnemyComponent& ec, EnemyState next,
-                  const std::string& tagName) {
+                  const std::string& tagName, const Spec* spec = nullptr) {
     if (ec.state == next) return;
     Log::engine()->info("[enemy] '{}' state {} -> {}",
                           tagName, stateName(ec.state), stateName(next));
     ec.state = next;
     ec.stateTime = 0.0f;
+    // F4H9 D7: al entrar Attack re-arm timers (wind-up del telegraph
+    // + cooldown=0 listo para golpear post wind-up).
+    if (next == EnemyState::Attack) {
+        ec.windUpTimer = spec != nullptr ? spec->windUpSec : 0.3f;
+        ec.attackCooldownTimer = 0.0f;
+    }
 }
 
 // F4H8: ensure NavAgent + setup para chase/attack. Auto-add component
@@ -63,10 +74,97 @@ void deactivateNavAgent(entt::registry& reg, entt::entity e) {
     }
 }
 
+// F4H9: aplica el golpe del enemy al player. Dispatch segun
+// `spec.attackKind`. Engine-generic.
+void applyEnemyAttack(Scene& scene, Entity enemy, Entity player,
+                       const Spec& spec, const std::string& tagName,
+                       PhysicsWorld* physics, AudioDevice* audio,
+                       AssetManager& assets) {
+    if (!player) return;
+
+    if (spec.attackKind == "projectile") {
+        // F4H9 D3: el enemy "dispara" un .moodweapon hacia el player.
+        // Reusa todo el pipeline F4H5 — Weapon::fire calcula direccion
+        // + raycast + spawn projectile + cleanup. El enemy se vuelve
+        // el shooter; ignoreOwner del weapon spec evita splash damage
+        // sobre si mismo.
+        //
+        // Si no hay physics o audio (tests headless), skip silent. La
+        // state machine sigue funcional pero el ataque no se materializa.
+        if (physics == nullptr || audio == nullptr) {
+            Log::engine()->warn(
+                "[enemy] '{}' projectile attack skipped (sin physics/audio)",
+                tagName);
+            return;
+        }
+        if (spec.projectileWeapon.empty()) {
+            Log::engine()->warn(
+                "[enemy] '{}' projectile attack sin projectileWeapon configurado",
+                tagName);
+            return;
+        }
+
+        // Auto-add WeaponComponent on-demand (D7 patron) con el
+        // projectileWeapon equipped en slot 0.
+        auto& reg = scene.registry();
+        const entt::entity eh = enemy.handle();
+        if (!reg.all_of<WeaponComponent>(eh)) {
+            reg.emplace<WeaponComponent>(eh);
+        }
+        auto& wc = reg.get<WeaponComponent>(eh);
+        // Si el slot 0 está vacio o tiene otro weapon, cargar el
+        // projectileWeapon. Si ya esta cargado, no re-loadear.
+        const WeaponAssetId desiredId = assets.loadWeapon(spec.projectileWeapon);
+        if (wc.slots[0].weaponAssetId != desiredId) {
+            wc.slots[0].weaponAssetId = desiredId;
+            if (const Weapon::Spec* ws = assets.getWeapon(desiredId)) {
+                wc.slots[0].currentAmmo = static_cast<int>(ws->magazineSize);
+            }
+        }
+        wc.activeSlot = 0;
+        // Reset fire cooldown del weapon — el enemy controla su propio
+        // cooldown via attackCooldownTimer, no via fireRate del weapon.
+        wc.fireTimer = 0.0f;
+
+        // Compute origin + direction towards player.
+        const auto& enemyXform  = enemy.getComponent<TransformComponent>();
+        const auto& playerXform = player.getComponent<TransformComponent>();
+        const glm::vec3 origin = enemyXform.position + glm::vec3(0.0f, 0.5f, 0.0f);
+        const glm::vec3 toPlayer = playerXform.position - origin;
+        const f32 len = glm::length(toPlayer);
+        const glm::vec3 dir = (len > 1e-4f) ? (toPlayer / len)
+                                              : glm::vec3(0.0f, 0.0f, -1.0f);
+
+        Weapon::FireParams params;
+        params.origin    = origin;
+        params.direction = dir;
+        params.ignoredBodyId = 0;  // sin physics body del enemy en F4H9
+
+        const auto result = Weapon::fire(scene, enemy, params,
+                                            *physics, *audio, assets);
+        Log::engine()->info(
+            "[enemy] '{}' projectile attack fired={} ({} pellets, {} hits)",
+            tagName, result.fired, result.pelletsFired, result.pelletsHit);
+        return;
+    }
+
+    // Default: melee body slam. Damage instantaneo via Health::applyDamage.
+    if (spec.damage <= 0.0f) return;
+    const auto& enemyXform  = enemy.getComponent<TransformComponent>();
+    const auto& playerXform = player.getComponent<TransformComponent>();
+    const glm::vec3 dir = glm::normalize(
+        playerXform.position - enemyXform.position
+        + glm::vec3(1e-4f, 0.0f, 0.0f));  // epsilon evita 0-vector
+    Health::applyDamage(scene, player, spec.damage, dir);
+    Log::engine()->info(
+        "[enemy] '{}' melee hit player ({:.0f} dmg)", tagName, spec.damage);
+}
+
 } // namespace
 
 void tickSystem(Scene& scene, f32 dt, Entity playerEntity,
-                AudioDevice* /*audio*/, const AssetManager& assets) {
+                AudioDevice* audio, AssetManager& assets,
+                PhysicsWorld* physics) {
     auto& reg = scene.registry();
 
     // Resolver pos del player. Si no es valida → playerPos quedará en NaN
@@ -177,7 +275,7 @@ void tickSystem(Scene& scene, f32 dt, Entity playerEntity,
                     ec.targetEntity = EnemyComponent::k_noTarget;
                     transitionTo(ec, EnemyState::Idle, tagName);
                 } else if (dist <= spec.attackRange) {
-                    transitionTo(ec, EnemyState::Attack, tagName);
+                    transitionTo(ec, EnemyState::Attack, tagName, &spec);
                 } else {
                     transitionTo(ec, EnemyState::Chase, tagName);
                 }
@@ -188,13 +286,13 @@ void tickSystem(Scene& scene, f32 dt, Entity playerEntity,
                     ec.targetEntity = EnemyComponent::k_noTarget;
                     transitionTo(ec, EnemyState::Idle, tagName);
                 } else if (dist <= spec.attackRange) {
-                    transitionTo(ec, EnemyState::Attack, tagName);
+                    transitionTo(ec, EnemyState::Attack, tagName, &spec);
                 }
                 break;
             }
             case EnemyState::Attack: {
-                // F4H9 traera el daño real al player. F4H7-F4H8: solo eval
-                // transition si se aleja.
+                // F4H9: wind-up + cooldown + apply damage.
+                // Si player se aleja → Chase/Idle como en F4H8.
                 if (!playerValid || dist > spec.attackRange * 1.5f) {
                     if (dist <= spec.aggroRange) {
                         transitionTo(ec, EnemyState::Chase, tagName);
@@ -202,6 +300,23 @@ void tickSystem(Scene& scene, f32 dt, Entity playerEntity,
                         ec.targetEntity = EnemyComponent::k_noTarget;
                         transitionTo(ec, EnemyState::Idle, tagName);
                     }
+                    break;
+                }
+                // En Attack stable: decrement wind-up; cuando expira y
+                // cooldown <= 0, aplicar el golpe + re-arm (D7). Tolerance
+                // de 1e-5 evita float epsilon edge cases — 6 decrements
+                // de 0.05 sobre 0.3 no llegan a 0 exacto (residuo 5e-8).
+                constexpr f32 k_timerEps = 1e-5f;
+                if (ec.windUpTimer > k_timerEps) {
+                    ec.windUpTimer = std::max(0.0f, ec.windUpTimer - dt);
+                } else if (ec.attackCooldownTimer <= k_timerEps) {
+                    applyEnemyAttack(scene, Entity{e, &scene}, playerEntity,
+                                      spec, tagName, physics, audio, assets);
+                    ec.attackCooldownTimer = spec.attackCooldown;
+                    ec.windUpTimer = spec.windUpSec;  // re-arm wind-up del proximo
+                } else {
+                    ec.attackCooldownTimer = std::max(0.0f,
+                        ec.attackCooldownTimer - dt);
                 }
                 break;
             }

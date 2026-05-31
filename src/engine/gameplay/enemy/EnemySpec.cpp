@@ -29,6 +29,10 @@ nlohmann::json Spec::toJson() const {
         {"painThreshold",  painThreshold},
         {"painDuration",   painDuration},
 
+        {"attackKind",       attackKind},
+        {"windUpSec",        windUpSec},
+        {"projectileWeapon", projectileWeapon},
+
         {"viewmodelMesh",  viewmodelMesh},
         {"hitSound",       hitSound},
         {"deathSound",     deathSound},
@@ -64,6 +68,10 @@ Spec Spec::fromJson(const nlohmann::json& j) {
     s.painThreshold   = j.value("painThreshold",  10.0f);
     s.painDuration    = j.value("painDuration",   0.3f);
 
+    s.attackKind        = j.value("attackKind",        std::string{"melee"});
+    s.windUpSec         = j.value("windUpSec",         0.3f);
+    s.projectileWeapon  = j.value("projectileWeapon",  std::string{});
+
     s.viewmodelMesh   = j.value("viewmodelMesh",  std::string{});
     s.hitSound        = j.value("hitSound",       std::string{});
     s.deathSound      = j.value("deathSound",     std::string{});
@@ -80,6 +88,15 @@ Spec Spec::fromJson(const nlohmann::json& j) {
     if (s.attackCooldown < 0.05f)    s.attackCooldown = 0.05f;
     if (s.painThreshold < 0.0f)      s.painThreshold = 0.0f;
     if (s.painDuration < 0.05f)      s.painDuration = 0.05f;
+
+    // F4H9 clamps:
+    if (s.attackKind != "melee" && s.attackKind != "projectile") {
+        Log::engine()->warn(
+            "[EnemySpec] attackKind desconocido '{}' — fallback a 'melee'",
+            s.attackKind);
+        s.attackKind = "melee";
+    }
+    if (s.windUpSec < 0.0f) s.windUpSec = 0.0f;
 
     return s;
 }

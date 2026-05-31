@@ -11,6 +11,48 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-31: F4H9 cierre — Ataques que dañan al player (melee + ranged + wind-up)
+
+**Contexto.** Tercer hito de Sub-fase 4.2. F4H7 dejó la state machine armada con 6 estados; F4H8 conectó Chase + Attack tracking continuo con NavSystem (A* del Hito 23). F4H9 hace que el enemy te golpee: cuando entra `Attack`, aplica `spec.damage` HP al player cada `spec.attackCooldown` segundos via `Health::applyDamage`, con un wind-up procedural de `spec.windUpSec` (default 0.3s) antes del primer golpe — ventana de esquive Doom/Quake-style. Schema `.moodenemy` extendido con `attackKind: "melee" | "projectile"` para soportar dos sabores de ataque data-driven en el mismo schema (Grunt melee + Imp ranged como demos paralelos).
+
+**Decisiones de scope (AskUserQuestion al dev)**:
+
+- **D1 — Melee + ranged desde día 1.** Schema `.moodenemy` se extiende con `attackKind: "melee" | "projectile"` data-driven en lugar de empezar solo melee + agregar projectile en hito futuro. Si `projectile`, declara `projectileWeapon: "weapons/fireball.moodweapon"` y el enemy spawnea ese projectile via el sistema F4H5. **Razón**: el data-driven es el norte de Fase 4 — schema completo desde el inicio evita migration cuando F4H11 agregue variedad (Imp ranged / Mancubus splash / Cacodemon orb / etc). El costo en F4H9 es lineal: la branch projectile es ~30 LOC reutilizando `Weapon::fire` completo.
+
+- **D2 — Wind-up 0.3s antes del primer golpe.** Convención Doom/Quake. El enemy entra Attack, espera `spec.windUpSec` (default 0.3s), aplica damage, espera `spec.attackCooldown` (default 1.0s), repite. **Razón**: el ataque instantáneo sin telegraph sería injusto — la animación de wind-up llegará en Sub-fase 4.3 (Mixamo), pero hoy el timer hace de telegraph procedural. El player aprende "cuando me ven, tengo 300ms para salir". Descartado 0 (instant) por injusto; descartado 0.5s por feel más Tank/Mancubus que Grunt — el dev quiere algo arcade-rapido por default; el spec lo configura por enemy.
+
+**Decisiones técnicas (convención agente, no preguntadas)**:
+
+- **D3 — Projectile del enemy reusa `Weapon::fire` del `.moodweapon`.** El `spec.projectileWeapon` apunta a un `.moodweapon` cargado por AssetManager. El EnemySystem llama `Weapon::fire(scene, enemy, FireParams{origin = enemyPos + (0, 0.5, 0), dir = normalize(playerPos - enemyPos), randomSeed=...}, physics, audio, assets)` apuntando al player. El enemy se vuelve el "shooter" del weapon — `ignoreOwner=true` evita self-damage del Imp por su propio splash. **Razón**: Imp fireball / Mancubus rocket no necesitan código nuevo de proyectil — son data en `.moodweapon`. El pipeline F4H5 (Projectile component + ProjectileSystem + raycast continuo + bounce + splash damage + audio + particle burst) corre engine-generic para entities con cualquier owner. Engine-generic puro, **cero codigo nuevo de proyectil**.
+
+- **D4 — Cooldown timer + windUp timer per-enemy.** `EnemyComponent` reemplaza `f32 lastAttackTime` (reservado F4H7 nunca usado) por `f32 attackCooldownTimer = 0.0f` (decrementa cada frame en Attack; 0 = ready to strike) + `f32 windUpTimer = 0.0f` (decrementa cada frame en Attack; 0 = wind-up done). Ambos timers se resetean al re-entrar Attack via `transitionTo(ec, Attack, &spec)`. **Razón**: cada engagement tiene su telegraph fresco; no podés "ahorrar" tiempo de wind-up corriendo en círculos. Si te pegan y entras Pain, al volver a Chase + Attack el wind-up arranca de cero.
+
+- **D5 — Damage al player via `Health::applyDamage`.** Mismo API que el player usa contra el enemy. Engine-generic. Si el player tiene `ArmorComponent` (F4H4), la armor come parte del damage primero (convención HL2 absorbRatio=0.66 default). El damage flash + pain reaction del player (F4H6) se triggea automáticamente via polling del bridge. **Razón**: no hay que reimplementar damage handling — el sistema unico de `Health::applyDamage` cubre player↔enemy en ambas direcciones, futuros NPCs aliados, traps, etc.
+
+- **D6 — `Enemy::tickSystem` signature extendida con `PhysicsWorld* physics = nullptr`.** Necesario para `Weapon::fire` cuando `attackKind=projectile` (raycast + collision). Default `nullptr` para tests headless: si physics es null y el enemy quiere disparar projectile, skip silencioso con log warn. El bridge ya tiene `m_physicsWorld.get()` para pasarlo. `AssetManager&` cambió a non-const para permitir `loadWeapon` on-demand del projectileWeapon. **Razón**: tests no tienen Jolt; los enemies melee siguen funcionando sin physics; los projectile tests verifican el branch via spawn de WeaponComponent y comprueban que no crashea con physics=nullptr.
+
+- **D7 — Re-arm wind-up al re-entrar Attack.** Cada transition Pain→Chase / Chase→Attack reset `windUpTimer = spec.windUpSec`. Justo y simple. Se hace via `transitionTo(ec, Attack, &spec)` con optional spec param — el side-effects block del switch POST-transition F4H8 invoca esto. **Razón**: D4 (no se ahorra tiempo); además sin esto el wind-up del primer golpe seria "instantaneo" porque al transition out de Attack los timers se quedaban en sus valores.
+
+- **D8 — Demo `imp.moodenemy` + `imp_fireball.moodweapon`.** Para validar el modo ranged. Imp tiene HP=30 (frágil), aggro=18m (largo), attackRange=10m (más largo que melee 2m del Grunt), moveSpeed=3.5 (más lento que Grunt 4.0), windUpSec=0.5 (telegraph más largo), attackCooldown=1.5s, attackKind=projectile, projectileWeapon="weapons/imp_fireball.moodweapon". El imp_fireball es un `.moodweapon` con projectile category, speed=12 m/s (slow visible — el player puede ver venir el fireball y esquivar), splashRadius=1.5m, directDamage=18 + splashDamage=12, ignoreOwner=true, lifetimeSec=4.0. Demo paralelo al grunt para que el dev pueda spawn ambos y validar el contraste.
+
+**Ajustes reactivos descubiertos via tests**:
+
+- **R1 — SIGABRT crash al primer `applyEnemyAttack`.** El helper `makePlayer` en `test_enemy_system.cpp` no agregaba `HealthComponent` al player entity. Cuando F4H9 corrió el primer test de melee damage, `applyEnemyAttack` llamaba `Health::applyDamage(scene, player, ...)` que internamente hace `player.getComponent<HealthComponent>()` — sin component → assert fail → SIGABRT en CI. Fix: `makePlayer` ahora agrega `HealthComponent` default con `current=100, max=100`. Los tests F4H7/F4H8 no necesitaban Health en el player porque el daño solo iba en dirección player→enemy.
+
+- **R2 — `k_timerEps = 1e-5f` tolerance.** Clave para tests verdes. 4 tests F4H9 reportaron `HP == 100` en lugar de `HP == 85` (1 hit de 15 dmg esperado tras `dt_total = 0.35s` cubriendo `windUpSec=0.3 + first strike cycle`). Diagnóstico: el test single-tick `tickSystem(scene, 0.35, ...)` no aplicaba damage porque la branch wind-up consume el dt y la rama `else if cooldownTimer <= 0` NO se ejecuta en el mismo tick (los else-if del switch son exclusivos). Acumulación: dividir en 7 ticks de 0.05s tampoco funcionó — al 6to tick `windUpTimer` quedaba en `0.3 - 0.05*6 = 0` exacto, al 7mo tick debía entrar la rama strike pero residuo float ~5e-8 mantenía el chequeo `windUpTimer > 0` como true infinito. Fix doble: (a) helper de test `advanceTicks(scene, dt, ticks, player, physics, audio, assets)` para fast-forward granular preciso; (b) constante `k_timerEps = 1e-5f` en switch Attack — `> k_timerEps` y `<= k_timerEps` reemplazan a los `> 0` y `<= 0` exactos. Tolerancia razonable: 1e-5s = 10 microsegundos, despreciable para timers de wind-up de 0.3s. **Convención durable**: cualquier timer float comparado contra 0 en el motor debe usar epsilon tolerance — F4H10+ deben seguir el patrón.
+
+**Tests F4H9**:
+
+- 4 nuevos en `test_enemy_spec.cpp` (defaults attack fields F4H9 / roundtrip JSON melee / roundtrip JSON projectile / clamps attackKind unknown→"melee" + windUpSec negativo→0).
+- 7 nuevos en `test_enemy_system.cpp` (Attack wind-up no damage en primeros 0.3s / Attack damage al player tras windUpSec / Attack cooldown anti-spam entre golpes / Re-arm wind-up Pain→Chase→Attack no instant strike post-pain / attackKind=projectile + physics=nullptr → no-op silent melee fallback / Multiples enemies Attack independent timers / Attack reset al transition out + re-entrada).
+- **Suite full 1461/12384 verde** (+11 cases / +31 asserts vs F4H8: 1450 → 1461). 0 regresión.
+
+**Strategic deferral preservado**. El enemy sigue siendo cubo placeholder per cierre F4H6 — toda Sub-fase 4.2 (F4H7-F4H12) cierra con cubos. Imp sin mesh distintivo todavía; visual pass unificado en Sub-fase 4.3. Hit react animation del player (mini stagger al recibir damage) queda backlog F4H9.2 si emerge desde feel — hoy el screen shake + pain reaction de F4H6 cubren.
+
+**Próximo hito**. F4H10 = animaciones de impacto + ragdoll on death. Posible primer hito con mesh Mixamo (vs cubos articulados con ragdoll fisico) — D1 a tomar al abrir F4H10.
+
+---
+
 ## 2026-05-31: F4H8 cierre — Chase con A* + Attack tracking continuo (Doom Eternal-style)
 
 **Contexto.** Segundo hito de Sub-fase 4.2. F4H7 dejó la state machine armada con 6 estados (Idle/Alert/Chase/Attack/Pain/Dead) pero Chase y Attack eran no-op. F4H8 activa el movimiento real conectando `EnemySystem` con `NavAgentComponent` + `NavSystem` (Hito 23 A*) que ya existían en el motor. El enemy persigue al player con A* puro grid y mantiene tracking mientras lo golpea.

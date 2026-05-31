@@ -9,6 +9,9 @@
   "attackCooldown": 1.0,
   "painThreshold": 10.0,
   "painDuration": 0.3,
+  "attackKind": "melee",
+  "windUpSec": 0.3,
+  "projectileWeapon": "",
   "viewmodelMesh": "",
   "hitSound": "",
   "deathSound": ""

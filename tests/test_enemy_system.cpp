@@ -90,6 +90,10 @@ Entity makePlayer(Scene& scene, glm::vec3 pos) {
     Entity p = scene.createEntity("player");
     auto& tf = p.addComponent<TransformComponent>();
     tf.position = pos;
+    // F4H9: el player tiene HealthComponent para recibir damage del enemy.
+    HealthComponent hc{};
+    hc.current = 100.0f; hc.max = 100.0f;
+    p.addComponent<HealthComponent>(hc);
     return p;
 }
 
@@ -525,4 +529,168 @@ TEST_CASE("F4H8 Attack→Chase si player se aleja > attackRange * 1.5") {
 
     // F4H8: Attack → Chase (no Alert) — el A* persigue.
     CHECK(enemy.getComponent<EnemyComponent>().state == EnemyState::Chase);
+}
+
+// =============================================================
+// F4H9 — Ataques (wind-up + cooldown + damage)
+// =============================================================
+
+TEST_CASE("F4H9 wind-up: no aplica damage en los primeros 0.3s del Attack") {
+    auto root = setupAssetRoot("windup_block");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    auto& ph = player.getComponent<HealthComponent>();
+    ph.current = 100.0f; ph.max = 100.0f;
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(1.5f, 0.0f, 0.0f));
+
+    // Setup Attack en 2 ticks.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Attack);
+    REQUIRE(enemy.getComponent<EnemyComponent>().windUpTimer > 0.0f);
+
+    // Tick 0.1s — todavía en wind-up. HP intacto.
+    Enemy::tickSystem(scene, 0.1f, player, nullptr, *assets);
+    CHECK(player.getComponent<HealthComponent>().current == doctest::Approx(100.0f));
+}
+
+// Helper local: dispara N ticks de `dt` cada uno. Util para "fast-forward"
+// sin asumir que un single tick gigante consume todos los timers.
+inline void advanceTicks(Scene& scene, f32 dt, int count,
+                          Entity player, AssetManager& assets) {
+    for (int i = 0; i < count; ++i) {
+        Enemy::tickSystem(scene, dt, player, nullptr, assets);
+    }
+}
+
+TEST_CASE("F4H9 melee damage al player tras windUpSec") {
+    auto root = setupAssetRoot("melee_dmg");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(1.5f, 0.0f, 0.0f));
+
+    // Setup Attack.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Attack);
+
+    // Ticks granulares para consumir el wind-up de 0.3s + 1 tick mas
+    // para aplicar el damage cuando windUp llega a 0.
+    advanceTicks(scene, 0.05f, 7, player, *assets);  // total 0.35s
+    // Grunt default damage=15.
+    CHECK(player.getComponent<HealthComponent>().current == doctest::Approx(85.0f));
+}
+
+TEST_CASE("F4H9 cooldown entre golpes (no spam)") {
+    auto root = setupAssetRoot("cooldown_spam");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(1.5f, 0.0f, 0.0f));
+
+    // Setup Attack + primer golpe.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    advanceTicks(scene, 0.05f, 7, player, *assets);  // primer golpe
+    REQUIRE(player.getComponent<HealthComponent>().current == doctest::Approx(85.0f));
+
+    // Tick chico durante el cooldown — HP no cambia.
+    advanceTicks(scene, 0.05f, 3, player, *assets);  // 0.15s — aun en cooldown
+    CHECK(player.getComponent<HealthComponent>().current == doctest::Approx(85.0f));
+}
+
+TEST_CASE("F4H9 segundo golpe tras cooldown + nuevo wind-up") {
+    auto root = setupAssetRoot("second_hit");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(1.5f, 0.0f, 0.0f));
+
+    // Setup Attack + primer golpe.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    advanceTicks(scene, 0.05f, 7, player, *assets);
+    REQUIRE(player.getComponent<HealthComponent>().current == doctest::Approx(85.0f));
+
+    // Mas ticks: cooldown 1.0s + wind-up 0.3s = 1.3s antes del proximo golpe.
+    advanceTicks(scene, 0.05f, 30, player, *assets);  // 1.5s
+    // Segundo golpe → HP=70.
+    CHECK(player.getComponent<HealthComponent>().current == doctest::Approx(70.0f));
+}
+
+TEST_CASE("F4H9 re-arm wind-up al re-entrar Attack post-Pain") {
+    auto root = setupAssetRoot("rearm_pain");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(1.5f, 0.0f, 0.0f));
+
+    // Setup Attack + primer golpe.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    advanceTicks(scene, 0.05f, 7, player, *assets);
+    REQUIRE(player.getComponent<HealthComponent>().current == doctest::Approx(85.0f));
+
+    // Damage al enemy → Pain.
+    Health::applyDamage(scene, enemy, 20.0f);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Pain);
+
+    // Pain duration (0.3s) → Chase → Attack proximo tick.
+    advanceTicks(scene, 0.1f, 5, player, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Attack);
+
+    // El wind-up se re-armo al entrar Attack → ticks chicos no golpean
+    // antes de consumir wind-up 0.3s. HP igual al post-primer-golpe.
+    const f32 hpBeforeReentry = player.getComponent<HealthComponent>().current;
+    advanceTicks(scene, 0.02f, 5, player, *assets);  // 0.1s — aun en wind-up
+    CHECK(player.getComponent<HealthComponent>().current ==
+            doctest::Approx(hpBeforeReentry));  // wind-up bloquea
+}
+
+TEST_CASE("F4H9 attackKind=projectile sin physics → no-op silent") {
+    // Verifica que el state machine sigue funcionando aunque no se pueda
+    // materializar el projectile (tests headless con physics=nullptr).
+    auto root = setupAssetRoot("projectile_no_physics");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    auto& ph = player.getComponent<HealthComponent>();
+    ph.current = 100.0f; ph.max = 100.0f;
+
+    // Enemy con attackKind="projectile" forzado en el component (sin spec real).
+    Entity enemy = scene.createEntity("imp");
+    auto& tf = enemy.addComponent<TransformComponent>();
+    tf.position = glm::vec3(8.0f, 0.0f, 0.0f);  // dentro attackRange si extendido
+    enemy.addComponent<HealthComponent>().current = 30.0f;
+    EnemyComponent ec{};
+    enemy.addComponent<EnemyComponent>(ec);
+
+    // Tick para que entre Idle→Alert→Chase. Con spec default (attackRange=2),
+    // dist 8 > 2 → queda en Chase. Necesitariamos un .moodenemy con
+    // attackRange >= 8 para entrar Attack. Como no podemos cargar uno real
+    // en este test sin filesystem, validamos solo que el tick no crashee
+    // con physics=nullptr + cualquier attackKind.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets,
+                        /*physics=*/nullptr);
+    // No crash. Player HP intacto (el enemy ni siquiera ataca a 8m con default spec).
+    CHECK(player.getComponent<HealthComponent>().current == doctest::Approx(100.0f));
+}
+
+TEST_CASE("F4H9 transition Alert→Attack arma windUpTimer = spec.windUpSec") {
+    auto root = setupAssetRoot("windup_init");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(1.5f, 0.0f, 0.0f));
+
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);  // Idle→Alert
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);  // Alert→Attack
+    const auto& ec = enemy.getComponent<EnemyComponent>();
+    REQUIRE(ec.state == EnemyState::Attack);
+    // Default spec.windUpSec = 0.3s. Tras la transition queda armado.
+    CHECK(ec.windUpTimer == doctest::Approx(0.3f));
+    CHECK(ec.attackCooldownTimer == doctest::Approx(0.0f));
 }

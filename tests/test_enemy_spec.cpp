@@ -37,22 +37,73 @@ TEST_CASE("EnemySpec: defaults sanos") {
     CHECK(s.attackCooldown == doctest::Approx(1.0f));
     CHECK(s.painThreshold  == doctest::Approx(10.0f));
     CHECK(s.painDuration   == doctest::Approx(0.3f));
+    // F4H9 defaults
+    CHECK(s.attackKind       == "melee");
+    CHECK(s.windUpSec        == doctest::Approx(0.3f));
+    CHECK(s.projectileWeapon.empty());
+}
+
+// =============================================================
+// F4H9 — Attack schema (attackKind / windUpSec / projectileWeapon)
+// =============================================================
+
+TEST_CASE("F4H9 EnemySpec: roundtrip JSON attack fields (melee)") {
+    Spec a;
+    a.attackKind       = "melee";
+    a.windUpSec        = 0.5f;
+    a.projectileWeapon = "";
+    const auto j = a.toJson();
+    const Spec b = Spec::fromJson(j);
+    CHECK(b.attackKind       == "melee");
+    CHECK(b.windUpSec        == doctest::Approx(0.5f));
+    CHECK(b.projectileWeapon.empty());
+}
+
+TEST_CASE("F4H9 EnemySpec: roundtrip JSON attack fields (projectile)") {
+    Spec a;
+    a.attackKind       = "projectile";
+    a.windUpSec        = 0.4f;
+    a.projectileWeapon = "weapons/imp_fireball.moodweapon";
+    const auto j = a.toJson();
+    const Spec b = Spec::fromJson(j);
+    CHECK(b.attackKind       == "projectile");
+    CHECK(b.windUpSec        == doctest::Approx(0.4f));
+    CHECK(b.projectileWeapon == "weapons/imp_fireball.moodweapon");
+}
+
+TEST_CASE("F4H9 EnemySpec: clamps attackKind desconocido → melee") {
+    nlohmann::json j;
+    j["_version"]   = Spec::k_schemaVersion;
+    j["attackKind"] = "telepathic";   // valor invalido
+    const Spec s = Spec::fromJson(j);
+    CHECK(s.attackKind == "melee");   // clamp + warn log
+}
+
+TEST_CASE("F4H9 EnemySpec: clamps windUpSec negativo → 0") {
+    nlohmann::json j;
+    j["_version"]  = Spec::k_schemaVersion;
+    j["windUpSec"] = -1.5f;
+    const Spec s = Spec::fromJson(j);
+    CHECK(s.windUpSec >= 0.0f);
 }
 
 TEST_CASE("EnemySpec: roundtrip JSON grunt completo") {
     Spec a;
-    a.displayName    = "Grunt";
-    a.health         = 75.0f;
-    a.aggroRange     = 20.0f;
-    a.attackRange    = 3.0f;
-    a.moveSpeed      = 5.5f;
-    a.damage         = 20.0f;
-    a.attackCooldown = 1.5f;
-    a.painThreshold  = 15.0f;
-    a.painDuration   = 0.4f;
-    a.viewmodelMesh  = "meshes/grunt.glb";
-    a.hitSound       = "sfx/grunt_hit.ogg";
-    a.deathSound     = "sfx/grunt_death.ogg";
+    a.displayName      = "Grunt";
+    a.health           = 75.0f;
+    a.aggroRange       = 20.0f;
+    a.attackRange      = 3.0f;
+    a.moveSpeed        = 5.5f;
+    a.damage           = 20.0f;
+    a.attackCooldown   = 1.5f;
+    a.painThreshold    = 15.0f;
+    a.painDuration     = 0.4f;
+    a.attackKind       = "melee";   // F4H9
+    a.windUpSec        = 0.25f;     // F4H9
+    a.projectileWeapon = "";        // F4H9
+    a.viewmodelMesh    = "meshes/grunt.glb";
+    a.hitSound         = "sfx/grunt_hit.ogg";
+    a.deathSound       = "sfx/grunt_death.ogg";
 
     const auto j = a.toJson();
     const Spec b = Spec::fromJson(j);
@@ -65,6 +116,9 @@ TEST_CASE("EnemySpec: roundtrip JSON grunt completo") {
     CHECK(b.attackCooldown == doctest::Approx(a.attackCooldown));
     CHECK(b.painThreshold  == doctest::Approx(a.painThreshold));
     CHECK(b.painDuration   == doctest::Approx(a.painDuration));
+    CHECK(b.attackKind     == a.attackKind);
+    CHECK(b.windUpSec      == doctest::Approx(a.windUpSec));
+    CHECK(b.projectileWeapon == a.projectileWeapon);
     CHECK(b.viewmodelMesh  == a.viewmodelMesh);
     CHECK(b.hitSound       == a.hitSound);
     CHECK(b.deathSound     == a.deathSound);

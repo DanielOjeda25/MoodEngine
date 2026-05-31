@@ -113,6 +113,10 @@ void setupEnemyBindings(sol::state& lua, Scene* scene, AssetManager* assets) {
         out["attack_cooldown"] = spec->attackCooldown;
         out["pain_threshold"]  = spec->painThreshold;
         out["pain_duration"]   = spec->painDuration;
+        // F4H9 attack fields.
+        out["attack_kind"]        = spec->attackKind;
+        out["wind_up_sec"]        = spec->windUpSec;
+        out["projectile_weapon"]  = spec->projectileWeapon;
         return out;
     });
 }
