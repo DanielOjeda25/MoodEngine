@@ -113,6 +113,17 @@ void setupWeaponBindings(sol::state& lua, class Scene* scene,
                           AudioDevice* audioDevice,
                           AssetManager* assetManager);
 
+/// @brief F4H7 — tabla `enemy` para los scripts Lua. Engine-generic:
+///        debug + automation del state machine. Requiere scene +
+///        assetManager (para resolver specs).
+///        API:
+///          enemy.get_state(tag) -> "idle"|"alert"|...
+///          enemy.set_state(tag, state) (debug force-set)
+///          enemy.kill(tag) (apply 99999 dmg via Health)
+///          enemy.spec(tag) -> {display_name, health, aggro_range, ...} | nil
+void setupEnemyBindings(sol::state& lua, class Scene* scene,
+                          AssetManager* assetManager);
+
 /// @brief F2H67 Bloque E: registra la tabla `vehicle` en `lua`.
 ///        Implementado en LuaBindings_Vehicle.cpp. Requiere `scene` y
 ///        `physicsWorld` para escribir el input del componente y leer

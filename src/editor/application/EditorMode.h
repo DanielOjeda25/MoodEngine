@@ -118,6 +118,12 @@ enum class ProjectAction {
     // 3D + trigger) son hito futuro F4H4 — la card vieja "Weapon empty"
     // del Gameplay tab fue removida porque no aportaba valor sin pickup.
     AddPlayer,
+    // F4H7: enemigo basico — Tag="Enemy_<N>" + Transform + MeshRenderer
+    // (cubo placeholder) + HealthComponent + EnemyComponent con el primer
+    // .moodenemy del catalogo. Estado inicial Idle; entra Alert cuando el
+    // player se acerca a aggroRange. F4H8 traera movimiento; F4H9 traera
+    // daño al player. Cubo se mantiene hasta Sub-fase 4.3 (NPC Mixamo).
+    AddEnemy,
     // F2H20: compilacion brush -> mesh estatica + export OBJ.
     CompileMap,
     ExportObj,

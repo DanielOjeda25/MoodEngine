@@ -394,6 +394,17 @@ SavedEntity parseEntityFromJson(const json& j) {
         se.weapon = sw;
     }
 
+    // F4H7: enemy opcional. Maps pre-F4H7 sin el campo no traen
+    // EnemyComponent. El path se resuelve al cargar en SceneLoader
+    // via AssetManager::loadEnemy.
+    if (j.contains("enemy")) {
+        const auto& je = j.at("enemy");
+        SavedEnemy senemy;
+        senemy.enemyPath = je.value("path",  std::string{});
+        senemy.state     = je.value("state", std::string{"idle"});
+        se.enemy = senemy;
+    }
+
     // F2H65: joint. Aditivo — mapas pre-F2H65 sin el campo se leen igual
     // (la entidad queda sin JointComponent).
     if (j.contains("joint")) {

@@ -251,6 +251,7 @@ void InspectorPanel::onImGuiRender() {
         if (dispatchEntity.hasComponent<ArmorComponent>())        renderArmorSection(dispatchEntity);     // F4H4
         if (dispatchEntity.hasComponent<PickupComponent>())       renderPickupSection(dispatchEntity);    // F4H4
         if (dispatchEntity.hasComponent<WeaponComponent>())       renderWeaponSection(dispatchEntity);    // F4H2
+        if (dispatchEntity.hasComponent<EnemyComponent>())        renderEnemySection(dispatchEntity);     // F4H7
     }
     if (catActive(activeCat, "physics")) {
         if (dispatchEntity.hasComponent<RigidBodyComponent>())    renderRigidBodySection(dispatchEntity);
@@ -633,6 +634,13 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
         e.hasComponent<PickupComponent>(),
         [](Entity en, std::string lbl) {
             return makeAddComponentCommand<PickupComponent>(en, std::move(lbl));
+        });
+    // F4H7: EnemyComponent en Logic — enemigo data-driven via .moodenemy.
+    add("component.name.enemy", "component.desc.enemy",
+        "editor.panel.inspector.add.cat.logic",
+        e.hasComponent<EnemyComponent>(),
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<EnemyComponent>(en, std::move(lbl));
         });
 
     // World

@@ -24,6 +24,7 @@
 #include "engine/inventory/ItemAsset.h" // F2H51
 #include "engine/quest/QuestAsset.h"    // F2H53
 #include "engine/gameplay/weapon/WeaponSpec.h"  // F4H2
+#include "engine/gameplay/enemy/EnemySpec.h"    // F4H7
 #include "engine/render/rhi/IMesh.h"
 #include "engine/render/rhi/ITexture.h"
 #include "engine/render/resources/MaterialAsset.h"
@@ -57,6 +58,8 @@ constexpr const char* k_emptyItemPath      = "__empty_item";
 constexpr const char* k_emptyQuestPath     = "__empty_quest";
 // F4H2: sentinela del Weapon fallback (slot 0). Spec con defaults.
 constexpr const char* k_emptyWeaponPath    = "__empty_weapon";
+// F4H7: sentinela del Enemy fallback (slot 0). Spec con defaults.
+constexpr const char* k_emptyEnemyPath     = "__empty_enemy";
 // Sentinela del material fallback (slot 0). Albedo blanco, mate medio.
 constexpr const char* k_defaultMaterialPath = "__default_material";
 
@@ -276,6 +279,16 @@ AssetManager::AssetManager(std::string rootDir,
         m_weapons.initFallback(std::move(empty), k_emptyWeaponPath);
     }
     Log::assets()->info("AssetManager: weapon 'vacio' generado en slot 0");
+
+    // ---- Slot 0 Enemy (F4H7): spec con defaults sanos para que
+    //      `getEnemy(0)` nunca sea null. EnemyComponent con enemyAssetId=0
+    //      usa estos defaults (50 HP, 12m aggro, 2m attack, 15 dmg).
+    {
+        auto empty = std::make_unique<Enemy::Spec>();
+        empty->displayName = "(empty)";
+        m_enemies.initFallback(std::move(empty), k_emptyEnemyPath);
+    }
+    Log::assets()->info("AssetManager: enemy 'vacio' generado en slot 0");
 }
 
 AssetManager::~AssetManager() = default;

@@ -408,6 +408,65 @@ struct ProjectileComponent {
     bool exploded      = false;               // sentinela — destroy en next tick
 };
 
+/// @brief F4H7 — Estados de un enemigo (boomer-shooter classic).
+///        Idle: parado, sin saber del player.
+///        Alert: detectó al player (entró en `aggroRange`), pero todavia
+///               no se mueve hacia el. F4H7 termina la maquina aca.
+///        Chase: persigue al player. Movimiento real en F4H8 (no-op en F4H7).
+///        Attack: golpea al player. Daño real en F4H9 (no-op en F4H7).
+///        Pain: recibio un disparo (`hitFlashTimer` subio). Stagger corto
+///              (`spec.painDuration`) y vuelve al estado anterior si tenia
+///              target, sino Idle.
+///        Dead: HP a 0. Terminal — auto-add `RigidBodyComponent::Dynamic`
+///              para caer con fisica (mismo patron F4H1 Health).
+enum class EnemyState : u8 {
+    Idle   = 0,
+    Alert  = 1,
+    Chase  = 2,
+    Attack = 3,
+    Pain   = 4,
+    Dead   = 5,
+};
+
+/// @brief F4H7 — Marker de enemigo data-driven. La spec real vive en el
+///        `.moodenemy` cargado en `AssetManager` (`enemyAssetId`).
+///        Engine-generic: NO contiene tipos de enemigo PANDEMONIUM —
+///        cada juego declara los suyos en assets.
+///
+///        `state` es runtime — al cargar arranca en `Idle`. Persiste
+///        `enemyAssetId` (via path en SavedEnemy) y opcionalmente `state`
+///        (para checkpoints — un enemigo muerto sigue muerto al recargar).
+struct EnemyComponent {
+    /// @brief Sentinela para `targetEntity` sin asignar. NO uses 0 — EnTT
+    ///        handle 0 es valido (la primera entity creada del scene).
+    ///        Mismo patron que `entt::null` (UINT32_MAX) pero raw para
+    ///        no incluir `<entt/entt.hpp>` en este header.
+    static constexpr u32 k_noTarget = 0xFFFFFFFFu;
+
+    /// @brief Id del EnemySpec asociado. 0 = sin spec (usa defaults del slot 0).
+    u32 enemyAssetId = 0;
+
+    /// @brief Estado actual de la maquina. Default = Idle al spawn / load.
+    EnemyState state = EnemyState::Idle;
+
+    /// Transients (no serializar):
+    /// @brief Segundos dentro del estado actual. Reset a 0 en cada transition.
+    f32 stateTime = 0.0f;
+    /// @brief Entity raw del target (player). `k_noTarget` = sin target.
+    ///        Forward decl-friendly (mismo patron ProjectileComponent.owner).
+    u32 targetEntity = k_noTarget;
+    /// @brief Cooldown del proximo ataque (Attack state). Reset al cooldown
+    ///        del spec al atacar. F4H9 traera el daño.
+    f32 lastAttackTime = -1.0f;
+    /// @brief Conteo de hits que recibio el enemigo. Para metrica + debug
+    ///        ("aguanta N hits"). NO confundir con `painsTotal` del player.
+    int painsTotal = 0;
+    /// @brief Cache del frame anterior del `hitFlashTimer` del Health del
+    ///        mismo entity. Si subio en este tick → transition a Pain.
+    ///        Mismo patron polling F4H4 (`m_f4h4_prevHitFlashTimer`).
+    f32 prevHitFlashTimer = 0.0f;
+};
+
 /// @brief F4H3 — Slot individual del arsenal. Plain data:
 ///        `weaponAssetId` (ref al `.moodweapon` cargado en `AssetManager`)
 ///        + `currentAmmo` per-slot. Per-slot ammo: cambiar de arma NO

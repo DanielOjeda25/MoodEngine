@@ -20,6 +20,7 @@
 #include "engine/assets/manager/AssetManager.h"
 #include "core/i18n/I18n.h"
 #include "engine/gameplay/weapon/WeaponSpec.h"  // F4H2 Bloque B: handleAddPlayer auto-asigna arma
+#include "engine/gameplay/enemy/EnemySpec.h"    // F4H7: handleAddEnemy auto-asigna .moodenemy
 #include "engine/render/resources/MeshAsset.h"
 #include "engine/scene/components/BrushComponent.h"  // F3H10: kit brush (no esta en Components.h)
 #include "engine/scene/components/Components.h"
@@ -832,6 +833,72 @@ void EditorApplication::handleAddPlayer() {
 
     replaceWithSingle(m_ui.selectionSet(), e);
     pushCreatedEntities({e}, "Crear player");
+}
+
+// ============================================================================
+// F4H7 — handleAddEnemy
+//
+// Spawnea entidad enemigo basica: cubo placeholder + HealthComponent +
+// EnemyComponent con el primer .moodenemy alfabetico del catalogo (auto-
+// asignacion como handleAddPlayer). Sin RigidBody: queda Static por default,
+// EnemySystem agrega Dynamic al morir (mismo patron Health F4H1).
+//
+// Sub-fase 4.2 cierra con cubos por strategic deferral del usuario en F4H6;
+// Sub-fase 4.3 traera viewmodel mesh real + animaciones Mixamo + ragdoll.
+// ============================================================================
+
+void EditorApplication::handleAddEnemy() {
+    if (!m_scene) return;
+    const std::string name = uniqueEntityName(*m_scene, "Enemy");
+    Entity e = m_scene->createEntity(name);
+
+    auto& t = e.getComponent<TransformComponent>();
+    t.position = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    // Cubo primitivo placeholder. Sub-fase 4.3 reemplazara con NPC Mixamo.
+    if (m_assetManager) {
+        e.addComponent<MeshRendererComponent>(
+            m_assetManager->missingMeshId(),
+            MaterialAssetId{0});
+    }
+
+    // F4H1 — HealthComponent. Si el spec tiene health propio, usar ese; sino
+    // defaults.
+    HealthComponent hc{};
+    hc.current = 50.0f;
+    hc.max     = 50.0f;
+
+    // F4H7 — EnemyComponent con primer .moodenemy del catalogo. Si no hay
+    // ningun .moodenemy, queda en slot 0 (defaults sanos del spec vacio).
+    EnemyComponent ec{};
+    if (m_assetManager) {
+        auto enemies = m_assetManager->enumerateEnemies(/*rescanFromDisk=*/true);
+        if (!enemies.empty()) {
+            const auto& src = enemies.front();
+            ec.enemyAssetId = src.id;
+            if (const Enemy::Spec* spec = m_assetManager->getEnemy(src.id)) {
+                hc.current = spec->health;
+                hc.max     = spec->health;
+            }
+            Log::editor()->info(
+                "[create_enemy] '{}' spec = '{}' (HP {})",
+                name, src.displayName, hc.max);
+        } else {
+            Log::editor()->warn(
+                "[create_enemy] no hay .moodenemy en assets/enemies/ — "
+                "enemy queda con defaults (slot 0). Crea un .moodenemy y "
+                "reabri Inspector.");
+        }
+    }
+    e.addComponent<HealthComponent>(hc);
+    e.addComponent<EnemyComponent>(ec);
+
+    Log::editor()->info(
+        "[create_enemy] Spawned '{}' (cubo + HealthComponent {}/{} + EnemyComponent Idle)",
+        name, hc.current, hc.max);
+
+    replaceWithSingle(m_ui.selectionSet(), e);
+    pushCreatedEntities({e}, std::string("Crear enemigo '") + name + "'");
 }
 
 } // namespace Mood

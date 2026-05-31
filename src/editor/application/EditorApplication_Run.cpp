@@ -41,6 +41,7 @@
 #include "engine/dialog/DialogInteractSystem.h"  // F2H48
 #include "engine/dialog/DialogSystem.h"          // F2H48
 #include "engine/gameplay/Health.h"                  // F4H1
+#include "engine/gameplay/enemy/EnemySystem.h"        // F4H7
 #include "engine/gameplay/pickup/PickupSystem.h"     // F4H4
 #include "engine/gameplay/projectile/ProjectileSystem.h" // F4H5
 #include "engine/gameplay/weapon/WeaponSpec.h"        // F4H4: arsenal display name
@@ -479,6 +480,8 @@ void EditorApplication::pumpUiRequests() {
         // F4H1: maniqui de testing — cubo + HealthComponent.
         case ProjectAction::AddDummy:                handleAddDummy();                 break;
         case ProjectAction::AddPlayer:               handleAddPlayer();                break;
+        // F4H7: enemigo basico — cubo + EnemyComponent + state machine.
+        case ProjectAction::AddEnemy:                handleAddEnemy();                 break;
         // F2H20: compilacion brush -> mesh estatica + export OBJ.
         case ProjectAction::CompileMap:              handleCompileMap();               break;
         case ProjectAction::ExportObj:               handleExportObj();                break;
@@ -725,6 +728,15 @@ void EditorApplication::tickSystems(f32 dt) {
         {
             MOOD_PROFILE_SCOPE("Pickup::tickSystem");
             Pickup::tickSystem(*m_scene, dt, playerEntity, m_assetManager.get());
+        }
+
+        // F4H7: tick de la state machine de los enemigos. Polling de
+        // hitFlashTimer del Health para detectar Pain transitions
+        // (mismo patron R4 F4H4 para mantener engine/game decoupled).
+        {
+            MOOD_PROFILE_SCOPE("Enemy::tickSystem");
+            Enemy::tickSystem(*m_scene, dt, playerEntity,
+                                m_audioDevice.get(), *m_assetManager);
         }
 
         // F4H5: tick de los proyectiles (rocket/plasma/granada). Mueve

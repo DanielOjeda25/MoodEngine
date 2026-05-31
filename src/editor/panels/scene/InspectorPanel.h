@@ -69,6 +69,7 @@ private:
     void renderArmorSection(Entity e);      // F4H4
     void renderPickupSection(Entity e);     // F4H4
     void renderWeaponSection(Entity e);     // F4H2
+    void renderEnemySection(Entity e);      // F4H7
 
     /// @brief F3H28: categorias scene-wide nuevas del Inspector.
     /// `renderGroupsSection` lista los Empty Group_<N> del mapa (backend

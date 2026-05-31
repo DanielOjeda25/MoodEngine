@@ -39,6 +39,7 @@ namespace Inventory { class Asset; }  // F2H51
 namespace Quest { class Asset; }      // F2H53
 namespace vehicle { struct VehicleConfig; }  // F2H67
 namespace Weapon { class Spec; }      // F4H2
+namespace Enemy  { class Spec; }      // F4H7
 
 /// @brief Identificador estable de una textura dentro de un `AssetManager`.
 ///        Valor 0 se reserva para la textura "missing": pedir `getTexture(0)`
@@ -102,6 +103,12 @@ using VehicleConfigAssetId = u32;
 ///        1 pellet, no asset refs) que asegura `getWeapon(0)` nunca null.
 ///        Loadeo lazy + cache por path logico, mismo patron que Vehicle.
 using WeaponAssetId = u32;
+
+/// @brief F4H7: Identificador estable de un EnemySpec (.moodenemy).
+///        Valor 0 reservado para un spec vacio (defaults: 50 HP, 12m aggro,
+///        2m attack, 15 dmg) que asegura `getEnemy(0)` nunca null. Loadeo
+///        lazy + cache por path logico, mismo patron que Weapon.
+using EnemyAssetId = u32;
 
 class AssetManager {
 public:
@@ -532,6 +539,44 @@ public:
     std::vector<WeaponListEntry> enumerateWeapons(
         bool rescanFromDisk = true);
 
+    // ---- Enemy (F4H7) ----
+
+    /// @brief Carga (o devuelve cacheado) un enemy spec por path logico
+    ///        (p.ej. "enemies/grunt.moodenemy"). En fallo devuelve
+    ///        `missingEnemyId()` (spec con defaults sanos) y loguea warn al
+    ///        canal `assets`. Mismo patron que `loadWeapon`.
+    EnemyAssetId loadEnemy(std::string_view logicalPath);
+
+    /// @brief Devuelve el Spec del id. Nunca null: ids invalidos caen al
+    ///        slot 0 (spec vacio con defaults).
+    const Enemy::Spec* getEnemy(EnemyAssetId id) const;
+
+    /// @brief Id del enemy vacio (slot 0). Spec con defaults.
+    EnemyAssetId missingEnemyId() const { return 0; }
+
+    /// @brief Path logico con el que se cargo el enemy. Slot 0 devuelve
+    ///        el sentinela `"__empty_enemy"`.
+    std::string enemyPathOf(EnemyAssetId id) const;
+
+    /// @brief Cantidad de enemies cacheados (incluye slot 0).
+    usize enemyCount() const;
+
+    /// @brief F4H7: entry simplificado del catalogo de enemies cargados.
+    ///        Usado por el Inspector (combo dropdown) y por
+    ///        `handleAddEnemy` (auto-asignar el primero).
+    struct EnemyListEntry {
+        EnemyAssetId id;
+        std::string  logicalPath;   // ej. "enemies/grunt.moodenemy"
+        std::string  displayName;   // del Spec; fallback al stem del path
+    };
+
+    /// @brief F4H7: enumera los enemies cacheados (slot >= 1) +
+    ///        opcionalmente escanea `assets/enemies/*.moodenemy` y carga
+    ///        los que falten en cache. Devuelto ordenado por displayName
+    ///        case-insensitive. Slot 0 (vacio) NUNCA se incluye.
+    std::vector<EnemyListEntry> enumerateEnemies(
+        bool rescanFromDisk = true);
+
     // ---- Rename de path lógico (F3H19) ----
 
     /// @brief F3H19: actualiza el path lógico asociado a un asset cacheado.
@@ -594,6 +639,9 @@ private:
 
     // Weapon (F4H2). [0] = spec vacio (defaults: 10 dano, 50m, 1 pellet).
     AssetRegistry<Weapon::Spec> m_weapons;
+
+    // Enemy (F4H7). [0] = spec vacio (defaults: 50 HP, 12m aggro, 15 dmg).
+    AssetRegistry<Enemy::Spec> m_enemies;
 };
 
 } // namespace Mood

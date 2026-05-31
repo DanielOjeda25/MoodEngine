@@ -540,6 +540,31 @@ void writePickup(json& je, const PickupComponent& p) {
 // Back-compat con F4H2 maps: el parser detecta el formato viejo via
 // presencia de `path`/`currentAmmo` plano vs `slots[]` array — ver
 // EntitySerializer_Parse.cpp.
+// F4H7: enemy. Persiste path logico del .moodenemy + state como string.
+// Los timers (stateTime, lastAttackTime, prevHitFlashTimer) y targetEntity
+// son transients runtime — al cargar empieza fresh.
+void writeEnemy(json& je, const EnemyComponent& e, const AssetManager& assets) {
+    json jw;
+    std::string path;
+    if (e.enemyAssetId != 0) {
+        path = assets.enemyPathOf(e.enemyAssetId);
+        if (path == "__empty_enemy") path.clear();
+    }
+    jw["path"] = std::move(path);
+
+    const char* stateStr = "idle";
+    switch (e.state) {
+        case EnemyState::Idle:   stateStr = "idle";   break;
+        case EnemyState::Alert:  stateStr = "alert";  break;
+        case EnemyState::Chase:  stateStr = "chase";  break;
+        case EnemyState::Attack: stateStr = "attack"; break;
+        case EnemyState::Pain:   stateStr = "pain";   break;
+        case EnemyState::Dead:   stateStr = "dead";   break;
+    }
+    jw["state"] = stateStr;
+    je["enemy"] = std::move(jw);
+}
+
 void writeWeapon(json& je, const WeaponComponent& w,
                   const AssetManager& assets) {
     // Check rapido: si todos los slots estan vacios, skip.
@@ -655,6 +680,8 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         writePickup(je, entity.getComponent<PickupComponent>());
     if (entity.hasComponent<WeaponComponent>())           // F4H2
         writeWeapon(je, entity.getComponent<WeaponComponent>(), assets);
+    if (entity.hasComponent<EnemyComponent>())            // F4H7
+        writeEnemy(je, entity.getComponent<EnemyComponent>(), assets);
     if (entity.hasComponent<PrefabLinkComponent>())
         writePrefabLink(je, entity.getComponent<PrefabLinkComponent>());
 

@@ -225,6 +225,19 @@ struct SavedWeapon {
     u32 activeSlot = 0;
 };
 
+/// @brief F4H7 — Copia persistida de EnemyComponent. Solo `enemyPath`
+///        (path logico del .moodenemy) + `state` (string). Los timers
+///        runtime (stateTime, targetEntity, lastAttackTime, painsTotal,
+///        prevHitFlashTimer) son transients y se reinician al cargar.
+///
+///        `state` por default "idle" — un enemigo guardado en Alert se
+///        recarga en Alert (util para checkpoints). Un enemigo muerto
+///        sigue muerto al recargar.
+struct SavedEnemy {
+    std::string enemyPath;            // ej. "enemies/grunt.moodenemy"
+    std::string state = "idle";       // "idle" | "alert" | "chase" | "attack" | "pain" | "dead"
+};
+
 /// @brief Copia persistida de un TriggerComponent (Hito 33).
 ///        Solo `halfExtents`; el flag runtime `playerInside` se reinicia
 ///        al cargar (la AABB-test del primer frame redetectara estado).
@@ -478,6 +491,7 @@ struct SavedEntity {
     std::optional<SavedArmor>      armor;                 // F4H4
     std::optional<SavedPickup>     pickup;                // F4H4
     std::optional<SavedWeapon>     weapon;                // F4H2
+    std::optional<SavedEnemy>      enemy;                 // F4H7
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.
     ///        0 = "sin grupo" (default). Solo se persiste si != 0.

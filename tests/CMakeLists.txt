@@ -26,6 +26,8 @@ add_executable(mood_tests
     test_pickup_system.cpp                     # F4H4
     test_projectile_system.cpp                 # F4H5
     test_game_feel_f4h6.cpp                    # F4H6
+    test_enemy_spec.cpp                        # F4H7
+    test_enemy_system.cpp                      # F4H7
     test_weapon_asset.cpp                      # F4H2
     test_weapon_system.cpp                     # F4H2
     test_input_keybindings.cpp                 # F4H2 Bloque B
@@ -190,6 +192,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Quest.cpp # F2H53 Bloque B
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Vehicle.cpp # F2H67 Polish 2
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Weapon.cpp  # F4H2
+    ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Enemy.cpp   # F4H7
     ${CMAKE_SOURCE_DIR}/src/engine/assets/manager/AssetManager_Rename.cpp  # F3H19
     ${CMAKE_SOURCE_DIR}/src/engine/quest/QuestAsset.cpp                  # F2H53 Bloque A
     ${CMAKE_SOURCE_DIR}/src/engine/quest/QuestSystem.cpp                 # F2H53 Bloque C
@@ -255,9 +258,12 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Health.cpp # F4H1
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Armor.cpp  # F4H4
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Weapon.cpp # F4H2
+    ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Enemy.cpp  # F4H7
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Input.cpp  # F4H2 Bloque B
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogScriptHost.cpp # F2H48.1
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/Health.cpp # F4H1
+    ${CMAKE_SOURCE_DIR}/src/engine/gameplay/enemy/EnemySpec.cpp # F4H7
+    ${CMAKE_SOURCE_DIR}/src/engine/gameplay/enemy/EnemySystem.cpp # F4H7
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/pickup/PickupSystem.cpp # F4H4
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/projectile/ProjectileSystem.cpp # F4H5
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/weapon/WeaponSpec.cpp   # F4H2

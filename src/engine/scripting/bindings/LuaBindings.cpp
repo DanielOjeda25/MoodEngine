@@ -398,6 +398,11 @@ void setupLuaBindings(sol::state& lua, Entity self,
     // + damage + particle se ejecutan igual.
     setupWeaponBindings(lua, self.scene(), physics, audio, assets);
 
+    // F4H7 — tabla `enemy`. get_state / set_state (debug) / kill / spec.
+    // Engine-generic: debug + automation de la state machine. Requiere
+    // assetManager para resolver `enemyAssetId` → spec.
+    setupEnemyBindings(lua, self.scene(), assets);
+
     // F2H67 Bloque E — tabla `vehicle`. Input + queries de speed/gear/rpm
     // + respawn. set_input solo escribe al componente; el VehicleSystem
     // pushea al physics en el siguiente tick.

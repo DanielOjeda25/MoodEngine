@@ -11,6 +11,65 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-31: F4H7 cierre — Enemigo básico con máquina de estados + `.moodenemy` data-driven (apertura Sub-fase 4.2)
+
+**Contexto.** Arranca Sub-fase 4.2 "¿es divertido pelear?" tras el cierre de Sub-fase 4.1 (F4H1-F4H6 cubrieron player + armas + HUD + game feel). El otro lado del loop de combate es el enemigo — necesita una infraestructura paralela: state machine + asset data-driven + integracion con Health. F4H7 entrega esa infraestructura completa pero NO mueve al enemigo (F4H8 traera nav A*) ni lo hace atacar (F4H9 traera daño al player). El enemigo es cubo placeholder per strategic deferral del usuario en cierre F4H6 — toda Sub-fase 4.2 cierra con cubos, visual pass en Sub-fase 4.3.
+
+**Decisiones de scope (AskUserQuestion al dev)**:
+
+- **D1 — Esqueleto completo de 6 estados desde F4H7.** Implemento los 6 estados (`Idle/Alert/Chase/Attack/Pain/Dead`) aunque `Chase` y `Attack` queden no-op hasta F4H8/F4H9. **Razón**: F4H8 NO toca la state machine, solo activa el branch de movimiento dentro de `Chase`. Si stripeo a Idle/Pain/Dead y agrego estados después, F4H8 refactoriza la maquina (cambio signature de transiciones). Mejor armar la estructura completa ahora. Descartado *Estados minimos por ahora* (solo Idle/Pain/Dead) por ese costo de refactor.
+
+- **D2 — Detección solo por proximidad (esfera de aggro).** Sin line-of-sight raycast. El enemigo te detecta si entras a `aggroRange` metros (configurable per-`.moodenemy`, default 12m). No le importa si hay pared en el medio. **Razón**: convencion Doom/Serious Sam — hordas tontas pero divertidas. LoS opt-in queda agendizado a F4H7.1 si emerge demand (sigilo o niveles con pasillos cerrados). Descartado *proximidad + LoS raycast* (mas realista pero costo CPU 1 raycast per enemy per frame + friccion gameplay si el player se esconde tras esquina).
+
+**Decisiones técnicas (convención agente, no preguntadas)**:
+
+- **D3 — `.moodenemy` paralelo a `.moodweapon`.** Mismo patron de asset data-driven establecido en F4H2. `EnemySpec` con `{displayName, health, aggroRange, attackRange, moveSpeed, damage, attackCooldown, painThreshold, painDuration, viewmodelMesh, hitSound, deathSound}`. `AssetManager::loadEnemy/getEnemy/enemyPathOf/missingEnemyId/enumerateEnemies` (mismo patron Weapon) + scan de `assets/enemies/*.moodenemy`. JSON roundtrip + clamps de sanidad. **Razón**: la memoria `project_fase4_engine_generic` define que Fase 4 entera es data-driven engine-generic — PANDEMONIUM vive en `assets/`, no en `src/`. F4H7 sigue el patron F4H2 sin desviarse.
+
+- **D4 — `EnemyComponent` engine-generic sin enum `EnemyKind`.** `{enemyAssetId, state, stateTime, targetEntity, lastAttackTime, painsTotal, prevHitFlashTimer}`. NO contiene tipos PANDEMONIUM-specific (Grunt/Demon/Imp/etc) — el "tipo" sale del `displayName` del asset cargado en runtime. **Razón**: cualquier categorizacion tactical (rusher vs tirador vs tank — F4H11) es responsabilidad del juego que monta el motor, no del motor. Si emerge demand desde encounter design, se agrega `enum EnemyKind` opt-in al spec.
+
+- **D5 — Pain trigger via polling de `HealthComponent.hitFlashTimer`.** Mismo patron R4 F4H4 — `Enemy::tickSystem` polla el `hitFlashTimer` del frame anterior; si subio en este tick (`hc->hitFlashTimer > ec.prevHitFlashTimer + 1e-4f`) → entra estado `Pain`. **Razón**: mantiene `engine/gameplay/Health.cpp` decoupled de `engine/gameplay/enemy/`. NO callbacks. Si Health emitiera callbacks rompeira layering — `gameplay/Health` no puede incluir `gameplay/enemy/`. Polling permite que F4H7 wirree Pain sin tocar signature de funciones Health puras.
+
+- **D6 — Dead state transition auto-add `RigidBodyComponent::Dynamic`.** Mismo patron F4H1 `Health::tickSystem` — cuando state pasa a Dead, EnemySystem agrega RigidBody Dynamic si el enemy no lo tenia (back-compat con enemies pre-existentes Static). Cae con fisica. **Razón**: feedback visual del death sin codigo per-juego — el enemy se desploma al matarlo.
+
+- **D7 — `handleAddEnemy` via Crear Entidad → Gameplay → "Enemigo (cubo)".** Mismo patron F4H1 `AddDummy`. Spawn Tag=`Enemy_<N>` + Transform + MeshRenderer cubo placeholder + HealthComponent (HP=spec.health) + EnemyComponent con primer `.moodenemy` alfa del catalogo (auto-rescan filesystem, mismo patron F4H3 handleAddPlayer). Sin RigidBody — Static por default; cae al morir via D6. **Razón**: dev workflow conocido — abrir Crear Entidad, click Gameplay, click Enemy → entity en (0,1,0). No requiere drag-drop ni editar Inspector inicial.
+
+- **D8 — InspectorPanel_Enemy en categoria Gameplay.** Combo `.moodenemy` enumerando catalogo + tooltip logicalPath + Spec read-only (HP/aggroRange/attackRange/moveSpeed/damage/attackCooldown/painThreshold/painDuration) + runtime debug (dropdown force-set state + stateTime + targetEntity + painsTotal). **Razón**: mismo lenguaje UX que InspectorPanel_Weapon. El debug runtime es critico para validar la state machine sin lanzar el juego entero.
+
+- **D9 — Demo `grunt.moodenemy` en `assets/enemies/`.** Engine ejemplo data-driven (no hardcoded). HP=50, aggro=12m, attackRange=2m, moveSpeed=4, damage=15, attackCooldown=1.0s, painThreshold=10dmg, painDuration=0.3s. Sin viewmodel mesh (placeholder cubo). **Razón**: validar el flow end-to-end en runtime — Crear Entidad → spawn → ver al Inspector cargar el spec → entrar Play → ver state machine en accion. Sin demo el asset type es inert.
+
+- **D10 — Lua bindings `enemy.*` mirror del pattern `weapon.*`/`health.*`.** `get_state(tag) → string` (lowercase), `set_state(tag, state)` (debug force-set; rechaza string desconocido), `kill(tag)` (apply 99999 dmg via Health::applyDamage), `spec(tag) → {display_name, health, aggro_range, ...}` (snake_case Lua idiomatic). **Razón**: scripting del juego puede automatizar encounters ("kill all enemies in zone X"), debug ("force grunt_1 to attack state"), y queries para HUD/AI.
+
+**Ajustes reactivos descubiertos via tests**:
+
+- **R1 — `k_noTarget = 0xFFFFFFFFu` sentinela en EnemyComponent.** Version inicial usaba `u32 targetEntity = 0` como "sin target". Tests "F4H7 Idle→Alert" y "F4H7 Pain → Alert despues de painDuration con target" reportaron fail con assert `ec.targetEntity != 0` — porque EnTT handle 0 ES un valor valido (la primera entity creada en el scene tiene handle 0). El check "tiene target" daba false negative cuando el player era la primera entity. Fix: `static constexpr u32 k_noTarget = 0xFFFFFFFFu` (mismo concepto que `entt::null` pero raw para no incluir `<entt/entt.hpp>` en Components_Gameplay.h). Default `targetEntity = k_noTarget`. System actualizado a comparar contra `k_noTarget`.
+
+- **R2 — Dead transition auto-add `RigidBodyComponent::Dynamic` en MISMO tick.** Version inicial separaba la transition (case del switch) del auto-add (case `Dead` con state machine). Tests "F4H7 Dead auto-add RigidBodyComponent Dynamic" y "F4H7 Dead no double-add RigidBody" verificaban el component INMEDIATAMENTE post-mortem — fail porque la transition Dead solo cambiaba state, el RB se agregaba al segundo tick. Fix: dentro del bloque `if (hc->dead && state != Dead)` agregar el RB en el mismo tick antes del return (mismo patron F4H1 Health::tickSystem). Ahora el RB esta el primer frame post-death.
+
+- **R3 — Test "enemy sin Transform" eliminado y reemplazado.** El guard defensivo `if (!reg.all_of<TransformComponent>(e)) return;` en `tickSystem` nunca se dispara — `Scene::createEntity` siempre agrega TransformComponent automaticamente. El test que intentaba verificar el guard creaba entity SIN Transform y esperaba state==Idle; en realidad la entity SI tenia Transform default (0,0,0), distance vs player (0,0,0) = 0 < aggroRange=12 → transition Alert. Reemplazado por "F4H7 multiples enemies independent state machines" (validacion mas util: 2 enemies, near→Alert, far→Idle).
+
+**1 bug build-time**:
+
+- **B1 — `StubTexture` API drift en test_enemy_system.cpp.** Test inicial usaba signatures viejas (`mipLevels()`/`rendererHandle()`) que NO existen en `ITexture` (que tiene `bind/unbind/width/height/handle()` con `TextureHandle` return type). El test_weapon_system.cpp tenia la signature correcta. Fix via copy del stub correcto.
+
+**Tests F4H7**: 23 nuevos verdes (80 asserts):
+- 9 en `test_enemy_spec.cpp`: defaults / roundtrip grunt completo / missing-field cae a defaults / schema version mismatch / clamps de sanidad / saveToFile + loadFromFile roundtrip / archivo inexistente / JSON malformado / file extension constante.
+- 14 en `test_enemy_system.cpp`: EnemyComponent default state = Idle / Idle→Alert aggro / Idle queda Idle fuera aggro / Pain trigger polling / Pain → Alert con target despues painDuration / Dead transition HP=0 / Dead auto-add RigidBody Dynamic / Dead terminal multi-tick / Dead no double-add RB / sin player queda Idle / Alert→Idle salida aggro*1.5 / Alert→Attack entra attackRange / stateTime incrementa / multiples enemies independent.
+
+**Suite full 1441/12320 verde** (+23 cases / +80 asserts vs F4H6: 1418 → 1441). 0 regresion.
+
+**Backlog post-F4H7**:
+- **F4H7.1** — Line-of-sight raycast opt-in (`spec.requireLineOfSight: bool`). Si emerge demand de sigilo o niveles cerrados.
+- **F4H8** — Movimiento Chase con A* (el motor ya lo tiene desde Hito 23 NavAgent). Activa el branch ya armado en F4H7 — sin refactor de state machine.
+- **F4H9** — Ataques melee + ranged que dañan al player.
+- **F4H10** — Animaciones de impacto (Mixamo) + ragdoll on death (F2H66).
+- **F4H11** — Variedad: 2-3 tipos `.moodenemy` (rusher / tirador / tank).
+- **F4H12** — Spawner zones + waves data-driven (`.moodwave`).
+- `EnemyKind` enum (categorización tactical) — solo si emerge demand desde encounter design F4H13.
+
+**Próximo hito**: **F4H8** — Navegacion del enemigo. Integrar `NavAgentComponent` (Hito 23) con `EnemyComponent.state == Chase`. El enemy persigue al player con A*; transition a Attack si entra attackRange (que sigue no-op hasta F4H9). Logic-only, cubos.
+
+---
+
 ## 2026-05-31: F4H6 cierre — Game feel pass: muzzle flash + hit marker + screen shake + crosshair dinámico + pain reaction + tracer
 
 **Contexto.** Cierre de Sub-fase 4.1 "¿se siente bien disparar?". F4H1-F4H5 dieron el combate **funcional**: salud, armas hitscan, swap multi-slot + viewmodel, HUD + pickups, proyectiles con splash. Pero al validar visualmente el dev reportó verbatim: *"sabes que pasa con el tema de daño, y armas es que todo es invisible no veo nada ni ningun diferencia entre ninguno, creo hasta el dummy o enemigo es un cubo no se porque no es un npc de los que tenemos con ragdoll, porque no bajamos animaciones de impacto o algo asi, y vamos mejorando"*. El combate funciona pero no se siente. F4H6 convierte combate funcional → combate que SE SIENTE.

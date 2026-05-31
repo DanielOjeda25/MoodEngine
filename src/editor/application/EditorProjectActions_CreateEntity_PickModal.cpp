@@ -349,6 +349,8 @@ void EditorApplication::renderPickFromLoadedMeshesModal() {
               ICON_FA_USER,                    ProjectAction::AddPlayer, "##player_card" },
             { "editor.menu.gameplay.dummy",  "editor.menu.gameplay.dummy.tooltip",
               ICON_FA_GAMEPAD,                 ProjectAction::AddDummy,  "##dummy_card"  },
+            { "editor.menu.gameplay.enemy",  "editor.menu.gameplay.enemy.tooltip",
+              ICON_FA_SKULL,                   ProjectAction::AddEnemy,  "##enemy_card"  },
         };
         constexpr int kCardCount = static_cast<int>(sizeof(kCards) / sizeof(kCards[0]));
 

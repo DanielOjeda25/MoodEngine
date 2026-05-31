@@ -555,6 +555,25 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<WeaponComponent>(wc);
         }
 
+        // F4H7: EnemyComponent. Resolver path → enemyAssetId via loadEnemy
+        // (cae a missingEnemyId() si .moodenemy no existe). El state se
+        // restaura desde string (back-compat: cualquier string desconocido
+        // cae a Idle). Los timers runtime arrancan fresh.
+        if (se.enemy.has_value()) {
+            const auto& sen = *se.enemy;
+            EnemyComponent ec{};
+            if (!sen.enemyPath.empty()) {
+                ec.enemyAssetId = assets.loadEnemy(sen.enemyPath);
+            }
+            if      (sen.state == "alert")  ec.state = EnemyState::Alert;
+            else if (sen.state == "chase")  ec.state = EnemyState::Chase;
+            else if (sen.state == "attack") ec.state = EnemyState::Attack;
+            else if (sen.state == "pain")   ec.state = EnemyState::Pain;
+            else if (sen.state == "dead")   ec.state = EnemyState::Dead;
+            else                            ec.state = EnemyState::Idle;
+            e.addComponent<EnemyComponent>(ec);
+        }
+
         // F2H65: JointComponent. El targetEntity (raw handle) se resuelve
         // desde el tag persistido — handles no son estables entre
         // sesiones. Eager lookup primero (sirve para undo de un single
