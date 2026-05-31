@@ -336,6 +336,33 @@ SavedEntity parseEntityFromJson(const json& j) {
         se.health = sh;
     }
 
+    // F4H4: armor opcional. Maps pre-F4H4 sin el campo no traen ArmorComponent.
+    if (j.contains("armor")) {
+        const auto& ja = j.at("armor");
+        SavedArmor sa;
+        sa.current     = ja.value("current",     0.0f);
+        sa.max         = ja.value("max",         100.0f);
+        sa.absorbRatio = ja.value("absorbRatio", 0.66f);
+        se.armor = sa;
+    }
+
+    // F4H4: pickup opcional. Maps pre-F4H4 sin el campo no traen PickupComponent.
+    if (j.contains("pickup")) {
+        const auto& jp = j.at("pickup");
+        SavedPickup sp;
+        sp.type           = jp.value("type",           2);
+        sp.weaponPath     = jp.value("weaponPath",     std::string());
+        sp.ammoAmount     = jp.value("ammoAmount",     0);
+        sp.ammoForWeapon  = jp.value("ammoForWeapon",  std::string());
+        sp.healthAmount   = jp.value("healthAmount",   25.0f);
+        sp.armorAmount    = jp.value("armorAmount",    25.0f);
+        sp.spinDegPerSec  = jp.value("spinDegPerSec",  90.0f);
+        sp.bobAmplitude   = jp.value("bobAmplitude",   0.1f);
+        sp.bobSpeed       = jp.value("bobSpeed",       2.0f);
+        sp.pickupRadius   = jp.value("pickupRadius",   1.5f);
+        se.pickup = sp;
+    }
+
     // F4H2: weapon opcional. Mapas pre-F4H2 sin el campo se leen igual
     // (la entidad queda sin WeaponComponent). El path se resuelve al
     // cargar en SceneLoader via AssetManager::loadWeapon.

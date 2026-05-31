@@ -83,6 +83,12 @@ void setupRagdollBindings(sol::state& lua, class Scene* scene);
 ///        get / is_alive). Cimiento del combate Fase 4.
 void setupHealthBindings(sol::state& lua, class Scene* scene);
 
+/// @brief F4H4 — tabla `armor` para los scripts Lua (give / set / get).
+///        Gemelo del binding health. `Health::applyDamage` consume armor
+///        primero (segun `absorbRatio`); estos bindings son utility para
+///        scripts del juego que dan armor packs.
+void setupArmorBindings(sol::state& lua, class Scene* scene);
+
 /// @brief F4H2 Bloque B — tabla `Input` para los scripts Lua.
 ///        API: `Input.is_action_pressed(action_name) -> bool`. Lookup
 ///        data-driven contra `UserSettings::input().keybindings`.

@@ -386,6 +386,10 @@ void setupLuaBindings(sol::state& lua, Entity self,
     // Lua del editor en Play mode.
     setupHealthBindings(lua, self.scene());
 
+    // F4H4 — tabla `armor`. give / set / get. Health::applyDamage consume
+    // armor primero segun absorbRatio.
+    setupArmorBindings(lua, self.scene());
+
     // F4H2 — tabla `weapon`. equip / fire / reload / can_fire / ammo /
     // spec. Engine-generic: orquesta el WeaponSystem sobre la entidad
     // referenciada por tag. F4H2 Bloque B: el AudioDevice ya llega via

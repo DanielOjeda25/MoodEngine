@@ -474,10 +474,12 @@ add_library(mood_engine_lib STATIC
     src/engine/scripting/bindings/LuaBindings_Ragdoll.cpp    # F2H66 Bloque E
     src/engine/scripting/bindings/LuaBindings_Vehicle.cpp    # F2H67 Bloque E
     src/engine/scripting/bindings/LuaBindings_Health.cpp     # F4H1
+    src/engine/scripting/bindings/LuaBindings_Armor.cpp      # F4H4
     src/engine/scripting/bindings/LuaBindings_Weapon.cpp     # F4H2
     src/engine/scripting/bindings/LuaBindings_Input.cpp      # F4H2 Bloque B
 
     src/engine/gameplay/Health.cpp                            # F4H1
+    src/engine/gameplay/pickup/PickupSystem.cpp               # F4H4
     src/engine/gameplay/weapon/WeaponSpec.cpp                 # F4H2
     src/engine/gameplay/weapon/WeaponSystem.cpp               # F4H2
     src/engine/input/InputActions.cpp                         # F4H2 Bloque B
@@ -656,6 +658,8 @@ add_executable(MoodEditor
     src/editor/panels/scene/InspectorPanel_Groups.cpp      # F3H28
     src/editor/panels/scene/InspectorPanel_MapTools.cpp    # F3H28
     src/editor/panels/scene/InspectorPanel_Health.cpp      # F4H1
+    src/editor/panels/scene/InspectorPanel_Armor.cpp       # F4H4
+    src/editor/panels/scene/InspectorPanel_Pickup.cpp      # F4H4
     src/editor/panels/scene/InspectorPanel_Weapon.cpp      # F4H2
     src/editor/panels/assets/AssetBrowserPanel.cpp
     src/editor/panels/assets/AssetBrowserPanel_Tabs.cpp   # F2H81 auditoría (split)

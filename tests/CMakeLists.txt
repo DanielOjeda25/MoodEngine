@@ -22,6 +22,8 @@ add_executable(mood_tests
     test_user_settings_editor.cpp              # F3H7 (+F3H21/F3H22/F3H23 fields)
     test_hosek_wilkie.cpp                      # F3H31
     test_health.cpp                            # F4H1
+    test_armor_component.cpp                   # F4H4
+    test_pickup_system.cpp                     # F4H4
     test_weapon_asset.cpp                      # F4H2
     test_weapon_system.cpp                     # F4H2
     test_input_keybindings.cpp                 # F4H2 Bloque B
@@ -249,10 +251,12 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Ragdoll.cpp # F2H66 E
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Vehicle.cpp # F2H67 E
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Health.cpp # F4H1
+    ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Armor.cpp  # F4H4
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Weapon.cpp # F4H2
     ${CMAKE_SOURCE_DIR}/src/engine/scripting/bindings/LuaBindings_Input.cpp  # F4H2 Bloque B
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogScriptHost.cpp # F2H48.1
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/Health.cpp # F4H1
+    ${CMAKE_SOURCE_DIR}/src/engine/gameplay/pickup/PickupSystem.cpp # F4H4
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/weapon/WeaponSpec.cpp   # F4H2
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/weapon/WeaponSystem.cpp # F4H2
 )

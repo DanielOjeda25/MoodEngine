@@ -75,6 +75,108 @@ void drawHealthNumber(const HudContext& ctx) {
                            valCol, 1.0f);
 }
 
+// 1b. F4H4 — ARMOR NUMBER — bottom-left, ENCIMA del Health. Gemelo
+//     visual del Health pero en azul (k_cyan/k_blue).
+void drawArmorNumber(const HudContext& ctx) {
+    const HudState& h = *ctx.hud;
+    if (h.max_armor <= 0) return;
+    const float pad = 24.0f;
+    const float originX = ctx.x0 + pad;
+    // 90px encima del Health number (que vive en y=ctx.h-pad-80).
+    const float originY = ctx.y0 + ctx.h - pad - 80.0f - 90.0f;
+
+    const float ratio = std::clamp(
+        static_cast<float>(h.armor) / static_cast<float>(h.max_armor),
+        0.0f, 1.0f);
+    // Azul saturado convencion HL/CS.
+    const ImU32 valCol = IM_COL32(80, 160, 255, 240);
+
+    constexpr float bw = 180.0f;
+    constexpr float bh = 80.0f;
+    ctx.dl->AddRectFilled(ImVec2(originX, originY),
+                           ImVec2(originX + bw, originY + bh),
+                           palette::k_bg_box, 4.0f);
+    ctx.dl->AddRect(ImVec2(originX, originY),
+                     ImVec2(originX + bw, originY + bh),
+                     palette::k_border, 4.0f, 0, 1.5f);
+
+    const std::string armorLbl = I18n::T("hud.label.armor");
+    ctx.dl->AddText(ImVec2(originX + 12.0f, originY + 8.0f),
+                     palette::k_white_dim, armorLbl.c_str());
+
+    char buf[16];
+    std::snprintf(buf, sizeof(buf), "%d", h.armor);
+    drawTextScaled(ctx.dl, ImVec2(originX + 12.0f, originY + 24.0f),
+                   buf, valCol, 2.8f);
+
+    const float barX = originX + 100.0f;
+    const float barY = originY + 38.0f;
+    const float barW = bw - 110.0f;
+    const float barH = 18.0f;
+    ctx.dl->AddRect(ImVec2(barX, barY),
+                     ImVec2(barX + barW, barY + barH),
+                     palette::k_border, 2.0f, 0, 1.0f);
+    ctx.dl->AddRectFilled(ImVec2(barX + 2.0f, barY + 2.0f),
+                           ImVec2(barX + 2.0f + (barW - 4.0f) * ratio,
+                                  barY + barH - 2.0f),
+                           valCol, 1.0f);
+}
+
+// 1c. F4H4 — ARSENAL OVERLAY — top-center transient (3s con alpha fade).
+//     Fila de 4 boxes con el nombre del arma; el activo highlighted.
+//     Triggereado por `triggerArsenalOverlay()` al swap.
+void drawArsenalOverlay(const HudContext& ctx) {
+    HudState& h = *ctx.hud;
+    if (h.arsenal_overlay_t <= 0.0f) return;
+    // Decrement timer (consume el dt aca, como hacen damage/hit_marker).
+    h.arsenal_overlay_t = std::max(0.0f, h.arsenal_overlay_t - ctx.dt);
+
+    // Alpha fade lineal de 3s → 0 = full alpha al inicio, 0 al final.
+    const float alpha = std::clamp(h.arsenal_overlay_t / 3.0f, 0.0f, 1.0f);
+    const ImU32 boxColBase    = IM_COL32(20, 20, 24,
+                                          static_cast<int>(180 * alpha));
+    const ImU32 boxColActive  = IM_COL32(255, 180, 60,
+                                          static_cast<int>(220 * alpha));
+    const ImU32 borderCol     = IM_COL32(255, 255, 255,
+                                          static_cast<int>(180 * alpha));
+    const ImU32 textCol       = IM_COL32(255, 255, 255,
+                                          static_cast<int>(240 * alpha));
+    const ImU32 activeTextCol = IM_COL32(20, 20, 20,
+                                          static_cast<int>(255 * alpha));
+
+    constexpr float bw = 140.0f;
+    constexpr float bh = 60.0f;
+    constexpr float gap = 10.0f;
+    constexpr float totalW = bw * 4 + gap * 3;
+    const float originX = ctx.x0 + (ctx.w - totalW) * 0.5f;
+    const float originY = ctx.y0 + 30.0f;
+
+    for (u32 i = 0; i < 4; ++i) {
+        const float bx = originX + i * (bw + gap);
+        const bool isActive = (i == h.arsenal_active_slot);
+        ctx.dl->AddRectFilled(ImVec2(bx, originY),
+                               ImVec2(bx + bw, originY + bh),
+                               isActive ? boxColActive : boxColBase, 4.0f);
+        ctx.dl->AddRect(ImVec2(bx, originY),
+                         ImVec2(bx + bw, originY + bh),
+                         borderCol, 4.0f, 0, isActive ? 2.5f : 1.5f);
+
+        // Slot number arriba-izq.
+        char idxBuf[4];
+        std::snprintf(idxBuf, sizeof(idxBuf), "%u", i + 1);
+        ctx.dl->AddText(ImVec2(bx + 8.0f, originY + 4.0f),
+                         isActive ? activeTextCol : textCol, idxBuf);
+
+        // Display name centrado.
+        const std::string& name = h.arsenal_slots[i];
+        const char* display = name.empty() ? "-" : name.c_str();
+        const ImVec2 textSize = ImGui::CalcTextSize(display);
+        ctx.dl->AddText(
+            ImVec2(bx + (bw - textSize.x) * 0.5f, originY + bh - 18.0f),
+            isActive ? activeTextCol : textCol, display);
+    }
+}
+
 // 2. AMMO COUNTER — bottom-right. Mag/reserve split estilo HL/CoD.
 //    "MAG: 30/30" grande + "RESERVE: 90" abajo mas chico + icono
 //    procedural de bala (rectangulo + triangulo) al lado.
@@ -693,6 +795,8 @@ const HudWidget k_widgets[] = {
     // Vignette PRIMERO para que quede detras del HUD numerico.
     { "damage_vignette",  &drawDamageVignette },
     { "health_number",    &drawHealthNumber },
+    { "armor_number",     &drawArmorNumber },       // F4H4
+    { "arsenal_overlay",  &drawArsenalOverlay },    // F4H4
     { "stamina_bar",      &drawStaminaBar },       // F2H41
     { "ammo_counter",     &drawAmmoCounter },
     { "objective_text",   &drawObjectiveText },    // F2H41

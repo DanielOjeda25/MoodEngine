@@ -41,6 +41,8 @@
 #include "engine/dialog/DialogInteractSystem.h"  // F2H48
 #include "engine/dialog/DialogSystem.h"          // F2H48
 #include "engine/gameplay/Health.h"              // F4H1
+#include "engine/gameplay/pickup/PickupSystem.h" // F4H4
+#include "engine/gameplay/weapon/WeaponSpec.h"   // F4H4: arsenal display name
 #include "engine/gameplay/weapon/WeaponSystem.h" // F4H2
 #include "engine/input/InputActions.h"           // F4H2 Bloque B
 #include "engine/game/state/GameState.h"         // F2H52 H: Tab toggle inventory_panel
@@ -666,6 +668,87 @@ void EditorApplication::tickSystems(f32 dt) {
                                 m_playCamera.forward(),
                                 glm::vec3(0.0f, 1.0f, 0.0f),
                                 *m_assetManager);
+
+        // F4H4: pickup tick + sync HudState con stats del player.
+        //
+        // Encontrar el player entity. El bridge usa la convencion del tag
+        // "player" (misma que F4H2 Bloque B input + F4H3 viewmodel).
+        Entity playerEntity;
+        m_scene->registry().view<TagComponent>().each(
+            [&](entt::entity ent, const TagComponent& tag) {
+                if (!playerEntity && tag.name == "player") {
+                    playerEntity = Entity{ent, m_scene.get()};
+                }
+            });
+
+        {
+            MOOD_PROFILE_SCOPE("Pickup::tickSystem");
+            Pickup::tickSystem(*m_scene, dt, playerEntity, m_assetManager.get());
+        }
+
+        // Sync HudState desde components del player + detectar transitions
+        // para triggerar overlays (damage flash, arsenal overlay).
+        if (playerEntity) {
+            auto& hud = GameState::hud();
+            // HP
+            if (playerEntity.hasComponent<HealthComponent>()) {
+                const auto& hc = playerEntity.getComponent<HealthComponent>();
+                hud.hp     = static_cast<int>(hc.current);
+                hud.max_hp = static_cast<int>(hc.max);
+                // Damage flash si hitFlashTimer subio respecto al frame
+                // anterior (Health::tickSystem decae el valor; un applyDamage
+                // lo resetea al pico).
+                if (hc.hitFlashTimer > m_f4h4_prevHitFlashTimer + 0.01f) {
+                    GameState::triggerDamageFlash(0.0f, 0.0f);
+                }
+                m_f4h4_prevHitFlashTimer = hc.hitFlashTimer;
+            }
+            // Armor
+            if (playerEntity.hasComponent<ArmorComponent>()) {
+                const auto& ac = playerEntity.getComponent<ArmorComponent>();
+                hud.armor     = static_cast<int>(ac.current);
+                hud.max_armor = static_cast<int>(ac.max);
+            } else {
+                hud.max_armor = 0;  // sin armor → widget no dibuja
+            }
+            // Weapon arsenal + ammo del slot activo + transition detection.
+            if (playerEntity.hasComponent<WeaponComponent>()) {
+                const auto& wc = playerEntity.getComponent<WeaponComponent>();
+                const u32 activeIdx = (wc.activeSlot < WeaponComponent::k_maxSlots)
+                                        ? wc.activeSlot : 0u;
+                if (activeIdx != m_f4h4_prevActiveSlot) {
+                    GameState::triggerArsenalOverlay();
+                    m_f4h4_prevActiveSlot = activeIdx;
+                }
+                hud.arsenal_active_slot = activeIdx;
+                for (u32 i = 0; i < 4; ++i) {
+                    const u32 id = wc.slots[i].weaponAssetId;
+                    if (id == 0) {
+                        hud.arsenal_slots[i].clear();
+                        continue;
+                    }
+                    if (const auto* spec = m_assetManager->getWeapon(id)) {
+                        hud.arsenal_slots[i] = spec->displayName.empty()
+                            ? std::string("?")
+                            : spec->displayName;
+                    }
+                }
+                // Ammo del slot activo.
+                const auto& activeSlot = wc.slots[activeIdx];
+                if (activeSlot.weaponAssetId != 0) {
+                    if (const auto* spec = m_assetManager->getWeapon(
+                            activeSlot.weaponAssetId)) {
+                        hud.mag     = (activeSlot.currentAmmo < 0)
+                                        ? static_cast<int>(spec->magazineSize)
+                                        : activeSlot.currentAmmo;
+                        hud.max_mag = static_cast<int>(spec->magazineSize);
+                        hud.reserve = 0;  // F4H4 no maneja reserve aun
+                    }
+                } else {
+                    hud.mag = 0; hud.max_mag = 0;
+                }
+            }
+        }
     }
 
     // 3.4) Fisica (Jolt, Hito 12): materializa bodies nuevos siempre y

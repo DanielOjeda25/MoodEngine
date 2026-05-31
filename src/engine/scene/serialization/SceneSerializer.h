@@ -170,6 +170,28 @@ struct SavedHealth {
     bool dead    = false;
 };
 
+/// @brief F4H4 — Copia persistida de ArmorComponent. Roundtrip puro.
+struct SavedArmor {
+    f32 current     = 0.0f;
+    f32 max         = 100.0f;
+    f32 absorbRatio = 0.66f;
+};
+
+/// @brief F4H4 — Copia persistida de PickupComponent. `ageSec` y `consumed`
+///        son transients (no persisten).
+struct SavedPickup {
+    int         type           = 2; // PickupType::Health
+    std::string weaponPath;
+    int         ammoAmount     = 0;
+    std::string ammoForWeapon;
+    f32         healthAmount   = 25.0f;
+    f32         armorAmount    = 25.0f;
+    f32         spinDegPerSec  = 90.0f;
+    f32         bobAmplitude   = 0.1f;
+    f32         bobSpeed       = 2.0f;
+    f32         pickupRadius   = 1.5f;
+};
+
 /// @brief F4H2 — Copia persistida de WeaponComponent. Solo `weaponPath`
 ///        (path logico del .moodweapon equipado) + `currentAmmo`. Los
 ///        timers (fireTimer, reloadTimer, firing) son transients runtime
@@ -453,6 +475,8 @@ struct SavedEntity {
     std::optional<SavedAudio>      audio;                 // F3H11
     std::optional<SavedCamera>     camera;                // F3H11
     std::optional<SavedHealth>     health;                // F4H1
+    std::optional<SavedArmor>      armor;                 // F4H4
+    std::optional<SavedPickup>     pickup;                // F4H4
     std::optional<SavedWeapon>     weapon;                // F4H2
     std::string prefabPath; // Hito 14: vacio = no vino de prefab
     /// @brief F2H33 (v14): id del VisGroup al que pertenece la entidad.

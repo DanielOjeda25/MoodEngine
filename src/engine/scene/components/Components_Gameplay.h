@@ -290,6 +290,62 @@ struct HealthComponent {
     f32  hitFlashTimer  = 0.0f;
 };
 
+/// @brief F4H4 — Armadura: capa de proteccion encima de Health. Convencion
+///        HL2/HL1: una fraccion `absorbRatio` del damage incoming va a la
+///        armor primero, el resto al HP. Al quedar armor=0, todo va al HP.
+///        Engine-generic: gemelo de HealthComponent, plain data.
+struct ArmorComponent {
+    f32 current      = 0.0f;
+    f32 max          = 100.0f;
+    f32 absorbRatio  = 0.66f; // 0..1 — fraccion del dmg que come la armor
+};
+
+/// @brief F4H4 — Tipo de pickup. Engine-generic enum, cada tipo decide que
+///        campo del PickupComponent se usa al recoger.
+enum class PickupType : u8 {
+    Weapon = 0,  // entrega `weaponPath` al primer slot vacio (o refill ammo)
+    Ammo   = 1,  // suma `ammoAmount` al slot del weapon `ammoForWeapon`
+    Health = 2,  // heal(player, healthAmount)
+    Armor  = 3,  // armor.current += armorAmount (clamp a max)
+};
+
+/// @brief F4H4 — Pickup en el suelo. El PickupSystem detecta overlap con el
+///        player (entity tag "player") por distancia plana y aplica el
+///        payload segun `type`. Convencion Doom/Quake/HL: spin + bob para
+///        que se note visualmente. Despawn permanente al recoger
+///        (`consumed=true` → destroy en proximo tick). Respawn multiplayer
+///        queda agendizado a F4H10.
+struct PickupComponent {
+    PickupType type = PickupType::Health;
+
+    /// @brief Weapon: path al .moodweapon que se entrega.
+    std::string weaponPath;
+
+    /// @brief Ammo: cantidad de municion + arma asociada (path al
+    ///        .moodweapon que matchea). Si vacio = arma activa del player.
+    int         ammoAmount = 0;
+    std::string ammoForWeapon;
+
+    /// @brief Health: monto que da `Health::heal` al player.
+    f32 healthAmount = 25.0f;
+
+    /// @brief Armor: monto que suma al ArmorComponent del player.
+    f32 armorAmount = 25.0f;
+
+    /// @brief Animacion visual idle: rota sobre Y + sube/baja Y.
+    f32 spinDegPerSec = 90.0f;
+    f32 bobAmplitude  = 0.1f;  // metros
+    f32 bobSpeed      = 2.0f;  // rad/s
+
+    /// @brief Radio de overlap con el player (esfera). Default generoso
+    ///        para boomer-shooter rapido.
+    f32 pickupRadius = 1.5f;
+
+    /// Transients (no serializar):
+    f32  ageSec   = 0.0f;  // edad del pickup para offset del bob
+    bool consumed = false; // marca destroy en proximo tick
+};
+
 /// @brief F4H3 — Marker para entidades de viewmodel (la arma en mano que
 ///        el jugador ve en primera persona). Cada frame en Play mode,
 ///        `Weapon::tickViewmodel` sincroniza el Transform de esta entity

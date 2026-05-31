@@ -53,6 +53,10 @@ void triggerDamageFlash(float dirX, float dirY) {
     h.damage_t = 0.5f;
 }
 
+void triggerArsenalOverlay() {
+    hud().arsenal_overlay_t = 3.0f;
+}
+
 void pushPickup(const char* text) {
     if (text == nullptr || std::strlen(text) == 0) return;
     auto& q = hud().pickup_queue;

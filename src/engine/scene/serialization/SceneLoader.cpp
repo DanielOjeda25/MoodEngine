@@ -504,6 +504,33 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<HealthComponent>(hc);
         }
 
+        // F4H4: ArmorComponent. Maps pre-F4H4 no traen el campo.
+        if (se.armor.has_value()) {
+            const auto& sa = *se.armor;
+            ArmorComponent ac{};
+            ac.current     = sa.current;
+            ac.max         = sa.max;
+            ac.absorbRatio = sa.absorbRatio;
+            e.addComponent<ArmorComponent>(ac);
+        }
+
+        // F4H4: PickupComponent. Maps pre-F4H4 no traen el campo.
+        if (se.pickup.has_value()) {
+            const auto& sp = *se.pickup;
+            PickupComponent pc{};
+            pc.type           = static_cast<PickupType>(sp.type);
+            pc.weaponPath     = sp.weaponPath;
+            pc.ammoAmount     = sp.ammoAmount;
+            pc.ammoForWeapon  = sp.ammoForWeapon;
+            pc.healthAmount   = sp.healthAmount;
+            pc.armorAmount    = sp.armorAmount;
+            pc.spinDegPerSec  = sp.spinDegPerSec;
+            pc.bobAmplitude   = sp.bobAmplitude;
+            pc.bobSpeed       = sp.bobSpeed;
+            pc.pickupRadius   = sp.pickupRadius;
+            e.addComponent<PickupComponent>(pc);
+        }
+
         // F4H2 + F4H3: WeaponComponent. El parser detecta el formato
         // (slots[] F4H3 vs path plano F4H2) y popula SavedWeapon.slots.
         // Aca solo resolvemos cada path via AssetManager::loadWeapon.

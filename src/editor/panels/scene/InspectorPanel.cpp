@@ -80,6 +80,8 @@ bool entityHasCategory(Entity e, const char* category) {
             || e.hasComponent<VehicleComponent>()
             || e.hasComponent<InventoryComponent>()
             || e.hasComponent<HealthComponent>()    // F4H1
+            || e.hasComponent<ArmorComponent>()     // F4H4
+            || e.hasComponent<PickupComponent>()    // F4H4
             || e.hasComponent<WeaponComponent>();   // F4H2
     }
     if (std::strcmp(category, "environment") == 0) {
@@ -246,6 +248,8 @@ void InspectorPanel::onImGuiRender() {
         if (dispatchEntity.hasComponent<VehicleComponent>())      renderVehicleSection(dispatchEntity);  // F2H67
         if (dispatchEntity.hasComponent<InventoryComponent>())    renderInventorySection(dispatchEntity);  // F2H51
         if (dispatchEntity.hasComponent<HealthComponent>())       renderHealthSection(dispatchEntity);    // F4H1
+        if (dispatchEntity.hasComponent<ArmorComponent>())        renderArmorSection(dispatchEntity);     // F4H4
+        if (dispatchEntity.hasComponent<PickupComponent>())       renderPickupSection(dispatchEntity);    // F4H4
         if (dispatchEntity.hasComponent<WeaponComponent>())       renderWeaponSection(dispatchEntity);    // F4H2
     }
     if (catActive(activeCat, "physics")) {
@@ -608,6 +612,27 @@ void InspectorPanel::drawAddComponentPopup(Entity e) {
         e.hasComponent<ItemPickupComponent>(),
         [](Entity en, std::string lbl) {
             return makeAddComponentCommand<ItemPickupComponent>(en, std::move(lbl));
+        });
+    // F4H4: HealthComponent en Logic.
+    add("component.name.health", "component.desc.health",
+        "editor.panel.inspector.add.cat.logic",
+        e.hasComponent<HealthComponent>(),
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<HealthComponent>(en, std::move(lbl));
+        });
+    // F4H4: ArmorComponent en Logic.
+    add("component.name.armor", "component.desc.armor",
+        "editor.panel.inspector.add.cat.logic",
+        e.hasComponent<ArmorComponent>(),
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<ArmorComponent>(en, std::move(lbl));
+        });
+    // F4H4: PickupComponent en Logic — engine-generic pickup en suelo.
+    add("component.name.pickup", "component.desc.pickup",
+        "editor.panel.inspector.add.cat.logic",
+        e.hasComponent<PickupComponent>(),
+        [](Entity en, std::string lbl) {
+            return makeAddComponentCommand<PickupComponent>(en, std::move(lbl));
         });
 
     // World

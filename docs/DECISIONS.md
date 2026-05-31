@@ -11,6 +11,59 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-30: F4H4 cierre — HUD de combate + Pickups en el mapa
+
+**Contexto:** F4H3 cerró el arsenal multi-slot + swap + viewmodel, pero el jugador disparaba "a ciegas" — sin feedback de vida, ammo o arma activa en pantalla. Y todo el arsenal aparecía mágicamente al spawn (sandbox D4 de F4H3 — `handleAddPlayer` rellenaba los 4 slots). F4H4 cierra los 2 faltantes del F4H3 original splitteado del roadmap PLAN_FASE4 (que era un bloque grande "ammo + swap + HUD + pickups"). Plan en `PLAN_HITO_F4H4.md`. 4 decisiones cerradas con AskUserQuestion + 5 ajustes reactivos durante implementacion + 2 bugs build-time.
+
+**Decisiones tomadas con AskUserQuestion:**
+
+- **D1 — Scope: Bundle HUD + Pickups en F4H4.** El roadmap textual PLAN_FASE4 listaba F4H3 = "munición + swap + HUD + pickups" (bloque grande); F4H3 entregado cubrió solo swap + viewmodel; F4H4 textual era "armas de proyectil rocket/plasma". Pregunta al dev: ¿HUD primero / pickups primero / proyectiles directo / bundle HUD+pickups? Eligió bundle — cierra Sub-fase 4.1 más completa antes de meter proyectiles + game feel pass. Trade-off: ~2x trabajo de un sub-hito normal, pero deja Sub-fase 4.1 sólida. Cascada: F4H4 textual (proyectiles) → F4H5; F4H5 (game feel) → F4H6.
+
+- **D2 — Estilo HUD: Half-Life/CS moderno sutil.** Recommended y aceptado. HP+armor widget bottom-left, ammo+arma activa widget bottom-right. Arsenal indicator NO permanente — overlay 3s al hacer swap con fade-out. Descartado: Doom clásico (4 esquinas siempre, mucho ruido visual para mapas chicos); Quake (barra inferior compacta, ocupa espacio horizontal en widescreen); Hybrid (Doom esquinas + arsenal solo al swap, no aportaba sobre HL/CS sutil). Damage flash full-screen vignette ya existía desde F2H39 — bonus gratis.
+
+- **D3 — Pickups: kit completo 4 tipos (Weapon/Ammo/Health/Armor).** Recommended y aceptado. Sandbox vuelve a "Player arranca solo con escopeta + resto via pickup". Descartado: "solo armas + ammo" (sin enemies hoy el player no recibe daño, pero F4H8 viene pronto — tener Health/Armor pickups data-driven ya hoy ahorra refactor); "solo armas único tipo" (recoge arma + ammo full — muy lazy, perdes la mecánica de buscar munición).
+
+- **D4-D8 — Convenciones Doom/HL del agente** (no AskUserQuestion, defaults convencionales documentados en plan):
+  - **D4**: arma duplicada al recoger refilla ammo a `magazineSize` (no duplica slot ni dropea — Doom/HL/Quake).
+  - **D5**: pickup despawn permanente single-player; respawn multiplayer queda F4H10.
+  - **D6**: crosshair estático (dinámico con spread es game feel F4H6).
+  - **D7**: damage flash = vignette rojo full-screen (sin camera shake — F4H6).
+  - **D8**: HUD hardcoded en C++ por ahora; `.moodhud` data-driven asset es YAGNI hasta que emerja necesidad de variantes per-personaje.
+
+**Ajustes reactivos durante implementación:**
+
+- **R1 — Widgets en framework `GameOverlay` existente** (vs `CombatHUDOverlay` separado del plan). Al inspeccionar el código, `GameOverlay` ya tenía: framework `HudWidget` extensible, `HudState` con `hp/mag/reserve/damage_t`, helpers `triggerHitMarker`/`triggerDamageFlash`, widgets `drawHealthNumber`/`drawAmmoCounter`/`drawDamageVignette`/`drawCrosshair`/`drawStaminaBar`/`drawHitMarker` — el 80% del HUD propuesto. Plan inicial proponía crear overlay nuevo dedicado. Refactor: extender `HudState` con campos F4H4 (`armor/max_armor/arsenal_overlay_t/arsenal_slots[4]/arsenal_active_slot`) + agregar 2 widgets nuevos (`drawArmorNumber`, `drawArsenalOverlay`) + sync desde bridge. Resultado: ~150 LOC ahorradas + comportamiento consistente con HUD existente (mismo tipografía, padding, palette). Lección: auditar el framework existente antes de planificar overlays nuevos.
+
+- **R2 — `triggerArsenalOverlay` en `GameState` (no `GameOverlay`)**. Mismo patrón que `triggerHitMarker`/`triggerDamageFlash`: vive en `engine/game/state/GameState.cpp` (sin ImGui dependency) para que Lua bindings + bridge lo invoquen sin arrastrar `imgui.h` al módulo de tests headless. Decisión consistente con F2H39 (helpers de mutación HUD en GameState, no en GameOverlay).
+
+- **R3 — `applyHealthPickup`/`applyArmorPickup` retornan `bool` (no consume si no aplica)**. Inicialmente eran void → siempre marcaban `consumed=true` al overlap. Test "F4H4 health pickup: player full HP → no consume, no efecto" expuso el bug: si el player está full HP y pisa un botiquín, el botiquín se borraba sin efecto. Anti-pattern: en Doom/Quake el botiquín queda en el suelo hasta que sea útil. Fix: retornar `bool` indicando si aplicó algo → solo consume si true. Mismo patrón para Armor (no consume si sin ArmorComponent o full).
+
+- **R4 — Detección de damage/swap por polling en el bridge** (no callbacks). Para evitar acoplar `engine/gameplay/Health.cpp` ↔ `engine/game/state/GameState.h` (rompe layering — gameplay no debería conocer HUD/UI), el bridge `EditorApplication_Run` cada frame detecta transitions: `hitFlashTimer` subió respecto al frame anterior → `triggerDamageFlash`; `activeSlot` cambió → `triggerArsenalOverlay`. Miembros `m_f4h4_prevHitFlashTimer` + `m_f4h4_prevActiveSlot` en `EditorApplication.h` cachean el estado del frame anterior. Alternativa de callbacks `Health::setOnDamageCallback(fn)` descartada por overkill — el bridge ya hace 5+ polling reads por frame, agregar 2 más es trivial. Convención: bridge owns el knowledge "el motor genérico expone state, el juego (bridge) interpreta para UI".
+
+- **R5 — Cards de pickup en el modal NO se agregaron** (plan decía 4 cards `AddPickupWeapon/Ammo/Health/Armor` en modal Gameplay). En vez, los 3 componentes nuevos (Health/Armor/Pickup) se agregaron al menu "Add Component" en la categoría Logic del Inspector. Workflow: dev crea Empty → Add Component → Pickup → edita type en Inspector. Más YAGNI que 4 cards separadas; `HealthComponent` también faltaba en el menu desde F4H1 (resuelto de paso). Trade-off: dev necesita 2 clicks más para spawnear un pickup vs card directa, pero el flow es más flexible (puede agregar Pickup a un mesh existente, ej. botín de un enemigo F4H9 muerto).
+
+**Bugs build-time fixados:**
+
+- **B1 — `WeaponSpec` forward-decl insuficiente en `PickupSystem.cpp`**. `AssetManager.h` declara `class WeaponSpec` (forward decl) y `getWeapon` retorna `const WeaponSpec*`. `PickupSystem.cpp::applyAmmoPickup` accede `spec->magazineSize` — requiere tipo completo. Sin el include, build falla con C2027 ("use of undefined type"). Fix: agregar `#include "engine/gameplay/weapon/WeaponSpec.h"` en `PickupSystem.cpp`. Detectado en primer build attempt (3 errors en líneas 81/83/121).
+
+- **B2 — `LuaBindings_Armor.cpp` faltaba en tests CMakeLists**. El test target compila `LuaBindings.cpp` que llama `setupArmorBindings` (registrado en F4H4 Sub-1). El archivo del binding `LuaBindings_Armor.cpp` se agregó al main CMakeLists pero faltó en `tests/CMakeLists.txt` → unresolved external symbol al linkear `mood_tests.exe`. Fix: agregar la línea gemela en tests CMakeLists. Convención conocida del proyecto pero cascade fácil de olvidar.
+
+**Tests F4H4**: 39 nuevos verdes. 9 en `test_armor_component.cpp` (defaults / sin ArmorComponent flujo F1 intacto / armor=0 todo HP / consume 66% / agotamiento + sobrante al HP / absorbRatio=1.0 / =0.0 inerte / dmg masivo agota + mata / clamp defensivo absorbRatio>1.0). 11 en `test_pickup_system.cpp` (defaults / health full no consume / damaged consume + destroy / fuera del radio no recoge / armor pickup con ArmorComponent / armor sin component no consume / weapon sin AssetManager skip / tick sin player no destroy / consumed=true en next tick / health clamp max / armor clamp max). **Suite full 1391/12164 verde** (+39 cases / +94 asserts vs F4H3: 1352 → 1391). 0 regresión.
+
+**Renumeración del roadmap PLAN_FASE4**: F4H4 textual (proyectiles rocket/plasma) → **F4H5**; F4H5 (game feel pass) → **F4H6**. Cascada hasta F4H7+ documentada en plan F4H4 §"Backlog". El roadmap textual se actualiza retroactivamente al cerrar cada hito — la próxima decisión de scope (F4H5 = proyectiles, confirmado) cierra el orden.
+
+**Backlog post-F4H4:**
+- **F4H4.1** — TriggerComponent dedicado para pickup overlap (vs distancia plana) si emerge bug con velocidad alta o pickup dentro de pared.
+- **F4H4.2** — `.moodhud` asset data-driven (HUD distinto por personaje/arma). YAGNI hoy.
+- **F4H5** — Armas de proyectil (rocket/plasma con splash). Bumped del F4H4 textual.
+- **F4H6** — Game feel pass: muzzle flash, hit marker, screen shake, crosshair dinámico con spread, pain reaction.
+- **F4H7** — Replace/discard arma cuando arsenal lleno (Apex style — pickup en suelo replace por arma droppeada).
+- Crosshair configurable via UserSettings (color, tamaño, estilo punto/cruz/circle).
+- Toggle showCombatHud con tecla H + UserSettings persist.
+- HudState.reserve ammo backpack (hoy F4H4 lo deja en 0).
+
+---
+
 ## 2026-05-30: F4H3 cierre — Segunda arma + swap + viewmodel (arsenal multi-slot)
 
 **Contexto:** F4H2 dejó "click → mata maniquí" funcional con UNA arma (shotgun). F4H3 cierra el loop "tengo varias armas, las cambio, las veo en mano" sobre el mismo cimiento data-driven (`.moodweapon` engine-generic, PANDEMONIUM en `assets/`). Plan en `PLAN_HITO_F4H3.md`. 9 sub-tareas + 4 decisiones cerradas con AskUserQuestion + 5 ajustes reactivos durante implementación.

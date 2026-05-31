@@ -769,28 +769,35 @@ void EditorApplication::handleAddPlayer() {
     auto& t = e.getComponent<TransformComponent>();
     t.position = glm::vec3(0.0f, 1.0f, 0.0f);
 
-    // F4H3 D4 (sandbox): rellenar TODOS los slots del arsenal con las
-    // primeras armas del catálogo (hasta k_maxSlots). Permite validar
-    // swap sin tener pickups armados todavía. F4H4 (pickups) volverá
-    // esto a "solo slot 0 + arma default + resto vía pickup".
+    // F4H4: HP + armor + arsenal con SOLO slot 0 default (escopeta primera
+    // alfabetica del catalogo). El resto via pickup. Sandbox F4H3 (4 slots
+    // auto) revertido — el flow real es "arrancas con escopeta, encontras
+    // el resto en el mapa".
+    HealthComponent hc{};
+    hc.current = 100.0f;
+    hc.max     = 100.0f;
+    e.addComponent<HealthComponent>(hc);
+
+    ArmorComponent ac{};
+    ac.current     = 0.0f;
+    ac.max         = 100.0f;
+    ac.absorbRatio = 0.66f;
+    e.addComponent<ArmorComponent>(ac);
+
     WeaponComponent wc{};
     if (m_assetManager) {
         auto weapons = m_assetManager->enumerateWeapons(/*rescanFromDisk=*/true);
         if (!weapons.empty()) {
-            const u32 n = static_cast<u32>(
-                std::min<usize>(weapons.size(), WeaponComponent::k_maxSlots));
-            for (u32 i = 0; i < n; ++i) {
-                const auto& src = weapons[i];
-                wc.slots[i].weaponAssetId = src.id;
-                if (const Weapon::Spec* spec = m_assetManager->getWeapon(src.id)) {
-                    wc.slots[i].currentAmmo = static_cast<int>(spec->magazineSize);
-                }
+            const auto& src = weapons.front();
+            wc.slots[0].weaponAssetId = src.id;
+            if (const Weapon::Spec* spec = m_assetManager->getWeapon(src.id)) {
+                wc.slots[0].currentAmmo = static_cast<int>(spec->magazineSize);
             }
             wc.activeSlot = 0;
             wc.lastActiveSlot = 0;
             Log::editor()->info(
-                "[create_player] arsenal auto-equipado: {} arma{} (slot 0 = '{}')",
-                n, n == 1 ? "" : "s", weapons.front().displayName);
+                "[create_player] slot 0 = '{}' (resto vacios — encontrar via pickup)",
+                src.displayName);
         } else {
             Log::editor()->warn(
                 "[create_player] no hay .moodweapon en assets/weapons/ — "

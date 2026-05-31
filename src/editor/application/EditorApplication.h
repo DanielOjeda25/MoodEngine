@@ -506,6 +506,13 @@ private:
     // pone al player en el centro por default.
     FpsCamera m_playCamera{glm::vec3(0.0f, 1.6f, 0.0f), -90.0f, 0.0f};
     EditorMode m_mode = EditorMode::Editor;
+
+    /// @brief F4H4: state previo del player para detectar transiciones
+    ///        cada frame en `EditorApplication_Run::tickSystems` y disparar
+    ///        overlays HUD (damage flash, arsenal overlay).
+    f32 m_f4h4_prevHitFlashTimer = 0.0f;
+    u32 m_f4h4_prevActiveSlot    = 0u;
+
     /// @brief F2H17: sub-modo del Editor estilo Blender. Toggle con
     ///        tecla 3 (Face). 1 (vertex) y 2 (edge) reservadas para
     ///        hitos futuros. Esc vuelve a Object Mode.

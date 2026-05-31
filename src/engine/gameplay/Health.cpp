@@ -28,8 +28,22 @@ void applyDamage(Scene& scene, Entity target, f32 amount,
     auto& h = target.getComponent<HealthComponent>();
     if (h.dead) return;  // ya muerto: idempotente
 
+    // F4H4 — La armor (si existe) come un % del damage primero. El sobrante
+    // va al HP. Convencion HL2 (default 0.66). Si armor.current==0 o no hay
+    // ArmorComponent, todo el damage pasa derecho al HP.
+    f32 dmgToHp = amount;
+    if (target.hasComponent<ArmorComponent>()) {
+        auto& armor = target.getComponent<ArmorComponent>();
+        if (armor.current > 0.0f && armor.absorbRatio > 0.0f) {
+            const f32 wanted   = amount * std::clamp(armor.absorbRatio, 0.0f, 1.0f);
+            const f32 absorbed = std::min(wanted, armor.current);
+            armor.current -= absorbed;
+            dmgToHp        = amount - absorbed;
+        }
+    }
+
     const f32 before = h.current;
-    h.current = std::max(0.0f, h.current - amount);
+    h.current = std::max(0.0f, h.current - dmgToHp);
     h.lastDamageTime = 0.0f;  // F4H2 lo puede usar para timers de pain animation
 
     const std::string tagName = target.hasComponent<TagComponent>()

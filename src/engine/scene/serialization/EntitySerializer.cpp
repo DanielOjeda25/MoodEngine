@@ -502,6 +502,31 @@ void writeHealth(json& je, const HealthComponent& h) {
     je["health"] = jh;
 }
 
+// F4H4: persistir ArmorComponent. Roundtrip plano.
+void writeArmor(json& je, const ArmorComponent& a) {
+    json ja;
+    ja["current"]      = a.current;
+    ja["max"]          = a.max;
+    ja["absorbRatio"]  = a.absorbRatio;
+    je["armor"] = ja;
+}
+
+// F4H4: persistir PickupComponent. ageSec/consumed son transients.
+void writePickup(json& je, const PickupComponent& p) {
+    json jp;
+    jp["type"]           = static_cast<int>(p.type);
+    jp["weaponPath"]     = p.weaponPath;
+    jp["ammoAmount"]     = p.ammoAmount;
+    jp["ammoForWeapon"]  = p.ammoForWeapon;
+    jp["healthAmount"]   = p.healthAmount;
+    jp["armorAmount"]    = p.armorAmount;
+    jp["spinDegPerSec"]  = p.spinDegPerSec;
+    jp["bobAmplitude"]   = p.bobAmplitude;
+    jp["bobSpeed"]       = p.bobSpeed;
+    jp["pickupRadius"]   = p.pickupRadius;
+    je["pickup"] = jp;
+}
+
 // F4H2 + F4H3: persistir WeaponComponent.
 //
 // F4H3 schema: emite siempre `slots[]` + `activeSlot`. Cada slot serializa
@@ -624,6 +649,10 @@ json serializeEntityToJson(Entity entity, const AssetManager& assets) {
         writeCamera(je, entity.getComponent<CameraComponent>());
     if (entity.hasComponent<HealthComponent>())           // F4H1
         writeHealth(je, entity.getComponent<HealthComponent>());
+    if (entity.hasComponent<ArmorComponent>())            // F4H4
+        writeArmor(je, entity.getComponent<ArmorComponent>());
+    if (entity.hasComponent<PickupComponent>())           // F4H4
+        writePickup(je, entity.getComponent<PickupComponent>());
     if (entity.hasComponent<WeaponComponent>())           // F4H2
         writeWeapon(je, entity.getComponent<WeaponComponent>(), assets);
     if (entity.hasComponent<PrefabLinkComponent>())

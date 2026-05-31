@@ -73,6 +73,21 @@ struct HudState {
     /// true si el auto esta dentro del frustum (sino el widget no dibuja).
     bool vehicle_marker_onscreen = false;
 
+    // --- F4H4: Armadura del player. drawArmorNumber widget.
+    int armor     = 0;
+    int max_armor = 100;
+
+    // --- F4H4: Arsenal overlay transient al hacer swap.
+    /// Countdown 3s. Mientras > 0, se dibuja el indicador del arsenal
+    /// con los 4 slots arriba-centro (activo highlighted, fade alpha).
+    f32 arsenal_overlay_t = 0.0f;
+    /// 4 names de las armas en cada slot (display name del WeaponSpec o
+    /// "" si vacio). Synced cada frame en Play desde el WeaponComponent
+    /// del player.
+    std::string arsenal_slots[4];
+    /// Slot activo 0..3 (highlighted).
+    u32 arsenal_active_slot = 0;
+
     // --- F2H39: Damage indicator (vignette + arc direccional) ---
     /// Direccion 2D (x: derecha, y: enfrente) normalizada del atacante.
     /// (0,1) = enemigo enfrente. (1,0) = derecha. (-1,0) = izquierda.
@@ -192,6 +207,12 @@ void triggerHitMarker();
 ///        `dir` se normaliza internamente. Magnitud 0 = vignette
 ///        radial sin arco. Lifetime 0.5s.
 void triggerDamageFlash(float dirX, float dirY);
+
+/// @brief F4H4 — Resetea el timer del arsenal overlay a 3s. Llamado por
+///        `Weapon::applySwap` cuando el shooter es el player. El widget
+///        `arsenal_overlay` dibuja la fila de slots arriba-centro mientras
+///        el timer > 0, con alpha fade.
+void triggerArsenalOverlay();
 
 /// @brief Empuja un pickup notification a la queue. Lifetime 2.5s.
 ///        La queue tiene cap implicito ~5 — push sobre lleno descarta
