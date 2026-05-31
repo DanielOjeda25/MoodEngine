@@ -11,6 +11,50 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-30: F4H5 cierre — Armas de proyectil (rocket + plasma + granada) con splash radial
+
+**Contexto:** F4H4 cerró el HUD + pickups. Quedaba el item "armas de proyectil" del roadmap PLAN_FASE4 (era F4H4 textual, renumerado a F4H5 al cerrar F4H4 = HUD/pickups). Hasta F4H4 todas las armas eran hitscan instantáneo via raycast — el jugador apuntaba y el daño se aplicaba inmediato. F4H5 introduce el **proyectil físico**: entity efímera que vuela con velocidad finita visible, choca con superficies/enemies, explota con splash damage radial. Plan en `PLAN_HITO_F4H5.md`. 2 decisiones con AskUserQuestion + 5 convenciones agente D3-D7 + 3 ajustes reactivos + 1 bug build-time fix.
+
+**Decisiones tomadas con AskUserQuestion:**
+
+- **D1 — Las 3 armas data-driven desde día 1: rocket + plasma + granada.** Recommended y aceptado. `.moodweapon` schema gana bloque `projectile` opcional; entrega 3 `.moodweapon` demo en `assets/weapons/`. Descartado: solo rocket primero (suficiente para validar mecánica pero perderíamos el data-driven que F4H2 estableció — Fase 4 entera es engine-generic, PANDEMONIUM en `assets/`); plasma solo (menos visceral que rocket para sentir splash); granada sola (más complejo por rebote físico — mejor sumarla a las 3). Trade-off: ~2x trabajo de Sub-tarea 5 (3 archivos en vez de 1), pero deja la mecánica cerrada con variedad real (rocket lento punch grande / plasma rápido cadencia / granada arc-throw skill-shot).
+
+- **D2 — Splash: esfera de radio + falloff lineal Doom/Quake clásico.** Recommended y aceptado. `damage_at(dist) = baseDamage * max(0, 1 - dist/radius)` con clamp. Implementación: `applySplashDamage` itera entities con `HealthComponent + TransformComponent`, calcula distancia plana al centro, si <= radius aplica damage scaled. Descartado: (a) **ForceFieldSystem one-shot** (F2H72 ya existe para field effects continuos con impulse) — overkill porque el ForceField es continuous (anchor en mundo + tick que mantiene el field) + impulse-based (push velocity, no damage); F4H5 es 1-frame explosion + damage, fit malo. (b) **Esfera + visibility check via raycast** desde centro a cada target — ~2-3x costo + tweaks de tunneling. Quake 1/2/3 nunca lo tuvieron y se sintió bien. F4H7+ si emerge demanda real (ej. el dev nota que enemies detrás de columnas mueren igual).
+
+**Decisiones del agente (defaults convencionales — documentadas en plan):**
+
+- **D3 — Self-damage del player (rocket-jump): habilitado por default.** El splash damage NO ignora al owner del proyectil. Convención Quake/Doom. Si `WeaponSpec.ignoreOwner=true` (existing F4H2 para hitscan), también aplica al splash (preserva semántica). Razón: rocket-jump es mecánica icónica del género; el dev puede flippear el flag en cualquier `.moodweapon` si quiere "el player no se daña a sí mismo".
+- **D4 — Mesh del proyectil: placeholder cubo via `missingMesh`.** No tintamos por categoria/arma — cada `.moodweapon` declara su `projectile.meshPath` (vacio → cubo). Mesh art real (rocket model, plasma sprite, granada esférica) va F4H5.1 backlog.
+- **D5 — Granada rebote: usar Jolt como Dynamic body con bounce factor.** Plan: la granada spawnea con `RigidBodyComponent::Dynamic` + bounce. Reality: el `ProjectileSystem` maneja el bounce internamente (reflejado sobre normal × bounceFactor del spec) en vez de delegar a Jolt — el proyectil NO tiene RigidBody, sigue siendo entity efimera con velocity manual. Razón: integrar Jolt Dynamic con el raycast continuo prevPos→newPos + lifetime + cleanup es más complejo que un branch en el system; el sistema actual es deterministic + testeable headless. F4H5.1+ si emerge necesidad de física real (granada que cae de mesa, etc.).
+- **D6 — Detección de impacto: raycast `prevPos → newPos` cada frame.** Cubre tunneling para proyectiles rápidos (plasma a 50 m/s con dt=16ms = 0.8m por frame, raycast continuo evita saltarse colliders pequeños). Convención HL/Source.
+- **D7 — VFX al explotar: `ParticleBurstComponent` mismo patrón F4H2.** Helper interno `spawnExplosionBurst` con paleta naranja-rojo + tamaño escalado al splashRadius (`max(0.2, radius * 0.15)`). Sonido 3D positional via AudioDevice (mismo path que hitscan impactSound). Decals quedan F4H5.1 (no existe DecalComponent — mismo backlog que F4H2.1).
+
+**Ajustes reactivos durante implementación:**
+
+- **R1 — `ProjectileComponent.owner` como `u32` raw (no `entt::entity`)**. El header `Components_Gameplay.h` NO incluye `<entt/entt.hpp>` — usa forward-decl-friendly `u32` para `TriggerComponent.bodiesInside` (F2H37 set runtime de bodies dentro del trigger). Mi declaración inicial `entt::entity owner = entt::null` rompió build con 7 errors (C2238/C2653/C3646) — `entt` no es nombre visible en el header sin el include. Fix: `u32 owner = 0` raw, cast `static_cast<u32>(shooter.handle())` en el spawn. Mantiene la convención forward-decl-friendly del header. 0 como sentinel "sin owner" es válido porque `entt::entity` 0 puede existir pero `applySplashDamage` con `ignoreOwner=0` simplemente no skipea esa entity (igual válido si el spec.ignoreOwner=false → rocket-jump pega al shooter).
+- **R2 — `applySplashDamage` recibe `u32 ignoreOwnerRaw` y castea internamente**. Mismo razonamiento que R1: el header del namespace `Projectile` no debería traer `<entt/entt.hpp>`. Cast interno `static_cast<entt::entity>(ignoreOwnerRaw)` para comparar con el iterador `ent` del view. Tests usan `0xFFFFFFFFu` como sentinel "sin owner" (mismo underlying que `entt::null`).
+- **R3 — `bounceFactor` clamp `[0,1]` inclusivo (no `(0,1)` exclusivo)**. El plan original sugería `> 0`. Reality: `bounceFactor=0` es válido — rebote totalmente inelástico ("sticky bomb" que se queda pegada en la pared al primer impacto). El clamp final permite 0 para use case futuro.
+
+**Bugs build-time fixados:**
+
+- **B1 — `entt::null` requiere `<entt/entt.hpp>` include**. `Components_Gameplay.h` solo trae forward decls de entt — `entt::null` no es visible sin el include completo. Fix: cambiar a `u32 owner = 0` raw (ver R1). No requiere include nuevo. Detectado en primer build attempt (7 errores en línea 400 + cascade en ProjectileSystem.cpp).
+
+**Tests F4H5**: 13 nuevos verdes. 5 schema en `test_projectile_system.cpp` (defaults / roundtrip rocket / sin bloque → defaults / clamps todos los campos / speed cap a 200 m/s). 8 splash damage (centro = baseDmg / borde = 0 / media distancia = 50% / fuera del radio = no efecto / ignoreOwner skipea shooter / radius=0 → no-op / baseDamage=0 → no-op / multiples entities afectadas). **Suite full 1404/12200 verde** (+13 cases / +36 asserts vs F4H4: 1391 → 1404). 0 regresión.
+
+**Renumeración roadmap PLAN_FASE4**: F4H5 textual (game feel pass) → **F4H6**. El cierre de Sub-fase 4.1 "¿se siente bien disparar?" va a F4H6 (muzzle flash + hit marker + screen shake + crosshair dinámico + pain reaction). Cascada hasta F4H7+ documentada al cierre de cada hito retroactivo.
+
+**Backlog post-F4H5:**
+- **F4H5.1** — Mesh art real para rocket/plasma/grenade + estela de humo (particle trail mientras vuela) + decals al explotar.
+- **F4H6** — Game feel pass: muzzle flash, hit marker, screen shake on explosion, pain reaction, crosshair dinámico con spread. Cierre Sub-fase 4.1.
+- **F4H7** — Replace/discard arma cuando arsenal lleno (Apex style — pickup en suelo replace por arma droppeada).
+- Raycast visibility check del splash (cobertura detrás de pared).
+- Direct hit detection vs splash-only (proyectil que pasa cerca sin impactar → solo splash).
+- Friendly fire toggle (multi-team — F4H10+ enemigos).
+- Granada con RigidBody Dynamic real (delegar bounce a Jolt si emerge necesidad de física más rica).
+- Color del cubo placeholder via material por arma (hoy todos missing-material).
+
+---
+
 ## 2026-05-30: F4H4 cierre — HUD de combate + Pickups en el mapa
 
 **Contexto:** F4H3 cerró el arsenal multi-slot + swap + viewmodel, pero el jugador disparaba "a ciegas" — sin feedback de vida, ammo o arma activa en pantalla. Y todo el arsenal aparecía mágicamente al spawn (sandbox D4 de F4H3 — `handleAddPlayer` rellenaba los 4 slots). F4H4 cierra los 2 faltantes del F4H3 original splitteado del roadmap PLAN_FASE4 (que era un bloque grande "ammo + swap + HUD + pickups"). Plan en `PLAN_HITO_F4H4.md`. 4 decisiones cerradas con AskUserQuestion + 5 ajustes reactivos durante implementacion + 2 bugs build-time.

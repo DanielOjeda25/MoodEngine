@@ -161,10 +161,13 @@ FireResult fire(Scene& scene,
     const Spec* spec = resolveSpec(scene, shooter, assets);
     if (spec == nullptr) return out;
 
-    // Solo hitscan en F4H2/F4H3. Otras categorias son no-op forward-compat.
-    if (spec->category != "hitscan") {
+    // F4H2 = hitscan; F4H5 = projectile (rocket/plasma/granada).
+    // Otras categorias siguen siendo no-op forward-compat.
+    const bool isHitscan    = spec->category == "hitscan";
+    const bool isProjectile = spec->category == "projectile";
+    if (!isHitscan && !isProjectile) {
         Log::engine()->warn(
-            "[weapon] '{}': category '{}' no soportada (solo hitscan)",
+            "[weapon] '{}': category '{}' no soportada (hitscan/projectile)",
             tagOf(shooter), spec->category);
         return out;
     }
@@ -183,6 +186,51 @@ FireResult fire(Scene& scene,
     const glm::vec3 forward = (glm::length(params.direction) > 0.0001f)
         ? glm::normalize(params.direction)
         : glm::vec3(0.0f, 0.0f, -1.0f);
+
+    // F4H5 PROJECTILE BRANCH: spawnea entity efimera con velocity;
+    // ProjectileSystem se encarga de movimiento + colision + explosion.
+    if (isProjectile) {
+        Entity proj = scene.createEntity("__projectile");
+        auto& ptf = proj.getComponent<TransformComponent>();
+        ptf.position = params.origin + forward * 0.4f;  // offset chico para no salir adentro del shooter
+        ptf.rotationEuler = glm::vec3(0.0f);
+        ptf.scale = glm::vec3(0.2f); // cubo placeholder
+
+        MeshRendererComponent mr{};
+        mr.mesh = spec->projectile.meshPath.empty()
+                    ? assets.missingMeshId()
+                    : assets.loadMesh(spec->projectile.meshPath);
+        mr.materials.push_back(assets.missingMaterialId());
+        proj.addComponent<MeshRendererComponent>(mr);
+
+        ProjectileComponent pc{};
+        pc.weaponAssetId = slot.weaponAssetId;
+        pc.owner         = static_cast<u32>(shooter.handle());
+        pc.velocity      = forward * spec->projectile.speed;
+        pc.lifetimeSec   = spec->projectile.lifetimeSec;
+        pc.bouncesLeft   = spec->projectile.bounceCount;
+        pc.prevPos       = ptf.position;
+        proj.addComponent<ProjectileComponent>(pc);
+
+        // Sonido del disparo (3D positional en origin del shooter).
+        if (!spec->fireSound.empty()) {
+            const auto clipId = assets.loadAudio(spec->fireSound);
+            if (AudioClip* clip = assets.getAudio(clipId)) {
+                audio.play(*clip, 1.0f, false, true, params.origin);
+            }
+        }
+
+        --slot.currentAmmo;
+        wc.fireTimer = 1.0f / spec->fireRatePerSec;
+        out.fired = true;
+        Log::engine()->info(
+            "[weapon] '{}' lanzo '{}' proyectil (speed={} m/s, splash={}m, ammo {}/{} slot {})",
+            tagOf(shooter), spec->displayName.empty() ? std::string("(unnamed)")
+                                                        : spec->displayName,
+            spec->projectile.speed, spec->projectile.splashRadius,
+            slot.currentAmmo, spec->magazineSize, wc.activeSlot);
+        return out;
+    }
 
     // Ignored body: si el Spec lo pide y el caller proveyo uno.
     const u32 ignoredId = spec->ignoreOwner ? params.ignoredBodyId : 0u;

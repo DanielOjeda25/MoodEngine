@@ -1,0 +1,31 @@
+{
+  "_version": 1,
+  "displayName": "Rocket Launcher",
+  "category": "projectile",
+  "damage": 0.0,
+  "range": 0.0,
+  "pellets": 1,
+  "spreadDeg": 0.0,
+  "fireRatePerSec": 1.2,
+  "magazineSize": 4,
+  "reloadTimeSec": 2.0,
+  "viewmodelMesh": "",
+  "viewmodelMaterial": "",
+  "fireSound": "",
+  "impactSound": "",
+  "muzzleVfx": "",
+  "impactVfx": "",
+  "ignoreOwner": true,
+  "projectile": {
+    "meshPath": "",
+    "materialPath": "",
+    "speed": 25.0,
+    "gravity": 0.0,
+    "bounceCount": 0,
+    "bounceFactor": 0.0,
+    "lifetimeSec": 5.0,
+    "directDamage": 80.0,
+    "splashRadius": 4.0,
+    "splashDamage": 60.0
+  }
+}

@@ -40,10 +40,11 @@
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H28 Bloque F: click-select desde ortos
 #include "engine/dialog/DialogInteractSystem.h"  // F2H48
 #include "engine/dialog/DialogSystem.h"          // F2H48
-#include "engine/gameplay/Health.h"              // F4H1
-#include "engine/gameplay/pickup/PickupSystem.h" // F4H4
-#include "engine/gameplay/weapon/WeaponSpec.h"   // F4H4: arsenal display name
-#include "engine/gameplay/weapon/WeaponSystem.h" // F4H2
+#include "engine/gameplay/Health.h"                  // F4H1
+#include "engine/gameplay/pickup/PickupSystem.h"     // F4H4
+#include "engine/gameplay/projectile/ProjectileSystem.h" // F4H5
+#include "engine/gameplay/weapon/WeaponSpec.h"        // F4H4: arsenal display name
+#include "engine/gameplay/weapon/WeaponSystem.h"      // F4H2
 #include "engine/input/InputActions.h"           // F4H2 Bloque B
 #include "engine/game/state/GameState.h"         // F2H52 H: Tab toggle inventory_panel
 #include "engine/inventory/ItemPickupSystem.h"   // F2H52 Bloque C
@@ -684,6 +685,15 @@ void EditorApplication::tickSystems(f32 dt) {
         {
             MOOD_PROFILE_SCOPE("Pickup::tickSystem");
             Pickup::tickSystem(*m_scene, dt, playerEntity, m_assetManager.get());
+        }
+
+        // F4H5: tick de los proyectiles (rocket/plasma/granada). Mueve
+        // entities con ProjectileComponent, detecta colision via raycast
+        // continuo prevPos -> currentPos, explode + splash damage.
+        {
+            MOOD_PROFILE_SCOPE("Projectile::tickSystem");
+            Projectile::tickSystem(*m_scene, dt, m_physicsWorld.get(),
+                                    m_audioDevice.get(), *m_assetManager);
         }
 
         // Sync HudState desde components del player + detectar transitions

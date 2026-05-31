@@ -100,6 +100,31 @@ public:
     // Comportamiento
     bool ignoreOwner = true;             // ignora el body del owner en el raycast
 
+    // ----- F4H5: Proyectiles (solo aplica si category == "projectile") -----
+    //
+    // Bloque opcional. Si el JSON no trae `projectile`, los campos quedan
+    // en defaults razonables (cubo placeholder + speed 20 m/s + splash 2m
+    // + 30 dmg). Si category != "projectile", el bloque se ignora en runtime
+    // (Weapon::fire decide por category, no por presencia del bloque).
+    struct ProjectileParams {
+        // Visual del proyectil flotando — fallback al missingMesh si vacio.
+        std::string meshPath;
+        std::string materialPath;
+
+        // Cinematica.
+        f32 speed         = 20.0f;       // m/s — vel inicial al spawn
+        f32 gravity       = 0.0f;        // 0 = sin gravedad; >0 = arc-throw (granada)
+        int bounceCount   = 0;           // 0 = no rebota; granada usa 3-4
+        f32 bounceFactor  = 0.6f;        // coef de restitucion del rebote (0..1)
+        f32 lifetimeSec   = 5.0f;        // si no impacta, explota al expirar
+
+        // Damage.
+        f32 directDamage  = 30.0f;       // a la entity con impacto directo
+        f32 splashRadius  = 2.0f;        // metros del falloff lineal
+        f32 splashDamage  = 30.0f;       // dmg en el centro; falloff lineal hasta 0 en borde
+    };
+    ProjectileParams projectile;
+
     // ----- Serializacion -----
 
     /// @brief Construye JSON completo (version + todos los campos).

@@ -1,0 +1,31 @@
+{
+  "_version": 1,
+  "displayName": "Grenade",
+  "category": "projectile",
+  "damage": 0.0,
+  "range": 0.0,
+  "pellets": 1,
+  "spreadDeg": 0.0,
+  "fireRatePerSec": 1.0,
+  "magazineSize": 5,
+  "reloadTimeSec": 2.0,
+  "viewmodelMesh": "",
+  "viewmodelMaterial": "",
+  "fireSound": "",
+  "impactSound": "",
+  "muzzleVfx": "",
+  "impactVfx": "",
+  "ignoreOwner": true,
+  "projectile": {
+    "meshPath": "",
+    "materialPath": "",
+    "speed": 12.0,
+    "gravity": 9.8,
+    "bounceCount": 3,
+    "bounceFactor": 0.55,
+    "lifetimeSec": 2.5,
+    "directDamage": 30.0,
+    "splashRadius": 4.5,
+    "splashDamage": 120.0
+  }
+}

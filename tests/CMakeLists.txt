@@ -24,6 +24,7 @@ add_executable(mood_tests
     test_health.cpp                            # F4H1
     test_armor_component.cpp                   # F4H4
     test_pickup_system.cpp                     # F4H4
+    test_projectile_system.cpp                 # F4H5
     test_weapon_asset.cpp                      # F4H2
     test_weapon_system.cpp                     # F4H2
     test_input_keybindings.cpp                 # F4H2 Bloque B
@@ -257,6 +258,7 @@ add_executable(mood_tests
     ${CMAKE_SOURCE_DIR}/src/engine/dialog/DialogScriptHost.cpp # F2H48.1
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/Health.cpp # F4H1
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/pickup/PickupSystem.cpp # F4H4
+    ${CMAKE_SOURCE_DIR}/src/engine/gameplay/projectile/ProjectileSystem.cpp # F4H5
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/weapon/WeaponSpec.cpp   # F4H2
     ${CMAKE_SOURCE_DIR}/src/engine/gameplay/weapon/WeaponSystem.cpp # F4H2
 )

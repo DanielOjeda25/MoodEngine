@@ -13,7 +13,7 @@ namespace Mood::Weapon {
 // =============================================================
 
 nlohmann::json Spec::toJson() const {
-    return nlohmann::json{
+    nlohmann::json out{
         {"_version",          k_schemaVersion},
         {"displayName",       displayName},
         {"category",          category},
@@ -36,6 +36,21 @@ nlohmann::json Spec::toJson() const {
 
         {"ignoreOwner",       ignoreOwner},
     };
+    // F4H5: bloque projectile (emitido siempre — los defaults son razonables
+    // si el .moodweapon no usa la mecanica de proyectil).
+    out["projectile"] = nlohmann::json{
+        {"meshPath",     projectile.meshPath},
+        {"materialPath", projectile.materialPath},
+        {"speed",        projectile.speed},
+        {"gravity",      projectile.gravity},
+        {"bounceCount",  projectile.bounceCount},
+        {"bounceFactor", projectile.bounceFactor},
+        {"lifetimeSec",  projectile.lifetimeSec},
+        {"directDamage", projectile.directDamage},
+        {"splashRadius", projectile.splashRadius},
+        {"splashDamage", projectile.splashDamage},
+    };
+    return out;
 }
 
 Spec Spec::fromJson(const nlohmann::json& j) {
@@ -73,6 +88,21 @@ Spec Spec::fromJson(const nlohmann::json& j) {
 
     s.ignoreOwner       = j.value("ignoreOwner",       true);
 
+    // F4H5: bloque projectile opcional. Sin el bloque, defaults.
+    if (j.contains("projectile") && j.at("projectile").is_object()) {
+        const auto& jp = j.at("projectile");
+        s.projectile.meshPath     = jp.value("meshPath",     std::string{});
+        s.projectile.materialPath = jp.value("materialPath", std::string{});
+        s.projectile.speed        = jp.value("speed",        20.0f);
+        s.projectile.gravity      = jp.value("gravity",      0.0f);
+        s.projectile.bounceCount  = jp.value("bounceCount",  0);
+        s.projectile.bounceFactor = jp.value("bounceFactor", 0.6f);
+        s.projectile.lifetimeSec  = jp.value("lifetimeSec",  5.0f);
+        s.projectile.directDamage = jp.value("directDamage", 30.0f);
+        s.projectile.splashRadius = jp.value("splashRadius", 2.0f);
+        s.projectile.splashDamage = jp.value("splashDamage", 30.0f);
+    }
+
     // Clamps de sanidad — el loader no puede confiar en que el .moodweapon
     // sea valido. Valores fuera de rango pueden romper el WeaponSystem
     // (division por cero en fireRate, raycast hacia atras, etc.).
@@ -84,6 +114,18 @@ Spec Spec::fromJson(const nlohmann::json& j) {
     if (s.fireRatePerSec <= 0.0f) s.fireRatePerSec = 0.001f;
     if (s.magazineSize < 1u) s.magazineSize = 1u;
     if (s.reloadTimeSec < 0.0f) s.reloadTimeSec = 0.0f;
+
+    // F4H5: clamps del bloque projectile.
+    if (s.projectile.speed < 0.0f)         s.projectile.speed = 0.0f;
+    if (s.projectile.speed > 200.0f)       s.projectile.speed = 200.0f;
+    if (s.projectile.gravity < 0.0f)       s.projectile.gravity = 0.0f;
+    if (s.projectile.bounceCount < 0)      s.projectile.bounceCount = 0;
+    if (s.projectile.bounceFactor < 0.0f)  s.projectile.bounceFactor = 0.0f;
+    if (s.projectile.bounceFactor > 1.0f)  s.projectile.bounceFactor = 1.0f;
+    if (s.projectile.lifetimeSec < 0.05f)  s.projectile.lifetimeSec = 0.05f;
+    if (s.projectile.directDamage < 0.0f)  s.projectile.directDamage = 0.0f;
+    if (s.projectile.splashRadius < 0.0f)  s.projectile.splashRadius = 0.0f;
+    if (s.projectile.splashDamage < 0.0f)  s.projectile.splashDamage = 0.0f;
 
     return s;
 }

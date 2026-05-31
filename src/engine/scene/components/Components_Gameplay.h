@@ -389,6 +389,25 @@ struct ParticleBurstComponent {
     f32 ttl = 1.0f;
 };
 
+/// @brief F4H5 — Entity efimero de proyectil (rocket/plasma/granada).
+///        Transient runtime: NO se serializa. Spawned por `Weapon::fire`
+///        cuando el arma activa tiene `category == "projectile"`.
+///        El `ProjectileSystem::tickSystem` lo mueve por velocity,
+///        detecta colision via raycast prevPos->currentPos, dispara
+///        explosion + splash damage al impactar o expirar.
+struct ProjectileComponent {
+    u32  weaponAssetId = 0;                  // arma que lo disparo
+    // Forward decl-friendly: u32 raw del shooter (entt::entity underlying)
+    // — para ignoreOwner del splash damage. 0 = sin owner (rocket-jump on).
+    u32  owner         = 0;
+    glm::vec3 velocity{0.0f, 0.0f, 0.0f};     // m/s
+    f32  age           = 0.0f;
+    f32  lifetimeSec   = 5.0f;                // cache del spec
+    int  bouncesLeft   = 0;                   // granada decrementa al rebotar
+    glm::vec3 prevPos{0.0f, 0.0f, 0.0f};      // pose anterior para raycast continuo
+    bool exploded      = false;               // sentinela — destroy en next tick
+};
+
 /// @brief F4H3 — Slot individual del arsenal. Plain data:
 ///        `weaponAssetId` (ref al `.moodweapon` cargado en `AssetManager`)
 ///        + `currentAmmo` per-slot. Per-slot ammo: cambiar de arma NO

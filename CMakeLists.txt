@@ -480,6 +480,7 @@ add_library(mood_engine_lib STATIC
 
     src/engine/gameplay/Health.cpp                            # F4H1
     src/engine/gameplay/pickup/PickupSystem.cpp               # F4H4
+    src/engine/gameplay/projectile/ProjectileSystem.cpp       # F4H5
     src/engine/gameplay/weapon/WeaponSpec.cpp                 # F4H2
     src/engine/gameplay/weapon/WeaponSystem.cpp               # F4H2
     src/engine/input/InputActions.cpp                         # F4H2 Bloque B

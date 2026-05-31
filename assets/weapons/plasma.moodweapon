@@ -1,0 +1,31 @@
+{
+  "_version": 1,
+  "displayName": "Plasma Gun",
+  "category": "projectile",
+  "damage": 0.0,
+  "range": 0.0,
+  "pellets": 1,
+  "spreadDeg": 0.0,
+  "fireRatePerSec": 3.5,
+  "magazineSize": 30,
+  "reloadTimeSec": 2.5,
+  "viewmodelMesh": "",
+  "viewmodelMaterial": "",
+  "fireSound": "",
+  "impactSound": "",
+  "muzzleVfx": "",
+  "impactVfx": "",
+  "ignoreOwner": true,
+  "projectile": {
+    "meshPath": "",
+    "materialPath": "",
+    "speed": 50.0,
+    "gravity": 0.0,
+    "bounceCount": 0,
+    "bounceFactor": 0.0,
+    "lifetimeSec": 3.0,
+    "directDamage": 40.0,
+    "splashRadius": 1.5,
+    "splashDamage": 15.0
+  }
+}
