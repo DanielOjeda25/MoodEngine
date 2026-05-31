@@ -114,3 +114,62 @@ TEST_CASE("resolveBinding: unknown string -> None") {
     auto multi = InputActions::resolveBinding("ab");
     CHECK(multi.type == InputActions::BindingType::None);
 }
+
+// ============================================================
+// F4H3 — scroll wheel + numero + scroll delta state
+// ============================================================
+
+TEST_CASE("F4H3 resolveBinding: mouse_wheel_up -> MouseWheel +1") {
+    auto b = InputActions::resolveBinding("mouse_wheel_up");
+    CHECK(b.type == InputActions::BindingType::MouseWheel);
+    CHECK(b.code == +1);
+}
+
+TEST_CASE("F4H3 resolveBinding: mouse_wheel_down -> MouseWheel -1") {
+    auto b = InputActions::resolveBinding("mouse_wheel_down");
+    CHECK(b.type == InputActions::BindingType::MouseWheel);
+    CHECK(b.code == -1);
+}
+
+TEST_CASE("F4H3 resolveBinding: digitos 1-9 -> SDL_SCANCODE_1..9") {
+    CHECK(InputActions::resolveBinding("1").code == SDL_SCANCODE_1);
+    CHECK(InputActions::resolveBinding("2").code == SDL_SCANCODE_2);
+    CHECK(InputActions::resolveBinding("4").code == SDL_SCANCODE_4);
+    CHECK(InputActions::resolveBinding("9").code == SDL_SCANCODE_9);
+}
+
+TEST_CASE("F4H3 resolveBinding: digito 0 -> SDL_SCANCODE_0") {
+    CHECK(InputActions::resolveBinding("0").code == SDL_SCANCODE_0);
+}
+
+TEST_CASE("F4H3 InputSettings defaults: weapon_next, weapon_prev, weapon_last, weapon_1..4") {
+    UserSettings::InputSettings s;
+    CHECK(s.keybindings.at("weapon_next") == "mouse_wheel_up");
+    CHECK(s.keybindings.at("weapon_prev") == "mouse_wheel_down");
+    CHECK(s.keybindings.at("weapon_last") == "q");
+    CHECK(s.keybindings.at("weapon_1") == "1");
+    CHECK(s.keybindings.at("weapon_2") == "2");
+    CHECK(s.keybindings.at("weapon_3") == "3");
+    CHECK(s.keybindings.at("weapon_4") == "4");
+}
+
+TEST_CASE("F4H3 scroll delta: notifyScrollEvent + pollScrollDelta acumula + consume") {
+    InputActions::resetState();
+    CHECK(InputActions::pollScrollDelta() == 0);
+
+    InputActions::notifyScrollEvent(+1);
+    InputActions::notifyScrollEvent(+2);
+    CHECK(InputActions::pollScrollDelta() == +3);
+    // poll consume — siguiente poll devuelve 0.
+    CHECK(InputActions::pollScrollDelta() == 0);
+
+    InputActions::notifyScrollEvent(-5);
+    CHECK(InputActions::pollScrollDelta() == -5);
+}
+
+TEST_CASE("F4H3 endFrame: resetea scroll delta") {
+    InputActions::resetState();
+    InputActions::notifyScrollEvent(+7);
+    InputActions::endFrame();
+    CHECK(InputActions::pollScrollDelta() == 0);
+}

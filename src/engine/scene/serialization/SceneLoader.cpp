@@ -504,19 +504,27 @@ Entity applyOneEntity(const SavedEntity& se,
             e.addComponent<HealthComponent>(hc);
         }
 
-        // F4H2: WeaponComponent. El weaponPath se resuelve via
-        // AssetManager::loadWeapon — si el .moodweapon no existe, el
-        // AssetManager devuelve missingWeaponId() (slot 0) y loguea warn.
-        // Asi la entidad queda con WeaponComponent pero sin arma efectiva.
-        // Timers son transients (0). Mapas pre-F4H2 sin el campo no
-        // añaden el componente.
+        // F4H2 + F4H3: WeaponComponent. El parser detecta el formato
+        // (slots[] F4H3 vs path plano F4H2) y popula SavedWeapon.slots.
+        // Aca solo resolvemos cada path via AssetManager::loadWeapon.
+        // Si el .moodweapon no existe, devuelve missingWeaponId() (0)
+        // y loguea warn — el slot queda vacio. Timers son transients.
         if (se.weapon.has_value()) {
             const auto& sw = *se.weapon;
             WeaponComponent wc{};
-            if (!sw.weaponPath.empty()) {
-                wc.weaponAssetId = assets.loadWeapon(sw.weaponPath);
+            const usize n = std::min<usize>(sw.slots.size(),
+                                              WeaponComponent::k_maxSlots);
+            for (usize i = 0; i < n; ++i) {
+                const auto& src = sw.slots[i];
+                WeaponSlot& dst = wc.slots[i];
+                if (!src.weaponPath.empty()) {
+                    dst.weaponAssetId = assets.loadWeapon(src.weaponPath);
+                }
+                dst.currentAmmo = src.currentAmmo;
             }
-            wc.currentAmmo = sw.currentAmmo;
+            wc.activeSlot = (sw.activeSlot < WeaponComponent::k_maxSlots)
+                            ? sw.activeSlot : 0u;
+            wc.lastActiveSlot = wc.activeSlot;
             e.addComponent<WeaponComponent>(wc);
         }
 

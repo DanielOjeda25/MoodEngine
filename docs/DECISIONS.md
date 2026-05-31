@@ -11,6 +11,47 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-30: F4H3 cierre — Segunda arma + swap + viewmodel (arsenal multi-slot)
+
+**Contexto:** F4H2 dejó "click → mata maniquí" funcional con UNA arma (shotgun). F4H3 cierra el loop "tengo varias armas, las cambio, las veo en mano" sobre el mismo cimiento data-driven (`.moodweapon` engine-generic, PANDEMONIUM en `assets/`). Plan en `PLAN_HITO_F4H3.md`. 9 sub-tareas + 4 decisiones cerradas con AskUserQuestion + 5 ajustes reactivos durante implementación.
+
+**Decisiones tomadas con AskUserQuestion:**
+
+- **D1 — Swap input: scroll wheel + Q/Tab last-used (NOT Doom numérico).** El recommended era 1/2/3/4 numérico Doom-style por familiaridad. Dev eligió scroll wheel + Q por flow moderno HL/Apex. Razón: cambio de arma más fluido en gameplay rápido boomer-shooter (la mano ya está en el mouse), Q vuelve a la anterior usada sin pensar el número. Numérica 1-4 queda como keybinding paralelo (no exclusiva) para que el dev pueda usar la que prefiera. Requirió extender `InputActions`: `BindingType::MouseWheel` (SDL_MOUSEWHEEL es event discreto, no estado polled) + `wasActionTriggered` con semántica one-shot (transición released→pressed para keys/mouse, delta-del-frame para wheel). Sin esto, sostener click sobre el wheel cyclaría infinito en cada frame.
+
+- **D2 — Arsenal: slot fijo por categoría, 4 slots (Quake/Doom style).** Recommended y aceptado. `WeaponSlot{weaponAssetId, currentAmmo=-1 (auto-init)}` × `k_maxSlots=4` + `activeSlot` + `lastActiveSlot`. Cada slot mapea a una tecla 1-4 + es ciclable con scroll. Per-slot ammo: cambiar de arma preserva munición de la anterior (otherwise reload-on-swap es feel pésimo). Alternativa "lista dinámica estilo HL2/Apex" descartada porque requiere UI más compleja (Q-radial menu) y no encaja en boomer-shooter (Doom/Quake nunca tuvieron arsenal dinámico). `k_maxSlots` queda como `constexpr` para que tests + Inspector tabs lo respeten; bump futuro es 1 línea + recompile.
+
+- **D3 — Viewmodel: mesh en escena con cámara separada (D3 recommended, implementado con near-plane reducido).** El recommended fue "mesh en escena + cámara separada" estilo Quake/HL/Source. Implementación inicial usa near-plane reducido del MeshRenderer normal (suficiente para validar el loop). Render pass dedicado con depth buffer aparte queda **agendizado a F4H3.1** si emerge clip-thru con paredes. Razón: bajar near-plane es 1 cambio puntual; render pass dedicado requiere refactor del SceneRenderer con sort/depth-state separados. Mejor validar el loop completo (swap + viewmodel sync) primero, agregar render pass dedicado solo si el clip-thru molesta en gameplay real. `.moodweapon.viewmodelMesh` campo opcional ya existía desde F4H2 (forward-compat).
+
+- **D4 — Sandbox: todas las armas del catálogo desde el inicio.** Recommended y aceptado. `handleAddPlayer` rellena `slots[0..min(k_maxSlots, catalogo)]` con `enumerateWeapons()`. Razón: sirve para validar swap sin tener que armar pickups (F4H5 traerá pickups reales — entonces `handleAddPlayer` volverá a "solo escopeta default + resto via pickup"). Alternativa "solo escopeta default" descartada porque el dev no podría probar swap end-to-end al cerrar el hito (necesitaría escribir Lua manual). Es decisión scoped al sandbox dev — el flow proper de "spawn → recoger armas en el mapa" es F4H5.
+
+**Ajustes reactivos durante implementación:**
+
+- **R1 — Helper `activeSlotOf()` con clamp defensivo.** `wc.activeSlot >= k_maxSlots` se clampea a 0 en lugar de UB con array OOB. Cubre 2 escenarios: (a) serialización corrupta de un map con `activeSlot=99`; (b) future bump de `k_maxSlots` (de 4 a 10) seguido de load de map viejo donde algún slot guardado quedó fuera del nuevo rango. Sin esto, cualquier acceso a `wc.slots[wc.activeSlot]` cracha. El log warn lo hace visible.
+
+- **R2 — `equipWeapon(scene, entity, path)` opera sobre slot activo (back-compat F4H2 API).** Alternativa "deprecar `equipWeapon` y forzar a usar `equipWeaponInSlot(slot, path)`" descartada porque los call-sites de F4H2 (Lua bindings `weapon.equip`, `SceneLoader::applyOneEntity` migración back-compat) seguirían rotos hasta que se reescribieran. Mantener `equipWeapon` con semántica "slot activo" + agregar `equipWeaponInSlot` explícito para el flow nuevo deja a F4H2 callers funcionando sin cambios. El binding Lua queda intuitivo: "equipo arma en el slot activo" es el caso más común.
+
+- **R3 — Sandbox D4 cambió: rellena TODOS los slots, no solo el primero.** El plan literal decía *"`handleAddPlayer` auto-rellena con la primera del catálogo"* (mismo comportamiento F4H2 Bloque B). Al implementar Sub-tarea 8, me di cuenta que con 1 sola arma equipada el dev no puede validar swap (no hay a qué swapear). Mejor rellenar `min(k_maxSlots, catalog)` slots — el dev arranca con 4 armas y puede probar scroll/Q/1-4 inmediatamente. Cambio se aplicó sin pedir confirmación porque es estrictamente más útil para validación + reversible en F4H5 (que va a refactorizar `handleAddPlayer` a "solo escopeta + pickups").
+
+- **R4 — Viewmodel via componente + system free function, NO ECS system class.** Mismo patrón que Health/Weapon de F4H1/F4H2. `ViewmodelComponent{offsetCamSpace, extraRotEulerDeg, scale, syncMeshOnSwap, lastSeenWeaponId}` + `Weapon::tickViewmodel(scene, camPos, camFwd, camUp, assets)` free function en `WeaponSystem` namespace. Alternativa "ViewmodelSystem class con `update(scene, dt)`" descartada porque agregaba boilerplate (ctor + estado interno) sin necesidad — el sync es stateless puro frame-by-frame leyendo del WeaponComponent del player. Consistencia con el resto de sistemas gameplay de Fase 4 también.
+
+- **R5 — Viewmodel mesh fallback al cubo (`assets.missingMeshId()`) si `spec.viewmodelMesh` empty.** Sin esto, el viewmodel quedaría invisible cuando las armas demo no tienen `viewmodelMesh` definido (que es el caso de `shotgun.moodweapon` + `pistola.moodweapon` hoy — F4H3.1 traerá art real). Fallback al cubo placeholder es feo pero indica al dev "viewmodel sync funciona, falta mesh art". Alternativa "log warn una vez y skip render" descartada porque la card "Player" del Gameplay tab crea el viewmodel entity esperando que aparezca algo; sin nada visible la regression sería confusa de diagnosticar.
+
+**Bugs build-time durante el cierre** (no decisiones, hallazgos):
+
+- **B1 — Campo `MeshRendererComponent` se llama `mesh` no `meshId`.** Asumí naming convention `<thing>Id` por consistencia con `WeaponSlot.weaponAssetId` y `Material.albedoTextureId`, pero el campo fue nombrado `mesh` (sin sufijo) cuando se introdujo el componente en Fase 1. Build falló con C2039 en 2 sitios: `WeaponSystem.cpp::tickViewmodel:516` (mesh swap del viewmodel) + `EditorProjectActions_CreateEntity.cpp::handleAddPlayer:814` (init del viewmodel entity). Fix mecánico: `mr.meshId` → `mr.mesh` en ambos. Detected en el primer build attempt; second build verde. Backlog: no es bug del feature, solo del agente — verificar nombre real del campo antes de asumir.
+
+**Tests F4H3**: ~19 nuevos verdes. 12 en `test_weapon_system.cpp` (`equipWeaponInSlot` basic+OOB / `swapToSlot` basic+same-slot-noop+OOB+resets-timers / `swapNext` cycle+skip-empty+alone / `swapPrev` / `swapLast` toggle+no-last / fire usa slot activo). 7 en `test_input_keybindings.cpp` (mouse_wheel_up/down resolve / dígitos 1-9+0 resolve / F4H3 7 keybindings defaults / scroll delta acumula+consume / endFrame reset delta). Tests del viewmodel sync quedan en validación manual editor (depende de SceneRenderer + cámara activa + Play mode). Suite full **1352/12070 verde** (+10 cases / +34 asserts vs F4H2 Bloque B: 1342 → 1352). Cero regresión.
+
+**Backlog post-F4H3:**
+- **F4H3.1** — Viewmodel render pass dedicado HL/Source style (depth buffer aparte) si clip-thru con paredes molesta en gameplay real. Mesh art real para escopeta + pistola (hoy son cubo placeholder). Animación idle/walk del viewmodel.
+- **F4H4** — HUD de combate (salud + ammo + arma activa) sobre GameOverlay. Hoy el player tiene salud + 4 slots + viewmodel pero sin feedback en pantalla del estado.
+- **F4H5** — Pickups de armas en el suelo (mesh + trigger + overlap script). Refactor de `handleAddPlayer` a "solo escopeta default + resto via pickup en mapa".
+- **F4H6** — Recoil + camera shake al disparar (game feel pass).
+- **F4H7** — Animaciones de reload + swap del viewmodel (cuando haya skeletal animation del viewmodel mesh).
+
+---
+
 ## 2026-05-29: F4H2 Bloque B cierre — Wiring final + UX armas + bug fixes brushes
 
 **Contexto:** F4H2 Bloque A entregó la infraestructura `.moodweapon` data-driven (asset + component + system + bindings + inspector + tests). Faltaba el último kilómetro: que el dev pueda hacer "Crear Player → Play → click → dispara → maniquí muere" SIN escribir Lua a mano. Bloque B cierra ese e2e y, en el camino, el dev pidió fixes UX adicionales bajo *"arregla todo ahora, AHORA EN ESTE HITO"*.

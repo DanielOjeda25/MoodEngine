@@ -203,8 +203,16 @@ struct InputSettings {
     std::unordered_map<std::string, std::string> keybindings;
 
     InputSettings() {
-        keybindings["fire"]   = "mouse_left";
-        keybindings["reload"] = "r";
+        keybindings["fire"]        = "mouse_left";
+        keybindings["reload"]      = "r";
+        // F4H3 — bindings de swap de armas (HL/Apex style).
+        keybindings["weapon_next"] = "mouse_wheel_up";
+        keybindings["weapon_prev"] = "mouse_wheel_down";
+        keybindings["weapon_last"] = "q";
+        keybindings["weapon_1"]    = "1";
+        keybindings["weapon_2"]    = "2";
+        keybindings["weapon_3"]    = "3";
+        keybindings["weapon_4"]    = "4";
     }
 };
 

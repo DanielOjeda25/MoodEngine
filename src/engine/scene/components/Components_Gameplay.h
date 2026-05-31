@@ -290,6 +290,41 @@ struct HealthComponent {
     f32  hitFlashTimer  = 0.0f;
 };
 
+/// @brief F4H3 — Marker para entidades de viewmodel (la arma en mano que
+///        el jugador ve en primera persona). Cada frame en Play mode,
+///        `Weapon::tickViewmodel` sincroniza el Transform de esta entity
+///        a la camara del player (camera_pos + right*x + up*y + forward*z)
+///        y, si `syncMeshOnSwap=true`, swap el MeshRenderer del viewmodel
+///        al `spec.viewmodelMesh` del arma actualmente equipada en el
+///        slot activo del WeaponComponent del player.
+///
+///        Engine-generic: la convencion del tag del viewmodel es
+///        `"__viewmodel"`. Otro juego puede usar otro tag rebindando el
+///        sistema (parametrico futuro).
+struct ViewmodelComponent {
+    /// @brief Offset en camera-space: x=right, y=up, z=forward.
+    ///        Defaults para feel boomer-shooter clasico: pegada abajo-derecha.
+    glm::vec3 offsetCamSpace{0.2f, -0.15f, -0.4f};
+
+    /// @brief Rotacion adicional en grados (sobre la rotacion de la
+    ///        camara). Util para inclinar el viewmodel a mano.
+    glm::vec3 extraRotEulerDeg{0.0f, 0.0f, 0.0f};
+
+    /// @brief Escala visual del viewmodel. Boomer-shooter: pequeno
+    ///        (~0.15) para no ocupar media pantalla.
+    glm::vec3 scale{0.15f, 0.15f, 0.15f};
+
+    /// @brief Si true, al cambiar `WeaponComponent::activeSlot` del
+    ///        player, el MeshRenderer del viewmodel adopta automaticamente
+    ///        el `spec.viewmodelMesh` del nuevo arma. False = mesh fijo
+    ///        (util para tests / overrides manuales).
+    bool syncMeshOnSwap = true;
+
+    /// Transient (no serializa): cache del weaponAssetId visto en el
+    /// ultimo tick. Si cambia, el sistema swap el mesh.
+    u32 lastSeenWeaponId = 0;
+};
+
 /// @brief F4H2 — Entidad efimera de particula one-shot (impact burst).
 ///        Usado por el WeaponSystem para los puffs de impacto. El
 ///        WeaponSystem::tickSystem decrementa `ttl` y destruye la
@@ -298,28 +333,59 @@ struct ParticleBurstComponent {
     f32 ttl = 1.0f;
 };
 
-/// @brief F4H2 — Arma equipada por una entidad (engine-generic).
-///        Plain data: solo `weaponAssetId` (ref al `.moodweapon` cargado
-///        en `AssetManager`) + `currentAmmo` + timers. El motor NO
-///        guarda los stats — vienen del Spec via `AssetManager::getWeapon`.
-///        Cambiar de arma = cambiar `weaponAssetId`.
-///        `weaponAssetId == 0` significa "sin arma equipada" — el
-///        `WeaponSystem::fire` lo trata como no-op.
-struct WeaponComponent {
-    /// @brief Id del WeaponSpec equipado. 0 = sin arma. Resuelto por
-    ///        el AssetManager desde el path logico al cargar la escena.
-    u32  weaponAssetId  = 0;
+/// @brief F4H3 — Slot individual del arsenal. Plain data:
+///        `weaponAssetId` (ref al `.moodweapon` cargado en `AssetManager`)
+///        + `currentAmmo` per-slot. Per-slot ammo: cambiar de arma NO
+///        pierde la munición de la anterior — convención Quake/Doom.
+struct WeaponSlot {
+    /// @brief Id del WeaponSpec en este slot. 0 = slot vacío.
+    u32 weaponAssetId = 0;
+    /// @brief Munición actual del arma de este slot. -1 = "todavía no
+    ///        inicializado" (auto-fill al primer fire / Inspector view).
+    int currentAmmo   = -1;
+};
 
-    /// @brief Munición actual en el mag. Inicializado a `spec.magazineSize`
-    ///        al equipar el arma por primera vez. -1 = "todavía no
-    ///        inicializado" (auto-fill al primer fire/Inspector view).
-    int  currentAmmo    = -1;
+/// @brief F4H2 + F4H3 — Arsenal del jugador (engine-generic).
+///
+///        F4H2 (Bloque A): single-slot — un arma equipada via
+///        `weaponAssetId` + `currentAmmo`.
+///        F4H3: refactor a multi-slot. `slots[k_maxSlots]` + `activeSlot`
+///        index + `lastActiveSlot` (para swap Q/Tab last-used). Cada slot
+///        guarda su propia munición. El `WeaponSystem` opera siempre
+///        sobre `slots[activeSlot]`.
+///
+///        Convención Quake/Doom: 4 slots fijos (primaria/secundaria/
+///        pesada/melee). Otros juegos sobre el motor pueden interpretar
+///        los slots como quieran — el motor no impone semántica.
+///
+///        Cambiar de arma = `Weapon::swapToSlot(scene, e, N)` o
+///        `swapNext/Prev/Last`. NO mutar `activeSlot` directo desde
+///        scripts — los APIs validan slot vacío + resetean timers.
+struct WeaponComponent {
+    /// @brief Cantidad fija de slots del arsenal. Tamaño en F4H3.
+    ///        Cambiar este valor bumpea la version del SavedWeapon.
+    static constexpr u32 k_maxSlots = 4;
+
+    /// @brief Arsenal del player. Slots vacíos quedan con
+    ///        `weaponAssetId = 0`.
+    WeaponSlot slots[k_maxSlots]{};
+
+    /// @brief Índice del slot equipado actualmente [0, k_maxSlots).
+    ///        El `WeaponSystem::fire/reload` opera sobre este slot.
+    u32 activeSlot = 0;
+
+    /// @brief Slot equipado antes del último swap. Permite Q/Tab toggle
+    ///        last-used (HL/Apex style). Igual a `activeSlot` al inicio.
+    u32 lastActiveSlot = 0;
 
     /// Transients (no serializar):
     /// @brief Cooldown del proximo disparo (segundos). Reset al firing
-    ///        rate del Spec al disparar. WeaponSystem::tick lo decae.
+    ///        rate del Spec al disparar. Compartido entre slots — al
+    ///        hacer swap el cooldown del arma anterior se descarta (mejor
+    ///        feel: swap interrumpe cualquier estado y arma fresh).
     f32  fireTimer      = 0.0f;
     /// @brief Tiempo restante del reload (segundos). > 0 = reloading.
+    ///        Swap cancela reload en curso.
     f32  reloadTimer    = 0.0f;
     /// @brief Bandera del frame: true si el input de fire esta sostenido.
     ///        El bridge de input la setea cada frame; WeaponSystem la lee.

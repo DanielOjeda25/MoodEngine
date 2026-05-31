@@ -769,21 +769,28 @@ void EditorApplication::handleAddPlayer() {
     auto& t = e.getComponent<TransformComponent>();
     t.position = glm::vec3(0.0f, 1.0f, 0.0f);
 
-    // WeaponComponent con la primera arma del catálogo auto-asignada
-    // (UX pedido por dev: que el player pueda disparar al instante sin
-    // tener que arrastrar arma del AssetBrowser).
+    // F4H3 D4 (sandbox): rellenar TODOS los slots del arsenal con las
+    // primeras armas del catálogo (hasta k_maxSlots). Permite validar
+    // swap sin tener pickups armados todavía. F4H4 (pickups) volverá
+    // esto a "solo slot 0 + arma default + resto vía pickup".
     WeaponComponent wc{};
     if (m_assetManager) {
         auto weapons = m_assetManager->enumerateWeapons(/*rescanFromDisk=*/true);
         if (!weapons.empty()) {
-            const auto& first = weapons.front();
-            wc.weaponAssetId = first.id;
-            if (const Weapon::Spec* spec = m_assetManager->getWeapon(first.id)) {
-                wc.currentAmmo = static_cast<int>(spec->magazineSize);
+            const u32 n = static_cast<u32>(
+                std::min<usize>(weapons.size(), WeaponComponent::k_maxSlots));
+            for (u32 i = 0; i < n; ++i) {
+                const auto& src = weapons[i];
+                wc.slots[i].weaponAssetId = src.id;
+                if (const Weapon::Spec* spec = m_assetManager->getWeapon(src.id)) {
+                    wc.slots[i].currentAmmo = static_cast<int>(spec->magazineSize);
+                }
             }
+            wc.activeSlot = 0;
+            wc.lastActiveSlot = 0;
             Log::editor()->info(
-                "[create_player] arma auto-asignada: '{}' (id={}, path={})",
-                first.displayName, first.id, first.logicalPath);
+                "[create_player] arsenal auto-equipado: {} arma{} (slot 0 = '{}')",
+                n, n == 1 ? "" : "s", weapons.front().displayName);
         } else {
             Log::editor()->warn(
                 "[create_player] no hay .moodweapon en assets/weapons/ — "
@@ -792,9 +799,29 @@ void EditorApplication::handleAddPlayer() {
     }
     e.addComponent<WeaponComponent>(wc);
 
+    // F4H3 — viewmodel entity: marker "__viewmodel" + ViewmodelComponent +
+    // MeshRenderer placeholder (cubo del missingMeshId). El sistema
+    // `Weapon::tickViewmodel` cada frame en Play mode sincroniza su
+    // Transform a la camara del player y swap el mesh segun el slot activo.
+    if (m_scene && m_assetManager) {
+        Entity vmEntity = m_scene->createEntity("__viewmodel");
+        ViewmodelComponent vm{};
+        vmEntity.addComponent<ViewmodelComponent>(vm);
+        // MeshRenderer con cubo placeholder; tickViewmodel lo va a
+        // sobreescribir al primer frame con el viewmodelMesh del arma
+        // activa (o mantener el cubo si el spec no trae viewmodelMesh).
+        MeshRendererComponent mr{};
+        mr.mesh = m_assetManager->missingMeshId();
+        mr.materials.push_back(m_assetManager->missingMaterialId());
+        vmEntity.addComponent<MeshRendererComponent>(mr);
+        Log::editor()->info(
+            "[create_player] viewmodel entity '__viewmodel' creada con "
+            "cubo placeholder (tickViewmodel la sincroniza a la camara).");
+    }
+
     Log::editor()->info(
-        "[create_player] Spawned 'player' (Tag + Transform + WeaponComponent). "
-        "Clic izquierdo en Play para disparar, R para recargar.");
+        "[create_player] Spawned 'player' (Tag + Transform + WeaponComponent + viewmodel). "
+        "Clic izquierdo dispara, R recarga, scroll/Q swap arma, 1-4 swap directo.");
 
     replaceWithSingle(m_ui.selectionSet(), e);
     pushCreatedEntities({e}, "Crear player");

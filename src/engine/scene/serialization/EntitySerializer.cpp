@@ -502,19 +502,46 @@ void writeHealth(json& je, const HealthComponent& h) {
     je["health"] = jh;
 }
 
-// F4H2: persistir WeaponComponent. weaponPath se reconstruye desde
-// `weaponAssetId` via `AssetManager::weaponPathOf`. Si el path es
-// sentinela vacio ("__empty_weapon") no se persiste — equivale a
-// "sin arma". Timers son transients.
+// F4H2 + F4H3: persistir WeaponComponent.
+//
+// F4H3 schema: emite siempre `slots[]` + `activeSlot`. Cada slot serializa
+// `{path, currentAmmo}`. Slots vacios (`weaponAssetId==0`) se emiten como
+// `{path: "", currentAmmo: -1}` para mantener la posicion de los slots
+// no-vacios (el dev puede tener slot 0 vacio + slot 1 con escopeta).
+//
+// Si la entity tiene WeaponComponent pero TODOS los slots son vacios, no
+// se persiste nada — equivale a "sin arma" y reduce ruido en el JSON.
+//
+// Back-compat con F4H2 maps: el parser detecta el formato viejo via
+// presencia de `path`/`currentAmmo` plano vs `slots[]` array — ver
+// EntitySerializer_Parse.cpp.
 void writeWeapon(json& je, const WeaponComponent& w,
                   const AssetManager& assets) {
-    if (w.weaponAssetId == 0) return; // sin arma equipada
-    const std::string path = assets.weaponPathOf(w.weaponAssetId);
-    if (path.empty() || path == "__empty_weapon") return;
+    // Check rapido: si todos los slots estan vacios, skip.
+    bool anyNonEmpty = false;
+    for (u32 i = 0; i < WeaponComponent::k_maxSlots; ++i) {
+        if (w.slots[i].weaponAssetId != 0) { anyNonEmpty = true; break; }
+    }
+    if (!anyNonEmpty) return;
+
+    json jSlots = json::array();
+    for (u32 i = 0; i < WeaponComponent::k_maxSlots; ++i) {
+        const WeaponSlot& s = w.slots[i];
+        std::string path;
+        if (s.weaponAssetId != 0) {
+            path = assets.weaponPathOf(s.weaponAssetId);
+            if (path == "__empty_weapon") path.clear();
+        }
+        jSlots.push_back(json{
+            {"path",        std::move(path)},
+            {"currentAmmo", s.currentAmmo},
+        });
+    }
+
     json jw;
-    jw["path"]        = path;
-    jw["currentAmmo"] = w.currentAmmo;
-    je["weapon"] = jw;
+    jw["slots"]      = std::move(jSlots);
+    jw["activeSlot"] = w.activeSlot;
+    je["weapon"] = std::move(jw);
 }
 
 // Link suave al prefab (Hito 14 Bloque 6). Solo se persiste si la

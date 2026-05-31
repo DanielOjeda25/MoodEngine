@@ -608,6 +608,16 @@ void EditorApplication::tickSystems(f32 dt) {
         const bool firePressed   = InputActions::isActionPressed("fire");
         const bool reloadPressed = InputActions::isActionPressed("reload");
 
+        // F4H3 — swap bindings (one-shot via wasActionTriggered).
+        // mouse_wheel_up/down (next/prev), q (last), 1-4 (slot directo).
+        const bool nextPressed = InputActions::wasActionTriggered("weapon_next");
+        const bool prevPressed = InputActions::wasActionTriggered("weapon_prev");
+        const bool lastPressed = InputActions::wasActionTriggered("weapon_last");
+        const bool slot1Pressed = InputActions::wasActionTriggered("weapon_1");
+        const bool slot2Pressed = InputActions::wasActionTriggered("weapon_2");
+        const bool slot3Pressed = InputActions::wasActionTriggered("weapon_3");
+        const bool slot4Pressed = InputActions::wasActionTriggered("weapon_4");
+
         m_scene->forEach<TagComponent, WeaponComponent>(
             [&](Entity e, TagComponent& tag, WeaponComponent& wc) {
                 if (tag.name != "player") return;
@@ -623,7 +633,20 @@ void EditorApplication::tickSystems(f32 dt) {
                 if (reloadPressed) {
                     Weapon::reload(*m_scene, e, *m_assetManager);
                 }
+                // F4H3 swap dispatch — one-shot triggers.
+                if (nextPressed)  Weapon::swapNext(*m_scene, e);
+                if (prevPressed)  Weapon::swapPrev(*m_scene, e);
+                if (lastPressed)  Weapon::swapLast(*m_scene, e);
+                if (slot1Pressed) Weapon::swapToSlot(*m_scene, e, 0);
+                if (slot2Pressed) Weapon::swapToSlot(*m_scene, e, 1);
+                if (slot3Pressed) Weapon::swapToSlot(*m_scene, e, 2);
+                if (slot4Pressed) Weapon::swapToSlot(*m_scene, e, 3);
             });
+
+        // F4H3 — endFrame() del InputActions para capturar prevPressed +
+        // resetear scrollDelta. Sin esto, wasActionTriggered detectaria
+        // todos los frames como "transicion" mientras se sostiene.
+        InputActions::endFrame();
     }
 
     // F4H2: tick del WeaponSystem — decae fireTimer/reloadTimer de las
@@ -633,6 +656,16 @@ void EditorApplication::tickSystems(f32 dt) {
     if (m_scene && m_assetManager && m_mode == EditorMode::Play) {
         MOOD_PROFILE_SCOPE("Weapon::tickSystem");
         Weapon::tickSystem(*m_scene, dt, *m_assetManager);
+
+        // F4H3: viewmodel sync — sigue a la camara y swap del mesh al
+        // cambiar de slot. Llamarlo DESPUES de tickSystem para que el
+        // swap del slot ya este reflejado.
+        MOOD_PROFILE_SCOPE("Weapon::tickViewmodel");
+        Weapon::tickViewmodel(*m_scene,
+                                m_playCamera.position(),
+                                m_playCamera.forward(),
+                                glm::vec3(0.0f, 1.0f, 0.0f),
+                                *m_assetManager);
     }
 
     // 3.4) Fisica (Jolt, Hito 12): materializa bodies nuevos siempre y

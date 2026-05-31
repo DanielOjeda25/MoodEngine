@@ -133,8 +133,12 @@ void setupWeaponBindings(sol::state& lua, Scene* scene,
             Entity e = findEntityByTag(*scene, tag);
             if (!e || !e.hasComponent<WeaponComponent>()) return sol::nil;
             const auto& wc = e.getComponent<WeaponComponent>();
-            if (wc.weaponAssetId == 0) return sol::nil;
-            const Weapon::Spec* spec = assetManager->getWeapon(wc.weaponAssetId);
+            // F4H3: spec del slot activo.
+            const u32 idx = (wc.activeSlot < WeaponComponent::k_maxSlots)
+                            ? wc.activeSlot : 0u;
+            const u32 wid = wc.slots[idx].weaponAssetId;
+            if (wid == 0) return sol::nil;
+            const Weapon::Spec* spec = assetManager->getWeapon(wid);
             if (spec == nullptr) return sol::nil;
             sol::table out = lua.create_table();
             out["displayName"]    = spec->displayName;
@@ -146,6 +150,7 @@ void setupWeaponBindings(sol::state& lua, Scene* scene,
             out["fireRatePerSec"] = spec->fireRatePerSec;
             out["magazineSize"]   = spec->magazineSize;
             out["reloadTimeSec"]  = spec->reloadTimeSec;
+            out["activeSlot"]     = wc.activeSlot;
             return out;
         });
 }

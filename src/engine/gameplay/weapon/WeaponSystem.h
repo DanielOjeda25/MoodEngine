@@ -95,16 +95,78 @@ bool reload(Scene& scene, Entity shooter, AssetManager& assets);
 ///        `ParticleBurstComponent` cuyo ttl expiro se destruyen.
 void tickSystem(Scene& scene, f32 dt, AssetManager& assets);
 
-/// @brief Equipa un WeaponSpec en una entidad. Si la entidad no tiene
-///        WeaponComponent, lo emplaza. Si el path es vacio, equivale a
-///        unequip (`weaponAssetId = 0`).
-///        Resetea `currentAmmo` al mag size del nuevo spec (si != -1
-///        en el componente, respeta lo que tenia — pensado para load
-///        de scene).
+/// @brief Equipa un WeaponSpec en el SLOT ACTIVO de la entidad. Si la
+///        entidad no tiene WeaponComponent, lo emplaza. Si el path es
+///        vacio, equivale a unequip del slot activo (`weaponAssetId=0`).
+///        Resetea `currentAmmo` del slot al mag size del nuevo spec
+///        (si != -1 en el componente, respeta lo que tenia — pensado
+///        para load de scene). Para equipar en otro slot usar
+///        `equipWeaponInSlot`.
 /// @return true si la operacion fue exitosa.
 bool equipWeapon(Scene& scene, Entity shooter,
                   const std::string& weaponPath,
                   AssetManager& assets);
+
+/// @brief F4H3 — Equipa un WeaponSpec en un slot especifico (no cambia
+///        `activeSlot`). Util para inicializar el arsenal del player al
+///        spawnear ("dame escopeta en slot 0, pistola en slot 1") o
+///        para pickups que ocupan un slot fijo.
+///        Path vacio = vacia el slot. No toca `fireTimer/reloadTimer`
+///        (otro slot activo puede estar mid-cooldown).
+/// @param slotIdx Indice del slot [0, WeaponComponent::k_maxSlots).
+/// @return true si la operacion fue exitosa, false si `slotIdx` fuera
+///         de rango.
+bool equipWeaponInSlot(Scene& scene, Entity shooter, u32 slotIdx,
+                        const std::string& weaponPath,
+                        AssetManager& assets);
+
+/// @brief F4H3 — Cambia al slot `slotIdx`. No-op si `slotIdx` esta fuera
+///        de rango o si ya es el slot activo. Si el slot destino esta
+///        vacio (`weaponAssetId==0`), el swap igual procede — el dev
+///        decidio activar un slot vacio (HUD muestra "(sin arma)").
+///        Actualiza `lastActiveSlot` antes de cambiar. Resetea
+///        `fireTimer` + `reloadTimer` a 0 (interrumpe reload en curso).
+/// @return true si el swap se ejecuto, false si no-op.
+bool swapToSlot(Scene& scene, Entity shooter, u32 slotIdx);
+
+/// @brief F4H3 — Cambia al siguiente slot NO VACIO en orden circular
+///        (activeSlot+1, +2, ... wraparound). Si todos los demas slots
+///        estan vacios, no-op. Util para scroll wheel up.
+/// @return true si el swap se ejecuto, false si no hay otro slot armado.
+bool swapNext(Scene& scene, Entity shooter);
+
+/// @brief F4H3 — Cambia al slot NO VACIO anterior en orden circular
+///        (activeSlot-1, -2, ... wraparound). Util para scroll wheel down.
+/// @return true si el swap se ejecuto, false si no hay otro slot armado.
+bool swapPrev(Scene& scene, Entity shooter);
+
+/// @brief F4H3 — Toggle entre `activeSlot` y `lastActiveSlot`. Util para
+///        la tecla Q/Tab (HL/Apex style "previous weapon"). No-op si
+///        `lastActiveSlot == activeSlot` (no hay arma anterior).
+/// @return true si el swap se ejecuto.
+bool swapLast(Scene& scene, Entity shooter);
+
+/// @brief F4H3 — Sincroniza el viewmodel a la camara del player y swap
+///        del mesh segun el slot activo. Busca entity con tag
+///        `"__viewmodel"` (engine-generic — el nombre vive en codigo,
+///        no en docs UI) + `ViewmodelComponent`. Si no existe, no-op.
+///
+///        Comportamiento por frame:
+///        1. Resuelve player (tag "player") + WeaponComponent.
+///        2. Si `syncMeshOnSwap=true` y el slot activo cambio, swap el
+///           MeshRenderer del viewmodel al `spec.viewmodelMesh`. Si el
+///           spec no tiene viewmodelMesh, usa `missingMeshId()` (cubo
+///           primitivo) como placeholder.
+///        3. Setea Transform: position = cameraPos + right*x + up*y +
+///           forward*z, rotation = camera-aligned + extraRotEulerDeg.
+///
+///        Llamar ANTES del SceneRenderer en Play mode, pasando el state
+///        actual de la camara del player.
+void tickViewmodel(Scene& scene,
+                    const glm::vec3& cameraPos,
+                    const glm::vec3& cameraForward,
+                    const glm::vec3& cameraUp,
+                    AssetManager& assets);
 
 /// @brief True si la entidad puede disparar ahora mismo (tiene arma,
 ///        cooldown OK, no esta reloading, tiene munición).

@@ -174,9 +174,33 @@ struct SavedHealth {
 ///        (path logico del .moodweapon equipado) + `currentAmmo`. Los
 ///        timers (fireTimer, reloadTimer, firing) son transients runtime
 ///        y se reinician al cargar.
+/// @brief F4H3 — Slot persistido del arsenal. Mismo formato que
+///        `WeaponSlot` en runtime: path logico del .moodweapon +
+///        munición actual. Vacio = slot vacio.
+struct SavedWeaponSlot {
+    std::string weaponPath;
+    int         currentAmmo = -1;
+};
+
+/// @brief F4H2 + F4H3 — Copia persistida de WeaponComponent.
+///
+///        F4H2 (Bloque A): single-slot — `weaponPath` + `currentAmmo`
+///        en el JSON.
+///        F4H3: refactor a multi-slot — `slots[]` array + `activeSlot`.
+///
+///        Back-compat F4H2: si el JSON no trae `slots`, los campos
+///        viejos `weaponPath`/`currentAmmo` se mapean a `slots[0]`
+///        con `activeSlot=0`. El parse en EntitySerializer_Parse decide
+///        el formato segun la presencia del campo `slots`.
 struct SavedWeapon {
-    std::string weaponPath;       // vacio = sin arma equipada
-    int         currentAmmo = -1; // -1 = auto-inicializar al equipar
+    // F4H2 back-compat: si el JSON viene en formato viejo, el parser
+    // popula estos campos directo y deja `slots[0]` con su contenido.
+    // El writer F4H3 NUNCA los emite (solo escribe `slots[]`).
+    // Quedan en el struct para que el parse pueda persistirlos
+    // temporalmente antes de hacer la migracion.
+
+    std::vector<SavedWeaponSlot> slots;
+    u32 activeSlot = 0;
 };
 
 /// @brief Copia persistida de un TriggerComponent (Hito 33).

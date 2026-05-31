@@ -1,12 +1,13 @@
-// F4H2: Inspector — WeaponComponent en la categoria Gameplay.
-// Cubre: dropdown del .moodweapon equipado, display del spec read-only
-// (damage/range/pellets/fireRate/magSize/reload), ammo actual editable
-// (debug), reload trigger.
+// F4H2 + F4H3: Inspector — WeaponComponent en la categoria Gameplay.
 //
-// F4H2 Bloque B follow-up (pedido del dev "borrar drag, lista con
-// armas"): drag-drop eliminado, reemplazado por un combo que enumera
-// `AssetManager::enumerateWeapons()`. Strings hardcoded reemplazados
-// por `I18n::T(...)` para que la UI cambie con el idioma.
+// F4H2 (Bloque A): un solo slot — combo `.moodweapon` + spec read-only
+// + slider ammo runtime.
+// F4H2 Bloque B follow-up: drag-drop reemplazado por combo desde
+// `enumerateWeapons()`. Strings via `I18n::T(...)`.
+// F4H3: multi-slot. 4 tabs (uno por slot del arsenal) + indicador del
+// slot activo + boton "Set active" por slot. Cada tab muestra el combo
+// + spec + ammo del slot seleccionado para editar (que NO siempre es el
+// slot activo en runtime).
 //
 // Engine-generic: el panel NUNCA muestra nombres de armas hardcoded —
 // todo viene del Spec via AssetManager.
@@ -27,56 +28,47 @@
 
 namespace Mood {
 
-void InspectorPanel::renderWeaponSection(Entity e) {
-    auto& w = e.getComponent<WeaponComponent>();
-    if (!beginComponentSection<WeaponComponent>(e, ICON_FA_GAMEPAD " Arma")) return;
+namespace {
 
-    AssetManager* assets = m_assets;
-    if (assets == nullptr) {
-        ImGui::TextDisabled("(AssetManager no disponible)");
-        return;
-    }
+// Renderiza el cuerpo del slot dado (combo + spec + ammo). Comparte
+// codigo entre los 4 tabs.
+void renderSlotBody(WeaponComponent& w, u32 slotIdx, AssetManager& assets,
+                     bool& edited) {
+    WeaponSlot& s = w.slots[slotIdx];
 
-    // F4H2 Bloque B follow-up: combo "armas disponibles" desde
-    // `enumerateWeapons` (scan defensivo de `assets/weapons/`). Reemplaza
-    // el drag-drop, asi no hay que ir al AssetBrowser para equipar.
     const std::vector<AssetManager::WeaponListEntry> catalog =
-        assets->enumerateWeapons(/*rescanFromDisk=*/true);
+        assets.enumerateWeapons(/*rescanFromDisk=*/false);
 
     // Preview = displayName del id actual, o "(sin arma)" si 0.
     std::string previewLabel;
-    if (w.weaponAssetId == 0) {
+    if (s.weaponAssetId == 0) {
         previewLabel = I18n::T("editor.panel.inspector.weapon.none");
     } else {
         bool found = false;
         for (const auto& entry : catalog) {
-            if (entry.id == w.weaponAssetId) {
+            if (entry.id == s.weaponAssetId) {
                 previewLabel = entry.displayName;
                 found = true;
                 break;
             }
         }
         if (!found) {
-            // Id presente en el componente pero no en el catalogo (raro:
-            // arma borrada del disco después de equiparla). Mostrar el path
-            // lógico crudo + advertencia visual.
-            previewLabel = assets->weaponPathOf(w.weaponAssetId) + " (?)";
+            previewLabel = assets.weaponPathOf(s.weaponAssetId) + " (?)";
         }
     }
 
     const std::string equippedLabel =
-        I18n::T("editor.panel.inspector.weapon.equipped") + "##weapon_combo";
+        I18n::T("editor.panel.inspector.weapon.equipped")
+        + "##weapon_combo_" + std::to_string(slotIdx);
     if (ImGui::BeginCombo(equippedLabel.c_str(), previewLabel.c_str())) {
-        // Entrada (sin arma) — permite desequipar desde el combo sin
-        // necesidad de un boton X separado.
         const std::string noneLabel =
             I18n::T("editor.panel.inspector.weapon.none");
-        const bool noneSelected = (w.weaponAssetId == 0);
+        const bool noneSelected = (s.weaponAssetId == 0);
         if (ImGui::Selectable(noneLabel.c_str(), noneSelected)) {
-            if (w.weaponAssetId != 0) {
-                w.weaponAssetId = 0;
-                w.currentAmmo = -1;
-                m_editedThisFrame = true;
+            if (s.weaponAssetId != 0) {
+                s.weaponAssetId = 0;
+                s.currentAmmo = -1;
+                edited = true;
             }
         }
         if (noneSelected) ImGui::SetItemDefaultFocus();
@@ -84,16 +76,17 @@ void InspectorPanel::renderWeaponSection(Entity e) {
         if (!catalog.empty()) ImGui::Separator();
 
         for (const auto& entry : catalog) {
-            const bool selected = (entry.id == w.weaponAssetId);
+            const bool selected = (entry.id == s.weaponAssetId);
             const std::string label =
-                entry.displayName + "##wc_" + std::to_string(entry.id);
+                entry.displayName + "##wc_" + std::to_string(slotIdx)
+                + "_" + std::to_string(entry.id);
             if (ImGui::Selectable(label.c_str(), selected)) {
-                if (entry.id != w.weaponAssetId) {
-                    w.weaponAssetId = entry.id;
-                    if (const Weapon::Spec* spec = assets->getWeapon(entry.id)) {
-                        w.currentAmmo = static_cast<int>(spec->magazineSize);
+                if (entry.id != s.weaponAssetId) {
+                    s.weaponAssetId = entry.id;
+                    if (const Weapon::Spec* spec = assets.getWeapon(entry.id)) {
+                        s.currentAmmo = static_cast<int>(spec->magazineSize);
                     }
-                    m_editedThisFrame = true;
+                    edited = true;
                 }
             }
             if (selected) ImGui::SetItemDefaultFocus();
@@ -110,8 +103,8 @@ void InspectorPanel::renderWeaponSection(Entity e) {
     }
 
     // --- Spec display (read-only) ---
-    if (w.weaponAssetId != 0) {
-        const Weapon::Spec* spec = assets->getWeapon(w.weaponAssetId);
+    if (s.weaponAssetId != 0) {
+        const Weapon::Spec* spec = assets.getWeapon(s.weaponAssetId);
         if (spec != nullptr) {
             ImGui::Separator();
             ImGui::TextDisabled("%s",
@@ -155,19 +148,72 @@ void InspectorPanel::renderWeaponSection(Entity e) {
         I18n::T("editor.panel.inspector.weapon.runtime_header").c_str());
 
     int magMax = 999;
-    if (w.weaponAssetId != 0) {
-        if (const Weapon::Spec* spec = assets->getWeapon(w.weaponAssetId)) {
+    if (s.weaponAssetId != 0) {
+        if (const Weapon::Spec* spec = assets.getWeapon(s.weaponAssetId)) {
             magMax = static_cast<int>(spec->magazineSize);
         }
     }
-    int displayedAmmo = (w.currentAmmo < 0) ? magMax : w.currentAmmo;
+    int displayedAmmo = (s.currentAmmo < 0) ? magMax : s.currentAmmo;
     const std::string ammoLabel =
-        I18n::T("editor.panel.inspector.weapon.ammo") + "##wc_ammo";
+        I18n::T("editor.panel.inspector.weapon.ammo")
+        + "##wc_ammo_" + std::to_string(slotIdx);
     if (ImGui::SliderInt(ammoLabel.c_str(), &displayedAmmo, 0, magMax)) {
-        w.currentAmmo = displayedAmmo;
-        m_editedThisFrame = true;
+        s.currentAmmo = displayedAmmo;
+        edited = true;
+    }
+}
+
+} // namespace
+
+void InspectorPanel::renderWeaponSection(Entity e) {
+    auto& w = e.getComponent<WeaponComponent>();
+    if (!beginComponentSection<WeaponComponent>(e, ICON_FA_GAMEPAD " Arma")) return;
+
+    AssetManager* assets = m_assets;
+    if (assets == nullptr) {
+        ImGui::TextDisabled("(AssetManager no disponible)");
+        return;
     }
 
+    // F4H3 multi-slot UI: tab bar con los 4 slots + indicador del activo.
+    // El slot "viewed" (el tab seleccionado) puede ser distinto del slot
+    // "active" (el que se dispara) — el dev puede editar un slot mientras
+    // otro esta activo.
+    if (ImGui::BeginTabBar("##weapon_slots")) {
+        for (u32 i = 0; i < WeaponComponent::k_maxSlots; ++i) {
+            const bool isActive = (i == w.activeSlot);
+            // Etiqueta: "1" + estrella si activo.
+            std::string label = std::to_string(i + 1);
+            if (isActive) label += "*";
+            label += "##slot" + std::to_string(i);
+            if (ImGui::BeginTabItem(label.c_str())) {
+                if (isActive) {
+                    ImGui::TextDisabled("%s",
+                        I18n::T("editor.panel.inspector.weapon.active_slot").c_str());
+                } else {
+                    if (ImGui::SmallButton(
+                            (I18n::T("editor.panel.inspector.weapon.set_active")
+                             + "##setactive_" + std::to_string(i)).c_str())) {
+                        w.lastActiveSlot = w.activeSlot;
+                        w.activeSlot = i;
+                        w.fireTimer = 0.0f;
+                        w.reloadTimer = 0.0f;
+                        m_editedThisFrame = true;
+                    }
+                }
+                ImGui::Separator();
+
+                bool edited = false;
+                renderSlotBody(w, i, *assets, edited);
+                if (edited) m_editedThisFrame = true;
+
+                ImGui::EndTabItem();
+            }
+        }
+        ImGui::EndTabBar();
+    }
+
+    // Timers del frame (compartidos por slot activo).
     if (w.fireTimer > 0.0f) {
         ImGui::Text("%s %.2f s",
             I18n::T("editor.panel.inspector.weapon.fire_cooldown").c_str(),

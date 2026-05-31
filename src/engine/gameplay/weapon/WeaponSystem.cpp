@@ -40,6 +40,19 @@ inline f32 randFloat01(u64& state) {
            / static_cast<f32>(0x1000000u);
 }
 
+// F4H3: accessor mutable al slot activo con clamp defensivo. Cualquier
+// path que cargue mapas viejos o serializacion corrupta puede dejar
+// `activeSlot` fuera de rango — clampeamos a 0 en lugar de UB.
+inline WeaponSlot& activeSlotOf(WeaponComponent& wc) {
+    if (wc.activeSlot >= WeaponComponent::k_maxSlots) wc.activeSlot = 0;
+    return wc.slots[wc.activeSlot];
+}
+inline const WeaponSlot& activeSlotOf(const WeaponComponent& wc) {
+    const u32 idx = (wc.activeSlot < WeaponComponent::k_maxSlots)
+                    ? wc.activeSlot : 0u;
+    return wc.slots[idx];
+}
+
 // Construye una direccion perturbada dentro de un cono de semi-angulo
 // `maxAngleDeg` alrededor de `forward`. Distribucion uniforme sobre el
 // disco proyectado del cono (no uniforme en angulo: tipico shotgun feel
@@ -113,14 +126,15 @@ void spawnImpactBurst(Scene& scene, const glm::vec3& worldPos,
     e.addComponent<ParticleBurstComponent>(burst);
 }
 
-// Resuelve el Spec equipado en la entidad. Devuelve nullptr si no
-// tiene WeaponComponent o si el id es 0 (sin arma).
-const Spec* resolveSpec(Scene& scene, Entity shooter,
+// F4H3: resuelve el Spec del slot activo. Devuelve nullptr si no hay
+// WeaponComponent, si el slot activo esta vacio, o si el id es invalido.
+const Spec* resolveSpec(Scene& /*scene*/, Entity shooter,
                           const AssetManager& assets) {
     if (!shooter || !shooter.hasComponent<WeaponComponent>()) return nullptr;
     const auto& wc = shooter.getComponent<WeaponComponent>();
-    if (wc.weaponAssetId == 0) return nullptr;
-    return assets.getWeapon(wc.weaponAssetId);
+    const auto& slot = activeSlotOf(wc);
+    if (slot.weaponAssetId == 0) return nullptr;
+    return assets.getWeapon(slot.weaponAssetId);
 }
 
 // Tag debug para logs.
@@ -142,27 +156,28 @@ FireResult fire(Scene& scene,
 
     if (!shooter || !shooter.hasComponent<WeaponComponent>()) return out;
     auto& wc = shooter.getComponent<WeaponComponent>();
+    auto& slot = activeSlotOf(wc);
 
     const Spec* spec = resolveSpec(scene, shooter, assets);
     if (spec == nullptr) return out;
 
-    // Solo hitscan en F4H2. Otras categorias son no-op forward-compat.
+    // Solo hitscan en F4H2/F4H3. Otras categorias son no-op forward-compat.
     if (spec->category != "hitscan") {
         Log::engine()->warn(
-            "[weapon] '{}': category '{}' no soportada (solo hitscan en F4H2)",
+            "[weapon] '{}': category '{}' no soportada (solo hitscan)",
             tagOf(shooter), spec->category);
         return out;
     }
 
     // Auto-inicializar ammo si nunca se hizo (currentAmmo == -1).
-    if (wc.currentAmmo < 0) {
-        wc.currentAmmo = static_cast<int>(spec->magazineSize);
+    if (slot.currentAmmo < 0) {
+        slot.currentAmmo = static_cast<int>(spec->magazineSize);
     }
 
     // Validaciones de estado.
     if (wc.reloadTimer > 0.0f) return out;
     if (wc.fireTimer > 0.0f)   return out;
-    if (wc.currentAmmo <= 0)   return out;
+    if (slot.currentAmmo <= 0) return out;
 
     // Direccion forward (no asumir normalizado en el caller).
     const glm::vec3 forward = (glm::length(params.direction) > 0.0001f)
@@ -175,7 +190,7 @@ FireResult fire(Scene& scene,
     // RNG sembrado con el id de la entidad shooter + el ammo actual.
     // Da reproducibilidad por estado del arma sin necesidad de wall clock.
     u64 rng = (static_cast<u64>(static_cast<u32>(shooter.handle())) << 17)
-              ^ static_cast<u64>(wc.currentAmmo)
+              ^ static_cast<u64>(slot.currentAmmo)
               ^ 0xA02BDBF7BB3C0A7Bull;
 
     bool firstHitRecorded = false;
@@ -230,17 +245,17 @@ FireResult fire(Scene& scene,
     }
 
     // Consumir munición + arrancar cooldown.
-    --wc.currentAmmo;
+    --slot.currentAmmo;
     wc.fireTimer = 1.0f / spec->fireRatePerSec;
     out.fired = true;
 
     Log::engine()->info(
-        "[weapon] '{}' disparo '{}' ({} pellet{}, {} hit{}, ammo {}/{})",
+        "[weapon] '{}' disparo '{}' ({} pellet{}, {} hit{}, ammo {}/{} slot {})",
         tagOf(shooter), spec->displayName.empty() ? std::string("(unnamed)")
                                                      : spec->displayName,
         out.pelletsFired, out.pelletsFired == 1 ? "" : "s",
         out.pelletsHit,   out.pelletsHit == 1 ? "" : "s",
-        wc.currentAmmo, spec->magazineSize);
+        slot.currentAmmo, spec->magazineSize, wc.activeSlot);
 
     return out;
 }
@@ -248,18 +263,19 @@ FireResult fire(Scene& scene,
 bool reload(Scene& scene, Entity shooter, AssetManager& assets) {
     if (!shooter || !shooter.hasComponent<WeaponComponent>()) return false;
     auto& wc = shooter.getComponent<WeaponComponent>();
+    auto& slot = activeSlotOf(wc);
 
     const Spec* spec = resolveSpec(scene, shooter, assets);
     if (spec == nullptr) return false;
 
     // Ya esta full -> no-op.
-    if (wc.currentAmmo == static_cast<int>(spec->magazineSize)) return false;
+    if (slot.currentAmmo == static_cast<int>(spec->magazineSize)) return false;
     // Ya esta reloading -> no extender.
     if (wc.reloadTimer > 0.0f) return true;
 
     wc.reloadTimer = spec->reloadTimeSec;
-    Log::engine()->info("[weapon] '{}' reload start ({:.2f}s)",
-                         tagOf(shooter), spec->reloadTimeSec);
+    Log::engine()->info("[weapon] '{}' reload start ({:.2f}s, slot {})",
+                         tagOf(shooter), spec->reloadTimeSec, wc.activeSlot);
     return true;
 }
 
@@ -268,24 +284,27 @@ void tickSystem(Scene& scene, f32 dt, AssetManager& assets) {
 
     // --- Weapon timers ---
     reg.view<WeaponComponent>().each([&](entt::entity h, WeaponComponent& wc) {
+        auto& slot = activeSlotOf(wc);
+
         if (wc.fireTimer > 0.0f) {
             wc.fireTimer = std::max(0.0f, wc.fireTimer - dt);
         }
         if (wc.reloadTimer > 0.0f) {
             const f32 before = wc.reloadTimer;
             wc.reloadTimer = std::max(0.0f, wc.reloadTimer - dt);
-            // Reload completo: rellenar mag.
+            // Reload completo: rellenar mag del slot activo.
             if (before > 0.0f && wc.reloadTimer == 0.0f) {
-                if (wc.weaponAssetId != 0) {
-                    if (const Spec* spec = assets.getWeapon(wc.weaponAssetId)) {
-                        wc.currentAmmo = static_cast<int>(spec->magazineSize);
+                if (slot.weaponAssetId != 0) {
+                    if (const Spec* spec = assets.getWeapon(slot.weaponAssetId)) {
+                        slot.currentAmmo = static_cast<int>(spec->magazineSize);
                         const std::string tag =
                             reg.all_of<TagComponent>(h)
                                 ? reg.get<TagComponent>(h).name
                                 : std::string("<sin-tag>");
                         Log::engine()->info(
-                            "[weapon] '{}' reload completo ({}/{})", tag,
-                            wc.currentAmmo, spec->magazineSize);
+                            "[weapon] '{}' reload completo ({}/{} slot {})",
+                            tag, slot.currentAmmo, spec->magazineSize,
+                            wc.activeSlot);
                     }
                 }
             }
@@ -307,7 +326,7 @@ void tickSystem(Scene& scene, f32 dt, AssetManager& assets) {
     }
 }
 
-bool equipWeapon(Scene& scene, Entity shooter,
+bool equipWeapon(Scene& /*scene*/, Entity shooter,
                   const std::string& weaponPath,
                   AssetManager& assets) {
     if (!shooter) return false;
@@ -316,41 +335,220 @@ bool equipWeapon(Scene& scene, Entity shooter,
         ? &shooter.getComponent<WeaponComponent>()
         : &shooter.addComponent<WeaponComponent>();
 
+    // F4H3: equipWeapon opera sobre el slot ACTIVO (back-compat con
+    // F4H2 API). Para equipar en un slot especifico usar
+    // `equipWeaponInSlot(scene, e, slot, path)`.
+    WeaponSlot& slot = activeSlotOf(*wc);
+
     if (weaponPath.empty()) {
-        wc->weaponAssetId = 0;
-        wc->currentAmmo   = -1;
-        wc->fireTimer     = 0.0f;
-        wc->reloadTimer   = 0.0f;
-        Log::engine()->info("[weapon] '{}' unequipped", tagOf(shooter));
+        slot.weaponAssetId = 0;
+        slot.currentAmmo   = -1;
+        wc->fireTimer      = 0.0f;
+        wc->reloadTimer    = 0.0f;
+        Log::engine()->info("[weapon] '{}' unequipped (slot {})",
+                             tagOf(shooter), wc->activeSlot);
         return true;
     }
 
     const auto id = assets.loadWeapon(weaponPath);
-    wc->weaponAssetId = id;
-    wc->fireTimer     = 0.0f;
-    wc->reloadTimer   = 0.0f;
+    slot.weaponAssetId = id;
+    wc->fireTimer      = 0.0f;
+    wc->reloadTimer    = 0.0f;
     // Si currentAmmo nunca se inicializo o se viene de un weapon distinto,
     // resetear al magsize nuevo. Si el caller carga la scene con un valor
     // guardado, lo respeta (el SceneLoader pasa por path setea sin tocar
     // ammo despues).
-    if (wc->currentAmmo < 0) {
+    if (slot.currentAmmo < 0) {
         if (const Spec* spec = assets.getWeapon(id)) {
-            wc->currentAmmo = static_cast<int>(spec->magazineSize);
+            slot.currentAmmo = static_cast<int>(spec->magazineSize);
         }
     }
-    Log::engine()->info("[weapon] '{}' equipped '{}' (id {})",
-                         tagOf(shooter), weaponPath, id);
+    Log::engine()->info("[weapon] '{}' equipped '{}' (id {} slot {})",
+                         tagOf(shooter), weaponPath, id, wc->activeSlot);
     return true;
+}
+
+bool equipWeaponInSlot(Scene& /*scene*/, Entity shooter, u32 slotIdx,
+                        const std::string& weaponPath, AssetManager& assets) {
+    if (!shooter) return false;
+    if (slotIdx >= WeaponComponent::k_maxSlots) {
+        Log::engine()->warn(
+            "[weapon] equipWeaponInSlot: slot {} fuera de rango [0,{})",
+            slotIdx, WeaponComponent::k_maxSlots);
+        return false;
+    }
+
+    WeaponComponent* wc = shooter.hasComponent<WeaponComponent>()
+        ? &shooter.getComponent<WeaponComponent>()
+        : &shooter.addComponent<WeaponComponent>();
+
+    WeaponSlot& slot = wc->slots[slotIdx];
+
+    if (weaponPath.empty()) {
+        slot.weaponAssetId = 0;
+        slot.currentAmmo   = -1;
+        // No tocar timers globales — otro slot activo puede estar mid-cooldown.
+        Log::engine()->info("[weapon] '{}' slot {} unequipped",
+                             tagOf(shooter), slotIdx);
+        return true;
+    }
+
+    const auto id = assets.loadWeapon(weaponPath);
+    slot.weaponAssetId = id;
+    if (slot.currentAmmo < 0) {
+        if (const Spec* spec = assets.getWeapon(id)) {
+            slot.currentAmmo = static_cast<int>(spec->magazineSize);
+        }
+    }
+    Log::engine()->info("[weapon] '{}' slot {} <- '{}' (id {})",
+                         tagOf(shooter), slotIdx, weaponPath, id);
+    return true;
+}
+
+// F4H3: helper interno para los 4 swap APIs. Aplica el cambio +
+// resetea timers + actualiza lastActiveSlot + logea. Asume que
+// `wc.activeSlot != newSlot` y `newSlot < k_maxSlots`.
+namespace {
+
+void applySwap(Entity shooter, WeaponComponent& wc, u32 newSlot) {
+    wc.lastActiveSlot = wc.activeSlot;
+    wc.activeSlot     = newSlot;
+    wc.fireTimer      = 0.0f;
+    wc.reloadTimer    = 0.0f;
+    const std::string tag = (shooter && shooter.hasComponent<TagComponent>())
+        ? shooter.getComponent<TagComponent>().name
+        : std::string("<sin-tag>");
+    Log::engine()->info("[weapon] '{}' swap slot {} -> {} (last {})",
+                         tag, wc.lastActiveSlot, wc.activeSlot,
+                         wc.lastActiveSlot);
+}
+
+} // namespace
+
+bool swapToSlot(Scene& /*scene*/, Entity shooter, u32 slotIdx) {
+    if (!shooter || !shooter.hasComponent<WeaponComponent>()) return false;
+    if (slotIdx >= WeaponComponent::k_maxSlots) return false;
+    auto& wc = shooter.getComponent<WeaponComponent>();
+    if (wc.activeSlot == slotIdx) return false; // no-op
+    applySwap(shooter, wc, slotIdx);
+    return true;
+}
+
+bool swapNext(Scene& /*scene*/, Entity shooter) {
+    if (!shooter || !shooter.hasComponent<WeaponComponent>()) return false;
+    auto& wc = shooter.getComponent<WeaponComponent>();
+    constexpr u32 N = WeaponComponent::k_maxSlots;
+    // Busca el siguiente slot no-vacio en orden circular (skip current).
+    for (u32 step = 1; step < N; ++step) {
+        const u32 idx = (wc.activeSlot + step) % N;
+        if (wc.slots[idx].weaponAssetId != 0) {
+            applySwap(shooter, wc, idx);
+            return true;
+        }
+    }
+    return false; // sin otro slot armado
+}
+
+bool swapPrev(Scene& /*scene*/, Entity shooter) {
+    if (!shooter || !shooter.hasComponent<WeaponComponent>()) return false;
+    auto& wc = shooter.getComponent<WeaponComponent>();
+    constexpr u32 N = WeaponComponent::k_maxSlots;
+    for (u32 step = 1; step < N; ++step) {
+        const u32 idx = (wc.activeSlot + N - step) % N;
+        if (wc.slots[idx].weaponAssetId != 0) {
+            applySwap(shooter, wc, idx);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool swapLast(Scene& /*scene*/, Entity shooter) {
+    if (!shooter || !shooter.hasComponent<WeaponComponent>()) return false;
+    auto& wc = shooter.getComponent<WeaponComponent>();
+    if (wc.lastActiveSlot == wc.activeSlot) return false; // sin arma anterior
+    if (wc.lastActiveSlot >= WeaponComponent::k_maxSlots) return false;
+    applySwap(shooter, wc, wc.lastActiveSlot);
+    return true;
+}
+
+void tickViewmodel(Scene& scene,
+                    const glm::vec3& cameraPos,
+                    const glm::vec3& cameraForward,
+                    const glm::vec3& cameraUp,
+                    AssetManager& assets) {
+    // 1. Buscar entity viewmodel + entity player con WeaponComponent.
+    Entity viewmodelEntity{};
+    Entity playerEntity{};
+    auto& reg = scene.registry();
+    reg.view<TagComponent>().each([&](entt::entity h, TagComponent& tag) {
+        if (tag.name == "__viewmodel") {
+            viewmodelEntity = Entity{h, &scene};
+        } else if (tag.name == "player") {
+            playerEntity = Entity{h, &scene};
+        }
+    });
+    if (!viewmodelEntity || !viewmodelEntity.hasComponent<ViewmodelComponent>()) {
+        return;
+    }
+    if (!playerEntity || !playerEntity.hasComponent<WeaponComponent>()) {
+        return;
+    }
+
+    auto& vm = viewmodelEntity.getComponent<ViewmodelComponent>();
+    auto& wc = playerEntity.getComponent<WeaponComponent>();
+    const WeaponSlot& activeSlot = wc.slots[
+        (wc.activeSlot < WeaponComponent::k_maxSlots) ? wc.activeSlot : 0u];
+
+    // 2. Sync mesh si el slot activo cambio (o es primer tick).
+    if (vm.syncMeshOnSwap && activeSlot.weaponAssetId != vm.lastSeenWeaponId) {
+        vm.lastSeenWeaponId = activeSlot.weaponAssetId;
+        if (viewmodelEntity.hasComponent<MeshRendererComponent>()) {
+            auto& mr = viewmodelEntity.getComponent<MeshRendererComponent>();
+            MeshAssetId targetMesh = assets.missingMeshId(); // cubo fallback
+            if (activeSlot.weaponAssetId != 0) {
+                if (const Spec* spec = assets.getWeapon(activeSlot.weaponAssetId)) {
+                    if (!spec->viewmodelMesh.empty()) {
+                        targetMesh = assets.loadMesh(spec->viewmodelMesh);
+                    }
+                }
+            }
+            mr.mesh = targetMesh;
+            // Materiales se quedan como esten (fallback default si missing).
+            // F4H3.1 puede asignar `spec.viewmodelMaterial` aca.
+        }
+    }
+
+    // 3. Sync transform: posicion = cameraPos + right*x + up*y + forward*z.
+    //    rotacion = camara-aligned + extraRotEulerDeg.
+    if (viewmodelEntity.hasComponent<TransformComponent>()) {
+        auto& tf = viewmodelEntity.getComponent<TransformComponent>();
+        const glm::vec3 forward = glm::normalize(cameraForward);
+        const glm::vec3 right   = glm::normalize(glm::cross(forward,
+                                                              glm::normalize(cameraUp)));
+        const glm::vec3 up      = glm::normalize(glm::cross(right, forward));
+
+        tf.position = cameraPos
+                    + right   * vm.offsetCamSpace.x
+                    + up      * vm.offsetCamSpace.y
+                    + forward * vm.offsetCamSpace.z;
+        // Yaw + pitch derivados de forward.
+        const f32 yaw   = glm::degrees(std::atan2(forward.x, -forward.z));
+        const f32 pitch = glm::degrees(std::asin(forward.y));
+        tf.rotationEuler = glm::vec3(pitch, yaw, 0.0f) + vm.extraRotEulerDeg;
+        tf.scale = vm.scale;
+    }
 }
 
 bool canFire(Scene& scene, Entity shooter, AssetManager& assets) {
     const Spec* spec = resolveSpec(scene, shooter, assets);
     if (spec == nullptr) return false;
     const auto& wc = shooter.getComponent<WeaponComponent>();
+    const auto& slot = activeSlotOf(wc);
     if (wc.reloadTimer > 0.0f) return false;
     if (wc.fireTimer > 0.0f)   return false;
-    const int ammo = (wc.currentAmmo < 0)
-        ? static_cast<int>(spec->magazineSize) : wc.currentAmmo;
+    const int ammo = (slot.currentAmmo < 0)
+        ? static_cast<int>(spec->magazineSize) : slot.currentAmmo;
     return ammo > 0;
 }
 
@@ -358,8 +556,9 @@ int ammoLeft(Scene& scene, Entity shooter, AssetManager& assets) {
     const Spec* spec = resolveSpec(scene, shooter, assets);
     if (spec == nullptr) return 0;
     const auto& wc = shooter.getComponent<WeaponComponent>();
-    if (wc.currentAmmo < 0) return static_cast<int>(spec->magazineSize);
-    return wc.currentAmmo;
+    const auto& slot = activeSlotOf(wc);
+    if (slot.currentAmmo < 0) return static_cast<int>(spec->magazineSize);
+    return slot.currentAmmo;
 }
 
 } // namespace Mood::Weapon

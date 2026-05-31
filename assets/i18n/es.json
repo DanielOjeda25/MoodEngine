@@ -333,6 +333,8 @@
   "editor.panel.inspector.weapon.ammo": "Munición",
   "editor.panel.inspector.weapon.fire_cooldown": "Cooldown disparo:",
   "editor.panel.inspector.weapon.reloading": "Recargando:",
+  "editor.panel.inspector.weapon.active_slot": "(slot activo)",
+  "editor.panel.inspector.weapon.set_active": "Activar este slot",
   "editor.pick_mesh_modal.import": "Importar...",
   "editor.pick_mesh_modal.new_empty": "Empty",
   "editor.pick_mesh_modal.empty": "No hay modelos importados en el proyecto. Usa 'Importar desde archivo' abajo para agregar uno.",

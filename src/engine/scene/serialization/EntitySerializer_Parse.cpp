@@ -339,11 +339,31 @@ SavedEntity parseEntityFromJson(const json& j) {
     // F4H2: weapon opcional. Mapas pre-F4H2 sin el campo se leen igual
     // (la entidad queda sin WeaponComponent). El path se resuelve al
     // cargar en SceneLoader via AssetManager::loadWeapon.
+    // F4H2 + F4H3 weapon parse con back-compat. Schema F4H3 es `slots[]`
+    // + `activeSlot`; schema F4H2 era `path` + `currentAmmo` plano.
+    // Detectamos por presencia de `slots`. Maps pre-F4H3 se migran al
+    // slot 0 con activeSlot=0; maps F4H3 leen los slots tal cual.
     if (j.contains("weapon")) {
         const auto& jw = j.at("weapon");
         SavedWeapon sw;
-        sw.weaponPath  = jw.value("path",        std::string{});
-        sw.currentAmmo = jw.value("currentAmmo", -1);
+
+        if (jw.contains("slots") && jw["slots"].is_array()) {
+            // Formato F4H3.
+            sw.activeSlot = jw.value("activeSlot", 0u);
+            for (const auto& jslot : jw["slots"]) {
+                SavedWeaponSlot s;
+                s.weaponPath  = jslot.value("path",        std::string{});
+                s.currentAmmo = jslot.value("currentAmmo", -1);
+                sw.slots.push_back(std::move(s));
+            }
+        } else {
+            // Formato F4H2 back-compat: path + currentAmmo plano -> slot 0.
+            SavedWeaponSlot s;
+            s.weaponPath  = jw.value("path",        std::string{});
+            s.currentAmmo = jw.value("currentAmmo", -1);
+            sw.slots.push_back(std::move(s));
+            sw.activeSlot = 0;
+        }
         se.weapon = sw;
     }
 

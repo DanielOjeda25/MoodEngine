@@ -333,6 +333,8 @@
   "editor.panel.inspector.weapon.ammo": "Ammo",
   "editor.panel.inspector.weapon.fire_cooldown": "Fire cooldown:",
   "editor.panel.inspector.weapon.reloading": "Reloading:",
+  "editor.panel.inspector.weapon.active_slot": "(active slot)",
+  "editor.panel.inspector.weapon.set_active": "Activate this slot",
   "editor.pick_mesh_modal.import": "Import...",
   "editor.pick_mesh_modal.new_empty": "Empty",
   "editor.pick_mesh_modal.empty": "No models imported in the project. Use 'Import from file' below to add one.",

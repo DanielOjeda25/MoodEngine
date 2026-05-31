@@ -23,6 +23,7 @@
 #include "editor/panels/scene/OrthoViewportPanel.h"  // F2H44: Shift+wheel snap step
 #include "editor/ui/DragDropFeedback.h"  // F3H17: cancelDragOnEscape
 #include "engine/game/state/GameState.h"
+#include "engine/input/InputActions.h"   // F4H3 notifyScrollEvent
 #include "engine/render/scene_renderer/SceneRenderer.h"
 #include "engine/render/backend/opengl/OpenGLFramebuffer.h"
 
@@ -71,6 +72,15 @@ void EditorApplication::processEvents() {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         ImGui_ImplSDL2_ProcessEvent(&ev);
+
+        // F4H3 — notify scroll wheel a InputActions para que el binding
+        // mouse_wheel_up/down sea visible al input bridge. Se acumula
+        // por frame; el bridge en tickSystems lo consume via
+        // wasActionTriggered("weapon_next") y endFrame() lo resetea.
+        if (ev.type == SDL_MOUSEWHEEL && ev.wheel.y != 0) {
+            InputActions::notifyScrollEvent(ev.wheel.y);
+        }
+
         if (ev.type == SDL_QUIT) {
             m_running = false;
         } else if (ev.type == SDL_WINDOWEVENT &&

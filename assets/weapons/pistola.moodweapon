@@ -1,0 +1,19 @@
+{
+  "_version": 1,
+  "displayName": "Pistola",
+  "category": "hitscan",
+  "damage": 25.0,
+  "range": 80.0,
+  "pellets": 1,
+  "spreadDeg": 0.5,
+  "fireRatePerSec": 5.0,
+  "magazineSize": 12,
+  "reloadTimeSec": 1.2,
+  "viewmodelMesh": "",
+  "viewmodelMaterial": "",
+  "fireSound": "",
+  "impactSound": "",
+  "muzzleVfx": "",
+  "impactVfx": "",
+  "ignoreOwner": true
+}
