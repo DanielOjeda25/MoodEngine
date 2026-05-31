@@ -11,6 +11,86 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-31: F4H8 cierre — Chase con A* + Attack tracking continuo (Doom Eternal-style)
+
+**Contexto.** Segundo hito de Sub-fase 4.2. F4H7 dejó la state machine armada con 6 estados (Idle/Alert/Chase/Attack/Pain/Dead) pero Chase y Attack eran no-op. F4H8 activa el movimiento real conectando `EnemySystem` con `NavAgentComponent` + `NavSystem` (Hito 23 A*) que ya existían en el motor. El enemy persigue al player con A* puro grid y mantiene tracking mientras lo golpea.
+
+**Decisiones de scope (AskUserQuestion al dev)**:
+
+- **D1 — Chase + Attack tracking en un solo hito (estilo Doom Eternal).** El enemy se mueve en Chase Y en Attack. NavAgent queda `active=true` en ambos. **Razón**: feel Doom Eternal — el enemy te marca siempre, sin ventanas de descanso para que el player descanse. Doom clásico (parar para atacar) queda F4H8.1 opt-in via `spec.attackStopsMove: bool` si el dev decide después que prefiere el telegraph clásico de wind-up estatico. F4H9 traera el daño real pero F4H8 ya tiene la postura: el enemy queda *encima del player*.
+
+- **D2 — A* puro sin anti-clumping.** Si 3 grunts persiguen al mismo player, los 3 van al mismo tile destino y pueden quedar overlap. **Razón**: convención Doom/Serious Sam — hordas tontas que se amontonan. Anti-clumping (personal-space radius o flocking simple) queda F4H8.2 si emerge fricción visual en validación con > 5 enemies simultáneos. **Out-of-scope capturada**: el dev respondio textual *"no quiero un mapa como una mesa de ajedrez, la idea no es que sea un mapa plano, sino que tambien esten en zonas alejadas en puntos diferentes, ni siquiera estoy hablando de un generador de mapas como el de unreal imaginate"*. Es level design (F4H13 encounter), NO entra a F4H8. Memoria `project_pandemonium_map_design` capturada para que no se nos olvide. El A* actual es 2D grid → navmesh 3D queda backlog post-F4H13 si emerge friccion con mapas multi-altura (rampas/plataformas).
+
+**Decisiones técnicas (convención agente, no preguntadas)**:
+
+- **D3 — EnemySystem es el único responsable de los NavAgents enemy.** En Chase/Attack: ensure component + `nav.target = playerPos` + `nav.speed = spec.moveSpeed` + `nav.active = true`. En Idle/Alert/Pain/Dead: si tiene NavAgent → `nav.active = false`. **Razón**: el patron del bridge actual (`forEach<NavAgentComponent>` seteando target=playerPos para TODOS) es demasiado agresivo — futuros NavAgents non-enemy (companions, patrol NPCs Lua, vehiculos AI) querran target distinto. EnemySystem maneja sus enemies; el bridge queda para los no-enemies.
+
+- **D4 — Bridge wireup: skip enemies en el forEach genérico.** El `forEach<NavAgentComponent>` en `EditorApplication_Run.cpp:1018-1027` sigue corriendo para back-compat (Lua script futuro puede crear NavAgent standalone) pero saltea entities con EnemyComponent. Comment migra de "futuro Lua patrol" a "F4H8: EnemySystem hace su propio target; aca quedan los standalone".
+
+- **D5 — Alert→Chase transition inmediata.** F4H7 dejó Alert como estado estable (queda en Alert mientras dist <= aggro * 1.5). F4H8: si Alert + `dist > attackRange` → transition inmediata a Chase. Alert ya no es estable — apenas te ve, persigue. Estilo Doom clásico: el enemy NO te observa con paciencia antes de moverse. La razon Alert sigue existiendo: F4H9 puede agregar un wind-up de 0.5s en Alert antes de Chase (si emerge demand de telegraph del aggro).
+
+- **D6 — `nav.speed = spec.moveSpeed` cada frame.** El spec puede cambiar (Inspector live edit, Lua script). Setting cada tick mantiene sync sin watcher. Costo: 1 float write per enemy per frame, irrelevante.
+
+- **D7 — Auto-add NavAgentComponent on demand sin remove.** Al entrar Chase por primera vez, si no tiene NavAgent, se agrega. NO lo borramos al salir de Chase — solo desactivamos (`active=false`) para que NavSystem lo skipee. **Razón**: re-allocar componente cada Idle↔Chase transition es churn innecesario; la entity los mantiene hasta morir.
+
+- **D8 — Dead deactivate NavAgent ANTES de agregar Dynamic RB.** El comment de `NavAgentComponent` (Components_Gameplay.h:114) advierte explicito desde Hito 23: "no debe tener tambien RigidBodyComponent::Dynamic — el NavSystem ya hace moveAndSlide y crear ambos handlers daria peleas de autoridad sobre el Transform". F4H8 respeta: cuando el enemy muere, primero `deactivateNavAgent` despues `auto-add Dynamic RB`. Mismo tick, orden estricto. El test "Dead desactiva NavAgent" cubre esta secuencia.
+
+**Ajuste reactivo descubierto via tests**:
+
+- **R1 — Post-switch NavAgent side-effects block.** Versión inicial llamaba `activateNavAgent` adentro del case del switch que evaluaba state PRE-transition. Los tests reportaron fail `REQUIRE(hasComponent<NavAgentComponent>())` tras 2 ticks Idle→Alert→Chase: el case Chase NO se ejecutaba en el mismo tick de la transition Alert→Chase (el switch solo entraba a un case por tick). Fix: separar las side-effects a un SEGUNDO switch que evalua state POST-transition al final del lambda, garantizando que Alert→Chase activa NavAgent en el MISMO tick (apenas Alert decide Chase, el A* arranca). El switch original quedo solo para evaluar transitions:
+
+```cpp
+// Switch 1 — transitions (evalua state PRE):
+switch (ec.state) {
+    case EnemyState::Alert:
+        if (dist > spec.attackRange) transitionTo(ec, Chase, ...);
+        break;
+    ...
+}
+
+// Switch 2 — side effects (evalua state POST):
+switch (ec.state) {
+    case EnemyState::Chase:
+    case EnemyState::Attack:
+        activateNavAgent(reg, e, playerPos, spec.moveSpeed);
+        break;
+    case EnemyState::Idle:
+    case EnemyState::Alert:
+    case EnemyState::Pain:
+        deactivateNavAgent(reg, e);
+        break;
+    case EnemyState::Dead:
+        break;  // ya desactivado al transition arriba
+}
+```
+
+Patron clean para state machines con side effects per-state. F4H9 puede reusarlo cuando agregue `applyDamageToPlayer` en case Attack.
+
+**Tests F4H8**: 9 nuevos verdes + 1 update (33 asserts). Update: F4H7 "Pain → Alert despues de painDuration con target" → F4H8 "Pain → Chase despues de painDuration con target" — semantica cambia porque Pain con target valido ahora retoma A* directo via Chase (no Alert intermedio).
+- Alert→Chase cuando dist > attackRange.
+- Chase agrega NavAgentComponent + target/speed/active.
+- Attack mantiene NavAgent active (tracking continuo D1).
+- Chase actualiza target cada tick si player se mueve.
+- Pain desactiva NavAgent.
+- Dead desactiva NavAgent (evita pelea con Dynamic RB).
+- Idle desactiva NavAgent (player se aleja).
+- NO double-add NavAgent en transitions Chase↔Idle↔Chase (D7).
+- Attack→Chase si player se aleja > attackRange * 1.5.
+
+**Suite full 1450/12353 verde** (+9 cases / +33 asserts vs F4H7: 1441 → 1450). 0 regresion.
+
+**Backlog post-F4H8**:
+- **F4H8.1 (opt-in)** — Doom-clasico Attack stop via `spec.attackStopsMove: bool` default false = tracking continuo. Solo si el dev decide despues que prefiere telegraph clasico.
+- **F4H8.2** — Anti-clumping si emerge fricción: personal-space radius en EnemySystem o flocking simple.
+- **F4H8.3** — Spec del `.moodenemy` pathfinding params: `turnRate` (que tan rapido cambia direccion), `acceleration` (no instant top speed), `repathHysteresisDist` (cuando re-A*). Hoy todos default — NavAgent del Hito 23 maneja repath cada 0.5s automatico.
+- **Navmesh 3D** — backlog post-F4H13 si los mapas con altura emergen (rampas/plataformas multi-nivel).
+- LoS raycast opt-in F4H7.1 sigue agendizado.
+- Ataque que daña al player → F4H9.
+
+**Próximo hito**: **F4H9** — Ataques que dañan al player. El enemy en `Attack` state (ya alcanzado en F4H7/F4H8) golpea al player aplicando `spec.damage` HP cada `spec.attackCooldown` segundos via `Health::applyDamage`. Sub-decisión a definir con el dev: melee solamente (golpe instantaneo si dist <= attackRange) vs melee + ranged proyectil (`.moodenemy` con `attackKind: "melee" | "projectile"` data-driven). Probablemente los 2 desde dia 1 para no romper schema. Logic-only, cubos.
+
+---
+
 ## 2026-05-31: F4H7 cierre — Enemigo básico con máquina de estados + `.moodenemy` data-driven (apertura Sub-fase 4.2)
 
 **Contexto.** Arranca Sub-fase 4.2 "¿es divertido pelear?" tras el cierre de Sub-fase 4.1 (F4H1-F4H6 cubrieron player + armas + HUD + game feel). El otro lado del loop de combate es el enemigo — necesita una infraestructura paralela: state machine + asset data-driven + integracion con Health. F4H7 entrega esa infraestructura completa pero NO mueve al enemigo (F4H8 traera nav A*) ni lo hace atacar (F4H9 traera daño al player). El enemigo es cubo placeholder per strategic deferral del usuario en cierre F4H6 — toda Sub-fase 4.2 cierra con cubos, visual pass en Sub-fase 4.3.

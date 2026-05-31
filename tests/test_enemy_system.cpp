@@ -161,8 +161,8 @@ TEST_CASE("F4H7 Pain trigger cuando hitFlashTimer sube (recibio damage)") {
     CHECK(ec.painsTotal == 1);
 }
 
-TEST_CASE("F4H7 Pain → Alert despues de painDuration con target") {
-    auto root = setupAssetRoot("pain_to_alert");
+TEST_CASE("F4H8 Pain → Chase despues de painDuration con target") {
+    auto root = setupAssetRoot("pain_to_chase");
     auto assets = makeAssets(root);
     Scene scene;
     Entity player = makePlayer(scene, glm::vec3(0.0f));
@@ -179,7 +179,8 @@ TEST_CASE("F4H7 Pain → Alert despues de painDuration con target") {
         Enemy::tickSystem(scene, 0.1f, player, nullptr, *assets);
     }
     const auto& ec = enemy.getComponent<EnemyComponent>();
-    CHECK(ec.state == EnemyState::Alert);  // tiene target → Alert
+    // F4H8: Pain con target vuelve a Chase (no Alert) — el A* retoma.
+    CHECK(ec.state == EnemyState::Chase);
 }
 
 TEST_CASE("F4H7 Dead transition cuando HP llega a 0") {
@@ -328,4 +329,200 @@ TEST_CASE("F4H7 multiples enemies independent state machines") {
     // Near entra Alert; far queda Idle (out of aggro).
     CHECK(near.getComponent<EnemyComponent>().state  == EnemyState::Alert);
     CHECK(far_.getComponent<EnemyComponent>().state  == EnemyState::Idle);
+}
+
+// =============================================================
+// F4H8 — NavAgent integration (Chase + Attack tracking)
+// =============================================================
+
+TEST_CASE("F4H8 Alert→Chase cuando dist > attackRange") {
+    auto root = setupAssetRoot("alert_chase");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(5.0f, 0.0f, 0.0f));
+
+    // Tick 1: Idle → Alert.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Alert);
+
+    // Tick 2: F4H8 (D5) — Alert dentro aggro pero fuera attack → Chase.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    CHECK(enemy.getComponent<EnemyComponent>().state == EnemyState::Chase);
+}
+
+TEST_CASE("F4H8 Chase agrega NavAgentComponent + target/speed/active") {
+    auto root = setupAssetRoot("chase_navagent");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(5.0f, 0.0f, 0.0f));
+    REQUIRE_FALSE(enemy.hasComponent<NavAgentComponent>());
+
+    // 2 ticks: Idle → Alert → Chase.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Chase);
+
+    REQUIRE(enemy.hasComponent<NavAgentComponent>());
+    const auto& nav = enemy.getComponent<NavAgentComponent>();
+    CHECK(nav.active == true);
+    CHECK(nav.target.x == doctest::Approx(0.0f));
+    CHECK(nav.target.z == doctest::Approx(0.0f));
+    CHECK(nav.speed   == doctest::Approx(4.0f));  // spec.moveSpeed default
+}
+
+TEST_CASE("F4H8 Attack mantiene NavAgent active (tracking continuo)") {
+    auto root = setupAssetRoot("attack_tracking");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(1.5f, 0.0f, 0.0f));
+
+    // Tick 1: Idle → Alert.
+    // Tick 2: Alert → Attack (dist 1.5 <= attackRange 2).
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Attack);
+
+    // F4H8 D1: NavAgent agregado + active=true en Attack.
+    REQUIRE(enemy.hasComponent<NavAgentComponent>());
+    CHECK(enemy.getComponent<NavAgentComponent>().active == true);
+}
+
+TEST_CASE("F4H8 Chase actualiza target cada tick si player se mueve") {
+    auto root = setupAssetRoot("target_updates");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(5.0f, 0.0f, 0.0f));
+
+    // 2 ticks → Chase.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.hasComponent<NavAgentComponent>());
+    const auto firstTarget = enemy.getComponent<NavAgentComponent>().target;
+
+    // Player se mueve.
+    player.getComponent<TransformComponent>().position = glm::vec3(2.0f, 0.0f, 3.0f);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+
+    const auto secondTarget = enemy.getComponent<NavAgentComponent>().target;
+    CHECK(secondTarget.x == doctest::Approx(2.0f));
+    CHECK(secondTarget.z == doctest::Approx(3.0f));
+    CHECK(firstTarget.x != doctest::Approx(secondTarget.x));
+}
+
+TEST_CASE("F4H8 Pain desactiva NavAgent") {
+    auto root = setupAssetRoot("pain_deactivate");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(5.0f, 0.0f, 0.0f));
+
+    // Setup Chase con NavAgent activo.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Chase);
+    REQUIRE(enemy.getComponent<NavAgentComponent>().active == true);
+
+    // Damage → Pain.
+    Health::applyDamage(scene, enemy, 20.0f);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Pain);
+
+    // F4H8: NavAgent desactivado en Pain.
+    CHECK(enemy.getComponent<NavAgentComponent>().active == false);
+}
+
+TEST_CASE("F4H8 Dead desactiva NavAgent (evita pelea con Dynamic RB)") {
+    auto root = setupAssetRoot("dead_deactivate_nav");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(5.0f, 0.0f, 0.0f), 10.0f);
+
+    // Setup Chase.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Chase);
+    REQUIRE(enemy.getComponent<NavAgentComponent>().active == true);
+
+    // Kill.
+    Health::applyDamage(scene, enemy, 999.0f);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Dead);
+
+    // F4H8 (D8): NavAgent desactivado para no pelear con Dynamic RB.
+    CHECK(enemy.getComponent<NavAgentComponent>().active == false);
+}
+
+TEST_CASE("F4H8 Idle desactiva NavAgent (player se aleja)") {
+    auto root = setupAssetRoot("idle_deactivate_nav");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(5.0f, 0.0f, 0.0f));
+
+    // Setup Chase.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<NavAgentComponent>().active == true);
+
+    // Player se aleja fuera de aggro * 1.5.
+    player.getComponent<TransformComponent>().position = glm::vec3(50.0f, 0.0f, 0.0f);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+
+    CHECK(enemy.getComponent<EnemyComponent>().state == EnemyState::Idle);
+    CHECK(enemy.getComponent<NavAgentComponent>().active == false);
+}
+
+TEST_CASE("F4H8 NO double-add NavAgent en transitions Chase↔Idle↔Chase") {
+    auto root = setupAssetRoot("no_dupe_nav");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(5.0f, 0.0f, 0.0f));
+
+    // Chase.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.hasComponent<NavAgentComponent>());
+
+    // Player se aleja → Idle.
+    player.getComponent<TransformComponent>().position = glm::vec3(50.0f, 0.0f, 0.0f);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Idle);
+
+    // Player vuelve cerca → Alert → Chase.
+    player.getComponent<TransformComponent>().position = glm::vec3(0.0f);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Chase);
+
+    // Verificar que solo hay 1 NavAgent en toda la scene.
+    int navCount = 0;
+    scene.registry().view<NavAgentComponent>().each(
+        [&](entt::entity, NavAgentComponent&) { navCount += 1; });
+    CHECK(navCount == 1);
+}
+
+TEST_CASE("F4H8 Attack→Chase si player se aleja > attackRange * 1.5") {
+    auto root = setupAssetRoot("attack_chase");
+    auto assets = makeAssets(root);
+    Scene scene;
+    Entity player = makePlayer(scene, glm::vec3(0.0f));
+    Entity enemy = makeEnemy(scene, "e1", glm::vec3(1.5f, 0.0f, 0.0f));
+
+    // Setup Attack.
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+    REQUIRE(enemy.getComponent<EnemyComponent>().state == EnemyState::Attack);
+
+    // Player se aleja a 5m (> attackRange*1.5 = 3m, < aggro 12).
+    player.getComponent<TransformComponent>().position = glm::vec3(5.0f, 0.0f, 0.0f);
+    Enemy::tickSystem(scene, 0.016f, player, nullptr, *assets);
+
+    // F4H8: Attack → Chase (no Alert) — el A* persigue.
+    CHECK(enemy.getComponent<EnemyComponent>().state == EnemyState::Chase);
 }

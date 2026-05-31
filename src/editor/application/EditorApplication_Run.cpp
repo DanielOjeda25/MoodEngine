@@ -1018,8 +1018,14 @@ void EditorApplication::tickSystems(f32 dt) {
     if (m_mode == EditorMode::Play && m_scene && m_navSystem) {
         MOOD_PROFILE_SCOPE("NavSystem::update");
         const glm::vec3 playerPos = m_playCamera.position();
+        // F4H8: EnemySystem es responsable de setear target/speed/active
+        // de los NavAgents de sus enemies (segun el state machine). Los
+        // NavAgents standalone (companions, patrol NPCs futuros, scripts
+        // Lua que monten su propio NavAgent) siguen siendo target=player
+        // por default — aca quedan los non-enemy.
         m_scene->forEach<NavAgentComponent>(
-            [&](Entity, NavAgentComponent& nav) {
+            [&](Entity e, NavAgentComponent& nav) {
+                if (e.hasComponent<EnemyComponent>()) return;  // EnemySystem lo maneja.
                 nav.target = playerPos;
             });
         m_navSystem->update(*m_scene, m_map, mapWorldOrigin(), dt);

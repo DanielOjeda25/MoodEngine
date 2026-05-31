@@ -41,6 +41,28 @@ void transitionTo(EnemyComponent& ec, EnemyState next,
     ec.stateTime = 0.0f;
 }
 
+// F4H8: ensure NavAgent + setup para chase/attack. Auto-add component
+// si no existe (D7). En estados quietos (Idle/Alert/Pain/Dead) se llama
+// a deactivateNavAgent en su lugar.
+void activateNavAgent(entt::registry& reg, entt::entity e,
+                       const glm::vec3& target, f32 speed) {
+    if (!reg.all_of<NavAgentComponent>(e)) {
+        reg.emplace<NavAgentComponent>(e);
+    }
+    auto& nav = reg.get<NavAgentComponent>(e);
+    nav.target = target;
+    nav.speed  = speed;
+    nav.active = true;
+}
+
+// F4H8: stop al NavAgent sin borrarlo (D7 — re-allocar cada
+// Idle↔Chase es churn innecesario; solo desactivamos).
+void deactivateNavAgent(entt::registry& reg, entt::entity e) {
+    if (reg.all_of<NavAgentComponent>(e)) {
+        reg.get<NavAgentComponent>(e).active = false;
+    }
+}
+
 } // namespace
 
 void tickSystem(Scene& scene, f32 dt, Entity playerEntity,
@@ -117,6 +139,10 @@ void tickSystem(Scene& scene, f32 dt, Entity playerEntity,
         // --- Dead transition ---
         if (hc != nullptr && hc->dead && ec.state != EnemyState::Dead) {
             transitionTo(ec, EnemyState::Dead, tagName);
+            // F4H8: desactivar NavAgent ANTES de agregar Dynamic RB —
+            // evita la pelea de autoridad sobre el Transform que el
+            // comment de NavAgentComponent flagea explicito (D8).
+            deactivateNavAgent(reg, e);
             // Auto-add Dynamic RB en el MISMO tick — el test inmediato
             // verifica el component (mismo patron F4H1 Health::tickSystem).
             if (!reg.all_of<RigidBodyComponent>(e)) {
@@ -135,7 +161,7 @@ void tickSystem(Scene& scene, f32 dt, Entity playerEntity,
             ? horizontalDistance(xform.position, playerPos)
             : 1e9f;
 
-        // --- State machine ---
+        // --- State machine — evalua transitions segun el state actual ---
         switch (ec.state) {
             case EnemyState::Idle: {
                 if (playerValid && dist <= spec.aggroRange) {
@@ -145,40 +171,33 @@ void tickSystem(Scene& scene, f32 dt, Entity playerEntity,
                 break;
             }
             case EnemyState::Alert: {
-                // F4H7: queda en Alert estable. F4H8 traera transicion a
-                // Chase (movimiento + pathfinding). Pre-F4H8 no chasea pero
-                // marca que el enemigo "te vio".
-                // Si el player salio del aggro range × 1.5 (hysteresis),
-                // volver a Idle.
+                // F4H8 (D5): Alert ya no es estable — apenas te ve, persigue.
+                // Si dist > attackRange → Chase. Si dist <= attackRange → Attack.
                 if (!playerValid || dist > spec.aggroRange * 1.5f) {
                     ec.targetEntity = EnemyComponent::k_noTarget;
                     transitionTo(ec, EnemyState::Idle, tagName);
                 } else if (dist <= spec.attackRange) {
                     transitionTo(ec, EnemyState::Attack, tagName);
+                } else {
+                    transitionTo(ec, EnemyState::Chase, tagName);
                 }
                 break;
             }
             case EnemyState::Chase: {
-                // F4H8 implementa movimiento aca. F4H7: no-op cinematico.
-                // Transition a Attack si el player ya esta cerca, a Alert
-                // si se escapo.
                 if (!playerValid || dist > spec.aggroRange * 1.5f) {
                     ec.targetEntity = EnemyComponent::k_noTarget;
                     transitionTo(ec, EnemyState::Idle, tagName);
                 } else if (dist <= spec.attackRange) {
                     transitionTo(ec, EnemyState::Attack, tagName);
-                } else if (dist > spec.attackRange * 1.5f) {
-                    // Hysteresis para no oscilar entre Attack/Chase.
-                    // No-op en F4H7.
                 }
                 break;
             }
             case EnemyState::Attack: {
-                // F4H9 implementa daño al player aca. F4H7: cooldown timer
-                // sin damage real. Vuelve a Alert/Chase si player se aleja.
+                // F4H9 traera el daño real al player. F4H7-F4H8: solo eval
+                // transition si se aleja.
                 if (!playerValid || dist > spec.attackRange * 1.5f) {
                     if (dist <= spec.aggroRange) {
-                        transitionTo(ec, EnemyState::Alert, tagName);
+                        transitionTo(ec, EnemyState::Chase, tagName);
                     } else {
                         ec.targetEntity = EnemyComponent::k_noTarget;
                         transitionTo(ec, EnemyState::Idle, tagName);
@@ -188,10 +207,10 @@ void tickSystem(Scene& scene, f32 dt, Entity playerEntity,
             }
             case EnemyState::Pain: {
                 // Stagger: queda en Pain durante painDuration. Despues vuelve
-                // a Alert si tiene target, sino Idle.
+                // a Chase (con target — el A* retoma) o Idle (sin target).
                 if (ec.stateTime >= spec.painDuration) {
                     if (ec.targetEntity != EnemyComponent::k_noTarget && playerValid) {
-                        transitionTo(ec, EnemyState::Alert, tagName);
+                        transitionTo(ec, EnemyState::Chase, tagName);
                     } else {
                         transitionTo(ec, EnemyState::Idle, tagName);
                     }
@@ -200,6 +219,27 @@ void tickSystem(Scene& scene, f32 dt, Entity playerEntity,
             }
             case EnemyState::Dead:
                 // Manejado arriba (early return).
+                break;
+        }
+
+        // --- F4H8: NavAgent side-effects basado en el state POST-transition.
+        // Separado del switch para que las transitions Alert→Chase activen
+        // el NavAgent en el MISMO tick (D5 — apenas Alert decide Chase, el
+        // A* arranca).
+        switch (ec.state) {
+            case EnemyState::Chase:
+            case EnemyState::Attack:
+                // D1+D6: tracking continuo en Chase Y Attack. Target/speed
+                // refresh cada frame para sync con spec live edits.
+                activateNavAgent(reg, e, playerPos, spec.moveSpeed);
+                break;
+            case EnemyState::Idle:
+            case EnemyState::Alert:
+            case EnemyState::Pain:
+                deactivateNavAgent(reg, e);
+                break;
+            case EnemyState::Dead:
+                // Ya desactivado al transition arriba.
                 break;
         }
 
