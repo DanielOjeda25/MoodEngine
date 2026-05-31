@@ -11,6 +11,57 @@ decisión, razones, alternativas descartadas, condiciones de revisión.
 
 ---
 
+## 2026-05-31: F4H6 cierre — Game feel pass: muzzle flash + hit marker + screen shake + crosshair dinámico + pain reaction + tracer
+
+**Contexto.** Cierre de Sub-fase 4.1 "¿se siente bien disparar?". F4H1-F4H5 dieron el combate **funcional**: salud, armas hitscan, swap multi-slot + viewmodel, HUD + pickups, proyectiles con splash. Pero al validar visualmente el dev reportó verbatim: *"sabes que pasa con el tema de daño, y armas es que todo es invisible no veo nada ni ningun diferencia entre ninguno, creo hasta el dummy o enemigo es un cubo no se porque no es un npc de los que tenemos con ragdoll, porque no bajamos animaciones de impacto o algo asi, y vamos mejorando"*. El combate funciona pero no se siente. F4H6 convierte combate funcional → combate que SE SIENTE.
+
+**Decisiones de scope (AskUserQuestion al dev)**:
+
+- **D1 — Bundle de 6 feedback layers en un solo hito.** Hito atómico cubre los 6 efectos del cierre de Sub-fase 4.1: (1) muzzle flash; (2) hit marker; (3) screen shake; (4) crosshair dinámico con spread; (5) pain reaction; (6) tracer del proyectil. Descartado *solo recoil* (M1/COD-style — único efecto cierra Sub-fase 4.1 a medias); descartado *solo shake* (Doom-Eternal-style — falta feedback de hit/spread/pain). El cierre de Sub-fase requiere el paquete completo. **Razón**: si el dev no siente diferencia entre las armas tras F4H6, el problema NO es game feel sino visual pass (Sub-fase 4.3). Mejor validar todos los efectos juntos para diagnosticar correctamente.
+
+- **D2 — Intensidad HL/COD sutil.** Cada efecto va al **80% inferior** del rango de la industria. Shake amplitudes [0.015, 0.2] (mu, ground truth Quake III es 0.1; Doom Eternal 0.4-0.7). Pitch pain 2° (Quake 5°; Doom Eternal 8°). Crosshair gap expand max 16px (CS:GO max 30; Apex max 25). Descartado *Doom-Eternal-style screen-wide shake* (overkill primer hito de feel) y *Quake hyper-arcade* (descontrola FOV percepción). **Razón estratégica**: primero validar suavidad — el dev puede pedir +50% intensidad fácilmente con sliders en Project Settings cuando confirme que el feel se siente correcto. Bajar intensidad ya validada es más costoso emocionalmente que subirla.
+
+**Decisiones técnicas (convención agente, no preguntadas)**:
+
+- **D3 — Procedural-only sin assets art.** F4H6 entrega los 6 efectos con: `ParticleBurst` ya existente (F4H2 spawnImpactBurst pattern) + cosenoidal/exponencial decay + xorshift32 randomness + state lifecycle en `HudState`. Cero texturas, cero sonidos, cero mesh assets nuevos. **Razón**: el strategic deferral del usuario (verbatim) *"antes de lo visual falta algo mas en el sistema? cuando tengamos toda la logica implementada ahi podemos ver lo visual"* defiere TODO el visual pass (texturas muzzle/impact + decals + viewmodel meshes + ragdoll NPC Mixamo + animaciones impacto) a Sub-fase 4.3 unificada DESPUÉS de Sub-fase 4.2 (enemies F4H7-F4H12 all logic con cubos). F4H6 entrega la **infraestructura procedural completa** del feel; el dev valida que la lógica está bien aunque visualmente sigan siendo cubos.
+
+- **D4 — Polling vs callbacks en bridge (R4 F4H4 preservado).** El bridge `EditorApplication_Run::tickSystems` POLLA state del frame anterior para detectar transitions (hitFlashTimer subió → disparar pain reaction; activeSlot cambió → arsenal overlay; targetsHit > 0 → hit marker). NO emite callbacks engine→game. **Razón**: mantiene `engine/gameplay/Health.cpp` y `engine/gameplay/projectile/ProjectileSystem.cpp` desacoplados de `engine/game/state/GameState.h`. Si emitiera callbacks rompería layering — `gameplay/` NO puede incluir `game/state/`. Polling permite que F4H6 wirree los efectos sin tocar la signature de funciones gameplay puras.
+
+- **D5 — Eje shake aleatorio per-frame via xorshift32 deterministic.** El shake no es solo `sin(t * freq) * amp` en una sola dirección — eso parece "vibración de vibrador". Se necesita rotación de eje per-frame para parecer impacto. Implementación: `static u32 shakeRoll = 0xD3B2F1A7u` xorshift32 → `vec3 axis = normalize(vec3(...))` y `shakeOffset = axis * sin(t * 80) * amp * (t / max_t)`. **Razón vs `rand()`**: thread-safety (game loop puede tickear en thread aparte futuro) + reproducibilidad para tests (test_game_feel_f4h6 con seed conocida puede validar offset shape). Mismo patrón aplicado en `triggerPainReaction.pain_roll_offset` para roll determinismo.
+
+- **D6 — Tracer preset por heuristic de `displayName` (no field schema).** En `Weapon::fire` projectile branch, después de spawnear el entity, se busca `spec.displayName` y se aplica preset heuristic: contains("rocket") → gris denso humo; contains("plasma") → cian aditivo; contains("grenade") → naranja con gravity sparks. **Razón vs field schema explícito `projectile.tracer { color, density }`**: no requiere migration de `.moodweapon` existentes (`rocket.moodweapon`, `plasma.moodweapon`, `grenade.moodweapon` ya creados en F4H5). Field opt-in queda agendizado a F4H6.1 si el dev quiere armas custom con tracer custom (e.g. mod del juego con "freeze gun" → cyan slow).
+
+**Ajustes reactivos durante implementación**:
+
+- **R1 — `triggerCameraShake` anti-spam timer > 50ms.** Versión inicial sobrescribía `shake_amp/shake_t` siempre. Test reactive durante validación con granadas multi-bounce (3-4 explosiones en 0.5s) generaba stutter visual feo — cada bounce dispara shake nuevo que cortaba el decay anterior, parecía bug. Fix: si shake actualmente activo + nuevo shake más débil + timer remaining > 50ms → ignorar. Permite que un shake más fuerte (granada vs disparo) sí sobrescriba; solo bloquea cascade de iguales/menores.
+
+- **R2 — `Projectile::tickSystem` retorno void → `TickStats{explosionCount, damageTargetsHit, lastExplosionCenter}`.** F4H5 dejó la función como void. F4H6 necesita saber cuándo + dónde explotó un proyectil + cuántas entities dañó para disparar (camera shake + hit marker + spread del crosshair). Refactor a TickStats struct retornado al bridge. No breaking back-compat — el único caller existente (`EditorApplication_Run`) se actualiza al pasar a leer el struct. `applySplashDamage` también cambia void → int (count entities dañadas) y se propaga a TickStats.damageTargetsHit. Costo: 2 test cases en `test_projectile_system.cpp` actualizan signature.
+
+- **R3 — Tracer NO se agregó al schema `.moodweapon`.** Heuristic por displayName cubre los 3 use cases F4H5 (rocket/plasma/grenade). Si emerge demand de custom tracer, se agrega `projectile.tracer { color, density, sizeStart, sizeEnd }` en schema bump explícito agendizado a F4H6.1.
+
+**Strategic deferral del usuario** (verbatim, no preguntado por el agente, dirigido por el dev): *"antes de lo visual falta algo mas en el sistema? cuando tengamos toda la logica implementada ahi podemos ver lo visual, ademas no quiero usar el cesium man, ese eliminalo, tenemos ya un npc de mixamo con algunas animaciones y podemos bajar mas"*. **Implicación arquitectónica**: Sub-fase 4.2 (F4H7-F4H12 enemies) toda cierra con cubos placeholder. Visual pass unificado en Sub-fase 4.3 (texturas + decals + viewmodel meshes + ragdoll NPC Mixamo + animaciones impacto). F4H6 marca el último hito procedural-only en Sub-fase 4.1.
+
+**Asset cleanup**: `assets/meshes/CesiumMan.glb` eliminado del repo (`git rm`). Razón: proyecto ya tiene Fox.glb + NPC Mixamo (npc.fbx + 3 anims) + Player Mixamo (player.fbx + 3 anims). CesiumMan era prueba de F2H51 obsoleta. Fox.glb preservado: `test_scene_loader.cpp:56` lo referencia como fixture.
+
+**Tests F4H6**: 14 nuevos verdes en `test_game_feel_f4h6.cpp` (40 asserts):
+- 3 triggerCameraShake (setea amp+timers / anti-spam más débil no pisa / más fuerte reemplaza).
+- 2 triggerPainReaction (setea pitch+roll+timer / anti-spam timer > 0.1s no re-trigger).
+- 5 FpsCamera offsets (setShakeOffset desplaza view / setShakeOffset(0) restaura / setPainOffset modifica forward pitch / setPainOffset(0,0) restaura / defaults sin shake/pain).
+- 2 applySplashDamage (retorna count entities dañadas / radius=0 retorna 0).
+- 2 crosshair spread (HudState default 0 / reset limpia timers F4H6).
+
+**Suite full 1418/12240 verde** (+14 cases / +40 asserts vs F4H5: 1404 → 1418). 0 regresión.
+
+**Backlog post-F4H6**:
+- **F4H6.1** — Tracer field schema explícito `.moodweapon` (`projectile.tracer { color, density, sizeStart, sizeEnd, gravity }`) si emerge demand de custom (mod / 2nd weapon set). Heuristic actual cubre F4H5 demo.
+- **Sub-fase 4.3 visual pass** — Texturas muzzle flash + impact decal + viewmodel meshes art real (rocket/pistola/escopeta) + NPC Mixamo aplicado a enemies (post-F4H7-F4H12) + ragdoll (F2H66) + animaciones impacto (Mixamo: hit_reaction.fbx, death.fbx).
+- Sound on muzzle flash / sound on pain reaction (parte de Sub-fase 4.3).
+- Camera shake intensity slider en `.moodproj > Gameplay > Combat` (per-game tuning sin recompilar) — agendizable a F4H6.2 si emerge demand de tuning per-juego.
+
+**Próximo hito**: **F4H7** — arranca Sub-fase 4.2 "Enemigos básicos". EnemyComponent + state machine simple {Idle/Chasing/Attacking/Dead} + spawn via Crear Entidad → Gameplay → Enemy. Logic-only — el enemigo sigue siendo cubo placeholder. Per strategic deferral del usuario: toda Sub-fase 4.2 (F4H7-F4H12) cierra con cubos, visual pass unificado posterior en Sub-fase 4.3 con NPC Mixamo + ragdoll + animaciones.
+
+---
+
 ## 2026-05-30: F4H5 cierre — Armas de proyectil (rocket + plasma + granada) con splash radial
 
 **Contexto:** F4H4 cerró el HUD + pickups. Quedaba el item "armas de proyectil" del roadmap PLAN_FASE4 (era F4H4 textual, renumerado a F4H5 al cerrar F4H4 = HUD/pickups). Hasta F4H4 todas las armas eran hitscan instantáneo via raycast — el jugador apuntaba y el daño se aplicaba inmediato. F4H5 introduce el **proyectil físico**: entity efímera que vuela con velocidad finita visible, choca con superficies/enemies, explota con splash damage radial. Plan en `PLAN_HITO_F4H5.md`. 2 decisiones con AskUserQuestion + 5 convenciones agente D3-D7 + 3 ajustes reactivos + 1 bug build-time fix.

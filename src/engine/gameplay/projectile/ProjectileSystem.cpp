@@ -55,18 +55,19 @@ void spawnExplosionBurst(Scene& scene, const glm::vec3& worldPos, f32 radius) {
 
 // Aplica explosion al final del frame: spawn burst + audio + splash damage
 // + marca el projectile exploded=true. NO destruye el entity (eso lo hace
-// el cleanup del tick).
-void explode(Scene& scene, Entity proj, const glm::vec3& center,
-              const Weapon::Spec& spec, AudioDevice* audio,
-              AssetManager& assets) {
+// el cleanup del tick). Retorna count de targets dañados (game feel).
+int explode(Scene& scene, Entity proj, const glm::vec3& center,
+             const Weapon::Spec& spec, AudioDevice* audio,
+             AssetManager& assets) {
     auto& p = proj.getComponent<ProjectileComponent>();
-    if (p.exploded) return;
+    if (p.exploded) return 0;
     p.exploded = true;
 
     const u32 ignoreOwner = spec.ignoreOwner ? p.owner : 0u;
 
-    applySplashDamage(scene, center, spec.projectile.splashRadius,
-                       spec.projectile.splashDamage, ignoreOwner);
+    const int dmgCount = applySplashDamage(scene, center,
+        spec.projectile.splashRadius, spec.projectile.splashDamage,
+        ignoreOwner);
     spawnExplosionBurst(scene, center, spec.projectile.splashRadius);
 
     if (audio && !spec.impactSound.empty()) {
@@ -80,16 +81,18 @@ void explode(Scene& scene, Entity proj, const glm::vec3& center,
         "[projectile] explosion at ({:.1f},{:.1f},{:.1f}) splash={}m dmg={}",
         center.x, center.y, center.z,
         spec.projectile.splashRadius, spec.projectile.splashDamage);
+    return dmgCount;
 }
 
 } // namespace
 
-void applySplashDamage(Scene& scene, const glm::vec3& center, f32 radius,
-                        f32 baseDamage, u32 ignoreOwnerRaw) {
-    if (radius <= 0.0f || baseDamage <= 0.0f) return;
+int applySplashDamage(Scene& scene, const glm::vec3& center, f32 radius,
+                       f32 baseDamage, u32 ignoreOwnerRaw) {
+    if (radius <= 0.0f || baseDamage <= 0.0f) return 0;
     auto& reg = scene.registry();
     const entt::entity ignoreOwner = static_cast<entt::entity>(ignoreOwnerRaw);
 
+    int count = 0;
     reg.view<HealthComponent, TransformComponent>().each(
         [&](entt::entity ent, HealthComponent& hc, const TransformComponent& tf) {
             (void)hc;
@@ -103,12 +106,16 @@ void applySplashDamage(Scene& scene, const glm::vec3& center, f32 radius,
             Entity victim{ent, &scene};
             Health::applyDamage(scene, victim, dmg, glm::normalize(
                 glm::vec3(d.x, std::max(0.1f, d.y), d.z)));
+            ++count;
         });
+    return count;
 }
 
-void tickSystem(Scene& scene, f32 dt, PhysicsWorld* physics,
-                 AudioDevice* audio, AssetManager& assets) {
+TickStats tickSystem(Scene& scene, f32 dt, PhysicsWorld* physics,
+                      AudioDevice* audio, AssetManager& assets) {
     auto& reg = scene.registry();
+
+    TickStats stats;
 
     // Pass 1: avanzar + detectar colision + explode.
     std::vector<entt::entity> toDestroy;
@@ -131,7 +138,11 @@ void tickSystem(Scene& scene, f32 dt, PhysicsWorld* physics,
             // Aging + lifetime.
             p.age += dt;
             if (p.age >= p.lifetimeSec) {
-                explode(scene, proj, tf.position, *spec, audio, assets);
+                const int n = explode(scene, proj, tf.position, *spec,
+                                       audio, assets);
+                stats.explosionCount += 1;
+                stats.damageTargetsHit += n;
+                stats.lastExplosionCenter = tf.position;
                 toDestroy.push_back(ent);
                 return;
             }
@@ -197,12 +208,18 @@ void tickSystem(Scene& scene, f32 dt, PhysicsWorld* physics,
             }
 
             // No rebota → explosion. Direct damage al hit entity si Health.
+            int directHits = 0;
             if (hitHealthEntity) {
                 Entity victim{static_cast<entt::entity>(hitBodyEntity), &scene};
                 Health::applyDamage(scene, victim, spec->projectile.directDamage,
                                      glm::normalize(p.velocity));
+                directHits = 1;
             }
-            explode(scene, proj, hitPoint, *spec, audio, assets);
+            const int splashHits = explode(scene, proj, hitPoint, *spec,
+                                            audio, assets);
+            stats.explosionCount += 1;
+            stats.damageTargetsHit += directHits + splashHits;
+            stats.lastExplosionCenter = hitPoint;
             toDestroy.push_back(ent);
         });
 
@@ -210,6 +227,7 @@ void tickSystem(Scene& scene, f32 dt, PhysicsWorld* physics,
     for (entt::entity ent : toDestroy) {
         if (reg.valid(ent)) reg.destroy(ent);
     }
+    return stats;
 }
 
 } // namespace Projectile

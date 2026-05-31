@@ -630,8 +630,44 @@ void EditorApplication::tickSystems(f32 dt) {
                     fp.origin        = m_playCamera.position();
                     fp.direction     = m_playCamera.forward();
                     fp.ignoredBodyId = 0;  // CharacterVirtual no expone body raycastable
-                    Weapon::fire(*m_scene, e, fp,
-                                  *m_physicsWorld, *m_audioDevice, *m_assetManager);
+                    const Weapon::FireResult fr = Weapon::fire(
+                        *m_scene, e, fp,
+                        *m_physicsWorld, *m_audioDevice, *m_assetManager);
+                    // F4H6 game feel triggers (solo si el disparo realmente salio).
+                    if (fr.fired) {
+                        // Muzzle flash: spawn particle burst chico en el origen
+                        // del disparo (offset forward chico, fuera del shooter).
+                        const glm::vec3 muzzlePos = fp.origin + fp.direction * 0.3f;
+                        Entity mf = m_scene->createEntity("__muzzle_flash");
+                        auto& mfTf = mf.getComponent<TransformComponent>();
+                        mfTf.position = muzzlePos;
+                        mfTf.scale = glm::vec3(0.1f);
+                        ParticleEmitterComponent mfEm{};
+                        mfEm.emissionShape = ParticleEmitterComponent::EmissionShape::Point;
+                        mfEm.emitRate = 0.0f;
+                        mfEm.lifetimeMin = 0.03f;
+                        mfEm.lifetimeMax = 0.07f;
+                        mfEm.velocityMin = fp.direction * 0.5f - glm::vec3(0.3f);
+                        mfEm.velocityMax = fp.direction * 2.0f + glm::vec3(0.3f);
+                        mfEm.sizeStart = 0.12f;
+                        mfEm.sizeEnd   = 0.02f;
+                        mfEm.colorStart = glm::vec4(1.0f, 0.95f, 0.6f, 1.0f);
+                        mfEm.colorEnd   = glm::vec4(1.0f, 0.5f,  0.1f, 0.0f);
+                        mfEm.additive = true;
+                        mfEm.gravityFactor = 0.0f;
+                        mfEm.maxParticles = 12;
+                        mfEm.emitAccumulator = 10.0f;
+                        mf.addComponent<ParticleEmitterComponent>(mfEm);
+                        ParticleBurstComponent mfBurst{};
+                        mfBurst.ttl = mfEm.lifetimeMax + 0.1f;
+                        mf.addComponent<ParticleBurstComponent>(mfBurst);
+                        // Screen shake chico al disparar.
+                        GameState::triggerCameraShake(0.02f, 0.08f);
+                        // Hit marker si pegamos a algo con Health.
+                        if (fr.pelletsHit > 0 || fr.damagedTarget != 0) {
+                            GameState::triggerHitMarker();
+                        }
+                    }
                 }
                 if (reloadPressed) {
                     Weapon::reload(*m_scene, e, *m_assetManager);
@@ -657,18 +693,22 @@ void EditorApplication::tickSystems(f32 dt) {
     // efimeros del impacto. Solo Play mode; el sistema es engine-generic
     // (no asume PANDEMONIUM).
     if (m_scene && m_assetManager && m_mode == EditorMode::Play) {
-        MOOD_PROFILE_SCOPE("Weapon::tickSystem");
-        Weapon::tickSystem(*m_scene, dt, *m_assetManager);
+        {
+            MOOD_PROFILE_SCOPE("Weapon::tickSystem");
+            Weapon::tickSystem(*m_scene, dt, *m_assetManager);
+        }
 
         // F4H3: viewmodel sync — sigue a la camara y swap del mesh al
         // cambiar de slot. Llamarlo DESPUES de tickSystem para que el
         // swap del slot ya este reflejado.
-        MOOD_PROFILE_SCOPE("Weapon::tickViewmodel");
-        Weapon::tickViewmodel(*m_scene,
-                                m_playCamera.position(),
-                                m_playCamera.forward(),
-                                glm::vec3(0.0f, 1.0f, 0.0f),
-                                *m_assetManager);
+        {
+            MOOD_PROFILE_SCOPE("Weapon::tickViewmodel");
+            Weapon::tickViewmodel(*m_scene,
+                                    m_playCamera.position(),
+                                    m_playCamera.forward(),
+                                    glm::vec3(0.0f, 1.0f, 0.0f),
+                                    *m_assetManager);
+        }
 
         // F4H4: pickup tick + sync HudState con stats del player.
         //
@@ -690,10 +730,27 @@ void EditorApplication::tickSystems(f32 dt) {
         // F4H5: tick de los proyectiles (rocket/plasma/granada). Mueve
         // entities con ProjectileComponent, detecta colision via raycast
         // continuo prevPos -> currentPos, explode + splash damage.
+        // F4H6: stats del tick → screen shake escalado a distancia + hit
+        // marker si hubo damage targets.
         {
             MOOD_PROFILE_SCOPE("Projectile::tickSystem");
-            Projectile::tickSystem(*m_scene, dt, m_physicsWorld.get(),
-                                    m_audioDevice.get(), *m_assetManager);
+            const auto stats = Projectile::tickSystem(*m_scene, dt,
+                m_physicsWorld.get(), m_audioDevice.get(), *m_assetManager);
+            if (stats.explosionCount > 0) {
+                // Screen shake escalado a distancia del player a la explosion.
+                const f32 dist = glm::length(stats.lastExplosionCenter
+                                              - m_playCamera.position());
+                // Falloff lineal a 10m. Amp max = 0.15 (HL/COD sutil pero
+                // notorio).
+                const f32 falloff = std::max(0.0f, 1.0f - dist / 10.0f);
+                if (falloff > 0.0f) {
+                    GameState::triggerCameraShake(0.15f * falloff, 0.4f);
+                }
+                // Hit marker si la explosion daño a alguien.
+                if (stats.damageTargetsHit > 0) {
+                    GameState::triggerHitMarker();
+                }
+            }
         }
 
         // Sync HudState desde components del player + detectar transitions
@@ -710,6 +767,9 @@ void EditorApplication::tickSystems(f32 dt) {
                 // lo resetea al pico).
                 if (hc.hitFlashTimer > m_f4h4_prevHitFlashTimer + 0.01f) {
                     GameState::triggerDamageFlash(0.0f, 0.0f);
+                    // F4H6: pain reaction + screen shake medio al recibir damage.
+                    GameState::triggerPainReaction();
+                    GameState::triggerCameraShake(0.08f, 0.25f);
                 }
                 m_f4h4_prevHitFlashTimer = hc.hitFlashTimer;
             }
@@ -757,6 +817,51 @@ void EditorApplication::tickSystems(f32 dt) {
                 } else {
                     hud.mag = 0; hud.max_mag = 0;
                 }
+                // F4H6: sync crosshair spread del arma activa.
+                if (activeSlot.weaponAssetId != 0) {
+                    if (const auto* spec = m_assetManager->getWeapon(
+                            activeSlot.weaponAssetId)) {
+                        hud.crosshair_spread_deg = spec->spreadDeg;
+                    }
+                } else {
+                    hud.crosshair_spread_deg = 0.0f;
+                }
+            }
+
+            // F4H6: decay timers + computar offsets transient + apply al
+            // FpsCamera. Se hace AL FINAL del sync para que cualquier
+            // trigger de este frame (pain reaction, shake on damage)
+            // ya este reflejado en los timers.
+            {
+                MOOD_PROFILE_SCOPE("F4H6 camera offsets");
+                // Decay shake.
+                if (hud.shake_t > 0.0f) {
+                    hud.shake_t = std::max(0.0f, hud.shake_t - dt);
+                }
+                // Decay pain.
+                if (hud.pain_pitch_t > 0.0f) {
+                    hud.pain_pitch_t = std::max(0.0f, hud.pain_pitch_t - dt);
+                }
+                // Computar offsets.
+                glm::vec3 shakeOffset(0.0f);
+                if (hud.shake_t > 0.0f && hud.shake_max_t > 0.0f) {
+                    const f32 ratio = hud.shake_t / hud.shake_max_t;
+                    const f32 amp = hud.shake_amp * ratio;
+                    const f32 freqX = 47.0f;  // Hz — alto = "shake" no oscilacion
+                    const f32 freqY = 53.0f;
+                    const f32 t = static_cast<f32>(ImGui::GetTime());
+                    shakeOffset.x = std::sin(t * freqX) * amp;
+                    shakeOffset.y = std::sin(t * freqY) * amp;
+                }
+                f32 painPitch = 0.0f;
+                f32 painRoll  = 0.0f;
+                if (hud.pain_pitch_t > 0.0f && hud.pain_pitch_max_t > 0.0f) {
+                    const f32 ratio = hud.pain_pitch_t / hud.pain_pitch_max_t;
+                    painPitch = hud.pain_pitch_amp * ratio;
+                    painRoll  = hud.pain_roll_offset * ratio;
+                }
+                m_playCamera.setShakeOffset(shakeOffset);
+                m_playCamera.setPainOffset(painPitch, painRoll);
             }
         }
     }

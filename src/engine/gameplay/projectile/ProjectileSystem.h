@@ -20,6 +20,13 @@ class AssetManager;
 
 namespace Projectile {
 
+/// @brief F4H6: stats del frame para que el bridge dispare game feel triggers.
+struct TickStats {
+    int explosionCount = 0;       // explosiones este frame
+    int damageTargetsHit = 0;     // total entities con Health afectadas
+    glm::vec3 lastExplosionCenter{0.0f}; // ultimo center, para shake escalado a distancia
+};
+
 /// @brief Tick del sistema. Llamado cada frame en Play mode. Mueve los
 ///        projectiles, detecta colision, dispara explosion + cleanup.
 ///
@@ -27,8 +34,12 @@ namespace Projectile {
 ///        detecta colision (proyectiles vuelan hasta agotar lifetime y
 ///        explotan en su posicion final). Aceptable para tests headless.
 ///        `audio` opcional: sin device, salta el impactSound.
-void tickSystem(Scene& scene, f32 dt, PhysicsWorld* physics,
-                 AudioDevice* audio, AssetManager& assets);
+///
+///        Retorna stats del frame (explosiones + targets dañados +
+///        ultimo center) para que el bridge trigger camera shake + hit
+///        marker escalados al evento. Empty si no hay proyectiles.
+TickStats tickSystem(Scene& scene, f32 dt, PhysicsWorld* physics,
+                      AudioDevice* audio, AssetManager& assets);
 
 /// @brief Aplica splash damage radial con falloff lineal: entities con
 ///        HealthComponent dentro del `radius` del `center` reciben
@@ -38,8 +49,9 @@ void tickSystem(Scene& scene, f32 dt, PhysicsWorld* physics,
 ///
 ///        Engine-generic: el caller decide qué constituye "splash"
 ///        (rocket, barrel explosion, environment hazard, etc.).
-void applySplashDamage(Scene& scene, const glm::vec3& center, f32 radius,
-                        f32 baseDamage, u32 ignoreOwner /*entt::entity raw*/);
+///        Retorna el numero de entities dañadas (para hit marker etc).
+int applySplashDamage(Scene& scene, const glm::vec3& center, f32 radius,
+                       f32 baseDamage, u32 ignoreOwner /*entt::entity raw*/);
 
 } // namespace Projectile
 } // namespace Mood

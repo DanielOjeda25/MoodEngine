@@ -57,6 +57,40 @@ void triggerArsenalOverlay() {
     hud().arsenal_overlay_t = 3.0f;
 }
 
+void triggerCameraShake(float amplitude, float duration) {
+    auto& h = hud();
+    // Anti-spam: si hay un shake activo mas fuerte, no lo pisamos. Si el
+    // nuevo es mas fuerte o el actual ya casi expira, reemplaza.
+    const bool currentlyActive = h.shake_t > 0.0f && h.shake_max_t > 0.0f;
+    const bool newIsStronger   = amplitude > h.shake_amp;
+    if (currentlyActive && !newIsStronger
+        && h.shake_t > 0.05f) {
+        return;
+    }
+    h.shake_amp     = amplitude;
+    h.shake_t       = duration;
+    h.shake_max_t   = duration;
+}
+
+void triggerPainReaction() {
+    auto& h = hud();
+    // Anti-spam: si el pitch ya activo y > 0.1s restantes, skip — evita
+    // oscilacion en damage continuo.
+    if (h.pain_pitch_t > 0.1f) return;
+    h.pain_pitch_amp     = 2.0f;  // deg
+    h.pain_pitch_t       = 0.25f;
+    h.pain_pitch_max_t   = 0.25f;
+    // Roll random ±1deg. Determinismo: no usamos rand() global por test
+    // reproducibility; usamos un xorshift sembrado por el frame count
+    // implicito al sumar el current shake_t (que cambia frame a frame).
+    static u32 painRoll = 0xA02BDBF7u;
+    painRoll ^= painRoll << 13;
+    painRoll ^= painRoll >> 17;
+    painRoll ^= painRoll << 5;
+    const f32 normalized = static_cast<f32>(painRoll) / 4294967296.0f;
+    h.pain_roll_offset   = (normalized * 2.0f - 1.0f);  // [-1, 1] deg
+}
+
 void pushPickup(const char* text) {
     if (text == nullptr || std::strlen(text) == 0) return;
     auto& q = hud().pickup_queue;

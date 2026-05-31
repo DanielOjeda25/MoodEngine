@@ -212,6 +212,56 @@ FireResult fire(Scene& scene,
         pc.prevPos       = ptf.position;
         proj.addComponent<ProjectileComponent>(pc);
 
+        // F4H6: Tracer del proyectil — ParticleEmitter persistente con
+        // preset por displayName del arma (engine-generic: tinte de color
+        // visualmente distinto rocket/plasma/granada). Si emerge necesidad
+        // de tracer custom, F4H6.1 puede mover esto a `spec.projectile.tracer*`.
+        ParticleEmitterComponent tracer{};
+        tracer.emissionShape = ParticleEmitterComponent::EmissionShape::Point;
+        const std::string lcName = spec->displayName;
+        // Heuristic simple por nombre del arma (Plasma Gun / Rocket Launcher /
+        // Grenade). F4H6.1: campo dedicado en el spec.
+        if (lcName.find("Plasma") != std::string::npos
+         || lcName.find("plasma") != std::string::npos) {
+            // Cyan glow rapido.
+            tracer.emitRate = 80.0f;
+            tracer.lifetimeMin = 0.15f;
+            tracer.lifetimeMax = 0.30f;
+            tracer.colorStart = glm::vec4(0.3f, 0.7f, 1.0f, 1.0f);
+            tracer.colorEnd   = glm::vec4(0.1f, 0.4f, 1.0f, 0.0f);
+            tracer.sizeStart = 0.12f;
+            tracer.sizeEnd   = 0.02f;
+            tracer.additive = true;
+            tracer.gravityFactor = 0.0f;
+        } else if (lcName.find("Grenade") != std::string::npos
+                || lcName.find("ranada")  != std::string::npos) {
+            // Chispas naranja-amarillo, gravedad leve.
+            tracer.emitRate = 30.0f;
+            tracer.lifetimeMin = 0.10f;
+            tracer.lifetimeMax = 0.20f;
+            tracer.colorStart = glm::vec4(1.0f, 0.8f, 0.2f, 0.9f);
+            tracer.colorEnd   = glm::vec4(0.5f, 0.2f, 0.0f, 0.0f);
+            tracer.sizeStart = 0.05f;
+            tracer.sizeEnd   = 0.01f;
+            tracer.additive = true;
+            tracer.gravityFactor = 0.3f;
+        } else {
+            // Default = rocket: humo gris semi-transparente, no additive.
+            tracer.emitRate = 60.0f;
+            tracer.lifetimeMin = 0.25f;
+            tracer.lifetimeMax = 0.45f;
+            tracer.colorStart = glm::vec4(0.5f, 0.5f, 0.5f, 0.8f);
+            tracer.colorEnd   = glm::vec4(0.3f, 0.3f, 0.3f, 0.0f);
+            tracer.sizeStart = 0.15f;
+            tracer.sizeEnd   = 0.05f;
+            tracer.additive = false;
+            tracer.gravityFactor = 0.0f;
+        }
+        tracer.velocityMin = glm::vec3(-0.1f);
+        tracer.velocityMax = glm::vec3(0.1f);
+        tracer.maxParticles = 128;
+        proj.addComponent<ParticleEmitterComponent>(tracer);
+
         // Sonido del disparo (3D positional en origin del shooter).
         if (!spec->fireSound.empty()) {
             const auto clipId = assets.loadAudio(spec->fireSound);

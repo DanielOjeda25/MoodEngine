@@ -25,6 +25,7 @@ add_executable(mood_tests
     test_armor_component.cpp                   # F4H4
     test_pickup_system.cpp                     # F4H4
     test_projectile_system.cpp                 # F4H5
+    test_game_feel_f4h6.cpp                    # F4H6
     test_weapon_asset.cpp                      # F4H2
     test_weapon_system.cpp                     # F4H2
     test_input_keybindings.cpp                 # F4H2 Bloque B

@@ -237,10 +237,16 @@ void drawAmmoCounter(const HudContext& ctx) {
 
 // 3. CROSSHAIR — dot central + cruz delgada outline. Estilo HL2/CoD.
 void drawCrosshair(const HudContext& ctx) {
+    const HudState& h = *ctx.hud;
     const float cx = ctx.x0 + ctx.w * 0.5f;
     const float cy = ctx.y0 + ctx.h * 0.5f;
-    constexpr float r       = 8.0f;
-    constexpr float gap     = 3.0f;  // hueco entre dot y cruz
+    // F4H6: gap base 3px + apertura segun spread del arma activa. Convencion
+    // CS/Valorant: arma precisa (pistola 0.5°) → gap chico. Shotgun 6° →
+    // gap amplio. Lineas de la cruz quedan al exterior, asi la apertura
+    // funciona visualmente sin acortar la cruz.
+    const float spreadGapPx = std::min(16.0f, h.crosshair_spread_deg * 1.5f);
+    const float gap   = 3.0f + spreadGapPx;
+    const float r     = gap + 5.0f;  // largo de cada arm relativo al gap
     constexpr float thick   = 1.5f;
     constexpr float thickOut= 3.0f;
 

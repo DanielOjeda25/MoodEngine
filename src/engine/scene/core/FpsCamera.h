@@ -49,6 +49,18 @@ public:
     glm::vec3 position() const { return m_position; }
     glm::vec3 forward() const;
     glm::mat4 viewMatrix() const;
+
+    /// @brief F4H6 — Offsets transient para game feel (camera shake +
+    ///        pain reaction). El bridge `EditorApplication_Run` los setea
+    ///        cada frame en Play, antes del render. NO mutan la pose
+    ///        lógica de la cámara (`m_position`/`m_yawDeg`/`m_pitchDeg`),
+    ///        solo se suman al `viewMatrix()` y al `forward()` resultantes.
+    ///        Setear a 0 cuando el efecto termina (el bridge lo hace).
+    void setShakeOffset(const glm::vec3& posOffset) { m_shakePosOffset = posOffset; }
+    void setPainOffset(float pitchDegOffset, float rollDegOffset) {
+        m_painPitchOffset = pitchDegOffset;
+        m_painRollOffset  = rollDegOffset;
+    }
     glm::mat4 projectionMatrix(float aspectRatio) const;
 
     float fovDeg() const { return m_fovDeg; }
@@ -67,6 +79,11 @@ private:
     float m_fovDeg = 70.0f;
     float m_near = 0.1f;
     float m_far = 100.0f;
+
+    // F4H6: offsets transient game feel (game state, no pose logica).
+    glm::vec3 m_shakePosOffset{0.0f};
+    float m_painPitchOffset = 0.0f;  // deg
+    float m_painRollOffset  = 0.0f;  // deg
 };
 
 } // namespace Mood

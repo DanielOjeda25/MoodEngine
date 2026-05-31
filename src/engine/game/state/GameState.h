@@ -77,6 +77,35 @@ struct HudState {
     int armor     = 0;
     int max_armor = 100;
 
+    // --- F4H6: Camera shake state (intensidad procedural con decay) ---
+    /// @brief Amplitud del shake en metros. Apply: offset del camera position
+    ///        = `sin(time*freqX)*ampX + sin(time*freqY)*ampY` escalado por
+    ///        `shake_t / shake_max_t`. 0 = sin shake.
+    f32 shake_amp     = 0.0f;
+    /// @brief Countdown timer del shake (segundos). Mientras > 0 el offset
+    ///        se aplica al m_playCamera. Decrementado en el bridge.
+    f32 shake_t       = 0.0f;
+    /// @brief Duracion total del shake al triggerearse — para normalizar el
+    ///        decay (`shake_t / shake_max_t`). Setear junto con shake_amp.
+    f32 shake_max_t   = 0.0f;
+
+    // --- F4H6: Pain reaction (pitch wobble + roll random al recibir damage)
+    /// @brief Amplitud del pitch en grados. Apply: agregar `amp * (t/max_t)`
+    ///        al pitch de la camara del player ANTES de la view matrix.
+    f32 pain_pitch_amp = 0.0f;
+    /// @brief Roll random en grados (se setea en el trigger via rand). Apply
+    ///        igual que pitch — agregar al roll de la camara.
+    f32 pain_roll_offset = 0.0f;
+    /// @brief Timer del pain pitch. Compartido entre pitch + roll.
+    f32 pain_pitch_t   = 0.0f;
+    f32 pain_pitch_max_t = 0.0f;
+
+    // --- F4H6: Crosshair spread visual (gap dinamico).
+    /// @brief Spread en grados del arma activa. El widget drawCrosshair
+    ///        computa `gap = 8 + min(16, spread * 1.5)`. Sync desde el bridge
+    ///        cada frame con `spec.spreadDeg` del slot activo.
+    f32 crosshair_spread_deg = 0.0f;
+
     // --- F4H4: Arsenal overlay transient al hacer swap.
     /// Countdown 3s. Mientras > 0, se dibuja el indicador del arsenal
     /// con los 4 slots arriba-centro (activo highlighted, fade alpha).
@@ -213,6 +242,20 @@ void triggerDamageFlash(float dirX, float dirY);
 ///        `arsenal_overlay` dibuja la fila de slots arriba-centro mientras
 ///        el timer > 0, con alpha fade.
 void triggerArsenalOverlay();
+
+/// @brief F4H6 — Camera shake procedural con decay lineal.
+///        `amplitude` en metros (HL/COD sutil: 0.02 disparo / 0.08 damage /
+///        0.15 explosion). `duration` en segundos (~0.1-0.4s tipico).
+///        Anti-spam: si ya hay un shake activo con `shake_t > duration`,
+///        no extiende (preserva el shake mas largo). Si el nuevo es mas
+///        fuerte, reemplaza.
+void triggerCameraShake(float amplitude, float duration);
+
+/// @brief F4H6 — Pain reaction al recibir damage: pitch wobble +2deg +
+///        roll random ±1deg sobre 0.25s, return a 0 en 0.3s. Anti-spam:
+///        no re-trigger si timer > 0.1s (evita oscilacion en damage
+///        continuo). NO mueve yaw (mantiene apuntar).
+void triggerPainReaction();
 
 /// @brief Empuja un pickup notification a la queue. Lifetime 2.5s.
 ///        La queue tiene cap implicito ~5 — push sobre lleno descarta
